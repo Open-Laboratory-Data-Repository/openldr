@@ -18,6 +18,11 @@ vi.mock('@/api', async (orig) => {
     createFacility: vi.fn(),
     updateFacility: vi.fn(),
     deleteFacility: vi.fn(),
+    // Bulk delete: the register-clearing path. Two calls, deliberately — the preview is what the
+    // operator confirms against, and the delete re-resolves and refuses if that count no longer
+    // holds.
+    previewBulkDeleteFacilities: vi.fn(),
+    bulkDeleteFacilities: vi.fn(),
     listPublishedForms: vi.fn(),
     getForm: vi.fn(),
     importFacilitiesCsv: vi.fn(),
@@ -49,7 +54,7 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
+import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
@@ -1487,6 +1492,101 @@ describe('Facilities page', () => {
         const last = listFacilitiesMock.mock.calls.at(-1)![0];
         expect(last.sorts).toEqual([expect.objectContaining({ column: 'name', ascending: true })]);
       });
+    });
+  });
+
+  // ── Bulk delete. The action exists because a bad import cannot otherwise be undone: the row menu
+  // deletes one facility, and a national register runs to thousands. Every test here is about the
+  // operator knowing what they are about to destroy. ────────────────────────────────────────────
+
+  describe('bulk delete', () => {
+    function seedTwo() {
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      listFacilitiesMock.mockResolvedValue(makePage([
+        { ...sampleFacility, id: 'f1', name: 'Kalabo RHC', source: 'import' },
+        { ...sampleFacility, id: 'f2', name: 'Lusaka Clinic', source: 'import' },
+      ]));
+    }
+
+    it('names the count, the in-use count and a sample before anything is deleted', async () => {
+      seedTwo();
+      (previewBulkDeleteFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({
+        total: 3776, inUse: 12,
+        sample: [{ id: 'f1', name: 'Kalabo RHC', facilityCode: 'A1' }],
+      });
+      show();
+      await waitFor(() => expect(screen.getByText('Kalabo RHC')).toBeInTheDocument());
+
+      clickMenuItem('Facility actions', /delete/i);
+
+      // ⚠ Anchored, not a bare /3776/. The count appears in BOTH the title and the body, and a
+      // loose matcher that hits two elements throws inside findByText's own waitFor — which reads
+      // as a timeout rather than the assertion failure it is. Same trap the Add-facility test above
+      // documents.
+      const dialog = await screen.findByRole('alertdialog');
+      expect(within(dialog).getByText(/Delete 3,?776 facilities\?/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/12 of them are used by reports/)).toBeInTheDocument();
+      // ⛔ The sample: the only defence against a filter parsed wrongly but CONSISTENTLY at both
+      // ends. The count guard cannot see that, because the client counted the same wrong set.
+      expect(within(dialog).getByText(/Kalabo RHC/)).toBeInTheDocument();
+      expect(bulkDeleteFacilities).not.toHaveBeenCalled();
+    });
+
+    it('sends the confirmed count with the same selection the table is showing', async () => {
+      seedTwo();
+      (previewBulkDeleteFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({
+        total: 2, inUse: 0, sample: [],
+      });
+      (bulkDeleteFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({ deleted: 2, inUse: 0 });
+      show();
+      await waitFor(() => expect(screen.getByText('Kalabo RHC')).toBeInTheDocument());
+
+      clickMenuItem('Facility actions', /delete/i);
+      const dialog = await screen.findByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+
+      await waitFor(() => expect(bulkDeleteFacilities).toHaveBeenCalledTimes(1));
+      // ⛔ expectedCount is the whole contract: the server re-resolves and refuses unless the set is
+      // still exactly this size, so a client that omitted it would be asking for an unconfirmed
+      // delete.
+      expect((bulkDeleteFacilities as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe(2);
+    });
+
+    it('reports a stale-count refusal instead of pretending it worked', async () => {
+      seedTwo();
+      (previewBulkDeleteFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({
+        total: 2, inUse: 0, sample: [],
+      });
+      (bulkDeleteFacilities as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('this selection now matches 5 facilities, not the 2 that were reviewed'),
+      );
+      show();
+      await waitFor(() => expect(screen.getByText('Kalabo RHC')).toBeInTheDocument());
+
+      clickMenuItem('Facility actions', /delete/i);
+      const dialog = await screen.findByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+
+      expect(await screen.findByText(/not the 2 that were reviewed/i)).toBeInTheDocument();
+    });
+
+    it('is not offered to a view-only operator', async () => {
+      seedTwo();
+      useAuthMock.mockReturnValue({
+        user: { id: 'me', username: 'me', displayName: null, roles: ['lab_tech'] },
+        loading: false,
+        hasCapability: (c: string) => c === 'facilities.view',
+      });
+      show();
+      await waitFor(() => expect(screen.getByText('Kalabo RHC')).toBeInTheDocument());
+
+      // The whole header menu is already withheld from a view-only operator, so the action is
+      // unreachable before its own `canManage` gate is ever consulted. Both are asserted: this one
+      // because it is what actually protects it today, and the belt-and-braces gate on the item
+      // itself because a later change that reopens this menu to viewers must not quietly reopen a
+      // destructive action with it.
+      expect(screen.queryByRole('button', { name: 'Facility actions' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /delete .*facilities/i })).not.toBeInTheDocument();
     });
   });
 });

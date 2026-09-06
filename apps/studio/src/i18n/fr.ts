@@ -869,6 +869,14 @@ export const fr: EnShape = {
       empty: 'Aucune suggestion',
       error: 'Impossible de charger les suggestions',
     },
+        bulkDelete: {
+          menuItem: 'Supprimer ces établissements…',
+          title: 'Supprimer {{count}} établissements ?',
+          body: 'Cela retire {{count}} établissements du registre. Cette action est irréversible.',
+          inUse: '{{count}} d’entre eux sont utilisés par des rapports aujourd’hui.',
+          inUseUnknown: 'Impossible de vérifier si certains sont utilisés par des rapports.',
+          sample: 'Par exemple : {{names}}.',
+        },
     import: {
       menuItem: 'Importer des établissements',
       actions: 'Actions d’importation',

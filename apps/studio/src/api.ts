@@ -896,6 +896,75 @@ export async function deleteFacility(id: string): Promise<void> {
   throw new Error(formatApiError('delete facility', await errorDetail(res)));
 }
 
+/** What a bulk delete is scoped to: the SAME selection `listFacilities` sends, minus paging and
+ *  sorting, which cannot change which rows match.
+ *
+ *  ⚠ `health` is deliberately absent. The registry list accepts it, but it is a join predicate with
+ *  no column in the shared grammar, so the delete cannot honour it — and the route REFUSES a
+ *  selection carrying it rather than silently widening to the whole register. Keeping it off this
+ *  type is what stops a caller sending it by habit. */
+export interface FacilityBulkSelection {
+  q?: string;
+  country?: string;
+  zone?: string;
+  region?: string;
+  district?: string;
+  council?: string;
+  status?: string;
+  level?: string;
+  ownership?: string;
+  nationalSystem?: string;
+  source?: string;
+  managedOrigin?: string;
+  registerState?: string;
+  /** The shared grammar, serialised exactly as `listFacilities` serialises it. */
+  filters?: string;
+}
+
+export interface FacilityBulkDeletePreview {
+  /** Every facility the selection matches — not a page. This is the number the operator confirms. */
+  total: number;
+  /** How many the reporting dimension (`facility_map`) currently points at, or NULL when the
+   *  warehouse could not be reached. Render null as unknown, NEVER as 0: "none are in use" is the
+   *  most reassuring possible lie to tell someone about to delete a register. */
+  inUse: number | null;
+  /** A handful of the matched rows, by name. The count guard cannot detect a filter that is parsed
+   *  wrongly but consistently at both ends; a recognisable name can. */
+  sample: { id: string; name: string; facilityCode: string | null }[];
+}
+
+/** What the selection matches right now, for the confirm dialog. Reads nothing and writes nothing. */
+export async function previewBulkDeleteFacilities(
+  selection: FacilityBulkSelection,
+): Promise<FacilityBulkDeletePreview> {
+  const res = await authFetch('/api/facilities/bulk-delete/preview', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ selection }),
+  });
+  if (!res.ok) throw new Error(formatApiError('preview bulk delete', await errorDetail(res)));
+  return res.json() as Promise<FacilityBulkDeletePreview>;
+}
+
+/** Delete everything the selection matches.
+ *
+ *  ⛔ `expectedCount` is the count the operator actually confirmed, and the server refuses with 409
+ *  unless the selection STILL matches exactly that many. Pass the number that was on screen, never
+ *  a freshly-fetched one — re-reading it here would defeat the entire guard by confirming whatever
+ *  the set happens to be at the moment of the click. */
+export async function bulkDeleteFacilities(
+  selection: FacilityBulkSelection,
+  expectedCount: number,
+): Promise<{ deleted: number; inUse: number | null }> {
+  const res = await authFetch('/api/facilities/bulk-delete', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ selection, expectedCount }),
+  });
+  if (!res.ok) throw new Error(formatApiError('delete facilities', await errorDetail(res)));
+  return res.json() as Promise<{ deleted: number; inUse: number | null }>;
+}
+
 /** Task 10: one entry from `GET /api/facilities/:id/history` (Task 8's read model over
  *  `audit_events` — apps/server/src/facilities-routes.ts). `before`/`after` are whatever the
  *  writer recorded — a full `FacilityRecord`-shaped object for `facility.create`/`facility.update`/

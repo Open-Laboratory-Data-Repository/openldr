@@ -127,3 +127,17 @@ facility with a gap stays editable.
 
 - [Load & push data](/docs/load-data)
 - [CLI](/docs/cli)
+
+## Deleting in bulk
+
+`POST /api/facilities/bulk-delete` removes every facility a selection matches. The selection is the
+same shape `GET /api/facilities` accepts, minus paging and sorting.
+
+`expectedCount` is required and is the contract: the route re-resolves the selection and answers
+409 unless it still matches exactly that many, so a set that moved between review and confirmation
+deletes nothing. `POST /api/facilities/bulk-delete/preview` returns `total`, `inUse` (how many the
+`facility_map` dimension points at, or `null` when the warehouse could not be reached) and a small
+`sample` for the operator to recognise.
+
+Two selections are refused outright rather than narrowed or widened: a `filters` string that does
+not parse, and any selection carrying `health`, which is a join predicate the delete cannot express.

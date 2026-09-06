@@ -265,3 +265,33 @@ saisi échoue de la même façon qu'un filtre mal saisi dans le navigateur.
 
 - [Terminologie](/docs/terminology)
 - [Audit](/docs/audit)
+
+## Supprimer des établissements en masse
+
+Le menu de ligne supprime un établissement. Un registre national en compte des milliers, donc un
+import mal mappé a besoin d'une sortie autre qu'une ligne à la fois. **Supprimer ces
+établissements…**, dans le menu `⋯` de la page, retire tout ce que le filtre courant du tableau
+sélectionne.
+
+Lisez la confirmation avant de l'accepter. Elle nomme trois choses, chacune répondant à une question
+différente :
+
+- **Le nombre.** C'est ce qui autorise la suppression. Si la sélection change entre la confirmation
+  et votre clic, l'opération est refusée et rien n'est supprimé.
+- **Combien sont utilisés par des rapports.** Les supprimer change ce que montrent les rapports. Si
+  l'entrepôt est injoignable, la fenêtre le dit plutôt que d'annoncer zéro.
+- **Quelques établissements par leur nom.** C'est la seule protection contre un filtre qui
+  sélectionne des lignes non voulues. Si vous ne les reconnaissez pas, annulez et vérifiez le filtre.
+
+Le filtre par état de mappage est le seul qu'une suppression en masse ne peut pas utiliser :
+l'action est donc indisponible tant qu'il est actif. Effacez-le et sélectionnez plutôt par registre
+ou par zone administrative.
+
+Depuis un terminal :
+
+```
+openldr facilities delete --where facilitySystem:eq:urn:zmb:mfl --force
+```
+
+`--force` est obligatoire, tout comme un `--where` ou un `--all` explicite : oublier le filtre ne
+doit jamais signifier silencieusement tout le registre.

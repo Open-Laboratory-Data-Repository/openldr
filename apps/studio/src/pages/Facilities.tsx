@@ -20,9 +20,11 @@ import {
 import { FACILITY_COLUMNS, type ParsedFilter, type ParsedSort } from '@openldr/table-query';
 import { useAuth } from '@/auth/AuthProvider';
 import {
-  listFacilities, deleteFacility, listPublishedForms, getFacilityHealth, retryFacilityJob,
+  listFacilities, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities,
+  listPublishedForms, getFacilityHealth, retryFacilityJob,
   listFacilityAdminValues,
   type Facility, type FacilityHealth, type FacilityDimensionState, type FacilityListQuery,
+  type FacilityBulkDeletePreview, type FacilityBulkSelection,
   type FacilityAdminLevel,
 } from '@/api';
 import { FacilityDialog } from '@/facilities/FacilityDialog';
@@ -418,6 +420,11 @@ export function Facilities() {
   const [hasForm, setHasForm] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<Facility | null | undefined>(undefined); // undefined = closed
   const [confirming, setConfirming] = useState<Facility | null>(null);
+  /** The bulk-delete confirmation. `null` = closed; a loaded preview = the dialog is showing what
+   *  the CURRENT selection matches, and `total` is the number the confirm is authorised against. */
+  const [bulkPreview, setBulkPreview] = useState<FacilityBulkDeletePreview | null>(null);
+  const [bulkPreviewing, setBulkPreviewing] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   // Task 10: which row's History sheet is open, or `undefined` when closed — mirrors `editing`'s
   // own undefined-means-closed convention. Unlike `editing`, this is reachable to EVERY viewer who
   // reaches this page at all (facilities.view alone), not just `canManage` — see the per-row ⋯
@@ -931,6 +938,57 @@ export function Facilities() {
     const next = [...prev]; next[i] = f; return next;
   });
 
+  /** EXACTLY what the table is showing, minus paging and sorting — neither changes which rows
+   *  match. Built here rather than passed around so the dialog, the preview and the delete cannot
+   *  drift apart.
+   *
+   *  ⛔ `health` is NOT included even though the list uses it. It has no column in the shared
+   *  grammar, so the delete cannot express it, and the route refuses a selection carrying it rather
+   *  than silently widening to the whole register — see `openBulkDelete`, which is disabled while
+   *  that filter is on rather than sending a request that can only fail. */
+  const bulkSelection = useCallback((): FacilityBulkSelection => ({
+    q: urlState.q || undefined,
+    filters: table.filters.length > 0 ? JSON.stringify(toWireFilters(table.filters)) : undefined,
+  }), [urlState.q, table.filters]);
+
+  /** A mapping-health filter cannot be honoured by the delete, so the action is withheld while one
+   *  is active. Refusing up front beats offering something that can only 400. */
+  const bulkBlockedByHealth = urlState.health !== undefined;
+
+  const openBulkDelete = useCallback(async () => {
+    setBulkPreviewing(true);
+    setError(null);
+    try {
+      setBulkPreview(await previewBulkDeleteFacilities(bulkSelection()));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkPreviewing(false);
+    }
+  }, [bulkSelection]);
+
+  const doBulkDelete = useCallback(async () => {
+    if (!bulkPreview) return;
+    // ⛔ The count from the PREVIEW the operator read, never a fresh one. Re-reading it here would
+    // confirm whatever the set happens to be at the instant of the click, which is the entire thing
+    // the server's 409 guard exists to prevent.
+    const expected = bulkPreview.total;
+    setBulkDeleting(true);
+    setError(null);
+    try {
+      await bulkDeleteFacilities(bulkSelection(), expected);
+      setBulkPreview(null);
+      await reload();
+      void reloadHealth();
+    } catch (e) {
+      // Left OPEN on failure. A stale-count 409 means the selection moved under the operator, and
+      // closing the dialog would hide the one message explaining why nothing was deleted.
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBulkDeleting(false);
+    }
+  }, [bulkPreview, bulkSelection, reload, reloadHealth]);
+
   const doDelete = useCallback(async () => {
     if (!confirming) return;
     const f = confirming;
@@ -1051,6 +1109,19 @@ export function Facilities() {
               <DropdownMenuItem onSelect={() => setImporting(true)}>
                 {t('facilities.import.menuItem')}
               </DropdownMenuItem>
+              {/* The only way to undo a bad import. The row menu deletes one facility and a national
+                  register runs to thousands, so without this a mis-mapped import is permanent.
+                  Withheld from a view-only operator, and disabled while a mapping-health filter is
+                  on — see `bulkBlockedByHealth`. */}
+              {canManage && (
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  disabled={bulkPreviewing || bulkBlockedByHealth || total === 0}
+                  onSelect={() => { void openBulkDelete(); }}
+                >
+                  {t('facilities.bulkDelete.menuItem')}
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>,
           actionsEl,
@@ -1262,6 +1333,34 @@ export function Facilities() {
             facilityName={viewingHistory.name}
           />
         )}
+
+        {/* ⛔ Not a plain "are you sure". The count is what the server's guard is authorised
+            against, the in-use number says whether reports will notice, and the sample is the only
+            thing that can reveal a filter matching rows the operator did not mean — the count guard
+            cannot see that, because the client counted the same wrong set. */}
+        <ConfirmDialog
+          open={bulkPreview !== null}
+          onOpenChange={(o) => { if (!o && !bulkDeleting) setBulkPreview(null); }}
+          title={t('facilities.bulkDelete.title', { count: bulkPreview?.total ?? 0 })}
+          description={
+            bulkPreview
+              ? [
+                t('facilities.bulkDelete.body', { count: bulkPreview.total }),
+                bulkPreview.inUse === null
+                  ? t('facilities.bulkDelete.inUseUnknown')
+                  : t('facilities.bulkDelete.inUse', { count: bulkPreview.inUse }),
+                bulkPreview.sample.length > 0
+                  ? t('facilities.bulkDelete.sample', {
+                    names: bulkPreview.sample.map((r: { name: string }) => r.name).join(', '),
+                  })
+                  : '',
+              ].filter(Boolean).join(' ')
+              : undefined
+          }
+          confirmLabel={t('common.delete')}
+          destructive
+          onConfirm={() => { void doBulkDelete(); }}
+        />
 
         <ConfirmDialog
           open={confirming !== null}

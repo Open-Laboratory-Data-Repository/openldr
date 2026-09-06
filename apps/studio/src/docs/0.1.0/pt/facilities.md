@@ -259,3 +259,32 @@ mal escrito falha da mesma forma que um filtro mal escrito falharia no navegador
 
 - [Terminologia](/docs/terminology)
 - [Auditoria](/docs/audit)
+
+## Eliminar unidades em massa
+
+O menu da linha elimina uma unidade. Um registo nacional tem milhares, por isso uma importação mal
+mapeada precisa de uma saída que não seja linha a linha. **Eliminar estas unidades…**, no menu `⋯`
+da página, remove tudo o que o filtro atual da tabela seleciona.
+
+Leia a confirmação antes de a aceitar. Nomeia três coisas, cada uma respondendo a uma pergunta
+diferente:
+
+- **A contagem.** É contra ela que a eliminação é autorizada. Se a seleção mudar entre a confirmação
+  e o seu clique, a operação é recusada e nada é eliminado.
+- **Quantas são usadas por relatórios.** Eliminá-las muda o que os relatórios mostram. Se o armazém
+  não puder ser contactado, a janela di-lo em vez de indicar zero.
+- **Algumas unidades pelo nome.** São a única proteção contra um filtro que seleciona linhas que não
+  pretendia. Se não as reconhecer, cancele e verifique o filtro.
+
+O filtro por estado de mapeamento é o único que uma eliminação em massa não consegue usar, por isso
+a ação fica indisponível enquanto estiver ativo. Limpe-o e selecione antes por registo ou por área
+administrativa.
+
+A partir de um terminal:
+
+```
+openldr facilities delete --where facilitySystem:eq:urn:zmb:mfl --force
+```
+
+`--force` é obrigatório, tal como um `--where` ou um `--all` explícito: esquecer o filtro nunca
+deve significar silenciosamente todo o registo.

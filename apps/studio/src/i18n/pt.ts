@@ -869,6 +869,14 @@ export const pt: EnShape = {
       empty: 'Sem sugestões',
       error: 'Não foi possível carregar as sugestões',
     },
+        bulkDelete: {
+          menuItem: 'Eliminar estas unidades…',
+          title: 'Eliminar {{count}} unidades?',
+          body: 'Isto remove {{count}} unidades do registo. Não pode ser anulado.',
+          inUse: '{{count}} delas são usadas por relatórios hoje.',
+          inUseUnknown: 'Não foi possível verificar se alguma é usada por relatórios.',
+          sample: 'Por exemplo: {{names}}.',
+        },
     import: {
       menuItem: 'Importar unidades',
       actions: 'Ações de importação',

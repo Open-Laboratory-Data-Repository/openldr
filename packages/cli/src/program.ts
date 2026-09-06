@@ -28,6 +28,7 @@ import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
+  runFacilitiesDelete,
 } from './facilities';
 import { setActorOverride } from './cli-actor';
 
@@ -400,6 +401,19 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (opts: { apply: boolean; json: boolean }) => {
       process.exitCode = await runFacilitiesPublish(opts);
+    });
+  // CLI parity for POST /api/facilities/bulk-delete. Labs run headless, so the only way to undo a
+  // bad import cannot be browser-only. Destructive: refuses without --force, and refuses an empty
+  // selection unless --all says so deliberately.
+  facilities
+    .command('delete')
+    .description('Delete facilities matching --where. DESTRUCTIVE — refuses without --force.')
+    .option('--where <expr...>', 'filter, same grammar as `facilities list` (e.g. facilitySystem:eq:urn:zmb:mfl)')
+    .option('--all', 'clear the ENTIRE registry — required when no --where is given', false)
+    .option('--force', 'required — confirms the destructive action', false)
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { where?: string[]; all: boolean; force: boolean; json: boolean }) => {
+      process.exitCode = await runFacilitiesDelete(opts);
     });
   // Task 13: CLI parity for `GET /api/facilities/mapping-conflicts`. Read-only, so no --apply.
   facilities

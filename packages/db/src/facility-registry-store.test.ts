@@ -10,6 +10,102 @@ async function store() {
 const manual = { id: 'f1', facilityCode: 'LAB01', name: 'Dodoma Regional Referral', source: 'manual' as const };
 
 describe('createFacilityRegistryStore', () => {
+  // ── Bulk delete (facilities bulk-delete slice). A filter-scoped DELETE is only as safe as the
+  // guarantee that the set it removes is the set the operator was shown, so these do not assert
+  // hand-written id lists: they assert that `idsMatching` and `list` agree, for the same options.
+  // That is the property the feature depends on, and a hand-written expectation would pass even if
+  // both drifted together. ────────────────────────────────────────────────────────────────────────
+
+  describe('idsMatching — the delete set is the list set', () => {
+    async function seeded() {
+      const { db, s } = await store();
+      await s.upsert({ id: 'a1', facilityCode: 'A1', name: 'Alpha Clinic', source: 'import', facilitySystem: 'urn:zmb:mfl', district: 'Kalabo' });
+      await s.upsert({ id: 'a2', facilityCode: 'A2', name: 'Beta Clinic', source: 'import', facilitySystem: 'urn:zmb:mfl', district: 'Lusaka' });
+      await s.upsert({ id: 'b1', facilityCode: 'B1', name: 'Gamma Hospital', source: 'manual', facilitySystem: 'urn:tz:hfr', district: 'Dodoma' });
+      return { db, s };
+    }
+
+    it('agrees with list() for a named filter', async () => {
+      const { s } = await seeded();
+      const listed = await s.list({ nationalSystem: 'urn:zmb:mfl', limit: 1000 });
+      const ids = await s.idsMatching({ nationalSystem: 'urn:zmb:mfl' });
+      expect(ids.map((r) => r.id).sort()).toEqual(listed.rows.map((r) => r.id).sort());
+      expect(ids).toHaveLength(2);
+    });
+
+    it('agrees with list() for a grammar filter, which is what the toolbar builds', async () => {
+      const { s } = await seeded();
+      const filters = [{ column: 'district', operator: 'eq', value: 'Kalabo', combine: 'and' }] as never;
+      const listed = await s.list({ filters, limit: 1000 });
+      const ids = await s.idsMatching({ filters });
+      expect(ids.map((r) => r.id)).toEqual(listed.rows.map((r) => r.id));
+      expect(ids).toHaveLength(1);
+    });
+
+    it('ANDs named and grammar filters the same way list() does', async () => {
+      const { s } = await seeded();
+      const filters = [{ column: 'district', operator: 'eq', value: 'Lusaka', combine: 'and' }] as never;
+      const opts = { nationalSystem: 'urn:zmb:mfl', filters };
+      const listed = await s.list({ ...opts, limit: 1000 });
+      const ids = await s.idsMatching(opts);
+      expect(ids.map((r) => r.id)).toEqual(listed.rows.map((r) => r.id));
+      expect(ids).toHaveLength(1);
+    });
+
+    it('⛔ returns EVERY match, never a page — the store default caps list() at 200', async () => {
+      // A delete that silently stopped at the first page would leave the register half-cleared while
+      // reporting success, which is the same class of lie this whole arc exists to remove.
+      const { s } = await store();
+      for (let i = 0; i < 205; i += 1) {
+        await s.upsert({ id: `p${i}`, facilityCode: `P${i}`, name: `Facility ${i}`, source: 'import', facilitySystem: 'urn:bulk:test' });
+      }
+      const paged = await s.list({ nationalSystem: 'urn:bulk:test' });
+      expect(paged.rows).toHaveLength(200);
+      expect(paged.total).toBe(205);
+      const ids = await s.idsMatching({ nationalSystem: 'urn:bulk:test' });
+      expect(ids).toHaveLength(205);
+    });
+
+    it('carries facilityCode, which the post-delete reprojection needs', async () => {
+      // `reprojectAfterRegistryDelete` reacts to the code a deletion FREED, and the row is gone by
+      // then — so the code has to be captured before the delete, not looked up after.
+      const { s } = await seeded();
+      const ids = await s.idsMatching({ nationalSystem: 'urn:tz:hfr' });
+      expect(ids).toEqual([{ id: 'b1', facilityCode: 'B1' }]);
+    });
+
+    it('an empty filter set matches everything, and says so rather than nothing', async () => {
+      // Fail-open is the dangerous direction here, so it is pinned deliberately: callers must treat
+      // "no filter" as "the whole register", never as "nothing selected".
+      const { s } = await seeded();
+      expect(await s.idsMatching({})).toHaveLength(3);
+    });
+  });
+
+  describe('removeMany', () => {
+    it('removes exactly the ids given and leaves the rest', async () => {
+      const { s } = await store();
+      await s.upsert({ id: 'k1', facilityCode: 'K1', name: 'Keep', source: 'manual' });
+      await s.upsert({ id: 'd1', facilityCode: 'D1', name: 'Drop one', source: 'manual' });
+      await s.upsert({ id: 'd2', facilityCode: 'D2', name: 'Drop two', source: 'manual' });
+
+      expect(await s.removeMany(['d1', 'd2'])).toBe(2);
+
+      expect(await s.get('k1')).toBeDefined();
+      expect(await s.get('d1')).toBeUndefined();
+      expect(await s.get('d2')).toBeUndefined();
+    });
+
+    it('is a no-op for an empty list rather than a bare DELETE', async () => {
+      // `.where('id', 'in', [])` is a footgun in several query builders; an unguarded bulk delete
+      // that degenerated into "no predicate" would empty the table.
+      const { s } = await store();
+      await s.upsert({ id: 'k1', facilityCode: 'K1', name: 'Keep', source: 'manual' });
+      expect(await s.removeMany([])).toBe(0);
+      expect(await s.get('k1')).toBeDefined();
+    });
+  });
+
   it('round-trips a hand-entered facility', async () => {
     const { s } = await store();
     await s.upsert(manual);

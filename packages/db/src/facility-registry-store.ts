@@ -182,6 +182,21 @@ export interface FacilityRegistryStore {
    */
   upsert(rec: FacilityRecord): Promise<FacilityRecord>;
   remove(id: string): Promise<void>;
+  /** Every facility matching `opts`, as id plus the code it holds — the exact set a bulk delete
+   *  removes. Built by the SAME predicate builder `list` uses, so "delete what I am looking at"
+   *  cannot select something other than what was shown; the store tests assert that agreement
+   *  rather than hand-written id lists.
+   *
+   *  Unpaged by design (`limit`/`offset` on `opts` are ignored). `health` is not expressible here:
+   *  it is a join predicate, not a column — see `facilityFilterBuilder`.
+   *
+   *  ⚠ An EMPTY `opts` matches the whole register. Callers must treat that as "everything", never
+   *  as "nothing selected". */
+  idsMatching(opts?: FacilityListOptions): Promise<{ id: string; facilityCode: string }[]>;
+  /** Delete the named rows, returning how many were actually removed. A no-op for an empty list,
+   *  never a bare DELETE. Cleanup around the removal (concept retirement, reprojection) belongs to
+   *  the caller, exactly as it does for `remove` — see the delete route. */
+  removeMany(ids: string[]): Promise<number>;
 }
 
 /** A national register runs 10-15k rows; `list()` with no options must not return all of them.
@@ -343,26 +358,31 @@ export function buildDistinctAdminValuesQuery(
     .limit(MAX_ADMIN_VALUES);
 }
 
-export function createFacilityRegistryStore(
-  db: Kysely<InternalSchema>,
-  capture?: ReferenceCapture,
-): FacilityRegistryStore {
-  return {
-    async get(id) {
-      const r = await db.selectFrom('facility_registry').selectAll().where('id', '=', id).executeTakeFirst();
-      return r ? toRecord(r as SelectRow) : undefined;
-    },
-
-    async list(opts = {}) {
-      // ⛔ ONE predicate builder shared by the rows query and the count query. Two copies would
-      // drift, and a `total` that disagrees with the page it describes is worse than no total.
-      // Generic over the select list (`O`) so the same closure types against both the
-      // `selectAll()` rows query and the `count(*)` aggregate query below — `.where()` never
-      // changes `O`, so this is ordinary Kysely generic inference, not a cast.
-      const applyFilters = <O>(
-        qb: SelectQueryBuilder<InternalSchema, 'facility_registry', O>,
-      ): SelectQueryBuilder<InternalSchema, 'facility_registry', O> => {
-        let q = qb;
+/** ⛔ ONE predicate builder, now shared by THREE consumers: `list`'s rows query, `list`'s count
+ *  query, and `idsMatching` — which is what a bulk delete removes. Two copies would drift, and a
+ *  `total` that disagrees with the page it describes is worse than no total; a DELETE that
+ *  disagrees with the page it describes is worse than either.
+ *
+ *  ⛔ THAT THIRD CONSUMER IS WHY THIS IS EXTRACTED. `idsMatching` resolves a filter to the exact
+ *  set a bulk delete will remove, and the operator confirms that set from a `list` page. If the two
+ *  built their predicates separately, "delete what I am looking at" could remove something else,
+ *  and the repo has already shipped this grammar returning the wrong rows twice (see the registry
+ *  Status picker and the audit DatePicker). Sharing the builder makes the two provably the same
+ *  query, which is what the store tests assert rather than hand-written id lists.
+ *
+ *  Generic over the select list (`O`) so the same closure types against the `selectAll()` rows
+ *  query, the `count(*)` aggregate, and the id/code projection alike — `.where()` never changes
+ *  `O`, so this is ordinary Kysely generic inference, not a cast.
+ *
+ *  ⚠ `health` is NOT here, and deliberately: it is a join predicate over
+ *  `facility_concept_projection`/`term_mappings`, not a `facility_registry` column, so it stays on
+ *  `list`'s own join. A caller that filters by health therefore cannot express that through
+ *  `idsMatching` — see its doc comment. */
+function facilityFilterBuilder(opts: FacilityListOptions) {
+  return <O>(
+    qb: SelectQueryBuilder<InternalSchema, 'facility_registry', O>,
+  ): SelectQueryBuilder<InternalSchema, 'facility_registry', O> => {
+    let q = qb;
         if (opts.country) q = q.where('country', '=', opts.country);
         if (opts.zone) q = q.where('zone', '=', opts.zone);
         if (opts.region) q = q.where('region', '=', opts.region);
@@ -401,8 +421,22 @@ export function createFacilityRegistryStore(
         if (opts.filters?.length) {
           q = q.where((eb) => buildFilterExpression(eb, opts.filters!, FACILITY_COLUMNS)!);
         }
-        return q;
-      };
+    return q;
+  };
+}
+
+export function createFacilityRegistryStore(
+  db: Kysely<InternalSchema>,
+  capture?: ReferenceCapture,
+): FacilityRegistryStore {
+  return {
+    async get(id) {
+      const r = await db.selectFrom('facility_registry').selectAll().where('id', '=', id).executeTakeFirst();
+      return r ? toRecord(r as SelectRow) : undefined;
+    },
+
+    async list(opts = {}) {
+      const applyFilters = facilityFilterBuilder(opts);
 
       // ⛔ An UNCORRELATED derived-table aggregate, and both halves of that matter.
       //
@@ -532,6 +566,30 @@ export function createFacilityRegistryStore(
         await trx.deleteFrom('facility_registry').where('id', '=', id).execute();
         // Capture SUSPENDED — see SUSPENDED_REFERENCE_ENTITY_TYPES in reference-change-log.ts. The
         // `capture` dep stays on this store's interface so re-enabling is one line, not a re-wiring.
+      });
+    },
+
+    async idsMatching(opts = {}) {
+      // NO limit and no offset, on purpose: this is the whole matching set, not a page. `list`
+      // caps at 200 by default, and a delete that quietly stopped at the first page would leave a
+      // register half-cleared while reporting success.
+      const rows = await facilityFilterBuilder(opts)(
+        db.selectFrom('facility_registry').select(['id', 'facility_code']),
+      ).execute();
+      // `facility_code` travels with the id because the post-delete reprojection reacts to the code
+      // a deletion FREED, by which time the row is gone and cannot be looked up.
+      return rows.map((r) => ({ id: r.id as string, facilityCode: r.facility_code as string }));
+    },
+
+    async removeMany(ids) {
+      // ⛔ Guarded, not merely tidy: `.where('id', 'in', [])` compiles to `in ()`, which Postgres
+      // rejects — and a builder that dropped the clause instead would turn this into an unqualified
+      // DELETE over the whole register.
+      if (ids.length === 0) return 0;
+      return db.transaction().execute(async (trx) => {
+        const res = await trx.deleteFrom('facility_registry').where('id', 'in', ids).executeTakeFirst();
+        // Capture SUSPENDED — same as `remove` above.
+        return Number(res.numDeletedRows ?? 0);
       });
     },
   };
