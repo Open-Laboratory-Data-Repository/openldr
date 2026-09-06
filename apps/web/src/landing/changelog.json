@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "89c896f5",
+          "type": "fix",
+          "scope": "ui",
+          "title": "Make a long Select reachable, and stop suggesting ZMB for every field"
+        },
+        {
           "hash": "6ee01fd2",
           "type": "fix",
           "scope": "facilities",
