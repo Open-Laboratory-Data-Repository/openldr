@@ -133,13 +133,27 @@ function runView(overrides: Partial<FacilityImportRunView> = {}): FacilityImport
 
 const mocked = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeof vi.fn>;
 
-/** Open the menu and click Upload, waiting for it to become enabled first — the same shape as
- *  `previewNow` above, except Upload deliberately does NOT wait on `File.text()`: the File itself is
- *  the request body, so nothing has to be read before the action is live. */
+/** Round-2 fix: drives the VISIBLE "Upload and validate" button — the one `handleUpload` actually
+ *  ships for — rather than its dropdown twin, so this exercises the real wiring an operator uses.
+ *  That button only renders on Mapping (step 2), so this presses Continue first when Source's own
+ *  Continue button is still on screen (every caller reaches this straight after `pickFileAndSystem`,
+ *  which never advances the step itself). Waits for Upload to become enabled first — the same
+ *  discipline as `previewNow`, except Upload deliberately does NOT wait on `File.text()`: the File
+ *  itself is the request body, so nothing has to be read before the action is live. */
 async function uploadNow() {
-  openMenu();
-  await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Upload and validate' })).not.toHaveAttribute('aria-disabled', 'true'));
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Upload and validate' }));
+  const continueButton = screen.queryByRole('button', { name: 'Continue' });
+  if (continueButton) fireEvent.click(continueButton);
+  const button = await screen.findByRole('button', { name: 'Upload and validate' });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+}
+
+/** Round-2 fix: the confirm-path equivalent of `uploadNow` above — drives the VISIBLE "Confirm
+ *  import" button on Review (step 3), which `canConfirmRun` renders once a run's own validated
+ *  summary is on screen. Every caller has already awaited something that only exists once that
+ *  summary rendered, so the button is present synchronously here. */
+function confirmNow() {
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
 }
 
 describe('ImportFacilitiesSheet', () => {
@@ -1240,7 +1254,7 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByRole('combobox', { name: /rows changed since this preview/i }));
     fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
 
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     expect(api.confirmFacilityImportRun).toHaveBeenCalledWith(
@@ -1372,7 +1386,7 @@ describe('ImportFacilitiesSheet', () => {
     await uploadNow();
     await screen.findByText(/3 facility row\(s\) will be created/i);
 
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     expect(await screen.findByText(/this import did not finish/i)).toBeInTheDocument();
     expect(screen.getByText(/superseded by a newer upload/i)).toBeInTheDocument();
@@ -1564,7 +1578,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByRole('combobox', { name: /rows missing from this file/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /import anyway/i })).not.toBeInTheDocument();
 
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     // ⛔ EXACT object, not `objectContaining`: the whole point is which keys are ABSENT.
@@ -1797,7 +1811,7 @@ describe('ImportFacilitiesSheet', () => {
 
     fireEvent.click(await screen.findByRole('checkbox', { name: /skipping the rows that could not be read/i }));
 
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', { allowMalformedRows: true });
@@ -1973,23 +1987,26 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByLabelText('MFL Code');
     await previewNow();
 
-    // The refusal is explained — not a silent "no rows found" and not a bare quarantine message.
+    // Round-2 fix: a column-map refusal must NOT carry the operator to Review — the panel that
+    // fixes it lives on Mapping, and Review has no equivalent. The refusal is explained right here,
+    // next to the panel, with no extra click: not a silent "no rows found", not a bare quarantine
+    // message, and not a trip to a step that does not have the fix on it.
     expect(await screen.findByText(
       /"MFL Code 2" and "MFL Code" both map to "national_code"/,
     )).toBeInTheDocument();
 
-    // Task 3: a column-map refusal still counts as reviewed (`hasReview`), so the sheet auto-advances
-    // to Review (step 3), where the refusal text above now lives. The panel that fixes it moved to
-    // Mapping (step 2) — go back to reach it.
-    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
-
     // ⛔ THE OTHER HALF OF THE FIX: before it, `ColumnMapStep` unmounted the instant `reviewResult`
     // existed (its own render gate read `!reviewResult`), so the very panel needed to fix the
-    // refusal disappeared at the same moment the refusal appeared. It must stay mounted here.
+    // refusal disappeared at the same moment the refusal appeared. It must stay mounted here,
+    // ALONGSIDE the error text above, on the SAME screen — not reachable only by navigating back.
     expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
     expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
+    // And the sheet really did stay put: Mapping is still current, not Review.
+    expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
   });
 
   it('does not render the columnMapErrors block, or keep the panel mounted, once the file parses cleanly', async () => {
@@ -2089,13 +2106,15 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    expect(await screen.findByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
-
-    // Task 3: an uploaded run counts as reviewed the instant it exists (`runId`), so the sheet is
-    // already on Review (step 3) here — go back to Mapping (step 2) to reach the panel.
-    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
-
-    // The panel the operator needs is still on screen, exactly as it is on the inline door.
+    // Round-2 fix: an uploaded run counts as reviewed the instant it exists (`runId`), which used to
+    // carry the sheet straight to Review — past the panel that fixes a column-map refusal, which
+    // does not exist there. Landing on Review happens first (before the poll answers), then the
+    // sheet retreats to Mapping the moment the refusal is known — one `waitFor` covers both the
+    // poll answering AND that retreat settling, rather than checking each in its own turn.
+    await waitFor(() => {
+      expect(screen.getByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+    });
     expect(screen.getByLabelText('Province')).toBeInTheDocument();
     expect(screen.getByLabelText('Zone')).toBeInTheDocument();
 
@@ -2132,10 +2151,10 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
     await screen.findByText(/both map to "zone"/);
-
-    // Task 3: go back to Mapping (step 2) to reach the panel — see the "keeps ColumnMapStep mounted"
-    // test above for why the sheet is on Review (step 3) at this point.
-    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+    // Round-2 fix: the sheet retreats to Mapping once the refusal is known — see the "keeps
+    // ColumnMapStep mounted" test above for why this needs its own wait. The panel is on screen
+    // once this settles, no back-click needed to reach it.
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
 
     // Fix it in place: send Zone to extras, which is what actually releases its passthrough claim.
     fireEvent.click(screen.getByLabelText('Zone'));

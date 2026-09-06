@@ -13,17 +13,23 @@ export interface ImportStepsProps {
   current: ImportStep;
   /** The furthest step earned. Anything beyond it is rendered but not reachable. */
   furthest: ImportStep;
+  /** Round-2 fix: this strip is now the ONLY back affordance — the sheet's own action row used to
+   *  also render a labelled Back button, which put two visible buttons on screen at once on Mapping
+   *  and Review. A step earlier than `current` is clickable only while this is true (mirrors
+   *  `canGoBack`, stepModel.ts: no going back while a run is live). A step from `current` onward, up
+   *  to `furthest`, stays reachable regardless — this only ever narrows what was already earned. */
+  allowBack: boolean;
   onSelect: (step: ImportStep) => void;
 }
 
 /** The "where am I" strip. Presentational only: it holds no state and decides nothing about what is
  *  reachable, which is `importSteps.ts`'s job and is tested there as arithmetic. */
-export function ImportSteps({ current, furthest, onSelect }: ImportStepsProps): JSX.Element {
+export function ImportSteps({ current, furthest, allowBack, onSelect }: ImportStepsProps): JSX.Element {
   const { t } = useTranslation();
   return (
     <nav aria-label={t('facilities.import.steps.label')} className="flex items-center gap-1">
       {STEPS.map(({ step, key }) => {
-        const reachable = step <= furthest;
+        const reachable = step <= furthest && (step >= current || allowBack);
         return (
           <Button
             key={step}

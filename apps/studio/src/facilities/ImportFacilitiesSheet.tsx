@@ -84,6 +84,26 @@ function describeColumnMapError(t: TFunction, e: ColumnMapError): string {
   }
 }
 
+/** The `columnMapErrors` block, extracted so it renders identically in the two places it now has
+ *  to. Before the round-2 fix it lived only inside `ReconciliationSummary`, on Review (step 3) — but
+ *  a column-map refusal now keeps the operator on Mapping (step 2), where that summary never
+ *  mounts (see the auto-advance effect's `columnMapRefused` guard below). One component, same i18n
+ *  keys, so the two render sites can never say something different about the same refusal. */
+function ColumnMapErrorsNotice({ result }: { result: FacilityImportResult }) {
+  const { t } = useTranslation();
+  if (result.columnMapErrors.length === 0) return null;
+  return (
+    <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+      <p className="font-medium">{t('facilities.import.columnMapErrorsTitle')}</p>
+      <ul className="mt-1 space-y-0.5">
+        {result.columnMapErrors.map((e, i) => (
+          <li key={`${e.reason}-${e.subject}-${i}`}>{describeColumnMapError(t, e)}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // A2a (FAC-P1-03) superseded the original F3 fix. `parsed - duplicates` only ever accounted for
 // rows the FILE itself repeated — every other accepted row still read as something an import would
 // write, even a row byte-identical to what the registry already holds (`unchanged`) or one that
@@ -372,16 +392,7 @@ function ReconciliationSummary(props: ReconciliationSummaryProps) {
           the map, which is exactly why `ColumnMapStep` stays mounted below for this specific
           `blockedReason` (see its own render gate). Rendered ahead of `noOutcomeStated` and the
           other amber boxes: this is the reason nothing else on this file could be evaluated. */}
-      {result.columnMapErrors.length > 0 && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <p className="font-medium">{t('facilities.import.columnMapErrorsTitle')}</p>
-          <ul className="mt-1 space-y-0.5">
-            {result.columnMapErrors.map((e, i) => (
-              <li key={`${e.reason}-${e.subject}-${i}`}>{describeColumnMapError(t, e)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ColumnMapErrorsNotice result={result} />
 
       {noOutcomeStated && (
         <p className="text-muted-foreground">
@@ -1295,16 +1306,38 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   };
   const furthest = furthestStep(stepGate);
   const step = clampStep(requestedStep, stepGate);
-  const showBack = canGoBack(step, stepGate);
+  // Round-2 fix: no longer a Back BUTTON's visibility — that button is gone (see the action row
+  // below). What `canGoBack` decides now is whether the step strip lets the operator click an
+  // earlier step at all, so the name says that instead of naming a button that no longer exists.
+  const allowBack = canGoBack(step, stepGate);
 
   // Auto-advance carries the operator to Review and NOWHERE else: after Upload and validate there
   // is no button for them to press, so the sheet has to move itself. It must NOT skip step 1, which
   // would make Continue unpressable and hide the source inputs the moment a register was picked.
   // Never rewinds: `clampStep` already handles falling back when a file is swapped.
+  //
+  // ⛔ ROUND-2 FIX: NOR does it leave a COLUMN-MAP refusal parked on Review. `columnMapErrors` is
+  // only fixable from the Mapping panel, which does not exist on Review — landing there anyway is
+  // what forced a click back to Mapping just to reach the fix, undoing the whole point of keeping
+  // `ColumnMapStep` mounted through the refusal (see `columnMapRefused`'s own docblock).
+  //
+  // This has to be a RETREAT, not just a guard on the forward move: `hasReview` (and so `furthest`)
+  // turns 3 the instant the background door's `runId` is set — see that field's own comment — which
+  // is BEFORE the first poll has said anything about `blockedReason`. The upload's own Continue
+  // already parked the operator on Mapping by then, so this effect's ordinary branch carries them to
+  // Review immediately, exactly as it does for every other run. Only once the first poll answers does
+  // `columnMapRefused` turn true, by which point `requestedStep` already reads 3 — a guard that only
+  // ever refused to ADVANCE would never see this, and the operator would stay stranded on Review with
+  // no way to fix the very thing that put them there. This branch un-does that specific move, and
+  // only that one: any OTHER step the operator had already reached (never past Mapping) is untouched.
   useEffect(() => {
+    if (columnMapRefused) {
+      setRequestedStep((prev) => (prev === 3 ? 2 : prev));
+      return;
+    }
     if (furthest < 3) return;
     setRequestedStep((prev) => (prev < 3 ? 3 : prev));
-  }, [furthest]);
+  }, [furthest, columnMapRefused]);
 
   /** Task 5: a fresh install has NO register: migration 082's back-fill seeds only from
    *  `national_system` values a pre-existing `facility_registry` already carries. Import is then
@@ -1402,7 +1435,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         </SheetHeader>
 
         <div className="flex items-center justify-between gap-2 px-6 py-3">
-          <ImportSteps current={step} furthest={furthest} onSelect={setRequestedStep} />
+          <ImportSteps current={step} furthest={furthest} allowBack={allowBack} onSelect={setRequestedStep} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('facilities.import.actions')}>
@@ -1505,15 +1538,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         </div>
         {/* ⛔ THE ONE EXCEPTION to AGENTS.md section 5, and it is deliberately narrow: exactly one
             visible button, the one that advances this step. Every other action, including Preview,
-            all three re-uploads, Cancel and Close, stays in the dropdown above. The rule broke
-            because eleven items shared one menu and the operator could not tell which of them moved
-            them forward. See the 2026-09-06 redesign spec. */}
-        <div className="flex items-center justify-between gap-2 px-6 pb-3">
-          {showBack ? (
-            <Button variant="ghost" size="sm" onClick={() => setRequestedStep((s) => (s - 1) as ImportStep)}>
-              {t('facilities.import.backAction')}
-            </Button>
-          ) : <span />}
+            all three re-uploads, Cancel and Close, stays in the dropdown above.
+            Round-2 fix: this row used to ALSO render a labelled Back button here, so Mapping and
+            Review showed two visible buttons at once — a duplicate of a job the step strip above
+            already does. There is no back affordance in this row any more: the strip's own steps are
+            it, clickable whenever `allowBack` is true (see `ImportSteps.tsx`). The rule broke because
+            eleven items shared one menu and the operator could not tell which of them moved them
+            forward. See the 2026-09-06 redesign spec. */}
+        <div className="flex items-center justify-end gap-2 px-6 pb-3">
           {step === 1 && (needsRegister ? (
             <Button size="sm" disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
               {t('facilities.import.registerSourceAction')}
@@ -1766,11 +1798,22 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               />
               {/* Non-blocking — see `columnMapValid`'s own state comment for why this never
                   disables Preview/Upload. Purely a heads-up: the server's own refusal (rendered
-                  above, in `ReconciliationSummary`) is what actually explains any problem. */}
+                  below, once one exists) is what actually explains any problem. */}
               {!columnMapValid && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   {t('facilities.import.columnMapIncompleteHint')}
                 </p>
+              )}
+              {/* Round-2 fix: the refusal that keeps this panel mounted needs its OWN explanation
+                  HERE too. `ReconciliationSummary`'s copy of this same block only ever renders on
+                  Review (step 3) — which a column-map refusal no longer reaches (see the
+                  auto-advance effect's `columnMapRefused` guard) — so without this the operator
+                  would see the panel with no reason given for why it is still here. Same
+                  component, same i18n keys as the Review-side copy; nothing here is reworded. */}
+              {columnMapRefused && reviewResult && (
+                <div className="mt-3">
+                  <ColumnMapErrorsNotice result={reviewResult} />
+                </div>
               )}
             </div>
           )}
