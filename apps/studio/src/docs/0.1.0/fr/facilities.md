@@ -48,6 +48,13 @@ rien du contrat est refusé, sauf si vous activez **Autoriser les colonnes non r
 la transporte dans `extras` de la même façon que le choix « la garder comme donnée
 supplémentaire ».
 
+> **Une colonne non reconnue arrête tout le fichier, et l'import le dit maintenant.** Pour un CSV,
+> un seul en-tête inconnu du contrat peut décaler toutes les colonnes suivantes : rien n'est donc
+> lu, et l'exécution ne signale aucune ligne et refuse. Utilisez le rechargement proposé, qui
+> conserve les colonnes non reconnues en données supplémentaires. Cette option doit être activée
+> avant la lecture du fichier, elle ne peut donc pas être ajoutée à l'étape de confirmation. Une
+> version JSONL n'est pas concernée : chaque ligne nomme ses propres champs.
+
 ## Comment obtenir une correspondance suggérée
 
 Vous avez rarement besoin de construire une correspondance de colonnes à la main. L'assistant et

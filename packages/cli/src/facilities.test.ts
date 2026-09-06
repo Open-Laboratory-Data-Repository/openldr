@@ -535,6 +535,28 @@ describe('facilities import CLI', () => {
   // verdict (see `FacilityImportResult.blocked`), so the exit code can no longer disagree with
   // whether anything was written, and `blockedReason` keeps the message from pointing an operator at
   // --allow-malformed-rows, which cannot help them here.
+  // ⛔ THE FOURTH ARM. This file's own comment on `describeColumnMapError`'s neighbour warned that
+  // "a reason added there and not here silently falls into the `quarantined-rows` message" — and
+  // when `'unknown-columns'` was added, that is exactly what happened: an operator whose file had
+  // nine unrecognised headers was told "0 row(s) quarantined" and sent chasing a quarantine problem
+  // that did not exist, instead of the override that would actually let them through.
+  it('unrecognised columns refuse by naming the columns and the override, not a quarantine count', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, parsed: 0,
+      unknownColumns: ['dhis2 uid', 'hims code', 'number of households'],
+      written: { created: 0, updated: 0 }, blocked: true, blockedReason: 'unknown-columns',
+    });
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/dhis2 uid, hims code, number of households/);
+    expect(err).toMatch(/--allow-unknown-columns/);
+    // The message this used to print, and the whole point of the arm.
+    expect(err).not.toMatch(/quarantined/);
+  });
+
   it('duplicate headers refuse with the columns named and no override suggested', async () => {
     mocks.importFacilities.mockResolvedValue({
       ...CLEAN_RESULT, parsed: 0, duplicateColumns: ['name'],

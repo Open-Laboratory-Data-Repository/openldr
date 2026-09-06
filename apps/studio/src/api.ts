@@ -1005,7 +1005,8 @@ export interface FacilityChangeSample extends FacilitySample {
 // (packages/bootstrap/src/facility-import.ts) gained 'column-map' in Task 3. A hand-mirrored type
 // like this one does not fail typecheck when the server adds a value; it only reads wrong at
 // runtime, which is exactly the class of drift this mirror exists to avoid.
-export type FacilityImportBlockedReason = 'duplicate-columns' | 'column-map' | 'quarantined-rows' | null;
+export type FacilityImportBlockedReason =
+  'duplicate-columns' | 'column-map' | 'unknown-columns' | 'quarantined-rows' | null;
 
 /** Mirrors the server's `FacilityReleaseMeta` (packages/terminology/src/facility-release.ts) — a
  *  JSONL release's own header line, verbatim. Always `null` on `FacilityImportResult.meta` for a

@@ -2550,11 +2550,20 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       const overridden = summary.blockedReason === 'quarantined-rows' && p.data.allowMalformedRows === true;
       if (!overridden) {
         reply.code(409);
+        // Each reason gets the remedy that actually exists for it, and only that one.
+        // `allowMalformedRows` rides THIS request because it changes only the verdict;
+        // `allowUnknownColumns` changes the parse, so the gate above refuses it here and the
+        // remedy is a fresh upload. `'duplicate-columns'` and `'column-map'` have no override at
+        // all, so they get no suggestion rather than one that cannot work.
+        const remedy = summary.blockedReason === 'quarantined-rows'
+          ? ' — confirm with allowMalformedRows to import the rest of the file anyway'
+          : (summary.blockedReason === 'unknown-columns'
+            ? ' — upload the file again with allowUnknownColumns to carry those columns into each'
+              + " row's extras; it changes how the file parses, so it cannot be supplied here"
+            : '');
         return {
           error: `import run ${id} cannot be applied: the file is blocked (${String(summary.blockedReason)})`
-            + (summary.blockedReason === 'quarantined-rows'
-              ? ' — confirm with allowMalformedRows to import the rest of the file anyway'
-              : ''),
+            + remedy,
         };
       }
     }

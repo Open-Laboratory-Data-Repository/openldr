@@ -189,7 +189,7 @@ export interface FacilityChangeSample extends FacilitySample {
 }
 
 export type FacilityImportBlockedReason =
-  'duplicate-columns' | 'column-map' | 'quarantined-rows' | null;
+  'duplicate-columns' | 'column-map' | 'unknown-columns' | 'quarantined-rows' | null;
 
 export interface FacilityImportResult {
   /** Rows the parser accepted (present regardless of `apply`, even on a dry run). Counts every
@@ -265,11 +265,28 @@ export interface FacilityImportResult {
    *  precedence.
    *
    *  Precedence, when more than one holds: `'duplicate-columns'` > `'column-map'` >
-   *  `'quarantined-rows'`. A header appearing twice makes any map for it ambiguous — no map can fix
-   *  it, so reporting the map error first would offer an operator a repair that cannot work.
-   *  `'column-map'` beats `'quarantined-rows'` for the mirror-image reason: a misrouted column makes
-   *  rows look malformed, so an operator shown the quarantine count would chase the wrong problem.
-   *  This matches `parseFacilityCsv`'s own ordering (Task 1). */
+   *  `'unknown-columns'` > `'quarantined-rows'`. A header appearing twice makes any map for it
+   *  ambiguous — no map can fix it, so reporting the map error first would offer an operator a
+   *  repair that cannot work. `'column-map'` beats the two below it for the mirror-image reason: a
+   *  misrouted column makes rows look malformed, so an operator shown the quarantine count would
+   *  chase the wrong problem. This matches `parseFacilityCsv`'s own ordering (Task 1).
+   *
+   *  ⛔ `'unknown-columns'` IS CSV-ONLY, and it was added late. Before it, an unrecognised header
+   *  set no reason at all, on the reasoning that the PARSER had refused the file (`records: []`) and
+   *  `blocked` was about files the parser accepted. That distinction never held — `'column-map'` is
+   *  also a parser refusal with `records: []` — and the gap was reachable: a national export with
+   *  nine unrecognised columns validated to `parsed: 0` with `blocked: false`, so the studio's
+   *  `canConfirmRun` offered Confirm, the apply parsed nothing, wrote nothing, and still reported
+   *  `applied` behind a success box. The inline door never had the hole because `canApply` requires
+   *  `parsed > 0`; the background door gated on `blocked` alone. Measured on the Zambia MFL export,
+   *  2026-09-06.
+   *
+   *  ⛔ NOT set for `format: 'jsonl'`. `parseFacilityRelease` never reads `allowUnknownColumns` and
+   *  never refuses on an unrecognised key — every line is a self-describing object, so a stray key
+   *  cannot shift another field the way a stray CSV header can. It still REPORTS `unknownColumns`,
+   *  informationally. Blocking there would refuse a file that parsed perfectly well and name an
+   *  override that provably cannot change it, which is the same fail-open-in-reverse mistake the
+   *  confirm route's own `inPlay` guard exists to avoid. */
   blockedReason: FacilityImportBlockedReason;
 
   // ── What this file would DO to the registry ───────────────────────────────────────────────────
@@ -729,12 +746,19 @@ export async function importFacilities(
   // Both are REPORTED on the result (`blocked`/`blockedReason`), not merely acted on here: three
   // separate consumers gate on this same question, and each one that re-derives it is a chance to
   // derive it differently. See `FacilityImportResult.blocked`.
+  // `!isRelease` and `!opts.allowUnknownColumns` together are exactly the condition under which
+  // `parseFacilityCsv` returns `records: []` for an unrecognised header — this reports that refusal
+  // rather than re-deriving a different one. See the precedence docblock on `blockedReason`.
+  const refusedForUnknownColumns =
+    !isRelease && unknownColumns.length > 0 && !opts.allowUnknownColumns;
   const blockedReason: FacilityImportResult['blockedReason'] =
     duplicateColumns.length > 0
       ? 'duplicate-columns'
       : (columnMapErrors.length > 0
         ? 'column-map'
-        : (quarantined.length > 0 && !opts.allowMalformedRows ? 'quarantined-rows' : null));
+        : (refusedForUnknownColumns
+          ? 'unknown-columns'
+          : (quarantined.length > 0 && !opts.allowMalformedRows ? 'quarantined-rows' : null)));
   const blocked = blockedReason !== null;
 
   const ids = records.map((r) => r.id);

@@ -952,6 +952,9 @@ export const en = {
       tooLargeFileError: 'This file is larger than this endpoint accepts. Import a register this size with the CLI: openldr facilities import.',
       emptyFileHint: 'This file is empty. Choose a different file before previewing.',
       doneTitle: 'Import complete',
+        nothingImportedTitle: 'Nothing was imported',
+        nothingImportedBody: 'This file produced no rows, so nothing was written to the registry.',
+        nothingImportedUnknownColumns: 'Unrecognised columns stopped the file from being read. Upload it again keeping them as extra data.',
       doneSummary: 'Created {{created}}, updated {{updated}}, skipped {{skipped}}.',
       // CT-3: rendered on the applied result, distinct from `summaryConflict` above (which is a
       // PREVIEW-time forecast) — this states what actually happened once the write ran.

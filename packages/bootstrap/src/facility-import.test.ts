@@ -125,9 +125,14 @@ describe('importFacilities', () => {
     // classify — `records: []` — not because the comparison was skipped.
     expect(blocked).toEqual({
       parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [],
-      // NOT blocked: unrecognised columns are refused by the PARSER (records: []), which is a
-      // different mechanism from `blocked` — that one is about a file the parser accepted.
-      duplicates: 0, blocked: false, blockedReason: null,
+      // ⛔ BLOCKED. This used to assert `blocked: false`, on the reasoning that "unrecognised
+      // columns are refused by the PARSER (records: []), which is a different mechanism from
+      // `blocked` — that one is about a file the parser accepted." That distinction never held:
+      // `column-map` is also a parser refusal with `records: []` and it has always set a
+      // `blockedReason`. The gap was reachable, and the Zambia team reached it — their national
+      // export validated to `parsed: 0`, the studio offered Confirm because nothing was blocked,
+      // and the apply wrote nothing and reported `applied` behind a green "Import complete".
+      duplicates: 0, blocked: true, blockedReason: 'unknown-columns',
       create: 0, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
       samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
       written: { created: 0, updated: 0, retired: 0 },
@@ -144,6 +149,58 @@ describe('importFacilities', () => {
     expect(allowed).toMatchObject({ parsed: 1, unknownColumns: ['beds'], written: { created: 1, updated: 0 } });
     const row = await rowFor(deps.db, '100');
     expect(row?.extras).toMatchObject({ beds: '250' });
+  });
+
+  describe('⛔ unrecognised columns block, and the block is a real verdict (the Zambia no-op import)', () => {
+    it('the override clears the block rather than merely changing the parse', async () => {
+      const deps = await buildDeps();
+      const withExtra = ['national_code,name,beds', '100,Dodoma Regional Referral,250'].join('\n') + '\n';
+      const r = await importFacilities(deps, withExtra, {
+        nationalSystem: SYSTEM, allowUnknownColumns: true, apply: true,
+      });
+      expect(r.blocked).toBe(false);
+      expect(r.blockedReason).toBeNull();
+      expect(r.written.created).toBe(1);
+    });
+
+    it('a duplicate header outranks it, matching the parser own return order', async () => {
+      const deps = await buildDeps();
+      const body = ['national_code,name,name,beds', '100,A,B,250'].join('\n') + '\n';
+      const r = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+      expect(r.blockedReason).toBe('duplicate-columns');
+    });
+
+    it('a bad column map outranks it, for the same reason', async () => {
+      const deps = await buildDeps();
+      const body = ['A,B,beds', '1,2,250'].join('\n') + '\n';
+      const r = await importFacilities(deps, body, {
+        nationalSystem: SYSTEM,
+        columnMap: { columns: { A: 'national_code', B: 'national_code' } },
+        apply: true,
+      });
+      expect(r.blockedReason).toBe('column-map');
+    });
+
+    it('it outranks quarantined rows, which are the weaker verdict', async () => {
+      const deps = await buildDeps();
+      // One unrecognised column AND a row whose field count disagrees with the header's.
+      const body = ['national_code,name,beds', '100,Alpha,250,STRAY'].join('\n') + '\n';
+      const r = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+      expect(r.blockedReason).toBe('unknown-columns');
+    });
+
+    it('⛔ does NOT block a JSONL release, where the flag is a documented no-op', async () => {
+      // `parseFacilityRelease` never reads `allowUnknownColumns` and never refuses on an
+      // unrecognised key — each line is a self-describing object, so a stray key cannot shift any
+      // other field the way a stray CSV header can. Blocking here would leave no way through.
+      const deps = await buildDeps();
+      const r = await importFacilities(deps, jsonl([rowLine('100', 'Alpha', { beds: 250 })]), {
+        nationalSystem: SYSTEM, format: 'jsonl', apply: true,
+      });
+      expect(r.blocked).toBe(false);
+      expect(r.blockedReason).toBeNull();
+      expect(r.written.created).toBe(1);
+    });
   });
 
   it('imports a file whose headers are not the contract, through a column map', async () => {

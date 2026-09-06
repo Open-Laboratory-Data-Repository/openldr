@@ -45,6 +45,13 @@ a isto uma coluna **passthrough**. Um cabeçalho não tratado que não escreve n
 recusado, a menos que ative **Permitir colunas não reconhecidas**, o que o transporta para
 `extras` da mesma forma que escolher "manter como dado extra".
 
+> **Uma coluna não reconhecida interrompe o ficheiro inteiro, e a importação passa a dizê-lo.** Num CSV,
+> um único cabeçalho desconhecido do contrato pode deslocar todas as colunas seguintes, por isso
+> nada é lido: a execução não comunica nenhuma linha e recusa. Use o recarregamento oferecido, que
+> mantém as colunas não reconhecidas como dados extra. Tem de ser definido antes de o ficheiro ser
+> lido, por isso não pode ser acrescentado no passo de confirmação. Uma versão JSONL não é
+> afetada: cada linha nomeia os seus próprios campos.
+
 ## Como obter um mapeamento sugerido
 
 Raramente precisa de construir um mapeamento de colunas à mão. Tanto o assistente como a CLI
