@@ -44,6 +44,12 @@ release never blocks on this: each line names its own fields, and the flag is a 
 }
 ```
 
+## The import wizard's three steps
+
+The Studio wizard has three steps: Source (pick the file and register), Mapping (build the
+column map), and Review (the validated summary, the value map, and Confirm import). This slice
+changed no API, so nothing else here moves.
+
 ## Getting a suggested map
 
 Both surfaces can propose a map from a file's headers offline, with no server round trip:

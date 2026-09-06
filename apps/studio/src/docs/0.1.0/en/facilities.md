@@ -16,6 +16,25 @@ own, using a column map and a value map, from either the import wizard or the `o
   register must always be named the same way.
 - Have the source file open somewhere so you can compare its header row to the contract fields below.
 
+## The three steps of the import wizard
+
+The import wizard has three steps, numbered at the top: Source, Mapping, and Review. Click a
+step in that strip to move between them. There is no separate Back button.
+
+- **Source.** Pick the file and the register it belongs to. If this install has no register yet,
+  the button here reads Register a source instead of Continue.
+- **Mapping.** Build or check the column map, and set any fixed values. See below.
+- **Review.** Shows the validated summary, the value map for level, status, or country values
+  that did not match, and the Confirm import button.
+
+Each step shows one button, for the action that moves you forward. Every other action, including
+Preview, the three re-upload options, Cancel, and Close, stays in the page's `⋯` menu.
+
+You cannot click a step you have not reached yet, and you cannot go back to an earlier step while
+a background check is running. After you upload a file on Mapping, the wizard moves you to Review
+on its own once the check finishes. If the check finds a problem with the column map, the wizard
+sends you back to Mapping and shows the errors there, so you can fix the map in place.
+
 ## What a column map is
 
 OpenLDR's import contract has a fixed set of fields: `national_code` and `name` (required), plus
