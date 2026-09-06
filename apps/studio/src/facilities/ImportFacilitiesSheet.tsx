@@ -1304,6 +1304,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setRequestedStep((prev) => (furthest > prev ? furthest : prev));
   }, [furthest]);
 
+  /** Task 5: a fresh install has NO register: migration 082's back-fill seeds only from
+   *  `national_system` values a pre-existing `facility_registry` already carries. Import is then
+   *  unreachable until one is created, and the only affordance was a dropdown item nothing pointed
+   *  at. This makes the requirement the step's own content, and the remedy its own button. */
+  const needsRegister = !sourcesLoading && !sourcesError && sources.length === 0;
+
   // F5 fix: `!csv` covers "still reading" AND "0-byte file" identically (both leave `csv` falsy),
   // so a genuinely empty file left Preview disabled forever with nothing on screen explaining why.
   // `csv === ''` (as opposed to `null`) only ever happens once `File.text()` has actually resolved
@@ -1506,7 +1512,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {t('facilities.import.backAction')}
             </Button>
           ) : <span />}
-          {step === 1 && (
+          {step === 1 && (needsRegister ? (
+            <Button size="sm" disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
+              {t('facilities.import.registerSourceAction')}
+            </Button>
+          ) : (
             <Button
               size="sm"
               disabled={!stepGate.hasFile || !stepGate.hasRegister}
@@ -1514,7 +1524,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             >
               {t('facilities.import.continueAction')}
             </Button>
-          )}
+          ))}
           {step === 2 && (
             <Button size="sm" disabled={uploadDisabled} onClick={() => void handleUpload()}>
               {uploading ? uploadLabel : t('facilities.import.uploadAction')}
@@ -1537,6 +1547,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               Release version — belong to Source (step 1) alone. Leaving them on screen at every step
               is what made five stages read as one scrolling surface; gone once the operator has
               picked a file and a register, back the moment they navigate to Source again. */}
+          {step === 1 && needsRegister && (
+            <div className="mx-6 mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
+              <p className="font-medium">{t('facilities.import.noRegisterTitle')}</p>
+              <p className="text-xs">{t('facilities.import.noRegisterBody')}</p>
+            </div>
+          )}
+
           {step === 1 && (
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 py-4 border-b border-border">
             <Label htmlFor="facility-import-file" className="whitespace-nowrap">{t('facilities.import.fileLabel')}</Label>

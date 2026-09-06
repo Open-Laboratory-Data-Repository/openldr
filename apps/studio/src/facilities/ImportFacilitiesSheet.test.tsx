@@ -239,9 +239,10 @@ describe('ImportFacilitiesSheet', () => {
 
     expect(await screen.findByText(/no facility registers are configured/i)).toBeInTheDocument();
 
-    // Standalone button is refused by this codebase's own rule (ui-actions-in-dots-menu) — the
-    // affordance must live in the ⋯ menu, never next to it.
-    expect(screen.queryByRole('button', { name: /register a source/i })).not.toBeInTheDocument();
+    // Task 5: "Register a source" is now ALSO the step's own visible primary action while no
+    // register exists (the one deliberate exception to ui-actions-in-dots-menu) — it stays in the
+    // ⋯ menu too, so either door opens the same dialog. This still exercises the menu door.
+    expect(screen.getByRole('button', { name: 'Register a source' })).toBeInTheDocument();
     clickMenuItem(/register a source/i);
 
     expect(await screen.findByText('Register a facility source')).toBeInTheDocument();
@@ -2244,6 +2245,30 @@ describe('ImportFacilitiesSheet', () => {
     it('Continue stays disabled until a file and a register are both chosen', async () => {
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
       expect(await screen.findByRole('button', { name: 'Continue' })).toBeDisabled();
+    });
+  });
+
+  describe('the register empty state', () => {
+    it('says a register is required and offers Add a register as the step action', async () => {
+      mocked(api.listFacilityImportSources).mockResolvedValue([]);
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      expect(await screen.findByText(/Register this file’s source first/)).toBeInTheDocument();
+      // ⛔ The action is VISIBLE, not an item in a menu nobody has a reason to open. This is the
+      // whole fix for "user doesnt know they have to register a national system first".
+      expect(screen.getByRole('button', { name: 'Register a source' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    });
+
+    it('goes back to the ordinary Continue action once a register exists', async () => {
+      // A bare array, NOT `{ rows }`. That is this client's actual shape, and the file's own
+      // HFR_SOURCE fixture is the same. Getting it wrong makes `sources.length === 0` stay true and
+      // the test passes for the wrong reason.
+      mocked(api.listFacilityImportSources).mockResolvedValue([HFR_SOURCE]);
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      expect(await screen.findByRole('button', { name: 'Continue' })).toBeInTheDocument();
+      expect(screen.queryByText(/Register this file’s source first/)).not.toBeInTheDocument();
     });
   });
 });

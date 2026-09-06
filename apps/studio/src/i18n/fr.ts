@@ -898,6 +898,8 @@ export const fr: EnShape = {
       nationalSystemLoading: 'Chargement des registres…',
       nationalSystemEmpty: 'Aucun registre de structures sanitaires n\'est configuré sur cette installation.',
       nationalSystemLoadError: 'Impossible de charger les registres.',
+      noRegisterTitle: 'Enregistrez d’abord la source de ce fichier',
+      noRegisterBody: 'Un import est classé sous un registre national, et cette installation n’en a aucun. Ajoutez-en un pour continuer.',
       registerSourceAction: 'Enregistrer un registre',
       registerSourceActions: 'Actions d’enregistrement du registre',
       registerSourceTitle: 'Enregistrer un registre d’établissements',

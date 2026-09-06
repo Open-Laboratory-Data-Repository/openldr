@@ -911,6 +911,8 @@ export const en = {
       nationalSystemLoading: 'Loading registers…',
       nationalSystemEmpty: 'No facility registers are configured on this install yet.',
       nationalSystemLoadError: 'Could not load facility registers.',
+      noRegisterTitle: 'Register this file’s source first',
+      noRegisterBody: 'An import is filed under a national register, and this install has none yet. Add one to continue.',
       registerSourceAction: 'Register a source',
       registerSourceActions: 'Register source actions',
       registerSourceTitle: 'Register a facility source',

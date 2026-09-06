@@ -898,6 +898,8 @@ export const pt: EnShape = {
       nationalSystemLoading: 'A carregar registos…',
       nationalSystemEmpty: 'Ainda não existe nenhum registo de unidades configurado nesta instalação.',
       nationalSystemLoadError: 'Não foi possível carregar os registos.',
+      noRegisterTitle: 'Registe primeiro a origem deste ficheiro',
+      noRegisterBody: 'Uma importação é arquivada sob um registo nacional, e esta instalação ainda não tem nenhum. Adicione um para continuar.',
       registerSourceAction: 'Registar uma fonte',
       registerSourceActions: 'Ações de registo da fonte',
       registerSourceTitle: 'Registar uma fonte de unidades',
