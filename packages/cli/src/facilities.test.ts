@@ -547,6 +547,30 @@ describe('facilities import CLI', () => {
   // when `'unknown-columns'` was added, that is exactly what happened: an operator whose file had
   // nine unrecognised headers was told "0 row(s) quarantined" and sent chasing a quarantine problem
   // that did not exist, instead of the override that would actually let them through.
+  // ⛔ THE CLI HAS ITS OWN COPY of this predicate and returns before `preview.blocked` is ever
+  // consulted, so it needs the map rule in its own right. Without it the two doors disagree about
+  // the same file, which is the exact failure the one-door work exists to remove.
+  it('imports a mapped file whose extra columns are unmapped, instead of refusing it', async () => {
+    const map = { columns: { 'MFL Code': 'national_code', Name: 'name' } };
+    mocks.readFileSync.mockImplementation((path: string) => (
+      String(path).endsWith('.json')
+        ? JSON.stringify(map)
+        : 'MFL Code,Name,Beds\n1835,Alpha,250\n'
+    ));
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, parsed: 1, unknownColumns: ['beds'],
+      written: { created: 1, updated: 0 }, blocked: false, blockedReason: null,
+    });
+
+    const code = await runFacilitiesImport('/some/file.csv', {
+      nationalSystem: 'urn:tz:hfr', apply: true, json: false, columnMap: '/some/map.json',
+    });
+
+    expect(code).toBe(0);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).not.toMatch(/unrecognised column/i);
+  });
+
   it('unrecognised columns refuse by naming the columns and the override, not a quarantine count', async () => {
     mocks.importFacilities.mockResolvedValue({
       ...CLEAN_RESULT, parsed: 0,
