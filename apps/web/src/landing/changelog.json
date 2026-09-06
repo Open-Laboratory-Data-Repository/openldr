@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "05a87dc3",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Make a value the ranker cannot place still mappable"
+        },
+        {
           "hash": "6dad74dd",
           "type": "fix",
           "scope": "facilities",
