@@ -887,6 +887,8 @@ export const pt: EnShape = {
         review: 'Revisão',
         position: 'Passo {{current}} de 3',
       },
+      continueAction: 'Continuar',
+      backAction: 'Voltar',
       title: 'Importar unidades',
       description: 'Carregue uma exportação CSV de um registo nacional de unidades e pré-visualize-a antes de escrever seja o que for.',
       fileLabel: 'Ficheiro',

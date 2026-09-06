@@ -1495,6 +1495,37 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        {/* ⛔ THE ONE EXCEPTION to AGENTS.md section 5, and it is deliberately narrow: exactly one
+            visible button, the one that advances this step. Every other action, including Preview,
+            all three re-uploads, Cancel and Close, stays in the dropdown above. The rule broke
+            because eleven items shared one menu and the operator could not tell which of them moved
+            them forward. See the 2026-09-06 redesign spec. */}
+        <div className="flex items-center justify-between gap-2 px-6 pb-3">
+          {showBack ? (
+            <Button variant="ghost" size="sm" onClick={() => setRequestedStep((s) => (s - 1) as ImportStep)}>
+              {t('facilities.import.backAction')}
+            </Button>
+          ) : <span />}
+          {step === 1 && (
+            <Button
+              size="sm"
+              disabled={!stepGate.hasFile || !stepGate.hasRegister}
+              onClick={() => setRequestedStep(2)}
+            >
+              {t('facilities.import.continueAction')}
+            </Button>
+          )}
+          {step === 2 && (
+            <Button size="sm" disabled={uploadDisabled} onClick={() => void handleUpload()}>
+              {uploading ? uploadLabel : t('facilities.import.uploadAction')}
+            </Button>
+          )}
+          {step === 3 && canConfirmRun && (
+            <Button size="sm" disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
+              {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}
+            </Button>
+          )}
+        </div>
         <div className="border-t border-border" />
 
         <div className="min-h-0 flex-1 overflow-y-auto">

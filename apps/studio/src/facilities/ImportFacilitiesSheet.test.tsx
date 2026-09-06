@@ -1821,18 +1821,22 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
+    // Task 4: the same "Uploading…" copy now also renders on the visible primary action button
+    // (Mapping's own primary action while an upload is in flight) — `{ selector: 'p' }` keeps this
+    // scoped to the sheet-body paragraph the comment above is actually about, so two honest matches
+    // do not read as "not found" and time out.
     // Indeterminate until the first progress event — `null`, never a frozen "0%".
-    expect(await screen.findByText('Uploading…')).toBeInTheDocument();
-    expect(screen.queryByText(/uploading… 0%/i)).not.toBeInTheDocument();
+    expect(await screen.findByText('Uploading…', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.queryByText(/uploading… 0%/i, { selector: 'p' })).not.toBeInTheDocument();
 
     await waitFor(() => expect(report).toBeDefined());
     act(() => { report?.(0.42); });
-    expect(await screen.findByText('Uploading… 42%')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading… 42%', { selector: 'p' })).toBeInTheDocument();
 
     // …and a transfer the browser will not measure (`lengthComputable` false) falls back to the
     // indeterminate copy rather than sticking on whatever number came last.
     act(() => { report?.(null); });
-    expect(await screen.findByText('Uploading…')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading…', { selector: 'p' })).toBeInTheDocument();
   });
 
   // A poll that gives up STOPS the chain: `run` stays null forever, so a "checking…" line gated on
@@ -2164,8 +2168,7 @@ describe('ImportFacilitiesSheet', () => {
       await pickFileAndSystem();
 
       // Task 3: picking a file and a register already earns Mapping (`furthestStep` does not require
-      // a review), so the sheet auto-advances there on its own — there is no Continue button yet in
-      // this task (Task 4 adds it). This asserts the panel arrived without one.
+      // a review), so the sheet auto-advances there on its own — no click is needed to arrive.
       expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
     });
 
@@ -2197,6 +2200,50 @@ describe('ImportFacilitiesSheet', () => {
       fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
 
       expect(await screen.findByLabelText('File')).toBeInTheDocument();
+    });
+  });
+
+  describe('the primary action', () => {
+    it('offers Continue on Source and Upload and validate on Mapping', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      // Task 3: picking a file and a register already advances the sheet to Mapping on its own, so
+      // Continue is only on screen up to that point — checked here before it disappears, rather than
+      // clicked (a click on a button already gone would just time out).
+      expect(await screen.findByRole('button', { name: 'Continue' })).toBeInTheDocument();
+
+      await pickFileAndSystem();
+
+      expect(await screen.findByRole('button', { name: 'Upload and validate' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    });
+
+    // The whole point of the exception to AGENTS.md section 5: the action that advances is visible,
+    // and it is the ONLY visible one. Everything else stays in the dropdown.
+    it('shows exactly one primary action, with Preview still in the menu', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      // Task 3: no Continue click needed — picking a file and a register already advanced the sheet
+      // to Mapping, where Upload and validate is the primary action.
+      await screen.findByRole('button', { name: 'Upload and validate' });
+
+      expect(screen.queryByRole('button', { name: /^Preview$/ })).not.toBeInTheDocument();
+      openMenu();
+      expect(screen.getByRole('menuitem', { name: /^Preview$/ })).toBeInTheDocument();
+    });
+
+    it('Continue stays disabled until a file and a register are both chosen', async () => {
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+      expect(await screen.findByRole('button', { name: 'Continue' })).toBeDisabled();
     });
   });
 });
