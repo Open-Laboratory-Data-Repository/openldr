@@ -48,8 +48,10 @@ Four, by the operator, before any of this was written.
    everywhere else in the app and everywhere else in this sheet. This is a deliberate, narrow
    exception, recorded here so it is not read later as the rule weakening.
 2. **One door.** The inline Preview/Apply path goes. Every import is upload and validate.
-3. **Pre-empt what the headers reveal.** Unrecognised columns become decisions in the mapping step.
-   Coordinates and malformed rows still surface after validation, because nothing can know them
+3. **A column map is the decision.** With a map present, an unmapped column goes to `extras`
+   instead of refusing the file. Superseded an earlier version of this decision, which made every
+   header an explicit choice in the mapping step; see Step 2 for the operator question that retired
+   it. Coordinates and malformed rows still surface after validation, because nothing can know them
    sooner.
 4. **A re-validate route is in scope**, so saving a value mapping does not mean re-uploading the
    file.
@@ -94,26 +96,60 @@ Primary action: **Continue**, enabled once a file and a register are both chosen
 
 Columns and fixed values, in the panel that already exists, with one change of meaning.
 
-Every header gets an explicit destination: a contract field, or **Keep as extra data**. `Not mapped`
-stops being an option.
+**A column map is itself the decision about every column in the file.** So when a map is present, a
+column the operator did not map is carried into the record's `extras` blob rather than refusing the
+file. `Not mapped` is relabelled **Keep as extra data**, because that is now exactly what it does.
 
-That is what removes the unrecognised-columns round trip. The studio already fetches the file's
-headers here, to build the suggestions, so it already knows which headers spell nothing on the
-contract. Today it uploads anyway, the worker refuses the whole file, and the operator re-uploads
-with an override. After this change the file is never sent in a state that will be refused for that
-reason.
+#### Why this replaced an earlier, worse version of this step
 
-It also retires a lie fixed earlier the same day. A header that spells a contract field claims that
-field whether or not the map mentions it, so rendering it as `Not mapped` was untrue and produced a
-`duplicate_target` refusal on a map the panel had called safe. With every header carrying an
-explicit destination, the false state has nowhere left to live.
+This section first said every header must be given an explicit destination, and that an undecided
+header blocks Continue. The operator's question retired that:
 
-A header with no decision blocks Continue and is named.
+> what does the parser want with data that I will never use? If csv had 20 columns and I only needed
+> 5, why complain about the other 15?
 
-There is deliberately no "drop this column" option, because the parser has none. A column either
-maps to a contract field or is carried into the record's `extras` blob, and `Keep as extra data`
-is that second outcome. Offering a third choice the importer cannot honour would be a new lie of
-exactly the kind this redesign removes. An operator who wants a column gone deletes it from the CSV.
+They are right, and the earlier version answered it badly: for their file it meant fifteen trips
+through a hidden menu to repeat a decision they had already made by mapping the other five.
+
+The refusal itself is not wrong, it is just older than column maps. It exists because the sibling
+parser `parseTermsCsv` promises to keep extra columns, keeps three, silently discards the rest, and
+reports success, so an import can lose half a file and say nothing. `parseFacilityCsv` refuses
+rather than repeat that, and the reasoning holds when it has nothing to go on.
+
+It stops holding the moment a map exists. The parser cannot otherwise tell "I looked at this column
+and do not want it" from "I forgot this column", because both look like an unmapped header. A map
+resolves that ambiguity: going through the headers and assigning five of them IS the statement that
+the other fifteen are not wanted. The refusal then fires on evidence it already has the answer to.
+
+#### The rule
+
+- **A map is present.** An unmapped column goes to `extras`. Nothing is lost, so the original
+  concern is still met, and nothing is asked of the operator, because they already answered. No
+  warning, no override, no re-upload.
+- **No map at all.** Unchanged. An unmapped header genuinely is undecided, so the file is refused
+  exactly as it is today, with `blockedReason: 'unknown-columns'` and the `allowUnknownColumns`
+  override. That path keeps every guard added on 2026-09-06.
+
+JSONL is unaffected: it never blocked on this and `allowUnknownColumns` is a documented no-op there.
+
+#### What this costs, stated plainly
+
+Unmapped columns are STORED, not discarded. A 21-column file with 5 mapped keeps 16 in each row's
+`extras`, across every row. For the Zambia export that is 16 values times 3 776 facilities. That is
+the honest price of never silently losing data, and it is the same price `Keep as extra` already
+charges today, just applied by default instead of per column.
+
+There is still no "drop this column" option, because the parser has none and inventing one in the UI
+would be a new lie of exactly the kind this redesign removes. An operator who truly wants a column
+gone deletes it from the CSV.
+
+#### What survives from the earlier version
+
+Relabelling `Not mapped` still retires a lie fixed earlier the same day. A header that spells a
+contract field claims that field whether or not the map mentions it, so rendering it as `Not mapped`
+was untrue and produced a `duplicate_target` refusal on a map the panel had called safe. Under the
+new rule every `Not mapped` row means the same thing, "kept as extra data", whether the header
+spells a contract field or not, so the label is true in both cases.
 
 Primary action: **Upload and validate**.
 
@@ -166,9 +202,11 @@ empty state with its Add a register action. No change to what any step does. Thi
 re-uploads. Delete `canApply`, the row cap, and the branches that exist only to keep the two doors
 in step.
 
-**Slice 3: the mapping step's forced decisions.** Replace `Not mapped` with an explicit destination
-per header. Block Continue on an undecided header. Remove the unrecognised-columns refusal path from
-the operator's flow, keeping the server's own guard, which stays as the authority.
+**Slice 3: a column map is the decision.** With a map present, an unmapped column goes to `extras`
+instead of refusing the file, in `parseFacilityCsv` and in the CLI's own guard alike. Relabel
+`Not mapped` as `Keep as extra data`, which is what it now does on every row. Turn the studio's
+amber unrecognised-columns warning into a plain note saying what was kept. The no-map path, and
+every guard added on 2026-09-06, is untouched.
 
 **Slice 4: the review step.** Visible Save for value mapping, the re-validate route behind it, and
 sonner feedback for import completion, delete and bulk delete.
