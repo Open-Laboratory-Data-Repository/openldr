@@ -18,6 +18,28 @@ do assistente de importação ou da CLI `openldr`.
 - Mantenha o ficheiro de origem aberto algures para comparar a sua linha de cabeçalhos com os
   campos do contrato abaixo.
 
+## Os três passos do assistente de importação
+
+O assistente de importação tem três passos, numerados no topo: Origem, Mapeamento e Revisão.
+Clique num passo dessa faixa para se mover entre eles. Não há um botão Voltar separado.
+
+- **Origem.** Escolha o ficheiro e o registo a que pertence. Se esta instalação ainda não tiver
+  nenhum registo, o botão aqui mostra "Registar uma fonte" em vez de "Continuar".
+- **Mapeamento.** Construa ou reveja o mapeamento de colunas, e defina os valores fixos. Veja
+  abaixo.
+- **Revisão.** Mostra o resumo validado, o mapeamento de valores para os valores de nível, estado
+  ou país que não corresponderam, e o botão "Confirmar importação".
+
+Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
+Pré-visualizar, as três opções de reenvio, Cancelar e Fechar, fica no menu `⋯` da página.
+
+Não pode clicar num passo que ainda não alcançou, nem voltar a um passo anterior enquanto uma
+verificação em segundo plano está a decorrer. Depois de carregar um ficheiro no Mapeamento, o
+assistente leva-o à Revisão sozinho assim que o carregamento começa, antes de a verificação
+terminar. Se a verificação encontrar um problema no mapeamento de colunas, o assistente devolve-o
+ao Mapeamento e mostra os erros ali, para
+que possa corrigir o mapeamento no mesmo sítio.
+
 ## O que é um mapeamento de colunas
 
 O contrato de importação do OpenLDR tem um conjunto fixo de campos: `national_code` e `name`

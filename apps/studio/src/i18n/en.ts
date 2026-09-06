@@ -893,6 +893,13 @@ export const en = {
     import: {
       menuItem: 'Import facilities',
       actions: 'Import actions',
+      steps: {
+        label: 'Import steps',
+        source: 'Source',
+        mapping: 'Mapping',
+        review: 'Review',
+      },
+      continueAction: 'Continue',
       title: 'Import facilities',
       description: 'Upload a CSV export from a national facility register and preview it before writing anything.',
       fileLabel: 'File',
@@ -902,6 +909,8 @@ export const en = {
       nationalSystemLoading: 'Loading registers…',
       nationalSystemEmpty: 'No facility registers are configured on this install yet.',
       nationalSystemLoadError: 'Could not load facility registers.',
+      noRegisterTitle: 'Register this file’s source first',
+      noRegisterBody: 'An import is filed under a national register, and this install has none yet. Add one to continue.',
       registerSourceAction: 'Register a source',
       registerSourceActions: 'Register source actions',
       registerSourceTitle: 'Register a facility source',
@@ -1054,6 +1063,11 @@ export const en = {
       // Non-blocking — shown beside the panel while a required field is still unmapped, but Preview
       // and Upload stay available either way; the server's own refusal (above) is authoritative.
       columnMapIncompleteHint: 'You can still preview or upload with this map incomplete — the import will explain exactly what still needs to be mapped.',
+      // Whole-branch review, FINDING 2: step 2 with nothing else on it — a JSONL release, an applied
+      // run, or a summary that is not a column-map refusal all leave the mapping panel unmounted, and
+      // this says why instead of leaving the pane blank.
+      columnMapNotApplicableJsonl: 'A release file already uses the contract’s own field names, so there is no column map to set.',
+      columnMapAlreadySent: 'This file’s column map has already been sent with the upload and cannot be changed now.',
       // Task 7: the column-mapping panel — one row per file header, a Select over the 16 contract
       // fields, and a constants section for a field no column carries (`country` is the case that
       // forced it).

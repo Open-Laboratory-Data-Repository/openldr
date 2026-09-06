@@ -880,6 +880,13 @@ export const fr: EnShape = {
     import: {
       menuItem: 'Importer des établissements',
       actions: 'Actions d’importation',
+      steps: {
+        label: 'Étapes de l’import',
+        source: 'Source',
+        mapping: 'Mappage',
+        review: 'Vérification',
+      },
+      continueAction: 'Continuer',
       title: 'Importer des établissements',
       description: 'Téléversez un export CSV d’un registre national d’établissements et prévisualisez-le avant toute écriture.',
       fileLabel: 'Fichier',
@@ -889,6 +896,8 @@ export const fr: EnShape = {
       nationalSystemLoading: 'Chargement des registres…',
       nationalSystemEmpty: 'Aucun registre de structures sanitaires n\'est configuré sur cette installation.',
       nationalSystemLoadError: 'Impossible de charger les registres.',
+      noRegisterTitle: 'Enregistrez d’abord la source de ce fichier',
+      noRegisterBody: 'Un import est classé sous un registre national, et cette installation n’en a aucun. Ajoutez-en un pour continuer.',
       registerSourceAction: 'Enregistrer un registre',
       registerSourceActions: 'Actions d’enregistrement du registre',
       registerSourceTitle: 'Enregistrer un registre d’établissements',
@@ -1007,6 +1016,8 @@ export const fr: EnShape = {
       columnMapErrorUnknownTarget: '« {{subject}} » est mappé vers « {{target}} », qui ne fait pas partie des {{count}} champs du contrat.',
       columnMapErrorMissingRequired: 'Le champ obligatoire « {{target}} » n’a ni colonne ni valeur fixe qui lui soit mappée.',
       columnMapIncompleteHint: 'Vous pouvez tout de même prévisualiser ou téléverser avec ce mappage incomplet — l’import expliquera précisément ce qu’il reste à mapper.',
+      columnMapNotApplicableJsonl: 'Un fichier de publication utilise déjà les noms de champs du contrat, il n’y a donc aucune correspondance de colonnes à définir.',
+      columnMapAlreadySent: 'La correspondance de colonnes de ce fichier a déjà été envoyée avec le téléversement et ne peut plus être modifiée.',
       columnMap: {
         notMapped: 'Non mappé',
         checkThisBadge: 'À vérifier',

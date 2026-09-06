@@ -880,6 +880,13 @@ export const pt: EnShape = {
     import: {
       menuItem: 'Importar unidades',
       actions: 'Ações de importação',
+      steps: {
+        label: 'Passos da importação',
+        source: 'Origem',
+        mapping: 'Mapeamento',
+        review: 'Revisão',
+      },
+      continueAction: 'Continuar',
       title: 'Importar unidades',
       description: 'Carregue uma exportação CSV de um registo nacional de unidades e pré-visualize-a antes de escrever seja o que for.',
       fileLabel: 'Ficheiro',
@@ -889,6 +896,8 @@ export const pt: EnShape = {
       nationalSystemLoading: 'A carregar registos…',
       nationalSystemEmpty: 'Ainda não existe nenhum registo de unidades configurado nesta instalação.',
       nationalSystemLoadError: 'Não foi possível carregar os registos.',
+      noRegisterTitle: 'Registe primeiro a origem deste ficheiro',
+      noRegisterBody: 'Uma importação é arquivada sob um registo nacional, e esta instalação ainda não tem nenhum. Adicione um para continuar.',
       registerSourceAction: 'Registar uma fonte',
       registerSourceActions: 'Ações de registo da fonte',
       registerSourceTitle: 'Registar uma fonte de unidades',
@@ -1007,6 +1016,8 @@ export const pt: EnShape = {
       columnMapErrorUnknownTarget: '«{{subject}}» está mapeado para «{{target}}», que não é um dos {{count}} campos do contrato.',
       columnMapErrorMissingRequired: 'O campo obrigatório «{{target}}» não tem coluna nem valor fixo mapeado para ele.',
       columnMapIncompleteHint: 'Ainda pode pré-visualizar ou carregar com este mapeamento incompleto — a importação explicará exatamente o que falta mapear.',
+      columnMapNotApplicableJsonl: 'Um ficheiro de lançamento já usa os próprios nomes de campo do contrato, por isso não há mapeamento de colunas a definir.',
+      columnMapAlreadySent: 'O mapeamento de colunas deste ficheiro já foi enviado com o carregamento e não pode ser alterado agora.',
       columnMap: {
         notMapped: 'Não mapeado',
         checkThisBadge: 'Verificar',

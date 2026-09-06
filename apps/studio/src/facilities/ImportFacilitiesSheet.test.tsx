@@ -133,13 +133,27 @@ function runView(overrides: Partial<FacilityImportRunView> = {}): FacilityImport
 
 const mocked = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeof vi.fn>;
 
-/** Open the menu and click Upload, waiting for it to become enabled first — the same shape as
- *  `previewNow` above, except Upload deliberately does NOT wait on `File.text()`: the File itself is
- *  the request body, so nothing has to be read before the action is live. */
+/** Round-2 fix: drives the VISIBLE "Upload and validate" button — the one `handleUpload` actually
+ *  ships for — rather than its dropdown twin, so this exercises the real wiring an operator uses.
+ *  That button only renders on Mapping (step 2), so this presses Continue first when Source's own
+ *  Continue button is still on screen (every caller reaches this straight after `pickFileAndSystem`,
+ *  which never advances the step itself). Waits for Upload to become enabled first — the same
+ *  discipline as `previewNow`, except Upload deliberately does NOT wait on `File.text()`: the File
+ *  itself is the request body, so nothing has to be read before the action is live. */
 async function uploadNow() {
-  openMenu();
-  await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Upload and validate' })).not.toHaveAttribute('aria-disabled', 'true'));
-  fireEvent.click(screen.getByRole('menuitem', { name: 'Upload and validate' }));
+  const continueButton = screen.queryByRole('button', { name: 'Continue' });
+  if (continueButton) fireEvent.click(continueButton);
+  const button = await screen.findByRole('button', { name: 'Upload and validate' });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+}
+
+/** Round-2 fix: the confirm-path equivalent of `uploadNow` above — drives the VISIBLE "Confirm
+ *  import" button on Review (step 3), which `canConfirmRun` renders once a run's own validated
+ *  summary is on screen. Every caller has already awaited something that only exists once that
+ *  summary rendered, so the button is present synchronously here. */
+function confirmNow() {
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
 }
 
 describe('ImportFacilitiesSheet', () => {
@@ -239,9 +253,10 @@ describe('ImportFacilitiesSheet', () => {
 
     expect(await screen.findByText(/no facility registers are configured/i)).toBeInTheDocument();
 
-    // Standalone button is refused by this codebase's own rule (ui-actions-in-dots-menu) — the
-    // affordance must live in the ⋯ menu, never next to it.
-    expect(screen.queryByRole('button', { name: /register a source/i })).not.toBeInTheDocument();
+    // Task 5: "Register a source" is now ALSO the step's own visible primary action while no
+    // register exists (the one deliberate exception to ui-actions-in-dots-menu) — it stays in the
+    // ⋯ menu too, so either door opens the same dialog. This still exercises the menu door.
+    expect(screen.getByRole('button', { name: 'Register a source' })).toBeInTheDocument();
     clickMenuItem(/register a source/i);
 
     expect(await screen.findByText('Register a facility source')).toBeInTheDocument();
@@ -1003,7 +1018,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-
+    // Continue advances to Mapping — Source, format/complete-release/release-version, is where the
+    // sheet stays until the operator presses it. Set these before ever leaving Source.
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
@@ -1162,6 +1178,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
+    // format/release-version live on Source — set them before Continue ever moves the sheet on.
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
     fireEvent.change(screen.getByLabelText('Release version'), { target: { value: 'r7' } });
@@ -1237,7 +1254,7 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByRole('combobox', { name: /rows changed since this preview/i }));
     fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
 
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     expect(api.confirmFacilityImportRun).toHaveBeenCalledWith(
@@ -1369,7 +1386,7 @@ describe('ImportFacilitiesSheet', () => {
     await uploadNow();
     await screen.findByText(/3 facility row\(s\) will be created/i);
 
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     expect(await screen.findByText(/this import did not finish/i)).toBeInTheDocument();
     expect(screen.getByText(/superseded by a newer upload/i)).toBeInTheDocument();
@@ -1506,6 +1523,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
+    // The complete-release checkbox lives on Source — set it before Continue ever moves the sheet on.
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
     await uploadNow();
 
@@ -1560,7 +1578,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByRole('combobox', { name: /rows missing from this file/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /import anyway/i })).not.toBeInTheDocument();
 
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     // ⛔ EXACT object, not `objectContaining`: the whole point is which keys are ABSENT.
@@ -1603,6 +1621,9 @@ describe('ImportFacilitiesSheet', () => {
 
     // The premise, asserted rather than assumed: the amber notice really IS rendered at `parsed: 0`.
     expect(await screen.findByText(/ward_code/)).toBeInTheDocument();
+    // This refusal is not a column-map one, so the sheet's own retreat effect never fires — the run
+    // reaching Review on its own, proven only indirectly by the assertions below until now.
+    expect(screen.getByRole('button', { name: /3\s*Review/ })).toHaveAttribute('aria-current', 'step');
     // ⛔ …and the tick that could only 409 is gone, replaced by the path that actually works.
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
     expect(screen.getByText(/has to be set before validation/i)).toBeInTheDocument();
@@ -1793,7 +1814,7 @@ describe('ImportFacilitiesSheet', () => {
 
     fireEvent.click(await screen.findByRole('checkbox', { name: /skipping the rows that could not be read/i }));
 
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', { allowMalformedRows: true });
@@ -1813,18 +1834,22 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
+    // Task 4: the same "Uploading…" copy now also renders on the visible primary action button
+    // (Mapping's own primary action while an upload is in flight) — `{ selector: 'p' }` keeps this
+    // scoped to the sheet-body paragraph the comment above is actually about, so two honest matches
+    // do not read as "not found" and time out.
     // Indeterminate until the first progress event — `null`, never a frozen "0%".
-    expect(await screen.findByText('Uploading…')).toBeInTheDocument();
-    expect(screen.queryByText(/uploading… 0%/i)).not.toBeInTheDocument();
+    expect(await screen.findByText('Uploading…', { selector: 'p' })).toBeInTheDocument();
+    expect(screen.queryByText(/uploading… 0%/i, { selector: 'p' })).not.toBeInTheDocument();
 
     await waitFor(() => expect(report).toBeDefined());
     act(() => { report?.(0.42); });
-    expect(await screen.findByText('Uploading… 42%')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading… 42%', { selector: 'p' })).toBeInTheDocument();
 
     // …and a transfer the browser will not measure (`lengthComputable` false) falls back to the
     // indeterminate copy rather than sticking on whatever number came last.
     act(() => { report?.(null); });
-    expect(await screen.findByText('Uploading…')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading…', { selector: 'p' })).toBeInTheDocument();
   });
 
   // A poll that gives up STOPS the chain: `run` stays null forever, so a "checking…" line gated on
@@ -1881,6 +1906,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    // The column map lives on Mapping (step 2) — Continue to reach it.
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     // If the sheet fed `onChange` into anything OTHER than `columnMap` state directly — a debounce,
     // a batched update, a dropped call — the seed `ColumnMapStep` computes on mount would never land
     // back in `value`, and both rows would still read "Not mapped" here (this is exactly the bug
@@ -1916,12 +1943,17 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByLabelText('MFL Code')).toHaveTextContent('national_code');
 
-    // Pick a DIFFERENT file — headers the first file's mapping decisions know nothing about.
+    // The File input lives on Source, not Mapping — go back to reach it, pick a DIFFERENT file
+    // (headers the first file's mapping decisions know nothing about), then Continue again to see
+    // the mapping panel react to it.
+    fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
     fireEvent.change(screen.getByLabelText('File'), {
       target: { files: [csvFile('Code,Facility Name\nX,Y\n')] },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(await screen.findByLabelText('Code')).toHaveTextContent('Not mapped');
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
@@ -1958,18 +1990,26 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByLabelText('MFL Code');
     await previewNow();
 
-    // The refusal is explained — not a silent "no rows found" and not a bare quarantine message.
+    // Round-2 fix: a column-map refusal must NOT carry the operator to Review — the panel that
+    // fixes it lives on Mapping, and Review has no equivalent. The refusal is explained right here,
+    // next to the panel, with no extra click: not a silent "no rows found", not a bare quarantine
+    // message, and not a trip to a step that does not have the fix on it.
     expect(await screen.findByText(
       /"MFL Code 2" and "MFL Code" both map to "national_code"/,
     )).toBeInTheDocument();
 
     // ⛔ THE OTHER HALF OF THE FIX: before it, `ColumnMapStep` unmounted the instant `reviewResult`
     // existed (its own render gate read `!reviewResult`), so the very panel needed to fix the
-    // refusal disappeared at the same moment the refusal appeared. It must stay mounted here.
+    // refusal disappeared at the same moment the refusal appeared. It must stay mounted here,
+    // ALONGSIDE the error text above, on the SAME screen — not reachable only by navigating back.
     expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
     expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
+    // And the sheet really did stay put: Mapping is still current, not Review.
+    expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
   });
 
   it('does not render the columnMapErrors block, or keep the panel mounted, once the file parses cleanly', async () => {
@@ -1988,8 +2028,13 @@ describe('ImportFacilitiesSheet', () => {
 
     await screen.findByText(/facility row\(s\) will be created/i);
     expect(screen.queryByText(/both map to/)).not.toBeInTheDocument();
-    // The design's ordinary flow: the panel maps columns exactly once, then gets out of the way —
-    // unaffected by the fix, which only keeps it mounted for the 'column-map' refusal specifically.
+    // Whole-branch review, FINDING 5: this used to credit the panel's own render gate for the
+    // absence below, but that is not what is happening here. This test never clicks Continue, so
+    // the preview runs from Source and the clean result auto-advances the sheet straight to Review
+    // (step 3) — `queryByLabelText('MFL Code')` is absent because `step !== 2`, not because
+    // `columnMapPanelShown`'s own `!reviewResult` clause excluded it while still on Mapping. The
+    // "keeps ColumnMapStep mounted through a refusal" tests above are the ones that actually
+    // exercise that clause, by staying on step 2 the whole time.
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
   });
 
@@ -2011,6 +2056,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('Code,Facility Name\nA,B\nC,D\n');
+    // The row-count hint and the notice both live in ColumnMapStep, on Mapping (step 2).
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     // rowCount wired: 2 data rows in the picked file.
     expect(await screen.findByText(/applies to 2 facilities/i)).toBeInTheDocument();
@@ -2034,6 +2081,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByLabelText('MFL Code');
     expect(screen.queryByText(/still preview or upload/i)).not.toBeInTheDocument();
   });
@@ -2066,8 +2114,15 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    expect(await screen.findByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
-    // The panel the operator needs is still on screen, exactly as it is on the inline door.
+    // Round-2 fix: an uploaded run counts as reviewed the instant it exists (`runId`), which used to
+    // carry the sheet straight to Review — past the panel that fixes a column-map refusal, which
+    // does not exist there. Landing on Review happens first (before the poll answers), then the
+    // sheet retreats to Mapping the moment the refusal is known — one `waitFor` covers both the
+    // poll answering AND that retreat settling, rather than checking each in its own turn.
+    await waitFor(() => {
+      expect(screen.getByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+    });
     expect(screen.getByLabelText('Province')).toBeInTheDocument();
     expect(screen.getByLabelText('Zone')).toBeInTheDocument();
 
@@ -2104,6 +2159,10 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
     await screen.findByText(/both map to "zone"/);
+    // Round-2 fix: the sheet retreats to Mapping once the refusal is known — see the "keeps
+    // ColumnMapStep mounted" test above for why this needs its own wait. The panel is on screen
+    // once this settles, no back-click needed to reach it.
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
 
     // Fix it in place: send Zone to extras, which is what actually releases its passthrough claim.
     fireEvent.click(screen.getByLabelText('Zone'));
@@ -2115,5 +2174,268 @@ describe('ImportFacilitiesSheet', () => {
     expect(mocked(api.uploadFacilityImport).mock.calls[1][0]).toEqual(
       expect.objectContaining({ columnMap: expect.objectContaining({ extras: ['Zone'] }) }),
     );
+  });
+
+  describe('the step shell', () => {
+    it('starts on Source and does not show the mapping panel yet', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValue({ headers: [], columns: [] });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      expect(await screen.findByRole('button', { name: /1\s*Source/ }))
+        .toHaveAttribute('aria-current', 'step');
+      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toBeDisabled();
+    });
+
+    it('opens Mapping once Continue is pressed, and shows the column map there', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      // Picking a file and a register earns Mapping, but Continue is the operator's own move —
+      // still on Source until they press it.
+      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
+    });
+
+    // The register picker and the file input belong to step 1 and must not be on screen at step 2:
+    // leaving them there is what made five stages read as one scrolling surface.
+    it('hides the source inputs once past Source', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      await screen.findByLabelText('MFL Code');
+
+      expect(screen.queryByLabelText('File')).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'National system' })).not.toBeInTheDocument();
+    });
+
+    it('goes back to Source and shows those inputs again', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      await screen.findByLabelText('MFL Code');
+      fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
+
+      expect(await screen.findByLabelText('File')).toBeInTheDocument();
+    });
+
+    // Round-3 fix: the dropdown's Preview item has no `step` gate at all — only `previewDisabled`
+    // and `!applyResult && !run` (see that item's own comment) — so it is reachable straight from
+    // Source, before Continue is ever pressed. On the inline door, `setPreviewResult(result)` makes
+    // `columnMapRefused` true in the SAME render the response lands, with no poll delay to wait
+    // out. The retreat effect used to fire only for `prev === 3`, so a refusal triggered from step 1
+    // (`requestedStep` still 1) did nothing: `clampStep(1, ...)` returns 1, the sheet stayed on
+    // Source, and neither `ColumnMapErrorsNotice` site mounted (both live behind step 2 or 3) — the
+    // operator saw no refusal at all.
+    it('Preview from the dropdown with no prior Continue click still lands on Mapping when the map is refused', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code', 'MFL Code 2'],
+        columns: [
+          { header: 'MFL Code', candidates: [] },
+          { header: 'MFL Code 2', candidates: [] },
+        ],
+      });
+      (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+        blocked: true, blockedReason: 'column-map',
+        columnMapErrors: [
+          { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
+        ],
+      }));
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
+      // Deliberately no Continue click here — file and register are chosen, and Preview is driven
+      // straight from the ⋯ menu while the sheet is still showing Source.
+      await previewNow();
+
+      expect(await screen.findByText(
+        /"MFL Code 2" and "MFL Code" both map to "national_code"/,
+      )).toBeInTheDocument();
+      expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
+      expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+    });
+  });
+
+  // Whole-branch review, FINDING 2: `ColumnMapStep` is the only thing gated to step 2, so every
+  // state that hides it — a JSONL release, or a map that has already been sent and cannot be
+  // changed here any more — left Mapping a blank pane with no explanation at all.
+  describe('when Mapping has nothing to show', () => {
+    it('says a JSONL release has no column map to set', async () => {
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
+      fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(await screen.findByText(/no column map to set/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+    });
+
+    it('says a CSV file\'s map was already sent, once a clean preview has moved past Mapping', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code', 'Name'],
+        columns: [
+          { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+          { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+        ],
+      });
+      (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      await screen.findByLabelText('MFL Code');
+
+      await previewNow();
+      await screen.findByText(/facility row\(s\) will be created/i);
+
+      // The clean preview auto-advances to Review (step 3) — go back to Mapping, which no longer has
+      // the panel to show, and check it explains why instead of sitting blank.
+      fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+
+      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+      expect(screen.getByText(/already been sent with the upload/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('the primary action', () => {
+    it('offers Continue on Source and Upload and validate on Mapping', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      expect(await screen.findByRole('button', { name: 'Continue' })).toBeInTheDocument();
+
+      await pickFileAndSystem();
+      // Picking a file and a register earns Mapping, but does not move the sheet there — Continue
+      // is still the visible action, on Source, until it is pressed.
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(await screen.findByRole('button', { name: 'Upload and validate' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    });
+
+    // The whole point of the exception to AGENTS.md section 5: the action that advances is visible,
+    // and it is the ONLY visible one. Everything else stays in the dropdown.
+    it('shows exactly one primary action, with Preview still in the menu', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      await screen.findByRole('button', { name: 'Upload and validate' });
+
+      expect(screen.queryByRole('button', { name: /^Preview$/ })).not.toBeInTheDocument();
+      openMenu();
+      expect(screen.getByRole('menuitem', { name: /^Preview$/ })).toBeInTheDocument();
+    });
+
+    it('Continue stays disabled until a file and a register are both chosen', async () => {
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+      expect(await screen.findByRole('button', { name: 'Continue' })).toBeDisabled();
+    });
+
+    // Whole-branch review, FINDING 1(a): this button used to check only `uploadDisabled`, unlike
+    // the dropdown's own Upload item (`!applyResult && !runId`). Once a run reaches a terminal
+    // state `runActive` goes false and the step strip lets the operator click back to Mapping — this
+    // proves the button the dropdown would never offer is not there for them to click either.
+    it('does not offer Upload and validate again on Mapping once the run has finished', async () => {
+      mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+      mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+        status: 'applied', summary: baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 } }),
+      }));
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      await uploadNow();
+      await screen.findByText(/import complete/i);
+
+      // The run finished, so Back is offered again (`canGoBack`) and the step strip reopens.
+      fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+
+      expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
+    });
+
+    // Whole-branch review, FINDING 1(b): the gate above would otherwise leave Mapping with no
+    // action at all in the one case an operator most needs one — a column-map refusal parks them
+    // here with `runId` already set. The primary action becomes the same re-upload the dropdown
+    // already offers as `reuploadColumnMapAction`, reusing its label and handler.
+    it('offers the corrected-map re-upload as Mapping\'s primary action on a column-map refusal', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code', 'MFL Code 2'],
+        columns: [
+          { header: 'MFL Code', candidates: [] },
+          { header: 'MFL Code 2', candidates: [] },
+        ],
+      });
+      mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+      mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+        status: 'awaiting_confirmation',
+        summary: baseResult({
+          blocked: true, blockedReason: 'column-map',
+          columnMapErrors: [
+            { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
+          ],
+        }),
+      }));
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
+      await uploadNow();
+
+      await waitFor(() => {
+        expect(screen.getByText(/"MFL Code 2" and "MFL Code" both map to "national_code"/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+      });
+      expect(screen.getByRole('button', { name: 'Re-upload with the corrected map' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('the register empty state', () => {
+    it('says a register is required and offers Add a register as the step action', async () => {
+      mocked(api.listFacilityImportSources).mockResolvedValue([]);
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      expect(await screen.findByText(/Register this file’s source first/)).toBeInTheDocument();
+      // ⛔ The action is VISIBLE, not an item in a menu nobody has a reason to open. This is the
+      // whole fix for "user doesnt know they have to register a national system first".
+      expect(screen.getByRole('button', { name: 'Register a source' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    });
+
+    it('goes back to the ordinary Continue action once a register exists', async () => {
+      // A bare array, NOT `{ rows }`. That is this client's actual shape, and the file's own
+      // HFR_SOURCE fixture is the same. Getting it wrong makes `sources.length === 0` stay true and
+      // the test passes for the wrong reason.
+      mocked(api.listFacilityImportSources).mockResolvedValue([HFR_SOURCE]);
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      expect(await screen.findByRole('button', { name: 'Continue' })).toBeInTheDocument();
+      expect(screen.queryByText(/Register this file’s source first/)).not.toBeInTheDocument();
+    });
   });
 });
