@@ -189,6 +189,23 @@ describe('importFacilities', () => {
       expect(r.blockedReason).toBe('unknown-columns');
     });
 
+    it('⛔ does NOT block when a column map decided the file', async () => {
+      // The 2026-09-06 guard stays load-bearing for the no-map case, pinned by the sibling tests
+      // here. This is the other side: the map is the decision, the rows parse, and a confirm is
+      // meaningful rather than a silent no-op.
+      const deps = await buildDeps();
+      const r = await importFacilities(deps, 'MFL Code,Name,Beds\n1835,Alpha,250\n', {
+        nationalSystem: SYSTEM,
+        columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+        apply: true,
+      });
+      expect(r.blocked).toBe(false);
+      expect(r.blockedReason).toBeNull();
+      expect(r.parsed).toBe(1);
+      expect(r.written.created).toBe(1);
+      expect(r.unknownColumns).toEqual(['beds']);
+    });
+
     it('⛔ does NOT block a JSONL release, where the flag is a documented no-op', async () => {
       // `parseFacilityRelease` never reads `allowUnknownColumns` and never refuses on an
       // unrecognised key — each line is a self-describing object, so a stray key cannot shift any
