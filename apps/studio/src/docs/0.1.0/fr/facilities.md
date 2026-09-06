@@ -20,13 +20,13 @@ d'une correspondance de valeurs, depuis l'assistant d'importation ou la CLI `ope
 
 ## Les trois étapes de l'assistant d'importation
 
-L'assistant d'importation a trois étapes, numérotées en haut : Source, Correspondance et
+L'assistant d'importation a trois étapes, numérotées en haut : Source, Mappage et
 Vérification. Cliquez sur une étape dans cette bande pour passer de l'une à l'autre. Il n'y a pas
 de bouton Retour séparé.
 
 - **Source.** Choisissez le fichier et le registre auquel il appartient. Si cette installation n'a
   encore aucun registre, le bouton affiche ici « Enregistrer un registre » au lieu de « Continuer ».
-- **Correspondance.** Construisez ou vérifiez la correspondance de colonnes, et définissez les
+- **Mappage.** Construisez ou vérifiez la correspondance de colonnes, et définissez les
   valeurs fixes. Voir ci-dessous.
 - **Vérification.** Affiche le résumé validé, la correspondance de valeurs pour les valeurs de
   niveau, statut ou pays qui n'ont pas trouvé de correspondance, et le bouton « Confirmer
@@ -37,10 +37,10 @@ trois options de réenvoi, Annuler et Fermer, reste dans le menu `⋯` de la pag
 
 Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
 étape antérieure pendant qu'une vérification en arrière-plan est en cours. Après un import de
-fichier à l'étape Correspondance, l'assistant vous amène tout seul à Vérification dès que l'envoi
+fichier à l'étape Mappage, l'assistant vous amène tout seul à Vérification dès que l'envoi
 démarre, avant même que le contrôle ne se termine. Si la vérification trouve un problème dans la
 correspondance de colonnes,
-l'assistant vous ramène à Correspondance et affiche les erreurs à cet endroit, pour que vous
+l'assistant vous ramène à Mappage et affiche les erreurs à cet endroit, pour que vous
 puissiez corriger la correspondance sur place.
 
 ## Ce qu'est une correspondance de colonnes

@@ -883,7 +883,7 @@ export const fr: EnShape = {
       steps: {
         label: 'Étapes de l’import',
         source: 'Source',
-        mapping: 'Correspondance',
+        mapping: 'Mappage',
         review: 'Vérification',
       },
       continueAction: 'Continuer',
