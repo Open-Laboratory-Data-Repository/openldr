@@ -271,7 +271,13 @@ export interface FacilityImportResult {
    *  misrouted column makes rows look malformed, so an operator shown the quarantine count would
    *  chase the wrong problem. This matches `parseFacilityCsv`'s own ordering (Task 1).
    *
-   *  ⛔ `'unknown-columns'` IS CSV-ONLY, and it was added late. Before it, an unrecognised header
+   *  ⛔ `'unknown-columns'` IS CSV-ONLY AND MAP-ABSENT-ONLY. A file that carries a `columnMap` is
+   *  never blocked for it: the map is the decision about every column, so an unmapped one is carried
+   *  into `extras` rather than refused, and reporting a refusal that did not happen would put the
+   *  studio back to offering a confirm the server then rejects. See `parseFacilityCsv`'s own
+   *  condition, which this one mirrors term for term.
+   *
+   *  ⛔ It was added late. Before it, an unrecognised header
    *  set no reason at all, on the reasoning that the PARSER had refused the file (`records: []`) and
    *  `blocked` was about files the parser accepted. That distinction never held — `'column-map'` is
    *  also a parser refusal with `records: []` — and the gap was reachable: a national export with
@@ -749,8 +755,13 @@ export async function importFacilities(
   // `!isRelease` and `!opts.allowUnknownColumns` together are exactly the condition under which
   // `parseFacilityCsv` returns `records: []` for an unrecognised header — this reports that refusal
   // rather than re-deriving a different one. See the precedence docblock on `blockedReason`.
-  const refusedForUnknownColumns =
-    !isRelease && unknownColumns.length > 0 && !opts.allowUnknownColumns;
+  // Mirrors `parseFacilityCsv`'s own condition exactly, INCLUDING the map term. A map present means
+  // the parser did not refuse the file, so reporting it as blocked would describe a refusal that did
+  // not happen, and would put the studio back to offering a confirm it then refuses.
+  const refusedForUnknownColumns = !isRelease
+    && unknownColumns.length > 0
+    && !opts.allowUnknownColumns
+    && opts.columnMap === undefined;
   const blockedReason: FacilityImportResult['blockedReason'] =
     duplicateColumns.length > 0
       ? 'duplicate-columns'

@@ -354,8 +354,15 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     // release with one new key unapplicable by any path at all. For CSV the refusal stands exactly
     // as before: there, `records` really is empty (`parsed: 0`) and an unrecognised header can shift
     // every subsequent column.
+    // ⛔ THE SAME CONDITION `parseFacilityCsv` now uses, re-derived here because this branch returns
+    // before `preview.blocked` is ever consulted. A map present means the parser did NOT refuse the
+    // file, so refusing it here would make the CLI disagree with the HTTP door about the same file.
+    // Reads the PARSED local, not `opts.columnMap`, which is only the path the map was read from.
     const refusedForUnknownColumns =
-      opts.format !== 'jsonl' && preview.unknownColumns.length > 0 && !opts.allowUnknownColumns;
+      opts.format !== 'jsonl'
+      && preview.unknownColumns.length > 0
+      && !opts.allowUnknownColumns
+      && columnMap === undefined;
 
     // Refuse loudly and name the columns rather than let the caller read a generic all-zero
     // summary and wonder why nothing happened. For CSV — the only format this can fire for, see

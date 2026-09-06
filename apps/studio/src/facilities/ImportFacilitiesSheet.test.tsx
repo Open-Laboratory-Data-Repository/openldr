@@ -365,7 +365,13 @@ describe('ImportFacilitiesSheet', () => {
 
   it('shows unknown columns with an explicit opt-in, naming the columns, and re-previews once checked', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({ parsed: 0, unknownColumns: ['weird_col', 'other_col'] }))
+      // `blockedReason` added: these fixtures stand for a file with NO column map, which is the
+      // case that still refuses, and `importFacilities` really does set the reason for it. The
+      // amber box now keys off that verdict rather than off the list alone.
+      .mockResolvedValueOnce(baseResult({
+        parsed: 0, unknownColumns: ['weird_col', 'other_col'],
+        blocked: true, blockedReason: 'unknown-columns',
+      }))
       .mockResolvedValueOnce(baseResult({ parsed: 3, create: 3, unknownColumns: ['weird_col', 'other_col'] }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
@@ -617,7 +623,10 @@ describe('ImportFacilitiesSheet', () => {
 
   it('F2: after opting into unknown columns, a wrong file still states an outcome and surfaces the skipped count', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({ parsed: 0, unknownColumns: ['patient_id', 'dob', 'sex'] }))
+      .mockResolvedValueOnce(baseResult({
+        parsed: 0, unknownColumns: ['patient_id', 'dob', 'sex'],
+        blocked: true, blockedReason: 'unknown-columns',
+      }))
       .mockResolvedValueOnce(baseResult({ parsed: 0, skipped: 3000, unknownColumns: ['patient_id', 'dob', 'sex'] }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
@@ -1085,6 +1094,9 @@ describe('ImportFacilitiesSheet', () => {
     await previewNow();
 
     expect(await screen.findByText(/values with no canonical mapping/i)).toBeInTheDocument();
+    // ⛔ VALUE mapping, not column mapping. `valueMap.notMapped` is a different key from
+    // `columnMap.notMapped` and did NOT change: a value with no canonical mapping is genuinely
+    // unmapped and imports as-is, whereas an unmapped COLUMN is kept as extra data.
     expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Not mapped');
     expect(screen.getByLabelText('District Clinic')).toHaveTextContent('Not mapped');
     expect(screen.getByText(/not checked against a canonical value set.*Status/i)).toBeInTheDocument();
@@ -1689,7 +1701,14 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.getFacilityImportRun)
       .mockResolvedValueOnce(runView({
         id: 'run-b1', status: 'awaiting_confirmation',
-        summary: baseResult({ parsed: 0, unknownColumns: ['ward_code'] }),
+        // `blockedReason` added: this fixture stands for a file with NO column map, the case that
+        // still refuses, and `importFacilities` really does set the reason for it. The re-upload is
+        // now offered on that verdict rather than on a populated list, because with a map present
+        // the columns were kept and re-uploading would change nothing.
+        summary: baseResult({
+          parsed: 0, unknownColumns: ['ward_code'],
+          blocked: true, blockedReason: 'unknown-columns',
+        }),
       }))
       // ⛔ The re-upload's own run is asked for and NEVER ANSWERS. That is what makes the assertions
       // at the end of this test discriminating: the only thing that can clear the superseded run's
@@ -1745,7 +1764,10 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    expect(await screen.findByText(/do not block a JSONL release/i)).toBeInTheDocument();
+    // ⛔ Was asserting a JSONL-specific message that no longer exists. A JSONL release never sets
+    // `blockedReason: 'unknown-columns'`, so it now takes the same "kept as extra data" note every
+    // other non-blocking case takes. The test's own name already promised exactly that.
+    expect(await screen.findByText(/Kept as extra data/i)).toBeInTheDocument();
     expect(screen.queryByText(/Nothing is imported unless you opt in/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/has to be set before validation/i)).not.toBeInTheDocument();
     openMenu();
@@ -1955,7 +1977,7 @@ describe('ImportFacilitiesSheet', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    expect(await screen.findByLabelText('Code')).toHaveTextContent('Not mapped');
+    expect(await screen.findByLabelText('Code')).toHaveTextContent('Keep as extra data');
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
 
     await previewNow();
@@ -2166,7 +2188,7 @@ describe('ImportFacilitiesSheet', () => {
 
     // Fix it in place: send Zone to extras, which is what actually releases its passthrough claim.
     fireEvent.click(screen.getByLabelText('Zone'));
-    fireEvent.click(await screen.findByRole('option', { name: 'Not mapped' }));
+    fireEvent.click(await screen.findByRole('option', { name: 'Keep as extra data' }));
 
     clickMenuItem('Re-upload with the corrected map');
 
@@ -2437,5 +2459,53 @@ describe('ImportFacilitiesSheet', () => {
       expect(await screen.findByRole('button', { name: 'Continue' })).toBeInTheDocument();
       expect(screen.queryByText(/Register this file’s source first/)).not.toBeInTheDocument();
     });
+  });
+
+  // ── A column map is the decision about every column, so what `unknownColumns` MEANS depends on
+  // whether one was present. Both sides are pinned here, because the split is the whole slice. ────
+
+  it('⛔ reports kept columns as a note, not a warning, when a map decided them', async () => {
+    // The Zambia file listed nine columns the operator had deliberately skipped, in an amber box
+    // saying "Nothing is imported unless you opt in below". With a map that sentence is false: the
+    // columns were kept and the rows imported.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({
+        parsed: 1, create: 1, unknownColumns: ['beds'], blocked: false, blockedReason: null,
+      }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/Kept as extra data/i)).toBeInTheDocument();
+    expect(screen.getByText(/beds/)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is imported unless you opt in/i)).not.toBeInTheDocument();
+    openMenu();
+    // Nothing to re-upload FOR: the file was not refused.
+    expect(screen.queryByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).not.toBeInTheDocument();
+  });
+
+  it('still warns, and still offers the override, when NO map decided them', async () => {
+    // The other half, and the reason the split reads the verdict rather than the list. With no map
+    // the file really is refused, and the amber box plus its re-upload are the only way through.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({
+        parsed: 0, unknownColumns: ['beds'], blocked: true, blockedReason: 'unknown-columns',
+      }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/Nothing is imported unless you opt in/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Kept as extra data/i)).not.toBeInTheDocument();
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).toBeInTheDocument();
   });
 });

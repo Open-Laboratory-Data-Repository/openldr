@@ -31,10 +31,16 @@ it already spells a contract field's name exactly (a **passthrough** column) —
 spells nothing on the contract is refused, unless `allowUnknownColumns` is set, which routes it
 to `extras` the same way listing it there explicitly would.
 
-For a CSV that refusal stops the whole file: an unknown header can shift every column after it, so
-nothing is parsed and the run reports `blocked` with `blockedReason: "unknown-columns"`. The flag is
-read by the parser, so it belongs to the upload, and a confirm carrying it is refused. A JSONL
-release never blocks on this: each line names its own fields, and the flag is a documented no-op.
+That refusal applies only when there is NO `columnMap`. A map is the decision about every column, so
+with one present an unmapped column is carried into the record's `extras` and the file parses
+normally. `unknownColumns` is still reported either way, as a statement about the file rather than a
+refusal.
+
+Without a map, a CSV with an unknown header parses nothing and the run reports `blocked` with
+`blockedReason: "unknown-columns"`. That reason is therefore reachable only in the no-map case. The
+flag is read by the parser, so it belongs to the upload, and a confirm carrying it is refused. A
+JSONL release never blocks on this: each line names its own fields, and the flag is a documented
+no-op.
 
 ```json
 {

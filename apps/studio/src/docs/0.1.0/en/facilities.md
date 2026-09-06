@@ -61,11 +61,17 @@ own, as long as it already spells a contract field's name exactly — the parser
 you turn on **Allow unrecognized columns**, which carries it into `extras` the same way choosing
 "keep as extra data" does.
 
-> **An unrecognised column stops the whole file, and the import now says so.** For a CSV, one
-> header the contract does not know can shift every column after it, so nothing is read at all: the
-> run reports no rows and refuses. Take the offered re-upload that keeps unrecognised columns as
-> extra data. It has to be set before the file is read, so it cannot be added at the confirm step.
-> A JSONL release is unaffected: each line names its own fields, so a stray key shifts nothing.
+> **Your column map is the decision about every column.** If you map five columns of twenty, the
+> other fifteen are kept as extra data and the import proceeds. You are not asked about them and
+> nothing is discarded: each row carries them in its extra data, which is also where "keep as extra
+> data" puts a column you choose explicitly.
+>
+> **With no column map at all, an unrecognised column still stops the file.** Nothing has told the
+> importer whether you wanted that column, and it will not guess, because a column silently dropped
+> is worse than a file refused. Take the offered re-upload that keeps unrecognised columns as extra
+> data. It has to be set before the file is read, so it cannot be added at the confirm step.
+>
+> A JSONL release never stops for this: each line names its own fields.
 
 ## How to get a suggested map
 

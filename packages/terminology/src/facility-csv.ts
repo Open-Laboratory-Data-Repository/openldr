@@ -282,10 +282,16 @@ export function validateColumnMap(map: FacilityColumnMap, headers: string[] = []
 /**
  * Parse a national facility CSV.
  *
- * ⛔ Unknown columns FAIL the file rather than being dropped. `parseTermsCsv` in this same package
- * does the opposite — its docblock promises "extra columns go to properties" while the code keeps
- * exactly three and silently discards the rest — so an import reports success having lost half the
- * data. That is the worst available outcome, and this parser deliberately does not repeat it.
+ * ⛔ Unknown columns FAIL the file rather than being dropped, WHEN THERE IS NO COLUMN MAP.
+ * `parseTermsCsv` in this same package does the opposite — its docblock promises "extra columns go
+ * to properties" while the code keeps exactly three and silently discards the rest — so an import
+ * reports success having lost half the data. That is the worst available outcome, and this parser
+ * deliberately does not repeat it.
+ *
+ * ⛔ WITH a `columnMap`, an unmapped column is carried into `extras` instead, and the file imports.
+ * The map is itself the decision about every column: an operator who assigned five headers of
+ * twenty has said the other fifteen are not wanted. Nothing is discarded either way, which is what
+ * the paragraph above actually protects. See the refusal condition below for the full reasoning.
  *
  * Imported records carry NO `managedOrigin` stamp (it comes back `undefined`, stored as NULL).
  * Migration 048's convention reserves `managed_origin = 'central'` for rows the sync APPLIER writes
@@ -353,7 +359,27 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
   if (columnMapErrors.length > 0) {
     return { records: [], unknownColumns, duplicateColumns: [], columnMapErrors, quarantined: [], skipped: 0, invalid: [] };
   }
-  if (unknownColumns.length > 0 && !opts.allowUnknownColumns) {
+  // ⛔ A COLUMN MAP IS THE DECISION ABOUT EVERY COLUMN, so an unmapped one is not an open question.
+  //
+  // This refusal predates column maps. It exists because the sibling `parseTermsCsv` promises to
+  // keep extra columns, keeps three, silently discards the rest, and still reports success, so an
+  // import can lose half a file and say nothing. Refusing is the right reading of an unmapped
+  // header when this parser has nothing else to go on, because it cannot otherwise tell "I looked
+  // at this and do not want it" from "I forgot it".
+  //
+  // A map settles that. An operator who walked the headers and assigned five of them has said, by
+  // doing so, that the other fifteen are not wanted. Refusing then argues with evidence already in
+  // hand, and it cost the Zambia team a nine-column warning about columns they had deliberately
+  // skipped. With a map those columns fall through to the `extras` loop below, which already keeps
+  // any column whose target is not a contract field: nothing is lost, so the original concern still
+  // holds, and nothing is asked, because it was already answered.
+  //
+  // `unknownColumns` stays POPULATED either way. It is a true statement about the file, and callers
+  // render it as a refusal or as a note by re-reading this same condition.
+  const refusedForUnknownColumns = unknownColumns.length > 0
+    && !opts.allowUnknownColumns
+    && opts.columnMap === undefined;
+  if (refusedForUnknownColumns) {
     return { records: [], unknownColumns, duplicateColumns: [], columnMapErrors, quarantined: [], skipped: 0, invalid: [] };
   }
 
