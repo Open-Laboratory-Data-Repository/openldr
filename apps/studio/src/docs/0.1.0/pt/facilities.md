@@ -70,10 +70,16 @@ erros um a um. Quatro coisas podem correr mal:
 
 | Motivo | O que significa | Como corrigir |
 |---|---|---|
-| `duplicate_target` | Dois cabeçalhos mapeiam para o mesmo campo do contrato. | Decida qual cabeçalho está correto para esse campo e mova o outro para um valor fixo ou dado extra. |
+| `duplicate_target` | Dois cabeçalhos reivindicam o mesmo campo do contrato. Um cabeçalho reivindica um campo por estar mapeado para ele, **ou apenas por ter o seu nome** — uma coluna chamada `Zone` reivindica `zone` mesmo que o painel mostre `Não mapeado`. | Decida qual cabeçalho está correto para esse campo e coloque o outro em `Não mapeado`, o que mantém os seus valores como dado extra. |
 | `constant_collision` | Um valor fixo e um cabeçalho mapeado (ou não tratado, já correspondente) reclamam ambos o mesmo campo. | Mantenha apenas um dos dois, o valor fixo ou o mapeamento de coluna, para esse campo. |
 | `unknown_target` | Um cabeçalho está mapeado para um nome que não é um dos campos do contrato. | Corrija o erro de escrita, ou mapeie-o para dado extra se não pertencer de todo ao contrato. |
 | `missing_required` | `national_code` ou `name` não tem coluna mapeada nem valor fixo. | Mapeie uma coluna, ou forneça um valor fixo, para o campo obrigatório em falta. |
+
+> **Uma coluna que tem o nome de um campo do contrato reivindica-o.** Um ficheiro com `Province` e
+> `Zone` é recusado se mapear `Province` para `zone`, porque `Zone` já o reivindica pelo nome.
+> Coloque `Zone` em `Não mapeado` para libertar a reivindicação. Os seus valores são mantidos como
+> dado extra, nunca descartados. O mesmo vale para `Ownership`, `Ward`, `District`, `Latitude` e
+> `Longitude`.
 
 ## A distinção que costuma confundir
 

@@ -26,9 +26,30 @@ const OPTIONAL_FIELDS = [
 // than hardcode" discipline `packages/cli/src/facilities.ts`'s `describeColumnMapError` already
 // follows for `FACILITY_CONTRACT_FIELDS.length` — instead of a second, driftable literal.
 export const CONTRACT_FIELDS: readonly string[] = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
+const CONTRACT_FIELD_SET = new Set<string>(CONTRACT_FIELDS);
 
 /** Not a contract field — a real header could never collide with it. */
 const UNMAPPED = '__not_mapped__';
+
+/** The contract field a header claims JUST BY SPELLING IT, with no map entry behind it — the
+ *  parser's "passthrough" rule, mirrored here so the panel can stop contradicting it.
+ *  `validateColumnMap` (packages/terminology/src/facility-csv.ts) walks the file's OWN headers and
+ *  lets any header that lowercases to a contract field claim that field. Only an explicit `extras`
+ *  entry releases the claim; "Not mapped" in the wire shape is simply the absence of a `columns`
+ *  entry, which is exactly what an untouched passthrough header already looks like.
+ *
+ *  ⛔ Measured on the real Zambia MFL export (`mfl_facilities_export20260810155748.csv`): its
+ *  headers include `Zone` AND `Ownership`, both of which spell contract fields, and the collision
+ *  rule below leaves BOTH unmapped because a second header suggests the same field. The panel used
+ *  to render them as "Not mapped" — untrue — so `Province → zone` read as safe and the server
+ *  refused it with `duplicate_target`, and the fixed-value box offered for `ownership` could only
+ *  ever produce `constant_collision`. Returns null for a header the map already decides. */
+function passthroughTarget(header: string, map: FacilityColumnMap): string | null {
+  if (header in map.columns) return null;
+  if ((map.extras ?? []).includes(header)) return null;
+  const spelled = header.trim().toLowerCase();
+  return CONTRACT_FIELD_SET.has(spelled) ? spelled : null;
+}
 
 export interface ColumnMapStepProps {
   /** One row per entry, in file order. */
@@ -126,33 +147,64 @@ export function ColumnMapStep({
 
   /** What this header currently shows in its `Select`. Post-seed, `value.columns` is authoritative —
    *  see the fix-pass note above. */
-  const selectedTarget = (header: string): string => value.columns[header] ?? UNMAPPED;
+  const selectedTarget = (header: string): string =>
+    value.columns[header] ?? passthroughTarget(header, value) ?? UNMAPPED;
 
-  /** Every contract field currently satisfied — by a column actually mapped to it, or by a
-   *  non-empty constant. A header sitting in `extras` maps to nothing and is correctly invisible
-   *  here (it is absent from `value.columns` by construction — see `keepAsExtra`). Read for both
-   *  the constants section (a field already claimed by a column has nothing to set a constant for)
-   *  and the blocking summary below; mirrors what the server's `validateColumnMap` (Task 1) treats
-   *  as satisfied. */
-  const claimedTargets = useMemo(() => {
-    const claimed = new Set<string>();
-    for (const target of Object.values(value.columns)) claimed.add(target);
-    for (const [field, raw] of Object.entries(value.constants ?? {})) {
-      if (raw.trim() !== '') claimed.add(field);
+  /** Who claims each contract field, and every field claimed twice. Walks the three claim sources in
+   *  the SAME ORDER as the server's `validateColumnMap` — mapped columns, then passthrough headers,
+   *  then constants — so the first claimant this reports is the one the server's own error message
+   *  names as `other`. A field sitting in `extras` claims nothing, by construction: `passthroughTarget`
+   *  returns null for it and `keepAsExtra` deletes its `columns` entry. */
+  const { claimedTargets, collisions } = useMemo(() => {
+    const by = new Map<string, string>();
+    const clashes: { field: string; a: string; b: string }[] = [];
+    const claim = (field: string, claimant: string): void => {
+      const owner = by.get(field);
+      if (owner !== undefined) clashes.push({ field, a: owner, b: claimant });
+      else by.set(field, claimant);
+    };
+    for (const [header, target] of Object.entries(value.columns)) claim(target, header);
+    for (const header of headers) {
+      const target = passthroughTarget(header, value);
+      if (target) claim(target, header);
     }
-    return claimed;
-  }, [value.columns, value.constants]);
+    for (const [field, raw] of Object.entries(value.constants ?? {})) {
+      if (raw.trim() !== '') claim(field, field);
+    }
+    return { claimedTargets: by, collisions: clashes };
+    // `value` is read whole by `passthroughTarget`; its three parts are what actually change.
+  }, [headers, value.columns, value.constants, value.extras]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const missingRequired = REQUIRED_FIELDS.filter((f) => !claimedTargets.has(f));
-  const unclaimedFields = CONTRACT_FIELDS.filter((f) => !claimedTargets.has(f));
+  /** Which fields get a fixed-value box. Unclaimed ones, as before — PLUS any field that already
+   *  carries a constant, whether or not something else now claims it.
+   *
+   *  ⛔ Without that second term the box deleted itself mid-typing: a non-empty constant claims its
+   *  field, so the first keystroke dropped the field out of this list and unmounted the very input
+   *  being typed into, with the stored value then displayed nowhere at all. A constant that now
+   *  collides with a column stays visible here precisely so it can be cleared — the collision box
+   *  below names it. */
+  const constantFields = CONTRACT_FIELDS.filter(
+    (f) => !claimedTargets.has(f) || (value.constants?.[f] ?? '').trim() !== '',
+  );
 
   useEffect(() => {
-    onValidityChange?.(missingRequired.length === 0);
-    // missingRequired is a fresh array every render; its length is the only thing that matters here.
+    onValidityChange?.(missingRequired.length === 0 && collisions.length === 0);
+    // Both are fresh arrays every render; their lengths are the only thing that matters here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [missingRequired.length, onValidityChange]);
+  }, [missingRequired.length, collisions.length, onValidityChange]);
 
   const setColumn = (header: string, target: string): void => {
+    // ⛔ "Not mapped" on a header that SPELLS a contract field is not expressible as an absent
+    // `columns` entry — that is exactly what an untouched passthrough header already is, and the
+    // parser would go on claiming the field. `extras` is the only thing that releases the claim, so
+    // that is what this writes, and the row then reads "Not mapped" with the extras badge beside it.
+    // The column's values are kept, in the record's `extras` blob (facility-csv.ts's extras loop),
+    // never dropped.
+    if (target === UNMAPPED && CONTRACT_FIELD_SET.has(header.trim().toLowerCase())) {
+      keepAsExtra(header);
+      return;
+    }
     const columns = { ...value.columns };
     if (target === UNMAPPED) delete columns[header];
     else columns[header] = target;
@@ -199,6 +251,10 @@ export function ColumnMapStep({
           // Naturally absent for a colliding header: a collision is never auto-selected, so
           // `selected` there is `Not mapped`, never `top.target`.
           const showBadge = top?.confidence === 'likely' && selected === top.target;
+          // "Kept as extra" used to leave no trace on screen at all — the Select simply read
+          // "Not mapped", identical to a header nobody had touched, even though the two mean very
+          // different things to the parser. This badge is that difference, made visible.
+          const inExtras = (value.extras ?? []).includes(header);
           return (
             <Fragment key={header}>
               <Label className="whitespace-nowrap" title={header}>{header}</Label>
@@ -217,6 +273,21 @@ export function ColumnMapStep({
                 {showBadge && (
                   <Badge variant="outline" className="shrink-0">
                     {t('facilities.import.columnMap.checkThisBadge')}
+                  </Badge>
+                )}
+                {/* ⚠ Measured at 375px: this grid's min-content width is 409px against a 289px
+                    container BEFORE any badge renders, because every `Label` here is
+                    `whitespace-nowrap` and "Catchment population head count" sizes the whole `auto`
+                    column at 217px. So the panel already scrolls sideways on a phone. This badge
+                    adds 117px to that scroll on the rows that carry it. Making the badge shrinkable
+                    does NOT help: `grid-cols-[auto_1fr]`'s 1fr track has a min-content floor, so
+                    the track stays wide however the badge is styled. `minmax(0,1fr)` takes it to
+                    428px, still over 289px, and deviates from the form-grid class AGENTS.md §5
+                    mandates. The real fix is the label column, which belongs to the mobile pass,
+                    not here. Kept identical to the `checkThisBadge` above it in the meantime. */}
+                {inExtras && (
+                  <Badge variant="secondary" className="shrink-0">
+                    {t('facilities.import.columnMap.keptAsExtraBadge')}
                   </Badge>
                 )}
                 <DropdownMenu>
@@ -245,14 +316,14 @@ export function ColumnMapStep({
         })}
       </div>
 
-      {unclaimedFields.length > 0 && (
+      {constantFields.length > 0 && (
         <div className="space-y-2">
           <div>
             <p className="font-medium">{t('facilities.import.columnMap.constantsTitle')}</p>
             <p className="text-xs text-muted-foreground">{t('facilities.import.columnMap.constantsHint')}</p>
           </div>
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
-            {unclaimedFields.map((field) => (
+            {constantFields.map((field) => (
               <Fragment key={field}>
                 <Label htmlFor={`column-map-constant-${field}`} className="whitespace-nowrap">{field}</Label>
                 <Input
@@ -264,6 +335,21 @@ export function ColumnMapStep({
               </Fragment>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ⛔ The refusal the server would answer with, said here instead — before Continue, in the
+          panel that can actually fix it. Two columns on one field, or a fixed value on a field a
+          column already claims: `validateColumnMap` reports both, and the panel used to report
+          neither, so a map it called safe came back refused. */}
+      {collisions.length > 0 && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <p className="font-medium">{t('facilities.import.columnMap.collisionTitle')}</p>
+          {collisions.map((c) => (
+            <p key={`${c.field}-${c.a}-${c.b}`}>
+              {t('facilities.import.columnMap.collision', { a: c.a, b: c.b, field: c.field })}
+            </p>
+          ))}
         </div>
       )}
 

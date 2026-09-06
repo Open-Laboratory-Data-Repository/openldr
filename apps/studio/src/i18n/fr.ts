@@ -971,6 +971,7 @@ export const fr: EnShape = {
       cancellingAction: 'Annulation…',
       reuploadUnknownColumnsAction: 'Réenvoyer en conservant les colonnes non reconnues',
       reuploadInvalidCoordinatesAction: 'Réenvoyer en conservant les lignes dont la coordonnée est invalide',
+        reuploadColumnMapAction: 'Réenvoyer avec le mappage corrigé',
       overrideNeedsReupload: 'Cette option change la façon dont le fichier est lu ; elle doit donc être définie avant la validation. Utilisez le menu d’actions ci-dessus pour réenvoyer ce fichier avec l’option — le résumé que vous examinerez sera alors celui qui sera appliqué.',
       overrideAppliedToRun: 'Cette validation a déjà été exécutée avec cette option activée ; le résumé ci-dessous est donc celui qui sera appliqué.',
       runLoading: 'Vérification de l’exécution de l’import…',
@@ -1007,6 +1008,9 @@ export const fr: EnShape = {
         missingRequiredTitle: 'Des champs obligatoires n’ont ni colonne ni valeur fixe',
         missingRequired: '{{field}} n’est pas mappé.',
         rowCountHint: 'Ce mappage s’applique à {{count}} établissement(s) dans ce fichier.',
+        keptAsExtraBadge: 'Conservé en donnée supplémentaire',
+        collisionTitle: 'Ce mappage de colonnes est inutilisable',
+        collision: '« {{a}} » et « {{b}} » revendiquent tous deux {{field}} — un seul le peut.',
       },
       valueMap: {
         actions: 'Actions de mappage des valeurs',

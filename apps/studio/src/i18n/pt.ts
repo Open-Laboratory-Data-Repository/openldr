@@ -971,6 +971,7 @@ export const pt: EnShape = {
       cancellingAction: 'A cancelar…',
       reuploadUnknownColumnsAction: 'Reenviar mantendo as colunas não reconhecidas',
       reuploadInvalidCoordinatesAction: 'Reenviar mantendo as linhas com coordenada inválida',
+        reuploadColumnMapAction: 'Reenviar com o mapeamento corrigido',
       overrideNeedsReupload: 'Esta opção altera a forma como o ficheiro é lido, por isso tem de ser definida antes da validação. Use o menu de ações acima para enviar novamente este ficheiro com a opção — o resumo que analisar passará a ser o que será aplicado.',
       overrideAppliedToRun: 'Esta validação já foi executada com essa opção ativa, por isso o resumo abaixo é o que será aplicado.',
       runLoading: 'A verificar a execução da importação…',
@@ -1007,6 +1008,9 @@ export const pt: EnShape = {
         missingRequiredTitle: 'Campos obrigatórios ainda sem coluna ou valor fixo',
         missingRequired: '{{field}} não está mapeado.',
         rowCountHint: 'Este mapeamento aplica-se a {{count}} unidade(s) neste ficheiro.',
+        keptAsExtraBadge: 'Mantido como dado extra',
+        collisionTitle: 'Este mapeamento de colunas não pode ser usado',
+        collision: '“{{a}}” e “{{b}}” reivindicam ambos {{field}} — apenas um pode.',
       },
       valueMap: {
         actions: 'Ações de mapeamento de valores',

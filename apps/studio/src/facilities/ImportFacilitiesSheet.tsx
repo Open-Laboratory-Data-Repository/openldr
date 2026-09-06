@@ -1255,6 +1255,20 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     && awaitingSummary.unknownColumns.length > 0 && !reupload.allowUnknownColumns;
   const canReuploadForInvalidCoordinates = !!awaitingSummary && !!reupload
     && awaitingSummary.invalid.length > 0 && !reupload.allowInvalidCoordinates;
+  /** Is the reconciliation on screen refused for the COLUMN MAP specifically? Two things read it:
+   *  the mapping panel's own render gate (which must stay mounted for exactly this refusal, on both
+   *  doors) and the re-upload action below.
+   *
+   *  ⛔ Zambia field report: the panel's gate used to open with a bare `!run`, so the exception that
+   *  keeps it mounted through a 'column-map' refusal only ever fired on the INLINE door. Any upload
+   *  sets `run`, so a background operator got the refusal with the panel already gone and no way to
+   *  fix the map in place — and a large national export is exactly the file that takes that door. */
+  const columnMapRefused = reviewResult?.blockedReason === 'column-map';
+  /** The background door's completable path for a refused map, and the mirror of the two re-uploads
+   *  above: those re-stream the file with a parse-changing FLAG, this one re-streams it with the map
+   *  the operator has just corrected in the panel. `handleUpload` reads the live `columnMap` and
+   *  supersedes this run, so the validate reviewed is the one the corrected map produced. */
+  const canReuploadForColumnMap = !!awaitingSummary && !!reupload && columnMapRefused;
   /** What actually got written, whichever door did it. */
   const appliedSummary: FacilityImportResult | null =
     applyResult ?? (run && run.status === 'applied' ? run.summary : null);
@@ -1426,6 +1440,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   onClick={() => void handleUpload({ allowInvalidCoordinates: true })}
                 >
                   {uploading ? uploadLabel : t('facilities.import.reuploadInvalidCoordinatesAction')}
+                </DropdownMenuItem>
+              )}
+              {canReuploadForColumnMap && (
+                <DropdownMenuItem
+                  disabled={uploadDisabled || confirming || cancelling}
+                  onClick={() => void handleUpload()}
+                >
+                  {uploading ? uploadLabel : t('facilities.import.reuploadColumnMapAction')}
                 </DropdownMenuItem>
               )}
               {/* Offered only while the run is still live: the cancel route 409s on a terminal run,
@@ -1629,14 +1651,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               on screen (`!reviewResult`): the design's own flow maps columns exactly once, before
               the file ever leaves this tab, and the operator cannot edit it again afterwards — see
               `columnMap`'s own reset-on-file-swap comment for why it must not persist past that. */}
-          {format === 'csv' && columnMapHeaders.length > 0 && !run && !appliedSummary
+          {format === 'csv' && columnMapHeaders.length > 0 && !appliedSummary
+            // ⛔ `!run` alone would unmount the panel the instant an upload resolves — see
+            // `columnMapRefused` for the field report that cost. A run still hides it for every
+            // OTHER state (validating, applying, a clean summary), preserving the "map columns
+            // exactly once" flow; only the refusal the panel itself can fix keeps it on screen.
+            && (!run || columnMapRefused)
             // ⛔ Fix pass (whole-branch review, MUST FIX 3): kept mounted THROUGH a 'column-map'
             // refusal, not just before any `reviewResult` exists — before this, the panel unmounted
             // the instant a preview came back (any `reviewResult`), so the operator who most needed
             // it (the one whose map the server just refused) lost it at the same moment the refusal
             // appeared, with no way to fix it in place. Still gone once a DIFFERENT block reason
             // exists (or none), preserving the original "map columns exactly once" flow.
-            && (!reviewResult || reviewResult.blockedReason === 'column-map') && (
+            && (!reviewResult || columnMapRefused) && (
             <div className="mx-6 mt-4">
               <ColumnMapStep
                 headers={columnMapHeaders}
