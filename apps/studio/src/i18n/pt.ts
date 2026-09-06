@@ -1041,6 +1041,8 @@ export const pt: EnShape = {
         saveAction: 'Guardar mapeamentos',
         saving: 'A guardar…',
         notMapped: 'Não mapeado',
+        loadFailed: 'As opções deste campo não puderam ser carregadas. Verifique a ligação e reabra este painel.',
+        noValueSet: 'Este campo não tem nenhum conjunto de valores nesta instalação, por isso não há nada para onde mapear. Adicione um em Terminologia.',
         savedCount: '{{count}} mapeamento(s) guardado(s).',
       },
     },

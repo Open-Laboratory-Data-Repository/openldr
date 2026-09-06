@@ -1934,11 +1934,19 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     if (!vs) {
       // The field's value set is not seeded on this install — the same condition
       // `resolveControlledFields` reports as `notValidated`. No candidates exist to rank against.
-      return { values: values.map((value) => ({ value, candidates: [] })), notValidated: true };
+      return { values: values.map((value) => ({ value, candidates: [] })), options: [], notValidated: true };
     }
     const { codes } = await ctx.terminology.admin.valueSets.expand(vs.id);
     const candidates = codes.map((c) => ({ code: c.code, display: c.display ?? null }));
-    return { values: suggestValues(values, candidates), notValidated: false };
+    // ⛔ `options` IS THE WHOLE VALUE SET, and it is not the same thing as `candidates`.
+    // `suggestValues` ranks and FILTERS: a raw value that resembles nothing in the set scores
+    // nothing and comes back with an empty candidate list, which is the honest answer to "what
+    // does this look like". The studio then rendered only those candidates, so an operator handed
+    // a judgement the ranker could not make had no way to make it. Measured on the real Zambia
+    // export: `Functional` resembles none of active/suspended/inactive, and the picker was empty.
+    // The ranking still drives ordering, pre-selection and the confidence badge; this is what the
+    // operator picks from when the ranking has nothing to say.
+    return { values: suggestValues(values, candidates), options: candidates, notValidated: false };
   });
 
   // Task 6 (facility-import-mapping): the wizard's value panel writes its raw-string -> canonical-

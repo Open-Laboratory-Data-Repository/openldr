@@ -1041,6 +1041,8 @@ export const fr: EnShape = {
         saveAction: 'Enregistrer les mappages',
         saving: 'Enregistrement…',
         notMapped: 'Non mappé',
+        loadFailed: 'Les options de ce champ n’ont pas pu être chargées. Vérifiez la connexion et rouvrez ce panneau.',
+        noValueSet: 'Ce champ n’a aucun jeu de valeurs sur cette installation, il n’y a donc rien vers quoi mapper. Ajoutez-en un dans Terminologie.',
         savedCount: '{{count}} mappage(s) enregistré(s).',
       },
     },
