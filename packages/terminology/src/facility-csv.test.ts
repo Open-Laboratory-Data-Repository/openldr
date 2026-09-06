@@ -211,13 +211,22 @@ describe('parseFacilityCsv with a column map', () => {
     expect(r.records[0].facilityCode).toBe('1835');
   });
 
-  it('⛔ refuses a header in neither columns nor extras, exactly as an unknown column today', () => {
+  // ⛔ THIS TEST USED TO ASSERT THE OPPOSITE, and its old name said so: "refuses a header in
+  // neither columns nor extras, exactly as an unknown column today". That was the rule until an
+  // operator asked what the parser wanted with data they would never use: if a file has 20
+  // columns and they need 5, why complain about the other 15? A map IS the decision about every
+  // column, so the unmapped ones are carried, not refused. The refusal survives only where there
+  // is no map at all, which the "NO column map" block at the end of this file pins.
+  it('carries a header in neither columns nor extras, because the map already decided it', () => {
     const r = parseFacilityCsv('MFL Code,Name,Surprise\n1835,X,y\n', {
       nationalSystem: HFR,
       columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
     });
     expect(r.unknownColumns).toEqual(['surprise']);
-    expect(r.records).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    // Reported AND kept. Reporting alone would be the silent-discard failure the refusal exists
+    // to prevent, so the value has to actually be somewhere.
+    expect(r.records[0].extras).toEqual({ surprise: 'y' });
   });
 
   it('⛔ refuses two headers mapped to the same field, reporting both', () => {
@@ -565,5 +574,53 @@ describe('parseFacilityCsv against the real Zambia MFL export', () => {
     // only leading/trailing trim is.
     expect(r.records.some((rec) => rec.name.includes('Mankhaka'))).toBe(true);
     expect(r.records.every((rec) => rec.name.trim().length > 0)).toBe(true);
+  });
+
+});
+
+describe('a column map is the decision about every column', () => {
+  // ── A column map is itself the decision about every column in the file. The operator's question
+  // that retired the old behaviour: "what does the parser want with data that I will never use? If
+  // csv had 20 columns and I only needed 5, why complain about the other 15?" ────────────────────
+
+  describe('unrecognised columns, when a column map is present', () => {
+    const FILE = 'MFL Code,Name,Beds,Ward Count\n1835,Namatindi RHC,250,4\n';
+    const MAP = { columns: { 'MFL Code': 'national_code', Name: 'name' } };
+
+    it('imports the file instead of refusing it', () => {
+      const r = parseFacilityCsv(FILE, { nationalSystem: HFR, columnMap: MAP });
+      expect(r.records).toHaveLength(1);
+      expect(r.records[0].name).toBe('Namatindi RHC');
+    });
+
+    it('⛔ keeps the unmapped values rather than dropping them', () => {
+      // The refusal exists because `parseTermsCsv` silently discarded columns and still reported
+      // success. Relaxing the refusal must not reintroduce that: the data has to be somewhere.
+      const r = parseFacilityCsv(FILE, { nationalSystem: HFR, columnMap: MAP });
+      expect(r.records[0].extras).toEqual({ beds: '250', 'ward count': '4' });
+    });
+
+    it('still REPORTS them, so a caller can say what it kept', () => {
+      const r = parseFacilityCsv(FILE, { nationalSystem: HFR, columnMap: MAP });
+      expect([...r.unknownColumns].sort()).toEqual(['beds', 'ward count']);
+    });
+  });
+
+  describe('unrecognised columns, when there is NO column map', () => {
+    // Unchanged, and deliberately so: with nothing to go on, the parser cannot tell "I do not want
+    // this column" from "I forgot it", and refusing is the safe reading of that ambiguity.
+    const FILE = 'national_code,name,beds\n100,Alpha,250\n';
+
+    it('still refuses the file', () => {
+      const r = parseFacilityCsv(FILE, { nationalSystem: HFR });
+      expect(r.records).toEqual([]);
+      expect(r.unknownColumns).toEqual(['beds']);
+    });
+
+    it('still honours the override', () => {
+      const r = parseFacilityCsv(FILE, { nationalSystem: HFR, allowUnknownColumns: true });
+      expect(r.records).toHaveLength(1);
+      expect(r.records[0].extras).toEqual({ beds: '250' });
+    });
   });
 });
