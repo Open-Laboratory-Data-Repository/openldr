@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "f0cf7176",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Refuse a confirm that could only import nothing"
+        },
+        {
           "hash": "0e9bf158",
           "type": "fix",
           "scope": "facilities",
