@@ -1555,60 +1555,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {/* ⛔ THE ONE EXCEPTION to AGENTS.md section 5, and it is deliberately narrow: exactly one
-            visible button, the one that advances this step. Every other action, including Preview,
-            all three re-uploads, Cancel and Close, stays in the dropdown above.
-            Round-2 fix: this row used to ALSO render a labelled Back button here, so Mapping and
-            Review showed two visible buttons at once — a duplicate of a job the step strip above
-            already does. There is no back affordance in this row any more: the strip's own steps are
-            it, clickable whenever `allowBack` is true (see `ImportSteps.tsx`). The rule broke because
-            eleven items shared one menu and the operator could not tell which of them moved them
-            forward. See the 2026-09-06 redesign spec. */}
-        <div className="flex items-center justify-end gap-2 px-6 pb-3">
-          {step === 1 && (needsRegister ? (
-            <Button size="sm" disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
-              {t('facilities.import.registerSourceAction')}
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              disabled={!stepGate.hasFile || !stepGate.hasRegister}
-              onClick={() => setRequestedStep(2)}
-            >
-              {t('facilities.import.continueAction')}
-            </Button>
-          ))}
-          {/* Whole-branch review, FINDING 1: this button used to check only `uploadDisabled` — the
-              dropdown's own Upload item ALSO checks `!applyResult && !runId` (see that item's own
-              comment for why: a second upload either supersedes the run this sheet is watching or
-              409s). Once a run reaches a terminal state `runActive` goes false, the step strip
-              reopens, and an operator who clicks back to Mapping saw this button enabled and could
-              fire a second upload the dropdown itself would never offer. Mirrors that same gate.
-              (b) That gate alone would leave Mapping with no action in the one case an operator most
-              needs one: a column-map refusal parks them here with `runId` already set. So the
-              refusal gets its own branch first, reusing the exact action (and label) the dropdown's
-              `canReuploadForColumnMap` item already offers — no new copy, no new handler. */}
-          {step === 2 && (columnMapRefused ? (
-            <Button
-              size="sm"
-              disabled={uploadDisabled || confirming || cancelling}
-              onClick={() => void handleUpload()}
-            >
-              {uploading ? uploadLabel : t('facilities.import.reuploadColumnMapAction')}
-            </Button>
-          ) : (
-            !applyResult && !runId && (
-              <Button size="sm" disabled={uploadDisabled} onClick={() => void handleUpload()}>
-                {uploading ? uploadLabel : t('facilities.import.uploadAction')}
-              </Button>
-            )
-          ))}
-          {step === 3 && canConfirmRun && (
-            <Button size="sm" disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
-              {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}
-            </Button>
-          )}
-        </div>
         <div className="border-t border-border" />
 
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -1942,6 +1888,75 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 </div>
               )}
             </div>
+          )}
+        </div>
+
+        {/* ⛔ THE ONE EXCEPTION to AGENTS.md section 5, and it is deliberately narrow: exactly one
+            visible button, the one that advances this step. Every other action, including Preview,
+            all three re-uploads, Cancel and Close, stays in the dropdown at the top of the sheet.
+            No labelled Back button lives here: the step strip's own steps are the back affordance,
+            clickable whenever `allowBack` is true (see `ImportSteps.tsx`).
+
+            ⛔ PINNED, and that is an operator decision taken with its costs stated. It sits AFTER
+            the scrolling body so it stays put while a 3 700-row mapping list scrolls past, which is
+            the whole reason it moved out of the band under the step strip. Two things follow.
+
+            First, this is a footer in all but name, which bends section 5 further than the primary
+            action exception alone. It carries ONE action and never a Cancel/Save pair, which is the
+            shape that rule actually forbids.
+
+            ⚠ Second, HEADLESS CHROMIUM CANNOT VERIFY THE BOTTOM EDGE. `SheetContent` is
+            `fixed inset-y-0`, so this row sits at the bottom of the FIXED viewport, and a browser
+            with a retractable URL bar measures that differently from a headless one, which has no
+            chrome to retract. Every automated bottom-edge check passes either way. `env(safe-area-
+            inset-bottom)` below covers the iOS home indicator; it does NOT cover a retracting URL
+            bar. Only a real phone can confirm this. See AGENTS.md's mobile-testing note. */}
+        <div
+          className="flex items-center justify-end gap-2 border-t border-border px-6 py-3"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
+          {step === 1 && (needsRegister ? (
+            <Button size="sm" disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
+              {t('facilities.import.registerSourceAction')}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              disabled={!stepGate.hasFile || !stepGate.hasRegister}
+              onClick={() => setRequestedStep(2)}
+            >
+              {t('facilities.import.continueAction')}
+            </Button>
+          ))}
+          {/* Whole-branch review, FINDING 1: this button used to check only `uploadDisabled` — the
+              dropdown's own Upload item ALSO checks `!applyResult && !runId` (see that item's own
+              comment for why: a second upload either supersedes the run this sheet is watching or
+              409s). Once a run reaches a terminal state `runActive` goes false, the step strip
+              reopens, and an operator who clicks back to Mapping saw this button enabled and could
+              fire a second upload the dropdown itself would never offer. Mirrors that same gate.
+              (b) That gate alone would leave Mapping with no action in the one case an operator most
+              needs one: a column-map refusal parks them here with `runId` already set. So the
+              refusal gets its own branch first, reusing the exact action (and label) the dropdown's
+              `canReuploadForColumnMap` item already offers — no new copy, no new handler. */}
+          {step === 2 && (columnMapRefused ? (
+            <Button
+              size="sm"
+              disabled={uploadDisabled || confirming || cancelling}
+              onClick={() => void handleUpload()}
+            >
+              {uploading ? uploadLabel : t('facilities.import.reuploadColumnMapAction')}
+            </Button>
+          ) : (
+            !applyResult && !runId && (
+              <Button size="sm" disabled={uploadDisabled} onClick={() => void handleUpload()}>
+                {uploading ? uploadLabel : t('facilities.import.uploadAction')}
+              </Button>
+            )
+          ))}
+          {step === 3 && canConfirmRun && (
+            <Button size="sm" disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
+              {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}
+            </Button>
           )}
         </div>
 
