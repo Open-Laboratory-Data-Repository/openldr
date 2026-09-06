@@ -1717,13 +1717,28 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
           {appliedSummary && (
             <div className="mx-6 mt-4 space-y-2 text-sm">
-              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-700">
-                <p className="font-medium">{t('facilities.import.doneTitle')}</p>
-                <p>{t('facilities.import.doneSummary', { created: appliedSummary.written.created, updated: appliedSummary.written.updated, skipped: appliedSummary.skipped })}</p>
-                {appliedSummary.duplicates > 0 && (
-                  <p>{t('facilities.import.duplicatesWarning', { count: appliedSummary.duplicates })}</p>
-                )}
-              </div>
+              {/* ⛔ A file that produced NO ROWS is not a completed import, and saying so in green
+                  is how the Zambia team read "Import complete. Created 0, updated 0, skipped 0."
+                  over a national export that had written nothing at all. Gated on `parsed === 0`,
+                  NOT on "wrote nothing": re-importing a byte-identical register legitimately writes
+                  nothing because every row is `unchanged`, and that IS a completed import. */}
+              {appliedSummary.parsed === 0 ? (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-700">
+                  <p className="font-medium">{t('facilities.import.nothingImportedTitle')}</p>
+                  <p>{t('facilities.import.nothingImportedBody')}</p>
+                  {appliedSummary.unknownColumns.length > 0 && (
+                    <p className="mt-1">{t('facilities.import.nothingImportedUnknownColumns')}</p>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-700">
+                  <p className="font-medium">{t('facilities.import.doneTitle')}</p>
+                  <p>{t('facilities.import.doneSummary', { created: appliedSummary.written.created, updated: appliedSummary.written.updated, skipped: appliedSummary.skipped })}</p>
+                  {appliedSummary.duplicates > 0 && (
+                    <p>{t('facilities.import.duplicatesWarning', { count: appliedSummary.duplicates })}</p>
+                  )}
+                </div>
+              )}
 
               {/* CT-3: THE FIX FOR THE DEFECT THIS TASK CLOSES. Before this, a row edited between
                   preview and apply was classified `conflict`, skipped by default (or overwritten),

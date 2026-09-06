@@ -1583,11 +1583,17 @@ describe('ImportFacilitiesSheet', () => {
   // stored summary shows the file contains the thing it waves through, which is the SAME condition
   // that renders this box. The checkbox is gone from the run door; what replaces it is asserted here
   // and, for the working half, in the re-upload test below.
-  it('A2b: a CSV register with an unrecognised column is completable at parsed 0 — and Confirm sends no parse-changing key', async () => {
+  it('A2b: a CSV register with an unrecognised column is completable at parsed 0 — through the RE-UPLOAD, never Confirm', async () => {
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    // ⛔ `blocked: true, blockedReason: 'unknown-columns'` — this used to be `false`/`null`, which
+    // is exactly the defect the Zambia team hit: nothing blocked, so Confirm was offered, and the
+    // apply parsed nothing, wrote nothing and reported `applied` behind a green success box. The
+    // register was always "completable at parsed 0"; it just was never Confirm that completed it.
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({
       status: 'awaiting_confirmation',
-      summary: baseResult({ parsed: 0, unknownColumns: ['ward_code'], blocked: false, blockedReason: null }),
+      summary: baseResult({
+        parsed: 0, unknownColumns: ['ward_code'], blocked: true, blockedReason: 'unknown-columns',
+      }),
     }));
     mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
@@ -1601,16 +1607,54 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
     expect(screen.getByText(/has to be set before validation/i)).toBeInTheDocument();
     openMenu();
+    // ⛔ The completable path IS offered...
     expect(screen.getByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).toBeInTheDocument();
+    // ...and the one that could only ever write nothing is NOT. `canConfirmRun` reads the same
+    // `blocked` verdict the confirm route enforces, so the studio and the server now agree about
+    // this file instead of the studio offering what the server would refuse.
+    expect(screen.queryByRole('menuitem', { name: 'Confirm import' })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
-    clickMenuItem('Confirm import');
+    expect(api.confirmFacilityImportRun).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
-    // ⛔ EXACT object, both directions at once: `onDeleted`/`onAbsent`/`onConflict` DO sit inside the
-    // `parsed > 0` wrapper, so none of them rendered and none may be sent — and neither may either
-    // parse-changing override, which the run's own stored `options` already carry.
-    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', {});
+  // ── The other half of the Zambia report: even reached through the API or the CLI, an apply that
+  // parsed nothing must not be dressed as a success. ──────────────────────────────────────────────
+
+  it('⛔ an applied run that wrote nothing does not claim the import completed', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'applied',
+      summary: baseResult({
+        parsed: 0, skipped: 0, unknownColumns: ['ward_code'],
+        written: { created: 0, updated: 0, retired: 0 },
+      }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    await uploadNow();
+
+    // "Import complete. Created 0, updated 0, skipped 0." was the screenshot the operator sent.
+    expect(await screen.findByText(/nothing was imported/i)).toBeInTheDocument();
+    expect(screen.queryByText(/import complete/i)).not.toBeInTheDocument();
+  });
+
+  it('still reports a real write as a completed import', async () => {
+    // The guard above must key on "wrote nothing", not on "a run finished" — or it would swallow
+    // every successful import too.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'applied',
+      summary: baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 } }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/import complete/i)).toBeInTheDocument();
+    expect(screen.queryByText(/nothing was imported/i)).not.toBeInTheDocument();
   });
 
   // ⛔ THE COMPLETABLE PATH ITSELF. Before this, a CSV register with one unrecognised column could be

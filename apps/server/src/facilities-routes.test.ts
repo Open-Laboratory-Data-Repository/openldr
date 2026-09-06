@@ -4455,6 +4455,36 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
       .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe(APPLY_PHASE.from);
   });
 
+  // ⛔ THE ZAMBIA NO-OP CONFIRM. Before `'unknown-columns'` existed, an unrecognised header set no
+  // `blockedReason`, so `blocked` was false and this gate passed the run straight through: the
+  // worker applied it, parsed nothing, wrote nothing, and reported `applied`. Measured on their
+  // national export, 2026-09-06 — nine unrecognised columns, `parsed: 0`, "Import complete."
+  it('⛔ 409s an unknown-columns file and names the re-upload, since the override belongs to the upload', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db, {
+      blocked: true, blockedReason: 'unknown-columns', unknownColumns: ['dhis2 uid', 'hims code'],
+    });
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/unknown-columns/);
+    // ⛔ The remedy, not just the token. `allowUnknownColumns` changes the PARSE, so it cannot ride
+    // this request — the gate above refuses it — which means the message must point at the upload
+    // instead, or it names a dead end. `allowMalformedRows` must NOT be suggested: it cannot help.
+    expect(res.json().error).toMatch(/upload/i);
+    expect(res.json().error).not.toMatch(/allowMalformedRows/);
+
+    // ⛔ And the override genuinely cannot be supplied here, so the run stays parked.
+    const withFlag = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+    expect(withFlag.statusCode).toBe(409);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
   it('⛔ 409s a run with no stored file — an inline preview cannot be applied by the worker', async () => {
     // `isApplicable` admits `previewed`, the state the INLINE A2a preview mints — and that run has no
     // `blob_key` (it carried its CSV in the request body and never stored it). Confirming one would
