@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
     facilityJobs: { retry: vi.fn(), enqueue: vi.fn() },
     // Task 4: `openldr facilities list` calls `ctx.facilityRegistry.list` directly — the same
     // store method Task 3's HTTP route reads (apps/server/src/facilities-routes.ts).
-    facilityRegistry: { list: vi.fn() },
+    facilityRegistry: { list: vi.fn(), idsMatching: vi.fn(), removeMany: vi.fn() },
     close: vi.fn(),
   },
   createAppContext: vi.fn(),
@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => ({
   listFacilityMappingConflicts: vi.fn(),
   facilityHealth: vi.fn(),
   recordAuditEvent: vi.fn(),
+  retireRegistryConcepts: vi.fn(),
+  reprojectAfterRegistryDelete: vi.fn(),
   // Task 9: the two DB-touching halves of the mapping feature — everything else `@openldr/bootstrap`
   // exports for it (`suggestColumns`/`suggestValues`/`CONTROLLED_FIELDS`/`CONTROLLED_VALUE_SETS`) is
   // PURE and stays the real implementation below, so `facilities suggest-map` is proven against the
@@ -96,6 +98,11 @@ vi.mock('@openldr/bootstrap', async () => {
     CONTROLLED_VALUE_SETS: actual.CONTROLLED_VALUE_SETS,
     resolveControlledFields: mocks.resolveControlledFields,
     saveFacilityValueMappings: mocks.saveFacilityValueMappings,
+    // The delete command's cleanup pair. Mocked rather than real: both reach into the terminology
+    // admin store and the projection table, which this file's fake ctx does not model — the ORDER
+    // they run in is what matters here, and the real behaviour is proven in bootstrap's own tests.
+    retireRegistryConcepts: mocks.retireRegistryConcepts,
+    reprojectAfterRegistryDelete: mocks.reprojectAfterRegistryDelete,
   };
 });
 
@@ -121,7 +128,7 @@ vi.mock('node:fs', () => ({
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
-  runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
+  runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList, runFacilitiesDelete,
 } from './facilities';
 // Task 9: real, PURE constant — see the `@openldr/bootstrap` mock factory above for why it is not
 // faked. Used to tell `mocks.ctx.terminology.admin.valueSets.getByUrl` which url each controlled
@@ -2634,5 +2641,95 @@ describe('facilities list CLI', () => {
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/db exploded/);
+  });
+});
+
+// ── `facilities delete` — CLI parity for POST /api/facilities/bulk-delete. Labs run headless, so
+// the register-clearing path cannot be browser-only. Destructive, so it refuses without --force,
+// exactly like every other danger-zone command. ──────────────────────────────────────────────────
+
+describe('runFacilitiesDelete', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.facilityRegistry.idsMatching.mockResolvedValue([]);
+    mocks.ctx.facilityRegistry.removeMany.mockResolvedValue(0);
+    mocks.retireRegistryConcepts.mockResolvedValue(0);
+    mocks.reprojectAfterRegistryDelete.mockResolvedValue({ failedRegistryIds: [] });
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+  });
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('⛔ refuses without --force and deletes nothing', async () => {
+    const code = await runFacilitiesDelete({ where: [], force: false, json: false });
+    expect(code).toBe(1);
+    expect(mocks.ctx.facilityRegistry.removeMany).not.toHaveBeenCalled();
+    expect(stderrSpy.mock.calls.map((c) => String(c[0])).join('')).toMatch(/--force/);
+  });
+
+  it('deletes exactly what the filter resolves to, and says how many', async () => {
+    mocks.ctx.facilityRegistry.idsMatching.mockResolvedValue([{ id: 'f1', facilityCode: 'A1' }, { id: 'f2', facilityCode: 'A2' }]);
+    mocks.ctx.facilityRegistry.removeMany.mockResolvedValue(2);
+
+    const code = await runFacilitiesDelete({ where: ['facilitySystem:eq:urn:zmb:mfl'], force: true, json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.ctx.facilityRegistry.removeMany).toHaveBeenCalledWith(['f1', 'f2']);
+    expect(stdoutSpy.mock.calls.map((c) => String(c[0])).join('')).toMatch(/2/);
+  });
+
+  it('⛔ refuses a bad --where rather than deleting the whole register', async () => {
+    // The fail-open direction: an unparsed filter that degraded to "no filter" would select every
+    // facility on the install. Same refusal the route gives, same reason.
+    const code = await runFacilitiesDelete({ where: ['not a filter'], force: true, json: false });
+    expect(code).toBe(1);
+    expect(mocks.ctx.facilityRegistry.removeMany).not.toHaveBeenCalled();
+  });
+
+  it('⛔ refuses an empty --where unless the caller asks for the whole register explicitly', async () => {
+    // `openldr facilities delete --force` with no filter is the single most destructive command in
+    // this tool. It must not be reachable by forgetting an argument.
+    const code = await runFacilitiesDelete({ where: [], force: true, json: false });
+    expect(code).toBe(1);
+    expect(mocks.ctx.facilityRegistry.removeMany).not.toHaveBeenCalled();
+    expect(stderrSpy.mock.calls.map((c) => String(c[0])).join('')).toMatch(/--all/);
+  });
+
+  it('deletes the whole register when --all is given with --force', async () => {
+    mocks.ctx.facilityRegistry.idsMatching.mockResolvedValue([{ id: 'f1', facilityCode: 'A1' }]);
+    mocks.ctx.facilityRegistry.removeMany.mockResolvedValue(1);
+
+    const code = await runFacilitiesDelete({ where: [], force: true, all: true, json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.ctx.facilityRegistry.removeMany).toHaveBeenCalledWith(['f1']);
+  });
+
+  it('reports nothing to do without pretending it deleted something', async () => {
+    mocks.ctx.facilityRegistry.idsMatching.mockResolvedValue([]);
+    const code = await runFacilitiesDelete({ where: ['facilitySystem:eq:urn:none'], force: true, json: false });
+    expect(code).toBe(0);
+    expect(mocks.ctx.facilityRegistry.removeMany).not.toHaveBeenCalled();
+  });
+
+  it('audits as the CLI actor, with the count and the filter', async () => {
+    mocks.ctx.facilityRegistry.idsMatching.mockResolvedValue([{ id: 'f1', facilityCode: 'A1' }]);
+    mocks.ctx.facilityRegistry.removeMany.mockResolvedValue(1);
+
+    await runFacilitiesDelete({ where: ['facilitySystem:eq:urn:zmb:mfl'], force: true, json: false });
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      // ⚠ actorType, NOT actorName. AGENTS.md §6 says "audit as actorName: 'cli'", but cliActor()
+      // returns the OS username and only falls back to 'cli' when it cannot read one — so asserting
+      // the name would pass on CI and fail on a developer machine. actorType is the stable claim.
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'facility.bulk_delete' }),
+    );
   });
 });

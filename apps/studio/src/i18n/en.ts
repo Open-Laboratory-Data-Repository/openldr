@@ -882,6 +882,14 @@ export const en = {
       empty: 'No suggestions',
       error: 'Could not load suggestions',
     },
+        bulkDelete: {
+          menuItem: 'Delete these facilities…',
+          title: 'Delete {{count}} facilities?',
+          body: 'This removes {{count}} facilities from the registry. It cannot be undone.',
+          inUse: '{{count}} of them are used by reports today.',
+          inUseUnknown: 'Whether any are used by reports could not be checked.',
+          sample: 'For example: {{names}}.',
+        },
     import: {
       menuItem: 'Import facilities',
       actions: 'Import actions',

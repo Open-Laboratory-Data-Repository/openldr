@@ -10,6 +10,8 @@ import {
   // Reused verbatim below; nothing here re-implements ranking or validation.
   suggestColumns, suggestValues, saveFacilityValueMappings, resolveControlledFields,
   CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
+  // The SAME cleanup helpers the delete route calls, in the same order — see runFacilitiesDelete.
+  retireRegistryConcepts, reprojectAfterRegistryDelete,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
   type FacilityImportResult, type ColumnSuggestion, type ValueMappingEntry, type ControlledField,
 } from '@openldr/bootstrap';
@@ -1460,6 +1462,102 @@ export async function runFacilitiesList(opts: FacilitiesListOpts): Promise<numbe
     const msg = redactError(err);
     if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
     else process.stderr.write(`facilities list failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export interface FacilitiesDeleteOpts {
+  /** `--where` flags, in the same grammar `facilities list` accepts. */
+  where?: string[];
+  /** Required. Destructive commands refuse without it — the house rule for every danger-zone
+   *  action in this tool. */
+  force?: boolean;
+  /** Required INSTEAD of `--where` to clear a whole register. An empty filter is the single most
+   *  destructive thing this command can do, so it may never be reachable by forgetting an argument. */
+  all?: boolean;
+  json?: boolean;
+}
+
+/** `openldr facilities delete` — CLI parity for `POST /api/facilities/bulk-delete`.
+ *
+ *  Labs run headless, so the only way to undo a bad import cannot be browser-only. The registry's
+ *  per-row delete has always existed; a national register runs to thousands of rows, which makes
+ *  one-at-a-time a non-answer.
+ *
+ *  ⛔ THREE REFUSALS, and each guards a different way to destroy a register by accident:
+ *   1. no `--force` — the house rule.
+ *   2. an unparseable `--where` — a filter that degraded to "no filter" would select every facility
+ *      on the install. Same refusal, same wording, as the route's 400.
+ *   3. an EMPTY selection without `--all` — forgetting the filter must not silently mean everything.
+ *
+ *  Unlike the HTTP door there is no `expectedCount` handshake: there is no preview step to go stale
+ *  between, and the operator types the filter themselves. `--force` is the confirmation. */
+export async function runFacilitiesDelete(opts: FacilitiesDeleteOpts): Promise<number> {
+  if (!opts.force) {
+    process.stderr.write(
+      'facilities delete refused: this permanently removes facilities from the registry — pass --force to confirm\n',
+    );
+    return 1;
+  }
+  const parsed = parseWhereFlags(opts.where ?? [], [], FACILITY_COLUMNS);
+  if (!parsed.ok) {
+    // Named and non-zero rather than falling back to an unfiltered delete. See refusal 2 above.
+    process.stderr.write(`facilities delete failed: ${parsed.error}\n`);
+    return 1;
+  }
+  if (parsed.query.filters.length === 0 && !opts.all) {
+    process.stderr.write(
+      'facilities delete refused: no --where given. Pass --all to clear the entire registry deliberately,\n'
+        + 'or narrow the selection with --where (e.g. --where facilitySystem:eq:urn:zmb:mfl)\n',
+    );
+    return 1;
+  }
+
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const matched = await ctx.facilityRegistry.idsMatching({
+      filters: parsed.query.filters.length ? parsed.query.filters : undefined,
+    });
+    if (matched.length === 0) {
+      // Reported as success with a count of zero, never as "deleted" — an operator who narrowed too
+      // far must be able to tell that from a delete that worked.
+      if (opts.json) process.stdout.write(JSON.stringify({ deleted: 0 }, null, 2) + '\n');
+      else process.stdout.write('no facilities matched — nothing deleted\n');
+      return 0;
+    }
+
+    const ids = matched.map((r) => r.id);
+    const deps = { internalDb: ctx.internalDb, admin: ctx.terminology.admin };
+    // Same order as the HTTP door and the single-row delete, for the reasons documented there:
+    // retire the concepts FIRST (the projection link is ON DELETE CASCADE), remove, then reproject
+    // survivors whose codes this freed.
+    try {
+      await retireRegistryConcepts(deps, ids);
+    } catch (err) {
+      process.stderr.write(`warning: failed to retire concepts for the deleted facilities: ${redactError(err)}\n`);
+    }
+    const deleted = await ctx.facilityRegistry.removeMany(ids);
+    for (const row of matched) {
+      await reprojectAfterRegistryDelete(deps, { id: row.id, facilityCode: row.facilityCode ?? null });
+    }
+
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'facility.bulk_delete',
+      entityType: 'facility',
+      entityId: 'bulk',
+      // The SELECTION, not just the number — "3776 deleted" is unauditable on its own.
+      metadata: { deleted, where: opts.where ?? [], all: opts.all === true },
+    });
+
+    if (opts.json) process.stdout.write(JSON.stringify({ deleted }, null, 2) + '\n');
+    else process.stdout.write(`deleted ${deleted} facilit${deleted === 1 ? 'y' : 'ies'}\n`);
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities delete failed: ${msg}\n`);
     return 1;
   } finally {
     await ctx.close();

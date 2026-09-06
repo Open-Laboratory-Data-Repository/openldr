@@ -179,6 +179,10 @@ function fakeCtx() {
   // (level, scope) the route computed, so a test can assert the route forwarded a good value
   // AND withheld a bad one, rather than merely reading the HTTP response.
   let lastAdminValuesCall: any;
+  // Same discipline as the two above: captures exactly what the bulk-delete route resolved its
+  // selection to, so a test can assert the route forwarded the operator's filter rather than
+  // silently widening it.
+  let lastIdsMatchingOptions: any;
   return {
     internalDb: emptyInternalDb(),
     audit: { record: async (e: any) => { audit.push(e); return e; } },
@@ -218,6 +222,20 @@ function fakeCtx() {
         return rec;
       },
       remove: async (id: string) => { const i = rows.findIndex((r) => r.id === id); if (i >= 0) rows.splice(i, 1); },
+      // Same shape as `list` above and for the same reason: the STORE's own predicate SQL is
+      // exercised against a migrated db in packages/db (and against REAL Postgres in
+      // facility-registry-live.test.ts, which is what a filter-scoped DELETE actually rests on).
+      // This fake exists to prove the ROUTE resolves, counts, guards and deletes — not to
+      // re-implement filtering.
+      idsMatching: async (opts?: any) => { lastIdsMatchingOptions = opts; return rows.map((r) => ({ id: r.id, facilityCode: r.facilityCode ?? null })); },
+      removeMany: async (ids: string[]) => {
+        let n = 0;
+        for (const id of ids) {
+          const i = rows.findIndex((r) => r.id === id);
+          if (i >= 0) { rows.splice(i, 1); n += 1; }
+        }
+        return n;
+      },
     },
     // Fix 1 (mapping-ux report): POST/PUT now project the written row into FACILITY_REGISTRY_SYSTEM
     // (`projectRegistryRows`). This file's ~100 other POST/PUT tests don't care about that
@@ -237,6 +255,7 @@ function fakeCtx() {
     __audit: audit,
     get __lastListOptions() { return lastListOptions; },
     get __lastAdminValuesCall() { return lastAdminValuesCall; },
+    get __lastIdsMatchingOptions() { return lastIdsMatchingOptions; },
   } as any;
 }
 
@@ -6003,5 +6022,142 @@ describe('Task 5: required is enforced on the route, not only in the studio', ()
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toContain('Region');
     expect(ctx.__rows[0].region).toBe('Copperbelt');
+  });
+});
+
+// ── Bulk delete. A destructive action scoped by a filter, so every test here is about the set: that
+// the set deleted is the set previewed, that a stale count deletes NOTHING, and that a filter the
+// route could not parse refuses rather than falling back to "everything". ─────────────────────────
+
+describe('POST /api/facilities/bulk-delete', () => {
+  const BULK = '/api/facilities/bulk-delete';
+
+  it('gated on facilities.manage — a view-only user cannot delete and nothing is removed', async () => {
+    const ctx = fakeCtx();
+    const manager = await appWith(ctx);
+    await manager.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    const viewOnly = await appWith(ctx, ['facilities.view']);
+
+    const res = await viewOnly.inject({
+      method: 'POST', url: BULK, payload: { selection: {}, expectedCount: 1 },
+    });
+    expect(res.statusCode).toBe(403);
+    expect((await manager.inject({ method: 'GET', url: '/api/facilities' })).json().total).toBe(1);
+  });
+
+  it('previews the same set it would delete: total, in-use count, and a sample', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+
+    const res = await app.inject({
+      method: 'POST', url: `${BULK}/preview`, payload: { selection: { nationalSystem: 'urn:tz:hfr' } },
+    });
+    expect(res.statusCode).toBe(200);
+    const out = res.json();
+    expect(out.total).toEqual(expect.any(Number));
+    // ⛔ number OR null, and null is load-bearing: the warehouse is a separate database and a
+    // separate deployment concern, so "could not measure" must stay distinguishable from "none are
+    // in use". Reporting 0 for an unreachable warehouse is the most reassuring possible lie right
+    // before a destructive action. This fake ctx has no facility_map, so it exercises exactly that.
+    expect(out.inUse === null || typeof out.inUse === 'number').toBe(true);
+    expect(out.inUse).toBeNull();
+    expect(Array.isArray(out.sample)).toBe(true);
+    // The sample is what makes a misparsed filter visible BEFORE the delete, so it must carry
+    // something an operator can recognise, not just ids.
+    if (out.sample.length > 0) expect(out.sample[0]).toHaveProperty('name');
+  });
+
+  it('deletes exactly the resolved set when the confirmed count still holds', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: { ...body, localCode: 'LAB02', name: 'Second' } });
+
+    const before = (await app.inject({ method: 'GET', url: '/api/facilities' })).json().total;
+    const res = await app.inject({
+      method: 'POST', url: BULK, payload: { selection: {}, expectedCount: before },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ deleted: before });
+    expect((await app.inject({ method: 'GET', url: '/api/facilities' })).json().total).toBe(0);
+  });
+
+  it('⛔ 409s on a stale count and deletes NOTHING', async () => {
+    // The guard that makes "confirm 12, delete 12" true rather than hopeful: anything that changed
+    // the set between the preview and the confirm — another operator, a running import, or a filter
+    // the route read differently than the client did — lands here instead of on the rows.
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+
+    const res = await app.inject({
+      method: 'POST', url: BULK, payload: { selection: {}, expectedCount: 99 },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/99/);
+    expect((await app.inject({ method: 'GET', url: '/api/facilities' })).json().total).toBe(1);
+  });
+
+  it('⛔ refuses a filter it cannot parse rather than treating it as no filter', async () => {
+    // Fail-CLOSED. An unparsed filter that degraded to `{}` would select the entire register, and
+    // the count guard would not save it: the client sent the count for the whole register too.
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+
+    const res = await app.inject({
+      method: 'POST', url: BULK,
+      payload: { selection: { filters: 'not-a-valid-filter-grammar' }, expectedCount: 1 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/facilities' })).json().total).toBe(1);
+  });
+
+  it('⛔ refuses a selection filtered by mapping health, which the delete cannot express', async () => {
+    // THE FAIL-OPEN THIS CLOSES. `health` is a join predicate over
+    // `facility_concept_projection`/`term_mappings`, not a `facility_registry` column, so it has no
+    // entry in `FACILITY_COLUMNS` and `idsMatching` cannot honour it. Dropping it silently would turn
+    // "delete the 3 unprojected facilities I am looking at" into "delete the whole register", and
+    // the count guard would not catch it: the client counted the narrower set, so the numbers would
+    // disagree only by luck. Refusing is the only safe reading.
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+
+    const res = await app.inject({
+      method: 'POST', url: BULK,
+      payload: { selection: { health: 'unprojected' }, expectedCount: 1 },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/health/i);
+    expect((await app.inject({ method: 'GET', url: '/api/facilities' })).json().total).toBe(1);
+  });
+
+  it('requires expectedCount rather than defaulting it', async () => {
+    // A destructive endpoint that treats a missing count as "however many there are" is a delete
+    // with no confirmation at all.
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+
+    const res = await app.inject({ method: 'POST', url: BULK, payload: { selection: {} } });
+    expect(res.statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/facilities' })).json().total).toBe(1);
+  });
+
+  it('audits the bulk delete with the count and the selection', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+
+    await app.inject({ method: 'POST', url: BULK, payload: { selection: {}, expectedCount: 1 } });
+
+    const events = ctx.__audit.map((e: any) => e.action);
+    expect(events).toContain('facility.bulk_delete');
   });
 });

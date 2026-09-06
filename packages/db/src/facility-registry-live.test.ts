@@ -32,6 +32,7 @@ const live = describe.skipIf(!url);
 //    Facilities list until this file runs again or someone removes them by hand.
 const COLLATE_MARKER = 'urn:openldr:test:facility-live-collate';
 const PAGE_MARKER = 'urn:openldr:test:facility-live-page';
+const BULK_MARKER = 'urn:openldr:test:facility-live-bulk';
 
 live('facility list ordering (live Postgres — pg-mem cannot parse COLLATE)', () => {
   let internal: InternalDb;
@@ -160,5 +161,111 @@ live('facility paging over duplicate names (live Postgres — pg-mem has a stabl
 
     expect(seen.length).toBe(40);
     expect(new Set(seen).size).toBe(40); // no facility on two pages, none unreachable
+  });
+});
+
+
+// ⛔ THE GAP THIS CLOSES, named in the table-query arc's own post-mortem: "no test anywhere runs a
+// filter the UI can build, through the route, to real Postgres. Task tests stop at pg-mem, a fake
+// context, or a mocked api client." Both slices that shipped on this grammar shipped a filter
+// returning ZERO rows for every value a user could pick, and both were caught by review rather than
+// by a test.
+//
+// A read that quietly matches nothing is a bad afternoon. A DELETE scoped by the same predicate is
+// a destroyed register — in either direction, since a predicate that silently drops its clause
+// matches EVERYTHING. So the bulk-delete selection is proven here, on real Postgres, against values
+// shaped like the ones the toolbar actually emits.
+//
+// pg-mem cannot stand in: `applyFilters` puts `like`/`ilike` and enum/text comparisons over the
+// same columns the collation block above proves pg-mem mishandles, and the store tests can only
+// show `list` and `idsMatching` agreeing with each other, not that either is right about Postgres.
+live('facility bulk-delete selection (live Postgres — the filter that scopes a DELETE)', () => {
+  let internal: InternalDb;
+  let store: ReturnType<typeof createFacilityRegistryStore>;
+
+  beforeAll(async () => {
+    internal = createInternalDb(url!);
+    store = createFacilityRegistryStore(internal.db as never);
+    await sql`delete from facility_registry where facility_system = ${BULK_MARKER}`.execute(internal.db);
+    await internal.db
+      .insertInto('facility_registry')
+      .values([
+        { id: 'live-b-1', name: 'Kalabo Rural Health Centre', facility_code: 'LB-1', facility_system: BULK_MARKER, source: 'import', district: 'Kalabo', status: 'Functional' },
+        { id: 'live-b-2', name: 'Kalabo Urban Clinic', facility_code: 'LB-2', facility_system: BULK_MARKER, source: 'import', district: 'Kalabo', status: 'Functional' },
+        { id: 'live-b-3', name: 'Lusaka Central Hospital', facility_code: 'LB-3', facility_system: BULK_MARKER, source: 'import', district: 'Lusaka', status: 'Functional' },
+        { id: 'live-b-4', name: 'Lusaka Annex', facility_code: 'LB-4', facility_system: BULK_MARKER, source: 'manual', district: 'Lusaka', status: 'Non-Functional' },
+      ] as never)
+      .execute();
+  });
+
+  afterAll(async () => {
+    if (!internal) return;
+    await sql`delete from facility_registry where facility_system = ${BULK_MARKER}`
+      .execute(internal.db)
+      .catch(() => undefined);
+    await internal.close().catch(() => undefined);
+  });
+
+  /** Every case runs the SAME options through both paths and demands they agree AND that the set is
+   *  the expected one. Agreement alone would pass if both were wrong together, which is precisely
+   *  how the Status-picker defect survived: the page and its count agreed on zero. */
+  async function bothWays(opts: Parameters<typeof store.list>[0]) {
+    const listed = await store.list({ ...opts, limit: 1000 });
+    const ids = await store.idsMatching(opts);
+    expect(ids.map((r) => r.id).sort()).toEqual(listed.rows.map((r) => r.id).sort());
+    return ids.map((r) => r.id).sort();
+  }
+
+  it('a status value as the REGISTER stores it, not as the value set spells it', async () => {
+    // The exact defect from slice C: the picker offered `active` while imports store `Functional`,
+    // so the filter matched nothing. Both spellings are asserted, so a fix that merely swapped one
+    // hardcoded value for another cannot pass.
+    expect(await bothWays({ nationalSystem: BULK_MARKER, status: 'Functional' }))
+      .toEqual(['live-b-1', 'live-b-2', 'live-b-3']);
+    expect(await bothWays({ nationalSystem: BULK_MARKER, status: 'active' })).toEqual([]);
+  });
+
+  it('a grammar filter over an admin column, as the toolbar emits it', async () => {
+    expect(await bothWays({
+      nationalSystem: BULK_MARKER,
+      filters: [{ column: 'district', operator: 'eq', value: 'Kalabo', combine: 'and' }],
+    } as never)).toEqual(['live-b-1', 'live-b-2']);
+  });
+
+  it('a `like` filter, which pg-mem and Postgres do not treat identically', async () => {
+    expect(await bothWays({
+      nationalSystem: BULK_MARKER,
+      filters: [{ column: 'name', operator: 'like', value: 'Lusaka', combine: 'and' }],
+    } as never)).toEqual(['live-b-3', 'live-b-4']);
+  });
+
+  it('named and grammar filters AND together, narrowing rather than widening', async () => {
+    // ⛔ The fail-OPEN direction. A predicate that dropped one of the two clauses would return a
+    // superset here, and for a DELETE a superset is the whole point of the test.
+    expect(await bothWays({
+      nationalSystem: BULK_MARKER,
+      source: 'import',
+      filters: [{ column: 'district', operator: 'eq', value: 'Lusaka', combine: 'and' }],
+    } as never)).toEqual(['live-b-3']);
+  });
+
+  it('a filter matching nothing selects nothing, and never everything', async () => {
+    expect(await bothWays({
+      nationalSystem: BULK_MARKER,
+      filters: [{ column: 'district', operator: 'eq', value: 'Nowhere', combine: 'and' }],
+    } as never)).toEqual([]);
+  });
+
+  it('removeMany deletes exactly the resolved set and nothing beside it', async () => {
+    const doomed = await store.idsMatching({
+      nationalSystem: BULK_MARKER,
+      filters: [{ column: 'district', operator: 'eq', value: 'Kalabo', combine: 'and' }],
+    } as never);
+    expect(doomed).toHaveLength(2);
+
+    expect(await store.removeMany(doomed.map((r) => r.id))).toBe(2);
+
+    const left = await store.idsMatching({ nationalSystem: BULK_MARKER });
+    expect(left.map((r) => r.id).sort()).toEqual(['live-b-3', 'live-b-4']);
   });
 });

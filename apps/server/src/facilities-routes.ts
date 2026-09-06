@@ -28,7 +28,7 @@ import {
   SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable, APPLY_PHASE,
 } from '@openldr/db';
 import type {
-  FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun, FacilityImportRunStatus,
+  FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun, FacilityImportRunStatus, FacilityListOptions,
   FacilityRecord,
 } from '@openldr/db';
 import { requireCapability } from './rbac';
@@ -135,6 +135,11 @@ const MAX_INLINE_APPLY_ROWS = 2000;
 // are the same number; an install that overrides the env var moves only the ceiling, which is
 // harmless precisely because this one binds nothing. If a future change makes this route buffer its
 // body, make `bodyLimit` read the config key too rather than leaving it a stale literal.
+/** How many facilities the bulk-delete preview names by name. Enough that a filter selecting the
+ *  wrong rows is recognisable at a glance, small enough that the dialog stays readable — the
+ *  operator confirms against the COUNT, and this is corroboration for it, not a listing. */
+const BULK_DELETE_SAMPLE = 5;
+
 const MAX_UPLOAD_BYTES = 1_073_741_824;
 // Same capability gate as every other write in this file (`facilities.manage`).
 const UPLOAD = { ...MANAGE, bodyLimit: MAX_UPLOAD_BYTES };
@@ -1600,6 +1605,172 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
     return { ...after, projection };
+  });
+
+  /** Resolve a bulk-delete `selection` to the store options `list` would use for the same request.
+   *  Returns the parse error instead when the grammar is bad.
+   *
+   *  ⛔ FAIL CLOSED. A `filters` string this cannot parse must NEVER degrade to "no filters", which
+   *  would silently widen the selection to the entire register — and the count guard below would
+   *  not catch it, because the client computed its expected count from the same widened set. Both
+   *  slices that shipped on this grammar shipped a filter matching the wrong rows, so this refuses
+   *  rather than guesses. Mirrors `GET /api/facilities`'s own `if (!parsed.ok) 400`. */
+  function selectionToListOptions(raw: unknown): { ok: true; opts: FacilityListOptions } | { ok: false; error: string } {
+    const sel = (raw ?? {}) as Record<string, unknown>;
+    // ⛔ `health` IS REFUSED, NOT IGNORED. It is a join predicate over
+    // `facility_concept_projection`/`term_mappings`, not a `facility_registry` column, so it has no
+    // entry in `FACILITY_COLUMNS` and `idsMatching` cannot honour it. Silently dropping it would
+    // widen "delete the three unprojected facilities I am looking at" into "delete the whole
+    // register" — and the count guard below would not catch it, because the client counted the
+    // narrower set and the two numbers would then disagree only by coincidence. The one filter this
+    // route cannot express is the one it must refuse.
+    if (ownFirstString(sel, 'health') !== undefined) {
+      return {
+        ok: false,
+        error: 'a bulk delete cannot be scoped by mapping health — clear that filter and select by'
+          + ' register, admin area or another column instead',
+      };
+    }
+    const parsed = parseTableQuery({ filters: ownFirstString(sel, 'filters') }, FACILITY_COLUMNS);
+    if (!parsed.ok) return { ok: false, error: parsed.error };
+    return {
+      ok: true,
+      opts: {
+        q: ownFirstString(sel, 'q'),
+        country: ownFirstString(sel, 'country'),
+        zone: ownFirstString(sel, 'zone'),
+        region: ownFirstString(sel, 'region'),
+        district: ownFirstString(sel, 'district'),
+        council: ownFirstString(sel, 'council'),
+        status: ownFirstString(sel, 'status'),
+        level: ownFirstString(sel, 'level'),
+        ownership: ownFirstString(sel, 'ownership'),
+        nationalSystem: ownFirstString(sel, 'nationalSystem'),
+        source: ownFirstString(sel, 'source'),
+        managedOrigin: ownFirstString(sel, 'managedOrigin'),
+        registerState: ownFirstString(sel, 'registerState'),
+        filters: parsed.query.filters,
+      },
+    };
+  }
+
+  /** How many of these facilities the REPORTING DIMENSION currently points at. That is what makes a
+   *  deletion visible in reports rather than merely tidy, so it is counted separately from the
+   *  total and shown before the operator confirms.
+   *
+   *  Best-effort: the external database is a different engine and a different deployment concern
+   *  from the registry, and a warehouse that cannot be reached must not block a registry cleanup.
+   *  Returns null for "could not measure", which the client renders as unknown rather than as 0 —
+   *  a silent 0 would read as "nothing is in use", the most reassuring possible lie. */
+  async function inUseCount(ids: string[]): Promise<number | null> {
+    if (ids.length === 0) return 0;
+    try {
+      const rows = await (ctx.store.db as unknown as Kysely<ExternalSchema>)
+        .selectFrom('facility_map')
+        .select(({ fn }) => fn.countAll<number>().as('n'))
+        .where('registry_id', 'in', ids)
+        .executeTakeFirst();
+      return Number(rows?.n ?? 0);
+    } catch (err) {
+      ctx.logger.error({ err }, 'failed to count facility_map references for a bulk delete');
+      return null;
+    }
+  }
+
+  app.post('/api/facilities/bulk-delete/preview', MANAGE, async (req, reply) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const sel = selectionToListOptions(b.selection);
+    if (!sel.ok) return reply.code(400).send({ error: sel.error });
+
+    const matched = await ctx.facilityRegistry.idsMatching(sel.opts);
+    // A page of the SAME selection, so what the operator reads in the dialog is drawn from the same
+    // predicate that will do the deleting — not a second query that could disagree with it.
+    const { rows } = await ctx.facilityRegistry.list({ ...sel.opts, limit: BULK_DELETE_SAMPLE });
+    return {
+      total: matched.length,
+      inUse: await inUseCount(matched.map((r) => r.id)),
+      sample: rows.map((r) => ({ id: r.id, name: r.name, facilityCode: r.facilityCode ?? null })),
+    };
+  });
+
+  /** Delete every facility the selection matches.
+   *
+   *  ⛔ `expectedCount` IS REQUIRED AND IS THE CONTRACT. The route re-resolves the selection and
+   *  refuses with 409 unless the set is still exactly the size the operator confirmed. That makes
+   *  "you confirmed N, N were deleted" true rather than hopeful: a concurrent import, another
+   *  operator, or a selection this route reads differently than the client did all land on the
+   *  refusal instead of on the rows. It cannot catch a filter that is parsed wrongly but
+   *  CONSISTENTLY at both ends — nothing on the wire can — which is why the preview also returns a
+   *  sample for the operator to recognise before confirming.
+   *
+   *  ⛔ Cleanup order is the single-row delete's, for the reasons documented there: retire the
+   *  concepts FIRST (the projection link is ON DELETE CASCADE and vanishes with the rows), remove,
+   *  then reproject survivors whose codes the deletion freed. Both helpers are already set-based,
+   *  so this is three calls rather than one per facility. */
+  app.post('/api/facilities/bulk-delete', MANAGE, async (req, reply) => {
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const expected = b.expectedCount;
+    if (typeof expected !== 'number' || !Number.isInteger(expected) || expected < 0) {
+      reply.code(400);
+      return { error: 'expectedCount is required — confirm the count this deletion was reviewed against' };
+    }
+    const sel = selectionToListOptions(b.selection);
+    if (!sel.ok) return reply.code(400).send({ error: sel.error });
+
+    const matched = await ctx.facilityRegistry.idsMatching(sel.opts);
+    if (matched.length !== expected) {
+      reply.code(409);
+      return {
+        error: `this selection now matches ${matched.length} facilities, not the ${expected} that were reviewed`
+          + ' — nothing was deleted; review it again',
+      };
+    }
+    if (matched.length === 0) return { deleted: 0, inUse: 0 };
+
+    const ids = matched.map((r) => r.id);
+    const inUse = await inUseCount(ids);
+    const deps = { internalDb: ctx.internalDb, admin: ctx.terminology.admin };
+
+    // Wrapped for the same reason the single-row delete wraps it: `retireRegistryConcepts` does not
+    // contain its own errors, and an uncontained throw fires BEFORE the removal, which would leave
+    // the facilities undeleted behind a 500.
+    try {
+      await retireRegistryConcepts(deps, ids);
+    } catch (err) {
+      ctx.logger.error({ err, count: ids.length }, 'failed to retire concepts for a bulk facility delete');
+    }
+
+    const deleted = await ctx.facilityRegistry.removeMany(ids);
+
+    // Survivors that can now claim a code this deletion freed. Contained per row, exactly as the
+    // single-row path is: a failed reprojection must not turn a successful deletion into a 500.
+    const failedRegistryIds: string[] = [];
+    for (const row of matched) {
+      const { failedRegistryIds: failed } = await reprojectAfterRegistryDelete(deps, {
+        id: row.id, facilityCode: row.facilityCode ?? null,
+      });
+      failedRegistryIds.push(...failed);
+    }
+    for (const registryId of [...new Set(failedRegistryIds)]) {
+      try {
+        await ctx.facilityJobs.enqueue({
+          kind: 'registry-projection', registryId, requestedBy: actorFromRequest(req).actorId,
+        });
+      } catch (err) {
+        ctx.logger.error({ err, registryId }, 'failed to enqueue a reprojection after a bulk delete');
+      }
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'facility.bulk_delete',
+      entityType: 'facility',
+      entityId: 'bulk',
+      // The SELECTION is recorded, not just the count: "3776 deleted" is unauditable on its own —
+      // a reader a year later needs to know which 3776.
+      metadata: { deleted, inUse, selection: b.selection ?? {} },
+    });
+
+    return { deleted, inUse };
   });
 
   app.delete('/api/facilities/:id', MANAGE, async (req, reply) => {

@@ -234,3 +234,31 @@ mistyped filter would in the browser.
 
 - [Terminology](/docs/terminology)
 - [Audit](/docs/audit)
+
+## Deleting facilities in bulk
+
+The row menu deletes one facility. A national register runs to thousands, so a mis-mapped import
+needs a way out that is not one row at a time. **Delete these facilities…** in the page's `⋯` menu
+removes everything the table's current filter selects.
+
+Read the confirmation before accepting it. It names three things, and each answers a different
+question:
+
+- **The count.** This is what the deletion is authorised against. If the selection changes between
+  the confirmation and your click, the import is refused and nothing is deleted.
+- **How many are used by reports.** Deleting those changes what reports show. If the warehouse
+  cannot be reached the dialog says so rather than reporting zero.
+- **A few facilities by name.** These are the only guard against a filter that selects rows you did
+  not mean. If you do not recognise them, cancel and check the filter.
+
+Filtering by mapping health is the one filter a bulk delete cannot use, so the action is unavailable
+while that filter is on. Clear it and select by register or admin area instead.
+
+From a terminal:
+
+```
+openldr facilities delete --where facilitySystem:eq:urn:zmb:mfl --force
+```
+
+`--force` is required. So is either a `--where` or an explicit `--all`: forgetting the filter must
+never quietly mean the whole registry.
