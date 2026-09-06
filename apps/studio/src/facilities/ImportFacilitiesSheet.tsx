@@ -407,17 +407,28 @@ function ReconciliationSummary(props: ReconciliationSummaryProps) {
           door the validate has already happened — see `ReuploadOverrides` for why a tick there could
           only 409 — so this offers the re-upload the confirm route's own refusal points at, and says
           nothing at all for a JSONL release, where the flag provably cannot change the parse. */}
-      {result.unknownColumns.length > 0 && (
+      {/* ⛔ SPLIT BY WHETHER THE FILE WAS ACTUALLY REFUSED, not by whether the list is populated.
+          `unknownColumns` is a true statement about the file either way, but what it MEANS depends
+          on whether a column map decided those columns. With a map they were carried into each
+          row's extras and nothing is wrong, so the amber box below would be a warning about work
+          the operator already did: it told the Zambia team "Nothing is imported unless you opt in"
+          about nine columns they had deliberately skipped. Reads the server's own `blockedReason`
+          rather than re-deriving the condition, so this and the parser cannot drift. */}
+      {result.unknownColumns.length > 0 && result.blockedReason !== 'unknown-columns' && (
+        <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <p className="font-medium text-foreground">{t('facilities.import.keptAsExtraTitle')}</p>
+          <p>{t('facilities.import.keptAsExtraBody', { columns: result.unknownColumns.join(', ') })}</p>
+        </div>
+      )}
+
+      {result.unknownColumns.length > 0 && result.blockedReason === 'unknown-columns' && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
           <p className="font-medium">{t('facilities.import.unknownColumnsTitle')}</p>
-          <p>
-            {t(
-              props.reupload?.sourceFormat === 'jsonl'
-                ? 'facilities.import.unknownColumnsBodyJsonl'
-                : 'facilities.import.unknownColumnsBody',
-              { columns: result.unknownColumns.join(', ') },
-            )}
-          </p>
+          {/* No JSONL arm any more, and it is not an oversight: this box now renders ONLY for
+              `blockedReason === 'unknown-columns'`, and `parseFacilityRelease` never sets it. A
+              JSONL release with an unrecognised key takes the "kept as extra data" note above, which
+              says the same thing in the same words as every other non-blocking case. */}
+          <p>{t('facilities.import.unknownColumnsBody', { columns: result.unknownColumns.join(', ') })}</p>
           {props.reupload === null ? (
             <label className="mt-2 flex items-center gap-2">
               <Checkbox
@@ -1267,8 +1278,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  shows the file actually contains the thing the flag waves through, the run did NOT already run
    *  with it (a second identical upload would change nothing), and the flag can change this format's
    *  parse at all — which `allowUnknownColumns` cannot for JSONL. */
+  // ⛔ Gated on the VERDICT, not just on the list. `unknownColumns` is populated whenever the file
+  // has columns outside the contract, but with a column map those were kept as extra data and the
+  // file imported: offering to re-upload "keeping unrecognised columns" there would name a remedy
+  // for a problem that does not exist, and would re-stream a national export to change nothing.
   const canReuploadForUnknownColumns = !!awaitingSummary && !!reupload
     && reupload.sourceFormat !== 'jsonl'
+    && awaitingSummary.blockedReason === 'unknown-columns'
     && awaitingSummary.unknownColumns.length > 0 && !reupload.allowUnknownColumns;
   const canReuploadForInvalidCoordinates = !!awaitingSummary && !!reupload
     && awaitingSummary.invalid.length > 0 && !reupload.allowInvalidCoordinates;

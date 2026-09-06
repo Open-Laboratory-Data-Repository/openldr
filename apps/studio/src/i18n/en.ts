@@ -941,12 +941,13 @@ export const en = {
       noRowsFound: 'No facility rows were found in this file. Confirm it is a compatible CSV export before trying again.',
       noRowsFoundSkipped: '{{skipped}} row(s) in this file were skipped for missing required fields, and none were imported. Confirm it is a compatible CSV export before trying again.',
       unknownColumnsTitle: 'Unrecognised columns',
+      keptAsExtraTitle: 'Kept as extra data',
+      keptAsExtraBody: 'These columns are not contract fields, so each row keeps them as extra data: {{columns}}.',
       unknownColumnsBody: 'This file has columns the importer does not recognise: {{columns}}. Nothing is imported unless you opt in below.',
       // ⛔ A JSONL release is NOT blocked by an unrecognised field, and the option that unblocks a CSV
       // is a documented no-op for it (parseFacilityRelease never reads it — see facility-release.ts).
       // Showing the CSV copy here would tell an operator nothing was imported when the whole release
       // was, and point them at an option that changes nothing.
-      unknownColumnsBodyJsonl: 'This release has fields the importer does not recognise: {{columns}}. They do not block a JSONL release — each line is self-describing, so they were kept as extra data and the rest of the release was read as normal.',
       allowUnknownColumns: 'Import anyway, keeping unrecognised columns as extra data',
       quarantinedTitle: 'Rows that could not be read',
       quarantinedCount_one: '{{count}} row could not be read (its column count did not match the header) and will not be imported unless you opt in below.',
@@ -1072,7 +1073,7 @@ export const en = {
       // fields, and a constants section for a field no column carries (`country` is the case that
       // forced it).
       columnMap: {
-        notMapped: 'Not mapped',
+        notMapped: 'Keep as extra data',
         checkThisBadge: 'Check this',
         keepAsExtra: 'Keep as extra',
         clear: 'Clear',

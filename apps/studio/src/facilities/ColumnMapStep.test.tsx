@@ -55,10 +55,16 @@ function Controlled({ initial, onChangeSpy, ...rest }: {
 }
 
 describe('ColumnMapStep', () => {
+  // ⛔ THE OPTION IS LABELLED "Keep as extra data", not "Not mapped", and the assertions below
+  // moved with it. The old label was a description of the wire shape (an absent `columns` entry)
+  // rather than of what happens: an unmapped column is carried into each row's `extras`. It is
+  // now true on every row, whether the header spells a contract field or not, which is what let
+  // the parser stop refusing files over columns the operator had deliberately skipped.
+
   it('pre-selects exact suggestions and leaves unmatched headers unset', () => {
     render(<Controlled headers={suggestions.map((s) => s.header)} suggestions={suggestions} initial={emptyMap} />);
     expect(screen.getByLabelText('MFL Code')).toHaveTextContent('national_code');
-    expect(screen.getByLabelText('Catchment population cso')).toHaveTextContent('Not mapped');
+    expect(screen.getByLabelText('Catchment population cso')).toHaveTextContent('Keep as extra data');
   });
 
   it('⛔ refuses to continue while a required field is unmapped', () => {
@@ -101,7 +107,7 @@ describe('ColumnMapStep', () => {
       // The `Controlled` wrapper already re-rendered the panel with the emitted value by this
       // point (its own `onChange` calls `setValue` synchronously) — this assertion is the one
       // that fails on the pre-fix component, once real re-render is exercised at all.
-      expect(screen.getByLabelText('MFL Code')).toHaveTextContent('Not mapped');
+      expect(screen.getByLabelText('MFL Code')).toHaveTextContent('Keep as extra data');
     });
 
     it('Keep as extra makes the blocking summary name the now-missing required field', () => {
@@ -135,7 +141,7 @@ describe('ColumnMapStep', () => {
         { header: 'Zone', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
       ];
       render(<Controlled headers={['Province', 'Zone']} suggestions={colliding} initial={emptyMap} />);
-      expect(screen.getByLabelText('Province')).toHaveTextContent('Not mapped');
+      expect(screen.getByLabelText('Province')).toHaveTextContent('Keep as extra data');
       // ⛔ `Zone` reads `zone` — NOT because the seed picked it (it did not, which is what this
       // test is about) but because the header spells the field, so the parser's passthrough rule
       // claims it. Asserting "Not mapped" here is what this panel used to do, and it was untrue:
@@ -155,7 +161,7 @@ describe('ColumnMapStep', () => {
       // Same split as Province/Zone above: neither is SEEDED, but `Ownership` spells the field and
       // therefore claims it. `Ownership type` spells nothing and stays genuinely unmapped.
       expect(screen.getByLabelText('Ownership')).toHaveTextContent('ownership');
-      expect(screen.getByLabelText('Ownership type')).toHaveTextContent('Not mapped');
+      expect(screen.getByLabelText('Ownership type')).toHaveTextContent('Keep as extra data');
     });
 
     it('still pre-selects a lone exact suggestion once only one header claims the target', () => {
@@ -180,7 +186,7 @@ describe('ColumnMapStep', () => {
       { header: 'Mobility status', candidates: [{ target: 'status', display: null, score: 0.65, confidence: 'weak' }] },
     ];
     render(<Controlled headers={['Mobility status']} suggestions={weak} initial={emptyMap} />);
-    expect(screen.getByLabelText('Mobility status')).toHaveTextContent('Not mapped');
+    expect(screen.getByLabelText('Mobility status')).toHaveTextContent('Keep as extra data');
     expect(screen.queryByText(/check this/i)).not.toBeInTheDocument();
   });
 
@@ -222,7 +228,7 @@ describe('ColumnMapStep', () => {
       { header: 'Zone', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
     ];
 
-    it('shows the field it claims, not "Not mapped"', () => {
+    it('shows the field it claims, not the release option', () => {
       render(<Controlled headers={['Province', 'Zone']} suggestions={zambia} initial={emptyMap} />);
       expect(screen.getByLabelText('Zone')).toHaveTextContent('zone');
     });
@@ -263,7 +269,7 @@ describe('ColumnMapStep', () => {
       render(<Controlled headers={['Province', 'Zone']} suggestions={zambia}
         initial={{ columns: { Province: 'zone' }, constants: {}, extras: [] }} onChangeSpy={onChange} />);
       fireEvent.click(screen.getByLabelText('Zone'));
-      fireEvent.click(await screen.findByRole('option', { name: 'Not mapped' }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Keep as extra data' }));
       expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ extras: ['Zone'] }));
       expect(screen.queryByText(/both claim zone/i)).not.toBeInTheDocument();
     });
@@ -271,7 +277,7 @@ describe('ColumnMapStep', () => {
     it('badges a header sitting in extras so the decision is visible', () => {
       render(<Controlled headers={['Zone']} suggestions={[zambia[1]]}
         initial={{ columns: {}, constants: {}, extras: ['Zone'] }} />);
-      expect(screen.getByLabelText('Zone')).toHaveTextContent('Not mapped');
+      expect(screen.getByLabelText('Zone')).toHaveTextContent('Keep as extra data');
       expect(screen.getByText(/kept as extra data/i)).toBeInTheDocument();
     });
   });
