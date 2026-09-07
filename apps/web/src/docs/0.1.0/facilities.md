@@ -55,8 +55,15 @@ no-op.
 
 ## The import wizard's three steps
 
-The Studio wizard has three steps: Source (pick the file and register), Mapping (build the
-column map), and Review (the validated summary, the value map, and Confirm import).
+The Studio wizard has three steps: Source (pick the file and register), Mapping (every decision:
+the column map, fixed values, what to do with conflicts, absences and deletions, and the value
+map), and Review (a read-only report of what the check found, plus Apply).
+
+Mapping decides; Review reports. If a check turns up something worth changing, go back to Mapping,
+change it, and come forward again. Changing anything on Mapping discards the last Review, so a
+summary that no longer matches what is about to be imported is never left on screen. The conflict,
+absent and deleted choices are the exception: they are applied at import time rather than when the
+file is read, so they cannot change what a check found and do not discard it.
 
 ## Getting a suggested map
 

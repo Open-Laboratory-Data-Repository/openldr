@@ -26,11 +26,36 @@ de bouton Retour séparé.
 
 - **Source.** Choisissez le fichier et le registre auquel il appartient. Si cette installation n'a
   encore aucun registre, le bouton affiche ici « Enregistrer un registre » au lieu de « Continuer ».
-- **Mappage.** Construisez ou vérifiez la correspondance de colonnes, et définissez les
-  valeurs fixes. Voir ci-dessous.
-- **Vérification.** Affiche le résumé validé, la correspondance de valeurs pour les valeurs de
-  niveau, statut ou pays qui n'ont pas trouvé de correspondance, et le bouton « Confirmer
-  l'import ».
+- **Mappage.** Toutes les décisions se prennent ici : la correspondance de colonnes, les valeurs
+  fixes, que faire des conflits, des absences et des suppressions, et quels mots du registre
+  correspondent au vocabulaire.
+- **Vérification.** Rapporte ce que la vérification a trouvé et propose une seule action,
+  Appliquer. Rien n'y est modifiable.
+
+### Le mappage décide, la vérification rapporte
+
+Si la vérification révèle quelque chose que vous voulez changer, revenez au Mappage, changez-le,
+puis avancez de nouveau. Cet aller-retour est voulu. Une liste nationale d'établissements engage
+trop de choses pour qu'il vaille la peine d'échanger l'exactitude contre la vitesse.
+
+Au premier passage, le Mappage n'affiche aucune liste de valeurs non reconnues, car rien n'a encore
+lu le fichier. Continuez, laissez la vérification s'exécuter, et la liste vous attend à votre
+retour. Il en va de même des options qui laissent passer un problème : aucune ne vous est proposée
+tant que rien ne vous a dit que le problème existe.
+
+**Changer quoi que ce soit au Mappage supprime la dernière Vérification.** C'est délibéré. Un
+résumé qui ne correspond plus à ce que vous allez importer est pire que pas de résumé : l'assistant
+le retire plutôt que de laisser à l'écran un chiffre qui n'est plus vrai. La Vérification est soit
+à jour, soit absente.
+
+Deux choses ne la suppriment volontairement **pas**, car elles ne changent rien à ce que la
+vérification a trouvé : les choix conflits, absences et suppressions, qui s'appliquent au moment de
+l'import et non à la lecture du fichier, et l'option d'importer malgré des lignes illisibles, qui
+décide seulement si l'import peut se poursuivre.
+
+La liste des valeurs non reconnues est conservée pendant que vous la traitez. Enregistrer une
+correspondance ne fait pas disparaître les lignes restantes, et ne relance plus la vérification
+tout seul. Demandez la vérification suivante quand vous êtes prêt.
 
 Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont Aperçu, les
 trois options de réenvoi, Annuler et Fermer, reste dans le menu `⋯` de la page.

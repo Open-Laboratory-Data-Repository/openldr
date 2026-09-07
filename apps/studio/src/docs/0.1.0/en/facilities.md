@@ -23,9 +23,33 @@ step in that strip to move between them. There is no separate Back button.
 
 - **Source.** Pick the file and the register it belongs to. If this install has no register yet,
   the button here reads Register a source instead of Continue.
-- **Mapping.** Build or check the column map, and set any fixed values. See below.
-- **Review.** Shows the validated summary, the value map for level, status, or country values
-  that did not match, and the Confirm import button.
+- **Mapping.** Every decision lives here: the column map, fixed values, what to do with conflicts,
+  absences and deletions, and which of the register's own words map onto the vocabulary.
+- **Review.** Reports what the check found and offers one action, Apply. Nothing on it is editable.
+
+### Mapping decides, Review reports
+
+If the check turns up something you want to change, go back to Mapping, change it, and come
+forward again. That round trip is deliberate. A national facility list is tied to too much for it
+to be worth trading correctness for speed.
+
+The first time through, Mapping shows no list of unrecognised values, because nothing has read the
+file yet. Continue, let the check run, and the list is waiting for you when you come back. The same
+is true of the options that wave a problem through: you are not offered a way past unrecognised
+columns until something has told you there are any.
+
+**Changing anything on Mapping discards the last Review.** That is on purpose. A summary that no
+longer matches what you are about to import is worse than no summary, so the wizard takes it away
+rather than leave a number on screen that is no longer true. Review is either current or absent.
+
+Two things deliberately do **not** discard it, because they cannot change what a check found: the
+conflict, absent and deleted choices, which are applied when you import rather than when the file
+is read, and the option to import past rows that could not be read at all, which only decides
+whether the import may proceed.
+
+The list of unrecognised values is kept while you work through it. Saving a mapping does not make
+the remaining rows vanish, and it no longer re-runs the check by itself. Ask for the next check
+when you are ready.
 
 Each step shows one button, for the action that moves you forward. Every other action, including
 Preview, the three re-upload options, Cancel, and Close, stays in the page's `⋯` menu.
