@@ -1870,6 +1870,8 @@ export const listFormVersions = (id: string): Promise<FormVersionSummary[]> =>
   apiGet(`/api/forms/${id}/versions`, 'list form versions');
 export const getFormVersion = (id: string, version: number): Promise<FormVersion> =>
   apiGet(`/api/forms/${id}/versions/${version}`, 'get form version');
+export const restoreFormVersion = (id: string, version: number): Promise<FormDefinition> =>
+  authFetch(`/api/forms/${id}/restore/${version}`, jbody({}, 'POST')).then((r) => okJson<FormDefinition>(r, 'restore form version'));
 export const setFormStatus = (id: string, status: FormStatus): Promise<FormDefinition> =>
   authFetch(`/api/forms/${id}/status`, jbody({ status }, 'POST')).then((r) => okJson<FormDefinition>(r, 'set form status'));
 export const deleteForm = (id: string): Promise<void> => apiDelete(`/api/forms/${id}`, 'delete form');

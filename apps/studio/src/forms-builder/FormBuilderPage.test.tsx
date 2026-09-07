@@ -434,6 +434,22 @@ describe('FormBuilderPage (three-pane shell)', () => {
     expect(await screen.findByText(/Published version|Compare form versions/)).toBeInTheDocument();
   });
 
+  it('Versions: ⋯ → Versions opens the history sheet', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'listFormVersions').mockResolvedValue([]);
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Versions'));
+
+    expect(await screen.findByText('Version history')).toBeInTheDocument();
+  });
+
   // ── Lifecycle actions (archive / delete / export) ────────────────────────────
 
   it('Archive: ⋯ → Archive calls setFormStatus(formId, "archived")', async () => {

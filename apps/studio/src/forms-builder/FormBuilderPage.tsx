@@ -7,6 +7,7 @@ import { createForm, deleteForm, formQuestionnaireUrl, getForm, publishForm, set
 import { createDefaultFormSchema, makeUniqueFieldId, newField } from './builderModel';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
+import { VersionHistorySheet } from './VersionHistorySheet';
 import { useTemplateHistory } from './useTemplateHistory';
 import { useBuilderKeyboard } from './useBuilderKeyboard';
 import { BuilderHeader } from './BuilderHeader';
@@ -30,6 +31,7 @@ export function FormBuilderPage(): JSX.Element {
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -295,6 +297,7 @@ export function FormBuilderPage(): JSX.Element {
           onSave={() => { void save(); }}
           onPublish={() => { void publish(); }}
           onCompare={() => setCompareOpen(true)}
+          onVersions={() => setVersionsOpen(true)}
           onAddField={addField}
           onArchive={() => { void archive(); }}
           onDisable={() => { void disable(); }}
@@ -374,6 +377,20 @@ export function FormBuilderPage(): JSX.Element {
         current={schema}
         open={compareOpen}
         onOpenChange={setCompareOpen}
+      />
+
+      <VersionHistorySheet
+        formId={formId}
+        open={versionsOpen}
+        onOpenChange={setVersionsOpen}
+        onRestored={(form) => {
+          // pushHistory, not recordEdit: restore must be undoable with the keyboard like every
+          // other builder action. Without it, restore is the one change you cannot take back,
+          // which is the opposite of what a version history is for.
+          history.pushHistory();
+          setSchema(normalizeFormSchema(form.schema));
+          setStatus(form.status);
+        }}
       />
 
       <ConfirmDialog

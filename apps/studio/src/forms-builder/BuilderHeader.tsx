@@ -96,6 +96,7 @@ export interface BuilderHeaderProps {
   onSave: () => void;
   onPublish: () => void;
   onCompare: () => void;
+  onVersions: () => void;
   onAddField: () => void;
   onArchive: () => void;
   onDisable: () => void;
@@ -132,6 +133,7 @@ export function BuilderHeader({
   onSave,
   onPublish,
   onCompare,
+  onVersions,
   onAddField,
   onArchive,
   onDisable,
@@ -332,6 +334,9 @@ export function BuilderHeader({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onCompare()}>
                 Compare
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!formId} onSelect={() => onVersions()}>
+                Versions
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem disabled={!formId} onSelect={() => onArchive()}>

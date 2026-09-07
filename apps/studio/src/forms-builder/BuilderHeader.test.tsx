@@ -29,6 +29,7 @@ function renderHeader(
   const onSave = vi.fn();
   const onPublish = vi.fn();
   const onCompare = vi.fn();
+  const onVersions = vi.fn();
   const onAddField = vi.fn();
   const onArchive = vi.fn();
   const onDisable = vi.fn();
@@ -44,6 +45,7 @@ function renderHeader(
       onSave={onSave}
       onPublish={onPublish}
       onCompare={onCompare}
+      onVersions={onVersions}
       onAddField={onAddField}
       onArchive={onArchive}
       onDisable={onDisable}
@@ -52,7 +54,7 @@ function renderHeader(
       {...overrides}
     />,
   );
-  return { ...utils, onChange, onSave, onPublish, onCompare, onAddField, onArchive, onDisable, onDelete, onExport };
+  return { ...utils, onChange, onSave, onPublish, onCompare, onVersions, onAddField, onArchive, onDisable, onDelete, onExport };
 }
 
 // Helper: open a DropdownMenu trigger and find/click a menu item by text.
