@@ -1627,6 +1627,23 @@ export const confirmFacilityImportRun = (
   authFetch(`/api/facilities/import/runs/${encodeURIComponent(id)}/confirm`, jbody(options, 'POST'))
     .then((r) => okJson<{ runId: string; status: FacilityImportRunStatus }>(r, 'confirm facility import'));
 
+/** `POST /api/facilities/import/runs/:id/revalidate` — check an already-uploaded file again under a
+ *  new column map, WITHOUT sending it again.
+ *
+ *  ⛔ The body carries the operator's decisions and NOTHING that says which file or which register:
+ *  those were settled by the upload, and the server drops them from the body anyway. */
+export const revalidateFacilityImportRun = (
+  id: string,
+  body: {
+    columnMap?: FacilityColumnMap;
+    allowUnknownColumns?: boolean;
+    allowInvalidCoordinates?: boolean;
+    allowMalformedRows?: boolean;
+  },
+): Promise<{ runId: string; status: FacilityImportRunStatus }> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(id)}/revalidate`, jbody(body, 'POST'))
+    .then((r) => okJson<{ runId: string; status: FacilityImportRunStatus }>(r, 'check this import again'));
+
 /** Ask a run to stop. ⛔ THE TWO OUTCOMES ARE NOT THE SAME ANSWER and a caller must not blur them:
  *
  *  - `'cancelled'` (HTTP 200) — the run was in a state no worker claims, so the server carried the

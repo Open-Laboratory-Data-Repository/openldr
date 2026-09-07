@@ -1027,11 +1027,11 @@ export const en = {
       // they have to be chosen before the validate that produced the summary on screen — the confirm
       // route refuses one that arrives late. These two re-stream the same file with the option set,
       // which is exactly what that refusal asks for.
-      reuploadUnknownColumnsAction: 'Re-upload keeping unrecognised columns',
-      reuploadInvalidCoordinatesAction: 'Re-upload keeping rows with an invalid coordinate',
-        reuploadColumnMapAction: 'Re-upload with the corrected map',
-        reuploadWithMapAction: 'Re-upload with this map',
-      overrideNeedsReupload: 'This option changes how the file is read, so it has to be set before validation. Use the actions menu above to upload this file again with it — the summary you review will then be the one that gets applied.',
+      reuploadUnknownColumnsAction: 'Check again keeping unrecognised columns',
+      reuploadInvalidCoordinatesAction: 'Check again keeping rows with an invalid coordinate',
+        reuploadColumnMapAction: 'Check again with the corrected map',
+        reuploadWithMapAction: 'Check again with this map',
+      overrideNeedsReupload: 'This option changes how the file is read, so the check has to run again with it. Use the actions menu above. The file you already uploaded is reused, so nothing is sent twice, and the summary you review will be the one that gets applied.',
       overrideAppliedToRun: 'This validation already ran with that option on, so the summary below is what will be applied.',
       runLoading: 'Checking the import run…',
       // The worker's own phase string, verbatim — it is free text the worker chooses, not a token
