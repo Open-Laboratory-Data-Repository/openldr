@@ -190,6 +190,36 @@ function confirmNow() {
   fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
 }
 
+/** Drive the STREAMED door until `summary` is rendered on Review.
+ *
+ *  The inline preview used to be the cheap way to put a `FacilityImportResult` on screen. With that
+ *  door gone this is the only way, and it is also what an operator actually does: upload, the worker
+ *  validates, the poll brings the summary back.
+ *
+ *  ⛔ NOT for a test that asserts what the UPLOAD was called with. This presses the button for you
+ *  and supplies its own mocks, so those would be the thing under test rather than the subject. Such
+ *  tests arrange by hand, exactly as the A2b tests further down already do.
+ *
+ *  @param run Override the run row. `status: 'applied'` is how a test reaches `appliedSummary`.
+ *  @param csv The fixture file's text, when the test cares about its headers.
+ */
+async function reviewWithSummary(
+  summary: FacilityImportResult,
+  run: Partial<FacilityImportRunView> = {},
+  csv?: string,
+): Promise<void> {
+  mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+  mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+    status: 'awaiting_confirmation', phase: 'validated', summary, ...run,
+  }));
+  await pickFileAndSystem(csv);
+  await uploadNow();
+  // ⛔ Waits for the STEP, not for a text match. Every caller then asserts its own copy, and a
+  // helper that waited on one caller's string would silently pass for a summary that never rendered.
+  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
+    .toHaveAttribute('aria-current', 'step'));
+}
+
 describe('ImportFacilitiesSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -215,8 +245,9 @@ describe('ImportFacilitiesSheet', () => {
 
   // ── B1 Task 9: the national-system picklist ─────────────────────────────────────────────────────
 
-  it('B1 Task 9: renders a Select populated from the API, keeps Preview disabled until a source is chosen, and sends the URI — never the display name', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+  it('B1 Task 9: renders a Select populated from the API, keeps Mapping unreachable until a source is chosen, and sends the URI — never the display name', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await waitFor(() => expect(api.listFacilityImportSources).toHaveBeenCalled());
@@ -230,26 +261,27 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByRole('option', { name: HFR_SOURCE.url })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' }); // close without picking
 
-    // A file alone is not enough: Preview stays disabled with no register chosen.
+    // A file alone is not enough: Mapping's action is unreachable with no register chosen.
+    // Asserting the absence of Mapping's own action covers both shapes of blocked Source: Continue
+    // present but disabled, and Continue replaced by "Register a source" when the install has no
+    // register at all.
     fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
-    openMenu();
-    // ⛔ "Cannot reach Mapping", not "Preview is disabled". Same guarantee, stated where it now
-    // lives. Preview moved to Mapping, which needs both a file and a register, so its old disabled
-    // state on Source is no longer reachable. Asserting the absence of Mapping'"'"'s own action covers
-    // both shapes of blocked Source: Continue present but disabled, and Continue replaced by
-    // "Register a source" when the install has no register at all.
     expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /^preview$/i })).not.toBeInTheDocument();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
 
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
-    await previewNow();
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
+    await uploadNow();
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
     // ⛔ THE WHOLE POINT: the source's URI reaches the request, never its display name.
-    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({ nationalSystem: HFR_SOURCE.url }));
-    expect(api.importFacilitiesCsv).not.toHaveBeenCalledWith(expect.objectContaining({ nationalSystem: HFR_SOURCE.name }));
+    // ⛔ The second argument is the progress callback. `uploadFacilityImport` takes two, and a
+    // one-argument `toHaveBeenCalledWith` would fail on the arity rather than on the subject.
+    expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({ nationalSystem: HFR_SOURCE.url }), expect.any(Function),
+    );
+    expect(api.uploadFacilityImport).not.toHaveBeenCalledWith(
+      expect.objectContaining({ nationalSystem: HFR_SOURCE.name }), expect.any(Function),
+    );
   });
 
   it('B1 Task 9: disables the Select and shows a loading state while sources are still being fetched', async () => {
@@ -331,152 +363,90 @@ describe('ImportFacilitiesSheet', () => {
     const trigger = screen.getByRole('combobox', { name: 'National system' });
     await waitFor(() => expect(trigger).toHaveTextContent(NEW_SOURCE.name));
 
-    // ⛔ THE WHOLE POINT: Preview is now reachable — a file plus the just-registered source is enough
-    // to import against it, which is exactly what "unreachable on a fresh install" denied before.
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    // ⛔ THE WHOLE POINT: importing is now reachable — a file plus the just-registered source is
+    // enough to import against it, which is exactly what "unreachable on a fresh install" denied
+    // before.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
-    await previewNow();
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledWith(
-      expect.objectContaining({ nationalSystem: NEW_SOURCE.url }),
+    await uploadNow();
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({ nationalSystem: NEW_SOURCE.url }), expect.any(Function),
     ));
   });
 
-  it('never applies straight from the file picker — Preview is a dry run, Apply is not offered until one succeeds', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
-    const onImported = vi.fn();
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={onImported} />);
-
-    // Apply is not even offered before a preview has run.
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
-
-    await pickFileAndSystem();
-    await previewNow();
-
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
-    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(
-      expect.objectContaining({ nationalSystem: 'HFR', apply: false }),
-    );
-    // Never sent an apply:true request just from picking a file + previewing.
-    expect(api.importFacilitiesCsv).not.toHaveBeenCalledWith(expect.objectContaining({ apply: true }));
-    expect(onImported).not.toHaveBeenCalled();
-  });
-
-  it('shows the dry-run summary before any Apply confirmation, then applies and reloads on confirm', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(cleanPreview)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 2, changed: 1, written: { created: 2, updated: 1, retired: 0 }, runId: 'run-1' }));
-    const onImported = vi.fn();
-    const onOpenChange = vi.fn();
-    render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={onImported} />);
-
-    await pickFileAndSystem();
-    await previewNow();
-    expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
-
-    clickMenuItem(/^apply$/i);
-    // The confirm dialog is an explicit second step, not an immediate apply.
-    expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
-
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ nationalSystem: 'HFR', apply: true }),
-    );
-    await waitFor(() => expect(onImported).toHaveBeenCalled());
-    expect(await screen.findByText(/import complete/i)).toBeInTheDocument();
-    // The sheet is not force-closed by a successful apply — the operator sees the result and
-    // closes it themselves.
-    expect(onOpenChange).not.toHaveBeenCalledWith(false);
-  });
-
   it('a parseable-but-wrong file (parsed: 0, no unknown columns) reads as "nothing found", not success', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({ parsed: 0 }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem('the quick brown fox');
-    await previewNow();
+    await reviewWithSummary(baseResult({ parsed: 0 }), {}, 'the quick brown fox');
 
     expect(await screen.findByText(/no facility rows were found/i)).toBeInTheDocument();
     // Nothing to confirm — the trap case must not offer Apply.
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
   });
 
-  it('shows unknown columns with an explicit opt-in, naming the columns, and re-previews once checked', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      // `blockedReason` added: these fixtures stand for a file with NO column map, which is the
-      // case that still refuses, and `importFacilities` really does set the reason for it. The
-      // amber box now keys off that verdict rather than off the list alone.
-      .mockResolvedValueOnce(baseResult({
-        parsed: 0, unknownColumns: ['weird_col', 'other_col'],
-        blocked: true, blockedReason: 'unknown-columns',
-      }))
-      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 3, unknownColumns: ['weird_col', 'other_col'] }));
+  // The opt-in's own round trip is the run door's, and it has its own test: "the run door
+  // re-uploads the same file with allowUnknownColumns, so the validate reviewed is the one applied".
+  // This test is the amber box's copy and the un-overridden request, nothing more.
+  it('shows unknown columns with an explicit opt-in, naming the columns', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    // `blockedReason` set: this fixture stands for a file with NO column map, which is the case
+    // that still refuses, and `importFacilities` really does set the reason for it. The amber box
+    // keys off that verdict rather than off the list alone.
+    await reviewWithSummary(baseResult({
+      parsed: 0, unknownColumns: ['weird_col', 'other_col'],
+      blocked: true, blockedReason: 'unknown-columns',
+    }));
 
     expect(await screen.findByText(/weird_col, other_col/)).toBeInTheDocument();
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
+    expect(api.uploadFacilityImport).toHaveBeenLastCalledWith(
       expect.objectContaining({ allowUnknownColumns: false }),
+      expect.any(Function),
     );
 
-    // ⛔ THE OVERRIDE LIVES ON MAPPING NOW. Review reports the finding and offers no control, so the
-    // operator comes back to decide. Ticking no longer re-checks by itself either: it retires the
+    // ⛔ THE OVERRIDE LIVES ON MAPPING. Review reports the finding and offers no control, so the
+    // operator comes back to decide. Ticking does not re-check by itself either: it retires the
     // summary, and the next check is theirs to ask for.
     await backToMapping();
-    fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
-    await previewNow();
-
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowUnknownColumns: true }),
-    );
-    expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /import anyway/i })).toBeInTheDocument();
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
   // Task 5: surface Task 4's `quarantined` (facility-import.ts) — a structurally malformed row's
   // line number and raw content, and the `allowMalformedRows` override, reusing the same
   // control/copy pattern as the unknown-columns opt-in above (see the brief).
-  it('lists quarantined line numbers, states the count, and blocks Apply until the operator opts in', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 1, create: 1,
-      quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
-      // What the server actually answers for a preview run WITHOUT the override — the sheet
-      // previews before the checkbox is ever ticked.
-      blocked: true, blockedReason: 'quarantined-rows',
-    }));
+  it('lists quarantined line numbers, states the count, and withholds Confirm until the operator opts in', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 1, create: 1,
+      quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
+      // What the worker's validate actually stores WITHOUT the override — the file is checked
+      // before the checkbox is ever ticked.
+      blocked: true, blockedReason: 'quarantined-rows',
+    }));
 
     expect(await screen.findByText(/line 3/i)).toBeInTheDocument();
     expect(screen.getByText(/2,Bad,Extra/)).toBeInTheDocument();
     expect(screen.getByText(/1 row could not be read/i)).toBeInTheDocument();
 
-    // Apply is not offered while a quarantined row is blocking and not yet allowed — same
-    // "not offered" idiom this sheet already uses for the unknown-columns-blocked and over-cap
-    // cases above, not a disabled control with no explanation.
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
+    // Confirm is not offered while a quarantined row is blocking and not yet allowed — the same
+    // "not offered" idiom this sheet already uses for the unknown-columns-blocked case, not a
+    // disabled control with no explanation.
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
 
-    // Opting in unblocks Apply locally — `allowMalformedRows` does not change what the parser
+    // Opting in unblocks Confirm locally — `allowMalformedRows` does not change what the parser
     // finds (see facility-import.ts's docblock: it only gates whether APPLY proceeds), so this
-    // must NOT re-trigger a preview request, unlike the unknown-columns checkbox above.
+    // must NOT re-check, unlike the unknown-columns checkbox.
     // The override lives on Mapping now. It stays out of `summarySignature` deliberately, so
     // ticking it does NOT retire the Review the operator already has: they step straight back.
     await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
-    expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1);
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
     forwardToReview();
 
-    openMenu();
-    expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
   });
 
   // ⛔ THE CASE THIS SHEET COULD NOT REFUSE ON ITS OWN. Its old gate was "quarantined rows and no
@@ -486,61 +456,23 @@ describe('ImportFacilitiesSheet', () => {
   // `parsed: 2` (a file the parser DID read rows out of) the old gate offers Apply for a write the
   // server will reject; reading the server's own `blocked` refuses it. Ticking the malformed-rows
   // checkbox must NOT release it either — duplicate headers have no override.
-  it('refuses Apply for a duplicate-header file even when rows parsed, and the override does not release it', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+  it('refuses Confirm for a duplicate-header file even when rows parsed, and the override does not release it', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await reviewWithSummary(baseResult({
       parsed: 2, create: 2, duplicateColumns: ['name'],
       quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
       blocked: true, blockedReason: 'duplicate-columns',
     }));
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
-
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
 
     // The quarantine block is rendered (the file has both problems), so the checkbox is reachable —
     // and ticking it changes nothing, because the reason is the unoverridable one.
     await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
     forwardToReview();
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
-  });
-
-  it('sends allowMalformedRows: true on Apply once the operator has opted in past quarantined rows', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({
-        parsed: 1, create: 1,
-        quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
-        // Preview, no override yet: the server says blocked.
-        blocked: true, blockedReason: 'quarantined-rows',
-      }))
-      .mockResolvedValueOnce(baseResult({
-        parsed: 1, create: 1,
-        quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
-        // Apply, override sent: same file, not blocked.
-        written: { created: 1, updated: 0, retired: 0 }, blocked: false, blockedReason: null,
-      }));
-    const onImported = vi.fn();
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={onImported} />);
-
-    await pickFileAndSystem();
-    await previewNow();
-    await backToMapping();
-    fireEvent.click(await screen.findByRole('checkbox', { name: /import anyway/i }));
-
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
-
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowMalformedRows: true, apply: true }),
-    );
-    await waitFor(() => expect(onImported).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
   });
 
   // ⛔ THE OVERRIDE HAS TO WORK IN BOTH DIRECTIONS. `blocked` is baked at PREVIEW time, so if the
@@ -554,168 +486,108 @@ describe('ImportFacilitiesSheet', () => {
   // The mock is an IMPLEMENTATION, not a fixed value, precisely so it answers the way the server
   // does — `blocked` computed from the request's own `allowMalformedRows` (facility-import.ts). A
   // constant payload would pass no matter what the sheet sends, which is what made this reachable.
-  it('re-imposes the quarantine block when the operator un-ticks the override after a re-preview', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockImplementation(
-      async (req: { allowMalformedRows: boolean }) => baseResult({
-        parsed: 1, create: 1,
-        quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
-        blocked: !req.allowMalformedRows,
-        blockedReason: req.allowMalformedRows ? null : 'quarantined-rows',
-      }),
-    );
+  it('re-imposes the quarantine block when the operator un-ticks the override', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 1, create: 1,
+      quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
+      blocked: true, blockedReason: 'quarantined-rows',
+    }));
+
+    // ⛔ THE PROPERTY THIS TEST EXISTS FOR, and the whole reason it is a TOGGLE rather than a
+    // release valve: the summary being toggled against was computed WITHOUT the override, so
+    // `blockedReason` still reads 'quarantined-rows' and un-ticking can re-impose it. On the inline
+    // door that took a request pinning `allowMalformedRows: false` on every preview. Here it is
+    // structural and stronger: the flag is not in the upload's payload at all, so the worker's
+    // validate could not have run with it.
+    expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.not.objectContaining({ allowMalformedRows: expect.anything() }),
+      expect.any(Function),
+    );
 
     await backToMapping();
     fireEvent.click(await screen.findByRole('checkbox', { name: /import anyway/i }));
-    openMenu();
-    expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
+    forwardToReview();
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
 
-    // A second Preview while the box is ticked — the state the re-applied override has to survive.
-    // ⛔ Through the helper, not a bare menu click: the first preview carried the sheet to Review,
-    // and Preview lives on Mapping now, so a re-preview has to step back first. The auto-advance
-    // brings it forward again once the new summary lands, which is why the checkbox assertions
-    // below still find their control.
-    await previewNow();
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    // THE LOAD-BEARING REQUEST: the preview asks for the UN-OVERRIDDEN answer even though the
-    // operator has opted in, so `blockedReason` stays 'quarantined-rows' for the checkbox to toggle
-    // against. Sending `true` here is exactly what makes the un-tick below unrepresentable.
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowMalformedRows: false, apply: false }),
-    );
-    // The opt-in survives the re-preview (nothing resets the checkbox), so Apply is still offered.
-    openMenu();
-    expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
-
-    // …and taking it back takes Apply away again.
+    // …and taking it back takes Confirm away again. Ticking never re-checked, so the summary
+    // standing here is still the un-overridden one both directions read.
     await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
     forwardToReview();
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces duplicates as a plainly-visible warning, not a buried number', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 5, create: 3, duplicates: 2,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 5, create: 3, duplicates: 2,
+    }));
 
     expect(await screen.findByText(/2 duplicate national code/i)).toBeInTheDocument();
   });
 
-  it('a malformed-CSV 400 surfaces the server message and keeps the sheet open', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockRejectedValue(
+  it('a rejected upload surfaces the server message and keeps the sheet open', async () => {
+    mocked(api.uploadFacilityImport).mockRejectedValue(
       new Error('import facilities failed: Invalid Record Length: columns length is 3, got 2 on line 4'),
     );
     const onOpenChange = vi.fn();
     render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-    await previewNow();
+    await uploadNow();
 
     expect(await screen.findByText(/invalid record length/i)).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
-  it('renders the over-cap 400 helpfully — plain language, no shell/CLI-only phrasing left bare, and the sheet stays open', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(cleanPreview)
-      .mockRejectedValueOnce(
-        new Error(
-          'import facilities failed: this register has 14000 row(s), which exceeds the 2000-row inline apply '
-          + 'limit; use `openldr facilities import --apply` (the CLI) instead — it is not bound by an HTTP request deadline',
-        ),
-      );
-    const onImported = vi.fn();
-    const onOpenChange = vi.fn();
-    render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={onImported} />);
-
-    await pickFileAndSystem();
-    await previewNow();
-    expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
-
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
-
-    // The friendlier message says plainly this is a browser/size limitation and names the CLI —
-    // it must NOT just dump the raw server string (which opens mid-sentence and reads oddly out
-    // of the terminal context: "this register has 14000 row(s), which exceeds...").
-    const friendly = await screen.findByText(/too large to apply/i);
-    expect(friendly).toBeInTheDocument();
-    expect(screen.queryByText(/this register has 14000 row\(s\)/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/openldr facilities import --apply/)).toBeInTheDocument();
-
-    expect(onImported).not.toHaveBeenCalled();
-    expect(onOpenChange).not.toHaveBeenCalledWith(false);
-  });
-
-  it('proactively warns when a clean dry run itself already exceeds the 2000-row apply cap, without offering Apply', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 14000, create: 14000,
-    }));
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
-
-    expect(await screen.findByText(/too large to apply/i)).toBeInTheDocument();
-    expect(screen.getByText(/openldr facilities import --apply/)).toBeInTheDocument();
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
-  });
-
-  it('Preview stays disabled until both a file and a national system are present, and never defaults the system', () => {
+  it('Mapping stays unreachable until both a file and a national system are present, and the system never defaults', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
     expect(screen.getByLabelText('National system')).toHaveValue('');
 
-    openMenu();
-    // ⛔ "Cannot reach Mapping", not "Preview is disabled". Same guarantee, stated where it now
-    // lives. Preview moved to Mapping, which needs both a file and a register, so its old disabled
-    // state on Source is no longer reachable. Asserting the absence of Mapping'"'"'s own action covers
-    // both shapes of blocked Source: Continue present but disabled, and Continue replaced by
-    // "Register a source" when the install has no register at all.
+    // ⛔ "Cannot reach Mapping", not "the action is disabled". Asserting the absence of
+    // Mapping's own action covers both shapes of blocked Source: Continue present but disabled,
+    // and Continue replaced by "Register a source" when the install has no register at all.
     expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /^preview$/i })).not.toBeInTheDocument();
   });
 
-  it('F2: after opting into unknown columns, a wrong file still states an outcome and surfaces the skipped count', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({
-        parsed: 0, unknownColumns: ['patient_id', 'dob', 'sex'],
-        blocked: true, blockedReason: 'unknown-columns',
-      }))
-      .mockResolvedValueOnce(baseResult({ parsed: 0, skipped: 3000, unknownColumns: ['patient_id', 'dob', 'sex'] }));
+  // F2 was one test walking from the blocked state to the opted-in one through a re-preview. The
+  // two states are what it actually asserted, and each is a summary in its own right, so they are
+  // two tests now. Neither assertion moved.
+  it('F2: before opting in, unknown-columns-blocked is its own explanation and not also "nothing found"', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 0, unknownColumns: ['patient_id', 'dob', 'sex'],
+      blocked: true, blockedReason: 'unknown-columns',
+    }));
 
     expect(await screen.findByText(/patient_id, dob, sex/)).toBeInTheDocument();
-    // Before opting in, unknown-columns-blocked is its own distinct explanation — the "wrong file"
-    // message must not also render here (would be a second, confusing message for the same click).
+    // The "wrong file" message must not also render here — it would be a second, confusing
+    // message for the same finding.
     expect(screen.queryByText(/no facility rows were found/i)).not.toBeInTheDocument();
+  });
 
-    await backToMapping();
-    fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
-    await previewNow();
+  it('F2: once opted in, a wrong file still states an outcome and surfaces the skipped count', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowUnknownColumns: true }),
-    );
+    // The summary a validate produces once the override rode the upload: the columns were kept, so
+    // nothing is blocked, and the file STILL parses to zero rows.
+    //
+    // ⛔ `options` IS THE OVERRIDE ON THIS DOOR, and it is load-bearing rather than decoration.
+    // `unknownColumnsOverridden` reads the RUN's stored options, not this sheet's checkbox
+    // (ImportFacilitiesSheet.tsx's `reupload ? reupload.allowUnknownColumns : ...`), because on a
+    // run the question is what the validate actually ran with. Without it the summary takes the
+    // "unrecognised columns" branch instead and never states the outcome at all.
+    await reviewWithSummary(baseResult({
+      parsed: 0, skipped: 3000, unknownColumns: ['patient_id', 'dob', 'sex'],
+    }), { options: { allowUnknownColumns: true } });
 
-    // Once opted in, a file that still parses to zero rows must say so plainly, AND the 3000
-    // skipped rows (previously invisible — `skipped` only ever rendered inside the `parsed > 0`
-    // branch) must be visible.
+    // A file that parses to zero rows must say so plainly, AND the 3000 skipped rows (previously
+    // invisible — `skipped` only ever rendered inside the `parsed > 0` branch) must be visible.
     expect(await screen.findByText(/3000 row\(s\).*skipped/i)).toBeInTheDocument();
     expect(screen.queryByText(/row\(s\) will be imported/i)).not.toBeInTheDocument();
   });
@@ -724,100 +596,53 @@ describe('ImportFacilitiesSheet', () => {
   // reconciliation (`create` + `changed`, the rows `classifyFacilityRows` says an apply would
   // actually write), not the old client-side `parsed - duplicates` approximation — a byte-identical
   // re-import collapses to `unchanged`, which `parsed - duplicates` had no way to know about.
-  it('F3: the headline row count and the apply-confirm body reflect what the server classified as create+changed, not the raw parsed count', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 5, duplicates: 2, create: 2, changed: 1, unchanged: 2,
-    }));
+  it('F3: the headline row count reflects what the server classified as create+changed, not the raw parsed count', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 5, duplicates: 2, create: 2, changed: 1, unchanged: 2,
+    }));
 
     // 2 create + 1 changed = 3 rows will actually land in the registry — NOT 5 parsed, and NOT
     // 5 - 2 duplicates (which would also read 3 here by coincidence; the point is the number now
     // comes from server classification, proven by the `unchanged` regression test below).
     expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
     expect(screen.queryByText(/5 row\(s\) will be imported/i)).not.toBeInTheDocument();
-
-    clickMenuItem(/^apply$/i);
-    expect(await screen.findByText(/this writes 3 facility row\(s\)/i)).toBeInTheDocument();
-    expect(screen.queryByText(/this writes 5 facility row\(s\)/i)).not.toBeInTheDocument();
   });
 
   // The case `parsed - duplicates` could never have gotten right: a file with no in-file duplicates
   // at all (so the old formula would have reported the full `parsed` count) where most rows are
   // byte-identical re-imports of what the registry already holds.
   it('F3 regression: a byte-identical re-import (parsed rows are mostly `unchanged`) reports the small real write, not the full parsed count', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 100, duplicates: 0, create: 0, changed: 1, unchanged: 99,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 100, duplicates: 0, create: 0, changed: 1, unchanged: 99,
+    }));
 
     expect(await screen.findByText(/1 row\(s\) will be imported/i)).toBeInTheDocument();
     expect(screen.queryByText(/100 row\(s\) will be imported/i)).not.toBeInTheDocument();
   });
 
-  it('F4: the 8MB size-cap 400 gets the same plain-language treatment as the row cap, including on a plain preview', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new Error('csv exceeds the 8MB limit for this endpoint; use `openldr facilities import` (the CLI) for a larger register'),
-    );
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
-
-    const friendly = await screen.findByText(/larger than this endpoint accepts/i);
-    expect(friendly).toBeInTheDocument();
-    expect(screen.queryByText(/csv exceeds the 8mb limit/i)).not.toBeInTheDocument();
-  });
-
-  it('F5: a 0-byte CSV explains why Preview stays disabled, instead of dead-ending with no explanation', async () => {
+  it('F5: a 0-byte CSV explains why the import cannot start, instead of dead-ending with no explanation', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     fireEvent.change(screen.getByLabelText('File'), { target: { files: [new File([''], 'empty.csv', { type: 'text/csv' })] } });
     fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
 
     expect(await screen.findByText(/this file is empty/i)).toBeInTheDocument();
-    openMenu();
-    // ⛔ "Cannot reach Mapping", not "Preview is disabled". Same guarantee, stated where it now
-    // lives. Preview moved to Mapping, which needs both a file and a register, so its old disabled
-    // state on Source is no longer reachable. Asserting the absence of Mapping'"'"'s own action covers
-    // both shapes of blocked Source: Continue present but disabled, and Continue replaced by
-    // "Register a source" when the install has no register at all.
+    // ⛔ "Cannot reach Mapping", not "the action is disabled". Asserting the absence of
+    // Mapping's own action covers both shapes of blocked Source: Continue present but disabled,
+    // and Continue replaced by "Register a source" when the install has no register at all.
     expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /^preview$/i })).not.toBeInTheDocument();
-  });
-
-  it('F6: the apply-confirm Cancel button is translated, not left as the English literal default', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
-    clickMenuItem(/^apply$/i);
-    await screen.findByRole('button', { name: /^apply$/i });
-
-    await i18n.changeLanguage('fr');
-    try {
-      expect(await screen.findByRole('button', { name: 'Annuler' })).toBeInTheDocument();
-    } finally {
-      await i18n.changeLanguage('en');
-    }
   });
 
   // ── A2a (FAC-P1-03/05): the reconciliation summary ────────────────────────────────────────────
 
   it('renders the create/changed/unchanged breakdown the server classified, alongside the headline count', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 7, create: 2, changed: 1, unchanged: 4,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({ parsed: 7, create: 2, changed: 1, unchanged: 4 }));
 
     expect(await screen.findByText(/2 facility row\(s\) will be created/i)).toBeInTheDocument();
     expect(screen.getByText(/1 existing facility row\(s\) will be changed/i)).toBeInTheDocument();
@@ -827,13 +652,11 @@ describe('ImportFacilitiesSheet', () => {
   // ⛔ THE WHOLE POINT OF THIS SLICE: `conflict: null` must never read as "0 conflicts" — that is
   // precisely the "0 means not computed" defect the audit findings this task closes exist to remove.
   it('renders conflict: null as "not evaluated", never as 0', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 3, create: 3, conflict: null,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 3, create: 3, conflict: null,
+    }));
 
     expect(await screen.findByText(/conflicts:.*not evaluated/i)).toBeInTheDocument();
     // The ONLY other way this branch could render for `conflict: null` is the real "0 rows" copy
@@ -853,13 +676,11 @@ describe('ImportFacilitiesSheet', () => {
   // preview returned" below). Renamed to what it actually tests: the non-zero-count rendering path,
   // as the counterpart to "renders conflict: null…" above.
   it('renders a non-zero conflict count from a preview result, distinct from the null "not evaluated" case', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 3, create: 2, conflict: 1, absent: 5,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 3, create: 2, conflict: 1, absent: 5,
+    }));
 
     expect(await screen.findByText(/1 row\(s\) were changed since this preview/i)).toBeInTheDocument();
     expect(screen.queryByText(/not evaluated/i)).not.toBeInTheDocument();
@@ -867,13 +688,11 @@ describe('ImportFacilitiesSheet', () => {
 
   // Same defect, same fix, for `absent`.
   it('renders absent: null as "not evaluated", never as 0', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 3, create: 3, absent: null,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 3, create: 3, absent: null,
+    }));
 
     expect(await screen.findByText(/absent from this file:.*not evaluated/i)).toBeInTheDocument();
     // Same reasoning as the conflict test above: the actual `summaryAbsent` copy (en.ts) never starts
@@ -884,7 +703,9 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   it('a changed-row sample shows the before→after diff, not just a bare count', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await reviewWithSummary(baseResult({
       parsed: 1, changed: 1,
       samples: {
         create: [], conflict: [], absent: [], deleted: [],
@@ -894,10 +715,6 @@ describe('ImportFacilitiesSheet', () => {
         }],
       },
     }));
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
 
     // The facility name heads the sample entry; the diff line beneath it shows the actual
     // before→after change — both "Dodoma RRH" occurrences (the heading AND the diff's `after`) are
@@ -907,13 +724,11 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   it('retirement choices for deleted/absent rows stay off the sheet entirely when there is nothing to retire', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 3, create: 3, deleted: 0, absent: 0,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 3, create: 3, deleted: 0, absent: 0,
+    }));
 
     expect(screen.queryByRole('combobox', { name: /rows this file says were removed/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /rows missing from this file/i })).not.toBeInTheDocument();
@@ -930,13 +745,11 @@ describe('ImportFacilitiesSheet', () => {
   // unreachable). It is gated on `runId` instead — an apply carrying this runId is what could later
   // discover a conflict, and the operator must set skip/overwrite BEFORE that happens.
   it('offers an overwrite choice once a preview has minted a runId, defaulting to Skip', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 3, create: 2, conflict: null, runId: 'run-1',
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 3, create: 2, conflict: null, runId: 'run-1',
+    }));
 
     await backToMapping();
     const select = await screen.findByRole('combobox', { name: /rows changed since this preview/i });
@@ -944,29 +757,12 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/skip them/i)).toBeInTheDocument();
   });
 
-  // The mirror image, and the direct proof the gating is on `runId`, not on `conflict`: a non-zero
-  // `conflict` with NO `runId` still hides the choice — a shape a real preview could never actually
-  // produce (conflict is null without a runId), but proves the predicate this sheet reads.
-  it('the overwrite choice stays off the sheet without a runId, even with a non-zero conflict', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 3, create: 3, conflict: 1, runId: null,
-    }));
+  it('offers a retirement choice for declared-removed rows once `deleted` is non-zero, defaulting to Retire', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
-
-    expect(screen.queryByRole('combobox', { name: /rows changed since this preview/i })).not.toBeInTheDocument();
-  });
-
-  it('offers a retirement choice for declared-removed rows once `deleted` is non-zero, defaulting to Retire', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+    await reviewWithSummary(baseResult({
       parsed: 3, create: 3, deleted: 2,
     }));
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
 
     await backToMapping();
     expect(await screen.findByRole('combobox', { name: /rows this file says were removed/i })).toBeInTheDocument();
@@ -975,137 +771,61 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   it('offers a retirement choice for merely-absent rows once `absent` is a non-zero number, defaulting to Report only', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 3, create: 3, absent: 4, deleted: 0,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 3, create: 3, absent: 4, deleted: 0,
+    }));
 
     await backToMapping();
     expect(await screen.findByRole('combobox', { name: /rows missing from this file/i })).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /rows this file says were removed/i })).not.toBeInTheDocument();
   });
 
-  it('Apply carries the operator\'s retirement choices AND the runId a prior preview returned', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({
-        parsed: 3, create: 1, changed: 1, unchanged: 1, deleted: 2, absent: 3, runId: 'run-42',
-      }))
-      .mockResolvedValueOnce(baseResult({
-        parsed: 3, written: { created: 1, updated: 1, retired: 0 }, runId: 'run-42',
-      }));
+  it('Confirm sends the default onConflict: skip when the operator never touches the control', async () => {
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    // `conflict: 1` so the control is SHOWN at all: `confirmOptionsFor` sends only the choices whose
+    // control the operator was actually offered, so a fixture with no conflict would omit the key
+    // and this test would pass for the wrong reason.
+    await reviewWithSummary(baseResult({ parsed: 3, create: 2, conflict: 1 }));
 
-    // Flip both retirement choices away from their defaults so the assertion below cannot pass by
-    // coincidence (the default 'retire'/'report' values would also satisfy an assertion that
-    // forgot to check the field was even threaded through).
-    // The retirement choices live on Mapping now. They are in NEITHER signature, so the summary
-    // survives the change and the operator steps straight back to it.
-    await backToMapping();
-    fireEvent.click(await screen.findByRole('combobox', { name: /rows this file says were removed/i }));
-    fireEvent.click(await screen.findByRole('option', { name: /report only/i }));
-    fireEvent.click(screen.getByRole('combobox', { name: /rows missing from this file/i }));
-    fireEvent.click(await screen.findByRole('option', { name: /retire them/i }));
-    forwardToReview();
+    confirmNow();
 
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
-
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        apply: true, runId: 'run-42', onDeleted: 'report', onAbsent: 'retire',
-      }),
-    );
-  });
-
-  it('Apply carries the operator\'s overwrite-conflicts choice, distinct from the default skip', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({
-        parsed: 3, create: 2, conflict: 1, runId: 'run-43',
-      }))
-      .mockResolvedValueOnce(baseResult({
-        parsed: 3, written: { created: 2, updated: 1, retired: 0 }, conflict: 1, runId: 'run-43',
-      }));
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
-
-    // Flip away from the default 'skip' so the assertion below cannot pass by coincidence (sending
-    // the default value would also satisfy an assertion that forgot to check the field was even
-    // threaded through — the same discipline the retirement-choices test above already applies).
-    await backToMapping();
-    fireEvent.click(await screen.findByRole('combobox', { name: /rows changed since this preview/i }));
-    fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
-
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
-
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ apply: true, runId: 'run-43', onConflict: 'overwrite' }),
-    );
-  });
-
-  it('Apply sends the default onConflict: skip when the operator never touches the control', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 2, conflict: 1, runId: 'run-44' }))
-      .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 2, updated: 0, retired: 0 }, conflict: 1, runId: 'run-44' }));
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
-
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
-
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ apply: true, onConflict: 'skip' }),
-    );
+    await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
+    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1',
+      expect.objectContaining({ onConflict: 'skip' }));
   });
 
   it('warns, informationally, that an unrecognised national system will create a new register identity', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 3, create: 3, knownNationalSystem: false,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 3, create: 3, knownNationalSystem: false,
+    }));
 
     expect(await screen.findByText(/new register identity/i)).toBeInTheDocument();
-    // Informational only — Apply must still be offered.
-    openMenu();
-    expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
+    // Informational only — Confirm must still be offered.
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
   });
 
   it('the applied-result summary reads written.created/written.updated, not a flat created/updated', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(cleanPreview)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 2, updated: 1, retired: 0 }, skipped: 0 }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+    await reviewWithSummary(
+      baseResult({ parsed: 3, written: { created: 2, updated: 1, retired: 0 }, skipped: 0 }),
+      { status: 'applied' },
+    );
 
     expect(await screen.findByText(/created 2, updated 1, skipped 0/i)).toBeInTheDocument();
   });
 
   // ── CT-3 (whole-branch review): the whole preview surface actually reaches the wire ────────────
 
-  it('CT-3: sends format/completeRelease/releaseVersion on preview, and the SAME values again on apply', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 3, runId: 'run-9' }))
-      .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 }, runId: 'run-9' }));
+  it('CT-3: format, completeRelease and releaseVersion ride the upload, so the validate parses what the operator declared', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
@@ -1116,50 +836,36 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
     fireEvent.change(screen.getByLabelText('Release version'), { target: { value: 'r7' } });
 
-    await previewNow();
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ format: 'jsonl', completeRelease: true, releaseVersion: 'r7', apply: false }),
+    await uploadNow();
+
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    expect(api.uploadFacilityImport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ format: 'jsonl', completeRelease: true, releaseVersion: 'r7' }),
+      expect.any(Function),
     );
 
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
-
-    // THE FIX: before this task the apply request never sent `format`/`completeRelease` at all, so
-    // an apply linked to a JSONL-release preview would have the server parse it as CSV instead.
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        format: 'jsonl', completeRelease: true, releaseVersion: 'r7', apply: true, runId: 'run-9',
-      }),
-    );
+    // ⛔ AND NOT AGAIN AT CONFIRM. These three describe how the file PARSES, so they belong to the
+    // request that runs before the classification the operator approves. The run stored them at
+    // upload time; the confirm route refuses a parse-changing value arriving late. On the inline
+    // door the same discipline took the opposite shape — send them twice, identically — because
+    // there was no run to store them on. Asserting they repeat here would invert the design.
+    expect(api.confirmFacilityImportRun).not.toHaveBeenCalled();
   });
 
-  it('CT-3: renders invalid-coordinate rows with line numbers, and the override re-previews (like allowUnknownColumns, unlike allowMalformedRows)', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({
-        parsed: 1, create: 1,
-        invalid: [{ line: 2, field: 'latitude', reason: 'out_of_range', raw: '95.0' }],
-      }))
-      .mockResolvedValueOnce(baseResult({ parsed: 2, create: 2 }));
+  // The override's own round trip belongs to the run door and has its own test: "the
+  // invalid-coordinate override is a re-upload too, and disappears once the run already ran with
+  // it". This test is the reporting, nothing more.
+  it('CT-3: renders invalid-coordinate rows with line numbers', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({
+      parsed: 1, create: 1,
+      invalid: [{ line: 2, field: 'latitude', reason: 'out_of_range', raw: '95.0' }],
+    }));
 
     expect(await screen.findByText(/rows with an invalid coordinate/i)).toBeInTheDocument();
     expect(screen.getByText(/1 row has a coordinate/i)).toBeInTheDocument();
     expect(screen.getByText(/line 2 — latitude: 95\.0/)).toBeInTheDocument();
-
-    await backToMapping();
-    fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
-    await previewNow();
-
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ allowInvalidCoordinates: true }),
-    );
-    expect(await screen.findByText(/2 row\(s\) will be imported/i)).toBeInTheDocument();
   });
 
   // Task 8: this used to assert a static warning sentence — `ValueMapPanel` now renders that same
@@ -1167,15 +873,13 @@ describe('ImportFacilitiesSheet', () => {
   // is unchanged). The `notValidated` half of this test is untouched: that stays the sheet's own
   // plain informational line, not part of the panel.
   it('CT-3/Task 8: renders one pick-list row per unmapped controlled-field value, and which fields could not be validated at all', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await reviewWithSummary(baseResult({
       parsed: 3, create: 3,
       unmapped: { level: ['Zonal Hospital', 'District Clinic'], status: [], country: [] },
       notValidated: ['status'],
     }));
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
 
     // Review REPORTS the finding and offers nothing to click.
     expect(await screen.findByText(/values with no canonical mapping/i)).toBeInTheDocument();
@@ -1193,14 +897,12 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   it('CT-3: renders a JSONL release\'s declared/parsed count mismatch', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await reviewWithSummary(baseResult({
       parsed: 2998, create: 2998,
       countMismatch: [{ field: 'rowCount', declared: 3000, parsed: 2998 }],
     }));
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-    await pickFileAndSystem();
-    await previewNow();
 
     expect(await screen.findByText(/declared counts do not match/i)).toBeInTheDocument();
     expect(screen.getByText(/this release declares 3000 row\(s\); 2998 were actually parsed/i)).toBeInTheDocument();
@@ -1213,59 +915,62 @@ describe('ImportFacilitiesSheet', () => {
   // this whole branch exists to close, surviving in the UI.
 
   it('CT-3: the apply result shows the conflict count and sample when rows were skipped (the default policy)', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 3, runId: 'run-5' }))
-      .mockResolvedValueOnce(baseResult({
-        parsed: 3, written: { created: 0, updated: 1, retired: 0 }, conflict: 2, runId: 'run-5',
-        samples: { create: [], changed: [], absent: [], deleted: [], conflict: [{ id: 'f1', nationalCode: 'C1', name: 'Dodoma RRH' }] },
-      }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+    await reviewWithSummary(baseResult({
+      parsed: 3, written: { created: 0, updated: 1, retired: 0 }, conflict: 2,
+      samples: { create: [], changed: [], absent: [], deleted: [], conflict: [{ id: 'f1', nationalCode: 'C1', name: 'Dodoma RRH' }] },
+    }), { status: 'applied' });
 
     expect(await screen.findByText(/2 row\(s\) changed since the preview were left as-is/i)).toBeInTheDocument();
     expect(screen.getByText(/Dodoma RRH \(C1\)/)).toBeInTheDocument();
   });
 
   it('CT-3: the apply result honestly says "overwritten", not "skipped", once the operator chose overwrite', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 2, conflict: null, runId: 'run-6' }))
-      .mockResolvedValueOnce(baseResult({
-        parsed: 3, written: { created: 0, updated: 1, retired: 0 }, conflict: 1, runId: 'run-6',
-        samples: { create: [], changed: [], absent: [], deleted: [], conflict: [{ id: 'f1', nationalCode: 'C1', name: 'Dodoma RRH' }] },
+    // ⛔ ARRANGED BY HAND. This is the one applied-result test whose wording depends on a CHOICE the
+    // operator makes before confirming, so it needs both run states in order: the validate the
+    // choice is made against, then the apply it produced. `reviewWithSummary` mocks one state.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun)
+      .mockResolvedValueOnce(runView({
+        status: 'awaiting_confirmation', phase: 'validated',
+        summary: baseResult({ parsed: 3, create: 2, conflict: 1 }),
+      }))
+      .mockResolvedValue(runView({
+        status: 'applied',
+        summary: baseResult({
+          parsed: 3, written: { created: 0, updated: 1, retired: 0 }, conflict: 1,
+          samples: { create: [], changed: [], absent: [], deleted: [], conflict: [{ id: 'f1', nationalCode: 'C1', name: 'Dodoma RRH' }] },
+        }),
       }));
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-    await previewNow();
+    await uploadNow();
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
+      .toHaveAttribute('aria-current', 'step'));
 
     await backToMapping();
     fireEvent.click(await screen.findByRole('combobox', { name: /rows changed since this preview/i }));
     fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
-    // Apply lives on Review, and the conflict policy is in neither signature, so the summary
-    // survived the change and one step forward is all this needs.
+    // The conflict policy is in neither signature, so the summary survived the change and one step
+    // forward is all this needs.
     forwardToReview();
 
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+    confirmNow();
 
     expect(await screen.findByText(/1 row\(s\) changed since the preview were overwritten by this import/i)).toBeInTheDocument();
     expect(screen.queryByText(/were left as-is/i)).not.toBeInTheDocument();
   });
 
   it('CT-3: the apply result stays silent about conflicts when there were none', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(cleanPreview)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 } }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+    await reviewWithSummary(
+      baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 } }),
+      { status: 'applied' },
+    );
 
     expect(await screen.findByText(/import complete/i)).toBeInTheDocument();
     expect(screen.queryByText(/changed since the preview/i)).not.toBeInTheDocument();
@@ -1300,9 +1005,6 @@ describe('ImportFacilitiesSheet', () => {
       }),
       expect.any(Function),
     );
-    // The background door is not the inline one: nothing was POSTed to /api/facilities/import.
-    expect(api.importFacilitiesCsv).not.toHaveBeenCalled();
-
     await waitFor(() => expect(api.getFacilityImportRun).toHaveBeenCalledWith('run-b1'));
     expect(await screen.findByText(/validating the uploaded file/i)).toBeInTheDocument();
     expect(screen.getByText('Phase: validating')).toBeInTheDocument();
@@ -2033,7 +1735,8 @@ describe('ImportFacilitiesSheet', () => {
         { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
       ],
     });
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
@@ -2046,10 +1749,16 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByLabelText('MFL Code')).toHaveTextContent('national_code');
     expect(screen.getByLabelText('Name')).toHaveTextContent('name');
 
-    await previewNow();
-    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({
-      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' }, constants: {}, extras: [] },
-    }));
+    await uploadNow();
+    // ⛔ The map is an OBJECT on the params, not a query string. `uploadFacilityImport` is what is
+    // mocked, and it serialises the map itself (api.ts) — so this asserts what the sheet handed
+    // over, which is the subject, rather than how the client encodes it.
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' }, constants: {}, extras: [] },
+      }),
+      expect.any(Function),
+    ));
   });
 
   it('Task 8: resets the column map on a file swap, so a stale mapping keyed on the OLD headers cannot satisfy the new file', async () => {
@@ -2070,7 +1779,8 @@ describe('ImportFacilitiesSheet', () => {
           { header: 'Facility Name', candidates: [] },
         ],
       });
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
@@ -2089,14 +1799,16 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByLabelText('Code')).toHaveTextContent('Keep as extra data');
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
 
-    await previewNow();
+    await uploadNow();
     // ⛔ THE FIX, PROVEN: without the reset, `columnMap.columns` would still carry
     // `{'MFL Code':'national_code', Name:'name'}` from the FIRST file — entries keyed on headers this
-    // file does not even have — and the blocking summary would have waved through a map the server's
+    // file does not even have — and the run would have been validated against a map the server's
     // own `validateColumnMap` would then refuse (`missing_required` for `national_code`/`name`, since
     // no header of THIS file actually claims them). Nothing was ever chosen for the second file, so
     // no columnMap is sent at all.
-    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({ columnMap: undefined }));
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({ columnMap: undefined }), expect.any(Function),
+    ));
   });
 
   // ── Whole-branch review, MUST FIX 3: `columnMapErrors` was mirrored in `api.ts` and rendered
@@ -2112,18 +1824,25 @@ describe('ImportFacilitiesSheet', () => {
         { header: 'MFL Code 2', candidates: [] },
       ],
     });
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      blocked: true, blockedReason: 'column-map',
-      columnMapErrors: [
-        { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
-      ],
+    // ⛔ ARRANGED BY HAND, NOT THROUGH `reviewWithSummary`. That helper waits for Review to become
+    // the current step, and this test's whole subject is a refusal that deliberately does NOT get
+    // there. Using it here would hang for the full timeout and then report the wrong thing.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation', phase: 'validated',
+      summary: baseResult({
+        blocked: true, blockedReason: 'column-map',
+        columnMapErrors: [
+          { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
+        ],
+      }),
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByLabelText('MFL Code');
-    await previewNow();
+    await uploadNow();
 
     // Round-2 fix: a column-map refusal must NOT carry the operator to Review — the panel that
     // fixes it lives on Mapping, and Review has no equivalent. The refusal is explained right here,
@@ -2151,21 +1870,18 @@ describe('ImportFacilitiesSheet', () => {
         { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
       ],
     });
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
-    await previewNow();
+    await reviewWithSummary(baseResult({ parsed: 3, create: 3 }), {}, 'MFL Code,Name\n1835,Namatindi RHC\n');
 
     await screen.findByText(/facility row\(s\) will be created/i);
     expect(screen.queryByText(/both map to/)).not.toBeInTheDocument();
-    // Whole-branch review, FINDING 5: this used to credit the panel's own render gate for the
-    // absence below, but that is not what is happening here. This test never clicks Continue, so
-    // the preview runs from Source and the clean result auto-advances the sheet straight to Review
-    // (step 3) — `queryByLabelText('MFL Code')` is absent because `step !== 2`, not because
-    // `columnMapPanelShown`'s own `!reviewResult` clause excluded it while still on Mapping. The
-    // "keeps ColumnMapStep mounted through a refusal" tests above are the ones that actually
-    // exercise that clause, by staying on step 2 the whole time.
+    // Whole-branch review, FINDING 5: this does NOT credit the panel's own render gate for the
+    // absence below. A clean summary puts the sheet on Review (step 3), so
+    // `queryByLabelText('MFL Code')` is absent because `step !== 2`, not because
+    // `columnMapPanelShown`'s own clause excluded it while still on Mapping. The "keeps
+    // ColumnMapStep mounted through a refusal" test above is the one that actually exercises that
+    // clause, by staying on step 2 the whole time.
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
   });
 
@@ -2178,27 +1894,26 @@ describe('ImportFacilitiesSheet', () => {
   // complete" to the server's own authoritative refusal (now actually shown, per the fix above),
   // never to a client-side guess that could diverge from it. ─────────────────────────────────────────
 
-  it('shows the row-count hint and a non-blocking notice while the column map is incomplete, without disabling Preview', async () => {
+  it('shows a non-blocking notice while the column map is incomplete, without disabling Upload', async () => {
     mocked(api.suggestColumnMap).mockResolvedValueOnce({
       headers: ['Code', 'Facility Name'],
       columns: [{ header: 'Code', candidates: [] }, { header: 'Facility Name', candidates: [] }],
     });
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('Code,Facility Name\nA,B\nC,D\n');
     // The row-count hint and the notice both live in ColumnMapStep, on Mapping (step 2).
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    // rowCount wired: 2 data rows in the picked file.
-    expect(await screen.findByText(/applies to 2 facilities/i)).toBeInTheDocument();
     // onValidityChange wired: neither header satisfies a required field, so the notice shows.
-    expect(screen.getByText(/still preview or upload/i)).toBeInTheDocument();
+    expect(await screen.findByText(/still preview or upload/i)).toBeInTheDocument();
 
-    // ...and it does not block anything — `previewNow` itself waits for Preview to become enabled,
-    // so this line is the proof: it would time out were Preview gated on validity.
-    await previewNow();
-    expect(api.importFacilitiesCsv).toHaveBeenCalled();
+    // ...and it does not block anything — `uploadNow` itself waits for Upload to become enabled,
+    // so this line is the proof: it would time out were Upload gated on validity.
+    await uploadNow();
+    expect(api.uploadFacilityImport).toHaveBeenCalled();
   });
 
   it('the incomplete-map notice clears once the required fields are satisfied', async () => {
@@ -2369,42 +2084,6 @@ describe('ImportFacilitiesSheet', () => {
       expect(await screen.findByLabelText('File')).toBeInTheDocument();
     });
 
-    // Round-3 fix: the dropdown's Preview item has no `step` gate at all — only `previewDisabled`
-    // and `!applyResult && !run` (see that item's own comment) — so it is reachable straight from
-    // Source, before Continue is ever pressed. On the inline door, `setPreviewResult(result)` makes
-    // `columnMapRefused` true in the SAME render the response lands, with no poll delay to wait
-    // out. The retreat effect used to fire only for `prev === 3`, so a refusal triggered from step 1
-    // (`requestedStep` still 1) did nothing: `clampStep(1, ...)` returns 1, the sheet stayed on
-    // Source, and neither `ColumnMapErrorsNotice` site mounted (both live behind step 2 or 3) — the
-    // operator saw no refusal at all.
-    it('Preview from the dropdown with no prior Continue click still lands on Mapping when the map is refused', async () => {
-      mocked(api.suggestColumnMap).mockResolvedValueOnce({
-        headers: ['MFL Code', 'MFL Code 2'],
-        columns: [
-          { header: 'MFL Code', candidates: [] },
-          { header: 'MFL Code 2', candidates: [] },
-        ],
-      });
-      (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-        blocked: true, blockedReason: 'column-map',
-        columnMapErrors: [
-          { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
-        ],
-      }));
-      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-      await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
-      // Deliberately no Continue click here — file and register are chosen, and Preview is driven
-      // straight from the ⋯ menu while the sheet is still showing Source.
-      await previewNow();
-
-      expect(await screen.findByText(
-        /"MFL Code 2" and "MFL Code" both map to "national_code"/,
-      )).toBeInTheDocument();
-      expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
-      expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
-    });
   });
 
   // Whole-branch review, FINDING 2: `ColumnMapStep` is the only thing gated to step 2, so every
@@ -2431,17 +2110,12 @@ describe('ImportFacilitiesSheet', () => {
           { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
         ],
       });
-      (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-      await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
-      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-      await screen.findByLabelText('MFL Code');
-
-      await previewNow();
+      await reviewWithSummary(baseResult({ parsed: 3, create: 3 }), {}, 'MFL Code,Name\n1835,Namatindi RHC\n');
       await screen.findByText(/facility row\(s\) will be created/i);
 
-      // The clean preview auto-advances to Review, so go back to Mapping.
+      // The clean summary auto-advances to Review, so go back to Mapping.
       fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
 
       // ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: that Mapping had no panel to show and said so,
@@ -2450,11 +2124,12 @@ describe('ImportFacilitiesSheet', () => {
       // Going back is only worth offering if something can change there, so the panel stays.
       expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
       expect(screen.queryByText(/already been sent with the upload/i)).not.toBeInTheDocument();
-      // ...and the step has an action again. It reads "Upload and validate" rather than a re-upload
-      // because this is the INLINE door: a preview never sets the sheet's own `runId`, only an
-      // upload does, so nothing has been sent yet and uploading is genuinely the next thing. The
-      // re-upload labels belong to the background door and are asserted where that door is driven.
-      expect(screen.getByRole('button', { name: 'Upload and validate' })).toBeInTheDocument();
+      // ...and the step has an action again. It reads "Check again with this map" rather than
+      // "Upload and validate" because a run already exists: the operator stepped back here to
+      // change something, and the action that sends the change is a re-check of the file the run
+      // already stored. Under the inline door this same spot read "Upload and validate", because a
+      // preview never set `runId` and nothing had been sent yet.
+      expect(screen.getByRole('button', { name: 'Check again with this map' })).toBeInTheDocument();
     });
   });
 
@@ -2480,7 +2155,11 @@ describe('ImportFacilitiesSheet', () => {
 
     // The whole point of the exception to AGENTS.md section 5: the action that advances is visible,
     // and it is the ONLY visible one. Everything else stays in the dropdown.
-    it('shows exactly one primary action, with Preview still in the menu', async () => {
+    // ⛔ THE ONLY TEST IN THE SUITE THAT ASSERTS THE INLINE DOOR IS GONE. Everything else here
+    // describes what the wizard does; this one pins what it no longer offers. Mapping used to carry
+    // a second way to check the same file, and Review a second way to write it, neither of them a
+    // visible button. One action per step means the menu does not quietly hold a rival.
+    it('shows exactly one primary action, and the menu offers no second way to check or apply', async () => {
       mocked(api.suggestColumnMap).mockResolvedValueOnce({
         headers: ['MFL Code'],
         columns: [{ header: 'MFL Code', candidates: [] }],
@@ -2493,7 +2172,8 @@ describe('ImportFacilitiesSheet', () => {
 
       expect(screen.queryByRole('button', { name: /^Preview$/ })).not.toBeInTheDocument();
       openMenu();
-      expect(screen.getByRole('menuitem', { name: /^Preview$/ })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /^Preview$/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /^Apply$/ })).not.toBeInTheDocument();
     });
 
     it('Continue stays disabled until a file and a register are both chosen', async () => {
@@ -2644,6 +2324,22 @@ describe('the file drop zone', () => {
 
   const dropZone = () => screen.getByRole('button', { name: /drag a \.csv/i });
   const drop = (el: HTMLElement, file: File) => fireEvent.drop(el, { dataTransfer: { files: [file] } });
+
+  // ⛔ THE READ IS THE SUBJECT, not the suggestion it feeds. The sheet used to pull the whole file
+  // into a JavaScript string so the inline door could put it in a JSON body. That door is gone, and
+  // the only thing left that wants the file's TEXT is its header row, which `suggest-map` reads one
+  // line of. A 64 MiB national register must not enter this tab at all.
+  it('reads only the head of the file, never the whole register', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValue({ headers: ['MFL Code'], columns: [] });
+    // A file whose text() would resolve to something far larger than its header row.
+    const big = new File([`MFL Code\n${'x\n'.repeat(50_000)}`], 'big.csv', { type: 'text/csv' });
+    const sliceSpy = vi.spyOn(big, 'slice');
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [big] } });
+
+    await waitFor(() => expect(sliceSpy).toHaveBeenCalledWith(0, 64 * 1024));
+  });
 
   it('accepts a dropped csv and treats it exactly like a browsed one', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);

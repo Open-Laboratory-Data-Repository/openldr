@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { MoreHorizontal, Building2, CheckCircle2, Loader2, XCircle, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -977,6 +978,10 @@ export function Facilities() {
     setError(null);
     try {
       await bulkDeleteFacilities(bulkSelection(), expected);
+      // The count the operator REVIEWED, matching the dialog they just read and the number the
+      // server's own guard agreed to. `deleted` from the response would be the same number by
+      // construction, and quoting the reviewed one keeps the confirmation and the question aligned.
+      toast.success(t('facilities.bulkDelete.deletedToast', { count: expected }));
       setBulkPreview(null);
       await reload();
       void reloadHealth();
@@ -987,7 +992,7 @@ export function Facilities() {
     } finally {
       setBulkDeleting(false);
     }
-  }, [bulkPreview, bulkSelection, reload, reloadHealth]);
+  }, [bulkPreview, bulkSelection, reload, reloadHealth, t]);
 
   const doDelete = useCallback(async () => {
     if (!confirming) return;
@@ -995,6 +1000,7 @@ export function Facilities() {
     setConfirming(null);
     try {
       await deleteFacility(f.id);
+      toast.success(t('facilities.deletedToast', { name: f.name }));
       setRows((prev) => prev.filter((r) => r.id !== f.id));
       setError(null);
       // A delete enqueues a rebuild server-side, so the dimension is now `updating`. This path
@@ -1004,7 +1010,7 @@ export function Facilities() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [confirming, reloadHealth]);
+  }, [confirming, reloadHealth, t]);
 
   // Registry-only loading gate: `hasForm === null` means the listPublishedForms() effect hasn't
   // settled yet. This used to gate the WHOLE page (return before Tabs even rendered), which meant a

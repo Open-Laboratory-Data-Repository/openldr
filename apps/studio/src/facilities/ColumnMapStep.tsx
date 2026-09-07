@@ -74,11 +74,6 @@ export interface ColumnMapStepProps {
    *  `ImportFacilitiesSheet.test.tsx` failed, each burning the 15s async timeout. A caller that
    *  ignores the argument behaves exactly as before. */
   onChange: (next: FacilityColumnMap, origin: 'seed' | 'edit') => void;
-  /** Facilities this file carries, when known. The spec is explicit that a mapping decision's
-   *  impact is reported in facilities, never in distinct strings — see
-   *  `docs/superpowers/specs/2026-08-12-facility-import-mapping-design.md` §4. Omitted before a
-   *  file has ever been parsed. */
-  rowCount?: number;
   /** Fires whenever whether every required field is satisfied changes — so the host (Task 8's
    *  `ImportFacilitiesSheet`) can gate its own Continue action without re-deriving the same
    *  required-field rule a second time. */
@@ -97,7 +92,7 @@ export interface ColumnMapStepProps {
  *  pre-selected; both are left `Not mapped` and need an explicit decision. See `autoTargetByHeader`
  *  below. */
 export function ColumnMapStep({
-  headers, suggestions, value, onChange, rowCount, onValidityChange,
+  headers, suggestions, value, onChange, onValidityChange,
 }: ColumnMapStepProps): JSX.Element {
   const { t } = useTranslation();
 
@@ -252,12 +247,6 @@ export function ColumnMapStep({
 
   return (
     <div className="space-y-4 text-sm">
-      {rowCount !== undefined && (
-        <p className="text-muted-foreground">
-          {t('facilities.import.columnMap.rowCountHint', { count: rowCount })}
-        </p>
-      )}
-
       <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
         {headers.map((header) => {
           const top = suggestionByHeader.get(header)?.candidates[0] ?? null;

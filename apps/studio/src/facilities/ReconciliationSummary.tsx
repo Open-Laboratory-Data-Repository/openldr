@@ -100,21 +100,18 @@ export interface ReuploadOverrides {
 export interface ReconciliationSummaryProps {
   result: FacilityImportResult;
   /** Was the unrecognised-columns override in force for THIS result? A FACT about the result, not a
-   *  control: the summary only reads it to choose wording. On the run door it is what the upload
-   *  recorded and the validate ran with.
+   *  control: the summary only reads it to choose wording. It is what the upload recorded and the
+   *  validate ran with.
    *
-   *  ⛔ On the inline door the sheet passes its live state, and that is safe only because of the
-   *  invalidation: change the checkbox and `summarySignature` moves, the summary is discarded, and
-   *  there is no window in which this boolean can describe a different parse from the one on
-   *  screen. */
+   *  ⛔ Before the first poll answers the sheet has only its own live checkbox to pass, and that is
+   *  safe only because of the invalidation: change the checkbox and `summarySignature` moves, the
+   *  summary is discarded, and there is no window in which this boolean can describe a different
+   *  parse from the one on screen. */
   unknownColumnsOverridden: boolean;
   /** Whether an apply this operator can still influence exists to set a conflict policy FOR — see
    *  the call sites for what answers it on each path. */
   showConflictChoice: boolean;
-  /** The INLINE route's 2 000-row cap notice. Always `false` for a background run — see
-   *  `APPLY_ROW_CAP`. */
-  overCap: boolean;
-  /** `null` on the inline door; the run's own parse-override state on the background one. */
+  /** The run's own parse-override state. */
   reupload: ReuploadOverrides | null;
 }
 
@@ -138,8 +135,8 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
   // ever involved — EXCEPT while the file is still just sitting blocked on an unopted-in unknown-
   // columns notice (unknownColumns present, the override not in force): that case already has its
   // own explanation (the amber box below) and doesn't need a second, more confusing "no rows found"
-  // message layered on top. Once the override IS in force (`unknownColumnsOverridden` — the ticked
-  // box on the inline door, the run's stored option on the background one) and the file still parses
+  // message layered on top. Once the override IS in force (`unknownColumnsOverridden` — the run's
+  // own stored option, which is what its validate ran with) and the file still parses
   // to nothing, that's the "wrong file entirely" trap surviving one step deeper — it must say so,
   // same as the plain no-unknown-columns case does.
   // Task 5: same reasoning as the unknownColumns exception above — a file that quarantined every
@@ -374,15 +371,6 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
               {t('facilities.import.duplicatesWarning', { count: result.duplicates })}
             </p>
-          )}
-          {props.overCap && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-              <p className="font-medium">{t('facilities.import.tooLargeTitle')}</p>
-              <p>{t('facilities.import.tooLargeBody', { count: result.parsed })}</p>
-              {/* A2b: the row cap is the INLINE route's alone. The register that is too large to
-                  apply through this request is exactly the one the background path exists for. */}
-              <p>{t('facilities.import.tooLargeUseUpload')}</p>
-            </div>
           )}
         </>
       )}

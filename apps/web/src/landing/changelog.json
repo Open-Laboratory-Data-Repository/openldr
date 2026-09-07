@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "fd107802",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A delete says what it deleted"
+        },
+        {
+          "hash": "ce2e5253",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The value map's Save is a visible button, not a hidden menu item"
+        },
+        {
+          "hash": "48db0d43",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A concept with no display no longer 500s the edit route"
+        },
+        {
+          "hash": "3b6d8f2d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Read the header row, not the whole register"
+        },
+        {
+          "hash": "3abc8782",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "One door into the importer, not two"
+        },
+        {
+          "hash": "3411d9a9",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A file that found nothing offers no Confirm"
+        },
+        {
           "hash": "04d52726",
           "type": "fix",
           "scope": "forms",
