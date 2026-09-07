@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SuggestCombobox, type SuggestStatus } from '@/components/ui/suggest-combobox';
 import { suggestValueMappings, type ControlledField, type ValueSetOption } from '@/api';
+import { sortValueSetOptions } from './sortValueSetOptions';
 
 export interface ConstantValueFieldProps {
   /** Matches the sibling `<Label htmlFor>` in `ColumnMapStep`'s constants grid. */
@@ -32,7 +33,7 @@ export interface ConstantValueFieldProps {
  *  operator could not tell an empty picker from a broken one. Never warn in any of the three: the
  *  warning claims the value was checked, and in all three it was not. */
 export function ConstantValueField({ id, field, value, onChange }: ConstantValueFieldProps): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [options, setOptions] = useState<ValueSetOption[]>([]);
   const [status, setStatus] = useState<SuggestStatus>('loading');
   const [notSeeded, setNotSeeded] = useState(false);
@@ -62,7 +63,10 @@ export function ConstantValueField({ id, field, value, onChange }: ConstantValue
     return () => { cancelled = true; };
   }, [field]);
 
-  const codes = useMemo(() => options.map((o) => o.code), [options]);
+  /** ⛔ SORTED. Nothing ranks this list, so it would otherwise render in expansion order, which is
+   *  seed order: 249 countries and 63 facility types that way are unsearchable by eye. */
+  const sorted = useMemo(() => sortValueSetOptions(options, i18n.language), [options, i18n.language]);
+  const codes = useMemo(() => sorted.map((o) => o.code), [sorted]);
 
   const labels = useMemo(() => {
     const m: Record<string, string> = {};

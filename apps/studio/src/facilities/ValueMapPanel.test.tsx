@@ -242,3 +242,47 @@ describe('ValueMapPanel', () => {
     expect(await screen.findByRole('option', { name: 'Dispensary' })).toBeInTheDocument();
   });
 });
+
+describe('ValueMapPanel option ordering', () => {
+  // ⛔ THE HELPER PASSING ITS OWN TESTS DOES NOT PROVE IT IS WIRED. This asserts the DOM order the
+  // operator actually sees: ranked candidates keep their scored order at the top, and only the
+  // remainder underneath is alphabetical.
+  it('keeps the ranked head in score order and sorts the tail alphabetically', async () => {
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [{
+        value: 'Functional',
+        candidates: [
+          { target: 'suspended', display: 'Suspended', score: 0.9, confidence: 'likely' },
+          { target: 'active', display: 'Active', score: 0.7, confidence: 'weak' },
+        ],
+      }],
+      // Deliberately NOT alphabetical, and deliberately in the order a value set expansion returns
+      // them: seed order.
+      options: [
+        { code: 'zebra-crossing', display: 'Zebra Crossing' },
+        { code: 'suspended', display: 'Suspended' },
+        { code: 'mid-thing', display: 'Mid Thing' },
+        { code: 'active', display: 'Active' },
+        { code: 'alpha-thing', display: 'Alpha Thing' },
+      ],
+      notValidated: false,
+    });
+
+    render(
+      <ValueMapPanel
+        nationalSystem="urn:zm:mfl"
+        unmapped={{ level: [], status: ['Functional'], country: [] }}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    const trigger = await screen.findByRole('combobox', { name: 'Functional' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (screen.queryAllByRole('option').length === 0) fireEvent.keyDown(trigger, { key: 'Enter' });
+
+    const shown = (await screen.findAllByRole('option')).map((o) => o.textContent);
+    // `Not mapped` first, then the two ranked candidates in SCORE order (Suspended above Active,
+    // which is not alphabetical), then the remaining three alphabetically.
+    expect(shown.slice(1)).toEqual(['Suspended', 'Active', 'Alpha Thing', 'Mid Thing', 'Zebra Crossing']);
+  });
+});

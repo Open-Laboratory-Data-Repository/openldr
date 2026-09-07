@@ -94,3 +94,26 @@ describe('ConstantValueField', () => {
     expect(screen.getByRole('combobox')).toBeInTheDocument();
   });
 });
+
+describe('ConstantValueField option ordering', () => {
+  // ⛔ Nothing ranks this list, so it would otherwise render in expansion order, which is seed
+  // order. 249 countries that way cannot be searched by eye.
+  it('renders the whole list alphabetically, whatever order the route returned it in', async () => {
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [],
+      options: [
+        { code: 'zmb', display: 'Zambia' },
+        { code: 'moz', display: 'Mozambique' },
+        { code: 'ago', display: 'Angola' },
+      ],
+      notValidated: false,
+    });
+
+    render(<ConstantValueField id="c-country" field="country" value="" onChange={vi.fn()} />);
+    await waitFor(() => expect(api.suggestValueMappings).toHaveBeenCalled());
+    fireEvent.focus(screen.getByRole('combobox'));
+
+    const shown = (await screen.findAllByRole('option')).map((o) => o.getAttribute('aria-label') ?? o.textContent);
+    expect(shown.map((s2) => (s2 ?? '').split(',')[0])).toEqual(['Angola', 'Mozambique', 'Zambia']);
+  });
+});
