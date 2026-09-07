@@ -12,6 +12,7 @@ import {
   suggestValueMappings, writeFacilityValueMappings,
   type ControlledField, type ValueMappingEntry, type ValueSetOption, type ValueSuggestion,
 } from '@/api';
+import { sortValueSetOptions } from './sortValueSetOptions';
 
 // CT-3 (whole-branch review): mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS` — same "mirrored,
 // not shared" idiom `ImportFacilitiesSheet.tsx` already uses (this app has no dependency on that
@@ -53,7 +54,7 @@ export interface ValueMapPanelProps {
  *  render a value with no suggestion at all — it just shows `Not mapped`, same as a value the
  *  operator has not gotten to yet. */
 export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPanelProps): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const fields = useMemo(
     () => CONTROLLED_FIELDS.filter((f) => unmapped[f].length > 0),
@@ -247,8 +248,15 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
                         {candidates.map((c) => (
                           <SelectItem key={c.target} value={c.target}>{c.display ?? c.target}</SelectItem>
                         ))}
-                        {(optionsByField.get(field) ?? [])
-                          .filter((o) => !candidates.some((c) => c.target === o.code))
+                        {/* ⛔ SORTED, BUT ONLY THIS TAIL. The ranked candidates above keep their
+                            scored order, which is the whole point of ranking them; what follows is
+                            the rest of the set in EXPANSION order, which is seed order, and 63
+                            facility types that way cannot be searched by eye. */}
+                        {sortValueSetOptions(
+                          (optionsByField.get(field) ?? [])
+                            .filter((o) => !candidates.some((c) => c.target === o.code)),
+                          i18n.language,
+                        )
                           .map((o) => (
                             <SelectItem key={o.code} value={o.code}>{o.display ?? o.code}</SelectItem>
                           ))}
