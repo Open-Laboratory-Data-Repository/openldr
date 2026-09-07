@@ -100,21 +100,15 @@ export interface ReuploadOverrides {
 
 export interface ReconciliationSummaryProps {
   result: FacilityImportResult;
-  /** The INLINE checkbox's value. On the run door the override in force is `reupload`'s instead. */
-  allowUnknownColumns: boolean;
-  allowMalformedRows: boolean;
-  allowInvalidCoordinates: boolean;
-  onAllowUnknownColumnsChange: (checked: boolean) => void;
-  onAllowMalformedRowsChange: (checked: boolean) => void;
-  onAllowInvalidCoordinatesChange: (checked: boolean) => void;
-  /** A request is in flight for this result; the override checkboxes must not be re-clicked. */
-  togglesDisabled: boolean;
-  onDeleted: 'retire' | 'report';
-  onDeletedChange: (value: 'retire' | 'report') => void;
-  onAbsent: 'retire' | 'report';
-  onAbsentChange: (value: 'retire' | 'report') => void;
-  onConflict: 'skip' | 'overwrite';
-  onConflictChange: (value: 'skip' | 'overwrite') => void;
+  /** Was the unrecognised-columns override in force for THIS result? A FACT about the result, not a
+   *  control: the summary only reads it to choose wording. On the run door it is what the upload
+   *  recorded and the validate ran with.
+   *
+   *  ⛔ On the inline door the sheet passes its live state, and that is safe only because of the
+   *  invalidation: change the checkbox and `summarySignature` moves, the summary is discarded, and
+   *  there is no window in which this boolean can describe a different parse from the one on
+   *  screen. */
+  unknownColumnsOverridden: boolean;
   /** Whether an apply this operator can still influence exists to set a conflict policy FOR — see
    *  the call sites for what answers it on each path. */
   showConflictChoice: boolean;
@@ -146,12 +140,7 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
   const { result } = props;
 
   const willWriteCount = willWrite(result);
-  /** Is the unrecognised-columns override actually in force for THIS result? On the inline door that
-   *  is the live checkbox; on the run door it is what the upload recorded and the validate ran with,
-   *  which is the only thing the summary on screen can have been computed against. */
-  const unknownColumnsOverridden = props.reupload
-    ? props.reupload.allowUnknownColumns
-    : props.allowUnknownColumns;
+  const unknownColumnsOverridden = props.unknownColumnsOverridden;
   // F2 fix: `parsed === 0` must read as an unsuccessful outcome whether or not unknown columns were
   // ever involved — EXCEPT while the file is still just sitting blocked on an unopted-in unknown-
   // columns notice (unknownColumns present, the override not in force): that case already has its
@@ -245,22 +234,6 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
               JSONL release with an unrecognised key takes the "kept as extra data" note above, which
               says the same thing in the same words as every other non-blocking case. */}
           <p>{t('facilities.import.unknownColumnsBody', { columns: result.unknownColumns.join(', ') })}</p>
-          {props.reupload === null ? (
-            <label className="mt-2 flex items-center gap-2">
-              <Checkbox
-                checked={props.allowUnknownColumns}
-                disabled={props.togglesDisabled}
-                onCheckedChange={(c) => props.onAllowUnknownColumnsChange(c === true)}
-              />
-              <span>{t('facilities.import.allowUnknownColumns')}</span>
-            </label>
-          ) : props.reupload.sourceFormat === 'jsonl' ? null : (
-            <p className="mt-2">
-              {t(props.reupload.allowUnknownColumns
-                ? 'facilities.import.overrideAppliedToRun'
-                : 'facilities.import.overrideNeedsReupload')}
-            </p>
-          )}
         </div>
       )}
 
@@ -273,14 +246,6 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
               <li key={row.line}>{t('facilities.import.quarantinedLine', { line: row.line, raw: row.raw })}</li>
             ))}
           </ul>
-          <label className="mt-2 flex items-center gap-2">
-            <Checkbox
-              checked={props.allowMalformedRows}
-              disabled={props.togglesDisabled}
-              onCheckedChange={(c) => props.onAllowMalformedRowsChange(c === true)}
-            />
-            <span>{t('facilities.import.allowMalformedRows')}</span>
-          </label>
         </div>
       )}
 
@@ -304,22 +269,6 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
           {/* Same two-door split as the unrecognised-columns box above — but with NO format branch:
               `allowInvalidCoordinates` is honoured by BOTH parsers (facility-csv.ts and
               facility-release.ts's `row` branch alike), so it is live for a JSONL release too. */}
-          {props.reupload === null ? (
-            <label className="mt-2 flex items-center gap-2">
-              <Checkbox
-                checked={props.allowInvalidCoordinates}
-                disabled={props.togglesDisabled}
-                onCheckedChange={(c) => props.onAllowInvalidCoordinatesChange(c === true)}
-              />
-              <span>{t('facilities.import.allowInvalidCoordinates')}</span>
-            </label>
-          ) : (
-            <p className="mt-2">
-              {t(props.reupload.allowInvalidCoordinates
-                ? 'facilities.import.overrideAppliedToRun'
-                : 'facilities.import.overrideNeedsReupload')}
-            </p>
-          )}
         </div>
       )}
 
@@ -396,69 +345,6 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
                 fields: result.notValidated.map((f) => t(`facilities.filters.${f}Label`)).join(', '),
               })}
             </p>
-          )}
-
-          {/* A2a: the retirement choices are INPUTS (label-left/input-right, exempt from the
-              ⋯-menu rule — see ui-actions-in-dots-menu), not actions. Shown only when there
-              is something meaningful to decide: a `deleted`/`absent` of `0` (or `absent`
-              still `null`, not evaluated) has nothing to retire, so a control here would
-              offer a choice with no effect. */}
-          {result.deleted > 0 && (
-            <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
-              <Label htmlFor="facility-import-on-deleted" className="whitespace-nowrap">
-                {t('facilities.import.onDeletedLabel')}
-              </Label>
-              <Select value={props.onDeleted} onValueChange={(v) => props.onDeletedChange(v as 'retire' | 'report')}>
-                <SelectTrigger id="facility-import-on-deleted" className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="retire">{t('facilities.import.onDeletedRetire')}</SelectItem>
-                  <SelectItem value="report">{t('facilities.import.onDeletedReport')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          {result.absent !== null && result.absent > 0 && (
-            <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
-              <Label htmlFor="facility-import-on-absent" className="whitespace-nowrap">
-                {t('facilities.import.onAbsentLabel')}
-              </Label>
-              <Select value={props.onAbsent} onValueChange={(v) => props.onAbsentChange(v as 'retire' | 'report')}>
-                <SelectTrigger id="facility-import-on-absent" className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="retire">{t('facilities.import.onAbsentRetire')}</SelectItem>
-                  <SelectItem value="report">{t('facilities.import.onAbsentReport')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          {/* CT-3: gated on `showConflictChoice`, NOT on `conflict` being a non-zero number —
-              and deliberately so, on BOTH paths. A fresh preview's own `conflict` is ALWAYS
-              `null`: `conflictsEvaluated` needs a `previewedAt` watermark from a PRIOR pass,
-              which the call that just minted the run can never supply for itself
-              (facility-import.ts's `previewedAt`/`conflictsEvaluated`) — and a background
-              validate runs with `apply: false` and no watermark for exactly the same reason.
-              A conflict can only ever be discovered by the APPLY this run will later authorise,
-              so the operator must set their skip/overwrite preference NOW, before that apply
-              runs, not after a count that will never arrive on this screen. */}
-          {props.showConflictChoice && (
-            <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
-              <Label htmlFor="facility-import-on-conflict" className="whitespace-nowrap">
-                {t('facilities.import.onConflictLabel')}
-              </Label>
-              <Select value={props.onConflict} onValueChange={(v) => props.onConflictChange(v as 'skip' | 'overwrite')}>
-                <SelectTrigger id="facility-import-on-conflict" className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="skip">{t('facilities.import.onConflictSkip')}</SelectItem>
-                  <SelectItem value="overwrite">{t('facilities.import.onConflictOverwrite')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           )}
 
           {result.duplicates > 0 && (

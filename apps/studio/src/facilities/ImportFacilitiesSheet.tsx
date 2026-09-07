@@ -36,6 +36,8 @@ import {
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
 import { CONTROLLED_FIELDS } from './controlledFields';
+import { ImportPolicyPanel } from './ImportPolicyPanel';
+import { summarySignature, worklistSignature, type ImportInputs } from './importInputsSignature';
 import {
   ColumnMapErrorsNotice, ReconciliationSummary, willWrite, type ReuploadOverrides,
 } from './ReconciliationSummary';
@@ -299,6 +301,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
   // A2b: the background run this sheet is watching, and the request states around it.
   const [runId, setRunId] = useState<string | null>(null);
+
+  /** Task 2 (Review reviews, Mapping decides): the signature the summary on screen was computed
+   *  under. `null` means there is no summary at all. Compared against the live inputs by `stepGate`
+   *  below, which is what makes Review "current or absent" rather than "present but possibly
+   *  stale". */
+  const [summaryAt, setSummaryAt] = useState<string | null>(null);
+  /** Bumped by `handleValueMappingsSaved`. Feeds `summarySignature` only: the worklist deliberately
+   *  does not read it, so saving one mapping never empties the list being worked through. */
+  const [valueMappingsSavedAt, setValueMappingsSavedAt] = useState(0);
+  /** The last check's result and the inputs it was computed under. Separate from `summaryAt`
+   *  because the two have different lifetimes: see `importInputsSignature.ts`. */
+  const [lastFindings, setLastFindings] = useState<FacilityImportResult | null>(null);
+  const [worklistAt, setWorklistAt] = useState<string | null>(null);
   const [run, setRun] = useState<FacilityImportRunView | null>(null);
   const [uploading, setUploading] = useState(false);
   /** How much of the file has gone, as a fraction — or `null` for "in flight, but the browser will
@@ -569,6 +584,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         apply: false,
       });
       setPreviewResult(result);
+      setSummaryAt(currentSummarySignature);
+      setLastFindings(result);
+      setWorklistAt(worklistSignature(inputs));
       // ⛔ An explicit Preview goes to its result, every time, not only the first. The auto-advance
       // effect keys on `furthest` CHANGING, so it carries the operator to Review on the first
       // preview and does nothing on a second: someone who stepped back to Mapping to fix the map
@@ -589,27 +607,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     }
   };
 
-  const toggleAllowUnknownColumns = (checked: boolean) => {
-    setAllowUnknownColumns(checked);
-    void runPreview({ allowUnknownColumns: checked });
-  };
-
-  // Deliberately does NOT re-run the preview — see `allowMalformedRows`'s doc comment above: the
-  // set of quarantined rows is a property of the file, not of this flag, so there is nothing new
-  // for a second preview request to discover. Toggling it only changes whether Apply is allowed
-  // to proceed.
-  const toggleAllowMalformedRows = (checked: boolean) => {
-    setAllowMalformedRows(checked);
-  };
-
-  // CT-3: DOES re-run the preview, same reasoning as `toggleAllowUnknownColumns` above and unlike
-  // `toggleAllowMalformedRows` — a row with an invalid coordinate is excluded from `records`
-  // entirely without this override, so ticking it changes `create`/`changed`/`unchanged`, not just
-  // whether Apply may proceed.
-  const toggleAllowInvalidCoordinates = (checked: boolean) => {
-    setAllowInvalidCoordinates(checked);
-    void runPreview({ allowInvalidCoordinates: checked });
-  };
+  // ⛔ NO `runPreview` IN ANY OF THESE THREE ANY MORE. Two of them used to re-check on every click,
+  // which was right when these lived on Review and the summary was the page you were looking at.
+  // They live on Mapping now, where a change is an EDIT: it moves `summarySignature`, `hasReview`
+  // goes false, the summary is discarded, and the operator re-checks when they choose to. Checking
+  // on a checkbox would spend a full validate of a national register per click, and on the streamed
+  // door it would spend a full re-upload.
+  //
+  // ⛔ `runPreview`'s `overrides` parameter STAYS. It is what let a toggle send its own new value
+  // ahead of the state update, and nothing else uses it today, but removing it is a separate change
+  // from moving these controls and would bury a behaviour change inside a refactor.
+  const toggleAllowUnknownColumns = (checked: boolean) => setAllowUnknownColumns(checked);
+  const toggleAllowMalformedRows = (checked: boolean) => setAllowMalformedRows(checked);
+  const toggleAllowInvalidCoordinates = (checked: boolean) => setAllowInvalidCoordinates(checked);
 
   // CT-3: any change to the file's declared SHAPE invalidates the preview the same way
   // `handleNationalSystemChange` already does — a preview computed for `format: 'csv'` describes a
@@ -740,6 +750,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       // null.
       setRun(null);
       setRunId(id);
+      // Task 2: the streamed door earns its Review here, at the upload, for the same reason `runId`
+      // is in `stepGate` at all — the first poll has not answered yet and the operator must not be
+      // left on Mapping watching nothing.
+      setSummaryAt(currentSummarySignature);
     } catch (err) {
       setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
     } finally {
@@ -869,10 +883,47 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // `run`) stays null until the FIRST POLL answers. Without `runId` here, the operator who just
   // uploaded a file would sit on Mapping — nothing rendered there once `run` mounts and hides
   // `ColumnMapStep` — watching nothing happen until that poll came back.
+  // Task 2: the inputs the summary on screen was computed from. Every field is existing sheet
+  // state; nothing here is new except `valueMappingsSavedAt`.
+  const inputs: ImportInputs = {
+    fileName: file?.name ?? null,
+    fileSize: file?.size ?? null,
+    nationalSystem: nationalSystem.trim(),
+    format,
+    completeRelease,
+    releaseVersion,
+    columnMap,
+    allowUnknownColumns,
+    allowInvalidCoordinates,
+    onConflict,
+    onAbsent,
+    onDeleted,
+    valueMappingsSavedAt,
+  };
+  const currentSummarySignature = summarySignature(inputs);
+
+  /** The last check's result, kept for the controls on Mapping that only make sense once something
+   *  has been found. Guarded by `worklistSignature`, the NARROWER of the two: choosing a policy or
+   *  saving a mapping must not make the findings disappear from under the operator while they act
+   *  on them. Changing the file, the register, the format or the column map does retire them,
+   *  because those change what the file contains. */
+  const liveFindings = worklistAt === worklistSignature(inputs) ? lastFindings : null;
+
   const stepGate = {
     hasFile: !!file,
     hasRegister: nationalSystem.trim() !== '',
-    hasReview: reviewResult !== null || appliedSummary !== null || runId !== null,
+    // ⛔ `summaryAt === currentSummarySignature` is what makes this "a summary that MATCHES THE
+    // INPUTS", not merely "a summary exists". Change the file, the register, the map, a fixed
+    // value, an override or a policy and this goes false, `furthestStep` returns 2 and `clampStep`
+    // pulls the operator back to Mapping. That is the safety half of this slice: Review is either
+    // current or absent, and never a number that is no longer true.
+    //
+    // ⛔ `runId !== null` STAYS in the OR. An upload sets it the instant it resolves while
+    // `reviewResult` waits for the first poll; without it the operator who just uploaded sits on
+    // Mapping watching nothing (see the comment above). It is inside the signature guard for the
+    // same reason as the other two.
+    hasReview: summaryAt !== null && summaryAt === currentSummarySignature
+      && (reviewResult !== null || appliedSummary !== null || runId !== null),
     runActive: runInFlight,
   };
   const furthest = furthestStep(stepGate);
@@ -1394,28 +1445,42 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </p>
           )}
 
+          {/* Task 2/3: the decisions live here now, not on Review. `findings` is the last check's
+              result guarded by `worklistSignature`, which is what makes the three contextual
+              overrides (and the absent/deleted policies) appear only once a check has actually
+              reported the thing they answer. Before any check it renders the conflict policy alone,
+              which is the one choice that can never be discovered from a summary. */}
+          {step === 2 && !applyResult && !runFinished && (
+            <div className="mx-6 mt-4">
+              <ImportPolicyPanel
+                onConflict={onConflict}
+                onConflictChange={setOnConflict}
+                onAbsent={onAbsent}
+                onAbsentChange={setOnAbsent}
+                onDeleted={onDeleted}
+                onDeletedChange={setOnDeleted}
+                allowUnknownColumns={allowUnknownColumns}
+                onAllowUnknownColumnsChange={toggleAllowUnknownColumns}
+                allowInvalidCoordinates={allowInvalidCoordinates}
+                onAllowInvalidCoordinatesChange={toggleAllowInvalidCoordinates}
+                allowMalformedRows={allowMalformedRows}
+                onAllowMalformedRowsChange={toggleAllowMalformedRows}
+                disabled={previewing || uploading || confirming || cancelling}
+                showConflictChoice={fromRun || !!previewResult?.runId}
+                findings={liveFindings}
+              />
+            </div>
+          )}
+
           {step === 3 && reviewResult && !appliedSummary && (
             <ReconciliationSummary
               result={reviewResult}
               nationalSystem={nationalSystem.trim()}
               onValueMappingsSaved={handleValueMappingsSaved}
-              allowUnknownColumns={allowUnknownColumns}
-              allowMalformedRows={allowMalformedRows}
-              allowInvalidCoordinates={allowInvalidCoordinates}
-              // ⛔ On the INLINE path these two re-run the preview, because they change which rows
-              // land in `records`. On the background path they are not offered as checkboxes at all
-              // — `reupload` below replaces them with the re-upload the confirm route's refusal
-              // points at — so these two handlers are the inline door's alone.
-              onAllowUnknownColumnsChange={toggleAllowUnknownColumns}
-              onAllowInvalidCoordinatesChange={toggleAllowInvalidCoordinates}
-              onAllowMalformedRowsChange={toggleAllowMalformedRows}
-              togglesDisabled={previewing || confirming || cancelling}
-              onDeleted={onDeleted}
-              onDeletedChange={setOnDeleted}
-              onAbsent={onAbsent}
-              onAbsentChange={setOnAbsent}
-              onConflict={onConflict}
-              onConflictChange={setOnConflict}
+              // A FACT about this result, not a control. On the run door it is what the upload
+              // recorded; on the inline door the live state, which the invalidation guarantees is
+              // the state this result was computed under.
+              unknownColumnsOverridden={reupload ? reupload.allowUnknownColumns : allowUnknownColumns}
               // Inline: only a preview that minted a run can be linked to an apply that could ever
               // discover a conflict. Background: the run IS the link, always.
               showConflictChoice={fromRun || !!previewResult?.runId}

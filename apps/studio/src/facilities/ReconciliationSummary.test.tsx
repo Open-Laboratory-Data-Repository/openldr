@@ -30,12 +30,7 @@ function baseResult(overrides: Partial<FacilityImportResult> = {}): FacilityImpo
 }
 
 const props = {
-  allowUnknownColumns: false, allowMalformedRows: false, allowInvalidCoordinates: false,
-  onAllowUnknownColumnsChange: vi.fn(), onAllowMalformedRowsChange: vi.fn(),
-  onAllowInvalidCoordinatesChange: vi.fn(), togglesDisabled: false,
-  onDeleted: 'report' as const, onDeletedChange: vi.fn(),
-  onAbsent: 'report' as const, onAbsentChange: vi.fn(),
-  onConflict: 'skip' as const, onConflictChange: vi.fn(),
+  unknownColumnsOverridden: false,
   showConflictChoice: false, overCap: false, reupload: null,
   nationalSystem: 'urn:zm:mfl', onValueMappingsSaved: vi.fn(),
 };
@@ -57,6 +52,19 @@ describe('ReconciliationSummary', () => {
       />,
     );
     expect(screen.getByText(/Zone/)).toBeInTheDocument();
+  });
+
+  // ⛔ THE MEASURABLE END STATE of this slice. Review reports; it decides nothing. The only
+  // interactive thing left is the value-mapping panel, which Task 4 moves to Mapping too; once it
+  // has, this assertion tightens to "no control at all".
+  it('offers no policy select and no override checkbox', () => {
+    render(<ReconciliationSummary {...props} result={baseResult({
+      parsed: 10, create: 3, deleted: 4, absent: 5,
+      unknownColumns: ['Catchment'], quarantined: [{ line: 2, raw: 'x', reason: 'too_few_fields' }],
+      invalid: [{ line: 3, field: 'latitude', raw: 'abc' }],
+    } as never)} />);
+    expect(screen.queryByLabelText(/on conflict|absent|deleted/i)).toBeNull();
+    expect(screen.queryAllByRole('checkbox')).toEqual([]);
   });
 });
 
