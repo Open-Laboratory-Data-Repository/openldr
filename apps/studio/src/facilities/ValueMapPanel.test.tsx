@@ -11,14 +11,15 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 // `setupTests.ts`, so an unmocked call would hit whatever `fetch` Node's own runtime provides and
 // reject on a relative URL — the panel must be exercised against a real, controllable mock, the same
 // idiom `ImportFacilitiesSheet.test.tsx` already uses for every other `@/api` call. And "Save
-// mappings" is a panel-level action, so AGENTS.md §5 puts it in the panel's own `⋯` `DropdownMenu`
-// ("Page-header, sheet, and per-row actions all go in a MoreHorizontal DropdownMenu... Never a
-// standalone Create/New button"), never a bare `<button>` — `DropdownMenuItem` only mounts once the
-// menu is open (Radix Portal + conditional render), so `getByRole('button', ...)` could only ever
-// match a plain button this convention forbids. The *intent* of every brief test (every unmapped
+// mappings" is now a plain visible button rather than a `⋯` menu item, which is a deliberate and
+// narrow exception to AGENTS.md §5, authorised by name in Slice 4 of
+// `docs/superpowers/specs/2026-09-06-facility-import-workflow-redesign-design.md`. See
+// `ValueMapPanel.tsx`'s own docblock for why. The *intent* of every brief test (every unmapped
 // value gets a ranked pick-list; Save writes the chosen mappings and reports how many; an unmapped
 // value never blocks) is preserved exactly — see ColumnMapStep.test.tsx's own "Deviation" note for
 // the same call made on the sibling panel Task 7 shipped.
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return {
@@ -28,26 +29,14 @@ vi.mock('@/api', async (orig) => {
   };
 });
 
+import { toast } from 'sonner';
 import * as api from '@/api';
 import { ValueMapPanel } from './ValueMapPanel';
 
 const mocked = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeof vi.fn>;
 
-/** Opens the panel's own `⋯` menu — same idiom as ColumnMapStep.test.tsx's `openRowMenu` and
- *  ImportFacilitiesSheet.test.tsx's `openMenu`: `userEvent.click` does not reliably open a Radix
- *  dropdown under jsdom, so this fires the pointer event Radix itself listens for, with a keyboard
- *  fallback. */
-function openMenu() {
-  const trigger = screen.getByRole('button', { name: /value mapping actions/i });
-  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  if (!screen.queryByRole('menu')) {
-    fireEvent.keyDown(trigger, { key: 'Enter' });
-  }
-}
-
 function clickSave() {
-  openMenu();
-  fireEvent.click(screen.getByRole('menuitem', { name: /save mappings/i }));
+  fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
 }
 
 beforeEach(() => {
@@ -110,7 +99,8 @@ describe('ValueMapPanel', () => {
     expect(api.writeFacilityValueMappings).toHaveBeenCalledWith(
       'urn:zm:mfl', [{ field: 'level', rawValue: 'Health Centre', toCode: 'health-center' }],
     );
-    expect(await screen.findByText(/1 mapping\(s\) written/i)).toBeInTheDocument();
+    await waitFor(() => expect(toast.success)
+      .toHaveBeenCalledWith(expect.stringMatching(/1 mapping\(s\) written/i)));
   });
 
   it('leaves an unmapped value alone rather than blocking the import — never renders a wall', async () => {
@@ -119,11 +109,37 @@ describe('ValueMapPanel', () => {
 
     expect(await screen.findByLabelText('Hospice')).toHaveTextContent('Not mapped');
     expect(screen.queryByText(/cannot continue/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /save mappings/i })).not.toBeInTheDocument();
+    // The action an operator needs is on the panel, not behind a 6 by 6 ghost icon. This is the
+    // whole point of the change: the operator who asked "how do these get mapped" could already
+    // map them, and could not see how.
+    const save = screen.getByRole('button', { name: /save mappings/i });
+    expect(save).toBeVisible();
+    expect(save).toBeEnabled();
     // Saving with nothing chosen still completes (writes nothing) rather than being disabled/blocked.
-    openMenu();
-    fireEvent.click(screen.getByRole('menuitem', { name: /save mappings/i }));
+    fireEvent.click(save);
     await waitFor(() => expect(api.writeFacilityValueMappings).not.toHaveBeenCalled());
+  });
+
+  it('reports a failed save as an error toast, and does not claim the preview is stale', async () => {
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [{
+        value: 'Health Centre',
+        candidates: [{ target: 'health-center', display: null, score: 1, confidence: 'exact' }],
+      }],
+      notValidated: false,
+    });
+    mocked(api.writeFacilityValueMappings).mockRejectedValue(new Error('write refused'));
+    const onSaved = vi.fn();
+    render(<ValueMapPanel nationalSystem="urn:zm:mfl"
+      unmapped={{ level: ['Health Centre'], status: [], country: [] }} onSaved={onSaved} />);
+
+    await waitFor(() => expect(screen.getByLabelText('Health Centre')).toHaveTextContent('health-center'));
+    clickSave();
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/write refused/)));
+    // `onSaved` bumps the stamp that retires the summary on screen. Nothing was written, so
+    // nothing about that summary changed.
+    expect(onSaved).not.toHaveBeenCalled();
   });
 
   it('an operator can override a pre-selected suggestion by hand', async () => {
