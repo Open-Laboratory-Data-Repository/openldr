@@ -190,6 +190,36 @@ function confirmNow() {
   fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
 }
 
+/** Drive the STREAMED door until `summary` is rendered on Review.
+ *
+ *  The inline preview used to be the cheap way to put a `FacilityImportResult` on screen. With that
+ *  door gone this is the only way, and it is also what an operator actually does: upload, the worker
+ *  validates, the poll brings the summary back.
+ *
+ *  ⛔ NOT for a test that asserts what the UPLOAD was called with. This presses the button for you
+ *  and supplies its own mocks, so those would be the thing under test rather than the subject. Such
+ *  tests arrange by hand, exactly as the A2b tests further down already do.
+ *
+ *  @param run Override the run row. `status: 'applied'` is how a test reaches `appliedSummary`.
+ *  @param csv The fixture file's text, when the test cares about its headers.
+ */
+async function reviewWithSummary(
+  summary: FacilityImportResult,
+  run: Partial<FacilityImportRunView> = {},
+  csv?: string,
+): Promise<void> {
+  mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+  mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+    status: 'awaiting_confirmation', phase: 'validated', summary, ...run,
+  }));
+  await pickFileAndSystem(csv);
+  await uploadNow();
+  // ⛔ Waits for the STEP, not for a text match. Every caller then asserts its own copy, and a
+  // helper that waited on one caller's string would silently pass for a summary that never rendered.
+  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
+    .toHaveAttribute('aria-current', 'step'));
+}
+
 describe('ImportFacilitiesSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -811,13 +841,9 @@ describe('ImportFacilitiesSheet', () => {
   // ── A2a (FAC-P1-03/05): the reconciliation summary ────────────────────────────────────────────
 
   it('renders the create/changed/unchanged breakdown the server classified, alongside the headline count', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
-      parsed: 7, create: 2, changed: 1, unchanged: 4,
-    }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    await reviewWithSummary(baseResult({ parsed: 7, create: 2, changed: 1, unchanged: 4 }));
 
     expect(await screen.findByText(/2 facility row\(s\) will be created/i)).toBeInTheDocument();
     expect(screen.getByText(/1 existing facility row\(s\) will be changed/i)).toBeInTheDocument();
