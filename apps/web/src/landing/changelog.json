@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "fd107802",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A delete says what it deleted"
+        },
+        {
+          "hash": "ce2e5253",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The value map's Save is a visible button, not a hidden menu item"
+        },
+        {
           "hash": "48db0d43",
           "type": "fix",
           "scope": "facilities",
