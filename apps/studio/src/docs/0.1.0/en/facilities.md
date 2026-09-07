@@ -64,7 +64,9 @@ the vocabulary, so it waits for your decision, which is the point.
 made, so a register that deliberately maps a word somewhere unusual keeps that.
 
 Each step shows one button, for the action that moves you forward. Every other action, including
-the three check-again options, Cancel, and Close, stays in the page's `⋯` menu.
+the three check-again options, Cancel, and Close, stays in the page's `⋯` menu. The one other
+visible button is **Save mappings**, on the value-mapping panel. It writes the value decisions you
+have made, and tells you how many it wrote.
 
 You cannot click a step you have not reached yet, and you cannot go back to an earlier step while
 a background check is running. After you upload a file on Mapping, the wizard moves you to Review

@@ -69,7 +69,9 @@ nada no vocabulário, por isso espera pela sua decisão, que é precisamente o o
 decisão que tomou.
 
 Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
-as três opções de verificar de novo, Cancelar e Fechar, fica no menu `⋯` da página.
+as três opções de verificar de novo, Cancelar e Fechar, fica no menu `⋯` da página. O único outro
+botão visível é **Guardar mapeamentos**, no painel de mapeamento de valores. Guarda as decisões que
+tomou e diz-lhe quantas guardou.
 
 Não pode clicar num passo que ainda não alcançou, nem voltar a um passo anterior enquanto uma
 verificação em segundo plano está a decorrer. Depois de carregar um ficheiro no Mapeamento, o
