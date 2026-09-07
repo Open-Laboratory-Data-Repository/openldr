@@ -111,10 +111,7 @@ export interface ReconciliationSummaryProps {
   /** Whether an apply this operator can still influence exists to set a conflict policy FOR — see
    *  the call sites for what answers it on each path. */
   showConflictChoice: boolean;
-  /** The INLINE route's 2 000-row cap notice. Always `false` for a background run — see
-   *  `APPLY_ROW_CAP`. */
-  overCap: boolean;
-  /** `null` on the inline door; the run's own parse-override state on the background one. */
+  /** The run's own parse-override state. */
   reupload: ReuploadOverrides | null;
 }
 
@@ -374,15 +371,6 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
             <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
               {t('facilities.import.duplicatesWarning', { count: result.duplicates })}
             </p>
-          )}
-          {props.overCap && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-              <p className="font-medium">{t('facilities.import.tooLargeTitle')}</p>
-              <p>{t('facilities.import.tooLargeBody', { count: result.parsed })}</p>
-              {/* A2b: the row cap is the INLINE route's alone. The register that is too large to
-                  apply through this request is exactly the one the background path exists for. */}
-              <p>{t('facilities.import.tooLargeUseUpload')}</p>
-            </div>
           )}
         </>
       )}
