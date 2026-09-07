@@ -245,8 +245,9 @@ describe('ImportFacilitiesSheet', () => {
 
   // ── B1 Task 9: the national-system picklist ─────────────────────────────────────────────────────
 
-  it('B1 Task 9: renders a Select populated from the API, keeps Preview disabled until a source is chosen, and sends the URI — never the display name', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+  it('B1 Task 9: renders a Select populated from the API, keeps Mapping unreachable until a source is chosen, and sends the URI — never the display name', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await waitFor(() => expect(api.listFacilityImportSources).toHaveBeenCalled());
@@ -260,26 +261,27 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByRole('option', { name: HFR_SOURCE.url })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' }); // close without picking
 
-    // A file alone is not enough: Preview stays disabled with no register chosen.
+    // A file alone is not enough: Mapping's action is unreachable with no register chosen.
+    // Asserting the absence of Mapping's own action covers both shapes of blocked Source: Continue
+    // present but disabled, and Continue replaced by "Register a source" when the install has no
+    // register at all.
     fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
-    openMenu();
-    // ⛔ "Cannot reach Mapping", not "Preview is disabled". Same guarantee, stated where it now
-    // lives. Preview moved to Mapping, which needs both a file and a register, so its old disabled
-    // state on Source is no longer reachable. Asserting the absence of Mapping'"'"'s own action covers
-    // both shapes of blocked Source: Continue present but disabled, and Continue replaced by
-    // "Register a source" when the install has no register at all.
     expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: /^preview$/i })).not.toBeInTheDocument();
-    fireEvent.keyDown(document.body, { key: 'Escape' });
 
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
-    await previewNow();
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
+    await uploadNow();
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
     // ⛔ THE WHOLE POINT: the source's URI reaches the request, never its display name.
-    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({ nationalSystem: HFR_SOURCE.url }));
-    expect(api.importFacilitiesCsv).not.toHaveBeenCalledWith(expect.objectContaining({ nationalSystem: HFR_SOURCE.name }));
+    // ⛔ The second argument is the progress callback. `uploadFacilityImport` takes two, and a
+    // one-argument `toHaveBeenCalledWith` would fail on the arity rather than on the subject.
+    expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({ nationalSystem: HFR_SOURCE.url }), expect.any(Function),
+    );
+    expect(api.uploadFacilityImport).not.toHaveBeenCalledWith(
+      expect.objectContaining({ nationalSystem: HFR_SOURCE.name }), expect.any(Function),
+    );
   });
 
   it('B1 Task 9: disables the Select and shows a loading state while sources are still being fetched', async () => {
@@ -1024,22 +1026,20 @@ describe('ImportFacilitiesSheet', () => {
     );
   });
 
-  it('Apply sends the default onConflict: skip when the operator never touches the control', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 2, conflict: 1, runId: 'run-44' }))
-      .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 2, updated: 0, retired: 0 }, conflict: 1, runId: 'run-44' }));
+  it('Confirm sends the default onConflict: skip when the operator never touches the control', async () => {
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem();
-    await previewNow();
+    // `conflict: 1` so the control is SHOWN at all: `confirmOptionsFor` sends only the choices whose
+    // control the operator was actually offered, so a fixture with no conflict would omit the key
+    // and this test would pass for the wrong reason.
+    await reviewWithSummary(baseResult({ parsed: 3, create: 2, conflict: 1 }));
 
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+    confirmNow();
 
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ apply: true, onConflict: 'skip' }),
-    );
+    await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
+    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1',
+      expect.objectContaining({ onConflict: 'skip' }));
   });
 
   it('warns, informationally, that an unrecognised national system will create a new register identity', async () => {
@@ -1067,10 +1067,9 @@ describe('ImportFacilitiesSheet', () => {
 
   // ── CT-3 (whole-branch review): the whole preview surface actually reaches the wire ────────────
 
-  it('CT-3: sends format/completeRelease/releaseVersion on preview, and the SAME values again on apply', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 3, runId: 'run-9' }))
-      .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 }, runId: 'run-9' }));
+  it('CT-3: format, completeRelease and releaseVersion ride the upload, so the validate parses what the operator declared', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
@@ -1081,23 +1080,20 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
     fireEvent.change(screen.getByLabelText('Release version'), { target: { value: 'r7' } });
 
-    await previewNow();
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({ format: 'jsonl', completeRelease: true, releaseVersion: 'r7', apply: false }),
+    await uploadNow();
+
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    expect(api.uploadFacilityImport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ format: 'jsonl', completeRelease: true, releaseVersion: 'r7' }),
+      expect.any(Function),
     );
 
-    clickMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
-
-    // THE FIX: before this task the apply request never sent `format`/`completeRelease` at all, so
-    // an apply linked to a JSONL-release preview would have the server parse it as CSV instead.
-    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
-    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        format: 'jsonl', completeRelease: true, releaseVersion: 'r7', apply: true, runId: 'run-9',
-      }),
-    );
+    // ⛔ AND NOT AGAIN AT CONFIRM. These three describe how the file PARSES, so they belong to the
+    // request that runs before the classification the operator approves. The run stored them at
+    // upload time; the confirm route refuses a parse-changing value arriving late. On the inline
+    // door the same discipline took the opposite shape — send them twice, identically — because
+    // there was no run to store them on. Asserting they repeat here would invert the design.
+    expect(api.confirmFacilityImportRun).not.toHaveBeenCalled();
   });
 
   // The override's own round trip belongs to the run door and has its own test: "the
@@ -1986,7 +1982,8 @@ describe('ImportFacilitiesSheet', () => {
         { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
       ],
     });
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
@@ -1999,10 +1996,16 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByLabelText('MFL Code')).toHaveTextContent('national_code');
     expect(screen.getByLabelText('Name')).toHaveTextContent('name');
 
-    await previewNow();
-    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({
-      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' }, constants: {}, extras: [] },
-    }));
+    await uploadNow();
+    // ⛔ The map is an OBJECT on the params, not a query string. `uploadFacilityImport` is what is
+    // mocked, and it serialises the map itself (api.ts) — so this asserts what the sheet handed
+    // over, which is the subject, rather than how the client encodes it.
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' }, constants: {}, extras: [] },
+      }),
+      expect.any(Function),
+    ));
   });
 
   it('Task 8: resets the column map on a file swap, so a stale mapping keyed on the OLD headers cannot satisfy the new file', async () => {
@@ -2023,7 +2026,8 @@ describe('ImportFacilitiesSheet', () => {
           { header: 'Facility Name', candidates: [] },
         ],
       });
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
@@ -2042,14 +2046,16 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByLabelText('Code')).toHaveTextContent('Keep as extra data');
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
 
-    await previewNow();
+    await uploadNow();
     // ⛔ THE FIX, PROVEN: without the reset, `columnMap.columns` would still carry
     // `{'MFL Code':'national_code', Name:'name'}` from the FIRST file — entries keyed on headers this
-    // file does not even have — and the blocking summary would have waved through a map the server's
+    // file does not even have — and the run would have been validated against a map the server's
     // own `validateColumnMap` would then refuse (`missing_required` for `national_code`/`name`, since
     // no header of THIS file actually claims them). Nothing was ever chosen for the second file, so
     // no columnMap is sent at all.
-    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({ columnMap: undefined }));
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({ columnMap: undefined }), expect.any(Function),
+    ));
   });
 
   // ── Whole-branch review, MUST FIX 3: `columnMapErrors` was mirrored in `api.ts` and rendered
