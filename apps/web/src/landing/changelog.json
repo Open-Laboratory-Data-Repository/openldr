@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "3060e8ef",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The Source step stacks on a phone"
+        },
+        {
+          "hash": "bfb70b64",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A real drop target for the file, and a Select that fills its column"
+        },
+        {
           "hash": "6ef1d3b4",
           "type": "fix",
           "scope": "facilities",
