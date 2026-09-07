@@ -1034,6 +1034,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         apply: false,
       });
       setPreviewResult(result);
+      // ⛔ An explicit Preview goes to its result, every time, not only the first. The auto-advance
+      // effect keys on `furthest` CHANGING, so it carries the operator to Review on the first
+      // preview and does nothing on a second: someone who stepped back to Mapping to fix the map
+      // and previewed again stayed on Mapping, with the new summary sitting on a step they had to
+      // go and find. Requesting it here makes the navigation a consequence of the action.
+      //
+      // ⛔ EXCEPT for a column-map refusal, which belongs on Mapping. That retreat lives in the
+      // same `[furthest]` effect, so it does NOT re-run for a second preview and cannot undo this;
+      // the condition has to be here. Read off `result` rather than the derived `columnMapRefused`,
+      // which is a render away and still describes the PREVIOUS result at this point.
+      if (result.blockedReason !== 'column-map') setRequestedStep(3);
     } catch (err) {
       setPreviewResult(null);
       const message = err instanceof Error ? err.message : String(err);
@@ -1243,6 +1254,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // ── derived ─────────────────────────────────────────────────────────────────────────────────────
 
   const runActive = !!run && RUN_ACTIVE_STATUSES.includes(run.status);
+  /** ⛔ ACTUALLY MOVING, as opposed to merely "a run exists". `runActive` includes
+   *  `awaiting_confirmation`, which is right for ITS job of freezing the inputs while a run holds
+   *  the register, and wrong for every question about what the operator may do next:
+   *  `awaiting_confirmation` is the PARKED state, where the worker has finished and the operator is
+   *  being asked to decide. Feeding the wider predicate to `canGoBack` made the step strip
+   *  unclickable at Review, so someone who reached the summary could not go back to Mapping to
+   *  change anything, which is most of what a review step is for. Reported by an operator as
+   *  "what's the point of review if I cant make changes". */
+  const runInFlight = runActive && run?.status !== 'awaiting_confirmation';
   const runFinished = !!run && RUN_TERMINAL_STATUSES.includes(run.status);
   /** The summary a background run has PARKED for the operator to decide about. Only ever set at
    *  `awaiting_confirmation`: an earlier run has nothing computed yet, and a later one has already
@@ -1318,7 +1338,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     hasFile: !!file,
     hasRegister: nationalSystem.trim() !== '',
     hasReview: reviewResult !== null || appliedSummary !== null || runId !== null,
-    runActive,
+    runActive: runInFlight,
   };
   const furthest = furthestStep(stepGate);
   const step = clampStep(requestedStep, stepGate);
@@ -1447,8 +1467,16 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  JSONL release, an applied run, a run or a summary that is not a column-map refusal, and the
    *  brief window while `File.text()` resolves all left step 2 completely blank, with nothing on
    *  screen to say why. */
+  //
+  //  ⛔ NO LONGER GATED ON THE MAP HAVING BEEN REFUSED. It used to hide the moment a run existed
+  //  unless `columnMapRefused`, so an operator who stepped back to Mapping found a step that
+  //  explained itself and offered nothing: they could see the map had already been sent and could
+  //  do nothing about it. Going back is only worth offering if something can change there, so the
+  //  panel stays and step 2's action becomes a re-upload. The RUN's map is still immutable, which
+  //  is what the confirm route's guarantees rest on: editing here mints a NEW run that supersedes
+  //  this one, exactly as the refusal path already did.
   const columnMapPanelShown = step === 2 && format === 'csv' && columnMapHeaders.length > 0
-    && !appliedSummary && (!run || columnMapRefused) && (!reviewResult || columnMapRefused);
+    && !appliedSummary && !runInFlight;
   // While a run holds the register, the inputs it was uploaded with must not drift out from under
   // it — the run is for THAT file under THAT national system, and nothing here can retract it.
   const inputsDisabled = applying || uploading || runActive;
@@ -1507,12 +1535,21 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   reason `RUN_ACTIVE_STATUSES` above omits it) — but the fourth is named here anyway,
                   because an enumeration that silently drops a member of the constant it cites is how
                   a later reader learns the wrong set. */}
-              {!applyResult && !runId && (
+              {/* ⛔ NOT on Mapping, where it is already the visible button, and NOT on Source, where
+                  taking it would skip the mapping step the whole flow exists to make legible. The
+                  approved design says one visible action per step and EVERYTHING ELSE in this menu:
+                  an item that repeats the button is neither, and an operator reported the menu as
+                  contradicting the button it sat beside. It survives here only for Review, where a
+                  re-upload is a genuine alternative to confirming. */}
+              {!applyResult && !runId && step === 3 && (
                 <DropdownMenuItem disabled={uploadDisabled} onClick={() => void handleUpload()}>
                   {uploading ? uploadLabel : t('facilities.import.uploadAction')}
                 </DropdownMenuItem>
               )}
-              {!applyResult && !run && (
+              {/* Preview is the inline door and slice 2 removes it outright. Until then it belongs
+                  to Mapping, where a map exists to preview: offering it on Source invited an
+                  operator to skip mapping entirely and then be refused for it. */}
+              {!applyResult && !run && step === 2 && (
                 <DropdownMenuItem disabled={previewDisabled} onClick={() => void runPreview()}>
                   {previewing ? t('facilities.import.previewing') : t('facilities.import.previewAction')}
                 </DropdownMenuItem>
@@ -1522,11 +1559,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   {applying ? t('facilities.import.applying') : t('facilities.import.applyAction')}
                 </DropdownMenuItem>
               )}
-              {canConfirmRun && (
-                <DropdownMenuItem disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
-                  {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}
-                </DropdownMenuItem>
-              )}
+              {/* ⛔ Deliberately NOT rendered: Confirm is Review's visible button, and this menu is
+                  for everything else. It was here before the step shell existed and stayed by
+                  oversight, so the same action appeared twice on the same screen. The re-uploads
+                  below are the genuine alternatives and they remain. */}
               {/* ⛔ THE RUN DOOR'S COMPLETABLE PATH FOR A PARSE-CHANGING OVERRIDE, and an ACTION, so
                   it lives here rather than as a control in the amber box (ui-actions-in-dots-menu).
                   It re-streams the SAME file with the override on the upload request, which
@@ -1954,21 +1990,24 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               needs one: a column-map refusal parks them here with `runId` already set. So the
               refusal gets its own branch first, reusing the exact action (and label) the dropdown's
               `canReuploadForColumnMap` item already offers — no new copy, no new handler. */}
-          {step === 2 && (columnMapRefused ? (
+          {/* Three shapes of the same action, because what it MEANS depends on what came before.
+              No run yet: this is the upload. A refused map: the re-upload the refusal names. A run
+              that simply exists: still a re-upload, because the operator stepped back here to
+              change something and needs a way to send it. All three call `handleUpload`, which
+              reads the live map and supersedes any run this sheet is watching. */}
+          {step === 2 && !applyResult && (
             <Button
               size="sm"
               disabled={uploadDisabled || confirming || cancelling}
               onClick={() => void handleUpload()}
             >
-              {uploading ? uploadLabel : t('facilities.import.reuploadColumnMapAction')}
+              {uploading ? uploadLabel : t(
+                !runId ? 'facilities.import.uploadAction'
+                  : columnMapRefused ? 'facilities.import.reuploadColumnMapAction'
+                    : 'facilities.import.reuploadWithMapAction',
+              )}
             </Button>
-          ) : (
-            !applyResult && !runId && (
-              <Button size="sm" disabled={uploadDisabled} onClick={() => void handleUpload()}>
-                {uploading ? uploadLabel : t('facilities.import.uploadAction')}
-              </Button>
-            )
-          ))}
+          )}
           {step === 3 && canConfirmRun && (
             <Button size="sm" disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
               {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}

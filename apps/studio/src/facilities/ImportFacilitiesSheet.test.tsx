@@ -84,6 +84,17 @@ async function pickFileAndSystem(contents?: string) {
  *  rather than a fixed delay, before clicking it. Leaves the menu closed afterward (same as
  *  clickMenuItem) via Radix's own item-select auto-close. */
 async function previewNow() {
+  // ⛔ REACH MAPPING FIRST, from either side. Preview is the inline door and it now lives on
+  // Mapping: offering it on Source invited an operator to skip mapping and then be refused for it.
+  // Coming from Source that means clicking Continue; coming BACK from Review, after a first preview
+  // has already carried the sheet forward, it means clicking the step strip. A re-preview is an
+  // ordinary thing for an operator to do, so the helper has to handle both.
+  const continueButton = screen.queryByRole('button', { name: 'Continue' });
+  if (continueButton) fireEvent.click(continueButton);
+  const mappingStep = screen.queryByRole('button', { name: /2\s*Mapping/ });
+  if (mappingStep && mappingStep.getAttribute('aria-current') !== 'step' && !mappingStep.hasAttribute('disabled')) {
+    fireEvent.click(mappingStep);
+  }
   openMenu();
   await waitFor(() => expect(screen.getByRole('menuitem', { name: /^preview$/i })).not.toHaveAttribute('aria-disabled', 'true'));
   fireEvent.click(screen.getByRole('menuitem', { name: /^preview$/i }));
@@ -198,7 +209,13 @@ describe('ImportFacilitiesSheet', () => {
     // A file alone is not enough: Preview stays disabled with no register chosen.
     fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
     openMenu();
-    expect(screen.getByRole('menuitem', { name: /^preview$/i })).toHaveAttribute('aria-disabled', 'true');
+    // ⛔ "Cannot reach Mapping", not "Preview is disabled". Same guarantee, stated where it now
+    // lives. Preview moved to Mapping, which needs both a file and a register, so its old disabled
+    // state on Source is no longer reachable. Asserting the absence of Mapping'"'"'s own action covers
+    // both shapes of blocked Source: Continue present but disabled, and Continue replaced by
+    // "Register a source" when the install has no register at all.
+    expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^preview$/i })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     fireEvent.click(trigger);
@@ -521,7 +538,11 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     // A second Preview while the box is ticked — the state the re-applied override has to survive.
-    clickMenuItem(/^preview$/i);
+    // ⛔ Through the helper, not a bare menu click: the first preview carried the sheet to Review,
+    // and Preview lives on Mapping now, so a re-preview has to step back first. The auto-advance
+    // brings it forward again once the new summary lands, which is why the checkbox assertions
+    // below still find their control.
+    await previewNow();
     await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
     // THE LOAD-BEARING REQUEST: the preview asks for the UN-OVERRIDDEN answer even though the
     // operator has opted in, so `blockedReason` stays 'quarantined-rows' for the checkbox to toggle
@@ -618,7 +639,13 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByLabelText('National system')).toHaveValue('');
 
     openMenu();
-    expect(screen.getByRole('menuitem', { name: /^preview$/i })).toHaveAttribute('aria-disabled', 'true');
+    // ⛔ "Cannot reach Mapping", not "Preview is disabled". Same guarantee, stated where it now
+    // lives. Preview moved to Mapping, which needs both a file and a register, so its old disabled
+    // state on Source is no longer reachable. Asserting the absence of Mapping'"'"'s own action covers
+    // both shapes of blocked Source: Continue present but disabled, and Continue replaced by
+    // "Register a source" when the install has no register at all.
+    expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^preview$/i })).not.toBeInTheDocument();
   });
 
   it('F2: after opting into unknown columns, a wrong file still states an outcome and surfaces the skipped count', async () => {
@@ -714,7 +741,13 @@ describe('ImportFacilitiesSheet', () => {
 
     expect(await screen.findByText(/this file is empty/i)).toBeInTheDocument();
     openMenu();
-    expect(screen.getByRole('menuitem', { name: /^preview$/i })).toHaveAttribute('aria-disabled', 'true');
+    // ⛔ "Cannot reach Mapping", not "Preview is disabled". Same guarantee, stated where it now
+    // lives. Preview moved to Mapping, which needs both a file and a register, so its old disabled
+    // state on Source is no longer reachable. Asserting the absence of Mapping'"'"'s own action covers
+    // both shapes of blocked Source: Continue present but disabled, and Continue replaced by
+    // "Register a source" when the install has no register at all.
+    expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^preview$/i })).not.toBeInTheDocument();
   });
 
   it('F6: the apply-confirm Cancel button is translated, not left as the English literal default', async () => {
@@ -1241,8 +1274,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByText(/absent from this file:.*not evaluated/i)).toBeInTheDocument();
     expect(screen.queryByText(/0 registry row\(s\) for this national system are absent from this file/i)).not.toBeInTheDocument();
 
-    openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Confirm import' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
   });
 
   it('A2b: Confirm carries the operator\'s retirement and conflict choices to the run', async () => {
@@ -1297,12 +1329,11 @@ describe('ImportFacilitiesSheet', () => {
     await uploadNow();
 
     expect(await screen.findByText(/line 3/i)).toBeInTheDocument();
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: 'Confirm import' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
-    clickMenuItem('Confirm import');
+    confirmNow();
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     expect(api.confirmFacilityImportRun).toHaveBeenCalledWith(
@@ -1366,10 +1397,14 @@ describe('ImportFacilitiesSheet', () => {
     // ⚠ The POSITIVE control on each of the two open menus below. Two `queryByRole` absences on a
     // menu that never actually opened would pass for the wrong reason and prove nothing; asserting
     // an item that IS there in the same open menu is what makes the absence beside it mean
-    // something. (`Upload and validate` here, `Close` after the run finished — the close item's own
+    // something. (`Register a source` here, `Close` after the run finished — the close item's own
     // label switches to Close once `runFinished`.)
+    //
+    // ⛔ `Upload and validate` used to be this control and no longer can be: it is Mapping's visible
+    // button now, and appears in this menu only on Review. `Register a source` is in this menu at
+    // every step, which is exactly what a positive control needs to be.
     openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Upload and validate' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Register a source' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Cancel this import' })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
@@ -1451,8 +1486,7 @@ describe('ImportFacilitiesSheet', () => {
 
     expect(await screen.findByText(/14000 facility row\(s\) will be created/i)).toBeInTheDocument();
     expect(screen.queryByText(/too large to apply/i)).not.toBeInTheDocument();
-    openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Confirm import' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
   });
 
   it('A2b: an applied run renders the written summary and reloads the caller\'s list exactly once', async () => {
@@ -1645,7 +1679,7 @@ describe('ImportFacilitiesSheet', () => {
     // ...and the one that could only ever write nothing is NOT. `canConfirmRun` reads the same
     // `blocked` verdict the confirm route enforces, so the studio and the server now agree about
     // this file instead of the studio offering what the server would refuse.
-    expect(screen.queryByRole('menuitem', { name: 'Confirm import' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     expect(api.confirmFacilityImportRun).not.toHaveBeenCalled();
@@ -1745,7 +1779,7 @@ describe('ImportFacilitiesSheet', () => {
     openMenu();
     // Positive control on the same open menu, so the absence beside it means something.
     expect(screen.getByRole('menuitem', { name: 'Cancel' })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Confirm import' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
   });
 
   // ⛔ THE FORMAT-BLIND HALF OF THE SAME FINDING. `allowUnknownColumns` is a documented NO-OP for
@@ -1770,9 +1804,13 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/Kept as extra data/i)).toBeInTheDocument();
     expect(screen.queryByText(/Nothing is imported unless you opt in/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/has to be set before validation/i)).not.toBeInTheDocument();
+    // Confirm is Review's visible BUTTON now, so it is asserted before the menu opens: Radix marks
+    // the rest of the page aria-hidden while a modal menu is up, which would hide it.
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
     openMenu();
-    // The positive control, so the two absences below are not those of a menu that never opened.
-    expect(screen.getByRole('menuitem', { name: 'Confirm import' })).toBeInTheDocument();
+    // The positive control, so the absences below are not those of a menu that never opened. Cancel
+    // is always in this menu, which makes it the right control now that Confirm has left it.
+    expect(screen.getByRole('menuitem', { name: 'Cancel this import' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
   });
@@ -1810,8 +1848,7 @@ describe('ImportFacilitiesSheet', () => {
     // The second run's stored options say the validate ran with it, so the notice changes and the
     // menu item retires — a second identical upload would change nothing.
     expect(await screen.findByText(/already ran with that option on/i)).toBeInTheDocument();
-    openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Confirm import' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Re-upload keeping rows with an invalid coordinate' })).not.toBeInTheDocument();
   });
 
@@ -2328,12 +2365,20 @@ describe('ImportFacilitiesSheet', () => {
       await previewNow();
       await screen.findByText(/facility row\(s\) will be created/i);
 
-      // The clean preview auto-advances to Review (step 3) — go back to Mapping, which no longer has
-      // the panel to show, and check it explains why instead of sitting blank.
+      // The clean preview auto-advances to Review, so go back to Mapping.
       fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
 
-      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
-      expect(screen.getByText(/already been sent with the upload/i)).toBeInTheDocument();
+      // ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: that Mapping had no panel to show and said so,
+      // "already been sent with the upload". True at the time, and useless to the operator who
+      // reported it: going back landed on a step that explained itself and offered nothing to do.
+      // Going back is only worth offering if something can change there, so the panel stays.
+      expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
+      expect(screen.queryByText(/already been sent with the upload/i)).not.toBeInTheDocument();
+      // ...and the step has an action again. It reads "Upload and validate" rather than a re-upload
+      // because this is the INLINE door: a preview never sets the sheet's own `runId`, only an
+      // upload does, so nothing has been sent yet and uploading is genuinely the next thing. The
+      // re-upload labels belong to the background door and are asserted where that door is driven.
+      expect(screen.getByRole('button', { name: 'Upload and validate' })).toBeInTheDocument();
     });
   });
 

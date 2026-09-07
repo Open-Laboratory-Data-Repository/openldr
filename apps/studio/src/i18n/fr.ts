@@ -993,6 +993,7 @@ export const fr: EnShape = {
       reuploadUnknownColumnsAction: 'Réenvoyer en conservant les colonnes non reconnues',
       reuploadInvalidCoordinatesAction: 'Réenvoyer en conservant les lignes dont la coordonnée est invalide',
         reuploadColumnMapAction: 'Réenvoyer avec le mappage corrigé',
+        reuploadWithMapAction: 'Réenvoyer avec ce mappage',
       overrideNeedsReupload: 'Cette option change la façon dont le fichier est lu ; elle doit donc être définie avant la validation. Utilisez le menu d’actions ci-dessus pour réenvoyer ce fichier avec l’option — le résumé que vous examinerez sera alors celui qui sera appliqué.',
       overrideAppliedToRun: 'Cette validation a déjà été exécutée avec cette option activée ; le résumé ci-dessous est donc celui qui sera appliqué.',
       runLoading: 'Vérification de l’exécution de l’import…',
