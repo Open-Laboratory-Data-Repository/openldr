@@ -1236,6 +1236,9 @@ describe('ImportFacilitiesSheet', () => {
     await backToMapping();
     fireEvent.click(await screen.findByRole('combobox', { name: /rows changed since this preview/i }));
     fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
+    // Apply lives on Review, and the conflict policy is in neither signature, so the summary
+    // survived the change and one step forward is all this needs.
+    forwardToReview();
 
     clickMenuItem(/^apply$/i);
     fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));

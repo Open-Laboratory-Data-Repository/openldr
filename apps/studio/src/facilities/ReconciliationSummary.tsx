@@ -234,6 +234,18 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
               JSONL release with an unrecognised key takes the "kept as extra data" note above, which
               says the same thing in the same words as every other non-blocking case. */}
           <p>{t('facilities.import.unknownColumnsBody', { columns: result.unknownColumns.join(', ') })}</p>
+          {/* ⛔ GUIDANCE, NOT A CONTROL, and it is still true on the run door. The override itself
+              lives on Mapping now, but this validate has already happened: nothing short of a fresh
+              upload re-runs it, so ticking the box there takes effect on the RE-UPLOAD offered in
+              the actions menu. Plan B's re-validate route is what will make this note unnecessary.
+              A JSONL release is exempt: `allowUnknownColumns` is a documented no-op for it. */}
+          {props.reupload !== null && props.reupload.sourceFormat !== 'jsonl' && (
+            <p className="mt-2">
+              {t(props.reupload.allowUnknownColumns
+                ? 'facilities.import.overrideAppliedToRun'
+                : 'facilities.import.overrideNeedsReupload')}
+            </p>
+          )}
         </div>
       )}
 
@@ -259,6 +271,15 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
           <p className="font-medium">{t('facilities.import.invalidTitle')}</p>
           <p>{t('facilities.import.invalidCount', { count: result.invalid.length })}</p>
+          {/* Same read-only guidance as the unrecognised-columns box, with NO format branch:
+              `allowInvalidCoordinates` is honoured by both parsers, so it is live for JSONL too. */}
+          {props.reupload !== null && (
+            <p className="mt-2">
+              {t(props.reupload.allowInvalidCoordinates
+                ? 'facilities.import.overrideAppliedToRun'
+                : 'facilities.import.overrideNeedsReupload')}
+            </p>
+          )}
           <ul className="mt-2 max-h-32 space-y-0.5 overflow-y-auto">
             {result.invalid.map((row, i) => (
               <li key={`${row.line}-${row.field}-${i}`}>
