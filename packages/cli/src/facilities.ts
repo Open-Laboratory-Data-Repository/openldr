@@ -11,13 +11,13 @@ import {
   suggestColumns, suggestValues, saveFacilityValueMappings, resolveControlledFields,
   CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
   // The SAME cleanup helpers the delete route calls, in the same order — see runFacilitiesDelete.
-  retireRegistryConcepts, reprojectAfterRegistryDelete,
+  retireRegistryConcepts, reprojectAfterRegistryDelete, revalidateImportRun,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
   type FacilityImportResult, type ColumnSuggestion, type ValueMappingEntry, type ControlledField,
 } from '@openldr/bootstrap';
 import {
   referenceCapture, createFacilityImportRunStore, createFacilityRegisterSourceStore,
-  resolveFacilityRegisterForImport, type ExternalSchema,
+  resolveFacilityRegisterForImport, VALIDATE_PHASE, type ExternalSchema,
   type FacilityImportRun, type FacilityImportRunStore, type FacilityRegisterSource,
 } from '@openldr/db';
 // Task 9: `parseFacilityCsv` is what `suggest-values` runs the file through to find each controlled
@@ -1658,4 +1658,73 @@ function formatJobsHuman(health: FacilityHealth): string {
     lines.push(`    retry with: openldr facilities jobs --retry ${job.id}`);
   }
   return lines.join('\n');
+}
+
+// ── Plan B: `openldr facilities import-run-revalidate <id>` ───────────────────────────────────
+
+export interface FacilitiesImportRunRevalidateOpts {
+  columnMap?: string;
+  allowUnknownColumns?: boolean;
+  allowInvalidCoordinates?: boolean;
+  allowMalformedRows?: boolean;
+  json: boolean;
+}
+
+/**
+ * Check an already-uploaded file again under a new column map, without sending the file again.
+ *
+ * ⛔ THE DECISION IS NOT HERE. Which runs may be checked again, and what each refusal says, is
+ * `revalidateImportRun`'s (@openldr/bootstrap) and is shared with the route, so the two doors cannot
+ * drift on it (AGENTS.md §6 item 2). This function reads the arguments, calls it, and reports.
+ *
+ * ⛔ NO `--force`. It writes no facility data: it moves a parked run back to the validate queue
+ * against the file it already stored. The destructive step is still the confirm.
+ */
+export async function runFacilitiesImportRunRevalidate(
+  id: string, opts: FacilitiesImportRunRevalidateOpts,
+): Promise<number> {
+  const fail = (message: string): number => {
+    if (opts.json) process.stdout.write(JSON.stringify({ error: message }) + '\n');
+    else process.stderr.write(`facilities import-run-revalidate refused: ${message}\n`);
+    return 1;
+  };
+
+  let columnMap: FacilityColumnMap | undefined;
+  if (opts.columnMap) {
+    const read = readJsonFile<FacilityColumnMap>(opts.columnMap);
+    if (!read.ok) return fail(read.error);
+    columnMap = read.value;
+  }
+
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const importRuns = createFacilityImportRunStore(ctx.internalDb);
+    // Only the flags the operator actually passed. An absent flag must not overwrite what the run
+    // already carries with a hardcoded `false`.
+    const options: Record<string, unknown> = {};
+    if (columnMap) options.columnMap = columnMap;
+    if (opts.allowUnknownColumns) options.allowUnknownColumns = true;
+    if (opts.allowInvalidCoordinates) options.allowInvalidCoordinates = true;
+    if (opts.allowMalformedRows) options.allowMalformedRows = true;
+
+    const outcome = await revalidateImportRun(importRuns, { runId: id, options });
+    if (!outcome.ok) return fail(outcome.message);
+
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'facility.import.revalidated',
+      entityType: 'facility',
+      entityId: id,
+      before: null,
+      after: null,
+      metadata: { runId: id },
+    });
+
+    if (opts.json) process.stdout.write(JSON.stringify({ runId: id, status: VALIDATE_PHASE.from }) + '\n');
+    else process.stdout.write(`import run ${id} is back in the validate queue; its stored file was not re-sent\n`);
+    return 0;
+  } catch (err) {
+    return fail(redactError(err));
+  } finally {
+    await ctx.close();
+  }
 }

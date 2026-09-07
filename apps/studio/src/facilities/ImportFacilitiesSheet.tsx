@@ -24,6 +24,7 @@ import {
   listFacilityImportSources,
   suggestColumnMap,
   uploadFacilityImport,
+  revalidateFacilityImportRun,
   type ColumnMapError,
   type ColumnSuggestion,
   type ControlledField,
@@ -700,6 +701,53 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  `overrides` are: the ⋯ item that sets one has to send its just-chosen value ahead of the React
    *  state update it also triggers. ⛔ `allowMalformedRows` is NOT one of them — it never reaches the
    *  parser, so it stays the confirm's and needs no second trip through the file. */
+  /**
+   * Check the file this run ALREADY UPLOADED again, under new options. Falls back to a fresh upload
+   * when there is nothing stored to re-check.
+   *
+   * ⛔ THE FALLBACK IS NOT DEAD CODE. A run that came from the inline preview door stored no file
+   * (`blobKey` null), and a run that has moved on from `awaiting_confirmation` cannot be re-checked
+   * either. In both cases sending the file again is the only thing that can work, which is exactly
+   * what these menu items did before this route existed.
+   */
+  const handleRevalidate = async (
+    overrides?: { allowUnknownColumns?: boolean; allowInvalidCoordinates?: boolean },
+  ): Promise<void> => {
+    const canRevalidate = !!runId && run?.status === 'awaiting_confirmation' && !!run?.blobKey;
+    if (!canRevalidate) { await handleUpload(overrides); return; }
+
+    const allowUnknown = overrides?.allowUnknownColumns ?? allowUnknownColumns;
+    const allowInvalid = overrides?.allowInvalidCoordinates ?? allowInvalidCoordinates;
+    // Kept in state as well as sent, for the same reason `handleUpload` keeps them: the summary the
+    // operator reviews next must be the one these options produced.
+    setAllowUnknownColumns(allowUnknown);
+    setAllowInvalidCoordinates(allowInvalid);
+    setUploading(true);
+    setError(null);
+    try {
+      await revalidateFacilityImportRun(runId as string, {
+        columnMap: hasColumnMapContent(columnMap) ? columnMap : undefined,
+        allowUnknownColumns: allowUnknown,
+        allowInvalidCoordinates: allowInvalid,
+      });
+      // The run is back in the validate queue. Dropping the stale summary here is what stops the
+      // previous verdict sitting on screen with its Confirm.
+      //
+      // ⛔ THE NONCE IS NOT OPTIONAL. The poller keys on `[runId, refreshNonce]` and stops once a
+      // run reaches a status it does not poll — `awaiting_confirmation` is exactly that. A re-check
+      // reuses the SAME `runId`, so without bumping the nonce nothing ever asks again and the sheet
+      // sits on "Checking the import run" forever. The upload path never hit this because a new
+      // upload changes `runId` and restarts the effect on its own.
+      setRun(null);
+      setSummaryAt(signatureWith(overrides));
+      setRefreshNonce((n) => n + 1);
+    } catch (err) {
+      setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleUpload = async (
     overrides?: { allowUnknownColumns?: boolean; allowInvalidCoordinates?: boolean },
   ): Promise<void> => {
@@ -760,7 +808,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       // Task 2: the streamed door earns its Review here, at the upload, for the same reason `runId`
       // is in `stepGate` at all — the first poll has not answered yet and the operator must not be
       // left on Mapping watching nothing.
-      setSummaryAt(summarySignatureRef.current);
+      //
+      // ⛔ `signatureWith(overrides)`, not the ref: this call sets the two override states just
+      // above and then awaits, so on a fast response React may not have re-rendered and the ref
+      // would still hold the pre-override value.
+      setSummaryAt(signatureWith(overrides));
     } catch (err) {
       setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
     } finally {
@@ -919,6 +971,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  by the time any awaited handler resumes it holds the signature the request actually went with. */
   const summarySignatureRef = useRef(currentSummarySignature);
   summarySignatureRef.current = currentSummarySignature;
+
+  /** The signature for a request that carries OVERRIDES, computed from the values actually sent.
+   *
+   *  ⛔ NOT the ref, for a request that changes state first. `handleUpload`/`handleRevalidate` call
+   *  `setAllowUnknownColumns`/`setAllowInvalidCoordinates` and then await; a mocked or fast response
+   *  can resolve before React has re-rendered, so the ref still holds the PRE-override value and the
+   *  stamp never matches. Same failure the ref itself was introduced to fix, one layer along. */
+  const signatureWith = (o?: { allowUnknownColumns?: boolean; allowInvalidCoordinates?: boolean }): string =>
+    summarySignature({
+      ...inputs,
+      allowUnknownColumns: o?.allowUnknownColumns ?? inputs.allowUnknownColumns,
+      allowInvalidCoordinates: o?.allowInvalidCoordinates ?? inputs.allowInvalidCoordinates,
+    });
 
   /** The last check's result, kept for the controls on Mapping that only make sense once something
    *  has been found. Guarded by `worklistSignature`, the NARROWER of the two: choosing a policy or
@@ -1188,7 +1253,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {canReuploadForUnknownColumns && (
                 <DropdownMenuItem
                   disabled={uploadDisabled || confirming || cancelling}
-                  onClick={() => void handleUpload({ allowUnknownColumns: true })}
+                  onClick={() => void handleRevalidate({ allowUnknownColumns: true })}
                 >
                   {uploading ? uploadLabel : t('facilities.import.reuploadUnknownColumnsAction')}
                 </DropdownMenuItem>
@@ -1196,7 +1261,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {canReuploadForInvalidCoordinates && (
                 <DropdownMenuItem
                   disabled={uploadDisabled || confirming || cancelling}
-                  onClick={() => void handleUpload({ allowInvalidCoordinates: true })}
+                  onClick={() => void handleRevalidate({ allowInvalidCoordinates: true })}
                 >
                   {uploading ? uploadLabel : t('facilities.import.reuploadInvalidCoordinatesAction')}
                 </DropdownMenuItem>
@@ -1204,7 +1269,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {canReuploadForColumnMap && (
                 <DropdownMenuItem
                   disabled={uploadDisabled || confirming || cancelling}
-                  onClick={() => void handleUpload()}
+                  onClick={() => void handleRevalidate()}
                 >
                   {uploading ? uploadLabel : t('facilities.import.reuploadColumnMapAction')}
                 </DropdownMenuItem>

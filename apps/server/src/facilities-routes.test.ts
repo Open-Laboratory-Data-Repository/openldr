@@ -8,6 +8,7 @@ import {
   createTerminologyAdminStore, createFacilityRegistryStore, createFacilityJobStore,
   createFacilityRegisterSourceStore,
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
+  VALIDATE_PHASE,
 } from '@openldr/db';
 import { projectRegistryRows } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
@@ -6201,5 +6202,116 @@ describe('POST /api/facilities/bulk-delete', () => {
 
     const events = ctx.__audit.map((e: any) => e.action);
     expect(events).toContain('facility.bulk_delete');
+  });
+});
+
+// --- Plan B: POST /api/facilities/import/runs/:id/revalidate -----------------------------------
+//
+// Check an ALREADY-UPLOADED file again under a new column map. Everything here is about what the
+// REQUEST leaves on the run row; the worker that then claims it lives in @openldr/bootstrap.
+
+const revalidateUrl = (runId: string) => `/api/facilities/import/runs/${runId}/revalidate`;
+
+describe('POST /api/facilities/import/runs/:id/revalidate', () => {
+  it('gated on facilities.manage', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const manageApp = await appWith(ctx);
+    const runId = await uploadAndPark(manageApp, db);
+
+    const viewApp = await appWith(ctx, ['facilities.view']);
+    const res = await viewApp.inject({ method: 'POST', url: revalidateUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(403);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('puts a parked run back in the validate queue with the new map, keeping its stored file', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+    const before = await db.selectFrom('facility_import_runs').select(['blob_key', 'active_key'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+
+    const res = await app.inject({
+      method: 'POST', url: revalidateUrl(runId),
+      payload: { columnMap: { columns: { Name: 'name' } }, allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId, status: VALIDATE_PHASE.from });
+
+    const after = await db.selectFrom('facility_import_runs')
+      .select(['status', 'options', 'summary', 'blob_key', 'active_key'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(after.status).toBe(VALIDATE_PHASE.from);
+    expect(after.options).toMatchObject({ columnMap: { columns: { Name: 'name' } }, allowUnknownColumns: true });
+    // The previous validate's verdict is not the new one's.
+    expect(after.summary).toBeNull();
+    // ⛔ The file is NOT re-sent, which is the entire point, and the register stays locked to this
+    // run throughout so a second import cannot slip in between.
+    expect(after.blob_key).toBe(before.blob_key);
+    expect(after.active_key).toBe(before.active_key);
+  });
+
+  // ⛔ THE WIRE SHAPE, which `typecheck` green does not pin. A body may carry the map; it may not
+  // move the run onto another register.
+  it('ignores identity fields in the body rather than honouring them', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({
+      method: 'POST', url: revalidateUrl(runId),
+      payload: { columnMap: { columns: { Name: 'name' } }, nationalSystem: 'urn:tz:hfr', sourceFormat: 'jsonl' },
+    });
+
+    expect(res.statusCode).toBe(202);
+    const after = await db.selectFrom('facility_import_runs')
+      .select(['national_system', 'source_format', 'options'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(after.national_system).toBe(SYSTEM);
+    expect(after.source_format).toBe('csv');
+    expect(after.options).not.toHaveProperty('nationalSystem');
+  });
+
+  it('404s a run that does not exist', async () => {
+    const app = await appWith(fakeImportCtx(await importDb()));
+    const res = await app.inject({ method: 'POST', url: revalidateUrl('fir_nope'), payload: {} });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('409s a run that is not parked, naming the status', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+    await db.updateTable('facility_import_runs').set({ status: 'confirmed' })
+      .where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'POST', url: revalidateUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('confirmed');
+  });
+
+  it('400s a body whose column map is the wrong shape', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+    const res = await app.inject({
+      method: 'POST', url: revalidateUrl(runId), payload: { columnMap: 'not-a-map' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // ⛔ Two clicks must queue ONE validate. The second request sees a run that is no longer parked.
+  it('refuses a second request, so a double click cannot queue two validates', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+
+    expect((await app.inject({ method: 'POST', url: revalidateUrl(runId), payload: {} })).statusCode).toBe(202);
+    expect((await app.inject({ method: 'POST', url: revalidateUrl(runId), payload: {} })).statusCode).toBe(409);
   });
 });

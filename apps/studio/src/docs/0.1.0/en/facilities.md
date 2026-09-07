@@ -52,7 +52,7 @@ the remaining rows vanish, and it no longer re-runs the check by itself. Ask for
 when you are ready.
 
 Each step shows one button, for the action that moves you forward. Every other action, including
-Preview, the three re-upload options, Cancel, and Close, stays in the page's `⋯` menu.
+Preview, the three check-again options, Cancel, and Close, stays in the page's `⋯` menu.
 
 You cannot click a step you have not reached yet, and you cannot go back to an earlier step while
 a background check is running. After you upload a file on Mapping, the wizard moves you to Review
@@ -98,8 +98,10 @@ you turn on **Allow unrecognized columns**, which carries it into `extras` the s
 >
 > **With no column map at all, an unrecognised column still stops the file.** Nothing has told the
 > importer whether you wanted that column, and it will not guess, because a column silently dropped
-> is worse than a file refused. Take the offered re-upload that keeps unrecognised columns as extra
-> data. It has to be set before the file is read, so it cannot be added at the confirm step.
+> is worse than a file refused. Take the offered option that checks the file again keeping
+> unrecognised columns as extra data. It has to be set before the file is read, so it cannot be
+> added at the confirm step. **The file you already uploaded is reused**, so a national register is
+> never sent twice to change one setting.
 >
 > A JSONL release never stops for this: each line names its own fields.
 

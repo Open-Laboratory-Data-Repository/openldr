@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { sql, type Kysely } from 'kysely';
 import { makeMigratedDb, makeMigratedDbWithMem } from './migrations/internal/test-helpers';
 import { createFacilityImportRunStore } from './facility-import-run-store';
-import { ALL_RUN_STATES, RUNNING_RUN_STATES, APPLY_PHASE, type FacilityImportRunStatus } from './facility-import-run-states';
+import { ALL_RUN_STATES, RUNNING_RUN_STATES, APPLY_PHASE, VALIDATE_PHASE, type FacilityImportRunStatus } from './facility-import-run-states';
 import type { InternalSchema } from './schema/internal';
 
 const base = { nationalSystem: 'urn:tz:hfr', sourceFormat: 'csv' as const, fileHash: 'h1', byteSize: 42, options: {} };
@@ -449,5 +449,60 @@ describe('createFacilityImportRunStore', () => {
     expect(stored.status).toBe('validating');
     expect(stored.error).toBeNull();
     expect(stored.active_key).toBe('urn:tz:hfr');
+  });
+});
+
+describe('requeueForValidation', () => {
+  /** Uploaded, validated, parked for a decision: the one state a re-validate may start from. */
+  async function parkedRun(system: string) {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    const run = await store.startUpload({
+      ...upload, nationalSystem: system, options: { columnMap: { columns: { A: 'name' } } },
+    });
+    await store.claimNext(VALIDATE_PHASE.from, VALIDATE_PHASE.to);
+    await store.completeValidation(run.id, { parsed: 2 });
+    return { db, store, run };
+  }
+
+  it('moves a parked run back to the validate queue with new options', async () => {
+    const { db, store, run } = await parkedRun('urn:zm:mfl');
+
+    const ok = await store.requeueForValidation(run.id, 'awaiting_confirmation', {
+      columnMap: { columns: { B: 'name' } },
+    });
+
+    expect(ok).toBe(true);
+    const after = await store.get(run.id);
+    expect(after?.status).toBe(VALIDATE_PHASE.from);
+    expect((after?.options as { columnMap: unknown }).columnMap).toEqual({ columns: { B: 'name' } });
+    // The previous validate's verdict is not the new one's. Left in place it would read as the
+    // answer to a question that has not been asked yet.
+    expect(after?.summary).toBeNull();
+    // ⛔ And it still holds the register. It never reached a terminal state, so releasing and
+    // re-taking `active_key` would open a window for a second import of the same register.
+    expect((await row(db, run.id)).active_key).toBe('urn:zm:mfl');
+  });
+
+  it('⛔ updates nothing for a second caller, so two clicks cannot queue two validates', async () => {
+    const { store, run } = await parkedRun('urn:zm:mfl2');
+    expect(await store.requeueForValidation(run.id, 'awaiting_confirmation', {})).toBe(true);
+    expect(await store.requeueForValidation(run.id, 'awaiting_confirmation', {})).toBe(false);
+  });
+
+  it('⛔ keeps the blob key, which is the whole point of not re-uploading', async () => {
+    const { store, run } = await parkedRun('urn:zm:mfl3');
+    await store.requeueForValidation(run.id, 'awaiting_confirmation', {});
+    expect((await store.get(run.id))?.blobKey).toBe(upload.blobKey);
+  });
+
+  it('⛔ writes options ONLY, so an options blob cannot rewrite the run identity', async () => {
+    const { store, run } = await parkedRun('urn:zm:mfl4');
+    await store.requeueForValidation(run.id, 'awaiting_confirmation', {
+      nationalSystem: 'urn:tz:hfr', sourceFormat: 'jsonl',
+    });
+    const after = await store.get(run.id);
+    expect(after?.nationalSystem).toBe('urn:zm:mfl4');
+    expect(after?.sourceFormat).toBe('csv');
   });
 });

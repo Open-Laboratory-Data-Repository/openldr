@@ -28,6 +28,8 @@ vi.mock('@/api', async (orig) => {
     suggestColumnMap: vi.fn(),
     suggestValueMappings: vi.fn(),
     writeFacilityValueMappings: vi.fn(),
+    // Plan B: the run door checks a stored file again instead of sending it twice.
+    revalidateFacilityImportRun: vi.fn(),
   };
 });
 
@@ -208,6 +210,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.suggestColumnMap).mockResolvedValue({ headers: [], columns: [] });
     mocked(api.suggestValueMappings).mockResolvedValue({ values: [], notValidated: false });
     mocked(api.writeFacilityValueMappings).mockResolvedValue({ written: 0, superseded: [] });
+    mocked(api.revalidateFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'queued' });
   });
 
   // ── B1 Task 9: the national-system picklist ─────────────────────────────────────────────────────
@@ -1736,10 +1739,10 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByRole('button', { name: /3\s*Review/ })).toHaveAttribute('aria-current', 'step');
     // ⛔ …and the tick that could only 409 is gone, replaced by the path that actually works.
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/has to be set before validation/i)).toBeInTheDocument();
+    expect(screen.getByText(/the check has to run again with it/i)).toBeInTheDocument();
     openMenu();
     // ⛔ The completable path IS offered...
-    expect(screen.getByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Check again keeping unrecognised columns' })).toBeInTheDocument();
     // ...and the one that could only ever write nothing is NOT. `canConfirmRun` reads the same
     // `blocked` verdict the confirm route enforces, so the studio and the server now agree about
     // this file instead of the studio offering what the server would refuse.
@@ -1826,16 +1829,16 @@ describe('ImportFacilitiesSheet', () => {
       1, expect.objectContaining({ allowUnknownColumns: false }), expect.any(Function),
     );
 
-    clickMenuItem('Re-upload keeping unrecognised columns');
+    clickMenuItem('Check again keeping unrecognised columns');
 
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
-    // ⛔ The SAME file and register, with the override on the UPLOAD — the request that runs before
-    // the classification, so the summary the operator reviews next is the one that gets applied.
-    expect(api.uploadFacilityImport).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ nationalSystem: 'HFR', format: 'csv', allowUnknownColumns: true }),
-      expect.any(Function),
+    // ⛔ THE FILE IS NOT SENT AGAIN. Plan B's route re-checks the blob the run already stored, so
+    // the override reaches the validate that produces the next summary without a second upload of a
+    // register that can run to tens of thousands of rows.
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
+    expect(api.revalidateFacilityImportRun).toHaveBeenCalledWith(
+      'run-b1', expect.objectContaining({ allowUnknownColumns: true }),
     );
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
     // ⛔ And the superseded run's summary — with its Confirm — leaves the screen rather than inviting
     // a decision about a run the register no longer belongs to.
     expect(await screen.findByText(/checking the import run/i)).toBeInTheDocument();
@@ -1867,7 +1870,7 @@ describe('ImportFacilitiesSheet', () => {
     // other non-blocking case takes. The test's own name already promised exactly that.
     expect(await screen.findByText(/Kept as extra data/i)).toBeInTheDocument();
     expect(screen.queryByText(/Nothing is imported unless you opt in/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/has to be set before validation/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the check has to run again with it/i)).not.toBeInTheDocument();
     // Confirm is Review's visible BUTTON now, so it is asserted before the menu opens: Radix marks
     // the rest of the page aria-hidden while a modal menu is up, which would hide it.
     expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
@@ -1875,7 +1878,7 @@ describe('ImportFacilitiesSheet', () => {
     // The positive control, so the absences below are not those of a menu that never opened. Cancel
     // is always in this menu, which makes it the right control now that Confirm has left it.
     expect(screen.getByRole('menuitem', { name: 'Cancel this import' })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Check again keeping unrecognised columns' })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
   });
 
@@ -1883,37 +1886,40 @@ describe('ImportFacilitiesSheet', () => {
   // with it there is nothing left to re-upload for — the box says so instead of offering a second
   // identical upload.
   it('A2b: the invalid-coordinate override is a re-upload too, and disappears once the run already ran with it', async () => {
-    mocked(api.uploadFacilityImport)
-      .mockResolvedValueOnce({ runId: 'run-b1' })
-      .mockResolvedValueOnce({ runId: 'run-b2' });
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
     const summary = baseResult({
       parsed: 2, create: 2,
       invalid: [{ line: 3, field: 'latitude', reason: 'out_of_range', raw: '999' }],
     });
+    // ⛔ ONE RUN, not two. A re-check reuses the run and its stored file, so the second poll answers
+    // for the SAME id with the override now recorded in its options. Modelling it as a second run
+    // would be modelling the re-upload this route replaced.
     mocked(api.getFacilityImportRun)
       .mockResolvedValueOnce(runView({ id: 'run-b1', status: 'awaiting_confirmation', summary }))
       .mockResolvedValue(runView({
-        id: 'run-b2', status: 'awaiting_confirmation', summary,
+        id: 'run-b1', status: 'awaiting_confirmation', summary,
         options: { nationalSystem: 'HFR', allowInvalidCoordinates: true },
       }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
     await uploadNow();
-    expect(await screen.findByText(/has to be set before validation/i)).toBeInTheDocument();
+    expect(await screen.findByText(/the check has to run again with it/i)).toBeInTheDocument();
 
-    clickMenuItem('Re-upload keeping rows with an invalid coordinate');
+    clickMenuItem('Check again keeping rows with an invalid coordinate');
 
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
-    expect(api.uploadFacilityImport).toHaveBeenNthCalledWith(
-      2, expect.objectContaining({ allowInvalidCoordinates: true }), expect.any(Function),
+    // Re-checked, not re-uploaded: the stored file is reused.
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
+    expect(api.revalidateFacilityImportRun).toHaveBeenCalledWith(
+      'run-b1', expect.objectContaining({ allowInvalidCoordinates: true }),
     );
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
 
     // The second run's stored options say the validate ran with it, so the notice changes and the
-    // menu item retires — a second identical upload would change nothing.
+    // menu item retires — a second identical check would change nothing.
     expect(await screen.findByText(/already ran with that option on/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Re-upload keeping rows with an invalid coordinate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Check again keeping rows with an invalid coordinate' })).not.toBeInTheDocument();
   });
 
   // …and the second reachable shape: a file whose every row was quarantined parses 0 rows too, with
@@ -2252,7 +2258,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByLabelText('Zone')).toBeInTheDocument();
 
     openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Re-upload with the corrected map' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Check again with the corrected map' })).toBeInTheDocument();
   });
 
   it('⛔ re-uploads the corrected map, so the validate reviewed is the one the operator fixed', async () => {
@@ -2293,12 +2299,16 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByLabelText('Zone'));
     fireEvent.click(await screen.findByRole('option', { name: 'Keep as extra data' }));
 
-    clickMenuItem('Re-upload with the corrected map');
+    clickMenuItem('Check again with the corrected map');
 
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
-    expect(mocked(api.uploadFacilityImport).mock.calls[1][0]).toEqual(
+    // ⛔ The CORRECTED MAP reaches the validate, and the file does not move: this is the case plan
+    // B exists for, since a column-map refusal on a national register used to cost a full re-upload
+    // to fix one header.
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
+    expect(mocked(api.revalidateFacilityImportRun).mock.calls[0][1]).toEqual(
       expect.objectContaining({ columnMap: expect.objectContaining({ extras: ['Zone'] }) }),
     );
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
   describe('the step shell', () => {
@@ -2543,7 +2553,7 @@ describe('ImportFacilitiesSheet', () => {
         expect(screen.getByText(/"MFL Code 2" and "MFL Code" both map to "national_code"/)).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
       });
-      expect(screen.getByRole('button', { name: 'Re-upload with the corrected map' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Check again with the corrected map' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
     });
   });
@@ -2596,7 +2606,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByText(/Nothing is imported unless you opt in/i)).not.toBeInTheDocument();
     openMenu();
     // Nothing to re-upload FOR: the file was not refused.
-    expect(screen.queryByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Check again keeping unrecognised columns' })).not.toBeInTheDocument();
   });
 
   it('still warns, and still offers the override, when NO map decided them', async () => {
@@ -2617,6 +2627,6 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/Nothing is imported unless you opt in/i)).toBeInTheDocument();
     expect(screen.queryByText(/Kept as extra data/i)).not.toBeInTheDocument();
     openMenu();
-    expect(screen.getByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Check again keeping unrecognised columns' })).toBeInTheDocument();
   });
 });

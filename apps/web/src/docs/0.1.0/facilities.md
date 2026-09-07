@@ -60,7 +60,10 @@ the column map, fixed values, what to do with conflicts, absences and deletions,
 map), and Review (a read-only report of what the check found, plus Apply).
 
 Mapping decides; Review reports. If a check turns up something worth changing, go back to Mapping,
-change it, and come forward again. Changing anything on Mapping discards the last Review, so a
+change it, and come forward again. **A file uploaded through the background door is checked again in
+place**, against the copy the server already holds, so a national register is never sent twice to
+fix one column map. Headless installs get the same thing as
+`openldr facilities import-run-revalidate <id> --column-map <file.json>`. Changing anything on Mapping discards the last Review, so a
 summary that no longer matches what is about to be imported is never left on screen. The conflict,
 absent and deleted choices are the exception: they are applied at import time rather than when the
 file is read, so they cannot change what a check found and do not discard it.

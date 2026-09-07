@@ -58,7 +58,7 @@ correspondance ne fait pas disparaître les lignes restantes, et ne relance plus
 tout seul. Demandez la vérification suivante quand vous êtes prêt.
 
 Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont Aperçu, les
-trois options de réenvoi, Annuler et Fermer, reste dans le menu `⋯` de la page.
+trois options de nouvelle vérification, Annuler et Fermer, reste dans le menu `⋯` de la page.
 
 Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
 étape antérieure pendant qu'une vérification en arrière-plan est en cours. Après un import de
@@ -112,9 +112,11 @@ supplémentaire ».
 >
 > **Sans aucun mappage, une colonne non reconnue arrête toujours le fichier.** Rien n'a indiqué à
 > l'importateur si vous vouliez cette colonne, et il ne devinera pas : une colonne perdue en silence
-> est pire qu'un fichier refusé. Utilisez le rechargement proposé, qui conserve les colonnes non
-> reconnues en données supplémentaires. Cette option doit être activée avant la lecture du fichier,
-> elle ne peut donc pas être ajoutée à l'étape de confirmation.
+> est pire qu'un fichier refusé. Utilisez l'option proposée qui vérifie de nouveau le fichier en
+> conservant les colonnes non reconnues en données supplémentaires. Cette option doit être activée
+> avant la lecture du fichier, elle ne peut donc pas être ajoutée à l'étape de confirmation.
+> **Le fichier déjà envoyé est réutilisé** : un registre national n'est jamais envoyé deux fois
+> pour changer un réglage.
 >
 > Une version JSONL ne s'arrête jamais pour cela : chaque ligne nomme ses propres champs.
 

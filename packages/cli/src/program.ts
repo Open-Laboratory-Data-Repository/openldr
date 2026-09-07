@@ -26,7 +26,8 @@ import { runErrorsList } from './errors';
 import { runUpdateCheck, UPDATE_ERROR_EXIT } from './update';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
-  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
+  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
+  runFacilitiesImportSources,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
   runFacilitiesDelete,
 } from './facilities';
@@ -385,6 +386,20 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (id: string, opts: { json: boolean }) => {
       process.exitCode = await runFacilitiesImportRunCancel(id, opts);
+    });
+  facilities
+    .command('import-run-revalidate <id>')
+    .description('Check an already-uploaded facility import again under a new column map, WITHOUT sending the file again. Only a run waiting for a decision can be re-checked. Exit 0 = queued for a fresh check, 1 = refused (no such run, wrong state, or nothing stored).')
+    .option('--column-map <file>', 'JSON column map to check the stored file against')
+    .option('--allow-unknown-columns', 'keep columns the contract does not name', false)
+    .option('--allow-invalid-coordinates', 'keep rows whose coordinates could not be read', false)
+    .option('--allow-malformed-rows', 'let the import proceed past rows that could not be read', false)
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (id: string, opts: {
+      columnMap?: string; allowUnknownColumns: boolean; allowInvalidCoordinates: boolean;
+      allowMalformedRows: boolean; json: boolean;
+    }) => {
+      process.exitCode = await runFacilitiesImportRunRevalidate(id, opts);
     });
   facilities
     .command('scan-observed')
