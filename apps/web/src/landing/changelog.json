@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "3133fc21",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A value that differs only by case or spelling resolves to its code"
+        },
+        {
           "hash": "c4c71e7d",
           "type": "feat",
           "scope": "facilities",
