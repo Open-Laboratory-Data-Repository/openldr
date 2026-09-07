@@ -18,6 +18,7 @@ import {
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
+  revalidateImportRun,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
   type ValueMappingEntry,
 } from '@openldr/bootstrap';
@@ -26,6 +27,7 @@ import {
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
   createFacilityRegisterSourceStore, resolveFacilityRegisterForImport,
   SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable, APPLY_PHASE,
+  VALIDATE_PHASE,
 } from '@openldr/db';
 import type {
   FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun, FacilityImportRunStatus, FacilityListOptions,
@@ -298,6 +300,16 @@ const ValueMappingsSchema = z.object({
   // see this route's own comment for why.
   nationalSystem: z.string().min(1),
   mappings: z.array(ValueMappingEntrySchema),
+});
+
+/** The re-validate body: the operator-supplied parts of a run's options, and nothing that says
+ *  WHICH FILE or WHICH REGISTER. `revalidateImportRun` drops identity keys anyway; this refuses the
+ *  obviously-wrong shapes at the door so the shared function only ever sees a sane object. */
+const RevalidateSchema = z.object({
+  columnMap: ColumnMapSchema.optional(),
+  allowUnknownColumns: z.boolean().optional(),
+  allowInvalidCoordinates: z.boolean().optional(),
+  allowMalformedRows: z.boolean().optional(),
 });
 
 const ConfirmSchema = z.object({
@@ -2808,6 +2820,43 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // ⛔ 409 for a terminal run rather than a cheerful no-op: a cancel arriving after the write is a
   // request that CANNOT be honoured, and an applied run stays applied. Reporting success would tell
   // an operator a national register had not been imported when it had.
+  // Check a file that is ALREADY UPLOADED again, under a new column map, without sending it again.
+  //
+  // ⛔ `MANAGE`, and that is a BODY-SIZE decision rather than an access one. `MANAGE`, `IMPORT` and
+  // `UPLOAD` in this file are the SAME capability (`facilities.manage`); they differ only in
+  // `bodyLimit`. This body is a column map and a few booleans, not a file, so it takes the plain
+  // guard. Do not reach for `UPLOAD` by analogy with the upload route: that raises the limit to the
+  // file cap for nothing.
+  //
+  // ⛔ WHY THIS EXISTS. Without it the only way to re-check a national register under a different
+  // map is to send the whole file again, and the studio's own "re-upload keeping unrecognised
+  // columns" affordance exists only because this route was missing.
+  app.post('/api/facilities/import/runs/:id/revalidate', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const p = RevalidateSchema.safeParse(req.body ?? {});
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    // The decision itself is `@openldr/bootstrap`'s, shared with the CLI, so the two doors cannot
+    // answer "may this run be checked again?" differently (AGENTS.md §6 item 2).
+    const outcome = await revalidateImportRun(importRuns, { runId: id, options: p.data });
+    if (!outcome.ok) {
+      reply.code(outcome.code === 'not-found' ? 404 : 409);
+      return { error: outcome.message };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'facility.import.revalidated',
+      entityType: 'facility',
+      entityId: id,
+      before: null,
+      after: null,
+      metadata: { runId: id },
+    });
+
+    reply.code(202);
+    return { runId: id, status: VALIDATE_PHASE.from };
+  });
+
   app.post('/api/facilities/import/runs/:id/cancel', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
 
