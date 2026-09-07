@@ -91,6 +91,14 @@ export interface FacilityImportRunStore {
    *
    *  ⚠ `active_key` is deliberately KEPT: the apply has not run, and until it does this run still
    *  owns the register. The terminal write that ends the apply releases it. */
+  /** Put a parked run back at the head of the VALIDATE queue with new operator-supplied options,
+   *  against the file it already stored. The guarded-update twin of `confirm` above: `false` means
+   *  the run was not in `expectedStatus` any more, so a second caller queues nothing.
+   *
+   *  ⛔ This is what makes changing a column map cost nothing on the streamed door. Without it the
+   *  only way to re-check a national register under a different map is to send the whole file
+   *  again. */
+  requeueForValidation(id: string, expectedStatus: FacilityImportRunStatus, options: unknown): Promise<boolean>;
   confirm(id: string, expectedStatus: FacilityImportRunStatus, options: unknown): Promise<boolean>;
   /** Ask for a run to stop.
    *
@@ -282,6 +290,48 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
         } as never)
         .where('id', '=', id)
         .where('status', '=', VALIDATE_PHASE.to)
+        .executeTakeFirst();
+      return Number(res?.numUpdatedRows ?? 0) > 0;
+    },
+
+    async requeueForValidation(id, expectedStatus, options) {
+      // ⛔ `VALIDATE_PHASE.from`, NEVER the literal `'queued'`. The worker claims with
+      // `claimNext(VALIDATE_PHASE.from, VALIDATE_PHASE.to)`, and spelled separately in the two
+      // packages the two can drift silently: the route would answer 202 and no worker would ever
+      // look at the run, which would then hold its register until a sweep freed it. Same reasoning
+      // `confirm` below states for `APPLY_PHASE.from`.
+      //
+      // ⛔ COMPARE-AND-SWAP on the status the caller observed, exactly like `confirm`. The route
+      // READ the run in an earlier statement, and between that read and this write a newer upload's
+      // supersede can fail it and release its `active_key`. `false` means that happened.
+      //
+      // ⛔ WRITES `options` AND CLEARS THE LAST VERDICT, NOTHING ELSE. `national_system`,
+      // `source_format`, `blob_key`, `file_hash` and `byte_size` are the run's identity and its
+      // stored file: an options blob must not be able to move a run onto another register. The
+      // worker already refuses to import under a register a run does not name
+      // (`facility-import-worker.ts`); this keeps the row itself honest so that refusal never has
+      // to fire.
+      //
+      // ⛔ `summary`, `previewed_at` and `error` all belong to the validate that already ran. Left
+      // in place, the summary would read as the answer to a question that has not been asked yet,
+      // and `previewed_at` is the watermark the apply's conflict detection is measured against.
+      //
+      // ⛔ `active_key` IS NOT TOUCHED. The run has held the register since `startUpload` and goes
+      // on holding it: it never reaches a terminal state here. Releasing and re-taking it would open
+      // a window for a second import of the same register to slip in.
+      const res = await db.updateTable('facility_import_runs')
+        .set({
+          status: VALIDATE_PHASE.from,
+          options: JSON.stringify(options) as never,
+          summary: null as never,
+          previewed_at: null as never,
+          error: null as never,
+          phase: null as never,
+          processed: 0,
+          total: null as never,
+        } as never)
+        .where('id', '=', id)
+        .where('status', '=', expectedStatus)
         .executeTakeFirst();
       return Number(res?.numUpdatedRows ?? 0) > 0;
     },
