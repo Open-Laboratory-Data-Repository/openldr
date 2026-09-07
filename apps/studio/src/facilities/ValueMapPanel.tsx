@@ -1,11 +1,8 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MoreHorizontal } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -48,6 +45,19 @@ export interface ValueMapPanelProps {
  *  `suggestions` prop for this panel, and each field's value set is looked up per-field here rather
  *  than by a parent that would otherwise have to know three separate value-set identities.
  *
+ *  ⛔ SAVE IS A VISIBLE BUTTON, and that is a deliberate exception to AGENTS.md §5, not a lapse.
+ *  It shipped as a 6 by 6 ghost `⋯` icon inside an amber warning box. The operator ran the real
+ *  Zambia export, saw twenty-three unmapped values, and asked "how do these get mapped". They
+ *  already could. The action was simply invisible. Slice 4 of
+ *  `docs/superpowers/specs/2026-09-06-facility-import-workflow-redesign-design.md` authorises this
+ *  one button by name.
+ *
+ *  This is the SECOND bend in that rule on this sheet and it is narrower than the first. Decision 1
+ *  of the same spec bends §5 for the action that ADVANCES a step; this is not that, since the step
+ *  is advanced by `Upload and validate` in the sheet's pinned footer. Neither bend is the rule
+ *  weakening. Every other action in this sheet, and everywhere else in the app, stays in a `⋯`
+ *  menu.
+ *
  *  ⛔ AN UNMAPPED VALUE NEVER BLOCKS, and this panel must never make it look like it does — existing,
  *  correct behaviour: the raw string is written through exactly as before this panel existed
  *  (`facility-controlled-fields.ts:155`). Nothing here disables Save, and nothing here refuses to
@@ -74,8 +84,6 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
   const [failedFields, setFailedFields] = useState<Set<ControlledField>>(new Set());
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [savedCount, setSavedCount] = useState<number | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   // Fetch ranked candidates for every field with unmapped values, once per DISTINCT set of values —
   // keyed on a signature string, the same idiom `ColumnMapStep`'s own header-seed effect uses (a
@@ -101,8 +109,6 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
   // guarding against a re-run the dependency array had already ruled out, and paid for it with a
   // failure mode the dependency array does not have.
   useEffect(() => {
-    setSavedCount(null);
-    setError(null);
     setUnseededFields(new Set());
     setFailedFields(new Set());
     let cancelled = false;
@@ -160,7 +166,6 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
 
   const handleSave = async (): Promise<void> => {
     setSaving(true);
-    setError(null);
     try {
       const entries = mappingsToSave();
       // ⛔ Saving with nothing chosen still completes — never disabled, never refused. A value the
@@ -169,11 +174,15 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
       const result = entries.length > 0
         ? await writeFacilityValueMappings(nationalSystem, entries)
         : { written: 0, superseded: [] };
-      setSavedCount(result.written);
-      // Mappings only take effect on a fresh parse — the caller re-runs the preview.
+      // ⛔ A TOAST, AND ONLY FOR THE OUTCOME OF THIS CLICK. `loadFailed` and `noValueSet` below
+      // stay inline on purpose: they describe a STANDING condition of the pickers on screen, and a
+      // message that vanishes on a timer would undo the fix that made those two causes
+      // distinguishable in the first place.
+      toast.success(t('facilities.import.valueMap.savedCount', { count: result.written }));
+      // Mappings only take effect on a fresh parse, so the caller retires the summary on screen.
       onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
@@ -185,27 +194,17 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
     <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <p className="font-medium">{t('facilities.import.unmappedTitle')}</p>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-amber-700"
-              aria-label={t('facilities.import.valueMap.actions')}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled={saving} onSelect={() => { void handleSave(); }}>
-              {saving ? t('facilities.import.valueMap.saving') : t('facilities.import.valueMap.saveAction')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* ⛔ NEVER DISABLED ON "nothing chosen". A value the operator has not decided about yet is
+            exactly what this panel exists to let through unblocked, and a greyed-out Save would say
+            the opposite. `saving` alone gates it, against a double submit. */}
+        <Button
+          size="sm" className="shrink-0 text-xs"
+          disabled={saving}
+          onClick={() => { void handleSave(); }}
+        >
+          {saving ? t('facilities.import.valueMap.saving') : t('facilities.import.valueMap.saveAction')}
+        </Button>
       </div>
-
-      {error && <p className="text-destructive">{error}</p>}
-      {savedCount !== null && (
-        <p className="text-emerald-700">{t('facilities.import.valueMap.savedCount', { count: savedCount })}</p>
-      )}
 
       {fields.map((field) => (
         <div key={field} className="space-y-2">
