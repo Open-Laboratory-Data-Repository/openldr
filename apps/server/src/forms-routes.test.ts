@@ -602,7 +602,8 @@ describe('forms routes', () => {
   });
 
   it('restores a version and audits it as form.restore', async () => {
-    const app = authedApp(fakeCtx());
+    const ctx = fakeCtx();
+    const app = authedApp(ctx);
     const created = await app.inject({
       method: 'POST', url: '/api/forms',
       payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
@@ -614,6 +615,10 @@ describe('forms routes', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().id).toBe(id);
+    expect(ctx.audits.find((event) => event.action === 'form.restore')).toMatchObject({
+      entityId: id,
+      metadata: { sourceVersion: 1 },
+    });
   });
 
   it('rejects a version path segment that is not a positive integer', async () => {
