@@ -253,6 +253,28 @@ describe('resolveControlledFields: the four ordered steps', () => {
     expect(res.unmapped.level).toEqual(['a center']);
   });
 
+  // ⛔ A CONCEPT WITH NO `display` KEY AT ALL, not a null one. `ExpandedConcept` says
+  // `display: string | null`, so a real expansion always carries the key and the strict
+  // `=== null` guard this replaced was true of every production path. A caller building the
+  // shape by hand omits it, and the loop then handed `undefined` to `normaliseControlledValue`
+  // and threw — reaching the facility EDIT route as a 500 where its own answer was a 400.
+  // Found by `apps/server`'s "still refuses when the edit CHANGES the level", which had been
+  // served from turbo's cache since the fold shipped.
+  it('a concept with no display at all does not throw, and its code still matches', async () => {
+    const admin = fakeAdmin({
+      valueSets: { [LEVEL]: [{ code: 'health-center' } as { code: string; display?: string | null }] },
+    });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [
+      rec({ level: 'HEALTH-CENTER' }),
+      rec({ level: 'Health Center' }),
+    ]);
+    // The code still folds on case, which is the only thing a display-less concept can offer.
+    expect(res.mapped.level.get('HEALTH-CENTER')).toBe('health-center');
+    // And the display spelling has nothing to match against, so it goes to the operator. That is
+    // the correct answer, not a defect: this test is here for the THROW, not for this value.
+    expect(res.unmapped.level).toEqual(['Health Center']);
+  });
+
   it('a collision does not stop other values resolving', async () => {
     const admin = fakeAdmin({
       valueSets: {
