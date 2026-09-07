@@ -197,9 +197,9 @@ const ACCEPTED_FILE_EXTENSIONS = ['.csv', '.jsonl'] as const;
  *  sends the `File` itself, so a 64 MiB national register no longer enters this tab at all.
  *
  *  ⛔ A header row longer than this truncates, and a truncated line reaches the same 400 the
- *  route already returns for a header row it cannot read. The contract has 16 fields and a real
- *  register carries perhaps 30 columns, so a header runs to hundreds of bytes: this is a ceiling
- *  with a wide margin, not a measured fit. */
+ *  route already returns for a header row it cannot read. MEASURED on the real Zambia MFL export
+ *  (`packages/cli/src/__fixtures__/zm-mfl-head.csv`): 21 columns, 260 bytes. This is 252 times
+ *  that, so it is a ceiling with a very wide margin rather than a fit. */
 const HEAD_BYTES = 64 * 1024;
 
 /** A file size an operator can read. Mirrors `humanSize` in `pages/Terminology.tsx`: this sheet does
