@@ -258,6 +258,12 @@ export const pt: EnShape = {
     emptyTitle: 'Ainda não há formulários',
     noMatch: 'Nenhum formulário corresponde.',
     refresh: 'Atualizar',
+    toastPublished: '{{name}} publicado',
+    toastArchived: '{{name}} arquivado',
+    toastDrafted: '{{name}} devolvido a rascunho',
+    toastDeleted: '{{name}} eliminado',
+    toastDuplicated: '{{name}} duplicado como {{copy}}',
+    toastImported: '{{name}} importado',
   },
   settings: {
     title: 'Definições',

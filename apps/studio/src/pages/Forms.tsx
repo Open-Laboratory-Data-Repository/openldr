@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { ClipboardList, FileInput, MoreHorizontal } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
@@ -22,6 +23,13 @@ function formatDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString();
 }
+
+/** Confirmation-toast key for the status a row was just moved to. */
+const STATUS_TOAST_KEY: Record<FormStatus, string> = {
+  draft: 'forms.toastDrafted',
+  published: 'forms.toastPublished',
+  archived: 'forms.toastArchived',
+};
 
 function StatusBadge({ status }: { status: FormStatus }) {
   if (status === 'published') return <Badge className="border-transparent bg-emerald-500/15 text-emerald-700">Published</Badge>;
@@ -177,6 +185,7 @@ export function Forms() {
       });
       setRows((prev) => upsertForm(prev, toSummary(created)));
       table.setPage(0);
+      toast.success(t('forms.toastImported', { name: created.name }));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     }
@@ -187,6 +196,7 @@ export function Forms() {
     try {
       const updated = await setFormStatus(form.id, status);
       setRows((prev) => upsertForm(prev, toSummary(updated)));
+      toast.success(t(STATUS_TOAST_KEY[status], { name: updated.name }));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     }
@@ -197,6 +207,7 @@ export function Forms() {
     try {
       const updated = await publishForm(form.id, { versionLabel: form.versionLabel ?? null });
       setRows((prev) => upsertForm(prev, toSummary(updated)));
+      toast.success(t('forms.toastPublished', { name: updated.name }));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     }
@@ -208,6 +219,7 @@ export function Forms() {
       const copy = await duplicateForm(form.id);
       setRows((prev) => upsertForm(prev, toSummary(copy)));
       table.setPage(0);
+      toast.success(t('forms.toastDuplicated', { name: form.name, copy: copy.name }));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     }
@@ -228,6 +240,7 @@ export function Forms() {
     try {
       await deleteForm(deleting.id);
       setRows((prev) => prev.filter((row) => row.id !== deleting.id));
+      toast.success(t('forms.toastDeleted', { name: deleting.name }));
       setDeleting(null);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));

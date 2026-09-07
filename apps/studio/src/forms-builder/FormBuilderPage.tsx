@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { createForm, deleteForm, formQuestionnaireUrl, getForm, publishForm, setFormStatus, updateForm } from '../api';
+import { createForm, deleteForm, formQuestionnaireUrl, getForm, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, makeUniqueFieldId, newField } from './builderModel';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
@@ -179,7 +180,17 @@ export function FormBuilderPage(): JSX.Element {
   });
 
   // ── API actions ──────────────────────────────────────────────────────────────
-  const save = async () => {
+
+  /** The server's own message (via okJson/formatApiError) rather than a generic "failed". */
+  const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+
+  /**
+   * Write the on-screen draft and return what the server stored.
+   *
+   * Returns the saved form so a caller can act on the id in the same tick. `setFormId` will not
+   * have landed yet, so publish-after-create has to read the id from here, not from state.
+   */
+  const saveDraft = async (): Promise<FormDefinition> => {
     const effectiveName = schema.name.trim() || 'Untitled form';
     const nextSchema: FormSchema = { ...schema, name: effectiveName };
     const payload = {
@@ -195,30 +206,70 @@ export function FormBuilderPage(): JSX.Element {
       setFormId(saved.id);
       navigate(`/forms/${saved.id}/builder`, { replace: true });
     }
+    return saved;
   };
 
+  const save = async () => {
+    try {
+      const saved = await saveDraft();
+      toast.success(`Saved ${saved.name}`);
+    } catch (err) {
+      toast.error(messageOf(err));
+    }
+  };
+
+  /**
+   * Publish snapshots the STORED form (`publish()` in packages/forms/src/store.ts reads the row
+   * back inside its transaction), so the draft has to reach the server first. Publishing without
+   * this saved whatever was last stored and silently dropped every edit made since.
+   */
   const publish = async () => {
-    if (!formId) return;
-    const published = await publishForm(formId, { versionLabel: schema.versionLabel ?? null });
-    setStatus(published.status);
+    try {
+      const saved = await saveDraft();
+      const published = await publishForm(saved.id, { versionLabel: schema.versionLabel ?? null });
+      setStatus(published.status);
+      toast.success(`Published ${published.name}`);
+    } catch (err) {
+      toast.error(messageOf(err));
+    }
   };
 
   const archive = async () => {
     if (!formId) return;
-    const f = await setFormStatus(formId, 'archived');
-    setStatus(f.status);
+    try {
+      const f = await setFormStatus(formId, 'archived');
+      setStatus(f.status);
+      toast.success(`Archived ${f.name}`);
+    } catch (err) {
+      toast.error(messageOf(err));
+    }
   };
 
   // NOTE: a dedicated active-toggle endpoint is future work; for now disable maps to archived.
   const disable = async () => {
     if (!formId) return;
-    await setFormStatus(formId, 'archived');
+    try {
+      const f = await setFormStatus(formId, 'archived');
+      setStatus(f.status);
+      // Reports the archive, not the menu item. Disable has no endpoint of its own yet, so telling
+      // the operator "Disabled" while the status badge turns amber Archived would be a lie.
+      toast.success(`Archived ${f.name}`);
+    } catch (err) {
+      toast.error(messageOf(err));
+    }
   };
 
   const handleDelete = async () => {
     if (!formId) return;
-    await deleteForm(formId);
-    navigate('/forms');
+    try {
+      await deleteForm(formId);
+      // Toasted before the navigate: the Toaster lives at the app root, so the message survives the
+      // route change and is waiting on the list the operator lands on.
+      toast.success(`Deleted ${schema.name || 'form'}`);
+      navigate('/forms');
+    } catch (err) {
+      toast.error(messageOf(err));
+    }
   };
 
   const exportForm = () => {

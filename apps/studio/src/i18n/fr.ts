@@ -258,6 +258,12 @@ export const fr: EnShape = {
     emptyTitle: 'Aucun formulaire pour le moment',
     noMatch: 'Aucun formulaire ne correspond.',
     refresh: 'Actualiser',
+    toastPublished: '{{name}} publié',
+    toastArchived: '{{name}} archivé',
+    toastDrafted: '{{name}} repassé en brouillon',
+    toastDeleted: '{{name}} supprimé',
+    toastDuplicated: '{{name}} dupliqué en {{copy}}',
+    toastImported: '{{name}} importé',
   },
   settings: {
     title: 'Paramètres',
