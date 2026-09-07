@@ -70,8 +70,8 @@ dans le vocabulaire : il attend donc votre décision, et c'est bien le but.
 **Une correspondance que vous avez faite à la main l'emporte toujours.** Rien de décidé
 automatiquement ne passe outre une décision que vous avez prise.
 
-Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont Aperçu, les
-trois options de nouvelle vérification, Annuler et Fermer, reste dans le menu `⋯` de la page.
+Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont les trois
+options de nouvelle vérification, Annuler et Fermer, reste dans le menu `⋯` de la page.
 
 Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
 étape antérieure pendant qu'une vérification en arrière-plan est en cours. Après un import de

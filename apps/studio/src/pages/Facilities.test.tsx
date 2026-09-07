@@ -25,7 +25,11 @@ vi.mock('@/api', async (orig) => {
     bulkDeleteFacilities: vi.fn(),
     listPublishedForms: vi.fn(),
     getForm: vi.fn(),
-    importFacilitiesCsv: vi.fn(),
+    // The import sheet's own three clients. This page drives the sheet end to end, so all three
+    // have to be here: absent from this factory they are `undefined`, and every call throws.
+    uploadFacilityImport: vi.fn(),
+    getFacilityImportRun: vi.fn(),
+    confirmFacilityImportRun: vi.fn(),
     // The Observed tab (Task 9) is its own component with its own test suite
     // (ObservedTab.test.tsx) — stubbed here only so switching tabs on THIS page doesn't reach the
     // real network; Radix Tabs unmounts the inactive TabsContent, so these are untouched by every
@@ -54,7 +58,7 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
+import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
@@ -161,25 +165,6 @@ function openMenu(triggerName: string, probeItemName: string | RegExp) {
  *  BEFORE calling this — see `openMenu` above. */
 function clickMenuItem(triggerName: string, itemName: string | RegExp) {
   openMenu(triggerName, itemName);
-  fireEvent.click(screen.getByRole('menuitem', { name: itemName }));
-}
-
-/** Open the Import sheet's own ⋯ "Import actions" menu and click `itemName`, waiting first for it
- *  to be enabled (Preview stays `aria-disabled` until the async `File.text()` read resolves). Used
- *  only by the F1 test below, which — unlike ImportFacilitiesSheet.test.tsx's own suite — renders
- *  the REAL Facilities page around the sheet, because F1 is specifically about what happens to the
- *  sheet when its caller's `reload()` runs, something a standalone-sheet render can never exercise. */
-async function clickImportMenuItem(itemName: string | RegExp) {
-  // The import sheet has three numbered steps now, and its actions moved onto the step they belong
-  // to: Preview and Apply live on Mapping, not on Source. Advancing past Source first is what this
-  // helper has to do before opening the menu, the same shape ImportFacilitiesSheet.test.tsx uses in
-  // its own previewNow.
-  const continueButton = screen.queryByRole('button', { name: 'Continue' });
-  if (continueButton && !continueButton.hasAttribute('disabled')) fireEvent.click(continueButton);
-  const trigger = screen.getByRole('button', { name: 'Import actions' });
-  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
-  await waitFor(() => expect(screen.getByRole('menuitem', { name: itemName })).not.toHaveAttribute('aria-disabled', 'true'));
   fireEvent.click(screen.getByRole('menuitem', { name: itemName }));
 }
 
@@ -463,32 +448,44 @@ describe('Facilities page', () => {
     listFacilitiesMock
       .mockResolvedValueOnce(makePage([])) // initial load
       .mockResolvedValueOnce(makePage([sampleFacility])); // background reload triggered by onImported
-    // A2a (FAC-P1-03/05): the sheet now reads the server's full reconciliation shape (`create`/
+    // A2a (FAC-P1-03/05): the sheet reads the server's full reconciliation shape (`create`/
     // `changed`/`unchanged`/`conflict`/`absent`/`deleted`/`samples`/`written`/`runId`/
-    // `knownNationalSystem`), not just the old flat `created`/`updated` — see
+    // `knownNationalSystem`), not the old flat `created`/`updated` — see
     // ImportFacilitiesSheet.test.tsx's own `baseResult` helper, mirrored here since this test drives
     // the sheet through the real Facilities page rather than standalone.
     // CT-3 (whole-branch review): Wave A's new fields (facility-import.ts's `FacilityImportResult`)
     // — release provenance and controlled-field warnings, both empty for this plain CSV fixture.
-    (importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({
-        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [], duplicates: 0,
-        blocked: false, blockedReason: null,
-        create: 3, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
-        samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
-        written: { created: 0, updated: 0, retired: 0 }, runId: 'run-1', knownNationalSystem: true,
-        meta: null, countMismatch: [], releaseVersion: null,
-        unmapped: { level: [], status: [], country: [] }, notValidated: [],
-      })
-      .mockResolvedValueOnce({
-        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [], duplicates: 0,
-        blocked: false, blockedReason: null,
-        create: 2, changed: 1, unchanged: 0, conflict: null, absent: null, deleted: 0,
-        samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
-        written: { created: 2, updated: 1, retired: 0 }, runId: 'run-1', knownNationalSystem: true,
-        meta: null, countMismatch: [], releaseVersion: null,
-        unmapped: { level: [], status: [], country: [] }, notValidated: [],
-      });
+    const VALIDATED = {
+      parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [], duplicates: 0,
+      blocked: false, blockedReason: null,
+      create: 3, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
+      samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
+      written: { created: 0, updated: 0, retired: 0 }, runId: 'run-1', knownNationalSystem: true,
+      meta: null, countMismatch: [], releaseVersion: null,
+      unmapped: { level: [], status: [], country: [] }, notValidated: [],
+    };
+    // The apply's own result. `create`/`changed` describe what it wrote, which is what the sheet
+    // reports once the run reaches `applied`.
+    const APPLIED = { ...VALIDATED, create: 2, changed: 1, written: { created: 2, updated: 1, retired: 0 } };
+    // One `facility_import_runs` row as the run route answers it. Mirrored from
+    // ImportFacilitiesSheet.test.tsx's `runView`, the same "mirrored, not shared" note the fixtures
+    // above already carry: this file does not import that suite's helpers.
+    const runViewFixture = (o: Record<string, unknown>) => ({
+      id: 'run-1', nationalSystem: 'HFR', sourceFormat: 'csv',
+      blobKey: 'facility-import/hfr/abc.csv', fileHash: 'deadbeef', byteSize: 42,
+      releaseVersion: null, releasePublishedAt: null,
+      declaredRowCount: null, declaredDeletionCount: null,
+      status: 'queued', phase: null, processed: 0, total: null,
+      previewedAt: null, summary: null, options: null, error: null,
+      cancelRequested: false, requestedBy: 'op-1',
+      createdAt: '2026-08-10T09:00:00.000Z', startedAt: null, finishedAt: null,
+      ...o,
+    });
+    (uploadFacilityImport as ReturnType<typeof vi.fn>).mockResolvedValue({ runId: 'run-1' });
+    (getFacilityImportRun as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(runViewFixture({ status: 'awaiting_confirmation', phase: 'validated', summary: VALIDATED }))
+      .mockResolvedValue(runViewFixture({ status: 'applied', summary: APPLIED }));
+    (confirmFacilityImportRun as ReturnType<typeof vi.fn>).mockResolvedValue({ runId: 'run-1', status: 'confirmed' });
     show();
     await waitFor(() => expect(screen.getByText(/no facilities yet/i)).toBeInTheDocument());
 
@@ -506,14 +503,14 @@ describe('Facilities page', () => {
     fireEvent.click(nationalSystemTrigger);
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
-    await clickImportMenuItem(/^preview$/i);
-    await waitFor(() => expect(importFacilitiesCsv).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Upload and validate' }));
+    await waitFor(() => expect(uploadFacilityImport).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
 
-    await clickImportMenuItem(/^apply$/i);
-    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm import' }));
 
-    await waitFor(() => expect(importFacilitiesCsv).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(listFacilities).toHaveBeenCalledTimes(2));
 
     // The sheet must still be showing ITS OWN success confirmation after the background reload

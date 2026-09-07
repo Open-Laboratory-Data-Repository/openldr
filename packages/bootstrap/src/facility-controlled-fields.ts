@@ -179,7 +179,14 @@ export async function resolveControlledFields(
     const poisoned = new Set<string>();
     for (const c of codes) {
       for (const token of [c.code, c.display]) {
-        if (token === null || token === '') continue;
+        // ⛔ LOOSE `== null`, DELIBERATELY: it catches `undefined` as well as `null`. The contract
+        // says `display: string | null` (`ExpandedConcept`, packages/db/src/value-set-expander.ts),
+        // so a real expansion never yields `undefined` and the strict check was true of production.
+        // A caller building the shape by hand can omit the key entirely, and then this fell through
+        // to `normaliseControlledValue(undefined)` and threw "Cannot read properties of undefined
+        // (reading 'trim')" — a 500 where the route's own answer was a 400. Absence is absence
+        // however it is spelled, which is what the comment above already says this loop means.
+        if (token == null || token === '') continue;
         const key = normaliseControlledValue(token);
         const seen = byKey.get(key);
         if (seen !== undefined && seen !== c.code) { poisoned.add(key); continue; }

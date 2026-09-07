@@ -942,12 +942,6 @@ export const en = {
       completeReleaseHint: 'Only a complete release lets rows this file is silent about be checked against the registry as absent.',
       releaseVersionLabel: 'Release version',
       releaseVersionPlaceholder: 'optional',
-      previewAction: 'Preview',
-      previewing: 'Previewing…',
-      applyAction: 'Apply',
-      applying: 'Importing…',
-      applyConfirmTitle: 'Apply this import?',
-      applyConfirmBody: 'This writes {{count}} facility row(s) into the registry now. This cannot be undone from here.',
       noRowsFound: 'No facility rows were found in this file. Confirm it is a compatible CSV export before trying again.',
       noRowsFoundSkipped: '{{skipped}} row(s) in this file were skipped for missing required fields, and none were imported. Confirm it is a compatible CSV export before trying again.',
       unknownColumnsTitle: 'Unrecognised columns',
@@ -974,10 +968,6 @@ export const en = {
       countMismatchDeletionCount: 'This release declares {{declared}} deletion(s); {{parsed}} were actually parsed.',
       previewSummary: '{{parsed}} row(s) will be imported ({{skipped}} skipped).',
       duplicatesWarning: '{{count}} duplicate national code(s) were found in this file; only the last row for each was kept.',
-      tooLargeTitle: 'Too large to apply here',
-      tooLargeBody: 'This register has {{count}} row(s), more than the browser can apply directly. Import it with the CLI instead: openldr facilities import --apply.',
-      tooLargeError: 'This file is too large to apply from the browser. Import a register this size with the CLI: openldr facilities import --apply.',
-      tooLargeFileError: 'This file is larger than this endpoint accepts. Import a register this size with the CLI: openldr facilities import.',
       emptyFileHint: 'This file is empty. Choose a different file before previewing.',
       doneTitle: 'Import complete',
         nothingImportedTitle: 'Nothing was imported',
@@ -1070,7 +1060,6 @@ export const en = {
       tooLargeUploadError: 'This file is larger than the upload limit for a background import. Import a register this size with the CLI: openldr facilities import.',
       // Shown beside the inline over-cap notice: the background path has no row cap, which is the
       // whole reason it exists.
-      tooLargeUseUpload: 'Or import it here in the background: choose Upload and validate from the actions menu above.',
       // Whole-branch review, MUST FIX 3: the four column-map refusal reasons, worded the same as
       // the CLI's own `describeColumnMapError` (packages/cli/src/facilities.ts) — this is the
       // server's authoritative refusal, rendered so it is no longer silent.
@@ -1107,7 +1096,6 @@ export const en = {
         constantNotSeeded: 'No {{field}} value list on this install, so nothing can be checked. The value imports as typed.',
         missingRequiredTitle: 'Required fields still need a column or a fixed value',
         missingRequired: '{{field}} is not mapped.',
-        rowCountHint: 'This map applies to {{count}} facilities in this file.',
         keptAsExtraBadge: 'Kept as extra data',
         collisionTitle: 'This column map cannot be used',
         collision: '“{{a}}” and “{{b}}” both claim {{field}} — only one may.',

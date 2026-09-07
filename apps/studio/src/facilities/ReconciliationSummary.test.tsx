@@ -23,7 +23,7 @@ function baseResult(overrides: Partial<FacilityImportResult> = {}): FacilityImpo
 
 const props = {
   unknownColumnsOverridden: false,
-  showConflictChoice: false, overCap: false, reupload: null,
+  showConflictChoice: false, reupload: null,
   nationalSystem: 'urn:zm:mfl', onValueMappingsSaved: vi.fn(),
 };
 
