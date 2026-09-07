@@ -8,6 +8,8 @@ import '@/i18n';
 // devDependency) and production pages import that barrel.
 import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 // Mirrors Users.test.tsx's mocking pattern: spread the real module so AppShell's own API calls
 // (listPluginUis, etc.) keep working, and only stub the facilities/forms surface this page uses.
 vi.mock('@/api', async (orig) => {
@@ -58,6 +60,7 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
+import { toast } from 'sonner';
 import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
@@ -805,6 +808,24 @@ describe('Facilities page', () => {
       await waitFor(() => expect(deleteFacility).toHaveBeenCalledWith('f1'));
       await waitFor(() =>
         expect((getFacilityHealth as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(afterMount));
+    });
+
+    // ⛔ SUCCESS WAS SILENT. Deleting one facility, or 3 776 of them, produced no confirmation of
+    // any kind: the row simply left the table and the page never said a thing. `Facilities.tsx` did
+    // not import `toast` at all, although sonner is mounted app-wide in `main.tsx`.
+    it('confirms a deleted facility by name', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue(currentHealth);
+      (deleteFacility as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      show();
+
+      await screen.findByText('Dodoma Regional Referral');
+      clickMenuItem(`Facility actions ${sampleFacility.name}`, /delete/i);
+      fireEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
+
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith(expect.stringContaining('Dodoma Regional Referral')));
     });
 
     // ⛔ `Updating` is transient, so a chip that only refreshes on mount and after a Retry can never
@@ -1555,6 +1576,27 @@ describe('Facilities page', () => {
       expect((bulkDeleteFacilities as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe(2);
     });
 
+    it('confirms how many were deleted, using the count the operator reviewed', async () => {
+      seedTwo();
+      (previewBulkDeleteFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({
+        total: 2, inUse: 0, sample: [],
+      });
+      (bulkDeleteFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({ deleted: 2, inUse: 0 });
+      show();
+      await waitFor(() => expect(screen.getByText('Kalabo RHC')).toBeInTheDocument());
+
+      clickMenuItem('Facility actions', /delete/i);
+      const dialog = await screen.findByRole('alertdialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+
+      await waitFor(() => expect(toast.success)
+        .toHaveBeenCalledWith(expect.stringMatching(/2 facilities deleted/i)));
+    });
+
+    // ⛔ A FAILED BULK DELETE STAYS IN THE DIALOG, and gets no toast. The stale-count 409 means the
+    // selection moved under the operator, and the dialog's own message is the one place that
+    // explains why nothing was deleted. A toast that vanishes would replace an explanation with a
+    // flash.
     it('reports a stale-count refusal instead of pretending it worked', async () => {
       seedTwo();
       (previewBulkDeleteFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({

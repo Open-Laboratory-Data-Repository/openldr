@@ -845,6 +845,11 @@ export const en = {
     newDesc: 'Enter a new facility into the registry.',
     deleteTitle: 'Delete {{name}}?',
     deleteBody: 'This permanently removes {{name}} from the facility registry. This cannot be undone.',
+    // Success used to be silent on this page: the row left the table and nothing said why.
+    // Failure is NOT a toast here, on either delete. Both already render their message where
+    // the operator is looking, and the bulk dialog stays open on a stale-count refusal because
+    // that message is the only explanation of why nothing happened.
+    deletedToast: '“{{name}}” deleted.',
     // Task 4 (scale): the search box placeholder/label and the two filter Selects — see
     // Facilities.tsx's own comment on why only health and source (closed vocabularies) get a
     // Select, not every field GET /api/facilities accepts.
@@ -895,6 +900,7 @@ export const en = {
           inUse: '{{count}} of them are used by reports today.',
           inUseUnknown: 'Whether any are used by reports could not be checked.',
           sample: 'For example: {{names}}.',
+          deletedToast: '{{count}} facilities deleted.',
         },
     import: {
       menuItem: 'Import facilities',
@@ -1105,7 +1111,6 @@ export const en = {
       // value never blocks — see ValueMapPanel.tsx's own docblock — so there is deliberately no
       // "cannot continue"-style copy anywhere in this group.
       valueMap: {
-        actions: 'Value mapping actions',
         saveAction: 'Save mappings',
         saving: 'Saving…',
         notMapped: 'Not mapped',
