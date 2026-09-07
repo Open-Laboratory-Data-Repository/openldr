@@ -80,6 +80,7 @@ export function SuggestCombobox({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const labelOf = (o: string): string => optionLabels?.[o] ?? o;
   const descriptionOf = (o: string): string | undefined => optionDescriptions?.[o];
@@ -105,6 +106,37 @@ export function SuggestCombobox({
     };
     if (open) document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
+  }, [open]);
+
+  // ⛔ A WINDOW-LEVEL CAPTURE LISTENER, and `stopPropagation` in `onKeyDown` below cannot replace
+  // it. Radix's `useEscapeKeydown` (@radix-ui/react-use-escape-keydown) registers on `document`
+  // with `{ capture: true }`, so an enclosing Sheet or Dialog decides to close during the CAPTURE
+  // phase, before this component's bubble-phase handler ever runs. Capture travels
+  // window -> document -> ..., so `window` is the only place left that can still stop it.
+  //
+  // MEASURED in the facility import sheet: with a value list open, one Escape closed the whole
+  // sheet and took the operator's column map with it. Armed only while the list is open, so a
+  // closed combobox leaves Escape alone and the sheet dismisses exactly as it always has.
+  useEffect(() => {
+    if (!open) return undefined;
+    const swallowEscape = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setOpen(false);
+      setActive(-1);
+    };
+    window.addEventListener('keydown', swallowEscape, { capture: true });
+    return () => window.removeEventListener('keydown', swallowEscape, { capture: true });
+  }, [open]);
+
+  // The listbox is `absolute` inside whatever scroll container encloses this field, so when the
+  // field sits near that container's bottom edge the list renders past it and is clipped.
+  // MEASURED in the facility import sheet on `country`'s 249 options: a 256px list clipped by
+  // 231px at 375x812, and by 260px on desktop, which put the whole list below the fold.
+  // `block: 'nearest'` scrolls the minimum needed, so a list already fully visible does not jump.
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.scrollIntoView({ block: 'nearest' });
   }, [open]);
 
   const listboxId = id ? `${id}-suggest-listbox` : undefined;
@@ -144,6 +176,7 @@ export function SuggestCombobox({
       />
       {open && (
         <div
+          ref={listRef}
           id={listboxId}
           role="listbox"
           className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md"

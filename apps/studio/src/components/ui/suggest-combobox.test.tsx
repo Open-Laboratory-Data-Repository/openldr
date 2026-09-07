@@ -279,3 +279,103 @@ describe('SuggestCombobox optionLabelTruncateFrom', () => {
     spy.mockRestore();
   });
 });
+
+describe('SuggestCombobox — Escape and an enclosing dismissable layer', () => {
+  const cities = ['Kampala', 'Kigali', 'Kisumu'];
+
+  /** Radix's `useEscapeKeydown` (@radix-ui/react-use-escape-keydown) registers on `document` with
+   *  `{ capture: true }`, so a Sheet or Dialog decides to close during the CAPTURE phase, before
+   *  any bubble-phase handler inside it runs. This stands in for that listener exactly, so the
+   *  tests below prove the real interaction without mounting a whole Sheet. */
+  function withDocumentEscapeListener(): { seen: () => number; stop: () => void } {
+    let count = 0;
+    const handler = (e: KeyboardEvent): void => { if (e.key === 'Escape') count += 1; };
+    document.addEventListener('keydown', handler, { capture: true });
+    return { seen: () => count, stop: () => document.removeEventListener('keydown', handler, { capture: true }) };
+  }
+
+  it('⛔ swallows Escape while the list is open, so an enclosing sheet does not also close', () => {
+    const layer = withDocumentEscapeListener();
+    try {
+      render(<SuggestCombobox value="" onChange={vi.fn()} options={cities} label="City" />);
+      const input = screen.getByRole('combobox', { name: 'City' });
+      fireEvent.focus(input);
+      expect(screen.getByRole('listbox')).toBeInTheDocument();
+
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      expect(screen.queryByRole('listbox')).toBeNull();
+      expect(layer.seen()).toBe(0);
+    } finally {
+      layer.stop();
+    }
+  });
+
+  it('lets Escape through when the list is closed, so the sheet still dismisses', () => {
+    const layer = withDocumentEscapeListener();
+    try {
+      render(<SuggestCombobox value="" onChange={vi.fn()} options={cities} label="City" />);
+      const input = screen.getByRole('combobox', { name: 'City' });
+      expect(screen.queryByRole('listbox')).toBeNull();
+
+      fireEvent.keyDown(input, { key: 'Escape' });
+
+      expect(layer.seen()).toBe(1);
+    } finally {
+      layer.stop();
+    }
+  });
+
+  it('lets every other key through untouched', () => {
+    const layer = withDocumentEscapeListener();
+    let others = 0;
+    const spy = (e: KeyboardEvent): void => { if (e.key !== 'Escape') others += 1; };
+    document.addEventListener('keydown', spy, { capture: true });
+    try {
+      render(<SuggestCombobox value="" onChange={vi.fn()} options={cities} label="City" />);
+      const input = screen.getByRole('combobox', { name: 'City' });
+      fireEvent.focus(input);
+      fireEvent.keyDown(input, { key: 'ArrowDown' });
+      expect(others).toBe(1);
+      expect(layer.seen()).toBe(0);
+    } finally {
+      document.removeEventListener('keydown', spy, { capture: true });
+      layer.stop();
+    }
+  });
+});
+
+describe('SuggestCombobox — the open list is brought into view', () => {
+  const cities = ['Kampala', 'Kigali', 'Kisumu'];
+
+  /** The listbox is `absolute` inside whatever scroll container encloses the field, so when the
+   *  field sits near that container's bottom edge the list renders past it and is clipped.
+   *  Measured in the facility import sheet on `country`'s 249 options: a 256px list clipped by
+   *  231px at 375x812, and by 260px on desktop — the whole list below the fold. */
+  it('⛔ scrolls the listbox into view when it opens', () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(<SuggestCombobox value="" onChange={vi.fn()} options={cities} label="City" />);
+      fireEvent.focus(screen.getByRole('combobox', { name: 'City' }));
+      expect(scrollIntoView).toHaveBeenCalled();
+      // 'nearest' so a list already fully visible does not jump.
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('does not scroll anything while the list is closed', () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      render(<SuggestCombobox value="" onChange={vi.fn()} options={cities} label="City" />);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+});
