@@ -58,7 +58,7 @@ describe('CompareDialog', () => {
     vi.spyOn(api, 'listFormVersions').mockResolvedValue([summary(2, 'v2'), summary(1, 'v1')]);
     const get = vi.spyOn(api, 'getFormVersion').mockImplementation(async (_id, v) => snapshot(v, `v${v}Field`) as never);
 
-    const { container } = render(<CompareDialog formId="form-1" current={draft} open onOpenChange={() => {}} />);
+    render(<CompareDialog formId="form-1" current={draft} open onOpenChange={() => {}} />);
     await waitFor(() => expect(get).toHaveBeenCalledWith('form-1', 2));
 
     // Right side moves off the draft and onto v1, so both sides are published versions.
@@ -66,12 +66,17 @@ describe('CompareDialog', () => {
     fireEvent.click(await screen.findByRole('option', { name: /v1/ }));
     await waitFor(() => expect(get).toHaveBeenCalledWith('form-1', 1));
 
-    const header = container.querySelector('.border-b p.mt-1');
-    await waitFor(() => {
-      expect(header?.textContent).toContain('v2');
-      expect(header?.textContent).toContain('v1');
+    // The dialog is portalled to document.body, so it never lands inside a render container.
+    // screen searches document.body and sees it. The header paragraph is the only element
+    // whose text reads "<left> vs <right>", so match on that instead of a Tailwind class.
+    const header = await screen.findByText((_text, element) => {
+      return element?.tagName === 'P' && /\bvs\b/.test(element.textContent ?? '');
     });
-    expect(header?.textContent?.toLowerCase()).not.toContain('draft');
+    expect(header.textContent).toContain('v2');
+    expect(header.textContent).toContain('v1');
+    // Scope the negative check to the header element itself: "Current draft" is also the
+    // label of an option in both Select dropdowns, which are in the document too.
+    expect(header.textContent?.toLowerCase()).not.toContain('draft');
   });
 
   it('moves the left selector to a different published version', async () => {
