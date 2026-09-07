@@ -64,7 +64,16 @@ export interface ColumnMapStepProps {
    *  it by `header`, so this need not be in the same order as `headers`. */
   suggestions: ColumnSuggestion[];
   value: FacilityColumnMap;
-  onChange: (next: FacilityColumnMap) => void;
+  /** ⛔ THE SECOND ARGUMENT IS LOAD-BEARING. `'seed'` is this panel's one-time opening offer,
+   *  written when the asynchronous suggestion call resolves; `'edit'` is the operator deciding
+   *  something. They look identical in `next` and they are not the same event.
+   *
+   *  MEASURED: the host discards its Review whenever the map changes, and without this distinction
+   *  a suggestion that resolved AFTER a check silently destroyed the summary the operator had just
+   *  earned. Alone the fetch won the race and it looked fine; under load 25 tests in
+   *  `ImportFacilitiesSheet.test.tsx` failed, each burning the 15s async timeout. A caller that
+   *  ignores the argument behaves exactly as before. */
+  onChange: (next: FacilityColumnMap, origin: 'seed' | 'edit') => void;
   /** Facilities this file carries, when known. The spec is explicit that a mapping decision's
    *  impact is reported in facilities, never in distinct strings — see
    *  `docs/superpowers/specs/2026-08-12-facility-import-mapping-design.md` §4. Omitted before a
@@ -142,7 +151,7 @@ export function ColumnMapStep({
         changed = true;
       }
     }
-    if (changed) onChange({ ...value, columns });
+    if (changed) onChange({ ...value, columns }, 'seed');
     // Deliberately keyed on the header signature + the (memoized, collision-resolved) suggestion
     // map only. `value`/`onChange` are read for their current-render values but must stay OUT of
     // this array — the ref above, not this array, is what stops the seed from firing more than
@@ -217,28 +226,28 @@ export function ColumnMapStep({
     // Choosing a real target (or explicitly clearing back to "Not mapped") is a decision — it
     // supersedes any earlier "keep as extra" for the same header.
     const extras = (value.extras ?? []).filter((h) => h !== header);
-    onChange({ ...value, columns, extras });
+    onChange({ ...value, columns, extras }, 'edit');
   };
 
   const keepAsExtra = (header: string): void => {
     const columns = { ...value.columns };
     delete columns[header];
     const extras = [...new Set([...(value.extras ?? []), header])];
-    onChange({ ...value, columns, extras });
+    onChange({ ...value, columns, extras }, 'edit');
   };
 
   const clearHeader = (header: string): void => {
     const columns = { ...value.columns };
     delete columns[header];
     const extras = (value.extras ?? []).filter((h) => h !== header);
-    onChange({ ...value, columns, extras });
+    onChange({ ...value, columns, extras }, 'edit');
   };
 
   const setConstant = (field: string, raw: string): void => {
     const constants = { ...(value.constants ?? {}) };
     if (raw.trim() === '') delete constants[field];
     else constants[field] = raw;
-    onChange({ ...value, constants });
+    onChange({ ...value, constants }, 'edit');
   };
 
   return (

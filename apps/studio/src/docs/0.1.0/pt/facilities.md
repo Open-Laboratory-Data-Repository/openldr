@@ -25,10 +25,36 @@ Clique num passo dessa faixa para se mover entre eles. Não há um botão Voltar
 
 - **Origem.** Escolha o ficheiro e o registo a que pertence. Se esta instalação ainda não tiver
   nenhum registo, o botão aqui mostra "Registar uma fonte" em vez de "Continuar".
-- **Mapeamento.** Construa ou reveja o mapeamento de colunas, e defina os valores fixos. Veja
-  abaixo.
-- **Revisão.** Mostra o resumo validado, o mapeamento de valores para os valores de nível, estado
-  ou país que não corresponderam, e o botão "Confirmar importação".
+- **Mapeamento.** Todas as decisões vivem aqui: o mapeamento de colunas, os valores fixos, o que
+  fazer com conflitos, ausências e remoções, e que palavras do próprio registo correspondem ao
+  vocabulário.
+- **Revisão.** Relata o que a verificação encontrou e oferece uma única ação, Aplicar. Nada nela é
+  editável.
+
+### O mapeamento decide, a revisão relata
+
+Se a verificação revelar algo que queira mudar, volte ao Mapeamento, mude-o e avance de novo. Essa
+ida e volta é deliberada. Uma lista nacional de estabelecimentos está ligada a coisas de mais para
+valer a pena trocar correção por rapidez.
+
+Na primeira passagem, o Mapeamento não mostra nenhuma lista de valores não reconhecidos, porque
+ainda nada leu o ficheiro. Continue, deixe a verificação correr, e a lista está à sua espera quando
+voltar. O mesmo vale para as opções que deixam passar um problema: nenhuma lhe é oferecida enquanto
+nada lhe disser que o problema existe.
+
+**Mudar seja o que for no Mapeamento descarta a última Revisão.** É de propósito. Um resumo que já
+não corresponde ao que está prestes a importar é pior do que resumo nenhum, por isso o assistente
+retira-o em vez de deixar no ecrã um número que já não é verdade. A Revisão está atualizada ou não
+está lá.
+
+Duas coisas deliberadamente **não** a descartam, porque não podem mudar o que a verificação
+encontrou: as escolhas de conflitos, ausências e remoções, que se aplicam no momento da importação
+e não na leitura do ficheiro, e a opção de importar apesar de linhas ilegíveis, que apenas decide
+se a importação pode prosseguir.
+
+A lista de valores não reconhecidos é mantida enquanto trabalha nela. Guardar um mapeamento não faz
+desaparecer as linhas restantes, e já não repete a verificação sozinho. Peça a verificação seguinte
+quando estiver pronto.
 
 Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
 Pré-visualizar, as três opções de reenvio, Cancelar e Fechar, fica no menu `⋯` da página.

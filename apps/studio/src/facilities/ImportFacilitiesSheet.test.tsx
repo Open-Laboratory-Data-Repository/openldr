@@ -100,6 +100,27 @@ async function previewNow() {
   fireEvent.click(screen.getByRole('menuitem', { name: /^preview$/i }));
 }
 
+/** Click the step strip back to Mapping. Every decision lives there now, so a test that changes one
+ *  after a check has to come back for it — which is the flow itself, not test ceremony. */
+async function backToMapping() {
+  // ⛔ WAITS FOR REVIEW FIRST. `previewNow` clicks the menu item and returns; it does not await
+  // the response. Stepping back before the result lands clicks a Mapping button while the sheet is
+  // ALREADY on Mapping, which does nothing, and the auto-advance effect then carries the operator
+  // to Review the moment the result arrives. Measured: the click looked fine and the step went
+  // forward anyway.
+  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
+    .toHaveAttribute('aria-current', 'step'));
+  fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+}
+
+/** Step forward to Review WITHOUT re-checking. Only legal when the summary was never retired, i.e.
+ *  nothing in `summarySignature` moved. `allowMalformedRows` is the case that matters: it does not
+ *  change what the parser finds, only whether Apply may proceed, so it is deliberately absent from
+ *  that signature and ticking it leaves the summary standing. */
+function forwardToReview() {
+  fireEvent.click(screen.getByRole('button', { name: /3\s*Review/ }));
+}
+
 /** Every `FacilityImportResult` field, defaulted to "clean, nothing to reconcile" — every test
  *  below overrides only the fields it cares about, so a new server field never has to be hand-added
  *  to a dozen unrelated mocks. Mirrors the server's own "reported on every call" contract
@@ -400,7 +421,12 @@ describe('ImportFacilitiesSheet', () => {
       expect.objectContaining({ allowUnknownColumns: false }),
     );
 
+    // ⛔ THE OVERRIDE LIVES ON MAPPING NOW. Review reports the finding and offers no control, so the
+    // operator comes back to decide. Ticking no longer re-checks by itself either: it retires the
+    // summary, and the next check is theirs to ask for.
+    await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
+    await previewNow();
 
     await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
     expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
@@ -439,8 +465,12 @@ describe('ImportFacilitiesSheet', () => {
     // Opting in unblocks Apply locally — `allowMalformedRows` does not change what the parser
     // finds (see facility-import.ts's docblock: it only gates whether APPLY proceeds), so this
     // must NOT re-trigger a preview request, unlike the unknown-columns checkbox above.
+    // The override lives on Mapping now. It stays out of `summarySignature` deliberately, so
+    // ticking it does NOT retire the Review the operator already has: they step straight back.
+    await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
     expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1);
+    forwardToReview();
 
     openMenu();
     expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
@@ -471,7 +501,9 @@ describe('ImportFacilitiesSheet', () => {
 
     // The quarantine block is rendered (the file has both problems), so the checkbox is reachable —
     // and ticking it changes nothing, because the reason is the unoverridable one.
+    await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
+    forwardToReview();
     openMenu();
     expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
   });
@@ -495,6 +527,7 @@ describe('ImportFacilitiesSheet', () => {
 
     await pickFileAndSystem();
     await previewNow();
+    await backToMapping();
     fireEvent.click(await screen.findByRole('checkbox', { name: /import anyway/i }));
 
     clickMenuItem(/^apply$/i);
@@ -532,6 +565,7 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await previewNow();
 
+    await backToMapping();
     fireEvent.click(await screen.findByRole('checkbox', { name: /import anyway/i }));
     openMenu();
     expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
@@ -556,7 +590,9 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     // …and taking it back takes Apply away again.
+    await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
+    forwardToReview();
     openMenu();
     expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
   });
@@ -665,7 +701,9 @@ describe('ImportFacilitiesSheet', () => {
     // message must not also render here (would be a second, confusing message for the same click).
     expect(screen.queryByText(/no facility rows were found/i)).not.toBeInTheDocument();
 
+    await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
+    await previewNow();
 
     await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
     expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
@@ -897,6 +935,7 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await previewNow();
 
+    await backToMapping();
     const select = await screen.findByRole('combobox', { name: /rows changed since this preview/i });
     expect(select).toBeInTheDocument();
     expect(await screen.findByText(/skip them/i)).toBeInTheDocument();
@@ -926,6 +965,7 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await previewNow();
 
+    await backToMapping();
     expect(await screen.findByRole('combobox', { name: /rows this file says were removed/i })).toBeInTheDocument();
     // `absent` is null here (not evaluated) — its own choice must not appear even though `deleted`'s does.
     expect(screen.queryByRole('combobox', { name: /rows missing from this file/i })).not.toBeInTheDocument();
@@ -940,6 +980,7 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await previewNow();
 
+    await backToMapping();
     expect(await screen.findByRole('combobox', { name: /rows missing from this file/i })).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /rows this file says were removed/i })).not.toBeInTheDocument();
   });
@@ -960,10 +1001,14 @@ describe('ImportFacilitiesSheet', () => {
     // Flip both retirement choices away from their defaults so the assertion below cannot pass by
     // coincidence (the default 'retire'/'report' values would also satisfy an assertion that
     // forgot to check the field was even threaded through).
+    // The retirement choices live on Mapping now. They are in NEITHER signature, so the summary
+    // survives the change and the operator steps straight back to it.
+    await backToMapping();
     fireEvent.click(await screen.findByRole('combobox', { name: /rows this file says were removed/i }));
     fireEvent.click(await screen.findByRole('option', { name: /report only/i }));
     fireEvent.click(screen.getByRole('combobox', { name: /rows missing from this file/i }));
     fireEvent.click(await screen.findByRole('option', { name: /retire them/i }));
+    forwardToReview();
 
     clickMenuItem(/^apply$/i);
     fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
@@ -992,6 +1037,7 @@ describe('ImportFacilitiesSheet', () => {
     // Flip away from the default 'skip' so the assertion below cannot pass by coincidence (sending
     // the default value would also satisfy an assertion that forgot to check the field was even
     // threaded through — the same discipline the retirement-choices test above already applies).
+    await backToMapping();
     fireEvent.click(await screen.findByRole('combobox', { name: /rows changed since this preview/i }));
     fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
 
@@ -1102,7 +1148,9 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByText(/1 row has a coordinate/i)).toBeInTheDocument();
     expect(screen.getByText(/line 2 — latitude: 95\.0/)).toBeInTheDocument();
 
+    await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
+    await previewNow();
 
     await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
     expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
@@ -1126,13 +1174,19 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await previewNow();
 
+    // Review REPORTS the finding and offers nothing to click.
     expect(await screen.findByText(/values with no canonical mapping/i)).toBeInTheDocument();
+    expect(screen.getByText(/map them on the mapping step/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Zonal Hospital')).toBeNull();
+    expect(screen.getByText(/not checked against a canonical value set.*Status/i)).toBeInTheDocument();
+
+    // The pick-lists are on Mapping, where the deciding happens.
+    await backToMapping();
     // ⛔ VALUE mapping, not column mapping. `valueMap.notMapped` is a different key from
     // `columnMap.notMapped` and did NOT change: a value with no canonical mapping is genuinely
     // unmapped and imports as-is, whereas an unmapped COLUMN is kept as extra data.
-    expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Not mapped');
+    expect(await screen.findByLabelText('Zonal Hospital')).toHaveTextContent('Not mapped');
     expect(screen.getByLabelText('District Clinic')).toHaveTextContent('Not mapped');
-    expect(screen.getByText(/not checked against a canonical value set.*Status/i)).toBeInTheDocument();
   });
 
   it('CT-3: renders a JSONL release\'s declared/parsed count mismatch', async () => {
@@ -1185,8 +1239,12 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await previewNow();
 
+    await backToMapping();
     fireEvent.click(await screen.findByRole('combobox', { name: /rows changed since this preview/i }));
     fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
+    // Apply lives on Review, and the conflict policy is in neither signature, so the summary
+    // survived the change and one step forward is all this needs.
+    forwardToReview();
 
     clickMenuItem(/^apply$/i);
     fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
@@ -1291,12 +1349,14 @@ describe('ImportFacilitiesSheet', () => {
 
     // Flipped away from every default, so the assertion below cannot pass on values the sheet never
     // threaded through — the same discipline the inline retirement-choices test applies.
+    await backToMapping();
     fireEvent.click(await screen.findByRole('combobox', { name: /rows this file says were removed/i }));
     fireEvent.click(await screen.findByRole('option', { name: /report only/i }));
     fireEvent.click(screen.getByRole('combobox', { name: /rows missing from this file/i }));
     fireEvent.click(await screen.findByRole('option', { name: /retire them/i }));
     fireEvent.click(screen.getByRole('combobox', { name: /rows changed since this preview/i }));
     fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
+    forwardToReview();
 
     confirmNow();
 
@@ -1332,7 +1392,11 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
+    await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
+    // `allowMalformedRows` is in NEITHER signature, so the summary survives the tick and Confirm,
+    // which lives on Review, is one step away rather than a re-upload away.
+    forwardToReview();
     confirmNow();
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
@@ -1871,7 +1935,9 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
+    await backToMapping();
     fireEvent.click(await screen.findByRole('checkbox', { name: /skipping the rows that could not be read/i }));
+    forwardToReview();
 
     confirmNow();
 
