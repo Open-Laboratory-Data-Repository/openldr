@@ -67,6 +67,9 @@ const mocks = vi.hoisted(() => ({
     // A2b Task 9: the four-valued cancel. The CLI's whole job here is to report WHICH of the four
     // came back, so this is mocked per-test rather than given a default.
     requestCancel: vi.fn(),
+    // Plan B: the guarded requeue behind `import-run-revalidate`. Reached through the REAL
+    // `revalidateImportRun` below, so these tests exercise the shared decision the route uses too.
+    requeueForValidation: vi.fn(),
     get: vi.fn(),
     list: vi.fn(),
   },
@@ -103,6 +106,9 @@ vi.mock('@openldr/bootstrap', async () => {
     // they run in is what matters here, and the real behaviour is proven in bootstrap's own tests.
     retireRegistryConcepts: mocks.retireRegistryConcepts,
     reprojectAfterRegistryDelete: mocks.reprojectAfterRegistryDelete,
+    // ⛔ REAL, not mocked. This IS the shared decision the route calls (AGENTS.md §6 item 2), so
+    // mocking it here would leave the CLI's half of that promise untested.
+    revalidateImportRun: actual.revalidateImportRun,
   };
 });
 
@@ -118,6 +124,10 @@ vi.mock('@openldr/db', async () => {
     createFacilityImportRunStore: mocks.createFacilityImportRunStore,
     createFacilityRegisterSourceStore: mocks.createFacilityRegisterSourceStore,
     resolveFacilityRegisterForImport: actual.resolveFacilityRegisterForImport,
+    // Plan B: a real, pure constant, for the same reason the gate above is real. Spelling `'queued'`
+    // here instead would let this file agree with a literal while the worker claims a state named by
+    // `VALIDATE_PHASE`, which is precisely the drift that constant exists to prevent.
+    VALIDATE_PHASE: actual.VALIDATE_PHASE,
   };
 });
 
@@ -127,7 +137,8 @@ vi.mock('node:fs', () => ({
 
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
-  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
+  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
+  runFacilitiesImportSources,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList, runFacilitiesDelete,
 } from './facilities';
 // Task 9: real, PURE constant — see the `@openldr/bootstrap` mock factory above for why it is not
@@ -2755,5 +2766,75 @@ describe('runFacilitiesDelete', () => {
       expect.objectContaining({ actorType: 'cli' }),
       expect.objectContaining({ action: 'facility.bulk_delete' }),
     );
+  });
+});
+
+describe('runFacilitiesImportRunRevalidate', () => {
+  const parked = { id: 'fir_r', status: 'awaiting_confirmation', blobKey: 'blob/1.csv' };
+
+  // This describe sits outside the file's other suites, so it carries its own setup rather than
+  // borrowing one that does not reach it.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+    mocks.createFacilityImportRunStore.mockReturnValue(mocks.runStore);
+  });
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('requeues a parked run under a new column map, and audits it as the CLI', async () => {
+    mocks.runStore.get.mockResolvedValue(parked);
+    mocks.runStore.requeueForValidation.mockResolvedValue(true);
+    mocks.readFileSync.mockReturnValue(JSON.stringify({ columns: { Name: 'name' } }));
+
+    const code = await runFacilitiesImportRunRevalidate('fir_r', { columnMap: 'map.json', json: true });
+
+    expect(code).toBe(0);
+    expect(mocks.runStore.requeueForValidation).toHaveBeenCalledWith(
+      'fir_r', 'awaiting_confirmation', { columnMap: { columns: { Name: 'name' } } },
+    );
+    // AGENTS.md §6 item 2: a CLI write is audited as the CLI actor.
+    // ⛔ `actorType`, NOT `actorName`. §6 says "audit as actorName: 'cli'", but `cliActor()`
+    // (packages/cli/src/cli-actor.ts:21) returns `{ actorType: 'cli', actorName: <OS user> }` with
+    // `'cli'` only as a FALLBACK when the OS gives no name. Asserting the name would pass on CI and
+    // fail on any developer's machine. `actorType` is the stable marker.
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mocks.ctx, expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'facility.import.revalidated', entityId: 'fir_r' }),
+    );
+  });
+
+  // ⛔ An absent flag must not overwrite what the run already carries with a hardcoded `false`.
+  it('sends only the flags actually passed', async () => {
+    mocks.runStore.get.mockResolvedValue(parked);
+    mocks.runStore.requeueForValidation.mockResolvedValue(true);
+
+    await runFacilitiesImportRunRevalidate('fir_r', { allowUnknownColumns: true, json: true });
+
+    expect(mocks.runStore.requeueForValidation).toHaveBeenCalledWith(
+      'fir_r', 'awaiting_confirmation', { allowUnknownColumns: true },
+    );
+  });
+
+  it('refuses a run that is not parked, naming the status, and writes nothing', async () => {
+    mocks.runStore.get.mockResolvedValue({ ...parked, status: 'applied' });
+
+    const code = await runFacilitiesImportRunRevalidate('fir_r', { json: true });
+
+    expect(code).toBe(1);
+    expect(mocks.runStore.requeueForValidation).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unreadable column map before touching the database', async () => {
+    mocks.readFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
+
+    const code = await runFacilitiesImportRunRevalidate('fir_r', { columnMap: 'missing.json', json: true });
+
+    expect(code).toBe(1);
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
   });
 });
