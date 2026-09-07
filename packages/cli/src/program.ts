@@ -5,7 +5,7 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
-import { runFormsExtract, runFormsList, runFormsLint } from './forms';
+import { runFormsExtract, runFormsList, runFormsLint, runFormsVersions, runFormsRestore } from './forms';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
@@ -654,6 +654,23 @@ export function buildProgram(): Command {
         process.stderr.write(`forms extract failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
+    });
+  forms
+    .command('versions <id>')
+    .description('List the published versions of one form, newest first')
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runFormsVersions(id, opts); }
+      catch (err) { process.stderr.write(`forms versions failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  forms
+    .command('restore <id> <version>')
+    .description('Put a published version back over the current draft')
+    .option('--json', 'emit JSON', false)
+    .option('--force', 'confirm overwriting the current draft', false)
+    .action(async (id: string, version: string, opts: { json: boolean; force: boolean }) => {
+      try { process.exitCode = await runFormsRestore(id, version, opts); }
+      catch (err) { process.stderr.write(`forms restore failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
   const reportDesign = program.command('report-design').description('Report Designer page designs');
