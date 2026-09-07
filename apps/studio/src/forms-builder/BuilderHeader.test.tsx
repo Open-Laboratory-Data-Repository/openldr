@@ -112,6 +112,21 @@ describe('BuilderHeader', () => {
       fireEvent.change(input, { target: { value: 'v2' } });
       expect(onChange).toHaveBeenCalledWith({ versionLabel: 'v2' });
     });
+
+    it('labels the free-text field as a label, not the version number', () => {
+      renderHeader();
+      expect(screen.getByLabelText('Version label')).toBeInTheDocument();
+    });
+
+    it('shows the published version number next to the status', () => {
+      renderHeader({ status: 'published', publishedVersion: 3 });
+      expect(screen.getByText('v3')).toBeInTheDocument();
+    });
+
+    it('shows no version number before the form has ever been published', () => {
+      renderHeader({ status: 'draft', publishedVersion: null });
+      expect(screen.queryByText(/^v\d+$/)).not.toBeInTheDocument();
+    });
   });
 
   describe('FHIR Version Select', () => {

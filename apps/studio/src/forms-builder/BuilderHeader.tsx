@@ -92,6 +92,9 @@ export interface BuilderHeaderProps {
   formId: string | null | undefined;
   /** Current form status (draft/published/archived). Shown as a colored dot to the left of the form name. */
   status?: string | null;
+  /** Newest published version number, or null when the form has never been published.
+   *  The box beside it is a free-text LABEL; this is the number the snapshot actually has. */
+  publishedVersion?: number | null;
   onChange: (patch: Partial<FormSchema>) => void;
   onSave: () => void;
   onPublish: () => void;
@@ -129,6 +132,7 @@ export function BuilderHeader({
   canPublish,
   formId,
   status,
+  publishedVersion,
   onChange,
   onSave,
   onPublish,
@@ -193,6 +197,11 @@ export function BuilderHeader({
               <TooltipContent>{statusLabel(status)}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {publishedVersion != null ? (
+            <span className="mb-3 shrink-0 text-xs font-medium text-muted-foreground">
+              v{publishedVersion}
+            </span>
+          ) : null}
           <div className="flex-1 min-w-0 space-y-1">
             <Label className="text-xs" htmlFor="builder-name">Form name</Label>
             <Input
@@ -205,9 +214,10 @@ export function BuilderHeader({
           </div>
         </div>
 
-        {/* Version label */}
-        <div className="w-24 space-y-1">
-          <Label className="text-xs" htmlFor="builder-version">Version</Label>
+        {/* Version label. Free text, and deliberately not the version number: the number is
+            assigned by publish and shown next to the status dot. */}
+        <div className="w-32 space-y-1">
+          <Label className="text-xs" htmlFor="builder-version">Version label</Label>
           <Input
             id="builder-version"
             aria-label="Version label"

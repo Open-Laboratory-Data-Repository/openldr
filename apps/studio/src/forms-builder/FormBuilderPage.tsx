@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { createForm, deleteForm, formQuestionnaireUrl, getForm, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
+import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, makeUniqueFieldId, newField } from './builderModel';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
@@ -34,6 +34,7 @@ export function FormBuilderPage(): JSX.Element {
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
 
   const history = useTemplateHistory<FormSchema>(() => schema);
 
@@ -48,6 +49,9 @@ export function FormBuilderPage(): JSX.Element {
         setFormId(loaded.id);
         setStatus(loaded.status);
         setSchema(normalizeFormSchema(loaded.schema));
+        void listFormVersions(loaded.id)
+          .then((vs) => { if (!cancelled) setPublishedVersion(vs[0]?.version ?? null); })
+          .catch(() => { /* the number is a nicety; a failure here must not break the builder */ });
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
@@ -186,6 +190,16 @@ export function FormBuilderPage(): JSX.Element {
   /** The server's own message (via okJson/formatApiError) rather than a generic "failed". */
   const messageOf = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
+  /** Newest version number, or null. Never throws: this only drives a caption. */
+  const latestVersionOf = async (id: string): Promise<number | null> => {
+    try {
+      const vs = await listFormVersions(id);
+      return vs[0]?.version ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   /**
    * Write the on-screen draft and return what the server stored.
    *
@@ -230,6 +244,7 @@ export function FormBuilderPage(): JSX.Element {
       const saved = await saveDraft();
       const published = await publishForm(saved.id, { versionLabel: schema.versionLabel ?? null });
       setStatus(published.status);
+      setPublishedVersion(await latestVersionOf(saved.id));
       toast.success(`Published ${published.name}`);
     } catch (err) {
       toast.error(messageOf(err));
@@ -293,6 +308,7 @@ export function FormBuilderPage(): JSX.Element {
           canPublish={!hasErrors}
           formId={formId}
           status={status}
+          publishedVersion={publishedVersion}
           onChange={patchSchema}
           onSave={() => { void save(); }}
           onPublish={() => { void publish(); }}
