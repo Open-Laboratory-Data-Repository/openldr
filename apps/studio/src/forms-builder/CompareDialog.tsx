@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getFormVersion, listFormVersions, type FormVersionSummary } from '../api';
@@ -35,11 +35,19 @@ async function sideSchema(formId: string, side: Side, current: FormSchema): Prom
   return normalizeFormSchema(snapshot.schema);
 }
 
+/** Display label for one side, matching how the selector renders that option. */
+function sideLabel(side: Side, versions: FormVersionSummary[]): string {
+  if (side === 'draft') return 'Current draft';
+  const version = versions.find((v) => v.version === side);
+  return version?.versionLabel ? `v${side} (${version.versionLabel})` : `v${side}`;
+}
+
 export function CompareDialog({ formId, current, open, onOpenChange }: { formId: string | null; current: FormSchema; open: boolean; onOpenChange: (open: boolean) => void }): JSX.Element {
   const [versions, setVersions] = useState<FormVersionSummary[]>([]);
-  const [rows, setRows] = useState<CompareRow[]>([]);
   const [left, setLeft] = useState<Side | null>(null);
   const [right, setRight] = useState<Side>('draft');
+  const [leftSchema, setLeftSchema] = useState<FormSchema | null>(null);
+  const [rightSchema, setRightSchema] = useState<FormSchema | null>(null);
 
   // Load the version list once per open, and seed the left side with the newest published
   // version so the dialog opens on exactly what it used to show.
@@ -55,27 +63,47 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
     return () => { cancelled = true; };
   }, [open, formId]);
 
-  // Recompute whenever either side moves.
+  // Refetch the left side when it moves, or when the draft changes and the left side is the draft.
   useEffect(() => {
     if (!open || !formId || left === null) return;
     let cancelled = false;
-    void Promise.all([sideSchema(formId, left, current), sideSchema(formId, right, current)])
-      .then(([before, after]) => {
-        if (!cancelled) setRows(flattenDiff(diffFormSchemas(before, after)));
-      });
+    void sideSchema(formId, left, current).then((schema) => {
+      if (!cancelled) setLeftSchema(schema);
+    });
     return () => { cancelled = true; };
-  }, [open, formId, left, right, current]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, formId, left, left === 'draft' ? current : null]);
 
-  const latest = versions[0];
-  const latestLabel = latest ? (latest.versionLabel ?? `v${latest.version}`) : '';
+  // Refetch the right side when it moves, or when the draft changes and the right side is the draft.
+  useEffect(() => {
+    if (!open || !formId) return;
+    let cancelled = false;
+    void sideSchema(formId, right, current).then((schema) => {
+      if (!cancelled) setRightSchema(schema);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, formId, right, right === 'draft' ? current : null]);
+
+  // Derived, not stored: recomputes only when one of the two resolved schemas changes.
+  const rows = useMemo(() => {
+    if (!leftSchema || !rightSchema) return [];
+    return flattenDiff(diffFormSchemas(leftSchema, rightSchema));
+  }, [leftSchema, rightSchema]);
+
+  const leftLabel = left !== null ? sideLabel(left, versions) : '';
+  const rightLabel = sideLabel(right, versions);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <div className="border-b border-border px-6 py-4">
           <DialogTitle className="text-base font-semibold">Compare form versions</DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">
-            {latest ? (
-              <>Draft vs published <span className="font-medium text-foreground">{latestLabel}</span></>
+            {versions.length > 0 ? (
+              <>
+                <span className="font-medium text-foreground">{leftLabel}</span> vs{' '}
+                <span className="font-medium text-foreground">{rightLabel}</span>
+              </>
             ) : (
               'No published versions yet.'
             )}
@@ -127,12 +155,12 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
         ) : rows.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <p className="text-sm font-medium">No differences</p>
-            <p className="mt-1 text-xs text-muted-foreground">The draft matches published {latestLabel}.</p>
+            <p className="mt-1 text-xs text-muted-foreground">{leftLabel} matches {rightLabel}.</p>
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between border-b border-border bg-muted/30 px-6 py-2 text-xs text-muted-foreground">
-              <span>{rows.length} change{rows.length === 1 ? '' : 's'} since {latestLabel}</span>
+              <span>{rows.length} change{rows.length === 1 ? '' : 's'} between {leftLabel} and {rightLabel}</span>
             </div>
             <div className="max-h-[55vh] divide-y divide-border overflow-auto">
               {rows.map((row) => {
