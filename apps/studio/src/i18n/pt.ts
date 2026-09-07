@@ -1029,7 +1029,6 @@ export const pt: EnShape = {
         constantsTitle: 'Valores fixos',
         constantsHint: 'Para um campo do contrato que nenhuma coluna deste ficheiro carrega. Cada linha recebe este valor.',
         constantPlaceholder: 'Mesmo valor para cada linha',
-        constantPlaceholderCountry: 'ex. ZMB',
         constantPickerPlaceholder: 'Escreva ou escolha um valor',
         constantPickerLoading: 'A carregar valores…',
         constantPickerEmpty: 'Nenhum valor correspondente',

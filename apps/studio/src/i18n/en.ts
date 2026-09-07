@@ -1082,7 +1082,6 @@ export const en = {
         constantsTitle: 'Fixed values',
         constantsHint: 'For a contract field no column in this file carries. Every row gets this value.',
         constantPlaceholder: 'Same value for every row',
-        constantPlaceholderCountry: 'e.g. ZMB',
         constantPickerPlaceholder: 'Type or pick a value',
         constantPickerLoading: 'Loading values…',
         constantPickerEmpty: 'No matching value',
