@@ -170,6 +170,12 @@ function clickMenuItem(triggerName: string, itemName: string | RegExp) {
  *  the REAL Facilities page around the sheet, because F1 is specifically about what happens to the
  *  sheet when its caller's `reload()` runs, something a standalone-sheet render can never exercise. */
 async function clickImportMenuItem(itemName: string | RegExp) {
+  // The import sheet has three numbered steps now, and its actions moved onto the step they belong
+  // to: Preview and Apply live on Mapping, not on Source. Advancing past Source first is what this
+  // helper has to do before opening the menu, the same shape ImportFacilitiesSheet.test.tsx uses in
+  // its own previewNow.
+  const continueButton = screen.queryByRole('button', { name: 'Continue' });
+  if (continueButton && !continueButton.hasAttribute('disabled')) fireEvent.click(continueButton);
   const trigger = screen.getByRole('button', { name: 'Import actions' });
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
   if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });

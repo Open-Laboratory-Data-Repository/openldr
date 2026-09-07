@@ -1023,6 +1023,7 @@ export const en = {
       reuploadUnknownColumnsAction: 'Re-upload keeping unrecognised columns',
       reuploadInvalidCoordinatesAction: 'Re-upload keeping rows with an invalid coordinate',
         reuploadColumnMapAction: 'Re-upload with the corrected map',
+        reuploadWithMapAction: 'Re-upload with this map',
       overrideNeedsReupload: 'This option changes how the file is read, so it has to be set before validation. Use the actions menu above to upload this file again with it — the summary you review will then be the one that gets applied.',
       overrideAppliedToRun: 'This validation already ran with that option on, so the summary below is what will be applied.',
       runLoading: 'Checking the import run…',

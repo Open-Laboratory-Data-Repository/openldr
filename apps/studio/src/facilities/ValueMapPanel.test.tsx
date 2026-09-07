@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
@@ -199,5 +200,45 @@ describe('ValueMapPanel', () => {
       unmapped={{ level: ['Health Centre'], status: [], country: [] }} onSaved={() => {}} />);
 
     expect(await screen.findByText(/no value set/i)).toBeInTheDocument();
+  });
+
+  // ⛔ THE BUG THAT MADE EVERY DROPDOWN EMPTY IN DEV, and the reason an operator asked what they
+  // were supposed to do with twenty-three unmappable values: nothing, because the panel never
+  // populated at all.
+  //
+  // The fetch effect set its `seededRef` guard BEFORE awaiting. React 18 StrictMode runs an effect
+  // twice on mount in dev: pass one sets the ref and starts the request, cleanup sets `cancelled`,
+  // pass two sees the ref already matching and returns without fetching. The first request then
+  // resolves into a cancelled closure and every state setter is skipped. No candidates, no options,
+  // no error, forever, and only in dev, which is where the operator was looking.
+  //
+  // `[signature]` alone is already the correct guard: it is a string built from the data, so an
+  // unrelated re-render cannot re-fire the effect and a genuinely new set always does.
+  it('⛔ still populates under StrictMode, whose double-invoke used to leave it empty', async () => {
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [{
+        value: 'Health Centre',
+        candidates: [{ target: 'health-center', display: 'Health Center', score: 0.83, confidence: 'likely' }],
+      }],
+      options: [
+        { code: 'health-center', display: 'Health Center' },
+        { code: 'dispensary', display: 'Dispensary' },
+      ],
+      notValidated: false,
+    });
+
+    render(
+      <StrictMode>
+        <ValueMapPanel nationalSystem="urn:zm:mfl"
+          unmapped={{ level: ['Health Centre'], status: [], country: [] }} onSaved={() => {}} />
+      </StrictMode>,
+    );
+
+    // The confident candidate pre-selects, which only happens if the response was actually applied.
+    await waitFor(() => expect(screen.getByLabelText('Health Centre')).toHaveTextContent('Health Center'));
+
+    // ...and the rest of the value set is reachable, not just the ranked one.
+    fireEvent.click(screen.getByLabelText('Health Centre'));
+    expect(await screen.findByRole('option', { name: 'Dispensary' })).toBeInTheDocument();
   });
 });

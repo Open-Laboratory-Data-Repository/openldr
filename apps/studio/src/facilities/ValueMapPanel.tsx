@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -84,10 +84,22 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
   // ColumnMapStep's aren't: both are fresh references every render, and including them would refire
   // this on every render rather than only when the DATA actually changes.
   const signature = JSON.stringify(fields.map((f) => [f, unmapped[f]]));
-  const seededRef = useRef<string | null>(null);
+  // ⛔ NO REF GUARD HERE, and removing it is the fix, not an oversight.
+  //
+  // This effect used to open with `if (seededRef.current === signature) return;` followed by
+  // `seededRef.current = signature`, set BEFORE the await. React 18 StrictMode runs an effect twice
+  // on mount in dev: pass one set the ref and started the request, cleanup set `cancelled`, and
+  // pass two saw the ref already matching and returned without fetching. The first request then
+  // resolved into a cancelled closure, so every setter below was skipped. The panel rendered rows
+  // with nothing in their pickers, no error and no explanation, in dev only. An operator hit it on
+  // a real import and asked what they were supposed to do with twenty-three unmappable values; the
+  // answer was that the panel had never loaded anything at all.
+  //
+  // `[signature]` is already the correct and sufficient guard. It is a string built from the data,
+  // so an unrelated re-render cannot re-fire this, and a genuinely new set always does. The ref was
+  // guarding against a re-run the dependency array had already ruled out, and paid for it with a
+  // failure mode the dependency array does not have.
   useEffect(() => {
-    if (seededRef.current === signature) return;
-    seededRef.current = signature;
     setSavedCount(null);
     setError(null);
     setUnseededFields(new Set());

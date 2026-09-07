@@ -418,6 +418,43 @@ describe('terminology admin store', () => {
     // exactly, which silently excluded every loader-fed concept. They now accept NULL too, but a real
     // non-active status (DEPRECATED here) must still be excluded — otherwise there would be no way to
     // retire a concept out of an intensional ValueSet by status.
+    // ⛔ THE EXPANSION CACHE WRITE MUST TOLERATE A CONCURRENT ONE. `writeExpansionCache` did a bare
+    // `delete` followed by a plain `insert`, with no conflict clause and no transaction, so two
+    // expansions running at once could interleave into
+    //
+    //     duplicate key value violates unique constraint "valueset_expansions_pk"
+    //
+    // The facility import's value-mapping panel fetches one field at a time in PARALLEL, and each
+    // request expands that field's bound value set, so it hit this on an ordinary import: Level came
+    // back 500 while Status came back fine. Its sibling `insertExpansionRows` has always used
+    // `onConflict(...).doNothing()`; this pins that the cache write is equally tolerant.
+    //
+    // pg-mem runs serially and cannot interleave two real transactions, so this drives the same
+    // collision deterministically instead: expand once, leave those rows in place, and expand again.
+    // The bare insert throws on the second call; a conflict-tolerant one does not.
+    it('⛔ re-expands over an already-populated cache without a duplicate-key error', async () => {
+      const { s: admin, db } = await store();
+      await db.insertInto('terminology_concepts').values([
+        { system: 's1', code: 'A', display: 'Alpha', status: 'ACTIVE' },
+        { system: 's1', code: 'B', display: 'Beta', status: 'ACTIVE' },
+      ] as never).execute();
+
+      const vs = await admin.valueSets.save({
+        url: 'urn:test:vs-reexpand', version: null, name: null, title: 'reexpand', status: 'active',
+        experimental: false, description: null,
+        compose: { include: [{ system: 's1' }] },
+      });
+
+      // The rows the first expansion wrote are still there. A second expansion must not collide
+      // with them, which is what a concurrent second request effectively does.
+      await expect(admin.valueSets.expand(vs.id)).resolves.toBeTruthy();
+      await expect(admin.valueSets.expand(vs.id)).resolves.toBeTruthy();
+
+      const codes = (await db.selectFrom('valueset_expansions').select('code')
+        .where('value_set_id', '=', vs.id).orderBy('code').execute()).map((c) => c.code);
+      expect(codes).toEqual(['A', 'B']);
+    });
+
     it('activeOnly expansion includes NULL-status concepts but still excludes DEPRECATED ones', async () => {
       const { s: admin, db } = await store();
       await db.insertInto('terminology_concepts').values([

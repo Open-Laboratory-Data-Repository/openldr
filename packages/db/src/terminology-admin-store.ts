@@ -344,14 +344,29 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
     return vsRow(r);
   }
 
+  // ⛔ ATOMIC, AND CONFLICT-TOLERANT, because two expansions of one set can and do run at once.
+  //
+  // This was a bare `delete` then a plain `insert`, neither in a transaction and the insert with no
+  // conflict clause, so two callers could interleave as delete/delete/insert/insert and the second
+  // insert collided with the rows the first had just written:
+  //
+  //     duplicate key value violates unique constraint "valueset_expansions_pk"
+  //
+  // The facility import's value-mapping panel fetches its controlled fields in PARALLEL and each
+  // request expands that field's bound value set, so an ordinary import hit it: one field came back
+  // 500 and its picker rendered empty. Reproduced against real Postgres in
+  // `valueset-expansion-live.test.ts`; pg-mem CANNOT show this, because it runs statements serially
+  // and delete-then-insert is perfectly safe when nothing runs in between.
+  //
+  // The transaction makes the pair atomic. `insertExpansionRows` is reused rather than re-rolling
+  // the insert: it already batches at 1000 (a large set would otherwise blow the parameter limit)
+  // and already carries the `onConflict...doNothing()` this one was missing.
   async function writeExpansionCache(id: string, codes: ExpandedConcept[]): Promise<void> {
-    await db.deleteFrom('valueset_expansions').where('value_set_id', '=', id).execute();
-    if (codes.length) {
-      await db.insertInto('valueset_expansions').values(codes.map((c) => ({
-        value_set_id: id, system_url: c.system, code: c.code, display: c.display, inactive: false,
-      }))).execute();
-    }
-    await db.updateTable('value_sets').set({ expanded_at: sql`now()` }).where('id', '=', id).execute();
+    await db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('valueset_expansions').where('value_set_id', '=', id).execute();
+      await insertExpansionRows(trx, id, codes);
+      await trx.updateTable('value_sets').set({ expanded_at: sql`now()` }).where('id', '=', id).execute();
+    });
   }
 
   async function insertExpansionRows(dbLike: Kysely<InternalSchema>, id: string, codes: ExpandedConcept[]): Promise<void> {
