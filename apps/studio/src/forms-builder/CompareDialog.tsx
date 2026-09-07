@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getFormVersion, listFormVersions, type FormVersionSummary } from '../api';
 import { diffFormSchemas, normalizeFormSchema, type FormSchema, type FormSchemaDiff } from '@openldr/forms/pure';
 
@@ -25,27 +26,45 @@ function flattenDiff(diff: FormSchemaDiff): CompareRow[] {
   return rows;
 }
 
+type Side = 'draft' | number;
+
+/** Resolve one side of the comparison to a schema. */
+async function sideSchema(formId: string, side: Side, current: FormSchema): Promise<FormSchema> {
+  if (side === 'draft') return current;
+  const snapshot = await getFormVersion(formId, side);
+  return normalizeFormSchema(snapshot.schema);
+}
+
 export function CompareDialog({ formId, current, open, onOpenChange }: { formId: string | null; current: FormSchema; open: boolean; onOpenChange: (open: boolean) => void }): JSX.Element {
   const [versions, setVersions] = useState<FormVersionSummary[]>([]);
   const [rows, setRows] = useState<CompareRow[]>([]);
+  const [left, setLeft] = useState<Side | null>(null);
+  const [right, setRight] = useState<Side>('draft');
 
+  // Load the version list once per open, and seed the left side with the newest published
+  // version so the dialog opens on exactly what it used to show.
   useEffect(() => {
     if (!open || !formId) return;
     let cancelled = false;
-    void listFormVersions(formId).then(async (loaded) => {
+    void listFormVersions(formId).then((loaded) => {
       if (cancelled) return;
       setVersions(loaded);
-      const first = loaded[0];
-      if (!first) {
-        setRows([]);
-        return;
-      }
-      const snapshot = await getFormVersion(formId, first.version);
-      if (cancelled) return;
-      setRows(flattenDiff(diffFormSchemas(normalizeFormSchema(snapshot.schema), current)));
+      setLeft(loaded[0] ? loaded[0].version : null);
+      setRight('draft');
     });
     return () => { cancelled = true; };
-  }, [open, formId, current]);
+  }, [open, formId]);
+
+  // Recompute whenever either side moves.
+  useEffect(() => {
+    if (!open || !formId || left === null) return;
+    let cancelled = false;
+    void Promise.all([sideSchema(formId, left, current), sideSchema(formId, right, current)])
+      .then(([before, after]) => {
+        if (!cancelled) setRows(flattenDiff(diffFormSchemas(before, after)));
+      });
+    return () => { cancelled = true; };
+  }, [open, formId, left, right, current]);
 
   const latest = versions[0];
   const latestLabel = latest ? (latest.versionLabel ?? `v${latest.version}`) : '';
@@ -61,9 +80,44 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
               'No published versions yet.'
             )}
           </p>
+          <div className="mt-3 flex items-center gap-2">
+            <Select
+              value={String(left ?? '')}
+              onValueChange={(v) => setLeft(v === 'draft' ? 'draft' : Number(v))}
+            >
+              <SelectTrigger className="w-44 text-xs" aria-label="Compare from">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Current draft</SelectItem>
+                {versions.map((v) => (
+                  <SelectItem key={v.id} value={String(v.version)}>
+                    {v.versionLabel ? `v${v.version} (${v.versionLabel})` : `v${v.version}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">to</span>
+            <Select
+              value={right === 'draft' ? 'draft' : String(right)}
+              onValueChange={(v) => setRight(v === 'draft' ? 'draft' : Number(v))}
+            >
+              <SelectTrigger className="w-44 text-xs" aria-label="Compare to">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Current draft</SelectItem>
+                {versions.map((v) => (
+                  <SelectItem key={v.id} value={String(v.version)}>
+                    {v.versionLabel ? `v${v.version} (${v.versionLabel})` : `v${v.version}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {!latest ? (
+        {versions.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <p className="text-sm font-medium">No published versions yet</p>
             <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
