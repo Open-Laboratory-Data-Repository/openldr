@@ -7,6 +7,8 @@ vi.mock('./forms', () => ({
   runFormsLint: mocks.runFormsLint,
   runFormsList: vi.fn().mockResolvedValue(0),
   runFormsExtract: vi.fn().mockReturnValue({ resourceTypes: [], invalidCount: 0, bundle: {} }),
+  runFormsVersions: vi.fn().mockResolvedValue(0),
+  runFormsRestore: vi.fn().mockResolvedValue(0),
 }));
 
 describe('forms lint, commander parsing path', () => {

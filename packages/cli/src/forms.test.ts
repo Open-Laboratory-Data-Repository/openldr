@@ -4,13 +4,14 @@ import { fileURLToPath } from 'node:url';
 const mocks = vi.hoisted(() => ({
   listVersions: vi.fn(),
   restore: vi.fn(),
+  get: vi.fn(),
   recordAuditEvent: vi.fn(),
   close: vi.fn(),
 }));
 
 vi.mock('@openldr/bootstrap', () => ({
   createAppContext: async () => ({
-    forms: { listVersions: mocks.listVersions, restore: mocks.restore },
+    forms: { listVersions: mocks.listVersions, restore: mocks.restore, get: mocks.get },
     audit: {}, logger: {}, close: mocks.close,
   }),
   recordAuditEvent: mocks.recordAuditEvent,
@@ -54,7 +55,24 @@ describe('runFormsRestore', () => {
     expect(mocks.restore).not.toHaveBeenCalled();
   });
 
-  it('restores with --force and audits as the cli actor', async () => {
+  it('rejects a version above the 32-bit range the route also rejects', async () => {
+    expect(await runFormsRestore('form-1', '99999999999999999999', { json: false, force: true })).toBe(1);
+    expect(await runFormsRestore('form-1', '2147483648', { json: false, force: true })).toBe(1);
+    expect(mocks.restore).not.toHaveBeenCalled();
+  });
+
+  it('exits cleanly when the form does not exist, without calling restore', async () => {
+    mocks.get.mockResolvedValue(null);
+
+    expect(await runFormsRestore('nope', '1', { json: false, force: true })).toBe(1);
+
+    expect(mocks.restore).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('restores with --force and audits as the cli actor, with the pre-restore form as before', async () => {
+    const before = { id: 'form-1', name: 'Specimen intake', status: 'published' };
+    mocks.get.mockResolvedValue(before);
     mocks.restore.mockResolvedValue({ id: 'form-1', name: 'Specimen intake', status: 'draft' });
 
     expect(await runFormsRestore('form-1', '1', { json: false, force: true })).toBe(0);
@@ -65,7 +83,7 @@ describe('runFormsRestore', () => {
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ actorType: 'cli' }),
-      expect.objectContaining({ action: 'form.restore' }),
+      expect.objectContaining({ action: 'form.restore', before }),
     );
   });
 });

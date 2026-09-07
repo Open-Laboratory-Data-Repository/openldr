@@ -116,7 +116,7 @@ export async function runFormsRestore(
   version: string,
   opts: { json: boolean; force: boolean },
 ): Promise<number> {
-  if (!/^[1-9]\d*$/.test(version)) {
+  if (!/^[1-9]\d*$/.test(version) || !Number.isSafeInteger(Number(version)) || Number(version) > 2147483647) {
     process.stderr.write('version must be a positive integer\n');
     return 1;
   }
@@ -129,10 +129,15 @@ export async function runFormsRestore(
   const parsed = Number(version);
   const ctx = await createAppContext(loadConfig());
   try {
+    const before = await ctx.forms.get(id);
+    if (!before) {
+      process.stderr.write(`no form with id ${id}\n`);
+      return 1;
+    }
     const restored = await ctx.forms.restore(id, parsed);
     await recordAuditEvent(ctx, cliActor(), {
       action: 'form.restore', entityType: 'form', entityId: id,
-      before: null, after: restored, metadata: { sourceVersion: parsed },
+      before, after: restored, metadata: { sourceVersion: parsed },
     });
     if (opts.json) {
       process.stdout.write(JSON.stringify(restored, null, 2) + '\n');

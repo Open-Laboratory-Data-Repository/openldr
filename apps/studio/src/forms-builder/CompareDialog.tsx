@@ -48,18 +48,29 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
   const [right, setRight] = useState<Side>('draft');
   const [leftSchema, setLeftSchema] = useState<FormSchema | null>(null);
   const [rightSchema, setRightSchema] = useState<FormSchema | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
+  const [leftError, setLeftError] = useState<string | null>(null);
+  const [rightError, setRightError] = useState<string | null>(null);
 
   // Load the version list once per open, and seed the left side with the newest published
   // version so the dialog opens on exactly what it used to show.
   useEffect(() => {
     if (!open || !formId) return;
     let cancelled = false;
-    void listFormVersions(formId).then((loaded) => {
-      if (cancelled) return;
-      setVersions(loaded);
-      setLeft(loaded[0] ? loaded[0].version : null);
-      setRight('draft');
-    });
+    setListError(null);
+    void listFormVersions(formId)
+      .then((loaded) => {
+        if (cancelled) return;
+        setVersions(loaded);
+        setLeft(loaded[0] ? loaded[0].version : null);
+        setRight('draft');
+      })
+      .catch((err) => {
+        // A failed fetch is not the same claim as "never published". Show the error, not the
+        // empty state, so a transient failure does not read as a permanent fact about the form.
+        if (cancelled) return;
+        setListError(err instanceof Error ? err.message : String(err));
+      });
     return () => { cancelled = true; };
   }, [open, formId]);
 
@@ -67,9 +78,18 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
   useEffect(() => {
     if (!open || !formId || left === null) return;
     let cancelled = false;
-    void sideSchema(formId, left, current).then((schema) => {
-      if (!cancelled) setLeftSchema(schema);
-    });
+    setLeftError(null);
+    void sideSchema(formId, left, current)
+      .then((schema) => {
+        if (!cancelled) setLeftSchema(schema);
+      })
+      .catch((err) => {
+        // Leaving the old schema in place would silently describe a comparison that is not
+        // the one selected, so drop it and show the error instead.
+        if (cancelled) return;
+        setLeftSchema(null);
+        setLeftError(err instanceof Error ? err.message : String(err));
+      });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, formId, left, left === 'draft' ? current : null]);
@@ -78,9 +98,16 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
   useEffect(() => {
     if (!open || !formId) return;
     let cancelled = false;
-    void sideSchema(formId, right, current).then((schema) => {
-      if (!cancelled) setRightSchema(schema);
-    });
+    setRightError(null);
+    void sideSchema(formId, right, current)
+      .then((schema) => {
+        if (!cancelled) setRightSchema(schema);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setRightSchema(null);
+        setRightError(err instanceof Error ? err.message : String(err));
+      });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, formId, right, right === 'draft' ? current : null]);
@@ -99,7 +126,9 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
         <div className="border-b border-border px-6 py-4">
           <DialogTitle className="text-base font-semibold">Compare form versions</DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">
-            {versions.length > 0 ? (
+            {listError ? (
+              <span className="text-destructive">Could not load versions.</span>
+            ) : versions.length > 0 ? (
               <>
                 <span className="font-medium text-foreground">{leftLabel}</span> vs{' '}
                 <span className="font-medium text-foreground">{rightLabel}</span>
@@ -145,12 +174,22 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
           </div>
         </div>
 
-        {versions.length === 0 ? (
+        {listError ? (
+          <div className="px-6 py-12 text-center">
+            <p className="text-sm font-medium text-destructive">Could not load versions</p>
+            <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">{listError}</p>
+          </div>
+        ) : versions.length === 0 ? (
           <div className="px-6 py-12 text-center">
             <p className="text-sm font-medium">No published versions yet</p>
             <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
               Publish this form to create a snapshot you can compare the current draft against.
             </p>
+          </div>
+        ) : leftError || rightError ? (
+          <div className="px-6 py-12 text-center">
+            <p className="text-sm font-medium text-destructive">Could not load the comparison</p>
+            <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">{leftError || rightError}</p>
           </div>
         ) : rows.length === 0 ? (
           <div className="px-6 py-12 text-center">

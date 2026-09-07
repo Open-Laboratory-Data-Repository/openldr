@@ -34,8 +34,9 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 16. Use **Compare** to review changes between versions.
 17. Use **Versions** to see every published version, newest first, with the date each was released.
 18. From a version's actions, choose **Restore** to put it back. This replaces the form you are
-    editing, and a published form goes back to draft. Undo in the builder reverses it, and nothing
-    reaches users until you publish again.
+    editing, and a published form goes back to draft right away. It drops out of View/Run the
+    moment you restore. Publish again to put it back there. Undo in the builder only changes what
+    is on screen; save it to write that back.
 
 ![Form builder with field palette, preview, editor, and actions](form-builder.png)
 
@@ -100,6 +101,11 @@ Change the field type to match the FHIR structure, or bind a more specific path 
 Operators running without the studio can run `openldr forms lint` to get the same findings.
 
 You can pass an optional form ID to lint a single form. Use `--json` for structured output. The command exits non-zero when any error is present.
+
+Run `openldr forms versions <id>` to list a form's published versions, newest first.
+
+Run `openldr forms restore <id> <version> --force` to put a published version back over the
+current draft. It refuses without `--force`.
 
 ## Advanced web usage
 

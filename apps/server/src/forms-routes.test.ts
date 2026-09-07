@@ -656,6 +656,22 @@ describe('forms routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('refuses a restore from a role holding forms.view but not forms.edit', async () => {
+    const ctx = fakeCtx();
+    const created = await authedApp(ctx).inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+    await authedApp(ctx).inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: {} });
+
+    const res = await authedApp(ctx, ['forms.view']).inject({
+      method: 'POST', url: `/api/forms/${id}/restore/1`, payload: {},
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
   it('audits published status changes as publish events', async () => {
     const ctx = fakeCtx();
     const app = authedApp(ctx);

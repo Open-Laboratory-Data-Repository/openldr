@@ -94,4 +94,14 @@ describe('CompareDialog', () => {
     expect(await screen.findByText(/v1Field/)).toBeInTheDocument();
     expect(screen.queryByText(/v2Field/)).not.toBeInTheDocument();
   });
+
+  it('a failed version list shows an error, not the never-published empty state', async () => {
+    vi.spyOn(api, 'listFormVersions').mockRejectedValue(new Error('list form versions: network error'));
+
+    render(<CompareDialog formId="form-1" current={draft} open onOpenChange={() => {}} />);
+
+    // The dialog is portalled to document.body, so query through screen, not the render container.
+    expect(await screen.findByText('list form versions: network error')).toBeInTheDocument();
+    expect(screen.queryByText(/no published versions yet/i)).not.toBeInTheDocument();
+  });
 });

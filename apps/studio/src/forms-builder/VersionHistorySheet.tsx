@@ -111,7 +111,7 @@ export function VersionHistorySheet({
                         <TableCell>{v.version}</TableCell>
                         <TableCell className="text-muted-foreground">{v.versionLabel || '-'}</TableCell>
                         <TableCell className="text-muted-foreground">
-                          {new Date(v.publishedAt).toLocaleDateString()}
+                          {new Date(v.publishedAt).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>
@@ -153,7 +153,7 @@ export function VersionHistorySheet({
         open={pendingRestore !== null}
         onOpenChange={(o) => { if (!o) setPendingRestore(null); }}
         title={pendingRestore ? `Restore version ${pendingRestore.version}?` : 'Restore version?'}
-        description="This replaces the form you are editing. A published form goes back to draft. You can undo it in the builder."
+        description="This overwrites the form you are editing. A published form drops out of View/Run right away. Undo puts your previous draft back on screen. Save it to keep that."
         confirmLabel="Restore"
         destructive
         onConfirm={() => { void confirmRestore(); }}
