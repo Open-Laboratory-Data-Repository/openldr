@@ -214,7 +214,7 @@ Add to `apps/server/src/forms-routes.test.ts`:
 
 ```ts
   it('restores a version and audits it as form.restore', async () => {
-    const app = await makeApp();
+    const app = authedApp(fakeCtx());
     const created = await app.inject({
       method: 'POST', url: '/api/forms',
       payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
@@ -229,7 +229,7 @@ Add to `apps/server/src/forms-routes.test.ts`:
   });
 
   it('rejects a version path segment that is not a positive integer', async () => {
-    const app = await makeApp();
+    const app = authedApp(fakeCtx());
     const created = await app.inject({
       method: 'POST', url: '/api/forms',
       payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
@@ -243,7 +243,7 @@ Add to `apps/server/src/forms-routes.test.ts`:
   });
 
   it('404s a version the form does not have', async () => {
-    const app = await makeApp();
+    const app = authedApp(fakeCtx());
     const created = await app.inject({
       method: 'POST', url: '/api/forms',
       payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
@@ -256,7 +256,7 @@ Add to `apps/server/src/forms-routes.test.ts`:
   });
 
   it('404s an unknown form', async () => {
-    const app = await makeApp();
+    const app = authedApp(fakeCtx());
 
     const res = await app.inject({ method: 'POST', url: '/api/forms/nope/restore/1', payload: {} });
 
@@ -264,7 +264,7 @@ Add to `apps/server/src/forms-routes.test.ts`:
   });
 ```
 
-Match the existing file's own app-construction helper rather than inventing one. Read the top of `forms-routes.test.ts` and reuse whatever it already calls to build the Fastify instance and the `forms` fake.
+`authedApp(ctx, capabilities?)` is at `forms-routes.test.ts:27` and defaults to `ALL_FORMS_CAPS`; `fakeCtx()` is at `:204`. Both already exist. Do not invent a helper.
 
 - [ ] **Step 2: Extend the test fake**
 
@@ -272,9 +272,10 @@ Match the existing file's own app-construction helper rather than inventing one.
 
 ```ts
       restore: async (id: string, version: number) => {
-        const form = forms.find((f) => f.id === id);
-        if (!form) throw new Error('form not found');
-        const snapshot = versions.find((v) => v.formId === id && v.version === version);
+        const form = forms.find((item) => item.id === id);
+        if (!form) throw new Error('not found');
+        // `versions` at line 212 is a Map<string, FormVersion[]> keyed by form id, NOT an array.
+        const snapshot = (versions.get(id) ?? []).find((item) => item.version === version);
         if (!snapshot) throw new Error('version not found');
         form.name = snapshot.name;
         form.versionLabel = snapshot.versionLabel;
@@ -285,7 +286,7 @@ Match the existing file's own app-construction helper rather than inventing one.
       },
 ```
 
-Use whatever the file already names its in-memory version array; if it has none, mirror the shape its `publish` fake pushes to.
+Place it beside the existing `listVersions` and `getVersion` fakes, which read the same Map.
 
 - [ ] **Step 3: Run the tests to verify they fail**
 
@@ -481,6 +482,7 @@ describe('VersionHistorySheet', () => {
     render(<VersionHistorySheet formId="form-1" open onOpenChange={() => {}} onRestored={() => {}} />);
 
     expect(await screen.findByText(/never been published/i)).toBeInTheDocument();
+    // StripedEmpty renders its children, so assert on the copy, not on a title prop.
     // An empty table's header forces intrinsic width and scrolls sideways on a phone.
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
@@ -574,10 +576,9 @@ export function VersionHistorySheet({
           ) : total === 0 ? (
             // Stripes imply emptiness, so they never show while loading. An empty table's header
             // forces intrinsic width and scrolls sideways on a phone, so render no table at all.
-            <StripedEmpty
-              title="No versions yet"
-              description="This form has never been published. Publishing takes a snapshot you can come back to."
-            />
+            <StripedEmpty className="min-h-[16rem]">
+              This form has never been published. Publishing takes a snapshot you can come back to.
+            </StripedEmpty>
           ) : (
             <>
               <div className="min-h-0 flex-1">
@@ -648,7 +649,8 @@ export function VersionHistorySheet({
 }
 ```
 
-Check `StripedEmpty`'s and `ConfirmDialog`'s real prop names before writing; match them rather than the names above if they differ.
+`StripedEmpty` takes only `children` and `className`; there is no `title` or `description` prop. Its
+`min-h-[16rem]` matches the data state so the sheet does not jump between the two.
 
 - [ ] **Step 5: Run the sheet test to verify it passes**
 
