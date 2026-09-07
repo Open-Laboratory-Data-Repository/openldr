@@ -57,6 +57,19 @@ La liste des valeurs non reconnues est conservée pendant que vous la traitez. E
 correspondance ne fait pas disparaître les lignes restantes, et ne relance plus la vérification
 tout seul. Demandez la vérification suivante quand vous êtes prêt.
 
+### L'orthographe n'est pas votre problème
+
+Une valeur qui ne diffère du vocabulaire que par les majuscules, ou parce qu'elle écrit Centre là où
+le vocabulaire écrit Center, se résout toute seule et n'atteint jamais cette liste. Le
+`Health Centre` de votre registre est importé comme `health-center`, et les mots que votre fichier a
+réellement employés sont conservés à côté de la ligne.
+
+Un nom réellement différent vous parvient toujours. `1st Level Hospital` n'est l'orthographe de rien
+dans le vocabulaire : il attend donc votre décision, et c'est bien le but.
+
+**Une correspondance que vous avez faite à la main l'emporte toujours.** Rien de décidé
+automatiquement ne passe outre une décision que vous avez prise.
+
 Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont Aperçu, les
 trois options de nouvelle vérification, Annuler et Fermer, reste dans le menu `⋯` de la page.
 

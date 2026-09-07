@@ -23,7 +23,10 @@ field names. A header you choose to map ends up in one of three places:
   refuses rather than guess which one should win.
 - **A fixed value (`constants`)**, for a contract field no column in the file carries at all. A
   national file usually has no `country` column, so `country` is normally supplied this way.
-  `level`, `status` and `country` are bound to value sets. In the studio their fixed value is picked
+  `level`, `status` and `country` are bound to value sets. A value differing from the vocabulary only
+by capitals, or by writing Centre where it writes Center, resolves automatically to the vocabulary's
+code, with the register's own words kept on the row; a mapping made by hand always takes precedence
+over that. In the studio their fixed value is picked
   from a list and stored as the code; through the CLI's `--column-map` file a `constants` entry for
   one of those three should be a code or a display from that field's value set, or the import writes
   it through as typed and reports it as unmapped.

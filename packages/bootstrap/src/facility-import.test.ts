@@ -1258,6 +1258,35 @@ describe('controlled-field resolution during an import', () => {
     expect(row?.extras).toMatchObject({ __source: { level: 'health_center' } });
   });
 
+  // ⛔ THE UNIT TEST PROVES THE CLASSIFICATION; THIS PROVES THE WRITE. `resolveControlledFields` can
+  // say "mapped" and `applyControlledFields` still leave the row alone if the two disagree about
+  // which string is canonical, which is a class of bug no per-function test can see. It runs against
+  // the REAL seeded vocabulary (migration 072), not a fixture, so it also proves `Health Centre` is
+  // genuinely foldable onto something that is actually there.
+  it('folds a spelling variant onto the seeded code, keeping the words the file used', async () => {
+    const deps = await buildDepsWithAdmin();
+    // 'Health Centre' (British) is what the Zambia MFL export writes; the seeded concept reads
+    // 'Health Center'. No mapping exists, so this resolves by the fold alone.
+    const r = await importFacilities(
+      deps, csv(['100,Alpha,Health Centre,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+
+    expect(r.unmapped.level).toEqual([]);
+    const row = await rowFor(deps.db, '100');
+    expect(row?.level).toBe('health-center');
+    // The words the register actually used are not lost, exactly as for a hand-made mapping.
+    expect(row?.extras).toMatchObject({ __source: { level: 'Health Centre' } });
+  });
+
+  // The other half of the same rule: a genuinely different NAME still reaches the operator.
+  it('leaves a genuinely different name unmapped, so it still reaches a person', async () => {
+    const deps = await buildDepsWithAdmin();
+    const r = await importFacilities(
+      deps, csv(['100,Alpha,1st Level Hospital,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+
+    expect(r.unmapped.level).toEqual(['1st Level Hospital']);
+    expect((await rowFor(deps.db, '100'))?.level).toBe('1st Level Hospital');
+  });
+
   it('reports every field notValidated — without throwing — when the caller omits deps.admin', async () => {
     const deps = await buildDeps(); // no `admin`
     const r = await importFacilities(
