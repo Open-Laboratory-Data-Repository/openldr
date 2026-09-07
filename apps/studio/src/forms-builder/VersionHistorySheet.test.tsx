@@ -84,4 +84,33 @@ describe('VersionHistorySheet', () => {
     // An empty table's header forces intrinsic width and scrolls sideways on a phone.
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
+
+  it('a failed fetch shows an error, not the never-published empty state', async () => {
+    vi.spyOn(api, 'listFormVersions').mockRejectedValue(new Error('list form versions: network error'));
+
+    render(<VersionHistorySheet formId="form-1" open onOpenChange={() => {}} onRestored={() => {}} />);
+
+    expect(await screen.findByText('list form versions: network error')).toBeInTheDocument();
+    expect(screen.queryByText(/never been published/i)).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('list form versions: network error'),
+    );
+  });
+
+  it('changing the page size returns to the first page', async () => {
+    const many = Array.from({ length: 15 }, (_, i) => version(15 - i, `v${15 - i}`));
+    vi.spyOn(api, 'listFormVersions').mockResolvedValue(many);
+
+    render(<VersionHistorySheet formId="form-1" open onOpenChange={() => {}} onRestored={() => {}} />);
+    expect(await screen.findByText('v15')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(await screen.findByText('v5')).toBeInTheDocument();
+    expect(screen.queryByText('v15')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Rows per page'));
+    fireEvent.click(await screen.findByText('25'));
+
+    expect(await screen.findByText('v15')).toBeInTheDocument();
+  });
 });

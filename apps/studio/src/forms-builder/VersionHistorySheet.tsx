@@ -29,6 +29,7 @@ export function VersionHistorySheet({
 }: VersionHistorySheetProps): JSX.Element {
   const [versions, setVersions] = useState<FormVersionSummary[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
   const [pendingRestore, setPendingRestore] = useState<FormVersionSummary | null>(null);
@@ -37,9 +38,15 @@ export function VersionHistorySheet({
     if (!open || !formId) return;
     let cancelled = false;
     setLoading(true);
+    setError(null);
     void listFormVersions(formId)
       .then((loaded) => { if (!cancelled) setVersions(loaded); })
-      .catch((err) => { if (!cancelled) toast.error(err instanceof Error ? err.message : String(err)); })
+      .catch((err) => {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+        toast.error(message);
+      })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [open, formId]);
@@ -76,6 +83,10 @@ export function VersionHistorySheet({
 
           {loading ? (
             <LoadingState />
+          ) : error ? (
+            // A failed fetch is not the same claim as "never published". Show the error, not
+            // StripedEmpty, so a transient failure does not read as a permanent fact about the form.
+            <p className="text-sm text-destructive">{error}</p>
           ) : total === 0 ? (
             // Stripes imply emptiness, so they never show while loading. An empty table's header
             // forces intrinsic width and scrolls sideways on a phone, so render no table at all.
@@ -84,7 +95,7 @@ export function VersionHistorySheet({
             </StripedEmpty>
           ) : (
             <>
-              <div className="min-h-0 flex-1">
+              <div className="flex min-h-0 flex-1 flex-col">
                 <Table wrapperClassName="min-h-0 flex-1">
                   <TableHeader>
                     <TableRow>
@@ -131,7 +142,7 @@ export function VersionHistorySheet({
                 pageSize={pageSize}
                 total={total}
                 onPageChange={setPage}
-                onPageSizeChange={setPageSize}
+                onPageSizeChange={(size) => { setPageSize(size); setPage(0); }}
               />
             </>
           )}
