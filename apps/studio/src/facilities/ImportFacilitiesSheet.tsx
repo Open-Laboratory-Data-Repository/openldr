@@ -37,6 +37,7 @@ import {
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
 import { CONTROLLED_FIELDS } from './controlledFields';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
+import { ValueMapPanel } from './ValueMapPanel';
 import { summarySignature, worklistSignature, type ImportInputs } from './importInputsSignature';
 import {
   ColumnMapErrorsNotice, ReconciliationSummary, willWrite, type ReuploadOverrides,
@@ -44,7 +45,6 @@ import {
 import { ImportSteps } from './ImportSteps';
 import { RegisterSourceDialog } from './RegisterSourceDialog';
 import { canGoBack, clampStep, furthestStep, type ImportStep } from './stepModel';
-import { ValueMapPanel } from './ValueMapPanel';
 
 
 /** Task 8: the reset value for a freshly picked file — no header has been mapped, constant-filled or
@@ -836,9 +836,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  simply repeat — so this re-streams the SAME file, which mints a fresh run and supersedes the one
    *  under review, the same mechanism the re-upload actions above already use for a parse-changing
    *  override. */
+  // ⛔ NO RE-CHECK HERE ANY MORE, and on the run door that also means no silent re-upload. Saving
+  // used to re-parse and carry the operator to Review, so the page both asked the question and
+  // reported the answer. Saving is now a local edit: it bumps the stamp, which retires the summary,
+  // and asking for a fresh check stays the operator's decision. The worklist survives deliberately
+  // (`worklistSignature` does not read this stamp), so the remaining rows do not vanish mid-edit.
   const handleValueMappingsSaved = (): void => {
-    if (fromRun) void handleUpload();
-    else void runPreview();
+    setValueMappingsSavedAt((n) => n + 1);
   };
   /** The run door's parse-override state, read off the RUN rather than this sheet's own — see
    *  `ReuploadOverrides`. `null` while an inline preview is what is under review, which is what makes
@@ -1502,11 +1506,23 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </div>
           )}
 
+          {/* Task 4: the value-mapping worklist, where the deciding happens. Fed by the last
+              check's findings, so it is absent on the first pass (nothing has read the file yet)
+              and present once a check has found work. Review reports the same values read-only. */}
+          {step === 2 && !applyResult && liveFindings
+            && CONTROLLED_FIELDS.some((f) => liveFindings.unmapped[f].length > 0) && (
+            <div className="mx-6 mt-4">
+              <ValueMapPanel
+                nationalSystem={nationalSystem.trim()}
+                unmapped={liveFindings.unmapped}
+                onSaved={handleValueMappingsSaved}
+              />
+            </div>
+          )}
+
           {step === 3 && reviewResult && !appliedSummary && (
             <ReconciliationSummary
               result={reviewResult}
-              nationalSystem={nationalSystem.trim()}
-              onValueMappingsSaved={handleValueMappingsSaved}
               // A FACT about this result, not a control. On the run door it is what the upload
               // recorded; on the inline door the live state, which the invalidation guarantees is
               // the state this result was computed under.

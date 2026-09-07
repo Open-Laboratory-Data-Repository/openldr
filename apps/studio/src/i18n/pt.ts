@@ -969,6 +969,8 @@ export const pt: EnShape = {
       summaryDeleted: '{{count}} linha(s) foram declaradas removidas por este ficheiro.',
       changedSampleTitle: 'Exemplos do que mudaria',
       changedFieldDiff: '{{field}}: {{before}} → {{after}}',
+      unmappedField: '{{field}}: {{count}} valor(es) que não reconhecemos, incluindo {{values}}.',
+      unmappedFixOnMapping: 'Mapeie-os no passo Mapeamento e verifique de novo. O que ficar por mapear é importado tal como está escrito.',
       unmappedTitle: 'Valores sem mapeamento canónico',
       unmappedMessage: '{{count}} valor(es) de {{field}} não têm mapeamento canónico e foram mantidos como introduzidos: {{values}}',
       notValidatedMessage: 'Não verificado face a um conjunto de valores canónico nesta instalação: {{fields}}.',

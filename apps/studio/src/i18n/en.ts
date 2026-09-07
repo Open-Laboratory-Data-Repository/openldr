@@ -993,6 +993,8 @@ export const en = {
       summaryDeleted: '{{count}} row(s) were declared removed by this file.',
       changedSampleTitle: 'Examples of what would change',
       changedFieldDiff: '{{field}}: {{before}} → {{after}}',
+      unmappedField: '{{field}}: {{count}} value(s) we do not recognise, including {{values}}.',
+      unmappedFixOnMapping: 'Map them on the Mapping step, then check again. Anything left unmapped is imported exactly as written.',
       unmappedTitle: 'Values with no canonical mapping',
       unmappedMessage: '{{count}} {{field}} value(s) have no canonical mapping and were kept as entered: {{values}}',
       notValidatedMessage: 'Not checked against a canonical value set on this install: {{fields}}.',

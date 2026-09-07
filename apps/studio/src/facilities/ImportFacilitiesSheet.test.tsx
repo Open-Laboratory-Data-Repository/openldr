@@ -1174,13 +1174,19 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await previewNow();
 
+    // Review REPORTS the finding and offers nothing to click.
     expect(await screen.findByText(/values with no canonical mapping/i)).toBeInTheDocument();
+    expect(screen.getByText(/map them on the mapping step/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Zonal Hospital')).toBeNull();
+    expect(screen.getByText(/not checked against a canonical value set.*Status/i)).toBeInTheDocument();
+
+    // The pick-lists are on Mapping, where the deciding happens.
+    await backToMapping();
     // ⛔ VALUE mapping, not column mapping. `valueMap.notMapped` is a different key from
     // `columnMap.notMapped` and did NOT change: a value with no canonical mapping is genuinely
     // unmapped and imports as-is, whereas an unmapped COLUMN is kept as extra data.
-    expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Not mapped');
+    expect(await screen.findByLabelText('Zonal Hospital')).toHaveTextContent('Not mapped');
     expect(screen.getByLabelText('District Clinic')).toHaveTextContent('Not mapped');
-    expect(screen.getByText(/not checked against a canonical value set.*Status/i)).toBeInTheDocument();
   });
 
   it('CT-3: renders a JSONL release\'s declared/parsed count mismatch', async () => {

@@ -11,7 +11,6 @@ import { MoreHorizontal } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import type { ColumnMapError, FacilityImportResult } from '@/api';
 import { CONTRACT_FIELDS } from './ColumnMapStep';
-import { ValueMapPanel } from './ValueMapPanel';
 import { CONTROLLED_FIELDS } from './controlledFields';
 
 /** One `ColumnMapError` (packages/terminology/src/facility-csv.ts, mirrored as `@/api`'s
@@ -117,12 +116,6 @@ export interface ReconciliationSummaryProps {
   overCap: boolean;
   /** `null` on the inline door; the run's own parse-override state on the background one. */
   reupload: ReuploadOverrides | null;
-  /** Task 8: the register `ValueMapPanel` writes mappings under — same identity on both doors, the
-   *  sheet's own `nationalSystem` state. */
-  nationalSystem: string;
-  /** Task 8: `ValueMapPanel`'s `onSaved` — a just-written mapping only takes effect on a fresh
-   *  parse, so this re-runs whichever preview produced `result`. */
-  onValueMappingsSaved: () => void;
 }
 
 /** A2a's reconciliation summary — what a file would actually DO to the registry, as the server
@@ -347,16 +340,25 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
           {/* CT-3 / Task 8: the controlled-field layer (FAC-P1-05) — a raw source value for
               level/status/country that resolved to no canonical `term_mappings` code. A WARNING,
               never a block: the raw value is still written exactly as before this layer existed
-              (see facility-import.ts's `unmapped` doc comment) — `ValueMapPanel` turns it into an
-              opportunity to fix it, never into a wall (see that file's own docblock). It renders its
-              own heading using the SAME `unmappedTitle` copy the plain warning box used to show, so
-              the operator sees no unexplained change in wording, only new controls underneath it. */}
+              (see facility-import.ts's `unmapped` doc comment).
+              ⛔ REPORTED HERE, DECIDED ON MAPPING. This used to render `ValueMapPanel` with its
+              pick-lists, which made Review the page that both asked the question and reported the
+              answer. The panel now lives on Mapping, fed by the last check's findings; this states
+              what was found and offers nothing to click. */}
           {CONTROLLED_FIELDS.some((f) => result.unmapped[f].length > 0) && (
-            <ValueMapPanel
-              nationalSystem={props.nationalSystem}
-              unmapped={result.unmapped}
-              onSaved={props.onValueMappingsSaved}
-            />
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+              <p className="font-medium">{t('facilities.import.unmappedTitle')}</p>
+              {CONTROLLED_FIELDS.filter((f) => result.unmapped[f].length > 0).map((f) => (
+                <p key={f}>
+                  {t('facilities.import.unmappedField', {
+                    field: t(`facilities.filters.${f}Label`),
+                    count: result.unmapped[f].length,
+                    values: result.unmapped[f].slice(0, 5).join(', '),
+                  })}
+                </p>
+              ))}
+              <p className="mt-1">{t('facilities.import.unmappedFixOnMapping')}</p>
+            </div>
           )}
           {/* Informational, not a warning box: these fields simply have no seeded value set
               to check against on this install, so mapped/unmapped could not be determined. */}

@@ -3,16 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { ReconciliationSummary, willWrite } from './ReconciliationSummary';
 import type { FacilityImportResult } from '@/api';
 
-// The summary still renders `ValueMapPanel`, which fetches. There is no global `fetch` stub in
-// `setupTests.ts`. Task 4 removes that panel from here and this mock goes with it.
-vi.mock('@/api', async (orig) => {
-  const actual = await orig<typeof import('@/api')>();
-  return {
-    ...actual,
-    suggestValueMappings: vi.fn().mockResolvedValue({ values: [], options: [], notValidated: false }),
-    writeFacilityValueMappings: vi.fn().mockResolvedValue({ written: 0, superseded: [] }),
-  };
-});
+// No `@/api` mock: this component fetches nothing any more. It reports; the deciding, and the
+// fetching that serves it, moved to Mapping with `ValueMapPanel`.
 
 /** Mirrors `ImportFacilitiesSheet.test.tsx`'s own `baseResult`: every field defaulted to "clean,
  *  nothing to reconcile", so a test overrides only what it is about. */
@@ -57,14 +49,24 @@ describe('ReconciliationSummary', () => {
   // ⛔ THE MEASURABLE END STATE of this slice. Review reports; it decides nothing. The only
   // interactive thing left is the value-mapping panel, which Task 4 moves to Mapping too; once it
   // has, this assertion tightens to "no control at all".
-  it('offers no policy select and no override checkbox', () => {
+  it('renders no control at all: Review reports, it does not decide', () => {
     render(<ReconciliationSummary {...props} result={baseResult({
       parsed: 10, create: 3, deleted: 4, absent: 5,
       unknownColumns: ['Catchment'], quarantined: [{ line: 2, raw: 'x', reason: 'too_few_fields' }],
       invalid: [{ line: 3, field: 'latitude', raw: 'abc' }],
+      unmapped: { level: ['Health Centre'], status: [], country: [] },
     } as never)} />);
-    expect(screen.queryByLabelText(/on conflict|absent|deleted/i)).toBeNull();
+    expect(screen.queryAllByRole('combobox')).toEqual([]);
     expect(screen.queryAllByRole('checkbox')).toEqual([]);
+    expect(screen.queryAllByRole('button')).toEqual([]);
+  });
+
+  it('still REPORTS the unmapped values, and says where to fix them', () => {
+    render(<ReconciliationSummary {...props} result={baseResult({
+      parsed: 3, create: 3, unmapped: { level: ['Health Centre'], status: [], country: [] },
+    } as never)} />);
+    expect(screen.getByText(/health centre/i)).toBeInTheDocument();
+    expect(screen.getByText(/map them on the mapping step/i)).toBeInTheDocument();
   });
 });
 
