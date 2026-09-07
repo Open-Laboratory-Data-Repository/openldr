@@ -422,16 +422,13 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   it('a parseable-but-wrong file (parsed: 0, no unknown columns) reads as "nothing found", not success', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({ parsed: 0 }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem('the quick brown fox');
-    await previewNow();
+    await reviewWithSummary(baseResult({ parsed: 0 }), {}, 'the quick brown fox');
 
     expect(await screen.findByText(/no facility rows were found/i)).toBeInTheDocument();
     // Nothing to confirm — the trap case must not offer Apply.
-    openMenu();
-    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
   });
 
   it('shows unknown columns with an explicit opt-in, naming the columns, and re-previews once checked', async () => {

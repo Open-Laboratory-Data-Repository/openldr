@@ -1188,7 +1188,28 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // ⛔ NO ROW CAP. `APPLY_ROW_CAP` is the inline route's; the background path's whole purpose is a
   // register too large for it, so the only thing standing between a validated run and a confirm is
   // the importer's own `blocked` verdict.
-  const canConfirmRun = !!awaitingSummary && !blockedFor(awaitingSummary);
+  /** Is there anything an apply could write? Not the same question as "is it blocked".
+   *
+   *  ⛔ FINDING NOTHING IS NOT A REFUSAL. `blocked` reports one, so a file the parser recognised
+   *  nothing in comes back unblocked, and without this the wizard offered Confirm on the very
+   *  screen that had just said "no facility rows were found". Confirming writes nothing and says so
+   *  honestly, so nothing is corrupted; the defect is offering an action for a file there is nothing
+   *  to do with. The inline door made this promise through `canApply`'s own `parsed > 0`; the
+   *  streamed door never did, and removing that door turned a masked gap into the only behaviour.
+   *
+   *  ⛔ `quarantined` IS THE EXCEPTION AND IT IS NOT OPTIONAL. A file whose every row is malformed
+   *  parses 0 rows too, and `allowMalformedRows` is precisely the override that makes those rows
+   *  writable — the apply re-reads them, so there IS something to write. Un-ticked, `blockedFor`
+   *  withholds Confirm on its own; ticked, this must not withhold it. `parsed > 0` alone regressed
+   *  that case, which the suite caught.
+   *
+   *  Not listed, deliberately: `invalid`. Its override rides the UPLOAD, not the confirm, so a run
+   *  validated without it cannot gain rows at apply time. The remedy there is the re-check offered
+   *  by `canReuploadForInvalidCoordinates`, and withholding Confirm is the correct answer. */
+  const hasSomethingToWrite = (r: FacilityImportResult | null): boolean =>
+    !!r && (r.parsed > 0 || r.quarantined.length > 0);
+  const canConfirmRun = !!awaitingSummary && hasSomethingToWrite(awaitingSummary)
+    && !blockedFor(awaitingSummary);
   const willWriteCount = reviewResult ? willWrite(reviewResult) : 0;
   // Whole-branch review, MUST FIX 3: `ColumnMapStep`'s `rowCount` — a plain count of non-empty data
   // lines in the picked file, informational only ("This map applies to N facilities in this file").
