@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "cffb96a1",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Bring an open suggestion list into view instead of letting it clip"
+        },
+        {
+          "hash": "063b4a6e",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Escape closes the open suggestion list, not the sheet around it"
+        },
+        {
+          "hash": "9183a26e",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Level, status and country fixed values are picked at Mapping"
+        },
+        {
+          "hash": "1921722f",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A fixed value for a controlled field is picked, not typed blind"
+        },
+        {
           "hash": "7b1ad197",
           "type": "fix",
           "scope": "facilities",
