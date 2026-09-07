@@ -262,7 +262,11 @@ describe('resolveControlledFields: the four ordered steps', () => {
   // served from turbo's cache since the fold shipped.
   it('a concept with no display at all does not throw, and its code still matches', async () => {
     const admin = fakeAdmin({
-      valueSets: { [LEVEL]: [{ code: 'health-center' } as { code: string; display?: string | null }] },
+      // ⛔ THE CAST IS THE SUBJECT, not a convenience. Both `ConceptFixture` and the real
+      // `ExpandedConcept` require `display`, so this shape is one the types forbid and only a
+      // hand-built caller can produce — which is exactly what the route test that found this does.
+      // Written the type's own way it would not compile, and the bug would stay unreachable here.
+      valueSets: { [LEVEL]: [{ code: 'health-center' } as unknown as ConceptFixture] },
     });
     const res = await resolveControlledFields(admin, 'urn:tz:hfr', [
       rec({ level: 'HEALTH-CENTER' }),
