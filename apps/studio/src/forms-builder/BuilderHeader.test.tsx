@@ -116,6 +116,12 @@ describe('BuilderHeader', () => {
     it('labels the free-text field as a label, not the version number', () => {
       renderHeader();
       expect(screen.getByLabelText('Version label')).toBeInTheDocument();
+
+      // Assert on visible label text to catch reversions to "Version"
+      const label = screen.getByText((content, element) => {
+        return content === 'Version label' && element?.tagName === 'LABEL';
+      });
+      expect(label).toBeInTheDocument();
     });
 
     it('shows the published version number next to the status', () => {
