@@ -139,10 +139,17 @@ export function ImportPolicyPanel(props: ImportPolicyPanelProps): JSX.Element {
         <p className="font-medium">{t('facilities.import.policyTitle')}</p>
         <p className="text-xs text-muted-foreground">{t('facilities.import.policyHint')}</p>
       </div>
-      <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
+      {/* ⛔ STACKED ON A PHONE, label-left/input-right from `sm` up. AGENTS.md §5 puts the label
+          left and the input right, and `ColumnMapStep` obeys it with a bare `auto` track because its
+          labels are single field names like `country`. These labels are sentences.
+          MEASURED at 375x812 inside a 289px pane: bare `auto` overflowed by 82px, and
+          `minmax(0,auto)` still overflowed by 27px because the Select keeps an intrinsic minimum the
+          label cannot shrink below. Stacking is what actually fits, and §6 item 4 (it has to work on
+          a phone) is why that wins at this width. The desktop layout is unchanged. */}
+      <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
         {rows.map((r) => (
           <Fragment key={r.key}>
-            <Label htmlFor={`import-policy-${r.key}`} className="break-words">{r.label}</Label>
+            <Label htmlFor={`import-policy-${r.key}`} className="min-w-0 break-words">{r.label}</Label>
             {r.node}
           </Fragment>
         ))}
