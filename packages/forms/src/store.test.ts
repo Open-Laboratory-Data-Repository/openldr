@@ -326,6 +326,95 @@ describe('createFormStore', () => {
 
     await db.destroy();
   });
+
+  it('restores a published version back over the current draft', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const v1Schema = schema();
+    const created = await store.create({
+      name: 'Specimen intake',
+      versionLabel: 'v1',
+      fhirResourceType: 'Questionnaire',
+      targetPages: ['forms'],
+      schema: v1Schema,
+    });
+    await store.publish(created.id, { actorId: 'u1', versionLabel: 'v1' });
+
+    await store.update(created.id, {
+      ...created,
+      name: 'Specimen intake revised',
+      versionLabel: 'v2',
+      schema: { ...v1Schema, name: 'Specimen intake revised' },
+      targetPages: ['forms', 'specimens'],
+    });
+
+    const restored = await store.restore(created.id, 1);
+
+    expect(restored.name).toBe('Specimen intake');
+    // The label travels with the schema. v1's fields under v2's label would be the lie this
+    // feature exists to remove.
+    expect(restored.versionLabel).toBe('v1');
+    expect(restored.targetPages).toEqual(['forms']);
+    expect((restored.schema as FormSchema).name).toBe('Specimen intake');
+  });
+
+  it('drops a published form back to draft when a restore changes its content', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const v1Schema = schema();
+    const created = await store.create({
+      name: 'Specimen intake',
+      fhirResourceType: 'Questionnaire',
+      targetPages: ['forms'],
+      schema: v1Schema,
+    });
+    await store.publish(created.id, { actorId: 'u1', versionLabel: 'v1' });
+    await store.update(created.id, {
+      ...created,
+      name: 'Specimen intake revised',
+      schema: { ...v1Schema, name: 'Specimen intake revised' },
+    });
+    const republished = await store.publish(created.id, { actorId: 'u1', versionLabel: 'v2' });
+    expect(republished.status).toBe('published');
+
+    const restored = await store.restore(created.id, 1);
+
+    expect(restored.status).toBe('draft');
+  });
+
+  it('creates no version row, because restoring is an edit and not a release', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const v1Schema = schema();
+    const created = await store.create({
+      name: 'Specimen intake',
+      fhirResourceType: 'Questionnaire',
+      targetPages: ['forms'],
+      schema: v1Schema,
+    });
+    await store.publish(created.id, { actorId: 'u1', versionLabel: 'v1' });
+    await store.update(created.id, {
+      ...created,
+      schema: { ...v1Schema, name: 'Changed' },
+    });
+
+    await store.restore(created.id, 1);
+
+    expect(await store.listVersions(created.id)).toHaveLength(1);
+  });
+
+  it('refuses a version the form does not have', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const created = await store.create({
+      name: 'Specimen intake',
+      fhirResourceType: 'Questionnaire',
+      targetPages: ['forms'],
+      schema: schema(),
+    });
+
+    await expect(store.restore(created.id, 7)).rejects.toThrow('version not found');
+  });
 });
 
 describe('createFormStore reference capture', () => {

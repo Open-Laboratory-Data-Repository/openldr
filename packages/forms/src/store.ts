@@ -388,6 +388,34 @@ export function createFormStore(db: Kysely<InternalSchema>, capture?: ReferenceC
     return (await get(id))!;
   }
 
+  /**
+   * Write a published snapshot back over the current draft.
+   *
+   * Goes through update() rather than writing form_definitions directly, so the
+   * published-to-draft demotion (store.ts:301) and the distributed-sync capture both behave
+   * exactly as they do for a hand edit. A restore that left a form published while changing its
+   * content would leave labs mirroring a body no version row describes.
+   *
+   * Creates no version row. Snapshots record releases, not edits. The operator publishes
+   * afterwards if they want the restored content released, and that publish takes the next number.
+   */
+  async function restore(id: string, version: number): Promise<FormDefinition> {
+    const existing = await get(id);
+    if (!existing) throw new Error('form not found');
+    const snapshot = await getVersion(id, version);
+    if (!snapshot) throw new Error('version not found');
+    return update(id, {
+      name: snapshot.name,
+      versionLabel: snapshot.versionLabel,
+      fhirResourceType: snapshot.fhirResourceType,
+      fhirVersion: snapshot.fhirVersion,
+      fhirProfileUrl: snapshot.fhirProfileUrl,
+      facilityId: snapshot.facilityId,
+      schema: snapshot.schema,
+      targetPages: snapshot.targetPages,
+    });
+  }
+
   async function duplicate(id: string): Promise<FormDefinition> {
     const form = await get(id);
     if (!form) throw new Error('form not found');
@@ -420,7 +448,7 @@ export function createFormStore(db: Kysely<InternalSchema>, capture?: ReferenceC
     return row ? toVersion(row as FormVersionRow) : null;
   }
 
-  return { get, list, listPublished, create, update, setStatus, delete: deleteForm, publish, duplicate, listVersions, getVersion };
+  return { get, list, listPublished, create, update, setStatus, delete: deleteForm, publish, duplicate, restore, listVersions, getVersion };
 }
 
 export type FormStore = ReturnType<typeof createFormStore>;
