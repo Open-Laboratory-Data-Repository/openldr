@@ -100,6 +100,14 @@ const SUBMIT = { preHandler: requireCapability('forms.submit') };
 const EDIT = { preHandler: requireCapability('forms.edit') };
 const PUBLISH = { preHandler: requireCapability('forms.publish') };
 
+/** A `:version` path segment is a positive 32-bit integer or it is a 400, never a cast. */
+function parseVersionParam(raw: string): number | null {
+  if (!/^[1-9]\d*$/.test(raw)) return null;
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed > 2147483647) return null;
+  return parsed;
+}
+
 export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/forms', VIEW, async () => ctx.forms.list());
 
@@ -208,12 +216,8 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
 
   app.get('/api/forms/:id/versions/:version', VIEW, async (req, reply) => {
     const { id, version } = req.params as { id: string; version: string };
-    if (!/^[1-9]\d*$/.test(version)) {
-      reply.code(400);
-      return { error: 'version must be a positive integer' };
-    }
-    const parsedVersion = Number(version);
-    if (!Number.isSafeInteger(parsedVersion) || parsedVersion > 2147483647) {
+    const parsedVersion = parseVersionParam(version);
+    if (parsedVersion === null) {
       reply.code(400);
       return { error: 'version must be a positive integer' };
     }
@@ -227,6 +231,32 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'not found' };
     }
     return snapshot;
+  });
+
+  // EDIT, not PUBLISH. Restore writes a draft; it releases nothing. The operator publishes
+  // afterwards through the normal gate if they want the restored content live.
+  app.post('/api/forms/:id/restore/:version', EDIT, async (req, reply) => {
+    const { id, version } = req.params as { id: string; version: string };
+    const parsedVersion = parseVersionParam(version);
+    if (parsedVersion === null) {
+      reply.code(400);
+      return { error: 'version must be a positive integer' };
+    }
+    const before = await ctx.forms.get(id);
+    if (!before) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    if (!(await ctx.forms.getVersion(id, parsedVersion))) {
+      reply.code(404);
+      return { error: 'version not found' };
+    }
+    const after = await ctx.forms.restore(id, parsedVersion);
+    await recordAudit(ctx, req, {
+      action: 'form.restore', entityType: 'form', entityId: id,
+      before, after, metadata: { sourceVersion: parsedVersion },
+    });
+    return after;
   });
 
   app.delete('/api/forms/:id', EDIT, async (req, reply) => {

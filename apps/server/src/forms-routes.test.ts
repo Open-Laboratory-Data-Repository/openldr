@@ -351,6 +351,19 @@ function fakeCtx(): AppContext & {
           publishedBy,
         })),
       getVersion: async (id: string, version: number) => versions.get(id)?.find((item) => item.version === version) ?? null,
+      restore: async (id: string, version: number) => {
+        const form = forms.find((item) => item.id === id);
+        if (!form) throw new Error('not found');
+        // `versions` at line 212 is a Map<string, FormVersion[]> keyed by form id, NOT an array.
+        const snapshot = (versions.get(id) ?? []).find((item) => item.version === version);
+        if (!snapshot) throw new Error('version not found');
+        form.name = snapshot.name;
+        form.versionLabel = snapshot.versionLabel;
+        form.schema = snapshot.schema;
+        form.targetPages = snapshot.targetPages;
+        form.status = 'draft';
+        return form;
+      },
       delete: async (id: string) => {
         const index = forms.findIndex((item) => item.id === id);
         if (index >= 0) forms.splice(index, 1);
@@ -586,6 +599,56 @@ describe('forms routes', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json()).toMatchObject({ error: 'version must be a positive integer' });
     }
+  });
+
+  it('restores a version and audits it as form.restore', async () => {
+    const app = authedApp(fakeCtx());
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+    await app.inject({ method: 'POST', url: `/api/forms/${id}/publish`, payload: {} });
+
+    const res = await app.inject({ method: 'POST', url: `/api/forms/${id}/restore/1`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().id).toBe(id);
+  });
+
+  it('rejects a version path segment that is not a positive integer', async () => {
+    const app = authedApp(fakeCtx());
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+
+    const res = await app.inject({ method: 'POST', url: `/api/forms/${id}/restore/abc`, payload: {} });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/positive integer/);
+  });
+
+  it('404s a version the form does not have', async () => {
+    const app = authedApp(fakeCtx());
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Specimen intake', schema: { fields: [] }, targetPages: ['forms'] },
+    });
+    const id = created.json().id as string;
+
+    const res = await app.inject({ method: 'POST', url: `/api/forms/${id}/restore/9`, payload: {} });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('404s an unknown form', async () => {
+    const app = authedApp(fakeCtx());
+
+    const res = await app.inject({ method: 'POST', url: '/api/forms/nope/restore/1', payload: {} });
+
+    expect(res.statusCode).toBe(404);
   });
 
   it('audits published status changes as publish events', async () => {
