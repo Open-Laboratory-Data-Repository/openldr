@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SuggestCombobox } from './suggest-combobox';
 import * as truncatedTextModule from './truncated-text';
@@ -352,16 +352,15 @@ describe('SuggestCombobox — the open list is brought into view', () => {
    *  field sits near that container's bottom edge the list renders past it and is clipped.
    *  Measured in the facility import sheet on `country`'s 249 options: a 256px list clipped by
    *  231px at 375x812, and by 260px on desktop — the whole list below the fold. */
-  it('⛔ scrolls the listbox into view when it opens', () => {
+  it('⛔ scrolls the listbox into view when it opens', async () => {
     const scrollIntoView = vi.fn();
     const original = Element.prototype.scrollIntoView;
     Element.prototype.scrollIntoView = scrollIntoView;
     try {
       render(<SuggestCombobox value="" onChange={vi.fn()} options={cities} label="City" />);
       fireEvent.focus(screen.getByRole('combobox', { name: 'City' }));
-      expect(scrollIntoView).toHaveBeenCalled();
       // 'nearest' so a list already fully visible does not jump.
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' }));
     } finally {
       Element.prototype.scrollIntoView = original;
     }

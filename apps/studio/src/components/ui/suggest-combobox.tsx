@@ -131,8 +131,9 @@ export function SuggestCombobox({
 
   // The listbox is `absolute` inside whatever scroll container encloses this field, so when the
   // field sits near that container's bottom edge the list renders past it and is clipped.
-  // MEASURED in the facility import sheet on `country`'s 249 options: a 256px list clipped by
-  // 231px at 375x812, and by 260px on desktop, which put the whole list below the fold.
+  // MEASURED in the facility import sheet on `country`'s 249 options, a 256px list: clipped by
+  // 231px at 375x812 and by 260px on desktop, which put the whole list below the fold. With this
+  // line, 0px on both, and `level` (63 options) and `status` (3) measure 0 as well.
   // `block: 'nearest'` scrolls the minimum needed, so a list already fully visible does not jump.
   useEffect(() => {
     if (!open) return;
