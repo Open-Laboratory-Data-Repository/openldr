@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "6ef1d3b4",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The value pickers read in alphabetical order"
+        },
+        {
           "hash": "3133fc21",
           "type": "fix",
           "scope": "facilities",
