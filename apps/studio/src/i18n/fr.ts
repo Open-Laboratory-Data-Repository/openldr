@@ -839,6 +839,7 @@ export const fr: EnShape = {
     newDesc: 'Saisir un nouvel établissement dans le registre.',
     deleteTitle: 'Supprimer {{name}} ?',
     deleteBody: 'Cette action supprime définitivement {{name}} du registre des établissements. Cette action est irréversible.',
+    deletedToast: '« {{name}} » supprimé.',
     searchPlaceholder: 'Rechercher des établissements…',
     filters: {
       healthLabel: 'État du mappage',
@@ -882,6 +883,7 @@ export const fr: EnShape = {
           inUse: '{{count}} d’entre eux sont utilisés par des rapports aujourd’hui.',
           inUseUnknown: 'Impossible de vérifier si certains sont utilisés par des rapports.',
           sample: 'Par exemple : {{names}}.',
+          deletedToast: '{{count}} établissements supprimés.',
         },
     import: {
       menuItem: 'Importer des établissements',
@@ -1048,7 +1050,6 @@ export const fr: EnShape = {
         collision: '« {{a}} » et « {{b}} » revendiquent tous deux {{field}} — un seul le peut.',
       },
       valueMap: {
-        actions: 'Actions de mappage des valeurs',
         saveAction: 'Enregistrer les mappages',
         saving: 'Enregistrement…',
         notMapped: 'Non mappé',

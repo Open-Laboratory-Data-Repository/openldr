@@ -839,6 +839,7 @@ export const pt: EnShape = {
     newDesc: 'Inserir uma nova unidade no registo.',
     deleteTitle: 'Eliminar {{name}}?',
     deleteBody: 'Esta ação remove permanentemente {{name}} do registo de unidades. Esta ação não pode ser anulada.',
+    deletedToast: '“{{name}}” eliminado.',
     searchPlaceholder: 'Pesquisar unidades…',
     filters: {
       healthLabel: 'Estado do mapeamento',
@@ -882,6 +883,7 @@ export const pt: EnShape = {
           inUse: '{{count}} delas são usadas por relatórios hoje.',
           inUseUnknown: 'Não foi possível verificar se alguma é usada por relatórios.',
           sample: 'Por exemplo: {{names}}.',
+          deletedToast: '{{count}} estabelecimentos eliminados.',
         },
     import: {
       menuItem: 'Importar unidades',
@@ -1048,7 +1050,6 @@ export const pt: EnShape = {
         collision: '“{{a}}” e “{{b}}” reivindicam ambos {{field}} — apenas um pode.',
       },
       valueMap: {
-        actions: 'Ações de mapeamento de valores',
         saveAction: 'Guardar mapeamentos',
         saving: 'A guardar…',
         notMapped: 'Não mapeado',
