@@ -314,6 +314,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  because the two have different lifetimes: see `importInputsSignature.ts`. */
   const [lastFindings, setLastFindings] = useState<FacilityImportResult | null>(null);
   const [worklistAt, setWorklistAt] = useState<string | null>(null);
+  /** How many times the OPERATOR has changed the column map. The signatures key on this rather than
+   *  on `columnMap` itself.
+   *
+   *  ⛔ NOT THE MAP'S CONTENT, and that is the whole point. `ColumnMapStep` writes its suggestion
+   *  seed into `columnMap` when the asynchronous `suggestColumnMap` call resolves, which can land
+   *  AFTER a check has run. Keying on content made that seed look like an edit and silently threw
+   *  away the Review the operator had just earned. A programmatic reset of the map always
+   *  accompanies a new file, register or format, and all three are in the signature already. */
+  const [columnMapEdits, setColumnMapEdits] = useState(0);
   const [run, setRun] = useState<FacilityImportRunView | null>(null);
   const [uploading, setUploading] = useState(false);
   /** How much of the file has gone, as a fraction — or `null` for "in flight, but the browser will
@@ -584,9 +593,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         apply: false,
       });
       setPreviewResult(result);
-      setSummaryAt(currentSummarySignature);
-      setLastFindings(result);
-      setWorklistAt(worklistSignature(inputs));
+      setSummaryAt(summarySignatureRef.current);
       // ⛔ An explicit Preview goes to its result, every time, not only the first. The auto-advance
       // effect keys on `furthest` CHANGING, so it carries the operator to Review on the first
       // preview and does nothing on a second: someone who stepped back to Mapping to fix the map
@@ -753,7 +760,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       // Task 2: the streamed door earns its Review here, at the upload, for the same reason `runId`
       // is in `stepGate` at all — the first poll has not answered yet and the operator must not be
       // left on Mapping watching nothing.
-      setSummaryAt(currentSummarySignature);
+      setSummaryAt(summarySignatureRef.current);
     } catch (err) {
       setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
     } finally {
@@ -892,15 +899,22 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     format,
     completeRelease,
     releaseVersion,
-    columnMap,
+    columnMapEdits,
     allowUnknownColumns,
     allowInvalidCoordinates,
-    onConflict,
-    onAbsent,
-    onDeleted,
     valueMappingsSavedAt,
   };
   const currentSummarySignature = summarySignature(inputs);
+
+  /** ⛔ STAMP FROM THE REF, NEVER FROM THE CLOSURE. `currentSummarySignature` inside an async
+   *  handler is the value from the render that CREATED the handler. The re-upload path sets
+   *  `allowUnknownColumns` and then uploads, so stamping the closure's copy recorded the
+   *  pre-override signature while the next render computed the post-override one: they never
+   *  matched, `hasReview` stayed false and the run's own progress block never rendered. Measured on
+   *  "the run door re-uploads the same file with allowUnknownColumns". Assigned on every render, so
+   *  by the time any awaited handler resumes it holds the signature the request actually went with. */
+  const summarySignatureRef = useRef(currentSummarySignature);
+  summarySignatureRef.current = currentSummarySignature;
 
   /** The last check's result, kept for the controls on Mapping that only make sense once something
    *  has been found. Guarded by `worklistSignature`, the NARROWER of the two: choosing a policy or
@@ -926,6 +940,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       && (reviewResult !== null || appliedSummary !== null || runId !== null),
     runActive: runInFlight,
   };
+  // ⛔ BOTH DOORS, from ONE place. An earlier draft stamped these inside `runPreview`, which is the
+  // inline door only: a background run's summary arrives through `awaitingSummary` when a poll
+  // answers, so the streamed door reached Mapping with an empty policy panel and no worklist. Keyed
+  // on `reviewResult`, which is what both doors actually produce.
+  useEffect(() => {
+    if (!reviewResult) return;
+    setLastFindings(reviewResult);
+    setWorklistAt(worklistSignature(inputs));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reviewResult]);
+
   const furthest = furthestStep(stepGate);
   const step = clampStep(requestedStep, stepGate);
   // Round-2 fix: no longer a Back BUTTON's visibility — that button is gone (see the action row
@@ -1402,8 +1427,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 headers={columnMapHeaders}
                 suggestions={columnMapSuggestions}
                 value={columnMap}
-                // ⛔ MUST STAY THIS DIRECT — see `columnMap`'s own state comment above.
-                onChange={setColumnMap}
+                // ⛔ STILL A DIRECT, SYNCHRONOUS ROUND-TRIP — see `columnMap`'s own state comment
+                // above. The only addition is counting OPERATOR edits, which is what the summary's
+                // lifetime keys on; the write to `columnMap` itself is unconditional as before.
+                onChange={(next, origin) => {
+                  setColumnMap(next);
+                  if (origin === 'edit') setColumnMapEdits((n) => n + 1);
+                }}
                 rowCount={columnMapRowCount}
                 onValidityChange={setColumnMapValid}
               />
