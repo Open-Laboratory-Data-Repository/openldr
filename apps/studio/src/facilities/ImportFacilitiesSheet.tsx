@@ -188,6 +188,20 @@ interface ImportFacilitiesSheetProps {
  *  read them (packages/terminology). */
 const ACCEPTED_FILE_EXTENSIONS = ['.csv', '.jsonl'] as const;
 
+/** How much of the chosen file is read into this tab.
+ *
+ *  The ONLY thing the sheet needs the file's text for is its header row: `suggestColumnMap` posts
+ *  it, and that route splits on the first newline and throws the rest away
+ *  (apps/server/src/facilities-routes.ts). Reading the WHOLE file was the inline door's
+ *  requirement, because that door carried the register in a JSON body. It is gone, and the upload
+ *  sends the `File` itself, so a 64 MiB national register no longer enters this tab at all.
+ *
+ *  ⛔ A header row longer than this truncates, and a truncated line reaches the same 400 the
+ *  route already returns for a header row it cannot read. The contract has 16 fields and a real
+ *  register carries perhaps 30 columns, so a header runs to hundreds of bytes: this is a ceiling
+ *  with a wide margin, not a measured fit. */
+const HEAD_BYTES = 64 * 1024;
+
 /** A file size an operator can read. Mirrors `humanSize` in `pages/Terminology.tsx`: this sheet does
  *  not import from that page, and a shared one is a bigger change than this finding asked for. */
 function humanFileSize(n: number): string {
@@ -214,7 +228,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  has not earned can never be shown even if this holds a stale value: picking a different file
    *  drops `hasReview` and the view falls back on its own, with no extra reset to remember. */
   const [requestedStep, setRequestedStep] = useState<ImportStep>(1);
-  const [csv, setCsv] = useState<string | null>(null);
+  const [csvHead, setCsvHead] = useState<string | null>(null);
   // B1 Task 9: holds the CHOSEN SOURCE'S URI, and only ever that — see `handleNationalSystemChange`
   // and the `Select` below. Before this task it was a free-text box hashed straight into every
   // facility's permanent id (`idFor`, facility-csv.ts); the import routes now refuse anything that
@@ -481,13 +495,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setCancelOutcome(null);
     setUploadProgress(null);
     invalidatePreview();
-    // ⚠ Read for the INLINE path only — `importFacilitiesCsv` carries the register in a JSON body,
-    // so that door genuinely needs the text. The A2b Upload path never touches `csv`: the File is
-    // the request body (see `uploadFacilityImport`), which is what keeps a national register out of
-    // this tab's memory.
-    if (!f) { setCsv(null); return; }
-    void f.text().then(setCsv).catch((err: unknown) => {
-      setCsv(null);
+    // ⚠ THE HEAD, NOT THE FILE. Only the header row is ever read out of it — see `HEAD_BYTES`.
+    // The upload path touches neither: the `File` itself is the request body (see
+    // `uploadFacilityImport`), which is what keeps a national register out of this tab's memory.
+    if (!f) { setCsvHead(null); return; }
+    void f.slice(0, HEAD_BYTES).text().then(setCsvHead).catch((err: unknown) => {
+      setCsvHead(null);
       setError(err instanceof Error ? err.message : String(err));
     });
   };
@@ -527,13 +540,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // changes — `format` because switching to `jsonl` must clear any CSV-only header list, `csv`
   // because a new file means new headers.
   useEffect(() => {
-    if (!csv || format !== 'csv') {
+    if (!csvHead || format !== 'csv') {
       setColumnMapHeaders([]);
       setColumnMapSuggestions([]);
       return;
     }
     let cancelled = false;
-    suggestColumnMap(csv)
+    suggestColumnMap(csvHead)
       .then((res) => {
         if (cancelled) return;
         setColumnMapHeaders(res.headers);
@@ -547,13 +560,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         // and trimmed. A quoted header containing a comma would split wrongly, which is acceptable
         // here for the same reason it is there — this is advisory, and the operator sees and confirms
         // every header before anything is imported; the authoritative parse stays the server's own.
-        const firstLine = csv.split(/\r?\n/, 1)[0] ?? '';
+        const firstLine = csvHead.split(/\r?\n/, 1)[0] ?? '';
         const headers = firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
         setColumnMapHeaders(headers);
         setColumnMapSuggestions([]);
       });
     return () => { cancelled = true; };
-  }, [csv, format]);
+  }, [csvHead, format]);
 
   const handleNationalSystemChange = (value: string) => {
     setNationalSystem(value);
@@ -977,13 +990,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  at. This makes the requirement the step's own content, and the remedy its own button. */
   const needsRegister = !sourcesLoading && !sourcesError && sources.length === 0;
 
-  // F5 fix: `!csv` covers "still reading" AND "0-byte file" identically (both leave `csv` falsy),
-  // so a genuinely empty file left Preview disabled forever with nothing on screen explaining why.
-  // `csv === ''` (as opposed to `null`) only ever happens once `File.text()` has actually resolved
-  // — a still-reading file has `csv === null` — so this fires exactly for "read finished, and it's
-  // empty", never during the async read window below.
-  const emptyFile = !!file && csv === '';
-  // `!csv` matters as its own gate, distinct from `!file`: reading the file's text back out is
+  // F5 fix: a genuinely empty file used to leave the step's action disabled forever with nothing on
+  // screen explaining why.
+  //
+  // ⛔ `file.size`, NOT THE READ. The old test was `csv === ''`, which could only become true once
+  // `File.text()` had resolved — so between choosing a 0-byte file and that read landing there was a
+  // window in which `uploadDisabled` let a doomed click through. `size` is known the instant the
+  // file is chosen.
+  const emptyFile = !!file && file.size === 0;
+  // `!csvHead` matters as its own gate, distinct from `!file`: reading the file's text back out is
   // asynchronous (File.text()), so there is a real window after picking a file where `file` is
   // already set but `csv` has not resolved yet. Without this, a click in that window would fall
   // through runPreview's own early return and silently do nothing — worse than a disabled button.
@@ -1053,15 +1068,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const canConfirmRun = !!awaitingSummary && hasSomethingToWrite(awaitingSummary)
     && !blockedFor(awaitingSummary);
   const willWriteCount = awaitingSummary ? willWrite(awaitingSummary) : 0;
-  // Whole-branch review, MUST FIX 3: `ColumnMapStep`'s `rowCount` — a plain count of non-empty data
-  // lines in the picked file, informational only ("This map applies to N facilities in this file").
-  // ⛔ NOT the authoritative row count: a quoted multi-line field would over-count here, the same
-  // acceptable impurity `suggestColumnMap`'s own naive header split already carries (see this
-  // sheet's `.catch` on that call) — the real count is `previewResult.parsed`, computed by the
-  // server, which this panel never has before that request runs.
-  const columnMapRowCount = csv
-    ? csv.split(/\r?\n/).filter((line, i) => i > 0 && line.trim() !== '').length
-    : undefined;
   /** Whole-branch review, FINDING 2: is `ColumnMapStep` actually on screen? Read by the panel's own
    *  render gate below AND by the empty-state note beside it, so the two can never drift apart —
    *  the note is exactly "step 2, and this is false". Before this fix only the panel had a gate: a
@@ -1475,7 +1481,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   setColumnMap(next);
                   if (origin === 'edit') setColumnMapEdits((n) => n + 1);
                 }}
-                rowCount={columnMapRowCount}
                 onValidityChange={setColumnMapValid}
               />
               {/* Non-blocking — see `columnMapValid`'s own state comment for why this never

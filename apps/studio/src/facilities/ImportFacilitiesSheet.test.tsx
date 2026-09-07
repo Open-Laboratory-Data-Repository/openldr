@@ -1894,7 +1894,7 @@ describe('ImportFacilitiesSheet', () => {
   // complete" to the server's own authoritative refusal (now actually shown, per the fix above),
   // never to a client-side guess that could diverge from it. ─────────────────────────────────────────
 
-  it('shows the row-count hint and a non-blocking notice while the column map is incomplete, without disabling Upload', async () => {
+  it('shows a non-blocking notice while the column map is incomplete, without disabling Upload', async () => {
     mocked(api.suggestColumnMap).mockResolvedValueOnce({
       headers: ['Code', 'Facility Name'],
       columns: [{ header: 'Code', candidates: [] }, { header: 'Facility Name', candidates: [] }],
@@ -1907,10 +1907,8 @@ describe('ImportFacilitiesSheet', () => {
     // The row-count hint and the notice both live in ColumnMapStep, on Mapping (step 2).
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-    // rowCount wired: 2 data rows in the picked file.
-    expect(await screen.findByText(/applies to 2 facilities/i)).toBeInTheDocument();
     // onValidityChange wired: neither header satisfies a required field, so the notice shows.
-    expect(screen.getByText(/still preview or upload/i)).toBeInTheDocument();
+    expect(await screen.findByText(/still preview or upload/i)).toBeInTheDocument();
 
     // ...and it does not block anything — `uploadNow` itself waits for Upload to become enabled,
     // so this line is the proof: it would time out were Upload gated on validity.
@@ -2326,6 +2324,22 @@ describe('the file drop zone', () => {
 
   const dropZone = () => screen.getByRole('button', { name: /drag a \.csv/i });
   const drop = (el: HTMLElement, file: File) => fireEvent.drop(el, { dataTransfer: { files: [file] } });
+
+  // ⛔ THE READ IS THE SUBJECT, not the suggestion it feeds. The sheet used to pull the whole file
+  // into a JavaScript string so the inline door could put it in a JSON body. That door is gone, and
+  // the only thing left that wants the file's TEXT is its header row, which `suggest-map` reads one
+  // line of. A 64 MiB national register must not enter this tab at all.
+  it('reads only the head of the file, never the whole register', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValue({ headers: ['MFL Code'], columns: [] });
+    // A file whose text() would resolve to something far larger than its header row.
+    const big = new File([`MFL Code\n${'x\n'.repeat(50_000)}`], 'big.csv', { type: 'text/csv' });
+    const sliceSpy = vi.spyOn(big, 'slice');
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [big] } });
+
+    await waitFor(() => expect(sliceSpy).toHaveBeenCalledWith(0, 64 * 1024));
+  });
 
   it('accepts a dropped csv and treats it exactly like a browsed one', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);

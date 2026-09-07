@@ -1037,7 +1037,6 @@ export const pt: EnShape = {
         constantNotSeeded: 'Não existe lista de valores {{field}} nesta instalação, por isso nada pode ser verificado. O valor é importado como escrito.',
         missingRequiredTitle: 'Campos obrigatórios ainda sem coluna ou valor fixo',
         missingRequired: '{{field}} não está mapeado.',
-        rowCountHint: 'Este mapeamento aplica-se a {{count}} unidade(s) neste ficheiro.',
         keptAsExtraBadge: 'Mantido como dado extra',
         collisionTitle: 'Este mapeamento de colunas não pode ser usado',
         collision: '“{{a}}” e “{{b}}” reivindicam ambos {{field}} — apenas um pode.',

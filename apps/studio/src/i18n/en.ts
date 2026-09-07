@@ -1090,7 +1090,6 @@ export const en = {
         constantNotSeeded: 'No {{field}} value list on this install, so nothing can be checked. The value imports as typed.',
         missingRequiredTitle: 'Required fields still need a column or a fixed value',
         missingRequired: '{{field}} is not mapped.',
-        rowCountHint: 'This map applies to {{count}} facilities in this file.',
         keptAsExtraBadge: 'Kept as extra data',
         collisionTitle: 'This column map cannot be used',
         collision: '“{{a}}” and “{{b}}” both claim {{field}} — only one may.',

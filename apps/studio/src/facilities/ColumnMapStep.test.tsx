@@ -52,7 +52,6 @@ function Controlled({ initial, onChangeSpy, ...rest }: {
   onChangeSpy?: (next: FacilityColumnMap) => void;
   headers: string[];
   suggestions: ColumnSuggestion[];
-  rowCount?: number;
   onValidityChange?: (valid: boolean) => void;
 }) {
   const [value, setValue] = useState(initial);

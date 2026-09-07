@@ -1037,7 +1037,6 @@ export const fr: EnShape = {
         constantNotSeeded: 'Aucune liste de valeurs {{field}} sur cette installation, donc rien ne peut être vérifié. La valeur est importée telle quelle.',
         missingRequiredTitle: 'Des champs obligatoires n’ont ni colonne ni valeur fixe',
         missingRequired: '{{field}} n’est pas mappé.',
-        rowCountHint: 'Ce mappage s’applique à {{count}} établissement(s) dans ce fichier.',
         keptAsExtraBadge: 'Conservé en donnée supplémentaire',
         collisionTitle: 'Ce mappage de colonnes est inutilisable',
         collision: '« {{a}} » et « {{b}} » revendiquent tous deux {{field}} — un seul le peut.',
