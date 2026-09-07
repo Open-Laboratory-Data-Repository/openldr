@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "c1f3306e",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Eight findings from the version history review"
+        },
+        {
+          "hash": "2766479d",
+          "type": "feat",
+          "scope": "cli",
+          "title": "List a form's versions and put one back"
+        },
+        {
           "hash": "fd107802",
           "type": "feat",
           "scope": "facilities",
@@ -16,6 +28,36 @@
           "type": "feat",
           "scope": "facilities",
           "title": "The value map's Save is a visible button, not a hidden menu item"
+        },
+        {
+          "hash": "a10e20dc",
+          "type": "feat",
+          "scope": "forms",
+          "title": "The header shows the real version, and the label says it is a label"
+        },
+        {
+          "hash": "3e588c55",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Compare dialog names the two picked versions, not the newest"
+        },
+        {
+          "hash": "7a5913f5",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Compare any two versions, not just the newest"
+        },
+        {
+          "hash": "7b2d5809",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Version history flex wrapper, fetch error, page reset"
+        },
+        {
+          "hash": "d3fb6aa4",
+          "type": "feat",
+          "scope": "forms",
+          "title": "A version history you can open and go back from"
         },
         {
           "hash": "48db0d43",
@@ -34,6 +76,18 @@
           "type": "fix",
           "scope": "facilities",
           "title": "One door into the importer, not two"
+        },
+        {
+          "hash": "b7488b2f",
+          "type": "feat",
+          "scope": "forms",
+          "title": "A route to put a published version back"
+        },
+        {
+          "hash": "478fa302",
+          "type": "feat",
+          "scope": "forms",
+          "title": "A published version can be written back over the draft"
         },
         {
           "hash": "3411d9a9",
