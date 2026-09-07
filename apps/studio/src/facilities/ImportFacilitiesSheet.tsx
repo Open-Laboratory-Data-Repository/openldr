@@ -177,9 +177,9 @@ function confirmOptionsFor(
 interface ImportFacilitiesSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Called once an APPLY succeeds (never for a dry run) so the caller can reload its list — see
-   *  Facilities.tsx, which passes its own `reload`. Called for BOTH doors: the inline apply, and a
-   *  background run this sheet watched reach `applied`. */
+  /** Called once an APPLY succeeds (never for a check) so the caller can reload its list — see
+   *  Facilities.tsx, which passes its own `reload`. Fired when a run this sheet is watching reaches
+   *  `applied`. */
   onImported: () => void;
 }
 
@@ -257,9 +257,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const [allowMalformedRows, setAllowMalformedRows] = useState(false);
   // CT-3: the third member of the override family — see `FacilityImportRequest.allowInvalidCoordinates`
   // (api.ts) for why a row failing coordinate validation is otherwise dropped from the parse rather
-  // than imported with both coordinates null. Unlike `allowMalformedRows`, toggling this DOES
-  // re-preview on the inline path (see `toggleAllowInvalidCoordinates` below) — it changes which rows
-  // land in `records`, not merely whether Apply may proceed.
+  // than imported with both coordinates null. Unlike `allowMalformedRows`, this one CHANGES THE
+  // PARSE — it decides which rows land in `records`, not merely whether the apply may proceed — so
+  // it rides the upload and a change to it needs a fresh check, never a re-read of the same summary.
   const [allowInvalidCoordinates, setAllowInvalidCoordinates] = useState(false);
   // CT-3: which shape the file is, and whether it declares itself a complete release — both feed
   // `FacilityImportRequest.format`/`completeRelease` (api.ts) on every preview AND apply. Without
@@ -440,8 +440,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     return () => { stopped = true; if (timer !== undefined) clearTimeout(timer); };
   }, [runId, refreshNonce]);
 
-  // The background path's equivalent of the inline apply's own `onImported()` call. Guarded by run
-  // id (not a boolean) so it fires once per applied run and never twice for one.
+  // `onImported()`, fired when a run this sheet is watching reaches `applied`. Guarded by run id
+  // (not a boolean) so it fires once per applied run and never twice for one.
   useEffect(() => {
     if (run?.status === 'applied' && notifiedRunRef.current !== run.id) {
       notifiedRunRef.current = run.id;
@@ -678,8 +678,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     if (!file || !nationalSystem.trim()) return;
     const allowUnknown = overrides?.allowUnknownColumns ?? allowUnknownColumns;
     const allowInvalid = overrides?.allowInvalidCoordinates ?? allowInvalidCoordinates;
-    // Kept in state as well as sent, so the inline door and a later re-upload both read the same
-    // answer the run was actually created with.
+    // Kept in state as well as sent, so a later re-check reads the same answer the run was actually
+    // created with.
     setAllowUnknownColumns(allowUnknown);
     setAllowInvalidCoordinates(allowInvalid);
     setUploading(true);
@@ -697,8 +697,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           releaseVersion: releaseVersion.trim() || null,
           // Reaches the run's stored `options`, which the worker's validate spreads into
           // `importFacilities` — so a complete release uploaded here has its `absent` count actually
-          // MEASURED instead of reported `null`. The checkbox is the same one the inline path uses;
-          // both doors now honour it.
+          // MEASURED instead of reported `null`.
           completeRelease,
           // ⛔ THE ONLY WAY A REGISTER THAT NEEDS ONE OF THESE CAN EVER BE IMPORTED FROM THE BROWSER.
           // Both are fed to the parser, so they have to be decided BEFORE the validate that computes
@@ -708,8 +707,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           // an apply that parses nothing, writes nothing and still reports `applied`).
           allowUnknownColumns: allowUnknown,
           allowInvalidCoordinates: allowInvalid,
-          // Task 8b: the same guard the inline door and `confirmOptionsFor` already apply — an empty
-          // map is not the same as no map (see `hasColumnMapContent`'s own doc comment), so this is
+          // Task 8b: the same guard `confirmOptionsFor` already applies — an empty map is not the
+          // same as no map (see `hasColumnMapContent`'s own doc comment), so this is
           // sent only when the operator actually mapped something. Stored on the run's `options`
           // before its own validate runs, which is what makes this door's validate agree with what
           // the operator sees, instead of reading the file's raw headers.
@@ -797,15 +796,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  been decided. */
   const awaitingSummary: FacilityImportResult | null =
     run && run.status === 'awaiting_confirmation' ? run.summary : null;
-  /** The reconciliation currently under review, whichever door produced it. Never both at once — an
-   *  upload clears any inline preview (see `handleUpload`) and picking a file clears any run. */
-  /** Task 8: `ValueMapPanel`'s `onSaved` — a just-written mapping only takes effect on a fresh parse,
-   *  so this re-runs whichever preview produced the summary on screen. On the inline door that is a
-   *  plain re-preview. There is no equivalent light-weight re-validate for a background run — its
-   *  summary came from a worker's validate over the uploaded blob, not from a request this tab can
-   *  simply repeat — so this re-streams the SAME file, which mints a fresh run and supersedes the one
-   *  under review, the same mechanism the re-upload actions above already use for a parse-changing
-   *  override. */
+  /** The reconciliation currently under review: the summary a run's own validate stored. Picking a
+   *  file clears any run, so this is either current or absent. */
+  /** Task 8: `ValueMapPanel`'s `onSaved`. A just-written mapping only takes effect on a fresh parse,
+   *  and the summary on screen came from a worker's validate over the uploaded blob rather than from
+   *  a request this tab can simply repeat. */
   // ⛔ NO RE-CHECK HERE ANY MORE, and on the run door that also means no silent re-upload. Saving
   // used to re-parse and carry the operator to Review, so the page both asked the question and
   // reported the answer. Saving is now a local edit: it bumps the stamp, which retires the summary,
@@ -814,9 +809,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const handleValueMappingsSaved = (): void => {
     setValueMappingsSavedAt((n) => n + 1);
   };
-  /** The run door's parse-override state, read off the RUN rather than this sheet's own — see
-   *  `ReuploadOverrides`. `null` while an inline preview is what is under review, which is what makes
-   *  the checkboxes stay checkboxes on that door. */
+  /** The parse-override state, read off the RUN rather than this sheet's own — see
+   *  `ReuploadOverrides`. What the validate actually ran with is the only honest answer here, and
+   *  this sheet's own checkbox can be ahead of it. `null` until the first poll answers. */
   const reupload: ReuploadOverrides | null = run
     ? {
       sourceFormat: run.sourceFormat,
@@ -927,10 +922,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       && (awaitingSummary !== null || appliedSummary !== null || runId !== null),
     runActive: runInFlight,
   };
-  // ⛔ BOTH DOORS, from ONE place. An earlier draft stamped these inside `runPreview`, which is the
-  // inline door only: a background run's summary arrives through `awaitingSummary` when a poll
-  // answers, so the streamed door reached Mapping with an empty policy panel and no worklist. Keyed
-  // on `awaitingSummary`, which is what both doors actually produce.
+  // ⛔ KEYED ON THE SUMMARY, NOT ON THE REQUEST THAT ASKED FOR IT. An earlier draft stamped these
+  // where the inline preview's response landed, which a run's summary never passes through: it
+  // arrives when a poll answers, so the wizard reached Mapping with an empty policy panel and no
+  // worklist.
   useEffect(() => {
     if (!awaitingSummary) return;
     setLastFindings(awaitingSummary);
@@ -965,15 +960,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // no way to fix the very thing that put them there. This branch un-does that specific move, and
   // only that one: any OTHER step the operator had already reached (never past Mapping) is untouched.
   //
-  // ⛔ ROUND-3 FIX: retreats from ANY step, not only from Review. The dropdown's Preview item has no
-  // `step` gate at all (only `previewDisabled` and `!applyResult && !run` — see that item's own
-  // comment), so it is reachable from Source with the sheet never having been past step 1. On the
-  // inline door `setPreviewResult(result)` makes `columnMapRefused` true in the SAME render as the
-  // response lands, with no poll delay to wait out — unlike the background door's two-hop
-  // transition described above. A guard that only fired for `prev === 3` did nothing for that path:
-  // `requestedStep` was still 1, so the sheet stayed on Source with neither `ColumnMapErrorsNotice`
-  // site mounted (both live behind `step === 2` or `step === 3`) and the operator saw no refusal at
-  // all. A column-map refusal means the Mapping panel is the only place that can help, regardless of
+  // ⛔ ROUND-3 FIX: retreats from ANY step, not only from Review. It was written for a door that no
+  // longer exists — an inline Preview reachable from Source, whose response made `columnMapRefused`
+  // true in the same render, with the sheet never having been past step 1 and a guard firing only
+  // for `prev === 3` doing nothing at all. The generality is kept because the rule it encodes is
+  // not about that door: a column-map refusal means the Mapping panel is the only place that can
+  // help, regardless of
   // which step the operator was on when they triggered it.
   useEffect(() => {
     if (columnMapRefused) {
@@ -1028,12 +1020,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // always ahead of the previewed answer and something has to apply it.
   //
   // ⛔ THIS IS A TOGGLE, NOT A RELEASE VALVE, and that only works because the answer being read was
-  // computed WITHOUT the override. On the inline path that is `runPreview` pinning
-  // `allowMalformedRows: false` on every preview request (see its comment); on the background path
-  // it is the worker's `validateOptions`, which runs the validate with the UPLOAD's stored options —
-  // the register identity and, when the operator declared one, `completeRelease`. Neither is an
-  // OVERRIDE: none of the three `allow*` flags can be among them, because those are the CONFIRM
-  // step's and reach the run only after this decision has been made.
+  // computed WITHOUT the override. It is the worker's `validateOptions` that guarantees it: the
+  // validate runs with the UPLOAD's stored options — the register identity and, when the operator
+  // declared one, `completeRelease`. Neither is an OVERRIDE, and `allowMalformedRows` is not even
+  // in the upload's payload, because it is the CONFIRM step's and reaches the run only after this
+  // decision has been made.
   // `blockedReason` therefore always reports the UN-OVERRIDDEN reason, so ticking the box releases
   // the block and un-ticking re-imposes it — pinned by "re-imposes the quarantine block when the
   // operator un-ticks the override". Nothing here re-derives the server's predicate from
@@ -1042,9 +1033,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // can clear it.
   const blockedFor = (r: FacilityImportResult | null): boolean => !!r && r.blocked
     && !(r.blockedReason === 'quarantined-rows' && allowMalformedRows);
-  // ⛔ NO ROW CAP. `APPLY_ROW_CAP` is the inline route's; the background path's whole purpose is a
-  // register too large for it, so the only thing standing between a validated run and a confirm is
-  // the importer's own `blocked` verdict.
   /** Is there anything an apply could write? Not the same question as "is it blocked".
    *
    *  ⛔ FINDING NOTHING IS NOT A REFUSAL. `blocked` reports one, so a file the parser recognised
@@ -1367,12 +1355,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 of accessible-name ambiguity `use-shadcn-components`/label-left-input-right exists to
                 avoid. Mirrors the plain `Input` rows above: `Label` owns the name, the hint is a
                 sibling `<p>`, not a second label.
-                ⛔ IT REACHES BOTH DOORS. The inline path sends it in the request body; the Upload
-                path sends it as the `completeRelease` query parameter, which the route stores in the
-                run's `options` and the worker's validate spreads into `importFacilities`. The gap
-                this comment used to record (a background validate always reporting `absent: null`,
-                so the summary told the operator to declare a complete release they had just
-                declared) is closed — see the upload route's own `completeRelease` block. */}
+                ⛔ IT REACHES THE VALIDATE. Sent as the `completeRelease` query parameter, which
+                the route stores in the run's `options` and the worker's validate spreads into
+                `importFacilities`. The gap this comment used to record (a validate always reporting
+                `absent: null`, so the summary told the operator to declare a complete release they
+                had just declared) is closed — see the upload route's own `completeRelease`
+                block. */}
             <Label htmlFor="facility-import-complete-release" className="whitespace-nowrap">
               {t('facilities.import.completeReleaseLabel')}
             </Label>
@@ -1565,12 +1553,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           {step === 3 && awaitingSummary && !appliedSummary && (
             <ReconciliationSummary
               result={awaitingSummary}
-              // A FACT about this result, not a control. On the run door it is what the upload
-              // recorded; on the inline door the live state, which the invalidation guarantees is
-              // the state this result was computed under.
+              // A FACT about this result, not a control: what the upload recorded and the validate
+              // actually ran with. `allowUnknownColumns` is the fallback for the window before the
+              // first poll answers, and the invalidation is what makes it safe — change the checkbox
+              // and `summarySignature` moves, so no summary is on screen to describe.
               unknownColumnsOverridden={reupload ? reupload.allowUnknownColumns : allowUnknownColumns}
-              // Inline: only a preview that minted a run can be linked to an apply that could ever
-              // discover a conflict. Background: the run IS the link, always.
+              // Constant. The run IS the link between the summary and the apply that could discover
+              // a conflict, and a summary on screen means a run exists.
               showConflictChoice
               reupload={reupload}
             />
