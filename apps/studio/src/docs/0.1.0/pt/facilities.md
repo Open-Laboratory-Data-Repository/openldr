@@ -56,8 +56,15 @@ cada cabeçalho tem três opções:
   analisador não consegue adivinhar qual deve prevalecer, por isso recusa em vez de adivinhar.
 - **Dar-lhe um valor fixo.** Use isto quando o contrato precisa de um campo para o qual o ficheiro
   não tem nenhuma coluna. Um ficheiro nacional raramente traz o seu próprio país, por exemplo,
-  pelo que `country` é normalmente um valor fixo (`ZMB`, `TZA`, etc.) em vez de uma coluna
-  mapeada. Os valores fixos são o código ISO, nunca uma etiqueta escrita à mão.
+  pelo que `country` é normalmente um valor fixo em vez de uma coluna mapeada.
+
+  `level`, `status` e `country` estão ligados a conjuntos de valores, por isso o seu valor fixo
+  escolhe-se numa lista em vez de se escrever. A escolha grava o código, que é a mesma cadeia que o
+  importador produz para um valor mapeado na Revisão, pelo que um valor escolhido não precisa de
+  mapeamento nenhum. Pode continuar a escrever um valor que a lista não oferece. O painel avisa-o
+  quando o faz, e esse valor é importado exatamente como escrito e aparece na Revisão para ser
+  mapeado. Se uma instalação não tiver lista de valores para um campo, o painel também o diz, e nada
+  é verificado.
 - **Mantê-lo como dado extra.** A coluna continua a ser importada, transportada para o campo
   `extras` do registo, mas não é tratada como um dos campos do contrato.
 

@@ -9,7 +9,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { ColumnSuggestion, FacilityColumnMap } from '@/api';
+import type { ColumnSuggestion, ControlledField, FacilityColumnMap } from '@/api';
+import { ConstantValueField } from './ConstantValueField';
 
 // Task 7: mirrors packages/terminology/src/facility-csv.ts's REQUIRED/OPTIONAL — "mirrored, not
 // shared", the same idiom every other facility-import type in this app already follows (this app
@@ -27,6 +28,11 @@ const OPTIONAL_FIELDS = [
 // follows for `FACILITY_CONTRACT_FIELDS.length` — instead of a second, driftable literal.
 export const CONTRACT_FIELDS: readonly string[] = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 const CONTRACT_FIELD_SET = new Set<string>(CONTRACT_FIELDS);
+
+/** The three fields bound to a value set. Mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS`, the
+ *  same "mirrored, not shared" idiom `ValueMapPanel.tsx:19` and this file's own `CONTRACT_FIELDS`
+ *  already use, because this app has no dependency on that package. */
+const CONTROLLED_CONSTANT_FIELDS = new Set<string>(['level', 'status', 'country']);
 
 /** Not a contract field — a real header could never collide with it. */
 const UNMAPPED = '__not_mapped__';
@@ -316,17 +322,29 @@ export function ColumnMapStep({
             {constantFields.map((field) => (
               <Fragment key={field}>
                 <Label htmlFor={`column-map-constant-${field}`} className="break-words">{field}</Label>
-                <Input
-                  id={`column-map-constant-${field}`}
-                  value={value.constants?.[field] ?? ''}
-                  onChange={(e) => setConstant(field, e.target.value)}
-                  // One shared placeholder used to put "e.g. ZMB" on every row, so region,
-                  // council, village, address and phone all suggested a country code. The ISO
-                  // example belongs to `country` and nowhere else.
-                  placeholder={field === 'country'
-                    ? t('facilities.import.columnMap.constantPlaceholderCountry')
-                    : t('facilities.import.columnMap.constantPlaceholder')}
-                />
+                {CONTROLLED_CONSTANT_FIELDS.has(field) ? (
+                  // A controlled field's fixed value is picked from its own value set. Typing one
+                  // blind could never work: `level` has 66 seeded concepts and the match is exact
+                  // against a code or a display, so `Health Centre` misses `health-center` and
+                  // `Health Center` both, and the operator only found out at Review.
+                  //
+                  // This is also where the `country` placeholder went. It read "e.g. ZMB", which
+                  // taught one code out of 249 and nothing about the other 248, and `country` no
+                  // longer renders an `Input` to carry it.
+                  <ConstantValueField
+                    id={`column-map-constant-${field}`}
+                    field={field as ControlledField}
+                    value={value.constants?.[field] ?? ''}
+                    onChange={(next) => setConstant(field, next)}
+                  />
+                ) : (
+                  <Input
+                    id={`column-map-constant-${field}`}
+                    value={value.constants?.[field] ?? ''}
+                    onChange={(e) => setConstant(field, e.target.value)}
+                    placeholder={t('facilities.import.columnMap.constantPlaceholder')}
+                  />
+                )}
               </Fragment>
             ))}
           </div>

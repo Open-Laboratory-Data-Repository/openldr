@@ -1,8 +1,22 @@
 import { useState } from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+// ⛔ REQUIRED, not optional. `constantFields` is every contract field no column claims, so every
+// test in this file already renders constants for `level`, `status` and `country`, and those three
+// now render `ConstantValueField`, which fetches. There is no global `fetch` stub in
+// `setupTests.ts`, so without this mock every test here fires three requests at Node's own `fetch`
+// and rejects on a relative URL.
+vi.mock('@/api', async (orig) => {
+  const actual = await orig<typeof import('@/api')>();
+  return { ...actual, suggestValueMappings: vi.fn() };
+});
+
+import * as api from '@/api';
 import { ColumnMapStep } from './ColumnMapStep';
 import type { ColumnSuggestion, FacilityColumnMap } from '@/api';
+
+const mockedApi = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeof vi.fn>;
 
 const suggestions: ColumnSuggestion[] = [
   { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
@@ -54,7 +68,47 @@ function Controlled({ initial, onChangeSpy, ...rest }: {
   );
 }
 
+beforeEach(() => {
+  mockedApi(api.suggestValueMappings).mockResolvedValue({
+    values: [],
+    options: [{ code: 'health-center', display: 'Health Center' }],
+    notValidated: false,
+  });
+});
+
 describe('ColumnMapStep', () => {
+  it('gives the three controlled fields a picker and every other field a plain box', async () => {
+    render(<Controlled headers={suggestions.map((s) => s.header)} suggestions={suggestions} initial={emptyMap} />);
+    await waitFor(() => expect(api.suggestValueMappings).toHaveBeenCalledWith('level', []));
+    expect(api.suggestValueMappings).toHaveBeenCalledWith('status', []);
+    expect(api.suggestValueMappings).toHaveBeenCalledWith('country', []);
+    expect(api.suggestValueMappings).toHaveBeenCalledTimes(3);
+
+    // A picker is a combobox; a plain box is not.
+    expect(screen.getByLabelText('level')).toHaveAttribute('role', 'combobox');
+    expect(screen.getByLabelText('village')).not.toHaveAttribute('role', 'combobox');
+  });
+
+  it('picking a level writes the CODE into the column map', async () => {
+    const onChangeSpy = vi.fn();
+    render(
+      <Controlled
+        headers={suggestions.map((s) => s.header)}
+        suggestions={suggestions}
+        initial={emptyMap}
+        onChangeSpy={onChangeSpy}
+      />,
+    );
+    await waitFor(() => expect(api.suggestValueMappings).toHaveBeenCalled());
+
+    fireEvent.focus(screen.getByLabelText('level'));
+    fireEvent.click(await screen.findByRole('option', { name: /health center/i }));
+
+    expect(onChangeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ constants: expect.objectContaining({ level: 'health-center' }) }),
+    );
+  });
+
   // ⛔ THE OPTION IS LABELLED "Keep as extra data", not "Not mapped", and the assertions below
   // moved with it. The old label was a description of the wire shape (an absent `columns` entry)
   // rather than of what happens: an unmapped column is carried into each row's `extras`. It is

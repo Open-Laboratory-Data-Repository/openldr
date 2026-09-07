@@ -22,8 +22,11 @@ field names. A header you choose to map ends up in one of three places:
 - **Mapped** to one contract field. Two headers can never map to the same field: the importer
   refuses rather than guess which one should win.
 - **A fixed value (`constants`)**, for a contract field no column in the file carries at all. A
-  national file usually has no `country` column, so `country` is normally supplied this way —
-  the ISO alpha-3 code (`ZMB`, `TZA`, …), never a free-text label.
+  national file usually has no `country` column, so `country` is normally supplied this way.
+  `level`, `status` and `country` are bound to value sets. In the studio their fixed value is picked
+  from a list and stored as the code; through the CLI's `--column-map` file a `constants` entry for
+  one of those three should be a code or a display from that field's value set, or the import writes
+  it through as typed and reports it as unmapped.
 - **`extras`**, kept on the record but not treated as a contract field.
 
 Not every header needs a decision. One left out of the map still claims its field on its own if
