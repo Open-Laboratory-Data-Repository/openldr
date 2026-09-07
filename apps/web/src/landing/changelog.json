@@ -1,6 +1,24 @@
 {
-  "generatedAt": "2026-09-06",
+  "generatedAt": "2026-09-07",
   "days": [
+    {
+      "date": "2026-09-07",
+      "version": null,
+      "entries": [
+        {
+          "hash": "7b1ad197",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "One action per step, and a Review you can step back from"
+        },
+        {
+          "hash": "59acfa7d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The value pickers were empty for two reasons, both real"
+        }
+      ]
+    },
     {
       "date": "2026-09-06",
       "version": null,
