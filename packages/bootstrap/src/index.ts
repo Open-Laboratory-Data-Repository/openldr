@@ -1721,6 +1721,7 @@ export type {
 // so `resolveControlledFields` picks them up on the next parse. Exported for Task 6's route and
 // Task 8's wizard wiring.
 export { saveFacilityValueMappings, FACILITY_VALUE_MAP_TYPE } from './facility-value-mappings';
+export { revalidateImportRun, type RevalidateOutcome, type RevalidateInput } from './facility-revalidate';
 export type { ValueMappingEntry, SaveValueMappingsResult } from './facility-value-mappings';
 export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
 export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
