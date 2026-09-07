@@ -256,6 +256,12 @@ export const en = {
     emptyTitle: 'No forms yet',
     noMatch: 'No forms match.',
     refresh: 'Refresh',
+    toastPublished: 'Published {{name}}',
+    toastArchived: 'Archived {{name}}',
+    toastDrafted: 'Moved to draft {{name}}',
+    toastDeleted: 'Deleted {{name}}',
+    toastDuplicated: 'Duplicated {{name}} as {{copy}}',
+    toastImported: 'Imported {{name}}',
   },
   settings: {
     title: 'Settings',

@@ -147,6 +147,19 @@ describe('visibleFieldIds + isSectionVisible', () => {
     expect(visibleFieldIds(s, { flag: 'on' }).has('child')).toBe(true);
   });
 
+  it('hides a field the builder disabled, whatever the visibility rules say', () => {
+    const s = schema([field({ id: 'kept' }), field({ id: 'region', enabled: false })]);
+    expect([...visibleFieldIds(s, {})]).toEqual(['kept']);
+  });
+
+  it('hides a disabled field inside a visible section', () => {
+    const s = schema(
+      [field({ id: 'kept', section: 'sec' }), field({ id: 'region', section: 'sec', enabled: false })],
+      [section({ id: 'sec' })],
+    );
+    expect(visibleFieldIds(s, {}).has('region')).toBe(false);
+  });
+
   it('does not infinite-loop on a self/cyclic reference (reads stored value once)', () => {
     const s = schema([
       field({ id: 'a', visibility: { combinator: 'all', conditions: [{ fieldId: 'b', operator: 'isNotEmpty' }] } }),

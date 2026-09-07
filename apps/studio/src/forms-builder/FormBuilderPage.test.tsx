@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 import { FormBuilderPage } from './FormBuilderPage';
 import * as api from '../api';
 
@@ -59,6 +61,8 @@ function openFieldMenu(): void {
 describe('FormBuilderPage (three-pane shell)', () => {
   beforeEach(() => {
     vi.spyOn(api, 'createForm').mockResolvedValue(makeFormDef());
+    vi.mocked(toast.success).mockReset();
+    vi.mocked(toast.error).mockReset();
   });
 
   it('renders with /forms/new: the header Form name input is present', () => {
@@ -271,6 +275,7 @@ describe('FormBuilderPage (three-pane shell)', () => {
 
   it('Publish: opens ⋯ → Publish → publishForm called for existing form', async () => {
     vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'updateForm').mockResolvedValue(makeFormDef());
     vi.spyOn(api, 'publishForm').mockResolvedValue({ ...makeFormDef(), status: 'published' as const });
 
     render(
@@ -284,6 +289,134 @@ describe('FormBuilderPage (three-pane shell)', () => {
     await waitFor(() =>
       expect(api.publishForm).toHaveBeenCalledWith('form-1', expect.anything()),
     );
+  });
+
+  it('Publish: saves the on-screen draft before snapshotting it', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    const update = vi.spyOn(api, 'updateForm').mockResolvedValue(makeFormDef());
+    const publish = vi.spyOn(api, 'publishForm').mockResolvedValue({ ...makeFormDef(), status: 'published' as const });
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    const nameInput = await screen.findByDisplayValue('Specimen intake');
+    fireEvent.change(nameInput, { target: { value: 'Specimen intake v2' } });
+
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Publish'));
+
+    await waitFor(() => expect(publish).toHaveBeenCalled());
+    // The edit reached the server before the snapshot was taken. Without this, publish
+    // snapshots the row as it was stored, so the rename above is silently left out.
+    expect(update).toHaveBeenCalledWith('form-1', expect.objectContaining({ name: 'Specimen intake v2' }));
+    expect(update.mock.invocationCallOrder[0]).toBeLessThan(publish.mock.invocationCallOrder[0]);
+  });
+
+  it('Publish: reports success by name', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'updateForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'publishForm').mockResolvedValue({ ...makeFormDef(), status: 'published' as const });
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Publish'));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Published Specimen intake'));
+  });
+
+  it('Publish: a rejected publish surfaces the server message instead of failing silently', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'updateForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'publishForm').mockRejectedValue(new Error('publish form: forms.publish required'));
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Publish'));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('publish form: forms.publish required'),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('Save draft: a rejected save surfaces the server message instead of failing silently', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'updateForm').mockRejectedValue(new Error('update form: name is required'));
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Save draft'));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('update form: name is required'),
+    );
+  });
+
+  it('Archive: reports which form was archived', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'setFormStatus').mockResolvedValue({ ...makeFormDef(), status: 'archived' as const });
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Archive'));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Archived Specimen intake'));
+  });
+
+  it('Disable: says the form was archived, because that is what the endpoint does', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'setFormStatus').mockResolvedValue({ ...makeFormDef(), status: 'archived' as const });
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Disable'));
+
+    // Disable maps to archive until a dedicated active-toggle endpoint exists. The message has to
+    // match the status badge the operator is about to see, not the menu item they clicked.
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Archived Specimen intake'));
+  });
+
+  it('Archive: a rejected archive surfaces the server message', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'setFormStatus').mockRejectedValue(new Error('set form status: form not found'));
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Archive'));
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('set form status: form not found'));
   });
 
   it('Compare: opens ⋯ → Compare → CompareDialog opens', async () => {
@@ -345,6 +478,27 @@ describe('FormBuilderPage (three-pane shell)', () => {
 
     await waitFor(() => expect(api.deleteForm).toHaveBeenCalledWith('form-1'));
     await waitFor(() => expect(screen.getByText('Forms list')).toBeInTheDocument());
+  });
+
+  it('Delete: reports which form went, on the list it lands on', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'deleteForm').mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+        <Routes>
+          <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
+          <Route path="/forms" element={<div>Forms list</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByDisplayValue('Specimen intake')).toBeInTheDocument();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Delete'));
+    expect(await screen.findByRole('alertdialog')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted Specimen intake'));
   });
 
   it('Export: ⋯ → Export calls formQuestionnaireUrl(formId)', async () => {

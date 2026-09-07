@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+import { toast } from 'sonner';
 import '@/i18n';
 import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 import { Forms } from './Forms';
@@ -41,6 +43,45 @@ describe('Forms page', () => {
     vi.spyOn(api, 'publishForm').mockResolvedValue({ ...form, status: 'published', schema: importedSchema, targetPages: ['forms'], createdAt: form.updatedAt });
     vi.spyOn(api, 'deleteForm').mockResolvedValue();
     vi.spyOn(api, 'exportFormBundle').mockResolvedValue(undefined);
+    vi.mocked(toast.success).mockReset();
+    vi.mocked(toast.error).mockReset();
+  });
+
+  it('publishing from a row reports which form was published', async () => {
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: /actions for specimen intake/i });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Publish')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Publish'));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Published Specimen intake'));
+  });
+
+  it('archiving from a row reports the new status', async () => {
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: /actions for specimen intake/i });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Archive')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Archive'));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Archived Specimen intake'));
+  });
+
+  it('deleting from a row reports which form went', async () => {
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: /actions for specimen intake/i });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Delete')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: /^delete$/i }));
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Deleted Specimen intake'));
   });
 
   it('lists forms, imports JSON, and exposes row actions', async () => {

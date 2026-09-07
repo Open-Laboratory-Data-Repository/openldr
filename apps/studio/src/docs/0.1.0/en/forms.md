@@ -26,20 +26,21 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 8. Add fields from the palette.
 9. Select a field to configure label, help text, required state, validation, terminology binding, repeatability, and conditional visibility.
 10. Reorder fields by dragging them in the canvas.
-11. Remove fields only after confirming no published workflow or report depends on them.
-12. Use **Preview** to test the form before publishing.
-13. Select **Save draft**.
-14. Select **Publish** when the form is ready for users.
-15. Use **Compare** to review changes between versions.
+11. Clear a field's checkbox in the field list to disable it. A disabled field is not shown to users, is not validated, and collects no answer. It stays in the form so you can switch it back on.
+12. Remove fields only after confirming no published workflow or report depends on them.
+13. Use **Preview** to test the form before publishing. Preview shows exactly what a user sees, so a disabled field does not appear there either.
+14. Select **Save draft** to store your work without releasing it.
+15. Select **Publish** when the form is ready for users. Publish saves the form on screen first, so you never have to remember to save before publishing.
+16. Use **Compare** to review changes between versions.
 
 ![Form builder with field palette, preview, editor, and actions](form-builder.png)
 
-16. From the form list, choose **View/Run**.
-17. Fill required fields and submit the response.
+17. From the form list, choose **View/Run**.
+18. Fill required fields and submit the response.
 
 ![Published form capture screen](form-capture.png)
 
-18. Use form actions to duplicate, archive, export, export a marketplace bundle, or delete when appropriate.
+19. Use form actions to duplicate, archive, export, export a marketplace bundle, or delete when appropriate.
 
 ## Expected result
 
@@ -51,6 +52,8 @@ The form is saved as a draft during design, published when ready, and available 
 - **A required field blocks submission:** confirm the field type, validation rule, and conditional visibility.
 - **A terminology field has no options:** check the terminology binding and the selected ValueSet.
 - **Users see the wrong page after submit:** review the configured target pages.
+- **A field you turned off still appears:** confirm the field list checkbox is clear, then save. The checkbox controls the live form, not just the preview.
+- **Publishing seemed to do nothing:** every action confirms itself with a message in the corner. If no message appeared, the action did not run.
 
 ## FHIR path validation
 

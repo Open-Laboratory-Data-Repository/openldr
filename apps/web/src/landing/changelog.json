@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "04d52726",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A disabled field disappears and publishing saves what is on screen"
+        },
+        {
           "hash": "3060e8ef",
           "type": "fix",
           "scope": "facilities",

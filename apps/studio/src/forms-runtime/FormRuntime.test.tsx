@@ -212,6 +212,27 @@ describe('FormRuntime', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('a disabled field is not rendered', () => {
+    const withDisabled: FormSchema = {
+      ...schema,
+      fields: schema.fields.map((f) => (f.id === 'patientId' ? { ...f, enabled: false } : f)),
+    };
+    render(<FormRuntime schema={withDisabled} submitLabel="Submit" onSubmit={vi.fn()} />);
+    expect(screen.queryByLabelText('Patient ID')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Add notes?')).toBeInTheDocument();
+  });
+
+  it('a disabled required field does not block submit', async () => {
+    const onSubmit = vi.fn();
+    const withDisabled: FormSchema = {
+      ...schema,
+      fields: schema.fields.map((f) => (f.id === 'patientId' ? { ...f, enabled: false } : f)),
+    };
+    render(<FormRuntime schema={withDisabled} submitLabel="Submit" onSubmit={onSubmit} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+  });
+
   it('toggling boolean reveals conditional field', async () => {
     const onSubmit = vi.fn();
     render(<FormRuntime schema={schema} submitLabel="Submit" onSubmit={onSubmit} />);

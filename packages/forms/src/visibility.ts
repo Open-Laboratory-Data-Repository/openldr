@@ -114,6 +114,11 @@ export function visibleFieldIds(
   const sectionsById = new Map(schema.sections.map((s) => [s.id, s]));
   const result = new Set<string>();
   for (const f of schema.fields) {
+    // A field the builder disabled is not rendered, not validated and not collected. The server
+    // already skips it (validateAnswers) and the target-page contract already ignores it
+    // (validateTemplateTargets); rendering it anyway made the builder's Enabled checkbox look dead
+    // and let the capture page collect answers nothing downstream would ever read.
+    if (f.enabled === false) continue;
     if (!isRuleSatisfied(f.visibility, values)) continue;
     if (f.section) {
       const sec = sectionsById.get(f.section);
