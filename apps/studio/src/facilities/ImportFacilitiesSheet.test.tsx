@@ -610,15 +610,15 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/2 duplicate national code/i)).toBeInTheDocument();
   });
 
-  it('a malformed-CSV 400 surfaces the server message and keeps the sheet open', async () => {
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockRejectedValue(
+  it('a rejected upload surfaces the server message and keeps the sheet open', async () => {
+    mocked(api.uploadFacilityImport).mockRejectedValue(
       new Error('import facilities failed: Invalid Record Length: columns length is 3, got 2 on line 4'),
     );
     const onOpenChange = vi.fn();
     render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-    await previewNow();
+    await uploadNow();
 
     expect(await screen.findByText(/invalid record length/i)).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
