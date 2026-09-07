@@ -49,9 +49,15 @@ as they appear in the file** — not the contract's names. For every header you 
 - **Map it** to one contract field. Two headers can never map to the same field — the parser cannot
   guess which one should win, so it refuses instead of guessing.
 - **Give it a fixed value.** Use this when the contract needs a field the file has no column for at
-  all — a national file rarely carries its own country, for example, so `country` is usually a fixed
-  value (`ZMB`, `TZA`, …) rather than a mapped column. Fixed values are the ISO code, never a label
-  someone typed by hand.
+  all. A national file rarely carries its own country, for example, so `country` is usually a fixed
+  value rather than a mapped column.
+
+  `level`, `status` and `country` are bound to value sets, so their fixed value is picked from a
+  list rather than typed. Picking writes the code, which is the same string the importer produces
+  for a value you map at Review, so a picked value needs no mapping at all. You can still type a
+  value the list does not offer. The panel says so when you do, and that value is imported exactly
+  as typed and turns up at Review to be mapped. If an install has no value list for a field, the
+  panel says that too, and nothing is checked.
 - **Keep it as extra data.** The column still gets imported — carried into the record's `extras` —
   but it is not treated as one of the contract fields.
 

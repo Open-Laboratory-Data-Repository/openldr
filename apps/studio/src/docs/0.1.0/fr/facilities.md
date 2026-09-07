@@ -60,8 +60,15 @@ contrat. Pour chaque en-tête, vous avez trois choix :
   deviner.
 - **Lui donner une valeur fixe.** À utiliser quand le contrat a besoin d'un champ pour lequel le
   fichier n'a aucune colonne. Un fichier national porte rarement son propre pays, par exemple,
-  donc `country` est généralement une valeur fixe (`ZMB`, `TZA`, etc.) plutôt qu'une colonne
-  mappée. Les valeurs fixes sont le code ISO, jamais une étiquette saisie à la main.
+  donc `country` est généralement une valeur fixe plutôt qu'une colonne mappée.
+
+  `level`, `status` et `country` sont liés à des jeux de valeurs, donc leur valeur fixe se choisit
+  dans une liste au lieu de se saisir. Le choix écrit le code, c'est-à-dire la même chaîne que
+  l'importateur produit pour une valeur mappée à la Révision, donc une valeur choisie n'a besoin
+  d'aucun mappage. Vous pouvez toujours saisir une valeur absente de la liste. Le panneau vous le
+  signale, et cette valeur est importée telle quelle puis apparaît à la Révision pour être mappée.
+  Si une installation n'a aucune liste de valeurs pour un champ, le panneau le dit aussi, et rien
+  n'est vérifié.
 - **La garder comme donnée supplémentaire.** La colonne est quand même importée, transportée dans
   le champ `extras` de l'enregistrement, mais elle n'est pas traitée comme l'un des champs du
   contrat.
