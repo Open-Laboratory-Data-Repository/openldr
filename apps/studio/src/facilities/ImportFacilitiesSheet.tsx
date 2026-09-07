@@ -1364,7 +1364,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           )}
 
           {step === 1 && (
-          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 py-4 border-b border-border">
+          /* ⛔ STACKED ON A PHONE, label-left/input-right from `sm` up. MEASURED at 375x812: the
+             `auto` label track was sized by "This file is a complete release" to 185px, leaving the
+             control column 147px in a 337px pane, so the two tracks plus the gap came to 349px and
+             the full-width File row spanning them overflowed the pane. AGENTS.md §5 sets the desktop
+             layout; §6 item 4 (it has to work on a phone) is why stacking wins at this width. Same
+             treatment, same reason, as `ImportPolicyPanel`. */
+          <div className="grid grid-cols-1 gap-y-1 px-6 py-4 border-b border-border sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
             {/* ⛔ THE ONE ROW THAT BREAKS THE GRID, deliberately. AGENTS.md §5 puts the label left
                 and the input right, and every other control on this step does. A drop target wants
                 to be big: half a row is a small thing to hit, most of all on a phone. So this spans
@@ -1373,7 +1379,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 ⛔ The native `<input type=file>` it replaces was an §5 violation in its own right
                 ("never a native `<input>`") and, styled only through the `file:` pseudo-element, had
                 no border or background of its own: on the dark theme it read as bare text. */}
-            <div className="col-span-2 space-y-1.5">
+            <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="facility-import-file">{t('facilities.import.fileLabel')}</Label>
               <div
                 role="button"
