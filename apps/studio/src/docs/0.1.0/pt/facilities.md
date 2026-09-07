@@ -57,7 +57,7 @@ desaparecer as linhas restantes, e já não repete a verificação sozinho. Peç
 quando estiver pronto.
 
 Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
-Pré-visualizar, as três opções de reenvio, Cancelar e Fechar, fica no menu `⋯` da página.
+Pré-visualizar, as três opções de verificar de novo, Cancelar e Fechar, fica no menu `⋯` da página.
 
 Não pode clicar num passo que ainda não alcançou, nem voltar a um passo anterior enquanto uma
 verificação em segundo plano está a decorrer. Depois de carregar um ficheiro no Mapeamento, o
@@ -107,9 +107,10 @@ recusado, a menos que ative **Permitir colunas não reconhecidas**, o que o tran
 >
 > **Sem qualquer mapeamento, uma coluna não reconhecida continua a interromper o ficheiro.** Nada
 > indicou ao importador se queria essa coluna, e ele não adivinha: uma coluna descartada em silêncio
-> é pior do que um ficheiro recusado. Use o recarregamento oferecido, que mantém as colunas não
-> reconhecidas como dados extra. Tem de ser definido antes de o ficheiro ser lido, por isso não pode
-> ser acrescentado no passo de confirmação.
+> é pior do que um ficheiro recusado. Use a opção oferecida que verifica o ficheiro de novo
+> mantendo as colunas não reconhecidas como dados extra. Tem de ser definido antes de o ficheiro ser
+> lido, por isso não pode ser acrescentado no passo de confirmação. **O ficheiro que já enviou é
+> reutilizado**, por isso um registo nacional nunca é enviado duas vezes para mudar uma definição.
 >
 > Uma versão JSONL nunca para por isto: cada linha nomeia os seus próprios campos.
 
