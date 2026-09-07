@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "c4c71e7d",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The run door checks the stored file again instead of re-sending it"
+        },
+        {
+          "hash": "f8744980",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Facilities import-run-revalidate, for labs that work headless"
+        },
+        {
+          "hash": "5cd78d92",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Check a stored import again without sending the file again"
+        },
+        {
+          "hash": "ddc84ebb",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "One decision about which import runs may be checked again"
+        },
+        {
+          "hash": "b15ddace",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A stored import run can be put back in the validate queue"
+        },
+        {
           "hash": "904d1c52",
           "type": "fix",
           "scope": "facilities",
