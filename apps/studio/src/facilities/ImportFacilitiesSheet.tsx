@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Upload } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -202,11 +203,33 @@ interface ImportFacilitiesSheetProps {
 // from an uploaded run. Pinned by "a 14 000-row register is confirmable on the background path".
 const APPLY_ROW_CAP = 2000;
 
+/** The two shapes this importer reads, named ONCE so the drop check below and the `accept` on the
+ *  input itself cannot drift apart. `parseFacilityCsv` and `parseFacilityRelease` are what actually
+ *  read them (packages/terminology). */
+const ACCEPTED_FILE_EXTENSIONS = ['.csv', '.jsonl'] as const;
+
+/** A file size an operator can read. Mirrors `humanSize` in `pages/Terminology.tsx`: this sheet does
+ *  not import from that page, and a shared one is a bigger change than this finding asked for. */
+function humanFileSize(n: number): string {
+  if (n < 1024) return `${n} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let v = n / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i += 1; }
+  return `${v.toFixed(1)} ${units[i]}`;
+}
+
+
 
 export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: ImportFacilitiesSheetProps) {
   const { t } = useTranslation();
 
   const [file, setFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  /** The extension of a file the operator dropped that this importer cannot read, or null. Held so
+   *  the refusal can NAME what they dropped rather than saying nothing and looking broken. */
+  const [wrongType, setWrongType] = useState<string | null>(null);
   /** ⛔ REQUESTED, not effective. `clampStep` below is what actually renders, so a step the operator
    *  has not earned can never be shown even if this holds a stale value: picking a different file
    *  drops `hasReview` and the view falls back on its own, with no extra reset to remember. */
@@ -446,8 +469,16 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setError(null);
   };
 
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
+  /**
+   * Choosing a file, whichever way the operator did it.
+   *
+   * ⛔ ONE FUNCTION FOR BOTH DOORS. Browsing and dropping must reset EXACTLY the same state, and the
+   * list below is long enough that a second copy would silently miss one. A drop that skipped, say,
+   * `setColumnMap(EMPTY_COLUMN_MAP)` would carry the previous file's mapping decisions onto a file
+   * whose headers were never checked against them, which is the defect the reset exists to prevent.
+   */
+  const selectFile = (f: File | null) => {
+    setWrongType(null);
     setFile(f);
     setAllowUnknownColumns(false);
     setAllowMalformedRows(false);
@@ -485,6 +516,33 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       setCsv(null);
       setError(err instanceof Error ? err.message : String(err));
     });
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => selectFile(e.target.files?.[0] ?? null);
+
+  /**
+   * A dropped file.
+   *
+   * ⛔ THE EXTENSION IS CHECKED HERE, and it is not checked anywhere else on this path. `accept` on
+   * the input governs the BROWSE dialog only; the browser applies none of it to a drop, so without
+   * this an operator could drop a .zip and watch it upload before the server refused it. Refused by
+   * NAMING what they dropped, because a drop that silently does nothing reads as a broken control.
+   */
+  const handleFileDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (inputsDisabled) return;
+    const f = e.dataTransfer.files?.[0];
+    if (!f) return;
+    const dot = f.name.lastIndexOf('.');
+    const ext = dot === -1 ? '' : f.name.slice(dot).toLowerCase();
+    if (!(ACCEPTED_FILE_EXTENSIONS as readonly string[]).includes(ext)) {
+      // Deliberately does NOT clear an already-chosen file: a mis-drop must not destroy the good
+      // file the operator picked a moment ago.
+      setWrongType(ext === '' ? f.name : ext);
+      return;
+    }
+    selectFile(f);
   };
 
   // Task 8: the header row + this app's own ranked suggestions for the current CSV file — one
@@ -1306,19 +1364,78 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           )}
 
           {step === 1 && (
-          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 py-4 border-b border-border">
-            <Label htmlFor="facility-import-file" className="whitespace-nowrap">{t('facilities.import.fileLabel')}</Label>
-            <div>
-              <input
-                id="facility-import-file"
-                type="file"
-                accept=".csv,text/csv,.jsonl,application/x-ndjson"
-                disabled={inputsDisabled}
-                onChange={handleFileChange}
-                className="text-sm text-foreground file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
-              />
+          /* ⛔ STACKED ON A PHONE, label-left/input-right from `sm` up. MEASURED at 375x812: the
+             `auto` label track was sized by "This file is a complete release" to 185px, leaving the
+             control column 147px in a 337px pane, so the two tracks plus the gap came to 349px and
+             the full-width File row spanning them overflowed the pane. AGENTS.md §5 sets the desktop
+             layout; §6 item 4 (it has to work on a phone) is why stacking wins at this width. Same
+             treatment, same reason, as `ImportPolicyPanel`. */
+          <div className="grid grid-cols-1 gap-y-1 px-6 py-4 border-b border-border sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
+            {/* ⛔ THE ONE ROW THAT BREAKS THE GRID, deliberately. AGENTS.md §5 puts the label left
+                and the input right, and every other control on this step does. A drop target wants
+                to be big: half a row is a small thing to hit, most of all on a phone. So this spans
+                both columns with the label above, which is also how the sibling drop zone in
+                `pages/Terminology.tsx` renders. Operator decision, 2026-09-07.
+                ⛔ The native `<input type=file>` it replaces was an §5 violation in its own right
+                ("never a native `<input>`") and, styled only through the `file:` pseudo-element, had
+                no border or background of its own: on the dark theme it read as bare text. */}
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="facility-import-file">{t('facilities.import.fileLabel')}</Label>
+              <div
+                role="button"
+                tabIndex={inputsDisabled ? -1 : 0}
+                aria-disabled={inputsDisabled || undefined}
+                onClick={() => { if (!inputsDisabled) fileInputRef.current?.click(); }}
+                onKeyDown={(e) => {
+                  if (inputsDisabled) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); }
+                }}
+                // `onDragOver` must preventDefault or the browser navigates to the dropped file.
+                onDragOver={(e) => { if (!inputsDisabled) { e.preventDefault(); setDragOver(true); } }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleFileDrop}
+                className={cn(
+                  'flex flex-col items-center justify-center gap-1 rounded-md border border-dashed px-4 py-6',
+                  'text-center text-xs transition-colors',
+                  inputsDisabled
+                    ? 'cursor-not-allowed border-border opacity-50'
+                    : 'cursor-pointer hover:border-muted-foreground/60',
+                  // The visible cue the operator asked for. `transition-colors` above is what makes
+                  // it read as a state change rather than a repaint.
+                  dragOver && !inputsDisabled && 'border-primary bg-primary/5',
+                )}
+              >
+                <Upload className="h-5 w-5 text-muted-foreground" aria-hidden />
+                {file ? (
+                  <span className="text-foreground">
+                    {t('facilities.import.fileChosen', { name: file.name, size: humanFileSize(file.size) })}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {t(dragOver ? 'facilities.import.fileDropActive' : 'facilities.import.fileDropHint')}
+                  </span>
+                )}
+                {/* The real input stays: it is what opens the picker, what carries `accept` for the
+                    browse path, and what a screen reader announces. `sr-only`, never `hidden`, so it
+                    keeps its accessible name from the Label above. */}
+                <input
+                  ref={fileInputRef}
+                  id="facility-import-file"
+                  type="file"
+                  accept=".csv,text/csv,.jsonl,application/x-ndjson"
+                  disabled={inputsDisabled}
+                  onChange={handleFileChange}
+                  className="sr-only"
+                  tabIndex={-1}
+                />
+              </div>
+              {wrongType && (
+                <p className="text-xs text-destructive">
+                  {t('facilities.import.fileWrongType', { ext: wrongType })}
+                </p>
+              )}
               {emptyFile && (
-                <p className="mt-1 text-xs text-destructive">{t('facilities.import.emptyFileHint')}</p>
+                <p className="text-xs text-destructive">{t('facilities.import.emptyFileHint')}</p>
               )}
             </div>
 
@@ -1343,7 +1460,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 onValueChange={handleNationalSystemChange}
                 disabled={inputsDisabled || sourcesLoading || sourcesError || sources.length === 0}
               >
-                <SelectTrigger id="facility-import-national-system">
+                {/* ⛔ `w-full`. A `<button>` sizes to its CONTENT, so this Select was narrower
+                    than every other control on the step. "File format" only looks right
+                    because it is a DIRECT grid child and gets stretched by `justify-items`;
+                    this one sits inside a wrapper `<div>` (it carries a hint underneath) and
+                    so has to say it. `SelectTrigger` sets no width of its own. */}
+                <SelectTrigger id="facility-import-national-system" className="w-full">
                   <SelectValue placeholder={
                     sourcesLoading
                       ? t('facilities.import.nationalSystemLoading')

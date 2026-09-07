@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { resolveControlledFields, applyControlledFields, observedFieldSystem } from './facility-controlled-fields';
+import {
+  resolveControlledFields, applyControlledFields, observedFieldSystem, normaliseControlledValue,
+} from './facility-controlled-fields';
 import type { FacilityRecord } from '@openldr/db';
 
 const rec = (over: Partial<FacilityRecord>): FacilityRecord =>
@@ -133,7 +135,12 @@ describe('resolveControlledFields — a canonical DISPLAY is canonical', () => {
     const admin = fakeAdmin({ valueSets: { [VS]: [{ code: 'health-center', display: 'Health Center' }] } });
     const res = await resolveControlledFields(admin, 'urn:zm:mfl', [rec({ level: 'Health Center' })]);
     expect(res.unmapped.level).toEqual([]);
-    expect(res.mapped.level.size).toBe(0);
+    // CHANGED by the controlled-value matching slice (2026-09-07): a display no longer passes
+    // through as itself, it resolves to the concept's CODE, so every resolved value in the column is
+    // one shape. This test's original point stands and is still what matters: the value set's OWN
+    // vocabulary is accepted. A live create really did fail with
+    // `level 'Health Center' is not a recognised canonical level value`.
+    expect(res.mapped.level.get('Health Center')).toBe('health-center');
   });
 
   it('still accepts a canonical code', async () => {
@@ -142,17 +149,121 @@ describe('resolveControlledFields — a canonical DISPLAY is canonical', () => {
     expect(res.unmapped.level).toEqual([]);
   });
 
-  it('still reports a value that is NEITHER a code nor a display', async () => {
-    // 'Health Centre' (British) is what the Zambia register writes. It must stay unmapped so the
-    // import keeps reporting it and the operator can map it.
+  it('still reports a value that is NEITHER a code nor a display nor a fold of one', async () => {
+    // ⛔ THE EXAMPLE CHANGED, AND THAT IS THE SLICE. This test used to use 'Health Centre' (British),
+    // asserting it "must stay unmapped so the operator can map it". The operator decided on
+    // 2026-09-07 that being asked about a spelling variant is busywork, so `Health Centre` now folds
+    // onto `health-center` and no longer reaches them. '1st Level Hospital' replaces it: a genuinely
+    // different NAME, which is exactly the kind of value that still belongs in front of a person.
     const admin = fakeAdmin({ valueSets: { [VS]: [{ code: 'health-center', display: 'Health Center' }] } });
-    const res = await resolveControlledFields(admin, 'urn:zm:mfl', [rec({ level: 'Health Centre' })]);
-    expect(res.unmapped.level).toEqual(['Health Centre']);
+    const res = await resolveControlledFields(admin, 'urn:zm:mfl', [rec({ level: '1st Level Hospital' })]);
+    expect(res.unmapped.level).toEqual(['1st Level Hospital']);
   });
 
   it('ignores a null display rather than treating it as a matchable value', async () => {
     const admin = fakeAdmin({ valueSets: { [VS]: [{ code: 'health-center', display: null }] } });
     const res = await resolveControlledFields(admin, 'urn:zm:mfl', [rec({ level: '' }), rec({ level: 'x' })]);
     expect(res.unmapped.level).toEqual(['x']);
+  });
+});
+
+describe('normaliseControlledValue', () => {
+  it('folds case and surrounding whitespace', () => {
+    expect(normaliseControlledValue('  Health Center ')).toBe('health center');
+  });
+
+  // The one spelling variant, and it is here because a real register needed it: the Zambia MFL
+  // export writes `Health Centre` while the seeded concept reads `Health Center`.
+  it('folds centre onto center', () => {
+    expect(normaliseControlledValue('Diagnostic Centre')).toBe('diagnostic center');
+    expect(normaliseControlledValue('Health Centre')).toBe(normaliseControlledValue('Health Center'));
+  });
+
+  // ⛔ TWO RULES, NOT A SIMILARITY SCORE. Anything that wants more tolerance than an enumerated
+  // variant belongs in the ranked suggester, behind the operator's own confirmation.
+  it('folds nothing else', () => {
+    expect(normaliseControlledValue('Hospital')).not.toBe(normaliseControlledValue('Hospitals'));
+    expect(normaliseControlledValue('Organisation')).not.toBe(normaliseControlledValue('Organization'));
+    expect(normaliseControlledValue('health-center')).not.toBe(normaliseControlledValue('health center'));
+  });
+});
+
+describe('resolveControlledFields: the four ordered steps', () => {
+  const LEVEL = 'urn:openldr:valueset:facility-type';
+  const concepts = [{ code: 'health-center', display: 'Health Center' }];
+
+  it('1. a value that IS a code is left alone: neither mapped nor unmapped', async () => {
+    const admin = fakeAdmin({ valueSets: { [LEVEL]: concepts } });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'health-center' })]);
+    expect(res.mapped.level.size).toBe(0);
+    expect(res.unmapped.level).toEqual([]);
+  });
+
+  // ⛔ THE ORDER IS THE POINT. An operator who deliberately mapped their register's `Health Centre`
+  // onto something else keeps that decision; an automatic fold must never overrule them.
+  it('2. an active mapping BEATS a fold that would have said something different', async () => {
+    const from = observedFieldSystem('level', 'urn:tz:hfr');
+    const admin = fakeAdmin({
+      valueSets: { [LEVEL]: [...concepts, { code: 'district-hospital', display: 'District Hospital' }] },
+      mappings: { [`${from}|Health Centre`]: [{ toCode: 'district-hospital', isActive: true }] },
+    });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'Health Centre' })]);
+    expect(res.mapped.level.get('Health Centre')).toBe('district-hospital');
+  });
+
+  it('3. a case-only difference resolves to the CODE, not to the display', async () => {
+    const admin = fakeAdmin({ valueSets: { [LEVEL]: concepts } });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'health center' })]);
+    expect(res.mapped.level.get('health center')).toBe('health-center');
+    expect(res.unmapped.level).toEqual([]);
+  });
+
+  it('3. the Centre spelling resolves too, which is what the Zambia export needs', async () => {
+    const admin = fakeAdmin({ valueSets: { [LEVEL]: concepts } });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'Health Centre' })]);
+    expect(res.mapped.level.get('Health Centre')).toBe('health-center');
+  });
+
+  it('3. an exact DISPLAY now resolves to the code as well', async () => {
+    const admin = fakeAdmin({ valueSets: { [LEVEL]: concepts } });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'Health Center' })]);
+    expect(res.mapped.level.get('Health Center')).toBe('health-center');
+  });
+
+  it('4. anything else is still unmapped, and still never blocks', async () => {
+    const admin = fakeAdmin({ valueSets: { [LEVEL]: concepts } });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'Something Else' })]);
+    expect(res.unmapped.level).toEqual(['Something Else']);
+  });
+
+  // ⛔ FAIL CLOSED. Two different concepts that normalise alike make the key USELESS, not ambiguous:
+  // values matching it go to the operator rather than to a guess. Zero seeded keys collide today
+  // (see facility-controlled-fields.seed.test.ts), so this exists for the concept added next year.
+  it('discards a key two different concepts share, leaving those values unmapped', async () => {
+    const admin = fakeAdmin({
+      valueSets: {
+        [LEVEL]: [
+          { code: 'a-center', display: 'A Center' },
+          { code: 'a-centre', display: 'A Centre' },
+        ],
+      },
+    });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'a center' })]);
+    expect(res.mapped.level.size).toBe(0);
+    expect(res.unmapped.level).toEqual(['a center']);
+  });
+
+  it('a collision does not stop other values resolving', async () => {
+    const admin = fakeAdmin({
+      valueSets: {
+        [LEVEL]: [
+          { code: 'a-center', display: 'A Center' },
+          { code: 'a-centre', display: 'A Centre' },
+          { code: 'health-center', display: 'Health Center' },
+        ],
+      },
+    });
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'health centre' })]);
+    expect(res.mapped.level.get('health centre')).toBe('health-center');
   });
 });

@@ -2630,3 +2630,55 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByRole('menuitem', { name: 'Check again keeping unrecognised columns' })).toBeInTheDocument();
   });
 });
+
+describe('the file drop zone', () => {
+  // This describe sits outside the main suite, so it carries its own setup rather than borrowing
+  // one that does not reach it.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocked(api.listFacilityImportSources).mockResolvedValue([HFR_SOURCE]);
+    mocked(api.suggestColumnMap).mockResolvedValue({ headers: [], columns: [] });
+    mocked(api.suggestValueMappings).mockResolvedValue({ values: [], notValidated: false });
+    mocked(api.writeFacilityValueMappings).mockResolvedValue({ written: 0, superseded: [] });
+  });
+
+  const dropZone = () => screen.getByRole('button', { name: /drag a \.csv/i });
+  const drop = (el: HTMLElement, file: File) => fireEvent.drop(el, { dataTransfer: { files: [file] } });
+
+  it('accepts a dropped csv and treats it exactly like a browsed one', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    drop(dropZone(), csvFile());
+    expect(await screen.findByText(/register\.csv/)).toBeInTheDocument();
+  });
+
+  // ⛔ `accept` on the input governs the BROWSE dialog only; a browser applies none of it to a drop.
+  // Without this check an operator could drop a .zip and watch it upload before the server refused.
+  it('refuses a file it cannot read, and NAMES what was dropped', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    drop(dropZone(), new File(['x'], 'register.zip', { type: 'application/zip' }));
+    expect(await screen.findByText(/that is a \.zip file/i)).toBeInTheDocument();
+  });
+
+  // A mis-drop must not destroy the good file chosen a moment earlier.
+  it('keeps an already-chosen file when a later drop is the wrong type', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
+    await screen.findByText(/register\.csv/);
+
+    drop(screen.getByRole('button', { name: /register\.csv/i }), new File(['x'], 'bad.zip'));
+
+    expect(await screen.findByText(/that is a \.zip file/i)).toBeInTheDocument();
+    expect(screen.getByText(/register\.csv/)).toBeInTheDocument();
+  });
+
+  // ⛔ It is a `role="button"` with a hidden input behind it, so the keyboard path is the only way a
+  // non-mouse operator reaches the picker at all.
+  it('opens the picker from the keyboard', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    const input = screen.getByLabelText('File') as HTMLInputElement;
+    const clicked = vi.spyOn(input, 'click').mockImplementation(() => {});
+    fireEvent.keyDown(dropZone(), { key: 'Enter' });
+    expect(clicked).toHaveBeenCalled();
+    clicked.mockRestore();
+  });
+});

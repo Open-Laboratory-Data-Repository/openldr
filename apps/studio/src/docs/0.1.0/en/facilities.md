@@ -51,6 +51,18 @@ The list of unrecognised values is kept while you work through it. Saving a mapp
 the remaining rows vanish, and it no longer re-runs the check by itself. Ask for the next check
 when you are ready.
 
+### Spelling is not your problem
+
+A value that differs from the vocabulary only by capitals, or by writing Centre where the vocabulary
+writes Center, resolves on its own and never reaches that list. Your register's `Health Centre` is
+imported as `health-center`, and the words your file actually used are kept alongside the row.
+
+A genuinely different name still reaches you. `1st Level Hospital` is not a spelling of anything in
+the vocabulary, so it waits for your decision, which is the point.
+
+**A mapping you made by hand always wins.** Nothing decided automatically overrules a decision you
+made, so a register that deliberately maps a word somewhere unusual keeps that.
+
 Each step shows one button, for the action that moves you forward. Every other action, including
 Preview, the three check-again options, Cancel, and Close, stays in the page's `⋯` menu.
 

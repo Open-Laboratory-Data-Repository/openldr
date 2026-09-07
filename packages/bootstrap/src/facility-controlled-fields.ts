@@ -67,6 +67,32 @@ export function observedFieldSystem(field: ControlledField, nationalSystem: stri
   return `${CONTROLLED_SYSTEM_PREFIX}${field}:${suffix}`;
 }
 
+/**
+ * How a controlled value is compared against a concept: the difference between two strings that a
+ * person would call the same word.
+ *
+ * ⛔ AN ENUMERATED LIST OF VARIANTS, NOT A SIMILARITY SCORE, and that difference is the whole reason
+ * this can sit in a path that writes without asking. A rule is added here only when a REAL register
+ * has been measured needing it, AND only when adding it introduces no cross-concept collision in any
+ * seeded set. `facility-controlled-fields.seed.test.ts` is what proves the second half, against the
+ * migrated database rather than a copy of the seed.
+ *
+ * The two rules, and why each exists:
+ *   - case, because a national export capitalises to its own house style;
+ *   - `centre` -> `center`, because the Zambia MFL export writes `Health Centre` while the seeded
+ *     concept reads `Health Center`, and the seed itself is inconsistent (`Health Center` and
+ *     `Radiology Services Center` against `Diagnostic Centre` and `Mobile Radiology and Imaging
+ *     Centre`, migration 072). The operator chose to make the MATCH tolerant rather than edit a
+ *     shipped vocabulary.
+ *
+ * ⛔ ANYTHING BEYOND AN ENUMERATED VARIANT BELONGS IN THE RANKER (`facility-mapping-suggest.ts`),
+ * which scores and then ASKS. Its `WEAK_MIN` of 0.62 exists to offer nothing rather than a wrong
+ * guess; this function keeps the same discipline by refusing to be clever at all.
+ */
+export function normaliseControlledValue(s: string): string {
+  return s.trim().toLowerCase().replace(/centre/g, 'center');
+}
+
 export interface ControlledResolution {
   /** field -> raw source value -> canonical code. Absent entry = unmapped. */
   mapped: Record<ControlledField, Map<string, string>>;
@@ -136,22 +162,57 @@ export async function resolveControlledFields(
     // hand-made facility on a live install carried `Level IA2 (Dispensary Laboratory)` and was
     // refused the same way. A `null` display contributes nothing — it is absence, not a matchable
     // empty string.
-    const canonical = new Set<string>();
+    // Step 1's set: a value that already IS a code needs nothing done to it.
+    const codeSet = new Set(codes.map((c) => c.code));
+
+    /**
+     * Step 3's map: normalised key -> the code it resolves to.
+     *
+     * ⛔ A KEY TWO DIFFERENT CONCEPTS CLAIM IS DELETED, not resolved to whichever was seen first.
+     * Values matching it fall through to `unmapped` and reach the operator, which is where an
+     * ambiguous value belongs. MEASURED: zero keys collide across the seeded sets today (63 level
+     * concepts, 3 status), so this branch is unreachable on a stock install. It exists so that a
+     * concept added later degrades to "ask" rather than to a wrong answer, and
+     * `facility-controlled-fields.seed.test.ts` is what tells us the day that changes.
+     */
+    const byKey = new Map<string, string>();
+    const poisoned = new Set<string>();
     for (const c of codes) {
-      canonical.add(c.code);
-      if (c.display !== null && c.display !== '') canonical.add(c.display);
+      for (const token of [c.code, c.display]) {
+        if (token === null || token === '') continue;
+        const key = normaliseControlledValue(token);
+        const seen = byKey.get(key);
+        if (seen !== undefined && seen !== c.code) { poisoned.add(key); continue; }
+        byKey.set(key, c.code);
+      }
     }
+    for (const key of poisoned) byKey.delete(key);
 
     const fromSystem = observedFieldSystem(field, nationalSystem);
     for (const raw of rawValues) {
-      if (canonical.has(raw)) continue; // already canonical: neither mapped nor unmapped.
-      const outgoing = await admin.termMappings.listOutgoing(fromSystem, raw);
+      // 1. Already the canonical form. Rewriting it to itself would be noise.
+      if (codeSet.has(raw)) continue;
+
+      // 2. ⛔ THE OPERATOR'S OWN DECISION WINS over the automatic fold below. A register that
+      // deliberately maps its `Health Centre` onto something other than `health-center` keeps that,
+      // which is why this step is ahead of step 3 and not behind it.
+      //
       // ⛔ The `m.isActive` check is load-bearing: a DEACTIVATED mapping must not resolve. The
       // first ACTIVE mapping wins, matching `saveExclusive`'s invariant of at most one active
       // mapping per `(fromSystem, fromCode)` within a scope.
+      const outgoing = await admin.termMappings.listOutgoing(fromSystem, raw);
       const active = outgoing.find((m) => m.isActive);
-      if (active) mapped[field].set(raw, active.toCode);
-      else unmapped[field].push(raw);
+      if (active) { mapped[field].set(raw, active.toCode); continue; }
+
+      // 3. The same word, read the way a person reads it. Resolves to the CODE so that every
+      // resolved value in the column is one shape; `applyControlledFields` keeps the raw string in
+      // `extras.__source`. This subsumes an exact DISPLAY match, which is why a display now
+      // resolves to its code instead of passing through as itself.
+      const folded = byKey.get(normaliseControlledValue(raw));
+      if (folded !== undefined) { mapped[field].set(raw, folded); continue; }
+
+      // 4. Unmapped. NEVER blocks and NEVER blanks: written exactly as it is today.
+      unmapped[field].push(raw);
     }
   }
 

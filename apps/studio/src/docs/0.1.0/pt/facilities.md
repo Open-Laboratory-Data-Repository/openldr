@@ -56,6 +56,18 @@ A lista de valores não reconhecidos é mantida enquanto trabalha nela. Guardar 
 desaparecer as linhas restantes, e já não repete a verificação sozinho. Peça a verificação seguinte
 quando estiver pronto.
 
+### A ortografia não é problema seu
+
+Um valor que difere do vocabulário apenas nas maiúsculas, ou por escrever Centre onde o vocabulário
+escreve Center, resolve-se sozinho e nunca chega a essa lista. O `Health Centre` do seu registo é
+importado como `health-center`, e as palavras que o seu ficheiro usou são guardadas junto da linha.
+
+Um nome verdadeiramente diferente continua a chegar-lhe. `1st Level Hospital` não é a ortografia de
+nada no vocabulário, por isso espera pela sua decisão, que é precisamente o objetivo.
+
+**Um mapeamento que fez à mão ganha sempre.** Nada decidido automaticamente passa por cima de uma
+decisão que tomou.
+
 Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
 Pré-visualizar, as três opções de verificar de novo, Cancelar e Fechar, fica no menu `⋯` da página.
 
