@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "904d1c52",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The policy panel's keys resolve, and it fits a phone"
+        },
+        {
+          "hash": "b0f7af69",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Value mapping moves to Mapping, and saving stops re-checking"
+        },
+        {
+          "hash": "49afa063",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The run door still says an override needs a re-upload"
+        },
+        {
+          "hash": "29c4ff8e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The seed is not an edit, and both doors fill the worklist"
+        },
+        {
           "hash": "cffb96a1",
           "type": "fix",
           "scope": "studio",
