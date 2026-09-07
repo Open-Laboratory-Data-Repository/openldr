@@ -32,15 +32,19 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 14. Select **Save draft** to store your work without releasing it.
 15. Select **Publish** when the form is ready for users. Publish saves the form on screen first, so you never have to remember to save before publishing.
 16. Use **Compare** to review changes between versions.
+17. Use **Versions** to see every published version, newest first, with the date each was released.
+18. From a version's actions, choose **Restore** to put it back. This replaces the form you are
+    editing, and a published form goes back to draft. Undo in the builder reverses it, and nothing
+    reaches users until you publish again.
 
 ![Form builder with field palette, preview, editor, and actions](form-builder.png)
 
-17. From the form list, choose **View/Run**.
-18. Fill required fields and submit the response.
+19. From the form list, choose **View/Run**.
+20. Fill required fields and submit the response.
 
 ![Published form capture screen](form-capture.png)
 
-19. Use form actions to duplicate, archive, export, export a marketplace bundle, or delete when appropriate.
+21. Use form actions to duplicate, archive, export, export a marketplace bundle, or delete when appropriate.
 
 ## Expected result
 
@@ -54,6 +58,8 @@ The form is saved as a draft during design, published when ready, and available 
 - **Users see the wrong page after submit:** review the configured target pages.
 - **A field you turned off still appears:** confirm the field list checkbox is clear, then save. The checkbox controls the live form, not just the preview.
 - **Publishing seemed to do nothing:** every action confirms itself with a message in the corner. If no message appeared, the action did not run.
+- **The Version label box does not change the version number:** it never did. The number is assigned when you publish, and is shown next to the status. The box is a free-text caption.
+- **Versions is greyed out:** the form has not been saved yet, so it has no versions.
 
 ## FHIR path validation
 
