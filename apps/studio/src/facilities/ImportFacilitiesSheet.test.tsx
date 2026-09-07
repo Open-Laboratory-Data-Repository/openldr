@@ -2117,21 +2117,18 @@ describe('ImportFacilitiesSheet', () => {
         { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
       ],
     });
-    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
-    await previewNow();
+    await reviewWithSummary(baseResult({ parsed: 3, create: 3 }), {}, 'MFL Code,Name\n1835,Namatindi RHC\n');
 
     await screen.findByText(/facility row\(s\) will be created/i);
     expect(screen.queryByText(/both map to/)).not.toBeInTheDocument();
-    // Whole-branch review, FINDING 5: this used to credit the panel's own render gate for the
-    // absence below, but that is not what is happening here. This test never clicks Continue, so
-    // the preview runs from Source and the clean result auto-advances the sheet straight to Review
-    // (step 3) — `queryByLabelText('MFL Code')` is absent because `step !== 2`, not because
-    // `columnMapPanelShown`'s own `!reviewResult` clause excluded it while still on Mapping. The
-    // "keeps ColumnMapStep mounted through a refusal" tests above are the ones that actually
-    // exercise that clause, by staying on step 2 the whole time.
+    // Whole-branch review, FINDING 5: this does NOT credit the panel's own render gate for the
+    // absence below. A clean summary puts the sheet on Review (step 3), so
+    // `queryByLabelText('MFL Code')` is absent because `step !== 2`, not because
+    // `columnMapPanelShown`'s own clause excluded it while still on Mapping. The "keeps
+    // ColumnMapStep mounted through a refusal" test above is the one that actually exercises that
+    // clause, by staying on step 2 the whole time.
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
   });
 
@@ -2397,17 +2394,12 @@ describe('ImportFacilitiesSheet', () => {
           { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
         ],
       });
-      (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-      await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
-      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-      await screen.findByLabelText('MFL Code');
-
-      await previewNow();
+      await reviewWithSummary(baseResult({ parsed: 3, create: 3 }), {}, 'MFL Code,Name\n1835,Namatindi RHC\n');
       await screen.findByText(/facility row\(s\) will be created/i);
 
-      // The clean preview auto-advances to Review, so go back to Mapping.
+      // The clean summary auto-advances to Review, so go back to Mapping.
       fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
 
       // ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: that Mapping had no panel to show and said so,
@@ -2416,11 +2408,12 @@ describe('ImportFacilitiesSheet', () => {
       // Going back is only worth offering if something can change there, so the panel stays.
       expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
       expect(screen.queryByText(/already been sent with the upload/i)).not.toBeInTheDocument();
-      // ...and the step has an action again. It reads "Upload and validate" rather than a re-upload
-      // because this is the INLINE door: a preview never sets the sheet's own `runId`, only an
-      // upload does, so nothing has been sent yet and uploading is genuinely the next thing. The
-      // re-upload labels belong to the background door and are asserted where that door is driven.
-      expect(screen.getByRole('button', { name: 'Upload and validate' })).toBeInTheDocument();
+      // ...and the step has an action again. It reads "Check again with this map" rather than
+      // "Upload and validate" because a run already exists: the operator stepped back here to
+      // change something, and the action that sends the change is a re-check of the file the run
+      // already stored. Under the inline door this same spot read "Upload and validate", because a
+      // preview never set `runId` and nothing had been sent yet.
+      expect(screen.getByRole('button', { name: 'Check again with this map' })).toBeInTheDocument();
     });
   });
 
