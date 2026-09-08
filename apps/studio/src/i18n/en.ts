@@ -1041,8 +1041,11 @@ export const en = {
       // which is exactly what that refusal asks for.
       reuploadUnknownColumnsAction: 'Check again keeping unrecognised columns',
       reuploadInvalidCoordinatesAction: 'Check again keeping rows with an invalid coordinate',
-        reuploadColumnMapAction: 'Check again with the corrected map',
-        reuploadWithMapAction: 'Check again with this map',
+      reuploadColumnMapAction: 'Check again with the corrected map',
+      // Task 6: Mapping's ordinary action. Not a re-upload label any more: Mapping is only ever
+      // reachable once Source has already stored the file, so this is the FIRST check, not a
+      // second send of it.
+      validateAllAction: 'Validate all',
       overrideNeedsReupload: 'This option changes how the file is read, so the check has to run again with it. Use the actions menu above. The file you already uploaded is reused, so nothing is sent twice, and the summary you review will be the one that gets applied.',
       overrideAppliedToRun: 'This validation already ran with that option on, so the summary below is what will be applied.',
       runLoading: 'Checking the import run…',

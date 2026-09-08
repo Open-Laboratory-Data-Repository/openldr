@@ -32,6 +32,10 @@ vi.mock('@/api', async (orig) => {
     uploadFacilityImport: vi.fn(),
     getFacilityImportRun: vi.fn(),
     confirmFacilityImportRun: vi.fn(),
+    // Task 6: Data's own grid (DataGridStep) reads the stored file's rows directly, stubbed here
+    // for the same reason as the three above: this page renders the real sheet, and the flow below
+    // passes through Data on its way to Mapping.
+    readFacilityImportRows: vi.fn(),
     // The Observed tab (Task 9) is its own component with its own test suite
     // (ObservedTab.test.tsx) — stubbed here only so switching tabs on THIS page doesn't reach the
     // real network; Radix Tabs unmounts the inactive TabsContent, so these are untouched by every
@@ -61,7 +65,7 @@ const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
 import { toast } from 'sonner';
-import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
+import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, listFacilityImportSources, readFacilityImportRows, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
@@ -181,6 +185,13 @@ describe('Facilities page', () => {
     (retryFacilityJob as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([HFR_SOURCE]);
+    // Task 6: Data's own grid (DataGridStep) fetches its own page the moment a run's `runId` is
+    // set, true for every test that clicks Continue on the import sheet, not only the ones about
+    // Data itself. An unmocked call has no `mockResolvedValue` and returns `undefined`, and
+    // `undefined.then` throws inside the effect.
+    (readFacilityImportRows as ReturnType<typeof vi.fn>).mockResolvedValue({
+      headers: [], rows: [], offset: 0, limit: 100, total: 0,
+    });
     (expandValueSet as ReturnType<typeof vi.fn>).mockImplementation((id: string) =>
       Promise.resolve(id === 'vs-location-status' ? STATUS_CODES : LEVEL_CODES));
     (getFacilityHistory as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [] });
@@ -507,14 +518,14 @@ describe('Facilities page', () => {
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
     // Fix for the reachability regression (ImportFacilitiesSheet.tsx): Continue now stores the
-    // file (`validate=false`) and lands on Data, not Mapping directly. Mapping's own re-upload
-    // action reads "Check again with this map" here, not "Upload and validate", because `runId`
-    // is already set by Source's own store. See that button's own comment.
+    // file (`validate=false`) and lands on Data, not Mapping directly. Mapping's own action reads
+    // "Validate all" here, not "Upload and validate", because `runId` is already set by Source's
+    // own store. See that button's own comment.
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
       .toHaveAttribute('aria-current', 'step'));
     fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Check again with this map' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Validate all' }));
     // TWO calls: Source's own store, then Mapping's validate.
     await waitFor(() => expect(uploadFacilityImport).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();

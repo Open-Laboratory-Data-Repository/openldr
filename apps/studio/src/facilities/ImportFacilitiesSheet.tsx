@@ -36,6 +36,7 @@ import {
   type FacilityRegisterSource,
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
+import { DataGridStep } from './DataGridStep';
 import { CONTROLLED_FIELDS } from './controlledFields';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
 import { ValueMapPanel } from './ValueMapPanel';
@@ -1277,10 +1278,27 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         </div>
         <div className="border-t border-border" />
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* ⛔ `flex flex-col`, ON TOP OF the scrolling column it already was, not INSTEAD of it.
+            Source, Mapping and Review stay ordinary stacked content that scrolls with the body
+            (`overflow-y-auto` still does that job for them). Data is the one child that has to
+            FILL the remaining height rather than take its own content height, and `flex-1` on a
+            child only ever means something when its PARENT is a flex container: a plain block
+            parent left the grid sized to its own content, splitting the pane in half above an
+            empty band (AGENTS.md §6's `wrapperClassName="min-h-0 flex-1"` trap, one level up). */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {error ? (
             <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
           ) : null}
+
+          {/* Task 6: Data (step 2), the file Source just stored, read back a page at a time.
+              `DataGridStep` fetches its own rows; this sheet never holds them. Guarded on `runId`
+              even though `stepGate.hasStoredFile` already requires it to reach step 2 at all,
+              because the type is `string | null` and the component's own prop is not. */}
+          {step === 2 && runId && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <DataGridStep runId={runId} />
+            </div>
+          )}
 
           {/* Task 3: the source inputs — File, National system, File format, complete release and
               Release version — belong to Source (step 1) alone. Leaving them on screen at every step
@@ -1779,21 +1797,32 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               needs one: a column-map refusal parks them here with `runId` already set. So the
               refusal gets its own branch first, reusing the exact action (and label) the dropdown's
               `canReuploadForColumnMap` item already offers — no new copy, no new handler. */}
-          {/* Three shapes of the same action, because what it MEANS depends on what came before.
-              No run yet: this is the upload. A refused map: the re-upload the refusal names. A run
-              that simply exists: still a re-upload, because the operator stepped back here to
-              change something and needs a way to send it. All three call `handleUpload`, which
-              reads the live map and supersedes any run this sheet is watching. */}
+          {/* Task 6: two shapes now, not three. There is no "no run yet" case any more: Mapping is
+              only ever reachable once Source has already stored the file, so `runId` is always set
+              here and the old `!runId` branch (the plain "Upload and validate" label) was dead.
+              A refused map: the re-upload the refusal names, unchanged. Everything else: "Validate
+              all", the operator's ordinary check of the file already sitting on the server, first
+              time or the fifth.
+              ⛔ `handleRevalidate`, NOT `handleUpload`, and that is Task 6's own fix for the double
+              upload this button used to cause on every click. It checks the run ALREADY on the
+              server again rather than sending the file a second time, but only from
+              `awaiting_confirmation`, the one status `revalidateImportRun`
+              (packages/bootstrap/src/facility-revalidate.ts) accepts; `handleRevalidate` falls back
+              to `handleUpload` for any other status. Mapping's run is `stored` (Source's own
+              store-only upload never validates it), so the FIRST click here still falls back and
+              still re-sends the file, a real gap this task's report names rather than papering
+              over by widening that guard, which is a shared bootstrap/CLI decision outside this
+              task's file list. Once a run HAS reached `awaiting_confirmation` (an operator stepping
+              back to Mapping to fix something) this same click checks it again for free. */}
           {step === 3 && (
             <Button
               size="sm"
               disabled={uploadDisabled || confirming || cancelling}
-              onClick={() => void handleUpload()}
+              onClick={() => void handleRevalidate()}
             >
               {uploading ? uploadLabel : t(
-                !runId ? 'facilities.import.uploadAction'
-                  : columnMapRefused ? 'facilities.import.reuploadColumnMapAction'
-                    : 'facilities.import.reuploadWithMapAction',
+                columnMapRefused ? 'facilities.import.reuploadColumnMapAction'
+                  : 'facilities.import.validateAllAction',
               )}
             </Button>
           )}

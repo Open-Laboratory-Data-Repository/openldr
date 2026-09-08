@@ -30,6 +30,9 @@ vi.mock('@/api', async (orig) => {
     writeFacilityValueMappings: vi.fn(),
     // Plan B: the run door checks a stored file again instead of sending it twice.
     revalidateFacilityImportRun: vi.fn(),
+    // Task 6: Data's own grid reads the stored file's rows directly; it never touches this
+    // sheet's own state (see DataGridStep.tsx's own doc comment on why).
+    readFacilityImportRows: vi.fn(),
   };
 });
 
@@ -203,11 +206,20 @@ async function advanceToMapping() {
 }
 
 /** Drives the two clicks an operator now needs for a first upload+validate: `advanceToMapping`
- *  above, then Mapping's own visible button, the one `handleUpload` ships an ordinary validate
- *  for. `uploadFacilityImport` is therefore called TWICE by a full run through this helper, once
- *  to store and once to validate, which is this task's own known, accepted double-upload. A
- *  later task replaces Mapping's re-upload with a check against the already-stored file. Every
- *  caller that mocks `uploadFacilityImport` to resolve must expect two calls, not one. */
+ *  above, then Mapping's own visible button ("Validate all"). `uploadFacilityImport` is therefore
+ *  called TWICE by a full run through this helper, once to store and once to validate.
+ *
+ *  ⛔ TASK 6: STILL TWO CALLS, and that is a known, reported limit rather than an oversight. The
+ *  button now goes through `handleRevalidate`, which checks an ALREADY-STORED run again without
+ *  re-sending it, but only from `awaiting_confirmation`, the one status `revalidateImportRun`
+ *  (packages/bootstrap/src/facility-revalidate.ts) accepts. The run this helper drives is
+ *  `stored`, Source's own store-only status, so `canRevalidate` is false here and `handleRevalidate`
+ *  falls back to `handleUpload`, exactly as it did before this task. Widening that guard to accept
+ *  `stored` is a shared bootstrap/CLI decision (AGENTS.md §6 item 2) outside this task's file list.
+ *  See `revalidateFacilityImportRun` calling this second, for the case this task's fix actually
+ *  reaches once a run HAS reached `awaiting_confirmation`: "goes back to Mapping after a validate
+ *  and checks the corrected map again without a third upload". Every caller that mocks
+ *  `uploadFacilityImport` to resolve must expect two calls, not one. */
 async function uploadNow() {
   await advanceToMapping();
   // A failed store leaves Mapping unreachable and nothing left to drive here.
@@ -215,11 +227,10 @@ async function uploadNow() {
   if (!mappingStep || mappingStep.hasAttribute('disabled')) return;
   // Mapping's own button can no longer read "Upload and validate": Mapping is only ever reachable
   // once `runId` is already set (Source's store is what earns `hasStoredFile`), so its label is
-  // always one of the two re-upload variants, never the first-upload one. Matched for both anyway,
-  // since a later task's fix for that label mismatch should not have to find this helper too.
+  // always "Validate all", or the column-map-refusal variant.
   const button = await screen.findByRole(
     'button',
-    { name: /upload and validate|check again with this map|check again with the corrected map/i },
+    { name: /validate all|check again with the corrected map/i },
   );
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
@@ -293,6 +304,13 @@ describe('ImportFacilitiesSheet', () => {
     // override this per-call, exactly as `suggestColumnMap` above is overridden.
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-default' });
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'stored' }));
+    // Task 6: Data's own grid fetches its own page the moment `runId` is set, which is true for
+    // every test that clicks Continue, whether or not the test itself is about Data. Defaulted
+    // here for the same reason `uploadFacilityImport` is above: an unmocked call has no
+    // `mockResolvedValue` and returns `undefined`, and `undefined.then` throws inside the effect.
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: [], rows: [], offset: 0, limit: 100, total: 0,
+    });
   });
 
   // ── B1 Task 9: the national-system picklist ─────────────────────────────────────────────────────
@@ -2135,9 +2153,9 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByRole('button', { name: /4\s*Review/ })).toBeDisabled();
 
     // The regression, pinned directly: strip position 3 must render MAPPING'S content, its own
-    // re-upload action, never Review's verdict screen with no column map in sight.
+    // validate action, never Review's verdict screen with no column map in sight.
     fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
-    expect(await screen.findByRole('button', { name: 'Check again with this map' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Validate all' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
     expect(screen.queryByText(/review the summary below/i)).not.toBeInTheDocument();
   });
@@ -2201,6 +2219,24 @@ describe('ImportFacilitiesSheet', () => {
       expect(await screen.findByLabelText('File')).toBeInTheDocument();
     });
 
+    // Task 6: Data used to render nothing at all. `DataGridStep` (Task 5) reads the stored file's
+    // own rows, so the operator can see what they uploaded before they map a single column.
+    it('Continue lands on Data, and Data shows the stored file on screen', async () => {
+      mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-a' });
+      mocked(api.readFacilityImportRows).mockResolvedValue({
+        headers: ['MFL Code', 'Name'], rows: [['100001', 'Chunga Clinic']], offset: 0, limit: 100, total: 1,
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+        .toHaveAttribute('aria-current', 'step'));
+      expect(await screen.findByText('Chunga Clinic')).toBeInTheDocument();
+      expect(api.readFacilityImportRows).toHaveBeenCalledWith('run-a', { offset: 0, limit: 100 });
+    });
+
   });
 
   // Whole-branch review, FINDING 2: `ColumnMapStep` is the only thing gated to Mapping (step 3,
@@ -2242,12 +2278,19 @@ describe('ImportFacilitiesSheet', () => {
       // Going back is only worth offering if something can change there, so the panel stays.
       expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
       expect(screen.queryByText(/already been sent with the upload/i)).not.toBeInTheDocument();
-      // ...and the step has an action again. It reads "Check again with this map" rather than
-      // "Upload and validate" because a run already exists: the operator stepped back here to
-      // change something, and the action that sends the change is a re-check of the file the run
-      // already stored. Under the inline door this same spot read "Upload and validate", because a
-      // preview never set `runId` and nothing had been sent yet.
-      expect(screen.getByRole('button', { name: 'Check again with this map' })).toBeInTheDocument();
+      // ...and the step has an action again: "Validate all", the same label Mapping always shows
+      // once a run exists. There is no first-upload label left to fall back to (Mapping is only
+      // ever reached after Source has already stored the file).
+      const validateAgain = screen.getByRole('button', { name: 'Validate all' });
+      expect(validateAgain).toBeInTheDocument();
+
+      // Task 6: THIS is the case the fix actually reaches. The run is already
+      // `awaiting_confirmation` (see `reviewWithSummary`'s mock), so clicking here goes through
+      // `revalidateFacilityImportRun`, a check against the blob already on the server, rather
+      // than a THIRD `uploadFacilityImport` of the same file.
+      fireEvent.click(validateAgain);
+      await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
+      expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -2274,13 +2317,13 @@ describe('ImportFacilitiesSheet', () => {
         .toHaveAttribute('aria-current', 'step'));
       expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Check again with this map' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Validate all' })).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
       // Mapping's own button can no longer read "Upload and validate": Mapping is only ever
       // reachable once `runId` is already set (Source's store is what earns `hasStoredFile`), so
-      // this reads as a re-upload from the moment it first renders.
-      expect(await screen.findByRole('button', { name: 'Check again with this map' })).toBeInTheDocument();
+      // this reads "Validate all" from the moment it first renders.
+      expect(await screen.findByRole('button', { name: 'Validate all' })).toBeInTheDocument();
     });
 
     // The whole point of the exception to AGENTS.md section 5: the action that advances is visible,
@@ -2298,7 +2341,7 @@ describe('ImportFacilitiesSheet', () => {
 
       await pickFileAndSystem();
       await advanceToMapping();
-      await screen.findByRole('button', { name: 'Check again with this map' });
+      await screen.findByRole('button', { name: 'Validate all' });
 
       expect(screen.queryByRole('button', { name: /^Preview$/ })).not.toBeInTheDocument();
       openMenu();
@@ -2455,6 +2498,9 @@ describe('the file drop zone', () => {
     // hand in every test that clicks it.
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-default' });
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'stored' }));
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: [], rows: [], offset: 0, limit: 100, total: 0,
+    });
   });
 
   const dropZone = () => screen.getByRole('button', { name: /drag a \.csv/i });
