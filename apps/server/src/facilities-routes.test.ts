@@ -4576,6 +4576,66 @@ describe('GET /api/facilities/import/runs/:id/columns/:header/values', () => {
     expect(res.json().error).toMatch(/this file could not be read as CSV/);
     expect(res.json().line).toBeDefined();
   });
+
+  // Final review, M6: the route picks its read format off `run.sourceFormat`, and nothing here
+  // covered the jsonl side of that branch. A JSONL release is the other of the two shapes this
+  // wizard accepts, so the branch is not an edge case.
+  it("reads a JSONL run's column through the jsonl branch, not the CSV one", async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'jsonl', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(
+        '{"code":"1","type":"Health Post"}\n'
+        + '{"code":"2","type":"Health Centre"}\n'
+        + '{"code":"3","type":"Health Post"}\n',
+        'utf8',
+      ),
+    });
+    expect(upload.statusCode).toBe(202);
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      header: 'type', values: ['Health Post', 'Health Centre'], distinct: 2, truncated: false,
+    });
+  });
+
+  // Final review, M6: the same stale-blob-key case the rows route already covers. `getStream`
+  // throws for an object that is not there, and an unhandled throw is a 500 the studio reports as a
+  // network fault. The run row is what is wrong, so the answer says so, in 409.
+  it('answers 409 rather than throwing when the stored file is gone', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,Health Post\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+    await db.updateTable('facility_import_runs')
+      .set({ blob_key: 'facility-imports/gone' }).where('id', '=', runId).execute();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values`,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/can no longer be read/i);
+  });
 });
 
 // --- A2b Task 5: POST /api/facilities/import/runs/:id/confirm ----------------------------------
