@@ -16,15 +16,15 @@ own, using a column map and a value map, from either the import wizard or the `o
   register must always be named the same way.
 - Have the source file open somewhere so you can compare its header row to the contract fields below.
 
-## The four stages of the import wizard
+## The four steps of the import wizard
 
-The import wizard has four stages, numbered at the top: Source, Data, Mapping, and Review. Click a
-stage in that strip to move between them. There is no separate Back button.
+The import wizard has four steps, numbered at the top: Source, Data, Mapping, and Review. Click a
+step in that strip to move between them. There is no separate Back button.
 
 - **Source.** Pick the file and the register it belongs to. If this install has no register yet,
   the button here reads Register a source instead of Continue. Leaving Source uploads the file.
   The file is stored, not checked, because no column map exists yet.
-- **Data.** Shows the stored file as a table, read only. Nothing on this stage can be edited. The
+- **Data.** Shows the stored file as a table, read only. Nothing on this step can be edited. The
   table is paged from the server, one page at a time, and it works the same way for a CSV file and
   a JSONL release. There is no button here: move on by clicking Mapping in the step strip.
 - **Mapping.** Every decision lives here: the column map, fixed values, what to do with conflicts,
@@ -75,7 +75,7 @@ check-again options, Cancel, and Close, stays in the page's `⋯` menu. The one 
 is **Save mappings**, on the value-mapping panel. It writes the value decisions you have made, and
 tells you how many it wrote.
 
-You cannot click a stage you have not reached yet, and you cannot go back to an earlier stage
+You cannot click a step you have not reached yet, and you cannot go back to an earlier step
 while a background check is running. Clicking Validate all on Mapping moves you to Review on its
 own as soon as the check starts, before the check itself finishes. If the check finds a problem
 with the column map, the wizard sends you back to Mapping and shows the errors there, so you can
@@ -131,9 +131,10 @@ you turn on **Allow unrecognized columns**, which carries it into `extras` the s
 You rarely have to build a column map by hand. Both the wizard and the CLI can look at a file's
 headers and propose a map offline, with no server round trip:
 
-- **In the wizard:** open **Facilities**, choose **Import**, and select the file. The column-mapping
-  step opens with a suggested map already filled in — a checkmark next to a row means the suggestion
-  is confident, and a **Check this** badge means it should be reviewed before you continue.
+- **In the wizard:** open **Facilities**, choose **Import**, select the file, and pick the register.
+  Leave Source to upload and store the file. The Data step shows the file as a read only table. The
+  Mapping step opens next with a suggested map already filled in. A checkmark next to a row means
+  the suggestion is confident, and a **Check this** badge means it should be reviewed before you continue.
 - **From the CLI:** run `openldr facilities suggest-map <path>`. It prints the same suggested map as
   a table, flags any collision the suggestion itself would cause, and tells you how to feed the
   result back in: `openldr facilities import <path> --column-map <file.json>`.

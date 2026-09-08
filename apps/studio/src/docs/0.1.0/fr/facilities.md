@@ -148,10 +148,11 @@ Vous avez rarement besoin de construire une correspondance de colonnes à la mai
 la CLI peuvent tous deux examiner les en-têtes d'un fichier et proposer une correspondance hors
 ligne, sans aller-retour serveur :
 
-- **Dans l'assistant :** ouvrez **Établissements**, choisissez **Importer**, et sélectionnez le
-  fichier. L'étape de correspondance des colonnes s'ouvre avec une suggestion déjà remplie. Une
-  coche à côté d'une ligne signifie que la suggestion est sûre, et un badge **À vérifier** signifie
-  qu'elle doit être revue avant de continuer.
+- **Dans l'assistant :** ouvrez **Établissements**, choisissez **Importer**, sélectionnez le fichier
+  et choisissez le registre. Quittez l'étape Source pour envoyer et stocker le fichier. L'étape
+  Données affiche le fichier sous forme de tableau en lecture seule. L'étape Mappage s'ouvre ensuite
+  avec une suggestion déjà remplie. Une coche à côté d'une ligne signifie que la suggestion est sûre,
+  et un badge **À vérifier** signifie qu'elle doit être revue avant de continuer.
 - **Depuis la CLI :** exécutez `openldr facilities suggest-map <path>`. Elle affiche la même
   correspondance suggérée sous forme de tableau, signale toute collision que la suggestion
   provoquerait elle-même, et indique comment réinjecter le résultat :

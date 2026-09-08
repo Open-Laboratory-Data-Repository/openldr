@@ -141,10 +141,11 @@ Raramente precisa de construir um mapeamento de colunas à mão. Tanto o assiste
 podem examinar os cabeçalhos de um ficheiro e propor um mapeamento offline, sem ida e volta ao
 servidor:
 
-- **No assistente:** abra **Unidades**, escolha **Importar**, e selecione o ficheiro. O passo de
-  mapeamento de colunas abre com uma sugestão já preenchida. Uma marca de visto junto a uma linha
-  significa que a sugestão é segura, e um selo **Verificar isto** significa que deve ser revista
-  antes de continuar.
+- **No assistente:** abra **Unidades**, escolha **Importar**, selecione o ficheiro e escolha o
+  registo. Saia do passo Origem para carregar e guardar o ficheiro. O passo Dados mostra o ficheiro
+  como uma tabela em apenas leitura. O passo Mapeamento abre a seguir com uma sugestão já
+  preenchida. Uma marca de visto junto a uma linha significa que a sugestão é segura, e um selo
+  **Verificar isto** significa que deve ser revista antes de continuar.
 - **A partir da CLI:** execute `openldr facilities suggest-map <path>`. Mostra o mesmo mapeamento
   sugerido em formato de tabela, assinala qualquer colisão que a própria sugestão causaria, e
   indica como devolver o resultado: `openldr facilities import <path> --column-map <file.json>`.
