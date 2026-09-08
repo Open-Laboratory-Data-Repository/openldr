@@ -42,16 +42,23 @@ const CONTRACT_FIELD_SET = new Set<string>(CONTRACT_FIELDS);
  *  already use, because this app has no dependency on that package. */
 const CONTROLLED_CONSTANT_FIELDS = new Set<string>(['level', 'status', 'country']);
 
-/** Task 6: the same three fields, as an array — this file already has the Set above for a
+/** Task 6: the same three fields, as an array. This file already has the Set above for a
  *  membership test; the worklist effect below needs to iterate them instead. */
 const CONTROLLED_FIELDS_LIST: ControlledField[] = ['level', 'status', 'country'];
 
 /** Not a contract field — a real header could never collide with it. */
 const UNMAPPED = '__not_mapped__';
 
-/** Task 6: a (header, value) pair as one Map/Record key — same reasoning as `ValueMapPanel`'s own
+/** Task 6: a (header, value) pair as one Map/Record key, same reasoning as `ValueMapPanel`'s own
  *  `rowKey`: `JSON.stringify` escapes its own separators, so two distinct pairs can never collide. */
 const valueChoiceKey = (header: string, value: string): string => JSON.stringify([header, value]);
+
+/** Final review, C1: a (field, raw value) pair as one Set key. Keyed on the FIELD, not the header,
+ *  because that is what a written mapping is keyed on: `writeFacilityValueMappings` sends
+ *  `{ field, rawValue, toCode }` and the server writes it under the register's own namespace for
+ *  that field. Two headers pointing at the same field therefore share a resolution, which is the
+ *  truth on the server. Same `JSON.stringify` collision argument as `valueChoiceKey` above. */
+const resolvedValueKey = (field: string, value: string): string => JSON.stringify([field, value]);
 
 /** One row of a header's value worklist: a raw value plus the ranker's own candidates for it. */
 type WorklistEntry = { value: string; candidates: ValueSuggestion['candidates'] };
@@ -60,6 +67,12 @@ type WorklistEntry = { value: string; candidates: ValueSuggestion['candidates'] 
  *  UNION of everything any source has ever reported for the row's current target, never a
  *  replacement. `checkRow`'s own click and the `unmappedByField` effect both call this, so neither
  *  can make the other's finding disappear.
+ *
+ *  ⛔ THIS IS MEMBERSHIP, NOT STATUS, and the two must never share a number again. Membership is
+ *  sticky on purpose, so a choice the operator already made is never dropped out from under them.
+ *  The row's own red/green is `unresolvedCount` below, which subtracts what has actually been
+ *  written. Reading the length of this union as the row's status is exactly the defect the final
+ *  review's C1 names: it never shrinks, so the row could never go back to green.
  *
  *  Two different things used to decide whether a value needed mapping. The server's `unmappedByField`
  *  (packages/bootstrap/src/facility-controlled-fields.ts) asks: does an exact or normalised match, or
@@ -74,6 +87,40 @@ function mergeWorklistEntries(existing: WorklistEntry[], fresh: WorklistEntry[])
   for (const entry of existing) byValue.set(entry.value, entry);
   for (const entry of fresh) byValue.set(entry.value, entry);
   return Array.from(byValue.values());
+}
+
+/** One shape, holding one header's last check. Final review, C1: it deliberately carries NO
+ *  `unrecognised` count any more. It used to, set to the length of the union above, and because a
+ *  union never shrinks the count never shrank either: one unrecognised value made the row red for
+ *  the life of the sheet, and the spec's Valid state was unreachable for any controlled column that
+ *  ever reported one. Two different things were sharing one number. Membership in `values` is
+ *  sticky, so a choice the operator already made is never dropped; the count is derived instead, by
+ *  `unresolvedCount` below, from what is still genuinely unresolved. */
+interface RowCheck {
+  target: string;
+  truncated: boolean;
+  distinct: number;
+  values?: WorklistEntry[];
+  options?: ValueSetOption[];
+}
+
+/** How many of a row's values still need an answer. This is the row's status, and it is not the
+ *  same question as "what is in the pick-list".
+ *
+ *  A value counts as resolved once its mapping has actually been WRITTEN, which the client knows
+ *  because it is the thing that wrote it (`handleSaveValueMappings` below records every entry the
+ *  save call accepted). A pick that has not been saved yet is still a value with no mapping behind
+ *  it, so it still counts.
+ *
+ *  ⚠ Final review, I1, NOT FIXED HERE: a mapping written during an EARLIER import of the same
+ *  register is invisible to this. The ranker (`packages/bootstrap/src/facility-mapping-suggest.ts`)
+ *  is pure string similarity and never reads `term_mappings`, and no route today answers "which of
+ *  these raw values does this register already resolve". Closing that needs a server change. */
+function unresolvedCount(check: RowCheck, resolved: ReadonlySet<string>): number {
+  // Thousands of distinct values on a controlled field: the count IS the finding, and no worklist
+  // was ever collected for it, so there is nothing to subtract.
+  if (check.truncated) return check.distinct;
+  return (check.values ?? []).filter((e) => !resolved.has(resolvedValueKey(check.target, e.value))).length;
 }
 
 /** The contract field a header claims JUST BY SPELLING IT, with no map entry behind it — the
@@ -104,7 +151,7 @@ export interface ColumnMapStepProps {
   suggestions: ColumnSuggestion[];
   value: FacilityColumnMap;
   /** Task 5: the stored run's id, so a row's status icon can read that column back and check it.
-   *  `null` before an upload — there is nothing stored yet, so nothing can be read. A click still
+   *  `null` before an upload: there is nothing stored yet, so nothing can be read. A click still
    *  does something in that case: it tells the operator to upload first, rather than doing nothing. */
   runId: string | null;
   /** ⛔ THE SECOND ARGUMENT IS LOAD-BEARING. `'seed'` is this panel's one-time opening offer,
@@ -121,18 +168,18 @@ export interface ColumnMapStepProps {
    *  `ImportFacilitiesSheet`) can gate its own Continue action without re-deriving the same
    *  required-field rule a second time. */
   onValidityChange?: (valid: boolean) => void;
-  /** Task 6: what `ValueMapPanel` used to read straight off the last FULL check — one entry per
+  /** Task 6: what `ValueMapPanel` used to read straight off the last FULL check, one entry per
    *  controlled field with at least one raw value that has no canonical mapping. This panel folds
    *  those in under the row currently claiming each field, alongside anything its OWN per-row check
    *  already found, so the operator has one worklist instead of two. `undefined`/absent is "no full
    *  check has reported anything yet", same as `ValueMapPanel` rendering nothing for an empty
    *  `unmapped`. */
   unmappedByField?: Record<ControlledField, string[]>;
-  /** The register any value mapping here is written under — required whenever `unmappedByField`
+  /** The register any value mapping here is written under. Required whenever `unmappedByField`
    *  (or a row's own check) actually has something to save; unused otherwise. Mirrors
    *  `ValueMapPanel`'s own `nationalSystem` prop exactly. */
   nationalSystem?: string;
-  /** Fires once Save has written the chosen value mappings (or found nothing to write) — same
+  /** Fires once Save has written the chosen value mappings (or found nothing to write). Same
    *  contract as `ValueMapPanel`'s own `onSaved`: a just-written mapping only takes effect on a
    *  fresh parse, so the caller retires the summary on screen. */
   onValueMappingsSaved?: () => void;
@@ -156,26 +203,27 @@ export function ColumnMapStep({
   const { t } = useTranslation();
 
   // Task 5: the per-field check. One entry per header that has ever been checked, holding what
-  // the check found AND the target it ran against — `stale` below is the comparison of that
+  // the check found AND the target it ran against. `stale` below is the comparison of that
   // stored target against the row's CURRENT target, not a boolean flag anyone sets by hand.
   //
-  // Task 6: `values`/`options` are the ranked worklist itself — only present for a controlled
+  // Task 6: `values`/`options` are the ranked worklist itself, only present for a controlled
   // target that has at least one value worth a pick-list. Two things populate them: this row's OWN
   // click (`checkRow` below, which fills `values` with exactly the subset it already counted as
   // `unrecognised`) and the host's `unmappedByField` prop, read by the effect further down (which
-  // fills `values` with EVERY value it was handed — those are already known unmapped by a full
+  // fills `values` with EVERY value it was handed, and those are already known unmapped by a full
   // check, not merely "the ranker was not confident"). Either way the render loop reads the same
   // two fields, so it does not need to know which origin populated them.
-  const [checkedByHeader, setCheckedByHeader] = useState<Record<string, {
-    target: string; unrecognised: number; truncated: boolean; distinct: number;
-    values?: { value: string; candidates: ValueSuggestion['candidates'] }[];
-    options?: ValueSetOption[];
-  }>>({});
-  /** Task 6: the operator's own value-mapping choices, keyed by `valueChoiceKey(header, value)` —
-   *  same shape `ValueMapPanel`'s own `choices` state uses, keyed by (field, value) there because it
+  const [checkedByHeader, setCheckedByHeader] = useState<Record<string, RowCheck>>({});
+  /** Final review, C1: every (field, raw value) this sheet has actually written a mapping for.
+   *  This is what lets a red row go back to green, and it is deliberately separate from the
+   *  worklist: the worklist is what the operator can still edit, this is what no longer counts
+   *  against them. Only a save that the server accepted adds to it. */
+  const [resolvedValues, setResolvedValues] = useState<ReadonlySet<string>>(new Set());
+  /** Task 6: the operator's own value-mapping choices, keyed by `valueChoiceKey(header, value)`.
+   *  This is the same shape `ValueMapPanel`'s own `choices` state uses, keyed by (field, value) there because it
    *  has one row per field; this panel has one row per header instead. An explicit choice always
    *  wins; anything absent falls back to the top ranked candidate (if confident) via
-   *  `defaultValueChoice` below, computed at render/save time rather than seeded into state — there
+   *  `defaultValueChoice` below, computed at render/save time rather than seeded into state. There
    *  is nothing here that a `StrictMode` double-fetch could race, since it never runs twice. */
   const [valueChoices, setValueChoices] = useState<Record<string, string>>({});
   const [savingValueMappings, setSavingValueMappings] = useState(false);
@@ -338,7 +386,7 @@ export function ColumnMapStep({
     onChange({ ...value, constants }, 'edit');
   };
 
-  /** Task 5: check ONE header's current target against that column's own values — never the
+  /** Task 5: check ONE header's current target against that column's own values, never the
    *  whole register. Reads the column back through Task 2's route, then, only for a controlled
    *  target, ranks those values through the same engine the value-mapping panel already uses. A
    *  target with no bound vocabulary has nothing to rank, so it records zero unrecognised values
@@ -372,7 +420,7 @@ export function ColumnMapStep({
         // sign. `name` and `national_code` are the two REQUIRED fields of every import, and
         // thousands of distinct values in them is the CORRECT case, not a finding. This must be
         // checked before `truncated` below, which is a controlled-field-only signal.
-        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised: 0, truncated: false, distinct } }));
+        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, truncated: false, distinct } }));
         return;
       }
       if (truncated) {
@@ -380,13 +428,13 @@ export function ColumnMapStep({
         // field: `level`/`status`/`country` each draw on a small, bound vocabulary, so a column
         // this large cannot really belong to one. Report the count, never the sample: listing
         // 200 of 3,788 values would look like the whole picture.
-        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised: distinct, truncated: true, distinct } }));
+        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, truncated: true, distinct } }));
         return;
       }
       const ranked = await suggestValueMappings(target as ControlledField, values);
       // Fix pass (Critical finding): the ranker's confidence still decides which of THESE values
       // look unrecognised from this row's own click. It never decides whether a value the server
-      // already reported unmapped (`unmappedByField`) stays on the worklist — that is added
+      // already reported unmapped (`unmappedByField`) stays on the worklist. That is added
       // unconditionally below, via `mergeWorklistEntries`.
       const rankedByValue = new Map(ranked.values.map((v) => [v.value, v.candidates]));
       const fresh: WorklistEntry[] = [];
@@ -404,18 +452,15 @@ export function ColumnMapStep({
         fresh.push({ value: raw, candidates: rankedByValue.get(raw) ?? [] });
       }
       setCheckedByHeader((prev) => {
-        // A choice the operator already made lives on a value already sitting in `check.values` —
-        // carry every value this row showed for the SAME target forward, so a re-check can only add
+        // A choice the operator already made lives on a value already sitting in `check.values`.
+        // Carry every value this row showed for the SAME target forward, so a re-check can only add
         // to the worklist, never quietly drop something out from under a pending choice.
         const prevEntry = prev[header];
         const carried = prevEntry && prevEntry.target === target ? prevEntry.values ?? [] : [];
         const merged = mergeWorklistEntries(carried, fresh);
         return {
           ...prev,
-          [header]: {
-            target, unrecognised: merged.length, truncated: false, distinct,
-            values: merged, options: ranked.options ?? [],
-          },
+          [header]: { target, truncated: false, distinct, values: merged, options: ranked.options ?? [] },
         };
       });
     } catch {
@@ -429,7 +474,7 @@ export function ColumnMapStep({
     }
   };
 
-  // Task 6: the OTHER way a header's worklist gets populated — the host's own full check already
+  // Task 6: the OTHER way a header's worklist gets populated: the host's own full check already
   // knows a field has unmapped values (`unmappedByField`, what `ValueMapPanel` used to read
   // directly) before this row has ever been clicked. Finds the header CURRENTLY claiming each such
   // field via `claimedTargets` (computed above, in the server's own claim order) and fetches the
@@ -439,7 +484,7 @@ export function ColumnMapStep({
   // ⛔ SIGNATURE-GUARDED, same idiom as `ValueMapPanel`'s own fetch effect and this file's own
   // header-seed effect: a string built from the data itself, so an unrelated re-render cannot
   // re-fire this and a genuinely new set always does. `checkedByHeader` is read inside but
-  // deliberately NOT a dependency — including it would re-run this the moment it sets state below.
+  // deliberately NOT a dependency, because including it would re-run this the moment it sets state below.
   const unmappedByFieldSignature = JSON.stringify(
     CONTROLLED_FIELDS_LIST.map((f) => [f, unmappedByField?.[f] ?? []]),
   );
@@ -451,12 +496,12 @@ export function ColumnMapStep({
       if (values.length === 0) continue;
       const header = claimedTargets.get(field);
       // No header claims it (a fixed value satisfies the field instead, which cannot have "unmapped
-      // raw values" — a constant is picked FROM the value set to begin with), or the header is not
+      // raw values", since a constant is picked FROM the value set to begin with), or the header is not
       // even in THIS file: nothing to attach the worklist to.
       if (!header || !headers.includes(header)) continue;
       const existing = checkedByHeader[header];
       // Fix pass (Critical finding): skip the fetch only when this row already carries EVERY value
-      // the server just reported for this exact target — there is nothing new to merge in. A row
+      // the server just reported for this exact target: there is nothing new to merge in. A row
       // missing even one of them (a fresh validate found something new, or nothing has run yet)
       // still fetches. This used to skip whenever a click had run at all, which meant a value the
       // full check found LATER than a click never reached the row.
@@ -477,13 +522,13 @@ export function ColumnMapStep({
           return {
             ...prev,
             [header]: {
-              target: field, unrecognised: merged.length, truncated: false, distinct: merged.length,
+              target: field, truncated: false, distinct: merged.length,
               values: merged, options: res.options ?? [],
             },
           };
         });
       }).catch(() => {
-        // Nothing to show is better than a stuck spinner for a row nobody clicked — the values are
+        // Nothing to show is better than a stuck spinner for a row nobody clicked. The values are
         // still visible on Review's own `ReconciliationSummary`, which reads `unmappedByField`
         // straight, not through this effect.
       });
@@ -493,8 +538,8 @@ export function ColumnMapStep({
   }, [unmappedByFieldSignature, claimedTargets, headers]);
 
   /** The choice for one (header, value) row: the operator's own pick if they made one, otherwise
-   *  the same "confident top candidate, else Not mapped" default `ValueMapPanel` seeds into state —
-   *  computed here instead, since nothing about it needs to survive a `StrictMode` double-render. */
+   *  the same "confident top candidate, else Not mapped" default `ValueMapPanel` seeds into state.
+   *  Computed here instead, since nothing about it needs to survive a `StrictMode` double-render. */
   const valueChoiceFor = (header: string, entryValue: string, candidates: ValueSuggestion['candidates']): string => {
     const chosen = valueChoices[valueChoiceKey(header, entryValue)];
     if (chosen) return chosen;
@@ -507,16 +552,16 @@ export function ColumnMapStep({
   };
 
   /** Is there anything on screen worth a Save click? Only a header whose worklist matches its
-   *  CURRENT target — a stale one is not shown (see the render loop below) and must not be saved
+   *  CURRENT target. A stale one is not shown (see the render loop below) and must not be saved
    *  either, since it describes a field the header no longer maps to. */
   const hasValueWorklist = Object.entries(checkedByHeader).some(
     ([header, check]) => check.target === selectedTarget(header) && (check.values?.length ?? 0) > 0,
   );
 
-  /** Task 6: the panel's own Save, for every worklist currently on screen at once — same single
+  /** Task 6: the panel's own Save, for every worklist currently on screen at once. Same single
    *  `writeFacilityValueMappings` call and the same toast `ValueMapPanel` already used, just
    *  gathering entries from `checkedByHeader` (one worklist per header) instead of from `unmapped`
-   *  (one list per field). An unmapped value never blocks — nothing here disables Save, and Save
+   *  (one list per field). An unmapped value never blocks: nothing here disables Save, and Save
    *  with nothing chosen still completes, writing nothing, exactly as `ValueMapPanel` always did. */
   const handleSaveValueMappings = async (): Promise<void> => {
     setSavingValueMappings(true);
@@ -534,6 +579,18 @@ export function ColumnMapStep({
       const result = entries.length > 0
         ? await writeFacilityValueMappings(nationalSystem ?? '', entries)
         : { written: 0, superseded: [] };
+      // Final review, C1: this is the moment a value stops being unresolved, and this call is the
+      // only thing that knows it. Recorded AFTER the write returns, never before: a save that threw
+      // wrote nothing, and marking a value resolved on an optimistic guess would turn a row green
+      // over a mapping the register does not carry. A value left at "Not mapped" is not in
+      // `entries`, so it is not recorded and goes on counting.
+      if (entries.length > 0) {
+        setResolvedValues((prev) => {
+          const next = new Set(prev);
+          for (const entry of entries) next.add(resolvedValueKey(entry.field, entry.rawValue));
+          return next;
+        });
+      }
       toast.success(t('facilities.import.valueMap.savedCount', { count: result.written }));
       onValueMappingsSaved?.();
     } catch (err) {
@@ -554,17 +611,19 @@ export function ColumnMapStep({
           // `selected` there is `Not mapped`, never `top.target`.
           const showBadge = top?.confidence === 'likely' && selected === top.target;
 
-          // Task 5: this row's status icon. `confidence` only speaks for the CURRENT target —
+          // Task 5: this row's status icon. `confidence` only speaks for the CURRENT target, so
           // an operator who picked something the ranker did not suggest gets `null`, not a
           // borrowed answer for a different field.
           const confidenceForSelected = top && top.target === selected ? top.confidence : null;
           const collidesHere = collisions.some((c) => c.a === header || c.b === header);
           const check = checkedByHeader[header];
           const stale = !!check && check.target !== selected;
+          // Final review, C1: derived, never stored. See `unresolvedCount`'s own docblock.
+          const unrecognised = check ? unresolvedCount(check, resolvedValues) : 0;
           const rowState = mappingRowState({
             collides: collidesHere,
             confidence: confidenceForSelected,
-            checked: check ? { unrecognised: check.unrecognised } : null,
+            checked: check ? { unrecognised } : null,
             stale,
           });
           // What the tooltip/aria-label names as the cause of an invalid row. Collision outranks
@@ -573,10 +632,10 @@ export function ColumnMapStep({
             ? t('facilities.import.columnMap.rowStatusCollides')
             : check?.truncated
               ? t('facilities.import.columnMap.rowStatusTooManyValues', { count: check.distinct })
-              : check && check.unrecognised > 0
-                ? t('facilities.import.columnMap.rowStatusUnrecognised', { count: check.unrecognised })
+              : unrecognised > 0
+                ? t('facilities.import.columnMap.rowStatusUnrecognised', { count: unrecognised })
                 : null;
-          // The row's own visible line, under the controls — distinct from `detail` above, which
+          // The row's own visible line, under the controls, distinct from `detail` above, which
           // only ever surfaces on hover/focus via the tooltip. Collision is left out here: the
           // collision block below the whole table already names both claimants, and repeating it
           // per row would say the same thing twice for no added information.
@@ -586,11 +645,11 @@ export function ColumnMapStep({
               ? { text: t('facilities.import.columnMap.rowCheckFailed'), destructive: true }
               : check?.truncated
                 ? { text: t('facilities.import.columnMap.rowStatusTooManyValues', { count: check.distinct }), destructive: true }
-                : check && !stale && check.unrecognised > 0
-                  ? { text: t('facilities.import.columnMap.rowStatusUnrecognised', { count: check.unrecognised }), destructive: true }
+                : !stale && unrecognised > 0
+                  ? { text: t('facilities.import.columnMap.rowStatusUnrecognised', { count: unrecognised }), destructive: true }
                   : null;
 
-          // Task 6: the worklist this row shows, if any. Never a stale one — a header just
+          // Task 6: the worklist this row shows, if any. Never a stale one: a header just
           // re-targeted describes a DIFFERENT field's values now, and rendering them here would
           // let the operator map "Health Centre" onto whatever `check.target` used to be.
           const worklist = check && !stale ? check.values ?? [] : [];
@@ -600,8 +659,8 @@ export function ColumnMapStep({
             // EVERY header so the `auto` label track sizes to the single widest label once, not per
             // row (`ImportFacilitiesSheet`'s own AGENTS.md-cited note on "Catchment population head
             // count"). A real wrapper div would become its own grid item and break that. `display:
-            // contents` keeps this element out of the box tree while leaving its children — the
-            // label, the controls, and the worklist below — as direct grid children, so `data-
+            // contents` keeps this element out of the box tree while leaving its children (the
+            // label, the controls, and the worklist below) as direct grid children, so `data-
             // mapping-row` is still reachable via `closest()` (a DOM-tree query, unaffected by CSS)
             // without disturbing the layout at all.
             <div key={header} data-mapping-row={header} className="contents">
@@ -671,10 +730,10 @@ export function ColumnMapStep({
               </div>
               {/* Task 6: the worklist itself, under the row it belongs to rather than in a separate
                   box the operator has to go and find. `sm:col-span-2` spans both grid tracks on the
-                  next row — at the mobile breakpoint the grid is already a single column, so this is
+                  next row. At the mobile breakpoint the grid is already a single column, so this is
                   a no-op there and the block simply stacks like everything else. Reuses
                   `ValueMapRow` (Task 6): ranked candidates first in score order, then the rest of the
-                  value set sorted, `Not mapped` always first — the same ordering `ValueMapPanel`
+                  value set sorted, `Not mapped` always first. The same ordering `ValueMapPanel`
                   still uses for Review's own copy of these values, from the same component. */}
               {worklist.length > 0 && (
                 <div className="min-w-0 sm:col-span-2">

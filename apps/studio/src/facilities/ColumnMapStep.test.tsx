@@ -14,7 +14,7 @@ vi.mock('@/api', async (orig) => {
     suggestValueMappings: vi.fn(),
     // Task 5: the per-field check and the two calls it must never make. `uploadFacilityImport`
     // and `revalidateFacilityImportRun` are mocked purely so `.not.toHaveBeenCalled()` below can
-    // tell "never called" apart from "not a mock" — this file never invokes either for real.
+    // tell "never called" apart from "not a mock". This file never invokes either for real.
     readFacilityImportColumnValues: vi.fn(),
     uploadFacilityImport: vi.fn(),
     revalidateFacilityImportRun: vi.fn(),
@@ -85,11 +85,11 @@ function Controlled({ initial, onChangeSpy, runId = null, ...rest }: {
 }
 
 /** Task 6: a thin wrapper matching the brief's own call shape (`renderColumnMapStep({ runId,
- *  headers, value })`) — `Controlled` underneath, same as every other test in this file.
+ *  headers, value })`), with `Controlled` underneath, same as every other test in this file.
  *
  *  Fix pass (Critical finding): also forwards `unmappedByField`/`nationalSystem`/
- *  `onValueMappingsSaved` — what `unmappedByFieldSignature`'s own effect and `handleSaveValueMappings`
- *  read — so a test can reproduce the server-vs-client worklist disagreement directly. */
+ *  `onValueMappingsSaved`, which is what `unmappedByFieldSignature`'s own effect and `handleSaveValueMappings`
+ *  read, so a test can reproduce the server-vs-client worklist disagreement directly. */
 function renderColumnMapStep(props: {
   runId?: string | null;
   headers: string[];
@@ -411,10 +411,10 @@ describe('ColumnMapStep', () => {
     });
   });
 
-  describe('⛔ Task 5 — the per-field check (checks one column, never the whole register)', () => {
+  describe('⛔ Task 5: the per-field check (checks one column, never the whole register)', () => {
     // Call history is NOT cleared between tests anywhere else in this file (no global
     // `clearMocks`/`resetMocks`), and the "was X called" assertions in this group depend on a
-    // clean slate — without this, an earlier test's own click leaks into a later test's "not
+    // clean slate. Without this, an earlier test's own click leaks into a later test's "not
     // called" assertion.
     beforeEach(() => {
       mockedApi(api.readFacilityImportColumnValues).mockClear();
@@ -470,7 +470,7 @@ describe('ColumnMapStep', () => {
       fireEvent.click(screen.getByRole('button', { name: /^Name:/ }));
 
       expect(await screen.findByText(/3,?788 distinct/i)).toBeInTheDocument();
-      // A truncated column is never sent to the ranker — its values were never even collected.
+      // A truncated column is never sent to the ranker: its values were never even collected.
       expect(api.suggestValueMappings).not.toHaveBeenCalledWith('level', expect.anything());
     });
 
@@ -486,7 +486,7 @@ describe('ColumnMapStep', () => {
 
     it('a target with no vocabulary goes green on a check, honestly', async () => {
       // `address` is not one of the three controlled fields, so there is no vocabulary to check
-      // it against — judged case: the check still runs (it reads the column) but records zero
+      // it against. Judged case: the check still runs (it reads the column) but records zero
       // unrecognised values, and the row goes green rather than staying stuck unchecked.
       mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
         header: 'Address', values: ['1 Main St', '2 Main St'], distinct: 2, truncated: false,
@@ -502,7 +502,7 @@ describe('ColumnMapStep', () => {
 
     // ⛔ FIX PASS (review Finding 1, CRITICAL): the `truncated` branch used to fire before the
     // controlled-field check, so a free-text field (`name`, `national_code`, `address`, `phone`)
-    // with thousands of distinct values — the CORRECT case for those fields — was reported as
+    // with thousands of distinct values, the CORRECT case for those fields, was reported as
     // probably mapped to the wrong field. `name` is one of the two required fields of every
     // import, so this broke the ordinary case, not an edge one.
     it('a truncated result on a non-controlled target is not a wrong-field finding', async () => {
@@ -518,7 +518,7 @@ describe('ColumnMapStep', () => {
       // not a finding. The row goes green, the same as an untruncated non-controlled check.
       expect(await screen.findByRole('button', { name: /^Name: checked, nothing wrong/i })).toBeInTheDocument();
       expect(screen.queryByText(/distinct/i)).not.toBeInTheDocument();
-      // A truncated column is never sent to the ranker — its values were never even collected —
+      // A truncated column is never sent to the ranker (its values were never even collected),
       // and a non-controlled target has no ranker call to make either way.
       expect(api.suggestValueMappings).not.toHaveBeenCalledWith('name', expect.anything());
     });
@@ -557,8 +557,8 @@ describe('ColumnMapStep', () => {
       expect(screen.getByRole('button', { name: /^Type: changed since the last check/i })).toBeInTheDocument();
     });
 
-    // ⛔ FIX PASS (review Finding 2): wiring test for the other half of the pure-function coverage
-    // — an exact, collision-free suggestion must read green with no click, i.e. `ColumnMapStep`
+    // ⛔ FIX PASS (review Finding 2): wiring test for the other half of the pure-function
+    // coverage: an exact, collision-free suggestion must read green with no click, i.e. `ColumnMapStep`
     // must actually pass `confidence: 'exact'` through to `mappingRowState` for the selected
     // target, not just leave a row neutral until it is manually checked.
     it('an exact suggestion with no collision reads green with no click at all', () => {
@@ -569,15 +569,15 @@ describe('ColumnMapStep', () => {
     });
   });
 
-  describe('⛔ Task 6 — the worklist moves into the row, not a separate box at the bottom', () => {
+  describe('⛔ Task 6: the worklist moves into the row, not a separate box at the bottom', () => {
     beforeEach(() => {
       mockedApi(api.readFacilityImportColumnValues).mockClear();
       mockedApi(api.suggestValueMappings).mockClear();
     });
 
-    // ⛔ Deviation from the brief's literal snippet: `/Type/` alone matches TWO buttons on this row
-    // — the status icon AND the row's own "Actions for Type" ⋯ menu trigger both contain the word
-    // "Type" — the exact ambiguity this file's own Task 5 tests already worked around with
+    // ⛔ Deviation from the brief's literal snippet: `/Type/` alone matches TWO buttons on this row:
+    // the status icon AND the row's own "Actions for Type" ⋯ menu trigger both contain the word
+    // "Type". That is the exact ambiguity this file's own Task 5 tests already worked around with
     // `/^Type:/`. This test does the same.
     it('puts a controlled field\'s unrecognised values under the row that maps it', async () => {
       mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
@@ -603,7 +603,7 @@ describe('ColumnMapStep', () => {
       expect(within(row as HTMLElement).getByLabelText('1st Level Hospital')).toBeInTheDocument();
     });
 
-    it('shows the OTHER unrecognised value in the same row too, ranked candidates first then the sorted tail', async () => {
+    it('shows the OTHER unrecognised value in the same row too', async () => {
       mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
         header: 'Type', values: ['1st Level Hospital', 'Others'], distinct: 2, truncated: false,
       });
@@ -627,6 +627,54 @@ describe('ColumnMapStep', () => {
       expect(within(row).getByLabelText('1st Level Hospital')).toHaveTextContent('Not mapped');
     });
 
+    // Final review, M1: the test above used to claim this ordering in its name and never open a
+    // Select. `ValueMapPanel.test.tsx` asserts the same ordering for its own copy of these rows,
+    // but that does not prove THIS panel feeds `ValueMapRow` the right `options`: the two read
+    // them from different places, `check.options` here and the panel's own fetch there.
+    it('puts the ranked candidates in score order at the top and sorts the tail after them', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Zonal Hospital'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string, values: string[]) => {
+        if (field !== 'level' || !values.includes('Zonal Hospital')) {
+          return { values: [], options: [], notValidated: false };
+        }
+        return {
+          values: [{
+            value: 'Zonal Hospital',
+            // Both `weak`, deliberately. A confident top candidate means the value is NOT
+            // unrecognised, so `checkRow` would leave it off the worklist and there would be no
+            // pick-list to open. Weak candidates are still ranked, which is what this asserts.
+            candidates: [
+              { target: 'zonal-hospital', display: 'Zonal Hospital', score: 0.6, confidence: 'weak' as const },
+              { target: 'hospital', display: 'Hospital', score: 0.5, confidence: 'weak' as const },
+            ],
+          }],
+          // Deliberately NOT alphabetical, and deliberately in the order a value set expansion
+          // returns them: seed order. The tail is what gets sorted; the ranked head is not.
+          options: [
+            { code: 'zonal-hospital', display: 'Zonal Hospital' },
+            { code: 'hospital', display: 'Hospital' },
+            { code: 'health-post', display: 'Health Post' },
+            { code: 'clinic', display: 'Clinic' },
+          ],
+          notValidated: false,
+        };
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('Zonal Hospital'));
+
+      const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
+      // `Not mapped` first, then the two ranked candidates in SCORE order, then the rest of the
+      // value set alphabetically. Clinic sorts before Health Post; seed order had it last.
+      expect(options).toEqual(['Not mapped', 'Zonal Hospital', 'Hospital', 'Clinic', 'Health Post']);
+    });
+
     it('does not show a picklist for a row nothing has found unrecognised values for', () => {
       renderColumnMapStep({
         runId: 'run-1', headers: ['MFL Code'],
@@ -642,7 +690,7 @@ describe('ColumnMapStep', () => {
   // client ranker's guess) used to answer two DIFFERENT questions about the same worklist, and
   // `checkRow` silently overwrote the server's answer with its own. These three tests are the
   // reviewer's own reproduction cases.
-  describe('⛔ fix pass — the worklist is a union, never a replacement (Critical finding)', () => {
+  describe('⛔ fix pass: the worklist is a union, never a replacement (Critical finding)', () => {
     beforeEach(() => {
       mockedApi(api.readFacilityImportColumnValues).mockClear();
       mockedApi(api.suggestValueMappings).mockClear();
@@ -658,7 +706,7 @@ describe('ColumnMapStep', () => {
         return {
           values: values.map((v) => ({
             value: v,
-            // The ranker is CONFIDENT about "Others" — that must not decide whether it needs
+            // The ranker is CONFIDENT about "Others", and that must not decide whether it needs
             // mapping. Only the server's own report decides that.
             candidates: v === 'Others'
               ? [{ target: 'other', display: 'Other', score: 1, confidence: 'exact' as const }]
@@ -699,7 +747,7 @@ describe('ColumnMapStep', () => {
         levelCalls += 1;
         // The FIRST check has no opinion, so "Zonal Hospital" surfaces as unrecognised and the
         // operator picks a mapping by hand. The SECOND check (the re-check below) turns confident
-        // about a DIFFERENT code — that must not evict the row or reset the operator's own pick.
+        // about a DIFFERENT code, which must not evict the row or reset the operator's own pick.
         const confident = levelCalls > 1;
         return {
           values: values.map((v) => ({
@@ -797,6 +845,90 @@ describe('ColumnMapStep', () => {
         { field: 'status', rawValue: 'Functional', toCode: 'active' },
       ]));
       expect(entries).toHaveLength(2);
+    });
+  });
+
+  // Final review, C1 (CRITICAL): a checked row could never go back to green. The row's count came
+  // straight off the length of its worklist, and the worklist is a UNION that nothing ever removes
+  // from, so one unrecognised value made the row red for the life of the sheet. Two different things
+  // were sharing one number. Worklist membership stays sticky, so a choice the operator has already
+  // made is never dropped; the count now reads only the values still unresolved.
+  describe('a checked row can go back to green once its values are mapped', () => {
+    beforeEach(() => {
+      mockedApi(api.readFacilityImportColumnValues).mockClear();
+      mockedApi(api.suggestValueMappings).mockClear();
+      mockedApi(api.writeFacilityValueMappings).mockClear();
+    });
+
+    it('goes green after the operator maps the value, saves, and checks again', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Zonal Hospital'], distinct: 1, truncated: false,
+      });
+      // The ranker never gets confident about this value, on either check. That is the point: the
+      // written mapping is what resolves it, not a better guess.
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string, values: string[]) => {
+        if (field !== 'level') return { values: [], options: [], notValidated: false };
+        return {
+          values: values.map((v) => ({ value: v, candidates: [] })),
+          options: [{ code: 'hospital', display: 'Hospital' }],
+          notValidated: false,
+        };
+      });
+
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByLabelText('Zonal Hospital');
+      expect(screen.getByRole('button', { name: /^Type: 1 value\(s\) are not recognised/i })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Zonal Hospital'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
+
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      expect(await screen.findByRole('button', { name: /^Type: checked, nothing wrong/i })).toBeInTheDocument();
+      // Sticky membership: the row the operator worked through is still on screen with their pick
+      // in it, so a mapping can still be corrected. It just no longer counts against the row.
+      expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Hospital');
+    });
+
+    it('a value left unmapped still counts, so Save alone does not turn a row green', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Zonal Hospital', 'Others'], distinct: 2, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string, values: string[]) => {
+        if (field !== 'level') return { values: [], options: [], notValidated: false };
+        return {
+          values: values.map((v) => ({ value: v, candidates: [] })),
+          options: [{ code: 'hospital', display: 'Hospital' }],
+          notValidated: false,
+        };
+      });
+
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByLabelText('Zonal Hospital');
+
+      // Only one of the two gets a mapping. The other is left as it came.
+      fireEvent.click(screen.getByLabelText('Zonal Hospital'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
+
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(1));
+
+      expect(await screen.findByRole('button', { name: /^Type: 1 value\(s\) are not recognised/i })).toBeInTheDocument();
     });
   });
 });
