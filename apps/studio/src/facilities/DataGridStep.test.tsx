@@ -91,6 +91,19 @@ describe('DataGridStep', () => {
     expect(screen.getByText(/4, 9/)).toBeInTheDocument();
   });
 
+  // ⛔ A FULLY UNREADABLE FILE IS NOT AN EMPTY FILE. When every line was skipped, `rows` is empty
+  // and `total` is 0, so the empty-state return used to fire first and hide the skipped notice
+  // below it. The operator saw "This file has no rows" for a register that was full of rows, none
+  // of which could be read. The skipped-line information must survive the empty check.
+  it('names the skipped lines instead of saying the file is empty, when every row was skipped', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: [], rows: [], offset: 0, limit: 100, total: 0, skipped: 3, skippedLines: [1, 2, 3],
+    });
+    render(<DataGridStep runId="fir_1" />);
+    expect(await screen.findByText(/1, 2, 3/)).toBeInTheDocument();
+    expect(screen.queryByText('This file has no rows.')).not.toBeInTheDocument();
+  });
+
   it('says nothing about skipped lines for a clean file', async () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
       headers: ['MFL Code', 'Name'],

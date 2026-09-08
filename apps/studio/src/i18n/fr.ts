@@ -934,6 +934,8 @@ export const fr: EnShape = {
       releaseVersionPlaceholder: 'facultatif',
       rowsFailed: 'Ce fichier n’a pas pu être lu.',
       rowsEmpty: 'Ce fichier ne contient aucune ligne.',
+      rowsEmptySkipped_one: '{{count}} ligne de ce fichier n’a pas pu être lue, et aucune ligne du fichier n’a pu être affichée. Ligne {{lines}}.',
+      rowsEmptySkipped_other: '{{count}} lignes de ce fichier n’ont pas pu être lues, et aucune ligne du fichier n’a pu être affichée. Lignes {{lines}}.',
       rowsSkipped_one: '{{count}} ligne de ce fichier n’a pas pu être lue et n’est pas affichée. Ligne {{lines}}.',
       rowsSkipped_other: '{{count}} lignes de ce fichier n’ont pas pu être lues et ne sont pas affichées. Lignes {{lines}}.',
       rowsDesktopOnly: 'Cette étape nécessite un écran plus large. Ouvrez cet import sur un ordinateur pour lire le fichier. Les autres étapes fonctionnent ici.',

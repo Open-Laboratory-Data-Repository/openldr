@@ -954,6 +954,8 @@ export const en = {
       // What actually went wrong is shown underneath, in the server's own words.
       rowsFailed: 'This file could not be read.',
       rowsEmpty: 'This file has no rows.',
+      rowsEmptySkipped_one: '{{count}} line in this file could not be read, and none of the file could be shown. Line {{lines}}.',
+      rowsEmptySkipped_other: '{{count}} lines in this file could not be read, and none of the file could be shown. Lines {{lines}}.',
       rowsSkipped_one: '{{count}} line in this file could not be read and is not shown. Line {{lines}}.',
       rowsSkipped_other: '{{count}} lines in this file could not be read and are not shown. Lines {{lines}}.',
       rowsDesktopOnly: 'This step needs a wider screen. Open this import on a desktop to read the file. The other steps work here.',

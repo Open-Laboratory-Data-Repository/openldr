@@ -69,15 +69,27 @@ export function DataGridStep({ runId }: DataGridStepProps): JSX.Element {
     );
   }
   if (!data) return <LoadingState className="min-h-[16rem] flex-1" />;
-  if (data.rows.length === 0) {
-    return <StripedEmpty className="min-h-[16rem] flex-1">{t('facilities.import.rowsEmpty')}</StripedEmpty>;
-  }
 
   // The server caps how many line numbers it names (a file with 3 000 bad lines has one problem,
   // not 3 000), so the count and the list can disagree. The trailing marker says the list is
   // partial rather than letting the operator read it as the whole set.
   const skippedLines = (data.skippedLines ?? []).join(', ')
     + ((data.skippedLines ?? []).length < (data.skipped ?? 0) ? ', …' : '');
+
+  if (data.rows.length === 0) {
+    // ⛔ A FILE FULL OF UNREADABLE ROWS IS NOT AN EMPTY FILE. If every line was skipped, `rows` is
+    // empty and this branch would otherwise fire before the skipped notice below ever rendered,
+    // telling the operator their register had no rows when it had nothing but bad ones. The empty
+    // state itself has to carry the skipped count and line numbers in that case.
+    if ((data.skipped ?? 0) > 0) {
+      return (
+        <StripedEmpty className="min-h-[16rem] flex-1">
+          {t('facilities.import.rowsEmptySkipped', { count: data.skipped, lines: skippedLines })}
+        </StripedEmpty>
+      );
+    }
+    return <StripedEmpty className="min-h-[16rem] flex-1">{t('facilities.import.rowsEmpty')}</StripedEmpty>;
+  }
 
   return (
     <div className="mx-6 mt-4 flex min-h-0 flex-1 flex-col">
