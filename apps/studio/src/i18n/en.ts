@@ -949,6 +949,8 @@ export const en = {
       completeReleaseHint: 'Only a complete release lets rows this file is silent about be checked against the registry as absent.',
       releaseVersionLabel: 'Release version',
       releaseVersionPlaceholder: 'optional',
+      rowsFailed: 'The file could not be read. Check the connection and open this step again.',
+      rowsEmpty: 'This file has no rows.',
       noRowsFound: 'No facility rows were found in this file. Confirm it is a compatible CSV export before trying again.',
       noRowsFoundSkipped: '{{skipped}} row(s) in this file were skipped for missing required fields, and none were imported. Confirm it is a compatible CSV export before trying again.',
       unknownColumnsTitle: 'Unrecognised columns',

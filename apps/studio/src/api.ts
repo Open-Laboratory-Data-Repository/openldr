@@ -1603,6 +1603,24 @@ export function uploadFacilityImport(
 export const getFacilityImportRun = (id: string): Promise<FacilityImportRunView> =>
   apiGet(`/api/facilities/import/runs/${encodeURIComponent(id)}`, 'get facility import run');
 
+/** One page of `GET /api/facilities/import/runs/:id/rows`: the stored file as a table, one
+ *  window at a time. The server always drains the file to answer, so `total` is the file's real
+ *  row count, never a partial-scan estimate. */
+export interface FacilityImportRows {
+  headers: string[];
+  rows: string[][];
+  offset: number;
+  limit: number;
+  total: number;
+}
+
+export const readFacilityImportRows = (
+  runId: string,
+  p: { offset: number; limit: number },
+): Promise<FacilityImportRows> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(runId)}/rows?offset=${p.offset}&limit=${p.limit}`)
+    .then((r) => okJson<FacilityImportRows>(r, 'read import rows'));
+
 /** The operator's decision, as `POST /api/facilities/import/runs/:id/confirm` takes it.
  *
  *  ⛔ EVERY FIELD IS OPTIONAL AND STAYS OPTIONAL. The server records only the keys the request

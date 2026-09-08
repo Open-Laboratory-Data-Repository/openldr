@@ -932,6 +932,8 @@ export const fr: EnShape = {
       completeReleaseHint: 'Seule une publication complète permet de vérifier comme absentes les lignes que ce fichier ne mentionne pas.',
       releaseVersionLabel: 'Version de la publication',
       releaseVersionPlaceholder: 'facultatif',
+      rowsFailed: 'Le fichier n’a pas pu être lu. Vérifiez la connexion et rouvrez cette étape.',
+      rowsEmpty: 'Ce fichier ne contient aucune ligne.',
       noRowsFound: 'Aucune ligne d’établissement n’a été trouvée dans ce fichier. Vérifiez qu’il s’agit bien d’un export CSV compatible avant de réessayer.',
       noRowsFoundSkipped: '{{skipped}} ligne(s) de ce fichier ont été ignorées faute de champs obligatoires, et aucune n’a été importée. Vérifiez qu’il s’agit bien d’un export CSV compatible avant de réessayer.',
       unknownColumnsTitle: 'Colonnes non reconnues',

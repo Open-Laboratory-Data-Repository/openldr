@@ -932,6 +932,8 @@ export const pt: EnShape = {
       completeReleaseHint: 'Só uma publicação completa permite verificar como ausentes as linhas que este ficheiro não menciona.',
       releaseVersionLabel: 'Versão da publicação',
       releaseVersionPlaceholder: 'opcional',
+      rowsFailed: 'Não foi possível ler o ficheiro. Verifique a ligação e abra este passo de novo.',
+      rowsEmpty: 'Este ficheiro não tem linhas.',
       noRowsFound: 'Não foram encontradas linhas de unidades neste ficheiro. Confirme que se trata de uma exportação CSV compatível antes de tentar novamente.',
       noRowsFoundSkipped: '{{skipped}} linha(s) deste ficheiro foram ignoradas por falta de campos obrigatórios, e nenhuma foi importada. Confirme que se trata de uma exportação CSV compatível antes de tentar novamente.',
       unknownColumnsTitle: 'Colunas não reconhecidas',
