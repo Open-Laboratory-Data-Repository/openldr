@@ -27,19 +27,19 @@
 ## File Structure
 
 **Server**
-- Modify `apps/server/src/facilities-routes.ts` — the upload route gains a `validate` query flag; a new `GET /api/facilities/import/runs/:id/rows` route.
-- Modify `apps/server/src/facilities-routes.test.ts` — route tests.
-- Create `packages/bootstrap/src/facility-file-rows.ts` — reads a window of rows out of a stream, CSV and JSONL. One responsibility: bytes in, rows out. No Fastify, no database.
+- Modify `apps/server/src/facilities-routes.ts`: the upload route gains a `validate` query flag; a new `GET /api/facilities/import/runs/:id/rows` route.
+- Modify `apps/server/src/facilities-routes.test.ts`: route tests.
+- Create `packages/bootstrap/src/facility-file-rows.ts`: reads a window of rows out of a stream, CSV and JSONL. One responsibility: bytes in, rows out. No Fastify, no database.
 - Create `packages/bootstrap/src/facility-file-rows.test.ts`.
 
 **Studio**
-- Modify `apps/studio/src/facilities/stepModel.ts` — four steps instead of three.
+- Modify `apps/studio/src/facilities/stepModel.ts`: four steps instead of three.
 - Modify `apps/studio/src/facilities/stepModel.test.ts`.
-- Modify `apps/studio/src/facilities/ImportSteps.tsx` — a fourth entry.
-- Create `apps/studio/src/facilities/DataGridStep.tsx` — the grid. Owns fetching its own page, nothing else.
+- Modify `apps/studio/src/facilities/ImportSteps.tsx`: a fourth entry.
+- Create `apps/studio/src/facilities/DataGridStep.tsx`: the grid. Owns fetching its own page, nothing else.
 - Create `apps/studio/src/facilities/DataGridStep.test.tsx`.
-- Modify `apps/studio/src/api.ts` — `readFacilityImportRows`, and `validate` on the upload client.
-- Modify `apps/studio/src/facilities/ImportFacilitiesSheet.tsx` — upload on leaving Source, render the Data step, Mapping's action becomes the validate.
+- Modify `apps/studio/src/api.ts`: `readFacilityImportRows`, and `validate` on the upload client.
+- Modify `apps/studio/src/facilities/ImportFacilitiesSheet.tsx`: upload on leaving Source, render the Data step, Mapping's action becomes the validate.
 - Modify `apps/studio/src/facilities/ImportFacilitiesSheet.test.tsx`.
 - Modify `apps/studio/src/i18n/{en,fr,pt}.ts`.
 
