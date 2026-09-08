@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "83169603",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Refuse a csv with no header row on Source, and stop the mapping step lying"
+        },
+        {
+          "hash": "8bd16e1a",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Re-read the header row when the same file is chosen again"
+        },
+        {
           "hash": "4eafa27e",
           "type": "fix",
           "scope": "forms",
