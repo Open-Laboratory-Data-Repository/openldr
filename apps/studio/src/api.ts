@@ -1298,8 +1298,10 @@ export interface FacilityImportColumnValues {
   header: string;
   values: string[];
   distinct: number;
-  /** `distinct` exceeded the cap, so `values` is a sample. A column with hundreds of distinct
-   *  values is usually one that was mapped wrongly, and the row says so rather than listing them. */
+  /** `distinct` exceeded the cap, so `values` is a sample, not the whole column. On its own this
+   *  says nothing about the mapping: hundreds of distinct values is a defect only for a field
+   *  bound to a small vocabulary (`level`/`status`/`country`), and the expected shape for a
+   *  free-text field such as `name` or `national_code`. The caller decides which one applies. */
   truncated: boolean;
 }
 

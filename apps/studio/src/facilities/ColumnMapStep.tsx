@@ -112,10 +112,14 @@ export function ColumnMapStep({
     target: string; unrecognised: number; truncated: boolean; distinct: number;
   }>>({});
   const [busyHeaders, setBusyHeaders] = useState<Set<string>>(new Set());
-  // Two ephemeral, header-keyed notices that are NOT part of `checkedByHeader`: neither one is a
+  // Two ephemeral, per-header notices that are NOT part of `checkedByHeader`: neither one is a
   // real check result, so neither should make `mappingRowState` call the row valid or invalid.
-  const [blockedHeader, setBlockedHeader] = useState<string | null>(null);
-  const [erroredHeader, setErroredHeader] = useState<string | null>(null);
+  // ⛔ FIX PASS (review Finding 3): each used to be one global value, so a click on row A that
+  // set it and a click on row B that cleared it (or set its own) could clobber A's transient
+  // notice. Per-header `Set`s, the same shape `busyHeaders` above already uses, so two rows'
+  // notices cannot step on one another.
+  const [blockedHeaders, setBlockedHeaders] = useState<Set<string>>(new Set());
+  const [erroredHeaders, setErroredHeaders] = useState<Set<string>>(new Set());
 
   const suggestionByHeader = useMemo(() => {
     const m = new Map<string, ColumnSuggestion>();
@@ -276,22 +280,39 @@ export function ColumnMapStep({
     if (!runId) {
       // Nothing stored to read yet. The icon stays in whatever state it already carries
       // (`checked` is untouched); this is what the click reports instead.
-      setBlockedHeader(header);
+      setBlockedHeaders((prev) => new Set(prev).add(header));
       return;
     }
-    setBlockedHeader((h) => (h === header ? null : h));
-    setErroredHeader((h) => (h === header ? null : h));
+    setBlockedHeaders((prev) => {
+      if (!prev.has(header)) return prev;
+      const next = new Set(prev);
+      next.delete(header);
+      return next;
+    });
+    setErroredHeaders((prev) => {
+      if (!prev.has(header)) return prev;
+      const next = new Set(prev);
+      next.delete(header);
+      return next;
+    });
     setBusyHeaders((prev) => new Set(prev).add(header));
     try {
       const { values, distinct, truncated } = await readFacilityImportColumnValues(runId, header);
-      if (truncated) {
-        // Thousands of distinct values almost always means the wrong field. Report the count,
-        // never the sample: listing 200 of 3,788 values would look like the whole picture.
-        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised: distinct, truncated: true, distinct } }));
+      if (!CONTROLLED_CONSTANT_FIELDS.has(target)) {
+        // ⛔ FIX PASS (review Finding 1, CRITICAL): a non-controlled target has no bound
+        // vocabulary, so it has no basis to call thousands of distinct values a wrong-field
+        // sign. `name` and `national_code` are the two REQUIRED fields of every import, and
+        // thousands of distinct values in them is the CORRECT case, not a finding. This must be
+        // checked before `truncated` below, which is a controlled-field-only signal.
+        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised: 0, truncated: false, distinct } }));
         return;
       }
-      if (!CONTROLLED_CONSTANT_FIELDS.has(target)) {
-        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised: 0, truncated: false, distinct } }));
+      if (truncated) {
+        // Thousands of distinct values on a CONTROLLED field almost always means the wrong
+        // field: `level`/`status`/`country` each draw on a small, bound vocabulary, so a column
+        // this large cannot really belong to one. Report the count, never the sample: listing
+        // 200 of 3,788 values would look like the whole picture.
+        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised: distinct, truncated: true, distinct } }));
         return;
       }
       const ranked = await suggestValueMappings(target as ControlledField, values);
@@ -301,7 +322,7 @@ export function ColumnMapStep({
       }).length;
       setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised, truncated: false, distinct } }));
     } catch {
-      setErroredHeader(header);
+      setErroredHeaders((prev) => new Set(prev).add(header));
     } finally {
       setBusyHeaders((prev) => {
         const next = new Set(prev);
@@ -348,9 +369,9 @@ export function ColumnMapStep({
           // only ever surfaces on hover/focus via the tooltip. Collision is left out here: the
           // collision block below the whole table already names both claimants, and repeating it
           // per row would say the same thing twice for no added information.
-          const rowNotice = blockedHeader === header
+          const rowNotice = blockedHeaders.has(header)
             ? { text: t('facilities.import.columnMap.rowCheckBlockedNoRun'), destructive: false }
-            : erroredHeader === header
+            : erroredHeaders.has(header)
               ? { text: t('facilities.import.columnMap.rowCheckFailed'), destructive: true }
               : check?.truncated
                 ? { text: t('facilities.import.columnMap.rowStatusTooManyValues', { count: check.distinct }), destructive: true }

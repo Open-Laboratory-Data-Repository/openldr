@@ -461,5 +461,73 @@ describe('ColumnMapStep', () => {
       expect(await screen.findByRole('button', { name: /^Address: checked, nothing wrong/i })).toBeInTheDocument();
       expect(api.suggestValueMappings).not.toHaveBeenCalledWith('address', expect.anything());
     });
+
+    // ⛔ FIX PASS (review Finding 1, CRITICAL): the `truncated` branch used to fire before the
+    // controlled-field check, so a free-text field (`name`, `national_code`, `address`, `phone`)
+    // with thousands of distinct values — the CORRECT case for those fields — was reported as
+    // probably mapped to the wrong field. `name` is one of the two required fields of every
+    // import, so this broke the ordinary case, not an edge one.
+    it('a truncated result on a non-controlled target is not a wrong-field finding', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Name', values: ['a', 'b'], distinct: 3788, truncated: true,
+      });
+      render(<Controlled runId="run-1" headers={['Name']} suggestions={[]}
+        initial={{ columns: { Name: 'name' }, constants: {}, extras: [] }} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Name:/ }));
+
+      // `name` has no bound vocabulary, so a truncated read is the expected shape of that column,
+      // not a finding. The row goes green, the same as an untruncated non-controlled check.
+      expect(await screen.findByRole('button', { name: /^Name: checked, nothing wrong/i })).toBeInTheDocument();
+      expect(screen.queryByText(/distinct/i)).not.toBeInTheDocument();
+      // A truncated column is never sent to the ranker — its values were never even collected —
+      // and a non-controlled target has no ranker call to make either way.
+      expect(api.suggestValueMappings).not.toHaveBeenCalledWith('name', expect.anything());
+    });
+
+    // ⛔ FIX PASS (review Finding 2): wiring test, not a repeat of `mappingRowState.test.ts`'s pure
+    // function coverage. That file already proves the arithmetic; this proves `ColumnMapStep`
+    // actually feeds it a stale flag when the operator re-targets a checked row.
+    it('a checked row goes stale when the operator re-targets it', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Health Post'], distinct: 1, truncated: false,
+      });
+      // A conditional implementation, not `mockResolvedValueOnce`: the unclaimed constant fields
+      // each fetch their own value set through this same mock on mount and after the re-target.
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string, values: string[]) => {
+        if (field === 'level' && values.includes('Health Post')) {
+          return {
+            values: [{ value: 'Health Post', candidates: [{ target: 'health-post', display: null, score: 1, confidence: 'exact' }] }],
+            options: [],
+            notValidated: false,
+          };
+        }
+        return { values: [], options: [], notValidated: false };
+      });
+
+      render(<Controlled runId="run-1" headers={['Type']} suggestions={[]}
+        initial={{ columns: { Type: 'level' }, constants: {}, extras: [] }} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      expect(await screen.findByRole('button', { name: /^Type: checked, nothing wrong/i })).toBeInTheDocument();
+
+      // Re-target the row to a different field. The check just recorded describes `level`, not
+      // `status`, so it must stop speaking for this row.
+      fireEvent.click(screen.getByLabelText('Type'));
+      fireEvent.click(await screen.findByRole('option', { name: 'status' }));
+
+      expect(screen.getByRole('button', { name: /^Type: changed since the last check/i })).toBeInTheDocument();
+    });
+
+    // ⛔ FIX PASS (review Finding 2): wiring test for the other half of the pure-function coverage
+    // — an exact, collision-free suggestion must read green with no click, i.e. `ColumnMapStep`
+    // must actually pass `confidence: 'exact'` through to `mappingRowState` for the selected
+    // target, not just leave a row neutral until it is manually checked.
+    it('an exact suggestion with no collision reads green with no click at all', () => {
+      render(<Controlled runId="run-1" headers={['MFL Code']} suggestions={[suggestions[0]]} initial={emptyMap} />);
+
+      expect(screen.getByRole('button', { name: /^MFL Code: checked, nothing wrong/i })).toBeInTheDocument();
+      expect(api.readFacilityImportColumnValues).not.toHaveBeenCalled();
+    });
   });
 });
