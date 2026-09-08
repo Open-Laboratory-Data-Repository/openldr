@@ -2915,8 +2915,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   app.get('/api/facilities/import/runs/:id/rows', VIEW, async (req, reply) => {
     const { id } = req.params as { id: string };
     const q = req.query as { offset?: string; limit?: string };
-    const offset = Math.max(0, Number.parseInt(q.offset ?? '0', 10) || 0);
-    const limit = Math.min(500, Math.max(1, Number.parseInt(q.limit ?? '100', 10) || 100));
+    // NaN check instead of || operator: 0 is a valid value for both params.
+    // Number.parseInt returns NaN only on unparseable input, and that is when we use the default.
+    const parsedOffset = Number.parseInt(q.offset ?? '0', 10);
+    const offset = Math.max(0, Number.isNaN(parsedOffset) ? 0 : parsedOffset);
+    const parsedLimit = Number.parseInt(q.limit ?? '100', 10);
+    const limit = Math.min(500, Math.max(1, Number.isNaN(parsedLimit) ? 100 : parsedLimit));
 
     const run = await importRuns.get(id);
     if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }

@@ -4225,6 +4225,29 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
     expect(res.json().limit).toBe(500);
   });
 
+  it('clamps a limit of 0 to the floor of 1', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n2,Beta\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/rows?limit=0`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().limit).toBe(1);
+    expect(res.json().rows.length).toBe(1);
+  });
+
   it('404s for a run that does not exist', async () => {
     const db = await importDb();
     const ctx = fakeImportCtx(db);
