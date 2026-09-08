@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import { sql } from 'kysely';
@@ -1816,6 +1817,14 @@ function fakeBlobStore() {
       objects.set(key, Buffer.concat(chunks));
     },
     async delete(key: string) { objects.delete(key); },
+    // Task 3 (facility-import-data-stage, Slice A): the rows route reads the stored file back
+    // through `getStream`, never `get` (see that route's own comment). This fake needs a
+    // stream to hand back, not just the map lookup the earlier tests were enough for.
+    async getStream(key: string) {
+      const bytes = objects.get(key);
+      if (!bytes) throw new Error(`no such object: ${key}`);
+      return Readable.from(bytes);
+    },
     __objects: objects,
   };
 }
@@ -4107,6 +4116,148 @@ describe('POST /api/facilities/import/upload', () => {
     expect(res.statusCode).toBe(202);
     const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
     expect(run.status).toBe('queued');
+  });
+});
+
+// --- Task 3 (facility-import-data-stage, Slice A): GET .../runs/:id/rows ----------------------
+//
+// The studio needs to show the uploaded file as a table before any column map exists, so this
+// route pages straight off the stored blob through `readFileRows` (Task 1). `readFileRows` always
+// drains the stream, so `scanned` is already the file's true row count. There is no `complete`
+// flag to check, and `total` below is always a number.
+describe('GET /api/facilities/import/runs/:id/rows', () => {
+  it('pages rows out of the stored file, and reports the total', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n2,Beta\n3,Gamma\n', 'utf8'),
+    });
+    expect(upload.statusCode).toBe(202);
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET', url: `/api/facilities/import/runs/${runId}/rows?offset=1&limit=1`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      headers: ['code', 'name'],
+      rows: [['2', 'Beta']],
+      offset: 1,
+      limit: 1,
+      total: 3,
+    });
+  });
+
+  it('defaults offset to 0 and limit to 100 when the query omits them', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n2,Beta\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      headers: ['code', 'name'],
+      rows: [['1', 'Alpha'], ['2', 'Beta']],
+      offset: 0,
+      limit: 100,
+      total: 2,
+    });
+  });
+
+  it('clamps a malformed limit and a negative offset instead of throwing', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/rows?offset=-5&limit=not-a-number`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.offset).toBe(0);
+    expect(body.limit).toBe(100);
+  });
+
+  it('clamps a limit over the 500 ceiling', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/rows?limit=999999`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().limit).toBe(500);
+  });
+
+  it('404s for a run that does not exist', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs/fir_missing/rows' });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  // Ruling 3: an inline-previewed run carries its CSV in the request body and stores nothing.
+  // That is the same case the confirm route already guards, four lines above the equivalent
+  // check this test exercises. That route answers 409 with an explanatory message rather than
+  // 404, so this route does the same for consistency: both are "this run has no stored file",
+  // not "this run is missing".
+  it('409s a run that has no stored file, same as confirm does', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+    await db.updateTable('facility_import_runs').set({ blob_key: null }).where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/no stored file/i);
   });
 });
 

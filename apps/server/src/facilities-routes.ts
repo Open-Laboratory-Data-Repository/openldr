@@ -18,7 +18,7 @@ import {
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
-  revalidateImportRun,
+  revalidateImportRun, readFileRows,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
   type ValueMappingEntry,
 } from '@openldr/bootstrap';
@@ -2902,5 +2902,34 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const run = await importRuns.get(id);
     if (!run) { reply.code(404); return { error: 'not found' }; }
     return run;
+  });
+
+  // Task 3 (facility-import-data-stage, Slice A): the stored file as a table, one window at a
+  // time, so the studio can show the upload before any column map exists.
+  //
+  // ⛔ STREAMED, NEVER BUFFERED. `ctx.blob.get` would return the whole object; a 64MB national
+  // register through it would put the file in the API's memory on every page request. `getStream`
+  // is what keeps this constant-memory. `readFileRows` still drains the whole stream to learn the
+  // row count, so `scanned` is already the file's true total. There is no partial-scan case, and
+  // `total` below is always a number, never null.
+  app.get('/api/facilities/import/runs/:id/rows', VIEW, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { offset?: string; limit?: string };
+    const offset = Math.max(0, Number.parseInt(q.offset ?? '0', 10) || 0);
+    const limit = Math.min(500, Math.max(1, Number.parseInt(q.limit ?? '100', 10) || 100));
+
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
+    // Same case the confirm and revalidate routes already guard: a run previewed inline carries
+    // its CSV in the request body and stores nothing. 409, not 404, matching those two routes.
+    // The run exists, it just has no file behind it to page through.
+    if (!run.blobKey) {
+      reply.code(409);
+      return { error: `import run ${id} has no stored file` };
+    }
+
+    const stream = await ctx.blob.getStream(run.blobKey);
+    const window = await readFileRows(stream, { format: run.sourceFormat, offset, limit });
+    return { headers: window.headers, rows: window.rows, offset, limit, total: window.scanned };
   });
 }
