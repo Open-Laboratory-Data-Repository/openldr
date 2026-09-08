@@ -812,7 +812,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         // A real validate. This is what actually starts the poll. See `pollRunId`'s own comment.
         setPollRunId(id);
         // Task 2: the streamed door earns its Review here, at the upload, for the same reason
-        // `runId` is in `stepGate` at all — the first poll has not answered yet and the operator
+        // `runId` is in `stepGate` at all: the first poll has not answered yet and the operator
         // must not be left on Mapping watching nothing.
         //
         // ⛔ `signatureWith(overrides)`, not the ref: this call sets the two override states just
