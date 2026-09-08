@@ -1,4 +1,4 @@
-import { Check, AlertCircle } from 'lucide-react';
+import { Check, AlertCircle, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -12,19 +12,22 @@ import type { MappingRowState } from './mappingRowState';
  *  disabled control, because a disabled control would contradict that decision visually, so the
  *  click handler is the thing that guards against a second check firing mid-run.
  *
- *  Neutral and stale share one gray tick by the same decision: a second glyph to tell them apart
- *  was considered and rejected. The `aria-label` and a real tooltip now carry the same wording,
- *  so a screen reader and a sighted mouse user both get the difference the icon does not show.
+ *  ⛔ STALE HAS ITS OWN GLYPH, and that is a reversal of an earlier decision, not an oversight.
+ *  Neutral and stale used to share one gray tick, with only the tooltip telling them apart. A
+ *  Radix Tooltip does not open on touch: its pointer handler bails when `pointerType === 'touch'`.
+ *  The operator's primary device is a phone over Tailscale, and AGENTS.md section 6 item 4 makes
+ *  the mobile view part of done, so on the device that matters most the two states were the same
+ *  picture with no way to reach the difference. The spec already authorised this escape: stale
+ *  takes a different glyph and neutral keeps the tick. Stale is now a circular-arrows glyph, which
+ *  reads as "check this again"; neutral keeps the gray tick. Both keep their tooltip and their
+ *  `aria-label`, so nothing was traded away to gain the glyph.
  *
  *  This wraps itself in its own `TooltipProvider`, the pattern `truncated-text.tsx` already
  *  uses. That way it works wherever it lands, and does not depend on the caller remembering to
  *  add a provider. Radix allows nested providers, so this is safe under `AppShell.tsx`'s own
- *  top-level one too.
- *
- *  KNOWN GAP: a Radix Tooltip does not open on touch. Its pointer handler bails when
- *  `pointerType === 'touch'`. On a phone, neutral and stale still look the same with no way to
- *  tell them apart. That is a real limit of this control, not something worked around here. How
- *  the per-field check should read on a phone needs its own decision, later. */
+ *  top-level one too. The tooltip is still the only carrier of a row's DETAIL on a phone, which is
+ *  acceptable: the detail also renders as a visible line under the row (`rowNotice` in
+ *  `ColumnMapStep.tsx`), so nothing is reachable by hover alone. */
 export function MappingRowStatus({
   state,
   label,
@@ -66,7 +69,11 @@ export function MappingRowStatus({
       ? <Check className="h-4 w-4 text-emerald-600" />
       : state === 'invalid'
         ? <AlertCircle className="h-4 w-4 text-destructive" />
-        : <Check className="h-4 w-4 text-muted-foreground" />;
+        : state === 'stale'
+          // Not a warning colour. A stale row is not wrong, it just has not been looked at since it
+          // changed, so it stays as quiet as neutral and only differs in shape.
+          ? <RefreshCw className="h-4 w-4 text-muted-foreground" />
+          : <Check className="h-4 w-4 text-muted-foreground" />;
 
   return (
     <TooltipProvider>

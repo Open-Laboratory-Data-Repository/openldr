@@ -74,9 +74,10 @@ Chaque ligne de mappage porte une petite icône à côté de son sélecteur de c
 
 - Une coche grise signifie que la ligne n'a pas encore été vérifiée.
 - Une coche verte signifie qu'elle a été vérifiée et que rien ne cloche.
-- Une icône rouge signifie qu'un problème existe. Survolez-la pour savoir lequel.
-- Une coche grise à nouveau signifie que le mappage a changé depuis sa dernière vérification.
-  L'infobulle le précise, pour ne pas se confondre avec « pas encore vérifiée ».
+- Une icône rouge signifie qu'un problème existe. La ligne dit lequel, juste en dessous.
+- Une flèche circulaire grise signifie que le mappage a changé depuis sa dernière vérification.
+  La forme diffère de la coche grise à dessein, pour que les deux ne se confondent pas sur un
+  téléphone, où l'infobulle ne s'ouvre pas du tout.
 
 L'icône reste cliquable dans tous les états. Une nouvelle vérification n'est jamais refusée.
 

@@ -65,9 +65,10 @@ Every mapping row carries a small icon next to its field picker. It has four sta
 
 - A gray tick means the row has not been checked yet.
 - A green tick means it has been checked, and nothing is wrong.
-- A red icon means something is wrong. Hover it to read what.
-- A gray tick again means the mapping changed since its last check. The tooltip says so, so it
-  does not read the same as "not checked yet".
+- A red icon means something is wrong. The row says what, in a line under it.
+- A gray circular arrow means the mapping changed since its last check. It is a different shape
+  from the gray tick on purpose, so the two do not read the same on a phone, where a tooltip
+  cannot be opened at all.
 
 The icon is always clickable, in every state. A re-check is never refused.
 

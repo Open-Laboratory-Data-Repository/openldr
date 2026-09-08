@@ -72,9 +72,10 @@ Cada linha de mapeamento tem um pequeno ícone junto ao seu seletor de campo. Te
 
 - Um visto cinzento significa que a linha ainda não foi verificada.
 - Um visto verde significa que foi verificada e nada está errado.
-- Um ícone vermelho significa que algo está errado. Passe o rato por cima para ver o quê.
-- Um visto cinzento outra vez significa que o mapeamento mudou desde a última verificação. A dica
-  diz isso mesmo, para não se confundir com "ainda não verificada".
+- Um ícone vermelho significa que algo está errado. A linha diz o quê, logo por baixo.
+- Uma seta circular cinzenta significa que o mapeamento mudou desde a última verificação. A forma
+  é diferente do visto cinzento de propósito, para que os dois não se confundam num telemóvel,
+  onde a dica não chega sequer a abrir.
 
 O ícone mantém-se clicável em todos os estados. Uma nova verificação nunca é recusada.
 

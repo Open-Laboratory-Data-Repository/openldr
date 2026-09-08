@@ -20,9 +20,9 @@ describe('MappingRowStatus', () => {
     expect(screen.getByRole('button', { name: /not recognised/i })).toBeInTheDocument();
   });
 
-  // Neutral and stale share a gray tick by the operator's own decision. The tooltip is what tells
-  // them apart, so it has to differ even though the glyph does not.
-  it('gives neutral and stale different words for the same glyph', () => {
+  // Stale now has its own glyph too (see the test further down), but the words still have to
+  // differ: the glyph says "this changed", the wording says what to do about it.
+  it('gives neutral and stale different words', () => {
     const { rerender } = render(<MappingRowStatus state="neutral" label="Type" busy={false} detail={null} onCheck={vi.fn()} />);
     const neutral = screen.getByRole('button', { name: /Type/ }).getAttribute('aria-label');
     rerender(<MappingRowStatus state="stale" label="Type" busy={false} detail={null} onCheck={vi.fn()} />);
@@ -48,8 +48,8 @@ describe('MappingRowStatus', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent(/checked, nothing wrong/i);
   });
 
-  // Neutral and stale share a gray tick. The earlier test proves the aria-label differs; this
-  // proves the same is true of the thing a mouse user actually sees.
+  // The earlier test proves the aria-label differs; this proves the same is true of the thing a
+  // mouse user actually sees.
   it('gives the tooltip different text for neutral and stale, same as the aria-label', () => {
     const { unmount } = render(<MappingRowStatus state="neutral" label="Type" busy={false} detail={null} onCheck={vi.fn()} />);
     fireEvent.focus(screen.getByRole('button', { name: /Type/ }));
@@ -61,6 +61,26 @@ describe('MappingRowStatus', () => {
     const staleTip = screen.getByRole('tooltip').textContent;
 
     expect(neutralTip).not.toEqual(staleTip);
+  });
+
+  // Final review, I2: a Radix Tooltip is inert on touch, and the tooltip was the ONLY thing telling
+  // neutral from stale. The operator's primary device is a phone, so on a phone the two states were
+  // indistinguishable. The spec allows the escape: stale takes its own glyph, neutral keeps the tick.
+  it('gives stale its own glyph, so a phone can tell it from neutral without a tooltip', () => {
+    const glyphFor = (state: 'neutral' | 'valid' | 'stale'): string => {
+      const { container, unmount } = render(
+        <MappingRowStatus state={state} label="Type" busy={false} detail={null} onCheck={vi.fn()} />,
+      );
+      const svg = container.querySelector('button svg');
+      const markup = svg?.innerHTML ?? '';
+      unmount();
+      return markup;
+    };
+
+    // Neutral keeps the tick. It draws the same shape as valid; only the colour differs.
+    expect(glyphFor('neutral')).toEqual(glyphFor('valid'));
+    // Stale draws something else entirely, so a touch user who cannot open a tooltip still sees it.
+    expect(glyphFor('stale')).not.toEqual(glyphFor('neutral'));
   });
 
   // Finding 2: a null `detail` on an invalid row must not assert a cause it does not know.
