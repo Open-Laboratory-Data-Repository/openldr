@@ -13,7 +13,7 @@ import { ValueMapRow, VALUE_MAP_UNMAPPED } from './ValueMapRow';
 // package).
 const CONTROLLED_FIELDS: ControlledField[] = ['level', 'status', 'country'];
 
-/** Not a real value-set code — a real one could never collide with it. Task 6: re-exported from
+/** Not a real value-set code, and a real one could never collide with it. Task 6: re-exported from
  *  `ValueMapRow` now, so this panel and `ColumnMapStep`'s own embedded worklist agree on the wire
  *  value "nothing chosen" means, without either importing the other. */
 const UNMAPPED = VALUE_MAP_UNMAPPED;
@@ -220,7 +220,7 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
           )}
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2">
             {/* Task 6: the per-value row itself moved to `ValueMapRow`, shared with `ColumnMapStep`'s
-                own embedded worklist — same ranked-head/sorted-tail ordering either way, one copy of
+                own embedded worklist. Same ranked-head/sorted-tail ordering either way, one copy of
                 that logic rather than two that could drift. */}
             {unmapped[field].map((value) => {
               const key = rowKey(field, value);

@@ -1136,7 +1136,7 @@ export const en = {
         // Guessing one, a collision or unrecognised values, could name the wrong one.
         rowStatusUnknown: 'something is wrong',
         // Task 5: a truncated column has more distinct values than a person should be asked to
-        // map — almost always the wrong field. Named by count, not listed, because the values
+        // map, almost always the wrong field. Named by count, not listed, because the values
         // themselves are not the point.
         rowStatusTooManyValues: '{{count}} distinct values found. This column is probably mapped to the wrong field.',
         // Task 5: before an upload there is no stored file, so a click cannot check anything yet.

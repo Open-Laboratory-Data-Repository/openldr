@@ -1305,7 +1305,7 @@ export interface FacilityImportColumnValues {
   truncated: boolean;
 }
 
-/** `GET /api/facilities/import/runs/:id/columns/:header/values` — that column's distinct
+/** `GET /api/facilities/import/runs/:id/columns/:header/values`. That column's distinct
  *  non-empty values, capped at `limit`. Reads the ONE stored file column, never the whole
  *  register: this is what lets a single mapping row be checked on its own. */
 export const readFacilityImportColumnValues = (

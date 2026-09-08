@@ -1634,7 +1634,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 // Task 6: what `ValueMapPanel` used to read directly, handed down instead so its
                 // per-value pick-lists render under the row that maps each field rather than in
                 // their own separate block below. `liveFindings` is already the last check's result
-                // guarded by `worklistSignature` — see `ImportPolicyPanel`'s own `findings` prop,
+                // guarded by `worklistSignature`. See `ImportPolicyPanel`'s own `findings` prop,
                 // fed the exact same value for the exact same reason.
                 unmappedByField={liveFindings?.unmapped}
                 nationalSystem={nationalSystem.trim()}
@@ -1715,7 +1715,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
           {/* Task 6: the value-mapping worklist no longer renders here as its own block. Its
               pick-lists moved INTO `ColumnMapStep` above, one worklist per row, under the mapping
-              it belongs to — see that component's own `unmappedByField` prop, fed `liveFindings`
+              it belongs to. See that component's own `unmappedByField` prop, fed `liveFindings`
               (the last check's findings guarded by `worklistSignature`) a few lines up. Review
               still reports the same values, read-only, from `ReconciliationSummary`. */}
 
