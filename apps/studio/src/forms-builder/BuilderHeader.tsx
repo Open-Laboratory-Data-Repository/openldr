@@ -198,9 +198,22 @@ export function BuilderHeader({
             </Tooltip>
           </TooltipProvider>
           {publishedVersion != null ? (
-            <span className="mb-3 shrink-0 text-xs font-medium text-muted-foreground">
-              v{publishedVersion}
-            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className="mb-3 shrink-0 cursor-help text-xs font-medium text-muted-foreground"
+                    aria-label={`What version ${publishedVersion} means`}
+                  >
+                    v{publishedVersion}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  Snapshot {publishedVersion} of this form. Publishing takes the next number. You
+                  cannot type this one.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : null}
           <div className="flex-1 min-w-0 space-y-1">
             <Label className="text-xs" htmlFor="builder-name">Form name</Label>
@@ -217,7 +230,24 @@ export function BuilderHeader({
         {/* Version label. Free text, and deliberately not the version number: the number is
             assigned by publish and shown next to the status dot. */}
         <div className="w-32 space-y-1">
-          <Label className="text-xs" htmlFor="builder-version">Version label</Label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label
+                  className="w-fit cursor-help text-xs"
+                  htmlFor="builder-version"
+                  aria-label="What the version label is"
+                >
+                  Version label
+                </Label>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                Your own name for this release, free text. It is not the snapshot number beside the
+                form name. It ships as the FHIR Questionnaire version, and as the marketplace bundle
+                version when it reads as semver like 1.2.0.
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Input
             id="builder-version"
             aria-label="Version label"

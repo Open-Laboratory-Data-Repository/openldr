@@ -129,6 +129,19 @@ describe('BuilderHeader', () => {
       expect(screen.getByText('v3')).toBeInTheDocument();
     });
 
+    it('explains that the label is not the version number', () => {
+      renderHeader();
+      // A tooltip explains what each of the two version things is. Radix renders the content
+      // into an aria-describedby-linked node only while open, so assert on the trigger's
+      // accessible description source rather than driving a hover in jsdom.
+      expect(screen.getByLabelText('What the version label is')).toBeInTheDocument();
+    });
+
+    it('explains what the published version number is', () => {
+      renderHeader({ status: 'published', publishedVersion: 3 });
+      expect(screen.getByLabelText('What version 3 means')).toBeInTheDocument();
+    });
+
     it('shows no version number before the form has ever been published', () => {
       renderHeader({ status: 'draft', publishedVersion: null });
       expect(screen.queryByText(/^v\d+$/)).not.toBeInTheDocument();
