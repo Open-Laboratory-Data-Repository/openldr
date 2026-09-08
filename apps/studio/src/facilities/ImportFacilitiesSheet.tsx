@@ -1230,10 +1230,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   import is unreachable from the UI. Disabled with the rest of the sheet's inputs
                   while a run holds the register — see `inputsDisabled` — for the same reason the
                   Select itself is: registering a source an operator cannot yet select is no help. */}
-              <DropdownMenuItem disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
-                {t('facilities.import.registerSourceAction')}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
+              {/* ⛔ SOURCE ONLY. It used to render on every step, so an operator standing on Data,
+                  looking at 3788 rows of a file they had already uploaded, was offered "Register a
+                  source". Reported as confusing, and it is: registering one there cannot help,
+                  because the register this run belongs to was fixed the moment the file was stored.
+                  Reachable exactly where it is the answer, which is Source. */}
+              {step === 1 && (
+                <>
+                  <DropdownMenuItem disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
+                    {t('facilities.import.registerSourceAction')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               {/* A2b: the background door. Offered only while no run is in play, and gated on
                   `runId` rather than `run` deliberately: `runId` is set the instant the upload
                   resolves, whereas `run` stays null until the FIRST POLL answers — a window in which
@@ -1719,6 +1728,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               // a conflict, and a summary on screen means a run exists.
               showConflictChoice
               reupload={reupload}
+              onGoToMapping={() => setRequestedStep(3)}
             />
           )}
 
