@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@/i18n';
 
 vi.mock('@/api', async (orig) => {
@@ -29,11 +29,34 @@ describe('DataGridStep', () => {
   });
 
   // AGENTS.md 5: every table gets TablePagination, no exceptions.
-  it('pages, and asks the server for the next window rather than filtering locally', async () => {
+  it('shows the total from the server, not the row count', async () => {
     render(<DataGridStep runId="fir_1" />);
     await screen.findByText('Chunga Clinic');
     await waitFor(() => expect(api.readFacilityImportRows).toHaveBeenCalledWith('fir_1', { offset: 0, limit: 100 }));
     expect(screen.getByText(/1.*100.*3,?788/)).toBeInTheDocument();
+  });
+
+  it('fetches the next window when pagination advances', async () => {
+    render(<DataGridStep runId="fir_1" />);
+    await screen.findByText('Chunga Clinic');
+    expect(mocked(api.readFacilityImportRows).mock.calls).toHaveLength(1);
+
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['MFL Code', 'Name'],
+      rows: [['100101', 'Nampundwe Health Post'], ['100102', 'Mbewe Clinic']],
+      offset: 100, limit: 100, total: 3788,
+    });
+
+    const nextButton = screen.getByRole('button', { name: 'Next page' });
+    fireEvent.click(nextButton);
+
+    await waitFor(() => {
+      expect(mocked(api.readFacilityImportRows).mock.calls).toHaveLength(2);
+    });
+    expect(mocked(api.readFacilityImportRows).mock.calls[1]?.[1]).toEqual({ offset: 100, limit: 100 });
+
+    expect(screen.getByText('Nampundwe Health Post')).toBeInTheDocument();
+    expect(screen.queryByText('Chunga Clinic')).not.toBeInTheDocument();
   });
 
   it('says so when the file could not be read, instead of an empty table', async () => {
