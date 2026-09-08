@@ -937,9 +937,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const stepGate = {
     hasFile: !!file,
     hasRegister: nationalSystem.trim() !== '',
+    // Task 4: the widened model's new gate. This sheet still maps the column map BEFORE it uploads
+    // (Mapping's own Upload button is what first stores the file), so nothing here yet means "the
+    // file is already sitting in blob storage" at the point Mapping needs to render. Hardcoded true
+    // so `furthestStep` keeps opening Mapping exactly where it does today. Task 6, which adds the
+    // real Data step and moves storage ahead of Mapping, is what gives this a real signal to read.
+    hasStoredFile: true,
     // ⛔ `summaryAt === currentSummarySignature` is what makes this "a summary that MATCHES THE
     // INPUTS", not merely "a summary exists". Change the file, the register, the map, a fixed
-    // value, an override or a policy and this goes false, `furthestStep` returns 2 and `clampStep`
+    // value, an override or a policy and this goes false, `furthestStep` returns 3 and `clampStep`
     // pulls the operator back to Mapping. That is the safety half of this slice: Review is either
     // current or absent, and never a number that is no longer true.
     //
@@ -980,7 +986,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // `ColumnMapStep` mounted through the refusal (see `columnMapRefused`'s own docblock).
   //
   // This has to be a RETREAT, not just a guard on the forward move: `hasReview` (and so `furthest`)
-  // turns 3 the instant the background door's `runId` is set — see that field's own comment — which
+  // turns 4 the instant the background door's `runId` is set — see that field's own comment — which
   // is BEFORE the first poll has said anything about `blockedReason`. The upload's own Continue
   // already parked the operator on Mapping by then, so this effect's ordinary branch carries them to
   // Review immediately, exactly as it does for every other run. Only once the first poll answers does
@@ -996,12 +1002,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // not about that door: a column-map refusal means the Mapping panel is the only place that can
   // help, regardless of
   // which step the operator was on when they triggered it.
+  //
+  // ⛔ Task 4: THE THRESHOLD IS 4, NOT `furthestStep`'s OLD 3. `furthestStep` now returns 3 for
+  // "Mapping is open" (this sheet's own stepGate sets `hasStoredFile` unconditionally true, so that
+  // happens as soon as a file and register are chosen) and only reaches 4 once `hasReview` is
+  // actually true. Comparing against the old `3` here would fire this effect the moment a file and
+  // register were picked, before any upload, and skip Mapping entirely. The sheet's own step numbers
+  // (2 = Mapping, 3 = Review below) are UNCHANGED this task — only the `furthestStep` threshold moved.
   useEffect(() => {
     if (columnMapRefused) {
       setRequestedStep((prev) => (prev !== 2 ? 2 : prev));
       return;
     }
-    if (furthest < 3) return;
+    if (furthest < 4) return;
     setRequestedStep((prev) => (prev < 3 ? 3 : prev));
   }, [furthest, columnMapRefused]);
 

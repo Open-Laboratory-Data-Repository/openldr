@@ -891,6 +891,7 @@ export const pt: EnShape = {
       steps: {
         label: 'Passos da importação',
         source: 'Origem',
+        data: 'Dados',
         mapping: 'Mapeamento',
         review: 'Revisão',
       },

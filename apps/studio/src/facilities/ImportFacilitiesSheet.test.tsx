@@ -81,6 +81,12 @@ async function pickFileAndSystem(contents?: string) {
   fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 }
 
+/** Task 4: the strip now shows four steps (Source, Data, Mapping, Review), so position 2 reads
+ *  "Data" and position 3 reads "Mapping" in the DOM, one slot earlier than their names below say.
+ *  The sheet itself is unchanged: numeric step 2 is still where the mapping panel and Upload button
+ *  render, and numeric step 3 is still Review. Task 6 moves the mapping panel to match the strip;
+ *  until then these helpers click by the strip's actual current text, not by the step's old name. */
+
 /** Reading the File's text back out (`file.text()`) is genuinely asynchronous in jsdom, so the
  *  Preview action stays disabled until it resolves — this opens the menu and waits for THAT,
  *  rather than a fixed delay, before clicking it. Leaves the menu closed afterward (same as
@@ -93,7 +99,7 @@ async function previewNow() {
   // ordinary thing for an operator to do, so the helper has to handle both.
   const continueButton = screen.queryByRole('button', { name: 'Continue' });
   if (continueButton) fireEvent.click(continueButton);
-  const mappingStep = screen.queryByRole('button', { name: /2\s*Mapping/ });
+  const mappingStep = screen.queryByRole('button', { name: /2\s*Data/ });
   if (mappingStep && mappingStep.getAttribute('aria-current') !== 'step' && !mappingStep.hasAttribute('disabled')) {
     fireEvent.click(mappingStep);
   }
@@ -110,9 +116,9 @@ async function backToMapping() {
   // ALREADY on Mapping, which does nothing, and the auto-advance effect then carries the operator
   // to Review the moment the result arrives. Measured: the click looked fine and the step went
   // forward anyway.
-  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
     .toHaveAttribute('aria-current', 'step'));
-  fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+  fireEvent.click(screen.getByRole('button', { name: /2\s*Data/ }));
 }
 
 /** Step forward to Review WITHOUT re-checking. Only legal when the summary was never retired, i.e.
@@ -120,7 +126,7 @@ async function backToMapping() {
  *  change what the parser finds, only whether Apply may proceed, so it is deliberately absent from
  *  that signature and ticking it leaves the summary standing. */
 function forwardToReview() {
-  fireEvent.click(screen.getByRole('button', { name: /3\s*Review/ }));
+  fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
 }
 
 /** Every `FacilityImportResult` field, defaulted to "clean, nothing to reconcile" — every test
@@ -216,7 +222,7 @@ async function reviewWithSummary(
   await uploadNow();
   // ⛔ Waits for the STEP, not for a text match. Every caller then asserts its own copy, and a
   // helper that waited on one caller's string would silently pass for a summary that never rendered.
-  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
     .toHaveAttribute('aria-current', 'step'));
 }
 
@@ -948,7 +954,7 @@ describe('ImportFacilitiesSheet', () => {
 
     await pickFileAndSystem();
     await uploadNow();
-    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
       .toHaveAttribute('aria-current', 'step'));
 
     await backToMapping();
@@ -1438,7 +1444,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/ward_code/)).toBeInTheDocument();
     // This refusal is not a column-map one, so the sheet's own retreat effect never fires — the run
     // reaching Review on its own, proven only indirectly by the assertions below until now.
-    expect(screen.getByRole('button', { name: /3\s*Review/ })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
     // ⛔ …and the tick that could only 409 is gone, replaced by the path that actually works.
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
     expect(screen.getByText(/the check has to run again with it/i)).toBeInTheDocument();
@@ -1859,7 +1865,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
     expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
     // And the sheet really did stay put: Mapping is still current, not Review.
-    expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step');
   });
 
   it('does not render the columnMapErrors block, or keep the panel mounted, once the file parses cleanly', async () => {
@@ -1967,7 +1973,7 @@ describe('ImportFacilitiesSheet', () => {
     // poll answering AND that retreat settling, rather than checking each in its own turn.
     await waitFor(() => {
       expect(screen.getByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+      expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step');
     });
     expect(screen.getByLabelText('Province')).toBeInTheDocument();
     expect(screen.getByLabelText('Zone')).toBeInTheDocument();
@@ -2008,7 +2014,7 @@ describe('ImportFacilitiesSheet', () => {
     // Round-2 fix: the sheet retreats to Mapping once the refusal is known — see the "keeps
     // ColumnMapStep mounted" test above for why this needs its own wait. The panel is on screen
     // once this settles, no back-click needed to reach it.
-    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step'));
 
     // Fix it in place: send Zone to extras, which is what actually releases its passthrough claim.
     fireEvent.click(screen.getByLabelText('Zone'));
@@ -2033,7 +2039,7 @@ describe('ImportFacilitiesSheet', () => {
 
       expect(await screen.findByRole('button', { name: /1\s*Source/ }))
         .toHaveAttribute('aria-current', 'step');
-      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /2\s*Data/ })).toBeDisabled();
     });
 
     it('opens Mapping once Continue is pressed, and shows the column map there', async () => {
@@ -2116,7 +2122,7 @@ describe('ImportFacilitiesSheet', () => {
       await screen.findByText(/facility row\(s\) will be created/i);
 
       // The clean summary auto-advances to Review, so go back to Mapping.
-      fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+      fireEvent.click(screen.getByRole('button', { name: /2\s*Data/ }));
 
       // ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: that Mapping had no panel to show and said so,
       // "already been sent with the upload". True at the time, and useless to the operator who
@@ -2197,7 +2203,7 @@ describe('ImportFacilitiesSheet', () => {
       await screen.findByText(/import complete/i);
 
       // The run finished, so Back is offered again (`canGoBack`) and the step strip reopens.
-      fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+      fireEvent.click(screen.getByRole('button', { name: /2\s*Data/ }));
 
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
     });
@@ -2231,7 +2237,7 @@ describe('ImportFacilitiesSheet', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/"MFL Code 2" and "MFL Code" both map to "national_code"/)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+        expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step');
       });
       expect(screen.getByRole('button', { name: 'Check again with the corrected map' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
