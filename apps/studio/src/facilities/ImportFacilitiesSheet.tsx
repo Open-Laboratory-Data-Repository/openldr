@@ -230,6 +230,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  drops `hasReview` and the view falls back on its own, with no extra reset to remember. */
   const [requestedStep, setRequestedStep] = useState<ImportStep>(1);
   const [csvHead, setCsvHead] = useState<string | null>(null);
+  /** ⛔ WHY A COUNTER AND NOT JUST `csvHead`. Choosing the SAME file twice (browse it, then drag it
+   *  in, which is what an operator did on the real Zambia export) reads a byte-identical head. React
+   *  bails out of a state update whose value is `Object.is`-equal to the current one, so `csvHead`
+   *  never "changes", the effect below never re-runs, and the header list `selectFile` just cleared
+   *  is never refilled. The Mapping step then has no column map to offer and says the map was
+   *  already sent with the upload, which is untrue and cost that operator a whole refused import.
+   *  This counter advances on every completed read, so a fresh read always re-derives the headers
+   *  whether or not its text differs. */
+  const [csvHeadReads, setCsvHeadReads] = useState(0);
   // B1 Task 9: holds the CHOSEN SOURCE'S URI, and only ever that — see `handleNationalSystemChange`
   // and the `Select` below. Before this task it was a free-text box hashed straight into every
   // facility's permanent id (`idFor`, facility-csv.ts); the import routes now refuse anything that
@@ -500,7 +509,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     // The upload path touches neither: the `File` itself is the request body (see
     // `uploadFacilityImport`), which is what keeps a national register out of this tab's memory.
     if (!f) { setCsvHead(null); return; }
-    void f.slice(0, HEAD_BYTES).text().then(setCsvHead).catch((err: unknown) => {
+    void f.slice(0, HEAD_BYTES).text().then((text) => {
+      // Both setters in one handler so React batches them: the effect below sees the new text and
+      // the new read count together, and never fires once for each.
+      setCsvHead(text);
+      setCsvHeadReads((n) => n + 1);
+    }).catch((err: unknown) => {
       setCsvHead(null);
       setError(err instanceof Error ? err.message : String(err));
     });
@@ -538,7 +552,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // `ColumnMapStep`'s own seed effect is gated on a header SIGNATURE alone, so headers arriving
   // before their matching suggestions would let it seed nothing and then never retry once the real
   // suggestions landed a moment later). Re-runs whenever the file's text OR the declared format
-  // changes — `format` because switching to `jsonl` must clear any CSV-only header list, `csv`
+  // changes, and on every completed head READ even when the text is unchanged (see `csvHeadReads`
+  // above: re-choosing the same file must re-derive the headers `selectFile` just cleared).
+  // `format` because switching to `jsonl` must clear any CSV-only header list, `csv`
   // because a new file means new headers.
   useEffect(() => {
     if (!csvHead || format !== 'csv') {
@@ -567,7 +583,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         setColumnMapSuggestions([]);
       });
     return () => { cancelled = true; };
-  }, [csvHead, format]);
+  }, [csvHead, format, csvHeadReads]);
 
   const handleNationalSystemChange = (value: string) => {
     setNationalSystem(value);

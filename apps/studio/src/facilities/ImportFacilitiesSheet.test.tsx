@@ -2341,6 +2341,53 @@ describe('the file drop zone', () => {
     await waitFor(() => expect(sliceSpy).toHaveBeenCalledWith(0, 64 * 1024));
   });
 
+  // ⛔ THE SAME FILE, CHOSEN TWICE, USED TO EMPTY THE MAPPING STEP FOR GOOD. Reported by an
+  // operator who clicked the drop target, picked the register export in the file dialog, then
+  // dragged the same file onto the component as well. Mapping came up with no column map at all and
+  // said the map "has already been sent with the upload", which was untrue: nothing had been
+  // uploaded. They then uploaded with no map, and the importer refused all 21 columns as
+  // unrecognised.
+  //
+  // `selectFile` clears `columnMapHeaders`, then reads the head. On the SECOND selection the head
+  // text is byte-identical, so `setCsvHead` receives a string equal to the state it already holds,
+  // React bails out of the update, `csvHead` never changes, and the effect keyed on it never
+  // re-runs. The cleared header list is never refilled. MEASURED live against the real 3788-row
+  // Zambia MFL export: one `suggest-map` request after the browse, and none at all after the drop.
+  it('⛔ still offers the column map when the same file is chosen twice (browse, then drop)', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValue({
+      headers: ['MFL Code', 'Name'],
+      columns: [
+        { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+        { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+      ],
+    });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    const contents = ['MFL Code,Name', '100001,Chunga Clinic', ''].join('\n');
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile(contents)] } });
+    // ⛔ WAIT FOR THE FIRST READ TO LAND BEFORE DROPPING, or this test cannot see the bug. The
+    // operator's first selection had long since resolved when they dragged the file in. Dropping
+    // while `File.text()` is still pending leaves `csvHead` at `null`, so the second read changes it
+    // and the effect fires anyway - which is why an earlier version of this test passed against the
+    // broken code.
+    await waitFor(() => expect(api.suggestColumnMap).toHaveBeenCalledTimes(1));
+    // The same bytes again, the way the operator did it: a drag onto the component.
+    drop(screen.getByRole('button', { name: /register\.csv/i }), csvFile(contents));
+    // The header list was just cleared. Re-deriving it is the whole fix: identical head text must
+    // not be mistaken for "nothing changed".
+    await waitFor(() => expect(api.suggestColumnMap).toHaveBeenCalledTimes(2));
+
+    const trigger = await screen.findByRole('combobox', { name: 'National system' });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    // The column map is on screen, and the sheet does not claim a map was already sent.
+    expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
+    expect(screen.queryByText(/already been sent/i)).not.toBeInTheDocument();
+  });
+
   it('accepts a dropped csv and treats it exactly like a browsed one', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
     drop(dropZone(), csvFile());
