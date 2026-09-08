@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 
 // ⛔ REQUIRED, not optional. `constantFields` is every contract field no column claims, so every
 // test in this file already renders constants for `level`, `status` and `country`, and those three
@@ -75,6 +75,28 @@ function Controlled({ initial, onChangeSpy, runId = null, ...rest }: {
         setValue(next);
       }}
     />
+  );
+}
+
+/** Task 6: a thin wrapper matching the brief's own call shape (`renderColumnMapStep({ runId,
+ *  headers, value })`) — `Controlled` underneath, same as every other test in this file. */
+function renderColumnMapStep(props: {
+  runId?: string | null;
+  headers: string[];
+  suggestions?: ColumnSuggestion[];
+  value: FacilityColumnMap;
+  onChangeSpy?: (next: FacilityColumnMap) => void;
+  onValidityChange?: (valid: boolean) => void;
+}) {
+  return render(
+    <Controlled
+      runId={props.runId ?? null}
+      headers={props.headers}
+      suggestions={props.suggestions ?? []}
+      initial={props.value}
+      onChangeSpy={props.onChangeSpy}
+      onValidityChange={props.onValidityChange}
+    />,
   );
 }
 
@@ -528,6 +550,75 @@ describe('ColumnMapStep', () => {
 
       expect(screen.getByRole('button', { name: /^MFL Code: checked, nothing wrong/i })).toBeInTheDocument();
       expect(api.readFacilityImportColumnValues).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('⛔ Task 6 — the worklist moves into the row, not a separate box at the bottom', () => {
+    beforeEach(() => {
+      mockedApi(api.readFacilityImportColumnValues).mockClear();
+      mockedApi(api.suggestValueMappings).mockClear();
+    });
+
+    // ⛔ Deviation from the brief's literal snippet: `/Type/` alone matches TWO buttons on this row
+    // — the status icon AND the row's own "Actions for Type" ⋯ menu trigger both contain the word
+    // "Type" — the exact ambiguity this file's own Task 5 tests already worked around with
+    // `/^Type:/`. This test does the same.
+    it('puts a controlled field\'s unrecognised values under the row that maps it', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['1st Level Hospital', 'Others'], distinct: 2, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [
+          { value: '1st Level Hospital', candidates: [] },
+          { value: 'Others', candidates: [] },
+        ],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      const row = (await screen.findByText('1st Level Hospital')).closest('[data-mapping-row="Type"]');
+      expect(row).not.toBeNull();
+      expect(within(row as HTMLElement).getByLabelText('1st Level Hospital')).toBeInTheDocument();
+    });
+
+    it('shows the OTHER unrecognised value in the same row too, ranked candidates first then the sorted tail', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['1st Level Hospital', 'Others'], distinct: 2, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [
+          { value: '1st Level Hospital', candidates: [] },
+          { value: 'Others', candidates: [] },
+        ],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      const row = (await screen.findByText('1st Level Hospital')).closest('[data-mapping-row="Type"]') as HTMLElement;
+      expect(within(row).getByLabelText('Others')).toBeInTheDocument();
+      expect(within(row).getByLabelText('1st Level Hospital')).toHaveTextContent('Not mapped');
+    });
+
+    it('does not show a picklist for a row nothing has found unrecognised values for', () => {
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['MFL Code'],
+        suggestions: [suggestions[0]],
+        value: emptyMap,
+      });
+
+      expect(screen.queryByText('1st Level Hospital')).not.toBeInTheDocument();
     });
   });
 });

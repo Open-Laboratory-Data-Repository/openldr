@@ -37,9 +37,7 @@ import {
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
 import { DataGridStep } from './DataGridStep';
-import { CONTROLLED_FIELDS } from './controlledFields';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
-import { ValueMapPanel } from './ValueMapPanel';
 import { summarySignature, worklistSignature, type ImportInputs } from './importInputsSignature';
 import {
   ColumnMapErrorsNotice, ReconciliationSummary, willWrite, type ReuploadOverrides,
@@ -1633,6 +1631,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   if (origin === 'edit') setColumnMapEdits((n) => n + 1);
                 }}
                 onValidityChange={setColumnMapValid}
+                // Task 6: what `ValueMapPanel` used to read directly, handed down instead so its
+                // per-value pick-lists render under the row that maps each field rather than in
+                // their own separate block below. `liveFindings` is already the last check's result
+                // guarded by `worklistSignature` — see `ImportPolicyPanel`'s own `findings` prop,
+                // fed the exact same value for the exact same reason.
+                unmappedByField={liveFindings?.unmapped}
+                nationalSystem={nationalSystem.trim()}
+                onValueMappingsSaved={handleValueMappingsSaved}
               />
               {/* Non-blocking — see `columnMapValid`'s own state comment for why this never
                   disables Preview/Upload. Purely a heads-up: the server's own refusal (rendered
@@ -1707,19 +1713,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </div>
           )}
 
-          {/* Task 4: the value-mapping worklist, where the deciding happens. Fed by the last
-              check's findings, so it is absent on the first pass (nothing has read the file yet)
-              and present once a check has found work. Review reports the same values read-only. */}
-          {step === 3 && liveFindings
-            && CONTROLLED_FIELDS.some((f) => liveFindings.unmapped[f].length > 0) && (
-            <div className="mx-6 mt-4">
-              <ValueMapPanel
-                nationalSystem={nationalSystem.trim()}
-                unmapped={liveFindings.unmapped}
-                onSaved={handleValueMappingsSaved}
-              />
-            </div>
-          )}
+          {/* Task 6: the value-mapping worklist no longer renders here as its own block. Its
+              pick-lists moved INTO `ColumnMapStep` above, one worklist per row, under the mapping
+              it belongs to — see that component's own `unmappedByField` prop, fed `liveFindings`
+              (the last check's findings guarded by `worklistSignature`) a few lines up. Review
+              still reports the same values, read-only, from `ReconciliationSummary`. */}
 
           {step === 4 && awaitingSummary && !appliedSummary && (
             <ReconciliationSummary
