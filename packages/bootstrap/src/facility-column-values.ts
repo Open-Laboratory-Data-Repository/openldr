@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
 import { parse as parseCsvStream } from 'csv-parse';
+import { FacilityFileUnreadableError } from './facility-file-rows';
 
 export interface ColumnValues {
   /** Distinct, non-empty, in first-seen order, capped at `limit`. */
@@ -63,15 +64,28 @@ export async function readColumnValues(
     let headerIndex = -1;
     let first = true;
 
-    for await (const row of parser as AsyncIterable<string[]>) {
-      if (first) {
-        headers = row.map((h, i) => (i === 0 ? stripBom(h) : h));
-        headerIndex = headers.indexOf(header);
-        first = false;
-        continue;
+    try {
+      for await (const row of parser as AsyncIterable<string[]>) {
+        if (first) {
+          headers = row.map((h, i) => (i === 0 ? stripBom(h) : h));
+          headerIndex = headers.indexOf(header);
+          first = false;
+          continue;
+        }
+        if (headerIndex === -1) continue;
+        record(row[headerIndex]);
       }
-      if (headerIndex === -1) continue;
-      record(row[headerIndex]);
+    } catch (err) {
+      // Wrapping the error in FacilityFileUnreadableError lets the caller turn it into a 4xx.
+      // An unwrapped CsvError reaches the route and becomes a 500, leaving the operator confused
+      // about whether their file is broken or the network is down. The error class carries the
+      // line number so a route message can name their file.
+      const line = (err as { lines?: number }).lines;
+      throw new FacilityFileUnreadableError(
+        `this file could not be read as CSV${typeof line === 'number' ? ` at line ${line}` : ''}: `
+        + `${err instanceof Error ? err.message : String(err)}`,
+        typeof line === 'number' ? line : null,
+      );
     }
   } else {
     // Same line-by-line JSONL read as `readFileRows`: a line that is not JSON, or that is not an
