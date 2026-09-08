@@ -1060,6 +1060,12 @@ export const pt: EnShape = {
         keptAsExtraBadge: 'Mantido como dado extra',
         collisionTitle: 'Este mapeamento de colunas não pode ser usado',
         collision: '“{{a}}” e “{{b}}” reivindicam ambos {{field}} — apenas um pode.',
+        rowStatusNeutral: '{{header}}: ainda não verificado. Verificar este mapeamento',
+        rowStatusValid: '{{header}}: verificado, nada de errado. Verificar novamente',
+        rowStatusInvalid: '{{header}}: {{detail}}. Verificar novamente',
+        rowStatusStale: '{{header}}: alterado desde a última verificação. Verificar novamente',
+        rowStatusUnrecognised: '{{count}} valor(es) não reconhecido(s)',
+        rowStatusCollides: 'outra coluna já reivindica este campo',
       },
       valueMap: {
         saveAction: 'Guardar mapeamentos',

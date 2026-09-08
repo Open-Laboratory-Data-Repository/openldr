@@ -1123,6 +1123,15 @@ export const en = {
         keptAsExtraBadge: 'Kept as extra data',
         collisionTitle: 'This column map cannot be used',
         collision: '“{{a}}” and “{{b}}” both claim {{field}} — only one may.',
+        // Task 4: the per-row status icon's accessible name. It is always clickable, so every one
+        // of these ends the same way, "Check again" or "Check this mapping" — a re-check is never
+        // gated on the app agreeing that something changed.
+        rowStatusNeutral: '{{header}}: not checked yet. Check this mapping',
+        rowStatusValid: '{{header}}: checked, nothing wrong. Check again',
+        rowStatusInvalid: '{{header}}: {{detail}}. Check again',
+        rowStatusStale: '{{header}}: changed since the last check. Check again',
+        rowStatusUnrecognised: '{{count}} value(s) are not recognised',
+        rowStatusCollides: 'another column already claims this field',
       },
       // Task 8: the value-mapping panel — one row per unmapped raw value (level/status/country),
       // grouped by field, each with a ranked Select over that field's own value set. An unmapped

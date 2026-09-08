@@ -1060,6 +1060,12 @@ export const fr: EnShape = {
         keptAsExtraBadge: 'Conservé en donnée supplémentaire',
         collisionTitle: 'Ce mappage de colonnes est inutilisable',
         collision: '« {{a}} » et « {{b}} » revendiquent tous deux {{field}} — un seul le peut.',
+        rowStatusNeutral: '{{header}} : pas encore vérifié. Vérifier ce mappage',
+        rowStatusValid: '{{header}} : vérifié, rien à signaler. Vérifier à nouveau',
+        rowStatusInvalid: '{{header}} : {{detail}}. Vérifier à nouveau',
+        rowStatusStale: '{{header}} : modifié depuis la dernière vérification. Vérifier à nouveau',
+        rowStatusUnrecognised: '{{count}} valeur(s) non reconnue(s)',
+        rowStatusCollides: 'une autre colonne revendique déjà ce champ',
       },
       valueMap: {
         saveAction: 'Enregistrer les mappages',
