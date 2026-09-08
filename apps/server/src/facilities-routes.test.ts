@@ -4151,6 +4151,8 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
       offset: 1,
       limit: 1,
       total: 3,
+      skipped: 0,
+      skippedLines: [],
     });
   });
 
@@ -4176,6 +4178,10 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
       offset: 0,
       limit: 100,
       total: 2,
+      // Zero and empty for a clean file. They are not optional: the studio reads them to tell an
+      // operator that a line in THEIR FILE could not be read, rather than blaming the connection.
+      skipped: 0,
+      skippedLines: [],
     });
   });
 
@@ -4281,6 +4287,101 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toMatch(/no stored file/i);
+  });
+
+  // ⛔ `MANAGE`, NOT `VIEW`, and the reason is what this route actually hands back: the RAW BYTES of
+  // an uploaded file, cell for cell. Putting the file there needs `facilities.manage`; reading it
+  // back must need the same. Under `VIEW` a read-only actor could page an entire national register
+  // out of blob storage through a route meant to show an operator their own upload.
+  it('refuses a view-only actor, the same capability the upload needs', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const manager = await appWith(ctx);
+
+    const upload = await manager.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const viewer = await appWith(ctx, ['facilities.view']);
+    const res = await viewer.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // ⛔ A QUOTED COMMA is the ordinary case in a national register full of `Clinic, Lusaka` place
+  // names, and the naive split this used to do shifted every cell to the right of one.
+  it('keeps a quoted comma in its own cell', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,"Clinic, Lusaka"\n2,Beta\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rows).toEqual([['1', 'Clinic, Lusaka'], ['2', 'Beta']]);
+    expect(res.json().total).toBe(2);
+  });
+
+  // ⛔ THE FILE IS STORED WITHOUT BEING PARSED now, so a line that is not JSON reaches this route
+  // for the first time. It threw, the route answered 500 and the studio told the operator to check
+  // their network connection over a bad line in their own file. Skipped, counted, and the line
+  // numbers named.
+  it('skips an unreadable jsonl line and names it, instead of 500ing', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'jsonl', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('{"code":"1"}\nnot json at all\n{"code":"3"}\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rows).toEqual([['1'], ['3']]);
+    expect(res.json().total).toBe(2);
+    expect(res.json().skipped).toBe(1);
+    expect(res.json().skippedLines).toEqual([2]);
+  });
+
+  // ⛔ A STALE BLOB KEY. `getStream` throws for an object that is not there, and an unhandled throw
+  // is a 500 the studio reports as a network fault. The run row is the thing that is wrong, and the
+  // answer has to say so.
+  it('answers 409 rather than throwing when the stored file is gone', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+    await db.updateTable('facility_import_runs')
+      .set({ blob_key: 'facility-imports/gone' }).where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/stored file/i);
   });
 });
 

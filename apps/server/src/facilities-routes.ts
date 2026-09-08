@@ -18,7 +18,7 @@ import {
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
-  revalidateImportRun, readFileRows,
+  revalidateImportRun, readFileRows, FacilityFileUnreadableError,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
   type ValueMappingEntry,
 } from '@openldr/bootstrap';
@@ -2912,7 +2912,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // is what keeps this constant-memory. `readFileRows` still drains the whole stream to learn the
   // row count, so `scanned` is already the file's true total. There is no partial-scan case, and
   // `total` below is always a number, never null.
-  app.get('/api/facilities/import/runs/:id/rows', VIEW, async (req, reply) => {
+  //
+  // ⛔ `MANAGE`, NOT `VIEW`, and that is an ACCESS decision, unlike the revalidate route's note
+  // above. What this hands back is the RAW CONTENT of an uploaded file, cell for cell. Putting the
+  // file there takes `facilities.manage` (`UPLOAD` is `MANAGE` with a bigger `bodyLimit`), so
+  // reading it back takes the same: under `VIEW` a read-only actor could page an entire national
+  // register out of blob storage through a route that exists to show an operator their own upload.
+  app.get('/api/facilities/import/runs/:id/rows', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const q = req.query as { offset?: string; limit?: string };
     // NaN check instead of || operator: 0 is a valid value for both params.
@@ -2932,8 +2938,43 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: `import run ${id} has no stored file` };
     }
 
-    const stream = await ctx.blob.getStream(run.blobKey);
-    const window = await readFileRows(stream, { format: run.sourceFormat, offset, limit });
-    return { headers: window.headers, rows: window.rows, offset, limit, total: window.scanned };
+    // ⛔ GUARDED, because an unhandled throw here is a 500 and the studio reports a 500 on this
+    // route as a network fault. `getStream` throws for a key that points at nothing, which a run
+    // row can carry after its blob was reaped or a restore put the rows back without the objects.
+    // The run is what is wrong, so this answers with the run, in the same 409 shape the missing-key
+    // case two lines above already uses.
+    let stream: Awaited<ReturnType<typeof ctx.blob.getStream>>;
+    try {
+      stream = await ctx.blob.getStream(run.blobKey);
+    } catch (err) {
+      ctx.logger?.warn?.({ err, runId: id, blobKey: run.blobKey }, 'facility import rows: stored file unreadable');
+      reply.code(409);
+      return { error: `import run ${id} has a stored file that can no longer be read` };
+    }
+
+    try {
+      const window = await readFileRows(stream, { format: run.sourceFormat, offset, limit });
+      // ⛔ `skipped`/`skippedLines` TRAVEL WITH THE WINDOW. They are how the studio can say "this
+      // is your file, and it is line 412", instead of the generic read failure an operator reads
+      // as a connection problem. Zero and empty for a clean file, which is the ordinary case.
+      return {
+        headers: window.headers,
+        rows: window.rows,
+        offset,
+        limit,
+        total: window.scanned,
+        skipped: window.skipped,
+        skippedLines: window.skippedLines,
+      };
+    } catch (err) {
+      // Not a 500 either: the file cannot be read AS THE FORMAT THE UPLOAD DECLARED, which is a
+      // fact about the operator's own file. 422, and the message names the line when the parser
+      // knew it.
+      if (err instanceof FacilityFileUnreadableError) {
+        reply.code(422);
+        return { error: `import run ${id}: ${err.message}`, line: err.line };
+      }
+      throw err;
+    }
   });
 }
