@@ -1001,7 +1001,6 @@ export const pt: EnShape = {
       onConflictOverwrite: 'Substituí-las por este ficheiro',
       newRegisterNotice: 'Nenhuma linha existente usa ainda este registo nacional — aplicar irá criar uma nova identidade de registo.',
       // A2b Tarefa 8: a importação em segundo plano (carregar → validar → confirmar → escrever).
-      uploadAction: 'Carregar e validar',
       uploading: 'A carregar…',
       uploadProgress: 'A carregar… {{percent}}%',
       confirmAction: 'Confirmar importação',

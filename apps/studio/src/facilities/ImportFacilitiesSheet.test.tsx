@@ -2166,6 +2166,32 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByText(/review the summary below/i)).not.toBeInTheDocument();
   });
 
+  // ⛔ AN ABANDONED SOURCE STEP MUST HAVE A WAY OUT. Continue now mints a run holding the register's
+  // `active_key`, and a `stored` run is never polled, so `run` stays null and `runActive` false.
+  // Gated on `runActive` alone, the ⋯ menu offered the operator who changed their mind nothing at
+  // all, and the register stayed locked with no affordance on screen. Closing the sheet does not
+  // release it.
+  it('offers Cancel for a stored run, which is never polled', async () => {
+    mocked(api.cancelFacilityImportRun).mockResolvedValue({ runId: 'run-default', outcome: 'cancelled' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+      .toHaveAttribute('aria-current', 'step'));
+
+    clickMenuItem('Cancel this import');
+    await waitFor(() => expect(api.cancelFacilityImportRun).toHaveBeenCalledWith('run-default'));
+  });
+
+  it('does not offer Cancel before anything is stored', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Cancel this import' })).not.toBeInTheDocument();
+  });
+
   describe('the step shell', () => {
     it('starts on Source and does not show the mapping panel yet', async () => {
       mocked(api.suggestColumnMap).mockResolvedValue({ headers: [], columns: [] });

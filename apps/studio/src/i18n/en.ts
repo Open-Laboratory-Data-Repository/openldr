@@ -1034,7 +1034,6 @@ export const en = {
       // A2b Task 8: the background import — upload the file, a worker validates it, the operator
       // confirms, a worker writes it. The inline Preview/Apply copy above is untouched: that path is
       // still the small-register door and still bounded by the server's 2 000-row inline cap.
-      uploadAction: 'Upload and validate',
       uploading: 'Uploading…',
       uploadProgress: 'Uploading… {{percent}}%',
       confirmAction: 'Confirm import',

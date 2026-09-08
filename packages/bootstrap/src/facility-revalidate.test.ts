@@ -89,8 +89,8 @@ describe('revalidateImportRun', () => {
 
   // ⛔ Client-supplied identity fields are IGNORED, not rejected, and the run's OWN stored ones are
   // written back in their place. A CLI user sending a whole options file that happens to carry
-  // `nationalSystem` should get their column map applied, not a refusal — and must not be able to
-  // move the run onto another register or another file by sending a different value.
+  // `nationalSystem` should get their column map applied, not a refusal. They must also not be able
+  // to move the run onto another register or another file by sending a different value.
   it('ignores client-supplied identity fields and writes the run\'s own back', async () => {
     const requeue = vi.fn().mockResolvedValue(true);
     const run = {

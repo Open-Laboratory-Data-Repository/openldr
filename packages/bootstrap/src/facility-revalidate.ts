@@ -18,7 +18,7 @@ export interface RevalidateInput {
   runId: string;
   /** Operator-supplied options. Identity fields present here are IGNORED, not refused: a caller
    *  sending a whole stored options blob should get their column map applied, not an error. The
-   *  run's OWN identity values are written back in their place — see `IDENTITY_KEYS`. */
+   *  run's OWN identity values are written back in their place. See `IDENTITY_KEYS`. */
   options: Record<string, unknown>;
 }
 

@@ -879,6 +879,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  "what's the point of review if I cant make changes". */
   const runInFlight = runActive && run?.status !== 'awaiting_confirmation';
   const runFinished = !!run && RUN_TERMINAL_STATUSES.includes(run.status);
+  /** ⛔ A STORED RUN, WHICH `runActive` CANNOT SEE. Source's Continue mints a run holding the
+   *  register's `active_key`, and a `stored` run is deliberately never polled (see `pollRunId`), so
+   *  `run` stays null and every predicate built on `run.status` reads false. `runId !== null &&
+   *  run === null` is exactly that state, the same reading `handleRevalidate` already relies on.
+   *
+   *  It matters for ONE affordance: Cancel. An operator who clicks Continue and then changes their
+   *  mind had nothing on screen to take, and closing the sheet does not release the register. The
+   *  cancel route accepts a `stored` run (it is in `SUPERSEDABLE_RUN_STATES` and not terminal), so
+   *  the item can actually do something.
+   *
+   *  ⛔ NOT AN EXPIRY, A CLEANUP JOB, OR A BLOB REAPER. Those are a later slice. This is the missing
+   *  way out of a step the operator is standing on. */
+  const storedRunCancellable = runId !== null && run === null && cancelOutcome === null;
   /** The summary a background run has PARKED for the operator to decide about. Only ever set at
    *  `awaiting_confirmation`: an earlier run has nothing computed yet, and a later one has already
    *  been decided. */
@@ -1232,24 +1245,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   run in any of `SUPERSEDABLE_RUN_STATES` (packages/db) — leaving the sheet watching
                   a run it no longer owns — and answers 409 for one a worker is holding
                   (`RUNNING_RUN_STATES` = `validating`/`applying`), which would surface as a bare
-                  error over a file the operator just picked. `SUPERSEDABLE_RUN_STATES` has FOUR
-                  members: `queued`, `awaiting_confirmation`, `confirmed` and `previewed`. A run this
-                  sheet's Upload minted can only ever be one of the first three — `previewed` is
-                  written by `startPreview` alone, i.e. the INLINE preview route's own state (same
-                  reason `RUN_ACTIVE_STATUSES` above omits it) — but the fourth is named here anyway,
+                  error over a file the operator just picked. `SUPERSEDABLE_RUN_STATES` has FIVE
+                  members: `queued`, `stored`, `awaiting_confirmation`, `confirmed` and `previewed`.
+                  A run this sheet's Upload minted can only ever be one of the first four; `previewed`
+                  is written by `startPreview` alone, i.e. the INLINE preview route's own state (same
+                  reason `RUN_ACTIVE_STATUSES` above omits it). The fifth is named here anyway,
                   because an enumeration that silently drops a member of the constant it cites is how
-                  a later reader learns the wrong set. */}
-              {/* ⛔ NOT on Mapping, where it is already the visible button, and NOT on Source, where
-                  taking it would skip the mapping step the whole flow exists to make legible. The
-                  approved design says one visible action per step and EVERYTHING ELSE in this menu:
-                  an item that repeats the button is neither, and an operator reported the menu as
-                  contradicting the button it sat beside. It survives here only for Review, where a
-                  re-upload is a genuine alternative to confirming. */}
-              {!runId && step === 4 && (
-                <DropdownMenuItem disabled={uploadDisabled} onClick={() => void handleUpload()}>
-                  {uploading ? uploadLabel : t('facilities.import.uploadAction')}
-                </DropdownMenuItem>
-              )}
+                  a later reader learns the wrong set. That is not hypothetical: `stored` was added
+                  to the constant by this task and this comment still said FOUR. */}
+              {/* ⛔ NO UPLOAD ITEM HERE. It was gated on `!runId && step === 4`, which is dead: step
+                  4 is Review, Review requires `stepGate.hasReview`, and `hasReview` requires
+                  `runId !== null` (see its own note). `!runId` and `step === 4` can never both hold,
+                  so the item could not render. What it was for is covered by the three re-upload
+                  items below, each offered where it can actually change something. */}
               {/* ⛔ Deliberately NOT rendered: Confirm is Review's visible button, and this menu is
                   for everything else. It was here before the step shell existed and stayed by
                   oversight, so the same action appeared twice on the same screen. The re-uploads
@@ -1286,8 +1294,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 </DropdownMenuItem>
               )}
               {/* Offered only while the run is still live: the cancel route 409s on a terminal run,
-                  and an affordance that can only fail is worse than none. */}
-              {runActive && (
+                  and an affordance that can only fail is worse than none. `storedRunCancellable` is
+                  the OTHER live case, and the one `runActive` structurally cannot see: see its own
+                  docblock. */}
+              {(runActive || storedRunCancellable) && (
                 <DropdownMenuItem disabled={cancelling || confirming} onClick={() => void handleCancelRun()}>
                   {cancelling ? t('facilities.import.cancellingAction') : t('facilities.import.cancelRunAction')}
                 </DropdownMenuItem>

@@ -1001,7 +1001,6 @@ export const fr: EnShape = {
       onConflictOverwrite: 'Les remplacer par ce fichier',
       newRegisterNotice: 'Aucune ligne existante n’utilise encore ce registre national — l’application créera une nouvelle identité de registre.',
       // A2b Tâche 8 : l’import en arrière-plan (téléversement → validation → confirmation → écriture).
-      uploadAction: 'Téléverser et valider',
       uploading: 'Téléversement…',
       uploadProgress: 'Téléversement… {{percent}} %',
       confirmAction: 'Confirmer l’import',
