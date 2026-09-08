@@ -2354,7 +2354,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     // Task 2 (facility-import-data-stage, Slice A): OPT-IN, so every existing caller (the CLI, any
     // script) keeps upload-and-validate. Only the studio's Source step asks for a store, because
-    // only it has a Mapping step to supply the map later — a validate run now would refuse every
+    // only it has a Mapping step to supply the map later. A validate run now would refuse every
     // column as unrecognised, which is the screen this whole slice exists to retire.
     const storeOnly = ownFirstString(q, 'validate') === 'false';
 

@@ -41,7 +41,7 @@ export const ALL_RUN_STATES = [
   // operator has put it, and nothing but the confirm route writes it. See `APPLY_PHASE`.
   'queued', 'validating', 'awaiting_confirmation', 'confirmed', 'applying',
   // Task 2 (facility-import-data-stage, Slice A): the upload can store a file without validating it.
-  // A `stored` run has no column map yet and is not `queued` — `CLAIMABLE_RUN_STATES` is derived
+  // A `stored` run has no column map yet and is not `queued`. `CLAIMABLE_RUN_STATES` is derived
   // from `VALIDATE_PHASE.from`, exactly `'queued'`, so no worker will ever claim it. It sits here
   // the same way `queued` does: nothing has classified it, and nothing expires it, so it belongs
   // with the abandoned-queue-head states below (SUPERSEDABLE), not TERMINAL or RUNNING.
