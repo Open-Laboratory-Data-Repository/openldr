@@ -1066,6 +1066,7 @@ export const fr: EnShape = {
         rowStatusStale: '{{header}} : modifié depuis la dernière vérification. Vérifier à nouveau',
         rowStatusUnrecognised: '{{count}} valeur(s) non reconnue(s)',
         rowStatusCollides: 'une autre colonne revendique déjà ce champ',
+        rowStatusUnknown: 'quelque chose ne va pas',
       },
       valueMap: {
         saveAction: 'Enregistrer les mappages',

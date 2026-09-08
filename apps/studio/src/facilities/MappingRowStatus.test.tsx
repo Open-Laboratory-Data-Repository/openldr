@@ -36,4 +36,39 @@ describe('MappingRowStatus', () => {
     fireEvent.click(screen.getByRole('button', { name: /Type/ }));
     expect(onCheck).not.toHaveBeenCalled();
   });
+
+  // Finding 1: an aria-label is not a tooltip. A sighted mouse user sees nothing on hover
+  // unless something actually renders. Focus opens a Radix Tooltip synchronously (no timer),
+  // so this does not need to wait on delayDuration or simulate a real pointer hover.
+  it('shows a real tooltip, not just an aria-label', () => {
+    render(<MappingRowStatus state="valid" label="Type" busy={false} detail={null} onCheck={vi.fn()} />);
+    const button = screen.getByRole('button', { name: /Type/ });
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    fireEvent.focus(button);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(/checked, nothing wrong/i);
+  });
+
+  // Neutral and stale share a gray tick. The earlier test proves the aria-label differs; this
+  // proves the same is true of the thing a mouse user actually sees.
+  it('gives the tooltip different text for neutral and stale, same as the aria-label', () => {
+    const { unmount } = render(<MappingRowStatus state="neutral" label="Type" busy={false} detail={null} onCheck={vi.fn()} />);
+    fireEvent.focus(screen.getByRole('button', { name: /Type/ }));
+    const neutralTip = screen.getByRole('tooltip').textContent;
+    unmount();
+
+    render(<MappingRowStatus state="stale" label="Type" busy={false} detail={null} onCheck={vi.fn()} />);
+    fireEvent.focus(screen.getByRole('button', { name: /Type/ }));
+    const staleTip = screen.getByRole('tooltip').textContent;
+
+    expect(neutralTip).not.toEqual(staleTip);
+  });
+
+  // Finding 2: a null `detail` on an invalid row must not assert a cause it does not know.
+  // `collides` is one possible cause; unrecognised values from a per-field check are another.
+  // Naming the wrong one is worse than a vague message.
+  it('does not blame a collision when the cause of an invalid row is not known', () => {
+    render(<MappingRowStatus state="invalid" label="Type" busy={false} detail={null} onCheck={vi.fn()} />);
+    const label = screen.getByRole('button').getAttribute('aria-label');
+    expect(label).not.toMatch(/already claims this field/i);
+  });
 });

@@ -1066,6 +1066,7 @@ export const pt: EnShape = {
         rowStatusStale: '{{header}}: alterado desde a última verificação. Verificar novamente',
         rowStatusUnrecognised: '{{count}} valor(es) não reconhecido(s)',
         rowStatusCollides: 'outra coluna já reivindica este campo',
+        rowStatusUnknown: 'algo está errado',
       },
       valueMap: {
         saveAction: 'Guardar mapeamentos',
