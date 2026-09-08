@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream';
 import { describe, it, expect } from 'vitest';
-import { readColumnValues, type ColumnValues } from './facility-column-values';
+import { readColumnValues } from './facility-column-values';
 import { FacilityFileUnreadableError } from './facility-file-rows';
 
 const streamOf = (s: string) => Readable.from([Buffer.from(s, 'utf8')]);

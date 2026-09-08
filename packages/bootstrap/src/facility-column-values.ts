@@ -24,8 +24,16 @@ const stripBom = (s: string): string => (s.charCodeAt(0) === 0xfeff ? s.slice(1)
  *
  *  ⛔ THE WHOLE POINT IS THAT IT READS ONE COLUMN. Checking `Type` against its value set must not
  *  cost a parse of 3788 rows times 21 columns, which is what running the full validate would do and
- *  what the operator rejected. This still streams the file, so it is constant memory, but it returns
- *  a vocabulary rather than a table.
+ *  what the operator rejected. The file is streamed, never buffered, so no row and no part of the
+ *  file is ever held whole, and it returns a vocabulary rather than a table.
+ *
+ *  ⚠ IT IS NOT CONSTANT MEMORY, and an earlier version of this note claimed it was. `values` is
+ *  capped at `limit`; `seen` is not, because `distinct` has to keep counting past the cap. Memory is
+ *  therefore O(distinct values in the column). On a controlled field that is a handful of strings.
+ *  On a free-text column pointed at this by mistake it is one entry per distinct cell, which for
+ *  `name` on a national register is very nearly one per row. That is bounded by the upload size cap
+ *  and nothing tighter. If a real file ever makes it hurt, the fix is to stop counting exactly once
+ *  past some ceiling, not to drop the cap on `values`.
  *
  *  ⛔ THE SET IS CAPPED AND THE COUNT IS NOT. A column with 3000 distinct values is a column that was
  *  mapped wrongly, and the operator needs to be told that, not handed 3000 pick-lists. `distinct`
