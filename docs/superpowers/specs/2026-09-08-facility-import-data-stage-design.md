@@ -95,6 +95,27 @@ is the busywork this stage exists to remove.
 apart by the tooltip, which reads "not checked yet" against "changed since the last check". If they
 later need to differ at a glance, stale takes a different glyph and neutral keeps the tick.
 
+## Splitting the store from the validate
+
+Added 2026-09-08, after planning found the four stages could not work without it.
+
+The upload cannot simply move to Source. `uploadFacilityImport` carries the column map
+(`api.ts:1532`) because the validate that produces the summary has to parse with it, and the upload
+route mints the run at `queued` for a worker to validate at once. At Source no map exists yet, since
+mapping is stage 3.
+
+Re-validate cannot fill the gap. It refuses parse-changing options by design, and a column map is
+the most parse-changing option there is: it decides which rows become records at all. The confirm
+gate's whole argument rests on the summary having been computed by the parse that gets applied.
+
+So **Source stores, and does not validate.** It mints a run in a new `stored` status. The Data stage
+pages that stored file. Mapping decides. The first validate is asked for from Mapping, with the map
+in hand, through the route that already exists for re-validating.
+
+`stored` needs no migration. `status` is plain `text not null` with no CHECK constraint
+(`080_facility_import_runs.ts:32`). A stored run keeps `active_key` set, so a register still admits
+one live run at a time, which is the behaviour the unique index on `active_key` already gives.
+
 ## Server changes
 
 **A paged read over the stored blob.** Returns a window of rows plus the total. It must also be able
@@ -134,8 +155,9 @@ Neither is the rule weakening. Both are recorded here so a later reader does not
 
 Three. Each ships on its own and leaves the wizard working.
 
-**Slice A: the Data stage, read only.** The upload moves to Source, a paged-read route serves rows,
-the grid renders them, JSONL included. Answers "let me see my file before I map it", and every later
+**Slice A: the Data stage, read only.** Source stores the file and mints a `stored` run, a
+paged-read route serves its rows, the grid renders them, JSONL included, and the first validate moves
+to Mapping where the map is known. Answers "let me see my file before I map it", and every later
 slice needs it.
 
 **Slice B: the mapping step answers back.** The status icon and its four states, the 100% auto-green,

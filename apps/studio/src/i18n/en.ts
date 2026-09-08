@@ -908,6 +908,7 @@ export const en = {
       steps: {
         label: 'Import steps',
         source: 'Source',
+        data: 'Data',
         mapping: 'Mapping',
         review: 'Review',
       },
@@ -948,6 +949,16 @@ export const en = {
       completeReleaseHint: 'Only a complete release lets rows this file is silent about be checked against the registry as absent.',
       releaseVersionLabel: 'Release version',
       releaseVersionPlaceholder: 'optional',
+      // ⛔ NO LONGER BLAMES THE CONNECTION. It used to read "Check the connection and open this step
+      // again", which sent an operator to look at their network over a bad line in their own file.
+      // What actually went wrong is shown underneath, in the server's own words.
+      rowsFailed: 'This file could not be read.',
+      rowsEmpty: 'This file has no rows.',
+      rowsEmptySkipped_one: '{{count}} line in this file could not be read, and none of the file could be shown. Line {{lines}}.',
+      rowsEmptySkipped_other: '{{count}} lines in this file could not be read, and none of the file could be shown. Lines {{lines}}.',
+      rowsSkipped_one: '{{count}} line in this file could not be read and is not shown. Line {{lines}}.',
+      rowsSkipped_other: '{{count}} lines in this file could not be read and are not shown. Lines {{lines}}.',
+      rowsDesktopOnly: 'This step needs a wider screen. Open this import on a desktop to read the file. The other steps work here.',
       noRowsFound: 'No facility rows were found in this file. Confirm it is a compatible CSV export before trying again.',
       noRowsFoundSkipped: '{{skipped}} row(s) in this file were skipped for missing required fields, and none were imported. Confirm it is a compatible CSV export before trying again.',
       unknownColumnsTitle: 'Unrecognised columns',
@@ -1025,7 +1036,6 @@ export const en = {
       // A2b Task 8: the background import — upload the file, a worker validates it, the operator
       // confirms, a worker writes it. The inline Preview/Apply copy above is untouched: that path is
       // still the small-register door and still bounded by the server's 2 000-row inline cap.
-      uploadAction: 'Upload and validate',
       uploading: 'Uploading…',
       uploadProgress: 'Uploading… {{percent}}%',
       confirmAction: 'Confirm import',
@@ -1038,8 +1048,11 @@ export const en = {
       // which is exactly what that refusal asks for.
       reuploadUnknownColumnsAction: 'Check again keeping unrecognised columns',
       reuploadInvalidCoordinatesAction: 'Check again keeping rows with an invalid coordinate',
-        reuploadColumnMapAction: 'Check again with the corrected map',
-        reuploadWithMapAction: 'Check again with this map',
+      reuploadColumnMapAction: 'Check again with the corrected map',
+      // Task 6: Mapping's ordinary action. Not a re-upload label any more: Mapping is only ever
+      // reachable once Source has already stored the file, so this is the FIRST check, not a
+      // second send of it.
+      validateAllAction: 'Validate all',
       overrideNeedsReupload: 'This option changes how the file is read, so the check has to run again with it. Use the actions menu above. The file you already uploaded is reused, so nothing is sent twice, and the summary you review will be the one that gets applied.',
       overrideAppliedToRun: 'This validation already ran with that option on, so the summary below is what will be applied.',
       runLoading: 'Checking the import run…',

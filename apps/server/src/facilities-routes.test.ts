@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import { sql } from 'kysely';
@@ -1816,6 +1817,14 @@ function fakeBlobStore() {
       objects.set(key, Buffer.concat(chunks));
     },
     async delete(key: string) { objects.delete(key); },
+    // Task 3 (facility-import-data-stage, Slice A): the rows route reads the stored file back
+    // through `getStream`, never `get` (see that route's own comment). This fake needs a
+    // stream to hand back, not just the map lookup the earlier tests were enough for.
+    async getStream(key: string) {
+      const bytes = objects.get(key);
+      if (!bytes) throw new Error(`no such object: ${key}`);
+      return Readable.from(bytes);
+    },
     __objects: objects,
   };
 }
@@ -4057,6 +4066,323 @@ describe('POST /api/facilities/import/upload', () => {
     expect(secondRun.status).toBe('queued');
     expect(secondRun.nationalSystem).toBe(SYSTEM);
   });
+
+  // ── Task 2 (facility-import-data-stage, Slice A): the upload can store without validating ──────
+  //
+  // Today the upload always mints a `queued` run, which the worker's `claimNext(VALIDATE_PHASE.from,
+  // …)` picks up on its own. This route has no separate job-queue call for a validate; the run's own
+  // `status` column IS the queue head. `validate=false` is the new opt-in: it mints a `stored` run
+  // instead, which is not `queued` and so nothing will ever claim it. That is deliberate: a `stored`
+  // run has no column map yet, and a validate run now would refuse every column as unrecognised. This
+  // flag is OPT-IN so every existing caller (the CLI, any script) keeps upload-and-validate unchanged.
+  it('validate=false stores the file and leaves the run unqueued, so it waits for a map', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(202);
+    const runId = res.json().runId as string;
+
+    // The file was still stored, byte for byte: only the VALIDATE is skipped, not the transfer.
+    const stored = onlyStoredObject(ctx);
+    expect(stored.bytes.toString('utf8')).toBe(csv);
+
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    expect(run.status).toBe('stored');
+    // ⛔ NOT `queued`. `CLAIMABLE_RUN_STATES` (facility-import-run-states.ts) is derived from
+    // `VALIDATE_PHASE.from`, which is exactly `'queued'`. A `stored` run is not in it, so
+    // `claimNext` will never select this row. There is no separate job-store call to assert against
+    // for this route: unlike `facility-map-rebuild`/`registry-projection` (fakeImportCtx's
+    // `facilityJobs`), the validate phase has no `.enqueue` call to spy on, only this status column.
+    expect(run.blobKey).toBe(stored.key);
+  });
+
+  it('without the flag, an upload still reaches `queued` (the default path is unchanged)', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.status).toBe('queued');
+  });
+});
+
+// --- Task 3 (facility-import-data-stage, Slice A): GET .../runs/:id/rows ----------------------
+//
+// The studio needs to show the uploaded file as a table before any column map exists, so this
+// route pages straight off the stored blob through `readFileRows` (Task 1). `readFileRows` always
+// drains the stream, so `scanned` is already the file's true row count. There is no `complete`
+// flag to check, and `total` below is always a number.
+describe('GET /api/facilities/import/runs/:id/rows', () => {
+  it('pages rows out of the stored file, and reports the total', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n2,Beta\n3,Gamma\n', 'utf8'),
+    });
+    expect(upload.statusCode).toBe(202);
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET', url: `/api/facilities/import/runs/${runId}/rows?offset=1&limit=1`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      headers: ['code', 'name'],
+      rows: [['2', 'Beta']],
+      offset: 1,
+      limit: 1,
+      total: 3,
+      skipped: 0,
+      skippedLines: [],
+    });
+  });
+
+  it('defaults offset to 0 and limit to 100 when the query omits them', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n2,Beta\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      headers: ['code', 'name'],
+      rows: [['1', 'Alpha'], ['2', 'Beta']],
+      offset: 0,
+      limit: 100,
+      total: 2,
+      // Zero and empty for a clean file. They are not optional: the studio reads them to tell an
+      // operator that a line in THEIR FILE could not be read, rather than blaming the connection.
+      skipped: 0,
+      skippedLines: [],
+    });
+  });
+
+  it('clamps a malformed limit and a negative offset instead of throwing', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/rows?offset=-5&limit=not-a-number`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.offset).toBe(0);
+    expect(body.limit).toBe(100);
+  });
+
+  it('clamps a limit over the 500 ceiling', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/rows?limit=999999`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().limit).toBe(500);
+  });
+
+  it('clamps a limit of 0 to the floor of 1', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n2,Beta\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/rows?limit=0`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().limit).toBe(1);
+    expect(res.json().rows.length).toBe(1);
+  });
+
+  it('404s for a run that does not exist', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs/fir_missing/rows' });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  // Ruling 3: an inline-previewed run carries its CSV in the request body and stores nothing.
+  // That is the same case the confirm route already guards, four lines above the equivalent
+  // check this test exercises. That route answers 409 with an explanatory message rather than
+  // 404, so this route does the same for consistency: both are "this run has no stored file",
+  // not "this run is missing".
+  it('409s a run that has no stored file, same as confirm does', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+    await db.updateTable('facility_import_runs').set({ blob_key: null }).where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/no stored file/i);
+  });
+
+  // ⛔ `MANAGE`, NOT `VIEW`, and the reason is what this route actually hands back: the RAW BYTES of
+  // an uploaded file, cell for cell. Putting the file there needs `facilities.manage`; reading it
+  // back must need the same. Under `VIEW` a read-only actor could page an entire national register
+  // out of blob storage through a route meant to show an operator their own upload.
+  it('refuses a view-only actor, the same capability the upload needs', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const manager = await appWith(ctx);
+
+    const upload = await manager.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const viewer = await appWith(ctx, ['facilities.view']);
+    const res = await viewer.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // ⛔ A QUOTED COMMA is the ordinary case in a national register full of `Clinic, Lusaka` place
+  // names, and the naive split this used to do shifted every cell to the right of one.
+  it('keeps a quoted comma in its own cell', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,"Clinic, Lusaka"\n2,Beta\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rows).toEqual([['1', 'Clinic, Lusaka'], ['2', 'Beta']]);
+    expect(res.json().total).toBe(2);
+  });
+
+  // ⛔ THE FILE IS STORED WITHOUT BEING PARSED now, so a line that is not JSON reaches this route
+  // for the first time. It threw, the route answered 500 and the studio told the operator to check
+  // their network connection over a bad line in their own file. Skipped, counted, and the line
+  // numbers named.
+  it('skips an unreadable jsonl line and names it, instead of 500ing', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'jsonl', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('{"code":"1"}\nnot json at all\n{"code":"3"}\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rows).toEqual([['1'], ['3']]);
+    expect(res.json().total).toBe(2);
+    expect(res.json().skipped).toBe(1);
+    expect(res.json().skippedLines).toEqual([2]);
+  });
+
+  // ⛔ A STALE BLOB KEY. `getStream` throws for an object that is not there, and an unhandled throw
+  // is a 500 the studio reports as a network fault. The run row is the thing that is wrong, and the
+  // answer has to say so.
+  it('answers 409 rather than throwing when the stored file is gone', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+    await db.updateTable('facility_import_runs')
+      .set({ blob_key: 'facility-imports/gone' }).where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/rows` });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/stored file/i);
+  });
 });
 
 // --- A2b Task 5: POST /api/facilities/import/runs/:id/confirm ----------------------------------
@@ -6255,16 +6581,60 @@ describe('POST /api/facilities/import/runs/:id/revalidate', () => {
     expect(after.active_key).toBe(before.active_key);
   });
 
+  // ⛔ Task 6's open concern. Source's own upload stores a file without validating it
+  // (`validate=false`, tested above), so a national register's FIRST validate has to start from
+  // `stored`, not `awaiting_confirmation`. Before this fix the only way to check a `stored` run at
+  // all was a second upload of the whole file. One object stored, asserted below, is the proof that
+  // did not happen here.
+  it('validates a stored run for the first time, with its column map, without a second upload', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(upload.statusCode).toBe(202);
+    const runId = upload.json().runId as string;
+    const before = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    expect(before.status).toBe('stored');
+
+    const res = await app.inject({
+      method: 'POST', url: revalidateUrl(runId),
+      payload: { columnMap: { columns: { Name: 'name' } }, allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId, status: VALIDATE_PHASE.from });
+    const after = await db.selectFrom('facility_import_runs')
+      .select(['status', 'options', 'blob_key'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(after.status).toBe(VALIDATE_PHASE.from);
+    expect(after.options).toMatchObject({ columnMap: { columns: { Name: 'name' } }, allowUnknownColumns: true });
+    expect(after.blob_key).toBe(before.blobKey);
+    // Exactly the ONE object the store-only upload wrote. A second upload would have added a second.
+    onlyStoredObject(ctx);
+  });
+
   // ⛔ THE WIRE SHAPE, which `typecheck` green does not pin. A body may carry the map; it may not
-  // move the run onto another register.
-  it('ignores identity fields in the body rather than honouring them', async () => {
+  // move the run onto another register. The body's `nationalSystem` is deliberately a DIFFERENT
+  // register from the one the upload recorded, so honouring it would be visible rather than
+  // accidentally matching.
+  //
+  // ⛔ THE RUN'S OWN IDENTITY IS WRITTEN BACK, not merely dropped, and that is the fix for the
+  // whole-branch review's C1. `requeueForValidation` REPLACES the run's options; dropping these
+  // keys and writing nothing in their place erased `completeRelease` on every browser import, since
+  // Mapping's Validate all is now the only path to a FIRST validate. See `IDENTITY_KEYS`.
+  it('ignores identity fields in the body and writes the run\'s own back', async () => {
     const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const runId = await uploadAndPark(app, db);
 
     const res = await app.inject({
       method: 'POST', url: revalidateUrl(runId),
-      payload: { columnMap: { columns: { Name: 'name' } }, nationalSystem: 'urn:tz:hfr', sourceFormat: 'jsonl' },
+      payload: { columnMap: { columns: { Name: 'name' } }, nationalSystem: 'urn:zm:mfl', sourceFormat: 'jsonl' },
     });
 
     expect(res.statusCode).toBe(202);
@@ -6273,7 +6643,43 @@ describe('POST /api/facilities/import/runs/:id/revalidate', () => {
       .where('id', '=', runId).executeTakeFirstOrThrow();
     expect(after.national_system).toBe(SYSTEM);
     expect(after.source_format).toBe('csv');
-    expect(after.options).not.toHaveProperty('nationalSystem');
+    // The run's own register, never the body's.
+    expect((after.options as { nationalSystem?: string }).nationalSystem).toBe(SYSTEM);
+    // The upload recorded no `sourceFormat` in its options, so there is nothing to carry forward
+    // and the body's does not become one.
+    expect(after.options).not.toHaveProperty('sourceFormat');
+  });
+
+  // ⛔ C1, END TO END THROUGH THE ROUTE. A `stored` run whose upload declared a complete release
+  // keeps that declaration through its FIRST validate. Without it the worker reads `run.options`,
+  // finds no flag, and `importFacilities` reports `absent: null` meaning NOT EVALUATED, so a later
+  // `onAbsent: 'retire'` retires nothing. There is no column for the flag on the run row.
+  it('carries completeRelease from the upload into the first validate', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false', completeRelease: 'true' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'POST', url: revalidateUrl(runId),
+      payload: { columnMap: { columns: { Name: 'name' } } },
+    });
+
+    expect(res.statusCode).toBe(202);
+    const after = await db.selectFrom('facility_import_runs')
+      .select(['options']).where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(after.options).toMatchObject({
+      columnMap: { columns: { Name: 'name' } },
+      nationalSystem: SYSTEM,
+      completeRelease: true,
+    });
   });
 
   it('404s a run that does not exist', async () => {

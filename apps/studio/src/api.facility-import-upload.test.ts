@@ -47,4 +47,25 @@ describe('uploadFacilityImport', () => {
     const url = new URL(xhr.url, 'http://localhost');
     expect(url.searchParams.has('columnMap')).toBe(false);
   });
+
+  // Fix for the reachability regression: Source now stores the file ahead of Mapping. This flag
+  // is what makes that possible. See `ImportFacilitiesSheet.tsx`'s Source footer button.
+  it('sends validate=false only when the caller passes it explicitly', async () => {
+    const file = new File([new Uint8Array([1, 2, 3])], 'register.csv');
+    await uploadFacilityImport({ file, nationalSystem: 'zm-mfl', format: 'csv', validate: false });
+    const xhr = FakeXHR.instances[0];
+    const url = new URL(xhr.url, 'http://localhost');
+    expect(url.searchParams.get('validate')).toBe('false');
+  });
+
+  it('omits validate from the query string for an ordinary upload-and-validate call', async () => {
+    const file = new File([new Uint8Array([1, 2, 3])], 'register.csv');
+    // Neither omitting the field nor passing `true` explicitly should ever put `validate` on the
+    // wire: the server's own default is already upload-and-validate (see `facilities-routes.ts`'s
+    // `storeOnly`), and a caller that wants it can simply say nothing.
+    await uploadFacilityImport({ file, nationalSystem: 'zm-mfl', format: 'csv', validate: true });
+    const xhr = FakeXHR.instances[0];
+    const url = new URL(xhr.url, 'http://localhost');
+    expect(url.searchParams.has('validate')).toBe(false);
+  });
 });

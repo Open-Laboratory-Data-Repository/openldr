@@ -1450,6 +1450,10 @@ export const importFacilitiesCsv = (body: FacilityImportRequest): Promise<Facili
  *  for both kinds of run. */
 export type FacilityImportRunStatus =
   | 'queued' | 'validating' | 'awaiting_confirmation' | 'confirmed' | 'applying'
+  // Task 2 (facility-import-data-stage, Slice A): a `validate=false` upload mints a run here
+  // instead of `queued`, so it sits with no column map and no worker claim until something asks
+  // for a real check. See `uploadFacilityImport`'s own `validate` parameter.
+  | 'stored'
   | 'previewed' | 'applied' | 'failed' | 'cancelled';
 
 /** One `facility_import_runs` row as `GET /api/facilities/import/runs/:id` returns it — mirrors the
@@ -1536,12 +1540,20 @@ export function uploadFacilityImport(
      *  a real map to send — `ImportFacilitiesSheet.tsx`'s `hasColumnMapContent` decides that, the same
      *  guard `confirmOptionsFor` already applies to the inline door's own `columnMap`. */
     columnMap?: FacilityColumnMap;
+    /** Fix for Task 4's reachability regression: Source now stores the file ahead of Mapping, and
+     *  this is how it asks the upload not to validate yet. Sent as `validate=false` on the query
+     *  string only when the caller passes `false` explicitly. Every other caller (Mapping's own
+     *  upload, the CLI, any script) keeps upload-and-validate, which is the server's own default
+     *  (see `facilities-routes.ts`'s `storeOnly`). `true` is never sent: it is already the
+     *  server's default and a caller that wants it can simply omit the field. */
+    validate?: boolean;
   },
   onProgress?: (fraction: number | null) => void,
 ): Promise<{ runId: string }> {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams({ nationalSystem: p.nationalSystem, format: p.format });
     if (p.releaseVersion) params.set('releaseVersion', p.releaseVersion);
+    if (p.validate === false) params.set('validate', 'false');
     // Sent only when the operator actually declared one. The route reads this parameter
     // three-valued (`ownBoolean`, facilities-routes.ts) and leaves the key out of the run's stored
     // `options` entirely when it is absent — so an undeclared release records no declaration at all
@@ -1590,6 +1602,31 @@ export function uploadFacilityImport(
 
 export const getFacilityImportRun = (id: string): Promise<FacilityImportRunView> =>
   apiGet(`/api/facilities/import/runs/${encodeURIComponent(id)}`, 'get facility import run');
+
+/** One page of `GET /api/facilities/import/runs/:id/rows`: the stored file as a table, one
+ *  window at a time. The server always drains the file to answer, so `total` is the file's real
+ *  row count, never a partial-scan estimate. */
+export interface FacilityImportRows {
+  headers: string[];
+  rows: string[][];
+  offset: number;
+  limit: number;
+  total: number;
+  /** How many lines the server could not read at all, and so left out of `rows` and `total`. Zero
+   *  for a clean file, which is the ordinary case. Only a JSONL release can produce these: a line
+   *  that is not JSON, or one that is JSON but not an object. */
+  skipped?: number;
+  /** 1-based line numbers of those lines, capped by the server. Shorter than `skipped` when the
+   *  cap bit, which is why the count is sent separately. */
+  skippedLines?: number[];
+}
+
+export const readFacilityImportRows = (
+  runId: string,
+  p: { offset: number; limit: number },
+): Promise<FacilityImportRows> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(runId)}/rows?offset=${p.offset}&limit=${p.limit}`)
+    .then((r) => okJson<FacilityImportRows>(r, 'read import rows'));
 
 /** The operator's decision, as `POST /api/facilities/import/runs/:id/confirm` takes it.
  *

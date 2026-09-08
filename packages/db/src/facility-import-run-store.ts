@@ -50,12 +50,17 @@ export interface FacilityImportRunStore {
    *  clearing `active_key`. */
   finishApply(id: string, status: 'applied' | 'failed', opts: { summary?: unknown; error?: string | null }): Promise<void>;
 
-  /** Mint a run for an uploaded file. Sets blob_key and status 'queued'. Throws when another run
-   *  holds this national_system; the route supersedes a supersedable one before calling. */
+  /** Mint a run for an uploaded file. Sets blob_key and status 'queued', unless `input.status`
+   *  overrides it. Throws when another run holds this national_system; the route supersedes a
+   *  supersedable one before calling. */
   startUpload(input: {
     nationalSystem: string; sourceFormat: 'csv' | 'jsonl'; blobKey: string;
     fileHash: string; byteSize: number; releaseVersion?: string | null;
     options: unknown; requestedBy?: string | null;
+    // Task 2 (facility-import-data-stage, Slice A): defaults to `'queued'`, unchanged. The route
+    // passes `'stored'` for a `validate=false` upload, which has no column map yet and so is not
+    // ready for the worker's validate phase to claim.
+    status?: FacilityImportRunStatus;
   }): Promise<FacilityImportRun>;
   /** Guarded UPDATE claim, exactly like facility-job-store's: a second claimer updates 0 rows.
    *
@@ -377,7 +382,7 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
         // ⛔ No `declared_row_count`/`declared_deletion_count` and no `release_published_at` here:
         // unlike `startPreview`, nothing has READ the file yet, so the only honest value is the
         // column default (null). The worker fills them in once it has parsed the release header.
-        status: 'queued',
+        status: input.status ?? 'queued',
         options: JSON.stringify(input.options) as never,
         requested_by: input.requestedBy ?? null,
         active_key: input.nationalSystem,

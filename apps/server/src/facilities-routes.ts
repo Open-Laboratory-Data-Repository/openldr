@@ -18,7 +18,7 @@ import {
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
-  revalidateImportRun,
+  revalidateImportRun, readFileRows, FacilityFileUnreadableError,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
   type ValueMappingEntry,
 } from '@openldr/bootstrap';
@@ -2352,6 +2352,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     }
     const releaseVersion = ownFirstString(q, 'releaseVersion') ?? null;
 
+    // Task 2 (facility-import-data-stage, Slice A): OPT-IN, so every existing caller (the CLI, any
+    // script) keeps upload-and-validate. Only the studio's Source step asks for a store, because
+    // only it has a Mapping step to supply the map later. A validate run now would refuse every
+    // column as unrecognised, which is the screen this whole slice exists to retire.
+    const storeOnly = ownFirstString(q, 'validate') === 'false';
+
     // The file DECLARES ITSELF the whole of this register — the one claim that lets a row's absence
     // from it mean anything at all (`FacilityImportResult.absent`). It rides the query string like
     // every other upload parameter and is stored on the run below, where the worker's
@@ -2543,6 +2549,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         fileHash,
         byteSize,
         releaseVersion,
+        // Task 2: a `validate=false` upload mints a `stored` run rather than `queued`, so the
+        // worker's validate phase (`CLAIMABLE_RUN_STATES`, derived from `VALIDATE_PHASE.from`) never
+        // claims it. Omitted (not `undefined`-spread) for every other caller, so `startUpload` keeps
+        // its own default.
+        ...(storeOnly ? { status: 'stored' as const } : {}),
         // Only what the request actually chose. The import options proper (allowUnknownColumns,
         // onConflict, …) are the CONFIRM step's, not the upload's — recording a made-up set here
         // would put a decision in the durable record that no operator ever made.
@@ -2891,5 +2902,79 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const run = await importRuns.get(id);
     if (!run) { reply.code(404); return { error: 'not found' }; }
     return run;
+  });
+
+  // Task 3 (facility-import-data-stage, Slice A): the stored file as a table, one window at a
+  // time, so the studio can show the upload before any column map exists.
+  //
+  // ⛔ STREAMED, NEVER BUFFERED. `ctx.blob.get` would return the whole object; a 64MB national
+  // register through it would put the file in the API's memory on every page request. `getStream`
+  // is what keeps this constant-memory. `readFileRows` still drains the whole stream to learn the
+  // row count, so `scanned` is already the file's true total. There is no partial-scan case, and
+  // `total` below is always a number, never null.
+  //
+  // ⛔ `MANAGE`, NOT `VIEW`, and that is an ACCESS decision, unlike the revalidate route's note
+  // above. What this hands back is the RAW CONTENT of an uploaded file, cell for cell. Putting the
+  // file there takes `facilities.manage` (`UPLOAD` is `MANAGE` with a bigger `bodyLimit`), so
+  // reading it back takes the same: under `VIEW` a read-only actor could page an entire national
+  // register out of blob storage through a route that exists to show an operator their own upload.
+  app.get('/api/facilities/import/runs/:id/rows', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { offset?: string; limit?: string };
+    // NaN check instead of || operator: 0 is a valid value for both params.
+    // Number.parseInt returns NaN only on unparseable input, and that is when we use the default.
+    const parsedOffset = Number.parseInt(q.offset ?? '0', 10);
+    const offset = Math.max(0, Number.isNaN(parsedOffset) ? 0 : parsedOffset);
+    const parsedLimit = Number.parseInt(q.limit ?? '100', 10);
+    const limit = Math.min(500, Math.max(1, Number.isNaN(parsedLimit) ? 100 : parsedLimit));
+
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
+    // Same case the confirm and revalidate routes already guard: a run previewed inline carries
+    // its CSV in the request body and stores nothing. 409, not 404, matching those two routes.
+    // The run exists, it just has no file behind it to page through.
+    if (!run.blobKey) {
+      reply.code(409);
+      return { error: `import run ${id} has no stored file` };
+    }
+
+    // ⛔ GUARDED, because an unhandled throw here is a 500 and the studio reports a 500 on this
+    // route as a network fault. `getStream` throws for a key that points at nothing, which a run
+    // row can carry after its blob was reaped or a restore put the rows back without the objects.
+    // The run is what is wrong, so this answers with the run, in the same 409 shape the missing-key
+    // case two lines above already uses.
+    let stream: Awaited<ReturnType<typeof ctx.blob.getStream>>;
+    try {
+      stream = await ctx.blob.getStream(run.blobKey);
+    } catch (err) {
+      ctx.logger?.warn?.({ err, runId: id, blobKey: run.blobKey }, 'facility import rows: stored file unreadable');
+      reply.code(409);
+      return { error: `import run ${id} has a stored file that can no longer be read` };
+    }
+
+    try {
+      const window = await readFileRows(stream, { format: run.sourceFormat, offset, limit });
+      // ⛔ `skipped`/`skippedLines` TRAVEL WITH THE WINDOW. They are how the studio can say "this
+      // is your file, and it is line 412", instead of the generic read failure an operator reads
+      // as a connection problem. Zero and empty for a clean file, which is the ordinary case.
+      return {
+        headers: window.headers,
+        rows: window.rows,
+        offset,
+        limit,
+        total: window.scanned,
+        skipped: window.skipped,
+        skippedLines: window.skippedLines,
+      };
+    } catch (err) {
+      // Not a 500 either: the file cannot be read AS THE FORMAT THE UPLOAD DECLARED, which is a
+      // fact about the operator's own file. 422, and the message names the line when the parser
+      // knew it.
+      if (err instanceof FacilityFileUnreadableError) {
+        reply.code(422);
+        return { error: `import run ${id}: ${err.message}`, line: err.line };
+      }
+      throw err;
+    }
   });
 }

@@ -18,17 +18,24 @@ d'une correspondance de valeurs, depuis l'assistant d'importation ou la CLI `ope
 - Garder le fichier source ouvert quelque part pour comparer sa ligne d'en-têtes aux champs du
   contrat ci-dessous.
 
-## Les trois étapes de l'assistant d'importation
+## Les quatre étapes de l'assistant d'importation
 
-L'assistant d'importation a trois étapes, numérotées en haut : Source, Mappage et
+L'assistant d'importation a quatre étapes, numérotées en haut : Source, Données, Mappage et
 Vérification. Cliquez sur une étape dans cette bande pour passer de l'une à l'autre. Il n'y a pas
 de bouton Retour séparé.
 
 - **Source.** Choisissez le fichier et le registre auquel il appartient. Si cette installation n'a
   encore aucun registre, le bouton affiche ici « Enregistrer un registre » au lieu de « Continuer ».
+  Quitter Source envoie le fichier au serveur. Il est seulement stocké, pas encore vérifié, car
+  aucune correspondance de colonnes n'existe encore.
+- **Données.** Montre le fichier stocké sous forme de tableau, en lecture seule. Rien n'est
+  modifiable à cette étape. Le tableau est paginé depuis le serveur, une page à la fois, et
+  fonctionne de la même façon pour un fichier CSV et pour une version JSONL. Il n'y a pas de bouton
+  ici : passez à la suite en cliquant sur Mappage dans la bande d'étapes.
 - **Mappage.** Toutes les décisions se prennent ici : la correspondance de colonnes, les valeurs
   fixes, que faire des conflits, des absences et des suppressions, et quels mots du registre
-  correspondent au vocabulaire.
+  correspondent au vocabulaire. Son action, Tout valider, lance la première vérification sur le
+  fichier déjà stocké à l'étape Source. Elle ne renvoie pas le fichier une deuxième fois.
 - **Vérification.** Rapporte ce que la vérification a trouvé et propose une seule action,
   Appliquer. Rien n'y est modifiable.
 
@@ -39,9 +46,9 @@ puis avancez de nouveau. Cet aller-retour est voulu. Une liste nationale d'étab
 trop de choses pour qu'il vaille la peine d'échanger l'exactitude contre la vitesse.
 
 Au premier passage, le Mappage n'affiche aucune liste de valeurs non reconnues, car rien n'a encore
-lu le fichier. Continuez, laissez la vérification s'exécuter, et la liste vous attend à votre
-retour. Il en va de même des options qui laissent passer un problème : aucune ne vous est proposée
-tant que rien ne vous a dit que le problème existe.
+lu le fichier. Cliquez sur Tout valider, laissez la vérification s'exécuter, et la liste vous
+attend à votre retour. Il en va de même des options qui laissent passer un problème : aucune ne
+vous est proposée tant que rien ne vous a dit que le problème existe.
 
 **Changer quoi que ce soit au Mappage supprime la dernière Vérification.** C'est délibéré. Un
 résumé qui ne correspond plus à ce que vous allez importer est pire que pas de résumé : l'assistant
@@ -70,18 +77,18 @@ dans le vocabulaire : il attend donc votre décision, et c'est bien le but.
 **Une correspondance que vous avez faite à la main l'emporte toujours.** Rien de décidé
 automatiquement ne passe outre une décision que vous avez prise.
 
-Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont les trois
-options de nouvelle vérification, Annuler et Fermer, reste dans le menu `⋯` de la page. Le seul autre
-bouton visible est **Enregistrer les mappages**, sur le panneau de mappage des valeurs. Il
-enregistre les décisions que vous avez prises et vous dit combien il en a enregistré.
+Source, Mappage et Vérification affichent chacune un seul bouton, celui qui fait avancer. Données
+n'en affiche aucun : cette étape sert à regarder le fichier, pas à agir dessus. Toute autre action,
+dont les trois options de nouvelle vérification, Annuler et Fermer, reste dans le menu `⋯` de la
+page. Le seul autre bouton visible est **Enregistrer les mappages**, sur le panneau de mappage des
+valeurs. Il enregistre les décisions que vous avez prises et vous dit combien il en a enregistré.
 
 Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
-étape antérieure pendant qu'une vérification en arrière-plan est en cours. Après un import de
-fichier à l'étape Mappage, l'assistant vous amène tout seul à Vérification dès que l'envoi
-démarre, avant même que le contrôle ne se termine. Si la vérification trouve un problème dans la
-correspondance de colonnes,
-l'assistant vous ramène à Mappage et affiche les erreurs à cet endroit, pour que vous
-puissiez corriger la correspondance sur place.
+étape antérieure pendant qu'une vérification en arrière-plan est en cours. Cliquer sur Tout valider
+au Mappage vous amène tout seul à Vérification dès que la vérification démarre, avant même qu'elle
+ne se termine. Si la vérification trouve un problème dans la correspondance de colonnes,
+l'assistant vous ramène à Mappage et affiche les erreurs à cet endroit, pour que vous puissiez
+corriger la correspondance sur place.
 
 ## Ce qu'est une correspondance de colonnes
 
@@ -141,10 +148,11 @@ Vous avez rarement besoin de construire une correspondance de colonnes à la mai
 la CLI peuvent tous deux examiner les en-têtes d'un fichier et proposer une correspondance hors
 ligne, sans aller-retour serveur :
 
-- **Dans l'assistant :** ouvrez **Établissements**, choisissez **Importer**, et sélectionnez le
-  fichier. L'étape de correspondance des colonnes s'ouvre avec une suggestion déjà remplie. Une
-  coche à côté d'une ligne signifie que la suggestion est sûre, et un badge **À vérifier** signifie
-  qu'elle doit être revue avant de continuer.
+- **Dans l'assistant :** ouvrez **Établissements**, choisissez **Importer**, sélectionnez le fichier
+  et choisissez le registre. Quittez l'étape Source pour envoyer et stocker le fichier. L'étape
+  Données affiche le fichier sous forme de tableau en lecture seule. L'étape Mappage s'ouvre ensuite
+  avec une suggestion déjà remplie. Une coche à côté d'une ligne signifie que la suggestion est sûre,
+  et un badge **À vérifier** signifie qu'elle doit être revue avant de continuer.
 - **Depuis la CLI :** exécutez `openldr facilities suggest-map <path>`. Elle affiche la même
   correspondance suggérée sous forme de tableau, signale toute collision que la suggestion
   provoquerait elle-même, et indique comment réinjecter le résultat :

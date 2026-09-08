@@ -1699,6 +1699,10 @@ export type {
   // `samples` bucket (the route and the CLI both render them) instead of re-declaring its shape.
   FacilitySample, FacilityChangeSample, FacilityImportBlockedReason,
 } from './facility-import';
+export {
+  readFileRows, FacilityFileUnreadableError,
+  type FileRowWindow, type ReadFileRowsOptions,
+} from './facility-file-rows';
 // FAC-P1-05: the source→canonical controlled-field layer `importFacilities` now runs over every
 // parsed record. Exported because `FacilityImportResult.unmapped`/`notValidated` are keyed/typed by
 // `ControlledField`, so the route and the CLI cannot name those types without it — and because an
