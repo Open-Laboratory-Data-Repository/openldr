@@ -989,6 +989,7 @@ export const pt: EnShape = {
       policyFoundInvalid: 'A última verificação encontrou {{count}} linha(s) com coordenadas inutilizáveis.',
       unmappedField: '{{field}}: {{count}} valor(es) que não reconhecemos, incluindo {{values}}.',
       unmappedFixOnMapping: 'Mapeie-os no passo Mapeamento e verifique de novo. O que ficar por mapear é importado tal como está escrito.',
+      unmappedGoToMapping: 'Mapear estes valores',
       unmappedTitle: 'Valores sem mapeamento canónico',
       unmappedMessage: '{{count}} valor(es) de {{field}} não têm mapeamento canónico e foram mantidos como introduzidos: {{values}}',
       notValidatedMessage: 'Não verificado face a um conjunto de valores canónico nesta instalação: {{fields}}.',

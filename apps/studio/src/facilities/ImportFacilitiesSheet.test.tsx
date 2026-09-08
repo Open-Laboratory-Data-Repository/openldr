@@ -976,6 +976,31 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByLabelText('District Clinic')).toHaveTextContent('Not mapped');
   });
 
+  // The operator's report: "only after I press validate all, it moves to review, then I click back
+  // to mapping". Moving to Review is deliberate, it is where the check's progress is watched. What
+  // was missing is a way back to the work. Review told them where to go and gave them nothing to
+  // press, so they had to find the step strip themselves.
+  //
+  // Sending them back automatically was considered and rejected, by the operator, on the grounds
+  // that an unmapped value is a WARNING and never blocks: importing with values left unmapped is a
+  // supported outcome, so a sheet that bounced them to Mapping on every check would turn that
+  // warning into a soft block they could never clear.
+  it('offers a way back to Mapping from the values Review reports, rather than only naming the step', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await reviewWithSummary(baseResult({
+      parsed: 3, create: 3,
+      unmapped: { level: ['Zonal Hospital', 'District Clinic'], status: [], country: [] },
+    }));
+
+    fireEvent.click(await screen.findByRole('button', { name: /map these values/i }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
+      .toHaveAttribute('aria-current', 'step'));
+    // And the worklist is there waiting, which is the point of going.
+    expect(await screen.findByLabelText('Zonal Hospital')).toBeInTheDocument();
+  });
+
   it('CT-3: renders a JSONL release\'s declared/parsed count mismatch', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 

@@ -132,6 +132,18 @@ export interface ReconciliationSummaryProps {
   /** Whether an apply this operator can still influence exists to set a conflict policy FOR — see
    *  the call sites for what answers it on each path. */
   showConflictChoice: boolean;
+  /** Take the operator to Mapping, where the value worklist is.
+   *
+   *  ⛔ REVIEW STILL REPORTS AND MAPPING STILL DECIDES. This does not move the pick-lists here; it
+   *  gives the sentence that names the step something to press. Before it, Review said "map them on
+   *  the Mapping step" and left the operator to find the step strip, which they reported as a round
+   *  trip they had to work out for themselves.
+   *
+   *  ⛔ AND IT IS A BUTTON, NOT AN AUTOMATIC RETURN. Sending them back on its own was considered and
+   *  rejected: an unmapped value is a warning that never blocks, so importing with values left
+   *  unmapped is a supported outcome. A sheet that bounced the operator to Mapping after every check
+   *  would turn that warning into a soft block they could never clear. */
+  onGoToMapping?: () => void;
   /** The run's own parse-override state. */
   reupload: ReuploadOverrides | null;
 }
@@ -152,6 +164,7 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
 
   const willWriteCount = willWrite(result);
   const unknownColumnsOverridden = props.unknownColumnsOverridden;
+  const { onGoToMapping } = props;
   // F2 fix: `parsed === 0` must read as an unsuccessful outcome whether or not unknown columns were
   // ever involved — EXCEPT while the file is still just sitting blocked on an unopted-in unknown-
   // columns notice (unknownColumns present, the override not in force): that case already has its
@@ -395,6 +408,14 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
                 </p>
               ))}
               <p className="mt-1">{t('facilities.import.unmappedFixOnMapping')}</p>
+              {onGoToMapping && (
+                <Button
+                  size="sm" className="mt-2 h-7 text-xs"
+                  onClick={onGoToMapping}
+                >
+                  {t('facilities.import.unmappedGoToMapping')}
+                </Button>
+              )}
             </div>
           )}
           {/* Informational, not a warning box: these fields simply have no seeded value set

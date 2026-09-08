@@ -91,10 +91,19 @@ export function DataGridStep({ runId }: DataGridStepProps): JSX.Element {
     return <StripedEmpty className="min-h-[16rem] flex-1">{t('facilities.import.rowsEmpty')}</StripedEmpty>;
   }
 
+  // ⛔ THE TABLE BLEEDS, THE NOTICE DOES NOT. AGENTS.md §5: row rules read edge to edge while text
+  // stays inset. The table's own cells carry their padding, so no margin at all puts the rules on
+  // the pane edges without moving a single value.
+  //
+  // ⛔ NO `-mx-6` HERE, and that is deliberate. The sheet's scrolling body carries NO horizontal
+  // padding of its own: every child adds its own `mx-6`. A negative margin would therefore push the
+  // table 24px OUTSIDE the pane rather than onto its edge, and §5's own note warns that an
+  // `overflow-auto` ancestor clips a bleeding element anyway. This body is `overflow-y-auto`.
+  // The skipped-line notice keeps its inset, because it is prose and prose stays with the copy.
   return (
-    <div className="mx-6 mt-4 flex min-h-0 flex-1 flex-col">
+    <div className="mt-4 flex min-h-0 flex-1 flex-col">
       {(data.skipped ?? 0) > 0 && (
-        <div className="mb-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
+        <div className="mx-6 mb-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
           {t('facilities.import.rowsSkipped', { count: data.skipped, lines: skippedLines })}
         </div>
       )}
