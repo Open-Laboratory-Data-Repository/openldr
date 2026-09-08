@@ -6619,15 +6619,22 @@ describe('POST /api/facilities/import/runs/:id/revalidate', () => {
   });
 
   // ⛔ THE WIRE SHAPE, which `typecheck` green does not pin. A body may carry the map; it may not
-  // move the run onto another register.
-  it('ignores identity fields in the body rather than honouring them', async () => {
+  // move the run onto another register. The body's `nationalSystem` is deliberately a DIFFERENT
+  // register from the one the upload recorded, so honouring it would be visible rather than
+  // accidentally matching.
+  //
+  // ⛔ THE RUN'S OWN IDENTITY IS WRITTEN BACK, not merely dropped, and that is the fix for the
+  // whole-branch review's C1. `requeueForValidation` REPLACES the run's options; dropping these
+  // keys and writing nothing in their place erased `completeRelease` on every browser import, since
+  // Mapping's Validate all is now the only path to a FIRST validate. See `IDENTITY_KEYS`.
+  it('ignores identity fields in the body and writes the run\'s own back', async () => {
     const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const runId = await uploadAndPark(app, db);
 
     const res = await app.inject({
       method: 'POST', url: revalidateUrl(runId),
-      payload: { columnMap: { columns: { Name: 'name' } }, nationalSystem: 'urn:tz:hfr', sourceFormat: 'jsonl' },
+      payload: { columnMap: { columns: { Name: 'name' } }, nationalSystem: 'urn:zm:mfl', sourceFormat: 'jsonl' },
     });
 
     expect(res.statusCode).toBe(202);
@@ -6636,7 +6643,43 @@ describe('POST /api/facilities/import/runs/:id/revalidate', () => {
       .where('id', '=', runId).executeTakeFirstOrThrow();
     expect(after.national_system).toBe(SYSTEM);
     expect(after.source_format).toBe('csv');
-    expect(after.options).not.toHaveProperty('nationalSystem');
+    // The run's own register, never the body's.
+    expect((after.options as { nationalSystem?: string }).nationalSystem).toBe(SYSTEM);
+    // The upload recorded no `sourceFormat` in its options, so there is nothing to carry forward
+    // and the body's does not become one.
+    expect(after.options).not.toHaveProperty('sourceFormat');
+  });
+
+  // ⛔ C1, END TO END THROUGH THE ROUTE. A `stored` run whose upload declared a complete release
+  // keeps that declaration through its FIRST validate. Without it the worker reads `run.options`,
+  // finds no flag, and `importFacilities` reports `absent: null` meaning NOT EVALUATED, so a later
+  // `onAbsent: 'retire'` retires nothing. There is no column for the flag on the run row.
+  it('carries completeRelease from the upload into the first validate', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false', completeRelease: 'true' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'POST', url: revalidateUrl(runId),
+      payload: { columnMap: { columns: { Name: 'name' } } },
+    });
+
+    expect(res.statusCode).toBe(202);
+    const after = await db.selectFrom('facility_import_runs')
+      .select(['options']).where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(after.options).toMatchObject({
+      columnMap: { columns: { Name: 'name' } },
+      nationalSystem: SYSTEM,
+      completeRelease: true,
+    });
   });
 
   it('404s a run that does not exist', async () => {
