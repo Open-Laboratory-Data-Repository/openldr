@@ -16,15 +16,21 @@ own, using a column map and a value map, from either the import wizard or the `o
   register must always be named the same way.
 - Have the source file open somewhere so you can compare its header row to the contract fields below.
 
-## The three steps of the import wizard
+## The four stages of the import wizard
 
-The import wizard has three steps, numbered at the top: Source, Mapping, and Review. Click a
-step in that strip to move between them. There is no separate Back button.
+The import wizard has four stages, numbered at the top: Source, Data, Mapping, and Review. Click a
+stage in that strip to move between them. There is no separate Back button.
 
 - **Source.** Pick the file and the register it belongs to. If this install has no register yet,
-  the button here reads Register a source instead of Continue.
+  the button here reads Register a source instead of Continue. Leaving Source uploads the file.
+  The file is stored, not checked, because no column map exists yet.
+- **Data.** Shows the stored file as a table, read only. Nothing on this stage can be edited. The
+  table is paged from the server, one page at a time, and it works the same way for a CSV file and
+  a JSONL release. There is no button here: move on by clicking Mapping in the step strip.
 - **Mapping.** Every decision lives here: the column map, fixed values, what to do with conflicts,
-  absences and deletions, and which of the register's own words map onto the vocabulary.
+  absences and deletions, and which of the register's own words map onto the vocabulary. Its
+  action, Validate all, runs the first check against the file already stored at Source. It does
+  not send the file a second time.
 - **Review.** Reports what the check found and offers one action, Apply. Nothing on it is editable.
 
 ### Mapping decides, Review reports
@@ -34,9 +40,9 @@ forward again. That round trip is deliberate. A national facility list is tied t
 to be worth trading correctness for speed.
 
 The first time through, Mapping shows no list of unrecognised values, because nothing has read the
-file yet. Continue, let the check run, and the list is waiting for you when you come back. The same
-is true of the options that wave a problem through: you are not offered a way past unrecognised
-columns until something has told you there are any.
+file yet. Click Validate all, let the check run, and the list is waiting for you when you come
+back. The same is true of the options that wave a problem through: you are not offered a way past
+unrecognised columns until something has told you there are any.
 
 **Changing anything on Mapping discards the last Review.** That is on purpose. A summary that no
 longer matches what you are about to import is worse than no summary, so the wizard takes it away
@@ -63,16 +69,17 @@ the vocabulary, so it waits for your decision, which is the point.
 **A mapping you made by hand always wins.** Nothing decided automatically overrules a decision you
 made, so a register that deliberately maps a word somewhere unusual keeps that.
 
-Each step shows one button, for the action that moves you forward. Every other action, including
-the three check-again options, Cancel, and Close, stays in the page's `⋯` menu. The one other
-visible button is **Save mappings**, on the value-mapping panel. It writes the value decisions you
-have made, and tells you how many it wrote.
+Source, Mapping and Review each show one button, for the action that moves you forward. Data shows
+none: it is for looking at the file, not for acting on it. Every other action, including the three
+check-again options, Cancel, and Close, stays in the page's `⋯` menu. The one other visible button
+is **Save mappings**, on the value-mapping panel. It writes the value decisions you have made, and
+tells you how many it wrote.
 
-You cannot click a step you have not reached yet, and you cannot go back to an earlier step while
-a background check is running. After you upload a file on Mapping, the wizard moves you to Review
-on its own as soon as the upload starts, before the check itself finishes. If the check finds a
-problem with the column map, the wizard
-sends you back to Mapping and shows the errors there, so you can fix the map in place.
+You cannot click a stage you have not reached yet, and you cannot go back to an earlier stage
+while a background check is running. Clicking Validate all on Mapping moves you to Review on its
+own as soon as the check starts, before the check itself finishes. If the check finds a problem
+with the column map, the wizard sends you back to Mapping and shows the errors there, so you can
+fix the map in place.
 
 ## What a column map is
 

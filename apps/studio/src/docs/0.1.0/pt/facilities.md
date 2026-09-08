@@ -18,16 +18,23 @@ do assistente de importação ou da CLI `openldr`.
 - Mantenha o ficheiro de origem aberto algures para comparar a sua linha de cabeçalhos com os
   campos do contrato abaixo.
 
-## Os três passos do assistente de importação
+## Os quatro passos do assistente de importação
 
-O assistente de importação tem três passos, numerados no topo: Origem, Mapeamento e Revisão.
-Clique num passo dessa faixa para se mover entre eles. Não há um botão Voltar separado.
+O assistente de importação tem quatro passos, numerados no topo: Origem, Dados, Mapeamento e
+Revisão. Clique num passo dessa faixa para se mover entre eles. Não há um botão Voltar separado.
 
 - **Origem.** Escolha o ficheiro e o registo a que pertence. Se esta instalação ainda não tiver
-  nenhum registo, o botão aqui mostra "Registar uma fonte" em vez de "Continuar".
+  nenhum registo, o botão aqui mostra "Registar uma fonte" em vez de "Continuar". Sair de Origem
+  envia o ficheiro para o servidor. O ficheiro fica guardado, ainda não verificado, porque ainda
+  não existe nenhum mapeamento de colunas.
+- **Dados.** Mostra o ficheiro guardado como uma tabela, só de leitura. Nada é editável neste
+  passo. A tabela é paginada a partir do servidor, uma página de cada vez, e funciona da mesma
+  forma para um ficheiro CSV e para uma versão JSONL. Não há botão aqui: avance clicando em
+  Mapeamento na faixa de passos.
 - **Mapeamento.** Todas as decisões vivem aqui: o mapeamento de colunas, os valores fixos, o que
   fazer com conflitos, ausências e remoções, e que palavras do próprio registo correspondem ao
-  vocabulário.
+  vocabulário. A sua ação, Validar tudo, executa a primeira verificação sobre o ficheiro já
+  guardado no passo Origem. Não envia o ficheiro uma segunda vez.
 - **Revisão.** Relata o que a verificação encontrou e oferece uma única ação, Aplicar. Nada nela é
   editável.
 
@@ -38,9 +45,9 @@ ida e volta é deliberada. Uma lista nacional de estabelecimentos está ligada a
 valer a pena trocar correção por rapidez.
 
 Na primeira passagem, o Mapeamento não mostra nenhuma lista de valores não reconhecidos, porque
-ainda nada leu o ficheiro. Continue, deixe a verificação correr, e a lista está à sua espera quando
-voltar. O mesmo vale para as opções que deixam passar um problema: nenhuma lhe é oferecida enquanto
-nada lhe disser que o problema existe.
+ainda nada leu o ficheiro. Clique em Validar tudo, deixe a verificação correr, e a lista está à sua
+espera quando voltar. O mesmo vale para as opções que deixam passar um problema: nenhuma lhe é
+oferecida enquanto nada lhe disser que o problema existe.
 
 **Mudar seja o que for no Mapeamento descarta a última Revisão.** É de propósito. Um resumo que já
 não corresponde ao que está prestes a importar é pior do que resumo nenhum, por isso o assistente
@@ -68,16 +75,16 @@ nada no vocabulário, por isso espera pela sua decisão, que é precisamente o o
 **Um mapeamento que fez à mão ganha sempre.** Nada decidido automaticamente passa por cima de uma
 decisão que tomou.
 
-Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
-as três opções de verificar de novo, Cancelar e Fechar, fica no menu `⋯` da página. O único outro
-botão visível é **Guardar mapeamentos**, no painel de mapeamento de valores. Guarda as decisões que
-tomou e diz-lhe quantas guardou.
+Origem, Mapeamento e Revisão mostram cada uma um único botão, o que avança para o passo seguinte.
+Dados não mostra nenhum: este passo serve para olhar para o ficheiro, não para agir sobre ele.
+Qualquer outra ação, incluindo as três opções de verificar de novo, Cancelar e Fechar, fica no menu
+`⋯` da página. O único outro botão visível é **Guardar mapeamentos**, no painel de mapeamento de
+valores. Guarda as decisões que tomou e diz-lhe quantas guardou.
 
 Não pode clicar num passo que ainda não alcançou, nem voltar a um passo anterior enquanto uma
-verificação em segundo plano está a decorrer. Depois de carregar um ficheiro no Mapeamento, o
-assistente leva-o à Revisão sozinho assim que o carregamento começa, antes de a verificação
-terminar. Se a verificação encontrar um problema no mapeamento de colunas, o assistente devolve-o
-ao Mapeamento e mostra os erros ali, para
+verificação em segundo plano está a decorrer. Clicar em Validar tudo no Mapeamento leva-o à Revisão
+sozinho assim que a verificação começa, antes de ela terminar. Se a verificação encontrar um
+problema no mapeamento de colunas, o assistente devolve-o ao Mapeamento e mostra os erros ali, para
 que possa corrigir o mapeamento no mesmo sítio.
 
 ## O que é um mapeamento de colunas
