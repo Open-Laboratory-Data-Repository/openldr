@@ -72,8 +72,13 @@ export function VersionHistorySheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="flex w-full flex-col sm:max-w-xl">
-          <SheetHeader>
+        {/* p-0 and gap-0, then each section pads itself. AGENTS.md section 5: rules read
+            edge-to-edge while text stays inset. The table's header underline, row dividers and
+            TablePagination's top border are those rules, and SheetContent's default p-6 stopped
+            every one of them short of the pane. Cell padding (px-4) keeps the text inset.
+            Same shape as workflows/components/panels/run-history-drawer.tsx. */}
+        <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
+          <SheetHeader className="border-b border-border px-4 py-3">
             <SheetTitle>Version history</SheetTitle>
             <SheetDescription>
               Every published version of this form, newest first. Restoring one replaces the draft
@@ -82,11 +87,11 @@ export function VersionHistorySheet({
           </SheetHeader>
 
           {loading ? (
-            <LoadingState />
+            <LoadingState className="min-h-[16rem]" />
           ) : error ? (
             // A failed fetch is not the same claim as "never published". Show the error, not
             // StripedEmpty, so a transient failure does not read as a permanent fact about the form.
-            <p className="text-sm text-destructive">{error}</p>
+            <p className="p-4 text-sm text-destructive">{error}</p>
           ) : total === 0 ? (
             // Stripes imply emptiness, so they never show while loading. An empty table's header
             // forces intrinsic width and scrolls sideways on a phone, so render no table at all.
