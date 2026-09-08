@@ -4491,6 +4491,91 @@ describe('GET /api/facilities/import/runs/:id/columns/:header/values', () => {
       header: 'not_a_column', values: [], distinct: 0, truncated: false,
     });
   });
+
+  it('clamps a limit over the 1000 ceiling', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const csv = Array.from({ length: 1100 }, (_, i) => `${i},type${i}`).join('\n');
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(`code,type\n${csv}\n`, 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values?limit=5000`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().distinct).toBe(1100);
+    expect(res.json().values.length).toBe(1000);
+    expect(res.json().truncated).toBe(true);
+  });
+
+  it('clamps a limit of 0 to the floor of 1', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,Alpha\n2,Beta\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values?limit=0`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().values.length).toBe(1);
+    expect(res.json().distinct).toBe(2);
+    expect(res.json().truncated).toBe(true);
+  });
+
+  it('404s for a run that does not exist', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/facilities/import/runs/fir_missing/columns/type/values',
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('answers 422 when the stored file cannot be read as CSV', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,"Health Post\n2,Health Centre\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values`,
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatch(/this file could not be read as CSV/);
+    expect(res.json().line).toBeDefined();
+  });
 });
 
 // --- A2b Task 5: POST /api/facilities/import/runs/:id/confirm ----------------------------------
