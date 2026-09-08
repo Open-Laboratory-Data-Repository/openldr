@@ -44,6 +44,27 @@ function describeColumnMapError(t: TFunction, e: ColumnMapError): string {
  *  never set) reads as an em-dash rather than the literal string "null"/"undefined". */
 const fmtDiffValue = (v: unknown): string => (v === null || v === undefined ? '—' : String(v));
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Which keys of an object-valued field actually differ.
+ *
+ *  ⛔ `extras` IS AN OBJECT, and `String(anObject)` is "[object Object]". Every changed row of a
+ *  mapped import carried the line `extras: [object Object] -> [object Object]`, which is the one
+ *  place the operator is told what an import would do to rows it is about to rewrite. On the real
+ *  Zambia export that was 3515 rows all saying nothing. Naming the keys that moved is the whole
+ *  point of the line.
+ *
+ *  A missing key and a key set to `undefined` are the same absence here, which is what
+ *  `JSON.stringify` already gives us, so the comparison does not need to tell them apart. */
+const changedObjectKeys = (before: unknown, after: unknown): string[] => {
+  const a = isPlainObject(before) ? before : {};
+  const b = isPlainObject(after) ? after : {};
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])]
+    .filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]))
+    .sort();
+};
+
 export /** The `columnMapErrors` block, extracted so it renders identically in the two places it now has
  *  to. Before the round-2 fix it lived only inside `ReconciliationSummary`, on Review (step 3) — but
  *  a column-map refusal now keeps the operator on Mapping (step 2), where that summary never
@@ -320,13 +341,32 @@ export function ReconciliationSummary(props: ReconciliationSummaryProps) {
                   <li key={row.id}>
                     <span className="font-medium">{row.name}</span>
                     <ul className="ml-3">
-                      {row.diff.map((d) => (
-                        <li key={d.field}>
-                          {t('facilities.import.changedFieldDiff', {
-                            field: d.field, before: fmtDiffValue(d.before), after: fmtDiffValue(d.after),
-                          })}
-                        </li>
-                      ))}
+                      {row.diff.map((d) => {
+                        // An object-valued field names what moved inside it; everything else keeps
+                        // the before/after it always had.
+                        if (isPlainObject(d.before) || isPlainObject(d.after)) {
+                          const keys = changedObjectKeys(d.before, d.after);
+                          return (
+                            <li key={d.field}>
+                              {t('facilities.import.changedFieldKeys', {
+                                field: d.field,
+                                // Empty means the server flagged a field whose contents are equal.
+                                // Say something true rather than an empty list.
+                                keys: keys.length > 0
+                                  ? keys.join(', ')
+                                  : t('facilities.import.changedFieldKeysUnnamed'),
+                              })}
+                            </li>
+                          );
+                        }
+                        return (
+                          <li key={d.field}>
+                            {t('facilities.import.changedFieldDiff', {
+                              field: d.field, before: fmtDiffValue(d.before), after: fmtDiffValue(d.after),
+                            })}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </li>
                 ))}
