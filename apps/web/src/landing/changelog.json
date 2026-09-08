@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "4eafa27e",
+          "type": "fix",
+          "scope": "forms",
+          "title": "The version history's rules reach the pane edges"
+        },
+        {
           "hash": "be6d90e9",
           "type": "feat",
           "scope": "forms",
