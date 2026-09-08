@@ -16,8 +16,9 @@ export type RevalidateOutcome =
 
 export interface RevalidateInput {
   runId: string;
-  /** Operator-supplied options. Identity fields present here are DROPPED, not refused: a caller
-   *  sending a whole stored options blob should get their column map applied, not an error. */
+  /** Operator-supplied options. Identity fields present here are IGNORED, not refused: a caller
+   *  sending a whole stored options blob should get their column map applied, not an error. The
+   *  run's OWN identity values are written back in their place — see `IDENTITY_KEYS`. */
   options: Record<string, unknown>;
 }
 
@@ -52,6 +53,21 @@ const REVALIDATABLE_LABEL = '"stored" or "awaiting_confirmation"';
  * national list under the wrong identity, and changing the file reference would validate something
  * nobody uploaded.
  *
+ * ⛔ CARRIED FORWARD OFF THE RUN, NOT MERELY DROPPED FROM THE REQUEST, and the difference is the
+ * whole of the defect this comment exists for. `requeueForValidation` REPLACES the run's `options`;
+ * it does not merge (see its own note in `facility-import-run-store.ts`). Dropping these keys and
+ * writing nothing back therefore ERASES them. `completeRelease` has no column on the run row, so
+ * the worker reads it out of `run.options` alone and cannot recover it: the operator ticks "this
+ * file is a complete release" on Source, the validate reports `absent: null` meaning NOT EVALUATED,
+ * and a later `onAbsent: 'retire'` retires nothing. That flag is what makes a national register's
+ * absences mean anything. It only ever bit on a re-check before; now that Mapping's Validate all is
+ * the ONLY path to a FIRST validate, it bit every browser import.
+ *
+ * ⛔ THE CLIENT STILL CANNOT SUPPLY ONE. The value written is the run's own, read back off the row.
+ * A value arriving in the request is discarded before this runs, and the route's zod schema forbids
+ * these keys outright. Carrying forward what the upload recorded is not the same as accepting a new
+ * one, and this must never become the same.
+ *
  * A field added to the run's options later needs a decision here: is it a thing the operator may
  * change between checks, or a thing the upload settled? Default to settled.
  */
@@ -84,13 +100,26 @@ export async function revalidateImportRun(
     return {
       ok: false,
       code: 'no-stored-file',
-      message: `import run ${input.runId} has no stored file — it was previewed inline; `
+      message: `import run ${input.runId} has no stored file: it was previewed inline; `
         + 'check it again through POST /api/facilities/import carrying its runId',
     };
   }
 
+  // Stored identity first, the operator's choices after, which is the order the confirm route
+  // already writes in (`facilities-routes.ts`, `{ ...storedOptions, ...chosen }`). The loop below
+  // then puts the stored identity back on top, so neither an operator nor a script can move a run
+  // onto another register or another file by sending one of these.
+  const stored = (run.options && typeof run.options === 'object' && !Array.isArray(run.options)
+    ? run.options
+    : {}) as Record<string, unknown>;
   const options: Record<string, unknown> = { ...input.options };
-  for (const k of IDENTITY_KEYS) delete options[k];
+  for (const k of IDENTITY_KEYS) {
+    delete options[k];
+    // `in`, not a truthiness test: `completeRelease: false` is a recorded decision and stays
+    // recorded, while a key the upload never wrote stays ABSENT rather than being written as an
+    // explicit `undefined` that would read as a decision nobody made.
+    if (k in stored) options[k] = stored[k];
+  }
 
   // `run.status`, not a fixed constant: two statuses are revalidatable now, and the compare-and-swap
   // has to match whichever one this run was actually read at, or a `stored` run's CAS would compare

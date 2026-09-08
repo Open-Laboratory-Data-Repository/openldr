@@ -87,20 +87,68 @@ describe('revalidateImportRun', () => {
     expect(out).toMatchObject({ ok: false, code: 'raced' });
   });
 
-  // ⛔ Identity fields are DROPPED, not rejected. A CLI user sending a whole options file that
-  // happens to carry `nationalSystem` should get their column map applied, not a refusal.
-  it('drops identity fields from the options it writes', async () => {
+  // ⛔ Client-supplied identity fields are IGNORED, not rejected, and the run's OWN stored ones are
+  // written back in their place. A CLI user sending a whole options file that happens to carry
+  // `nationalSystem` should get their column map applied, not a refusal — and must not be able to
+  // move the run onto another register or another file by sending a different value.
+  it('ignores client-supplied identity fields and writes the run\'s own back', async () => {
     const requeue = vi.fn().mockResolvedValue(true);
-    await revalidateImportRun(runStore(parked, requeue), {
+    const run = {
+      ...parked,
+      options: {
+        nationalSystem: 'urn:zm:mfl', sourceFormat: 'csv', completeRelease: true,
+        releaseVersion: 'v1', blobKey: 'b1', fileHash: 'real', byteSize: 42,
+      },
+    };
+    await revalidateImportRun(runStore(run, requeue), {
       runId: 'fir_1',
       options: {
-        nationalSystem: 'urn:tz:hfr', sourceFormat: 'jsonl', completeRelease: true,
+        nationalSystem: 'urn:tz:hfr', sourceFormat: 'jsonl', completeRelease: false,
         releaseVersion: 'v9', blobKey: 'evil', fileHash: 'x', byteSize: 1,
         columnMap: { columns: {} }, allowUnknownColumns: true,
       },
     });
     expect(requeue).toHaveBeenCalledWith('fir_1', 'awaiting_confirmation', {
       columnMap: { columns: {} }, allowUnknownColumns: true,
+      nationalSystem: 'urn:zm:mfl', sourceFormat: 'csv', completeRelease: true,
+      releaseVersion: 'v1', blobKey: 'b1', fileHash: 'real', byteSize: 42,
     });
+  });
+
+  // ⛔ THE MERGE BLOCKER. `requeueForValidation` REPLACES the run's options; it does not merge. With
+  // the first validate now asked for from Mapping through this function, dropping the identity keys
+  // and writing nothing in their place erased `completeRelease` on EVERY browser import: the
+  // operator ticks "complete release" on Source, the validate reports `absent: null` (NOT EVALUATED)
+  // and a later `onAbsent: 'retire'` retires nothing. There is no column for the flag on the run
+  // row, so the worker reads it out of `run.options` alone and cannot recover it.
+  it('carries a stored run\'s completeRelease into its first validate', async () => {
+    const requeue = vi.fn().mockResolvedValue(true);
+    const run = { ...stored, options: { nationalSystem: 'urn:zm:mfl', completeRelease: true } };
+    await revalidateImportRun(runStore(run, requeue), {
+      runId: 'fir_4', options: { columnMap: { columns: { name: 'facility_name' } } },
+    });
+    expect(requeue).toHaveBeenCalledWith('fir_4', 'stored', {
+      columnMap: { columns: { name: 'facility_name' } },
+      nationalSystem: 'urn:zm:mfl', completeRelease: true,
+    });
+  });
+
+  // A key the upload never recorded stays absent, rather than being written as an explicit
+  // `undefined` that would read as a decision nobody made.
+  it('writes back only the identity keys the run actually stored', async () => {
+    const requeue = vi.fn().mockResolvedValue(true);
+    const run = { ...stored, options: { nationalSystem: 'urn:zm:mfl' } };
+    await revalidateImportRun(runStore(run, requeue), { runId: 'fir_4', options: {} });
+    const written = requeue.mock.calls[0][2] as Record<string, unknown>;
+    expect(Object.keys(written)).toEqual(['nationalSystem']);
+  });
+
+  // A run whose options are not an object at all (a legacy row, a null column) must not throw.
+  it('survives a run whose stored options are not an object', async () => {
+    const requeue = vi.fn().mockResolvedValue(true);
+    await revalidateImportRun(runStore({ ...stored, options: null }, requeue), {
+      runId: 'fir_4', options: { columnMap: { columns: {} } },
+    });
+    expect(requeue).toHaveBeenCalledWith('fir_4', 'stored', { columnMap: { columns: {} } });
   });
 });
