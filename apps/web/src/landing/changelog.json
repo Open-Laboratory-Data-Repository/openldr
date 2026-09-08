@@ -1,10 +1,88 @@
 {
-  "generatedAt": "2026-09-08",
+  "generatedAt": "2026-09-09",
   "days": [
     {
       "date": "2026-09-08",
       "version": null,
       "entries": [
+        {
+          "hash": "aecba41e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The value row's label wraps, like its sibling already does"
+        },
+        {
+          "hash": "b6fd6703",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A stale row gets its own glyph, so a phone can see it"
+        },
+        {
+          "hash": "2378a9eb",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A checked row goes back to green once its values are mapped"
+        },
+        {
+          "hash": "68d0b7af",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A check must not remove a value the server called unmapped"
+        },
+        {
+          "hash": "ddada3e3",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A field's unrecognised values sit under the field"
+        },
+        {
+          "hash": "fe4db53b",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Truncation only means a wrong field for a controlled field"
+        },
+        {
+          "hash": "f4041f47",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Check one mapping without validating the register"
+        },
+        {
+          "hash": "11909347",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A mapping row's status icon gets a real tooltip"
+        },
+        {
+          "hash": "ca4c60e3",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A status icon for a mapping row"
+        },
+        {
+          "hash": "f8f26581",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A mapping row's status, as arithmetic"
+        },
+        {
+          "hash": "e98cd64e",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A route for one column's values"
+        },
+        {
+          "hash": "92782876",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Wrap CSV parse errors in FacilityFileUnreadableError"
+        },
+        {
+          "hash": "5f68f47d",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Read one column's distinct values from a stored file"
+        },
         {
           "hash": "f5eba06f",
           "type": "fix",
