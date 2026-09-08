@@ -6,6 +6,120 @@
       "version": null,
       "entries": [
         {
+          "hash": "f5eba06f",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The import sheet is usable on a phone"
+        },
+        {
+          "hash": "838669af",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Review offers the way back to Mapping, not just its name"
+        },
+        {
+          "hash": "abe8af1d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Register a source belongs to Source, and nowhere else"
+        },
+        {
+          "hash": "9c1f227d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "An unreadable file no longer reports as empty"
+        },
+        {
+          "hash": "e2035de6",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "An abandoned Source step has a way out, and two stale comments go"
+        },
+        {
+          "hash": "1500df43",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The Data step tells the operator it is their file"
+        },
+        {
+          "hash": "6cd30a06",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Reading an uploaded file back needs manage, not view"
+        },
+        {
+          "hash": "4dda38e6",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The Data step reads CSV with a CSV parser"
+        },
+        {
+          "hash": "396d8165",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The first validate no longer erases completeRelease"
+        },
+        {
+          "hash": "d85908a9",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The first validate no longer re-uploads the register"
+        },
+        {
+          "hash": "29807e11",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Data shows the grid, Mapping checks the stored run when it can"
+        },
+        {
+          "hash": "5afe8c1b",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The uploaded file as a paged table"
+        },
+        {
+          "hash": "75e915c7",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A stored file, not a hardcoded gate, opens Mapping"
+        },
+        {
+          "hash": "83707bb8",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A Data step between Source and Mapping"
+        },
+        {
+          "hash": "6461993a",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Clamp limit=0 to floor of 1, not to default of 100"
+        },
+        {
+          "hash": "d38de0f8",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Page the stored import file as rows"
+        },
+        {
+          "hash": "4af61ee7",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Remove em dashes from Task 2 comments per code style"
+        },
+        {
+          "hash": "7c3e09ad",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "An upload can store a file without validating it"
+        },
+        {
+          "hash": "ca0f8e79",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Read a window of rows out of a file stream"
+        },
+        {
           "hash": "8187549c",
           "type": "fix",
           "scope": "facilities",
