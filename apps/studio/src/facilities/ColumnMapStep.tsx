@@ -53,6 +53,29 @@ const UNMAPPED = '__not_mapped__';
  *  `rowKey`: `JSON.stringify` escapes its own separators, so two distinct pairs can never collide. */
 const valueChoiceKey = (header: string, value: string): string => JSON.stringify([header, value]);
 
+/** One row of a header's value worklist: a raw value plus the ranker's own candidates for it. */
+type WorklistEntry = { value: string; candidates: ValueSuggestion['candidates'] };
+
+/** Fix pass (Critical finding, mapping-answers-back Slice B Task 6 review): a row's worklist is the
+ *  UNION of everything any source has ever reported for the row's current target, never a
+ *  replacement. `checkRow`'s own click and the `unmappedByField` effect both call this, so neither
+ *  can make the other's finding disappear.
+ *
+ *  Two different things used to decide whether a value needed mapping. The server's `unmappedByField`
+ *  (packages/bootstrap/src/facility-controlled-fields.ts) asks: does an exact or normalised match, or
+ *  an active mapping, resolve this value? `checkRow` asked a different question: is the ranker's own
+ *  guess confident? A value can fail the server's test and still score high on the ranker's fuzzy
+ *  match, and `checkRow` used to let that confident guess evict a value the server had already named
+ *  unmapped, silently dropping it, and any choice the operator had already made for it, on the next
+ *  click of "check". The ranker's confidence still decides what is ranked first in the pick-list; it
+ *  no longer decides whether a value is in the list at all. */
+function mergeWorklistEntries(existing: WorklistEntry[], fresh: WorklistEntry[]): WorklistEntry[] {
+  const byValue = new Map<string, WorklistEntry>();
+  for (const entry of existing) byValue.set(entry.value, entry);
+  for (const entry of fresh) byValue.set(entry.value, entry);
+  return Array.from(byValue.values());
+}
+
 /** The contract field a header claims JUST BY SPELLING IT, with no map entry behind it — the
  *  parser's "passthrough" rule, mirrored here so the panel can stop contradicting it.
  *  `validateColumnMap` (packages/terminology/src/facility-csv.ts) walks the file's OWN headers and
@@ -361,20 +384,40 @@ export function ColumnMapStep({
         return;
       }
       const ranked = await suggestValueMappings(target as ControlledField, values);
-      // Task 6: the worklist IS this filtered subset, not a separate re-derivation of it — the row
-      // below renders exactly what `unrecognised` counts, never a superset or a stale one.
-      const unrecognisedValues = ranked.values.filter((v) => {
+      // Fix pass (Critical finding): the ranker's confidence still decides which of THESE values
+      // look unrecognised from this row's own click. It never decides whether a value the server
+      // already reported unmapped (`unmappedByField`) stays on the worklist — that is added
+      // unconditionally below, via `mergeWorklistEntries`.
+      const rankedByValue = new Map(ranked.values.map((v) => [v.value, v.candidates]));
+      const fresh: WorklistEntry[] = [];
+      const seen = new Set<string>();
+      for (const v of ranked.values) {
         const topCandidate = v.candidates[0];
-        return !topCandidate || topCandidate.confidence === 'weak';
+        if (!topCandidate || topCandidate.confidence === 'weak') {
+          fresh.push({ value: v.value, candidates: v.candidates });
+          seen.add(v.value);
+        }
+      }
+      for (const raw of unmappedByField?.[target as ControlledField] ?? []) {
+        if (seen.has(raw)) continue;
+        seen.add(raw);
+        fresh.push({ value: raw, candidates: rankedByValue.get(raw) ?? [] });
+      }
+      setCheckedByHeader((prev) => {
+        // A choice the operator already made lives on a value already sitting in `check.values` —
+        // carry every value this row showed for the SAME target forward, so a re-check can only add
+        // to the worklist, never quietly drop something out from under a pending choice.
+        const prevEntry = prev[header];
+        const carried = prevEntry && prevEntry.target === target ? prevEntry.values ?? [] : [];
+        const merged = mergeWorklistEntries(carried, fresh);
+        return {
+          ...prev,
+          [header]: {
+            target, unrecognised: merged.length, truncated: false, distinct,
+            values: merged, options: ranked.options ?? [],
+          },
+        };
       });
-      setCheckedByHeader((prev) => ({
-        ...prev,
-        [header]: {
-          target, unrecognised: unrecognisedValues.length, truncated: false, distinct,
-          values: unrecognisedValues.map((v) => ({ value: v.value, candidates: v.candidates })),
-          options: ranked.options ?? [],
-        },
-      }));
     } catch {
       setErroredHeaders((prev) => new Set(prev).add(header));
     } finally {
@@ -412,22 +455,33 @@ export function ColumnMapStep({
       // even in THIS file: nothing to attach the worklist to.
       if (!header || !headers.includes(header)) continue;
       const existing = checkedByHeader[header];
-      // Already fresh for this exact target — a click may have just produced a more specific
-      // result (Task 5's own confidence filter) and this must not clobber it with the unfiltered
-      // full-check list.
-      if (existing && existing.target === field && existing.values) continue;
+      // Fix pass (Critical finding): skip the fetch only when this row already carries EVERY value
+      // the server just reported for this exact target — there is nothing new to merge in. A row
+      // missing even one of them (a fresh validate found something new, or nothing has run yet)
+      // still fetches. This used to skip whenever a click had run at all, which meant a value the
+      // full check found LATER than a click never reached the row.
+      const alreadyCovered = !!existing && existing.target === field
+        && values.every((v) => existing.values?.some((ev) => ev.value === v));
+      if (alreadyCovered) continue;
       void suggestValueMappings(field, values).then((res) => {
         if (cancelled) return;
-        setCheckedByHeader((prev) => ({
-          ...prev,
-          [header]: {
-            target: field, unrecognised: values.length, truncated: false, distinct: values.length,
-            values: values.map((v) => ({
-              value: v, candidates: res.values.find((r) => r.value === v)?.candidates ?? [],
-            })),
-            options: res.options ?? [],
-          },
+        const fresh: WorklistEntry[] = values.map((v) => ({
+          value: v, candidates: res.values.find((r) => r.value === v)?.candidates ?? [],
         }));
+        setCheckedByHeader((prev) => {
+          // Same union rule as `checkRow`: never drop a value (or the choice attached to it) that
+          // this row already carried for the same target.
+          const prevEntry = prev[header];
+          const carried = prevEntry && prevEntry.target === field ? prevEntry.values ?? [] : [];
+          const merged = mergeWorklistEntries(carried, fresh);
+          return {
+            ...prev,
+            [header]: {
+              target: field, unrecognised: merged.length, truncated: false, distinct: merged.length,
+              values: merged, options: res.options ?? [],
+            },
+          };
+        });
       }).catch(() => {
         // Nothing to show is better than a stuck spinner for a row nobody clicked — the values are
         // still visible on Review's own `ReconciliationSummary`, which reads `unmappedByField`

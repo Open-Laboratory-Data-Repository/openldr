@@ -18,12 +18,15 @@ vi.mock('@/api', async (orig) => {
     readFacilityImportColumnValues: vi.fn(),
     uploadFacilityImport: vi.fn(),
     revalidateFacilityImportRun: vi.fn(),
+    // Fix pass (Critical finding, mapping-answers-back Slice B Task 6): the Save button aggregates
+    // every row's chosen mappings into one call. No test in this file exercised it before this pass.
+    writeFacilityValueMappings: vi.fn(),
   };
 });
 
 import * as api from '@/api';
 import { ColumnMapStep } from './ColumnMapStep';
-import type { ColumnSuggestion, FacilityColumnMap } from '@/api';
+import type { ColumnSuggestion, ControlledField, FacilityColumnMap } from '@/api';
 
 const mockedApi = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeof vi.fn>;
 
@@ -63,6 +66,9 @@ function Controlled({ initial, onChangeSpy, runId = null, ...rest }: {
   headers: string[];
   suggestions: ColumnSuggestion[];
   onValidityChange?: (valid: boolean) => void;
+  unmappedByField?: Record<ControlledField, string[]>;
+  nationalSystem?: string;
+  onValueMappingsSaved?: () => void;
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -79,7 +85,11 @@ function Controlled({ initial, onChangeSpy, runId = null, ...rest }: {
 }
 
 /** Task 6: a thin wrapper matching the brief's own call shape (`renderColumnMapStep({ runId,
- *  headers, value })`) — `Controlled` underneath, same as every other test in this file. */
+ *  headers, value })`) — `Controlled` underneath, same as every other test in this file.
+ *
+ *  Fix pass (Critical finding): also forwards `unmappedByField`/`nationalSystem`/
+ *  `onValueMappingsSaved` — what `unmappedByFieldSignature`'s own effect and `handleSaveValueMappings`
+ *  read — so a test can reproduce the server-vs-client worklist disagreement directly. */
 function renderColumnMapStep(props: {
   runId?: string | null;
   headers: string[];
@@ -87,6 +97,9 @@ function renderColumnMapStep(props: {
   value: FacilityColumnMap;
   onChangeSpy?: (next: FacilityColumnMap) => void;
   onValidityChange?: (valid: boolean) => void;
+  unmappedByField?: Record<ControlledField, string[]>;
+  nationalSystem?: string;
+  onValueMappingsSaved?: () => void;
 }) {
   return render(
     <Controlled
@@ -96,6 +109,9 @@ function renderColumnMapStep(props: {
       initial={props.value}
       onChangeSpy={props.onChangeSpy}
       onValidityChange={props.onValidityChange}
+      unmappedByField={props.unmappedByField}
+      nationalSystem={props.nationalSystem}
+      onValueMappingsSaved={props.onValueMappingsSaved}
     />,
   );
 }
@@ -619,6 +635,168 @@ describe('ColumnMapStep', () => {
       });
 
       expect(screen.queryByText('1st Level Hospital')).not.toBeInTheDocument();
+    });
+  });
+
+  // ⛔ Fix pass (Critical finding): `unmappedByField` (the server's own report) and `checkRow` (the
+  // client ranker's guess) used to answer two DIFFERENT questions about the same worklist, and
+  // `checkRow` silently overwrote the server's answer with its own. These three tests are the
+  // reviewer's own reproduction cases.
+  describe('⛔ fix pass — the worklist is a union, never a replacement (Critical finding)', () => {
+    beforeEach(() => {
+      mockedApi(api.readFacilityImportColumnValues).mockClear();
+      mockedApi(api.suggestValueMappings).mockClear();
+      mockedApi(api.writeFacilityValueMappings).mockClear();
+    });
+
+    it('a value the server reported unmapped survives a click-check the ranker is confident about', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Zonal Hospital', 'Others'], distinct: 2, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string, values: string[]) => {
+        if (field !== 'level') return { values: [], options: [], notValidated: false };
+        return {
+          values: values.map((v) => ({
+            value: v,
+            // The ranker is CONFIDENT about "Others" — that must not decide whether it needs
+            // mapping. Only the server's own report decides that.
+            candidates: v === 'Others'
+              ? [{ target: 'other', display: 'Other', score: 1, confidence: 'exact' as const }]
+              : [],
+          })),
+          options: [{ code: 'other', display: 'Other' }],
+          notValidated: false,
+        };
+      });
+
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+        unmappedByField: { level: ['Zonal Hospital', 'Others'], status: [], country: [] },
+      });
+
+      // The server's own report puts both rows on screen before anything is clicked.
+      await screen.findByLabelText('Zonal Hospital');
+      expect(screen.getByLabelText('Others')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      // The click-check finishes...
+      await screen.findByText(/2 value\(s\) are not recognised/i);
+      // ...and BOTH values are still there. "Others" did not vanish just because the ranker
+      // suddenly had an opinion about it.
+      expect(screen.getByLabelText('Zonal Hospital')).toBeInTheDocument();
+      expect(screen.getByLabelText('Others')).toBeInTheDocument();
+    });
+
+    it('a mapping the operator already chose survives a re-check and still reaches Save', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Zonal Hospital'], distinct: 1, truncated: false,
+      });
+      let levelCalls = 0;
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string, values: string[]) => {
+        if (field !== 'level') return { values: [], options: [], notValidated: false };
+        levelCalls += 1;
+        // The FIRST check has no opinion, so "Zonal Hospital" surfaces as unrecognised and the
+        // operator picks a mapping by hand. The SECOND check (the re-check below) turns confident
+        // about a DIFFERENT code — that must not evict the row or reset the operator's own pick.
+        const confident = levelCalls > 1;
+        return {
+          values: values.map((v) => ({
+            value: v,
+            candidates: confident
+              ? [{ target: 'hospital', display: 'Hospital', score: 1, confidence: 'exact' as const }]
+              : [],
+          })),
+          options: [
+            { code: 'hospital', display: 'Hospital' },
+            { code: 'health-post', display: 'Health Post' },
+          ],
+          notValidated: false,
+        };
+      });
+
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByLabelText('Zonal Hospital');
+
+      // Operator picks a mapping by hand, different from whatever the ranker later guesses.
+      fireEvent.click(screen.getByLabelText('Zonal Hospital'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Health Post' }));
+      expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Health Post');
+
+      // Re-check the row.
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await waitFor(() => expect(levelCalls).toBe(2));
+
+      // The operator's own choice is still what is shown, not evicted and not reset to the
+      // ranker's fresh (and different) guess.
+      expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Health Post');
+
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
+
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledWith(
+        'urn:zm:mfl', [{ field: 'level', rawValue: 'Zonal Hospital', toCode: 'health-post' }],
+      ));
+    });
+
+    it('aggregates mappings chosen under two different headers into one Save call', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockImplementation(
+        async (_runId: string, header: string) => {
+          if (header === 'Type') return { header, values: ['Zonal Hospital'], distinct: 1, truncated: false };
+          if (header === 'Condition') return { header, values: ['Functional'], distinct: 1, truncated: false };
+          return { header, values: [], distinct: 0, truncated: false };
+        },
+      );
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string) => {
+        if (field === 'level') {
+          return {
+            values: [{ value: 'Zonal Hospital', candidates: [] }],
+            options: [{ code: 'hospital', display: 'Hospital' }],
+            notValidated: false,
+          };
+        }
+        if (field === 'status') {
+          return {
+            values: [{ value: 'Functional', candidates: [] }],
+            options: [{ code: 'active', display: 'Active' }],
+            notValidated: false,
+          };
+        }
+        return { values: [], options: [], notValidated: false };
+      });
+
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type', 'Condition'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level', Condition: 'status' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByLabelText('Zonal Hospital');
+      fireEvent.click(screen.getByLabelText('Zonal Hospital'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
+
+      fireEvent.click(screen.getByRole('button', { name: /^Condition:/ }));
+      await screen.findByLabelText('Functional');
+      fireEvent.click(screen.getByLabelText('Functional'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Active' }));
+
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 2, superseded: [] });
+      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
+
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(1));
+      const [system, entries] = mockedApi(api.writeFacilityValueMappings).mock.calls[0];
+      expect(system).toBe('urn:zm:mfl');
+      expect(entries).toEqual(expect.arrayContaining([
+        { field: 'level', rawValue: 'Zonal Hospital', toCode: 'hospital' },
+        { field: 'status', rawValue: 'Functional', toCode: 'active' },
+      ]));
+      expect(entries).toHaveLength(2);
     });
   });
 });
