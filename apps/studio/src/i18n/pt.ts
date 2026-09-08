@@ -972,6 +972,8 @@ export const pt: EnShape = {
       summaryDeleted: '{{count}} linha(s) foram declaradas removidas por este ficheiro.',
       changedSampleTitle: 'Exemplos do que mudaria',
       changedFieldDiff: '{{field}}: {{before}} → {{after}}',
+      changedFieldKeys: '{{field}}: {{keys}} mudaram',
+      changedFieldKeysUnnamed: 'o conteúdo',
       policyTitle: 'O que fazer com as diferenças',
       policyHint: 'Decidido aqui. A Revisão indica o que estas escolhas fariam.',
       policyFoundUnknownColumns: 'A última verificação encontrou {{count}} coluna(s) não reconhecida(s).',

@@ -1000,6 +1000,8 @@ export const en = {
       summaryDeleted: '{{count}} row(s) were declared removed by this file.',
       changedSampleTitle: 'Examples of what would change',
       changedFieldDiff: '{{field}}: {{before}} → {{after}}',
+      changedFieldKeys: '{{field}}: {{keys}} changed',
+      changedFieldKeysUnnamed: 'contents',
       policyTitle: 'What to do with the differences',
       policyHint: 'Decided here. Review reports what these choices would do.',
       policyFoundUnknownColumns: 'The last check found {{count}} unrecognised column(s).',

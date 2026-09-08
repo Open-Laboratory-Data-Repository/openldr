@@ -28,6 +28,33 @@ const props = {
 };
 
 describe('ReconciliationSummary', () => {
+  // ⛔ EVERY CHANGED ROW OF A MAPPED IMPORT SHOWED "[object Object]". `fmtDiffValue` was `String(v)`,
+  // and `extras` is an object, so the one line telling an operator what an import would do to 3515
+  // rows read `extras: [object Object] -> [object Object]`. Reported off a real Zambia import.
+  it('⛔ names the extras keys that changed instead of printing [object Object]', () => {
+    render(<ReconciliationSummary {...props} result={baseResult({
+      parsed: 1, changed: 1,
+      samples: {
+        create: [], conflict: [], absent: [], deleted: [],
+        changed: [{
+          id: 'f1', name: 'Namatindi Rural Health Centre', nationalCode: '100001',
+          diff: [{
+            field: 'extras',
+            before: { 'dhis2 uid': 'old-uid', 'hims code': 'HC001', location: 'Urban' },
+            after: { 'dhis2 uid': 'new-uid', 'hims code': 'HC001', location: 'Rural' },
+          }],
+        }],
+      },
+    })} />);
+
+    expect(screen.queryByText(/\[object Object\]/)).not.toBeInTheDocument();
+    // The two keys that actually differ, and not the one that did not.
+    const line = screen.getByText(/extras:/);
+    expect(line).toHaveTextContent('dhis2 uid');
+    expect(line).toHaveTextContent('location');
+    expect(line).not.toHaveTextContent('hims code');
+  });
+
   it('renders a result without throwing', () => {
     render(<ReconciliationSummary {...props} result={baseResult({ parsed: 10, create: 3, changed: 2 })} />);
     expect(screen.getByText(/3/)).toBeInTheDocument();
