@@ -67,7 +67,9 @@ const EMPTY_COLUMN_MAP: FacilityColumnMap = { columns: {}, constants: {}, extras
  *  copy have to move together. The three terminal states (`applied`/`failed`/`cancelled`) are
  *  deliberately absent: each has its own block below that says more than a label could, and
  *  `previewed` is the INLINE path's own state, which a run reached through this sheet's Upload can
- *  never enter (only `startPreview` writes it). */
+ *  never enter (only `startPreview` writes it). `stored` is also absent: Source's own store-only
+ *  upload sets it, and nothing is "going to happen" to a stored run until Mapping asks for a real
+ *  check, so there is no worker activity to report a status line for. */
 const RUN_ACTIVE_STATUSES: FacilityImportRunStatus[] =
   ['queued', 'validating', 'awaiting_confirmation', 'confirmed', 'applying'];
 
@@ -333,6 +335,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
   // A2b: the background run this sheet is watching, and the request states around it.
   const [runId, setRunId] = useState<string | null>(null);
+  /** Which run the POLL effect below actually watches. Distinct from `runId`: Source's own
+   *  store-only call (`validate: false`) sets `runId` (that is the whole of `hasStoredFile`'s
+   *  signal) but mints a `stored` run nothing is "going to happen" to yet. See `RUN_ACTIVE_
+   *  STATUSES`'s own doc comment. Polling it anyway would be wasted requests forever (a `stored`
+   *  run never leaves that status on its own), so this stays `null` until a REAL validate (Mapping's
+   *  own upload) sets it, and reverts to `null` on a fresh store so a superseded run's poll cannot
+   *  answer for a run that no longer exists on screen. */
+  const [pollRunId, setPollRunId] = useState<string | null>(null);
 
   /** Task 2 (Review reviews, Mapping decides): the signature the summary on screen was computed
    *  under. `null` means there is no summary at all. Compared against the live inputs by `stepGate`
@@ -437,12 +447,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // A self-scheduling `setTimeout` chain rather than `setInterval`: the next request is only ever
   // booked once the previous one has answered, so a slow server cannot stack requests.
   useEffect(() => {
-    if (!runId) return;
+    if (!pollRunId) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async (): Promise<void> => {
       try {
-        const next = await getFacilityImportRun(runId);
+        const next = await getFacilityImportRun(pollRunId);
         if (stopped) return;
         setRun(next);
         if (RUN_POLLED_STATUSES.includes(next.status)) {
@@ -457,7 +467,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     };
     void tick();
     return () => { stopped = true; if (timer !== undefined) clearTimeout(timer); };
-  }, [runId, refreshNonce]);
+  }, [pollRunId, refreshNonce]);
 
   // `onImported()`, fired when a run this sheet is watching reaches `applied`. Guarded by run id
   // (not a boolean) so it fires once per applied run and never twice for one.
@@ -510,6 +520,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     // A2b: a new file starts a new import in every sense. The picker is disabled while a run is
     // live (see `inputsDisabled`), so this only ever discards a run that has already finished.
     setRunId(null);
+    setPollRunId(null);
     setRun(null);
     setCancelOutcome(null);
     setUploadProgress(null);
@@ -702,7 +713,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   };
 
   const handleUpload = async (
-    overrides?: { allowUnknownColumns?: boolean; allowInvalidCoordinates?: boolean },
+    overrides?: {
+      allowUnknownColumns?: boolean;
+      allowInvalidCoordinates?: boolean;
+      /** Fix for the reachability regression: `false` is Source's own store-only call, sent as
+       *  `validate=false` so the upload mints a `stored` run instead of a `queued` one. Every
+       *  other caller omits this and keeps upload-and-validate. */
+      validate?: boolean;
+    },
   ): Promise<void> => {
     if (!file || !nationalSystem.trim()) return;
     const allowUnknown = overrides?.allowUnknownColumns ?? allowUnknownColumns;
@@ -742,6 +760,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           // before its own validate runs, which is what makes this door's validate agree with what
           // the operator sees, instead of reading the file's raw headers.
           columnMap: hasColumnMapContent(columnMap) ? columnMap : undefined,
+          validate: overrides?.validate,
         },
         setUploadProgress,
       );
@@ -753,14 +772,31 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       // null.
       setRun(null);
       setRunId(id);
-      // Task 2: the streamed door earns its Review here, at the upload, for the same reason `runId`
-      // is in `stepGate` at all — the first poll has not answered yet and the operator must not be
-      // left on Mapping watching nothing.
-      //
-      // ⛔ `signatureWith(overrides)`, not the ref: this call sets the two override states just
-      // above and then awaits, so on a fast response React may not have re-rendered and the ref
-      // would still hold the pre-override value.
-      setSummaryAt(signatureWith(overrides));
+      // ⛔ NOT OPTIONAL, even when the id is unchanged (only a real risk under a test double, since
+      // a real server never hands out the same id twice). The poll effect keys on
+      // `[pollRunId, refreshNonce]`, so an id equal to the run already being watched would leave
+      // React seeing no change and never re-poll, and `run` would stay stuck at the `null` just
+      // set above.
+      setRefreshNonce((n) => n + 1);
+      if (overrides?.validate === false) {
+        // Source's own store-only call. Nothing has been checked, so there is no review to earn
+        // yet: `summaryAt` stays as it was, and `hasStoredFile` (now `runId !== null`) is the only
+        // gate this call moves. `pollRunId` stays null: a `stored` run has nothing worth polling
+        // for (see that field's own comment). Land on Data, the step this call belongs to.
+        setPollRunId(null);
+        setRequestedStep(2);
+      } else {
+        // A real validate. This is what actually starts the poll. See `pollRunId`'s own comment.
+        setPollRunId(id);
+        // Task 2: the streamed door earns its Review here, at the upload, for the same reason
+        // `runId` is in `stepGate` at all — the first poll has not answered yet and the operator
+        // must not be left on Mapping watching nothing.
+        //
+        // ⛔ `signatureWith(overrides)`, not the ref: this call sets the two override states just
+        // above and then awaits, so on a fast response React may not have re-rendered and the ref
+        // would still hold the pre-override value.
+        setSummaryAt(signatureWith(overrides));
+      }
     } catch (err) {
       setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
     } finally {
@@ -937,12 +973,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const stepGate = {
     hasFile: !!file,
     hasRegister: nationalSystem.trim() !== '',
-    // Task 4: the widened model's new gate. This sheet still maps the column map BEFORE it uploads
-    // (Mapping's own Upload button is what first stores the file), so nothing here yet means "the
-    // file is already sitting in blob storage" at the point Mapping needs to render. Hardcoded true
-    // so `furthestStep` keeps opening Mapping exactly where it does today. Task 6, which adds the
-    // real Data step and moves storage ahead of Mapping, is what gives this a real signal to read.
-    hasStoredFile: true,
+    // Fix for the reachability regression the widened model shipped with: Source now stores the
+    // file itself, before Mapping ever opens (see `handleUpload`'s `validate` option and Source's
+    // own button below), and `runId` is set the instant that upload resolves. That is the real
+    // signal that the file is sitting in blob storage, not merely picked in the browser.
+    hasStoredFile: runId !== null,
     // ⛔ `summaryAt === currentSummarySignature` is what makes this "a summary that MATCHES THE
     // INPUTS", not merely "a summary exists". Change the file, the register, the map, a fixed
     // value, an override or a policy and this goes false, `furthestStep` returns 3 and `clampStep`
@@ -986,14 +1021,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // `ColumnMapStep` mounted through the refusal (see `columnMapRefused`'s own docblock).
   //
   // This has to be a RETREAT, not just a guard on the forward move: `hasReview` (and so `furthest`)
-  // turns 4 the instant the background door's `runId` is set — see that field's own comment — which
-  // is BEFORE the first poll has said anything about `blockedReason`. The upload's own Continue
-  // already parked the operator on Mapping by then, so this effect's ordinary branch carries them to
-  // Review immediately, exactly as it does for every other run. Only once the first poll answers does
-  // `columnMapRefused` turn true, by which point `requestedStep` already reads 3 — a guard that only
-  // ever refused to ADVANCE would never see this, and the operator would stay stranded on Review with
-  // no way to fix the very thing that put them there. This branch un-does that specific move, and
-  // only that one: any OTHER step the operator had already reached (never past Mapping) is untouched.
+  // turns 4 the instant Mapping's own Upload sets `runId` AND `summaryAt` together. See `handleUpload`'s
+  // own comment on that pair. That is BEFORE the first poll has said anything about `blockedReason`.
+  // Mapping's click already parked the operator there, so this effect's ordinary branch carries them
+  // to Review immediately, exactly as it does for every other run. Only once the first poll answers
+  // does `columnMapRefused` turn true, by which point `requestedStep` already reads 4 (Review's own
+  // number, see the fix below). A guard that only ever refused to ADVANCE would never see this, and
+  // the operator would stay stranded on Review with no way to fix the very thing that put them
+  // there. This branch un-does that specific move, and only that one: any OTHER step the operator
+  // had already reached (never past Mapping) is untouched.
   //
   // ⛔ ROUND-3 FIX: retreats from ANY step, not only from Review. It was written for a door that no
   // longer exists — an inline Preview reachable from Source, whose response made `columnMapRefused`
@@ -1003,19 +1039,20 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // help, regardless of
   // which step the operator was on when they triggered it.
   //
-  // ⛔ Task 4: THE THRESHOLD IS 4, NOT `furthestStep`'s OLD 3. `furthestStep` now returns 3 for
-  // "Mapping is open" (this sheet's own stepGate sets `hasStoredFile` unconditionally true, so that
-  // happens as soon as a file and register are chosen) and only reaches 4 once `hasReview` is
-  // actually true. Comparing against the old `3` here would fire this effect the moment a file and
-  // register were picked, before any upload, and skip Mapping entirely. The sheet's own step numbers
-  // (2 = Mapping, 3 = Review below) are UNCHANGED this task — only the `furthestStep` threshold moved.
+  // Fix for the reachability regression (Critical finding, code review): the sheet's OWN step
+  // numbers move here too, to agree with `furthestStep`'s model (1 Source, 2 Data, 3 Mapping,
+  // 4 Review). Before this fix the sheet still rendered Mapping at its own `step === 2` and Review
+  // at its own `step === 3`, one slot behind the strip's real labels, so an operator who clicked
+  // strip position 3 ("Mapping") landed on this sheet's Review content instead. Upload was never
+  // shown. The retreat below now targets 3 (Mapping's real number), and the advance targets 4
+  // (Review's real number).
   useEffect(() => {
     if (columnMapRefused) {
-      setRequestedStep((prev) => (prev !== 2 ? 2 : prev));
+      setRequestedStep((prev) => (prev !== 3 ? 3 : prev));
       return;
     }
     if (furthest < 4) return;
-    setRequestedStep((prev) => (prev < 3 ? 3 : prev));
+    setRequestedStep((prev) => (prev < 4 ? 4 : prev));
   }, [furthest, columnMapRefused]);
 
   /** Task 5: a fresh install has NO register: migration 082's back-fill seeds only from
@@ -1107,19 +1144,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const willWriteCount = awaitingSummary ? willWrite(awaitingSummary) : 0;
   /** Whole-branch review, FINDING 2: is `ColumnMapStep` actually on screen? Read by the panel's own
    *  render gate below AND by the empty-state note beside it, so the two can never drift apart —
-   *  the note is exactly "step 2, and this is false". Before this fix only the panel had a gate: a
-   *  JSONL release, an applied run, a run or a summary that is not a column-map refusal, and the
-   *  brief window while `File.text()` resolves all left step 2 completely blank, with nothing on
-   *  screen to say why. */
+   *  the note is exactly "step 3, and this is false" (renumbered along with Mapping's own step, per
+   *  the reachability fix above). Before this fix only the panel had a gate: a JSONL release, an
+   *  applied run, a run or a summary that is not a column-map refusal, and the brief window while
+   *  `File.text()` resolves all left step 3 completely blank, with nothing on screen to say why. */
   //
   //  ⛔ NO LONGER GATED ON THE MAP HAVING BEEN REFUSED. It used to hide the moment a run existed
   //  unless `columnMapRefused`, so an operator who stepped back to Mapping found a step that
   //  explained itself and offered nothing: they could see the map had already been sent and could
   //  do nothing about it. Going back is only worth offering if something can change there, so the
-  //  panel stays and step 2's action becomes a re-upload. The RUN's map is still immutable, which
+  //  panel stays and step 3's action becomes a re-upload. The RUN's map is still immutable, which
   //  is what the confirm route's guarantees rest on: editing here mints a NEW run that supersedes
   //  this one, exactly as the refusal path already did.
-  const columnMapPanelShown = step === 2 && format === 'csv' && columnMapHeaders.length > 0
+  const columnMapPanelShown = step === 3 && format === 'csv' && columnMapHeaders.length > 0
     && !appliedSummary && !runInFlight;
   // While a run holds the register, the inputs it was uploaded with must not drift out from under
   // it — the run is for THAT file under THAT national system, and nothing here can retract it.
@@ -1185,7 +1222,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   an item that repeats the button is neither, and an operator reported the menu as
                   contradicting the button it sat beside. It survives here only for Review, where a
                   re-upload is a genuine alternative to confirming. */}
-              {!runId && step === 3 && (
+              {!runId && step === 4 && (
                 <DropdownMenuItem disabled={uploadDisabled} onClick={() => void handleUpload()}>
                   {uploading ? uploadLabel : t('facilities.import.uploadAction')}
                 </DropdownMenuItem>
@@ -1462,13 +1499,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           )}
           {/* ⚠ `!error` matters: the poll's catch STOPS the chain and leaves `run` null, so without
               it this line went on claiming an activity that had already given up — underneath the
-              error box explaining that it had. Task 3: gated to Review (step 3) with the rest of the
-              run status blocks below — `hasReview` (and so `step === 3`) is already true the instant
-              `runId` is set, so this shows exactly when it used to. */}
-          {step === 3 && runId && !run && !error && (
+              error box explaining that it had. Task 3: gated to Review (step 4, renumbered by the
+              reachability fix above) with the rest of the run status blocks below. `hasReview`
+              (and so `step === 4`) turns true the instant Mapping's own Upload sets `runId` and
+              `summaryAt` together, so this shows exactly when it used to. */}
+          {step === 4 && runId && !run && !error && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">{t('facilities.import.runLoading')}</p>
           )}
-          {step === 3 && run && RUN_ACTIVE_STATUSES.includes(run.status) && (
+          {step === 4 && run && RUN_ACTIVE_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-border px-3 py-2 text-xs space-y-1">
               <p className="font-medium">{t(`facilities.import.runStatus.${run.status}`)}</p>
               {run.phase && <p className="text-muted-foreground">{t('facilities.import.runPhase', { phase: run.phase })}</p>}
@@ -1486,14 +1524,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               operator it was "cancelled" would be a claim about a national register that the server
               never made. Only the 200 `cancelled` answer — a run in a state no worker claims, which
               the route terminated itself — may say so. */}
-          {step === 3 && cancelOutcome && run && !RUN_TERMINAL_STATUSES.includes(run.status) && (
+          {step === 4 && cancelOutcome && run && !RUN_TERMINAL_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
               {cancelOutcome === 'requested'
                 ? t('facilities.import.cancelRequestedNotice')
                 : t('facilities.import.cancelledNotice')}
             </div>
           )}
-          {step === 3 && run?.status === 'cancelled' && (
+          {step === 4 && run?.status === 'cancelled' && (
             <div className="mx-6 mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
               {t('facilities.import.cancelledNotice')}
             </div>
@@ -1502,7 +1540,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               newer upload of the same register can take the run over and it ends here instead. The
               operator sees that only because the sheet kept polling — which is why this block
               exists at all rather than the run simply vanishing from the screen. */}
-          {step === 3 && run?.status === 'failed' && (
+          {step === 4 && run?.status === 'failed' && (
             <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <p className="font-medium">{t('facilities.import.runFailedTitle')}</p>
               {run.error && <p className="text-xs">{run.error}</p>}
@@ -1542,8 +1580,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               )}
               {/* Round-2 fix: the refusal that keeps this panel mounted needs its OWN explanation
                   HERE too. `ReconciliationSummary`'s copy of this same block only ever renders on
-                  Review (step 3) — which a column-map refusal no longer reaches (see the
-                  auto-advance effect's `columnMapRefused` guard) — so without this the operator
+                  Review (step 4, renumbered by the reachability fix above). A column-map
+                  refusal no longer reaches Review at all (see the auto-advance effect's
+                  `columnMapRefused` guard), so without this the operator
                   would see the panel with no reason given for why it is still here. Same
                   component, same i18n keys as the Review-side copy; nothing here is reworded. */}
               {columnMapRefused && awaitingSummary && (
@@ -1554,20 +1593,20 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </div>
           )}
 
-          {/* Whole-branch review, FINDING 2: step 2 with nothing on it. `columnMapPanelShown`
-              covers five distinct states with one gate — a JSONL release, an applied run, a run or a
-              summary that is not a column-map refusal, and the brief window while `File.text()` is
-              still resolving — and every one of them left this step a blank pane, most visibly for a
-              first, ordinary JSONL upload: Continue from Source landed on a step labelled Mapping
-              with nothing on it at all. Two messages, not five: JSONL has no column map to set at
-              all; every other case's map already went out with the upload and cannot be changed
-              from here now. */}
+          {/* Whole-branch review, FINDING 2: step 3 (Mapping, renumbered by the reachability fix
+              above) with nothing on it. `columnMapPanelShown` covers five distinct states with one
+              gate: a JSONL release, an applied run, a run or a summary that is not a column-map
+              refusal, and the brief window while `File.text()` is still resolving. Every one
+              of them left this step a blank pane, most visibly for a first, ordinary JSONL upload:
+              stepping forward to Mapping showed nothing at all. Two messages, not five: JSONL has
+              no column map to set at all; every other case's map already went out with the upload
+              and cannot be changed from here now. */}
           {/* ⛔ IT MAY ONLY SAY "already sent" WHEN A RUN EXISTS. This was one string standing in
               for five states, so a hidden column map always claimed the map had gone out with an
               upload. An operator read that on a file they had not uploaded, took it to mean mapping
               was closed to them, uploaded with no map, and had all 21 columns refused as
               unrecognised. `runId` is the only thing that makes that sentence true. */}
-          {step === 2 && !columnMapPanelShown && (
+          {step === 3 && !columnMapPanelShown && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">
               {format === 'jsonl'
                 ? t('facilities.import.columnMapNotApplicableJsonl')
@@ -1582,7 +1621,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               overrides (and the absent/deleted policies) appear only once a check has actually
               reported the thing they answer. Before any check it renders the conflict policy alone,
               which is the one choice that can never be discovered from a summary. */}
-          {step === 2 && !runFinished && (
+          {step === 3 && !runFinished && (
             <div className="mx-6 mt-4">
               <ImportPolicyPanel
                 onConflict={onConflict}
@@ -1607,7 +1646,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           {/* Task 4: the value-mapping worklist, where the deciding happens. Fed by the last
               check's findings, so it is absent on the first pass (nothing has read the file yet)
               and present once a check has found work. Review reports the same values read-only. */}
-          {step === 2 && liveFindings
+          {step === 3 && liveFindings
             && CONTROLLED_FIELDS.some((f) => liveFindings.unmapped[f].length > 0) && (
             <div className="mx-6 mt-4">
               <ValueMapPanel
@@ -1618,7 +1657,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </div>
           )}
 
-          {step === 3 && awaitingSummary && !appliedSummary && (
+          {step === 4 && awaitingSummary && !appliedSummary && (
             <ReconciliationSummary
               result={awaitingSummary}
               // A FACT about this result, not a control: what the upload recorded and the validate
@@ -1633,7 +1672,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             />
           )}
 
-          {step === 3 && appliedSummary && (
+          {step === 4 && appliedSummary && (
             <div className="mx-6 mt-4 space-y-2 text-sm">
               {/* ⛔ A file that produced NO ROWS is not a completed import, and saying so in green
                   is how the Zambia team read "Import complete. Created 0, updated 0, skipped 0."
@@ -1711,6 +1750,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           className="flex items-center justify-end gap-2 border-t border-border px-6 py-3"
           style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
         >
+          {/* Fix for the reachability regression: this button used to just move to the next step
+              (`setRequestedStep(2)`). It now stores the file, which is what makes `hasStoredFile`
+              (and so `furthestStep`) a real signal instead of the hardcoded `true` the widened
+              model shipped with. `uploadDisabled` already covers every reason this could fail
+              (no file, no register, an empty file, a missing header row, or an upload already in
+              flight), so it replaces the old bare `hasFile`/`hasRegister` check. */}
           {step === 1 && (needsRegister ? (
             <Button size="sm" disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
               {t('facilities.import.registerSourceAction')}
@@ -1718,10 +1763,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           ) : (
             <Button
               size="sm"
-              disabled={!stepGate.hasFile || !stepGate.hasRegister || noHeaderRow}
-              onClick={() => setRequestedStep(2)}
+              disabled={uploadDisabled}
+              onClick={() => void handleUpload({ validate: false })}
             >
-              {t('facilities.import.continueAction')}
+              {uploading ? uploadLabel : t('facilities.import.continueAction')}
             </Button>
           ))}
           {/* Whole-branch review, FINDING 1: this button used to check only `uploadDisabled` — the
@@ -1739,7 +1784,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               that simply exists: still a re-upload, because the operator stepped back here to
               change something and needs a way to send it. All three call `handleUpload`, which
               reads the live map and supersedes any run this sheet is watching. */}
-          {step === 2 && (
+          {step === 3 && (
             <Button
               size="sm"
               disabled={uploadDisabled || confirming || cancelling}
@@ -1752,7 +1797,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               )}
             </Button>
           )}
-          {step === 3 && canConfirmRun && (
+          {step === 4 && canConfirmRun && (
             <Button size="sm" disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
               {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}
             </Button>

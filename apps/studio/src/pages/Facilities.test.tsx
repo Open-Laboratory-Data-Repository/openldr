@@ -506,9 +506,17 @@ describe('Facilities page', () => {
     fireEvent.click(nationalSystemTrigger);
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
+    // Fix for the reachability regression (ImportFacilitiesSheet.tsx): Continue now stores the
+    // file (`validate=false`) and lands on Data, not Mapping directly. Mapping's own re-upload
+    // action reads "Check again with this map" here, not "Upload and validate", because `runId`
+    // is already set by Source's own store. See that button's own comment.
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Upload and validate' }));
-    await waitFor(() => expect(uploadFacilityImport).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+      .toHaveAttribute('aria-current', 'step'));
+    fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Check again with this map' }));
+    // TWO calls: Source's own store, then Mapping's validate.
+    await waitFor(() => expect(uploadFacilityImport).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm import' }));

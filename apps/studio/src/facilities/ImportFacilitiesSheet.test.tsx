@@ -81,11 +81,13 @@ async function pickFileAndSystem(contents?: string) {
   fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 }
 
-/** Task 4: the strip now shows four steps (Source, Data, Mapping, Review), so position 2 reads
- *  "Data" and position 3 reads "Mapping" in the DOM, one slot earlier than their names below say.
- *  The sheet itself is unchanged: numeric step 2 is still where the mapping panel and Upload button
- *  render, and numeric step 3 is still Review. Task 6 moves the mapping panel to match the strip;
- *  until then these helpers click by the strip's actual current text, not by the step's old name. */
+/** Fix for the reachability regression (Critical finding, code review): the strip shows four
+ *  steps (Source, Data, Mapping, Review) and the sheet's OWN numbering now agrees with it: 1
+ *  Source, 2 Data, 3 Mapping, 4 Review. Before this fix the sheet still rendered Mapping's panel
+ *  at its own `step === 2` and Review's summary at `step === 3`, one slot behind the strip's real
+ *  labels, so clicking strip position 3 ("Mapping") actually showed Review's content and an
+ *  operator could reach it without ever seeing the column map. The helpers below click by the
+ *  strip's real label at its real position, which is what an operator does. */
 
 /** Reading the File's text back out (`file.text()`) is genuinely asynchronous in jsdom, so the
  *  Preview action stays disabled until it resolves — this opens the menu and waits for THAT,
@@ -111,14 +113,14 @@ async function previewNow() {
 /** Click the step strip back to Mapping. Every decision lives there now, so a test that changes one
  *  after a check has to come back for it — which is the flow itself, not test ceremony. */
 async function backToMapping() {
-  // ⛔ WAITS FOR REVIEW FIRST. `previewNow` clicks the menu item and returns; it does not await
+  // ⛔ WAITS FOR REVIEW FIRST. `uploadNow` fires the last click and returns; it does not await
   // the response. Stepping back before the result lands clicks a Mapping button while the sheet is
   // ALREADY on Mapping, which does nothing, and the auto-advance effect then carries the operator
   // to Review the moment the result arrives. Measured: the click looked fine and the step went
   // forward anyway.
-  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
     .toHaveAttribute('aria-current', 'step'));
-  fireEvent.click(screen.getByRole('button', { name: /2\s*Data/ }));
+  fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
 }
 
 /** Step forward to Review WITHOUT re-checking. Only legal when the summary was never retired, i.e.
@@ -126,7 +128,7 @@ async function backToMapping() {
  *  change what the parser finds, only whether Apply may proceed, so it is deliberately absent from
  *  that signature and ticking it leaves the summary standing. */
 function forwardToReview() {
-  fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+  fireEvent.click(screen.getByRole('button', { name: /4\s*Review/ }));
 }
 
 /** Every `FacilityImportResult` field, defaulted to "clean, nothing to reconcile" — every test
@@ -173,25 +175,61 @@ function runView(overrides: Partial<FacilityImportRunView> = {}): FacilityImport
 
 const mocked = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeof vi.fn>;
 
-/** Round-2 fix: drives the VISIBLE "Upload and validate" button — the one `handleUpload` actually
- *  ships for — rather than its dropdown twin, so this exercises the real wiring an operator uses.
- *  That button only renders on Mapping (step 2), so this presses Continue first when Source's own
- *  Continue button is still on screen (every caller reaches this straight after `pickFileAndSystem`,
- *  which never advances the step itself). Waits for Upload to become enabled first — the same
- *  discipline as `previewNow`, except Upload deliberately does NOT wait on `File.text()`: the File
- *  itself is the request body, so nothing has to be read before the action is live. */
-async function uploadNow() {
+/** Drives the sheet from Source to Mapping, the first half of what an operator now needs to reach
+ *  the column map at all, since the reachability fix moved storage ahead of Mapping.
+ *
+ *  Source's own visible button (`Continue`) now stores the file (`validate=false`) and lands on
+ *  Data; only THEN is Mapping's own strip position reachable. `uploadFacilityImport` is called
+ *  ONCE by this alone. Every caller that reaches this already past Source (nothing left to click,
+ *  or Mapping already current) is a no-op. A failed store leaves Mapping unreachable and this
+ *  returns having done nothing further: the caller's own assertions on the surfaced error are the
+ *  point of that case. */
+async function advanceToMapping() {
   const continueButton = screen.queryByRole('button', { name: 'Continue' });
-  if (continueButton) fireEvent.click(continueButton);
-  const button = await screen.findByRole('button', { name: 'Upload and validate' });
+  if (continueButton) {
+    fireEvent.click(continueButton);
+    // Query FRESH on every poll, never the button captured above: once the store succeeds the
+    // sheet moves off Source and this button unmounts, and a stale reference to a removed node
+    // keeps reporting whatever `disabled` it had the instant before removal.
+    await waitFor(() => {
+      const stillOnSource = screen.queryByRole('button', { name: 'Continue' });
+      expect(stillOnSource === null || !stillOnSource.hasAttribute('disabled')).toBe(true);
+    });
+  }
+  const mappingStep = screen.queryByRole('button', { name: /3\s*Mapping/ });
+  if (mappingStep && mappingStep.getAttribute('aria-current') !== 'step' && !mappingStep.hasAttribute('disabled')) {
+    fireEvent.click(mappingStep);
+  }
+}
+
+/** Drives the two clicks an operator now needs for a first upload+validate: `advanceToMapping`
+ *  above, then Mapping's own visible button, the one `handleUpload` ships an ordinary validate
+ *  for. `uploadFacilityImport` is therefore called TWICE by a full run through this helper, once
+ *  to store and once to validate, which is this task's own known, accepted double-upload. A
+ *  later task replaces Mapping's re-upload with a check against the already-stored file. Every
+ *  caller that mocks `uploadFacilityImport` to resolve must expect two calls, not one. */
+async function uploadNow() {
+  await advanceToMapping();
+  // A failed store leaves Mapping unreachable and nothing left to drive here.
+  const mappingStep = screen.queryByRole('button', { name: /3\s*Mapping/ });
+  if (!mappingStep || mappingStep.hasAttribute('disabled')) return;
+  // Mapping's own button can no longer read "Upload and validate": Mapping is only ever reachable
+  // once `runId` is already set (Source's store is what earns `hasStoredFile`), so its label is
+  // always one of the two re-upload variants, never the first-upload one. Matched for both anyway,
+  // since a later task's fix for that label mismatch should not have to find this helper too.
+  const button = await screen.findByRole(
+    'button',
+    { name: /upload and validate|check again with this map|check again with the corrected map/i },
+  );
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
 }
 
 /** Round-2 fix: the confirm-path equivalent of `uploadNow` above — drives the VISIBLE "Confirm
- *  import" button on Review (step 3), which `canConfirmRun` renders once a run's own validated
- *  summary is on screen. Every caller has already awaited something that only exists once that
- *  summary rendered, so the button is present synchronously here. */
+ *  import" button on Review (step 4, renumbered by the reachability fix above), which
+ *  `canConfirmRun` renders once a run's own validated summary is on screen. Every caller has
+ *  already awaited something that only exists once that summary rendered, so the button is
+ *  present synchronously here. */
 function confirmNow() {
   fireEvent.click(screen.getByRole('button', { name: 'Confirm import' }));
 }
@@ -222,7 +260,7 @@ async function reviewWithSummary(
   await uploadNow();
   // ⛔ Waits for the STEP, not for a text match. Every caller then asserts its own copy, and a
   // helper that waited on one caller's string would silently pass for a summary that never rendered.
-  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
     .toHaveAttribute('aria-current', 'step'));
 }
 
@@ -247,6 +285,14 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.suggestValueMappings).mockResolvedValue({ values: [], notValidated: false });
     mocked(api.writeFacilityValueMappings).mockResolvedValue({ written: 0, superseded: [] });
     mocked(api.revalidateFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'queued' });
+    // Fix for the reachability regression: Source's own Continue button now stores the file
+    // (`validate=false`), which is a real network call it never made before. Every test that
+    // clicks Continue needs this to resolve, even the many that only care about navigating to
+    // Data or Mapping and never touch the run itself. Defaulted here so those tests do not each
+    // have to arrange it by hand. Tests that care about the upload's own request or response
+    // override this per-call, exactly as `suggestColumnMap` above is overridden.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-default' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'stored' }));
   });
 
   // ── B1 Task 9: the national-system picklist ─────────────────────────────────────────────────────
@@ -278,7 +324,8 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
     await uploadNow();
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
     // ⛔ THE WHOLE POINT: the source's URI reaches the request, never its display name.
     // ⛔ The second argument is the progress callback. `uploadFacilityImport` takes two, and a
     // one-argument `toHaveBeenCalledWith` would fail on the arity rather than on the subject.
@@ -416,7 +463,9 @@ describe('ImportFacilitiesSheet', () => {
     // summary, and the next check is theirs to ask for.
     await backToMapping();
     expect(screen.getByRole('checkbox', { name: /import anyway/i })).toBeInTheDocument();
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
+    // Navigating back does not call it again.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
   });
 
   // Task 5: surface Task 4's `quarantined` (facility-import.ts) — a structurally malformed row's
@@ -449,7 +498,9 @@ describe('ImportFacilitiesSheet', () => {
     // ticking it does NOT retire the Review the operator already has: they step straight back.
     await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
+    // Ticking the checkbox does not re-check by itself, so this stays at two.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
     forwardToReview();
 
     expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
@@ -523,7 +574,9 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
     forwardToReview();
     expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
+    // Neither tick re-checks by itself, so this stays at two through both direction changes.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
   });
 
   it('surfaces duplicates as a plainly-visible warning, not a buried number', async () => {
@@ -835,8 +888,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-    // Continue advances to Mapping — Source, format/complete-release/release-version, is where the
-    // sheet stays until the operator presses it. Set these before ever leaving Source.
+    // Continue now stores the file. Source, where format/complete-release/release-version live,
+    // is where the sheet stays until the operator presses it. Set these before ever leaving Source.
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
@@ -844,7 +897,8 @@ describe('ImportFacilitiesSheet', () => {
 
     await uploadNow();
 
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
     expect(api.uploadFacilityImport).toHaveBeenLastCalledWith(
       expect.objectContaining({ format: 'jsonl', completeRelease: true, releaseVersion: 'r7' }),
       expect.any(Function),
@@ -954,7 +1008,7 @@ describe('ImportFacilitiesSheet', () => {
 
     await pickFileAndSystem();
     await uploadNow();
-    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
       .toHaveAttribute('aria-current', 'step'));
 
     await backToMapping();
@@ -1002,7 +1056,8 @@ describe('ImportFacilitiesSheet', () => {
 
     await uploadNow();
 
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
     // ⛔ `expect.any(File)` is the assertion that matters: the browser hands the File over as the
     // request body. A `csv: '<string>'` here would be the `f.text()` path this task removes.
     expect(api.uploadFacilityImport).toHaveBeenCalledWith(
@@ -1348,7 +1403,9 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
     await uploadNow();
 
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment). Both
+    // read the same sheet state, so both carry the declaration.
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
     expect(api.uploadFacilityImport).toHaveBeenCalledWith(
       expect.objectContaining({ nationalSystem: 'HFR', completeRelease: true }),
       expect.any(Function),
@@ -1369,7 +1426,8 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
     expect(api.uploadFacilityImport).toHaveBeenCalledWith(
       expect.objectContaining({ completeRelease: false }), expect.any(Function),
     );
@@ -1444,7 +1502,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/ward_code/)).toBeInTheDocument();
     // This refusal is not a column-map one, so the sheet's own retreat effect never fires — the run
     // reaching Review on its own, proven only indirectly by the assertions below until now.
-    expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('button', { name: /4\s*Review/ })).toHaveAttribute('aria-current', 'step');
     // ⛔ …and the tick that could only 409 is gone, replaced by the path that actually works.
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
     expect(screen.getByText(/the check has to run again with it/i)).toBeInTheDocument();
@@ -1504,9 +1562,13 @@ describe('ImportFacilitiesSheet', () => {
   // with an option the studio's upload did not expose; leave it and the apply parses nothing, writes
   // nothing and still reports `applied`. This is the affordance that 409 names.
   it('A2b: the run door re-uploads the same file with allowUnknownColumns, so the validate reviewed is the one applied', async () => {
+    // TWO uploads happen before the run under test even exists: Source's own store, then
+    // Mapping's real validate (see `uploadNow`'s own comment). `run-store` stands in for the
+    // first and is never read again; `run-b1` is Mapping's validate, the run whose summary this
+    // test is actually about.
     mocked(api.uploadFacilityImport)
-      .mockResolvedValueOnce({ runId: 'run-b1' })
-      .mockResolvedValueOnce({ runId: 'run-b2' });
+      .mockResolvedValueOnce({ runId: 'run-store' })
+      .mockResolvedValueOnce({ runId: 'run-b1' });
     mocked(api.getFacilityImportRun)
       .mockResolvedValueOnce(runView({
         id: 'run-b1', status: 'awaiting_confirmation',
@@ -1531,8 +1593,8 @@ describe('ImportFacilitiesSheet', () => {
     await uploadNow();
     await screen.findByText(/ward_code/);
 
-    // The FIRST upload carried no override — otherwise the second assertion below would be measuring
-    // a value that was always there.
+    // The FIRST upload (Source's store) carried no override. Otherwise the second assertion
+    // below would be measuring a value that was always there.
     expect(api.uploadFacilityImport).toHaveBeenNthCalledWith(
       1, expect.objectContaining({ allowUnknownColumns: false }), expect.any(Function),
     );
@@ -1546,7 +1608,9 @@ describe('ImportFacilitiesSheet', () => {
     expect(api.revalidateFacilityImportRun).toHaveBeenCalledWith(
       'run-b1', expect.objectContaining({ allowUnknownColumns: true }),
     );
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+    // Still just the two calls `uploadNow` made (Source's store, then Mapping's validate). The
+    // re-check above went through `revalidateFacilityImportRun`, not a third upload.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
     // ⛔ And the superseded run's summary — with its Confirm — leaves the screen rather than inviting
     // a decision about a run the register no longer belongs to.
     expect(await screen.findByText(/checking the import run/i)).toBeInTheDocument();
@@ -1621,7 +1685,9 @@ describe('ImportFacilitiesSheet', () => {
     expect(api.revalidateFacilityImportRun).toHaveBeenCalledWith(
       'run-b1', expect.objectContaining({ allowInvalidCoordinates: true }),
     );
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+    // Still just the two calls `uploadNow` made (Source's store, then Mapping's validate). The
+    // re-check above went through `revalidateFacilityImportRun`, not a third upload.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
 
     // The second run's stored options say the validate ran with it, so the notice changes and the
     // menu item retires — a second identical check would change nothing.
@@ -1664,10 +1730,14 @@ describe('ImportFacilitiesSheet', () => {
   // client gives up `fetch` for.
   it('A2b: the upload percentage is rendered where the operator can see it, not only on the menu item', async () => {
     let report: ((f: number | null) => void) | undefined;
-    mocked(api.uploadFacilityImport).mockImplementation((_p: unknown, onProgress: unknown) => {
-      report = onProgress as (f: number | null) => void;
-      return new Promise<never>(() => { /* never settles: the upload stays in flight */ });
-    });
+    // Source's own store resolves normally, so the sheet actually reaches Mapping. It is
+    // Mapping's own upload (the second call) whose progress this test watches.
+    mocked(api.uploadFacilityImport)
+      .mockResolvedValueOnce({ runId: 'run-store' })
+      .mockImplementation((_p: unknown, onProgress: unknown) => {
+        report = onProgress as (f: number | null) => void;
+        return new Promise<never>(() => { /* never settles: the upload stays in flight */ });
+      });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
@@ -1746,8 +1816,9 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
-    // The column map lives on Mapping (step 2) — Continue to reach it.
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    // The column map lives on Mapping (step 3). Continue stores the file and lands on Data first,
+    // so reaching it now costs the extra strip click `advanceToMapping` makes.
+    await advanceToMapping();
     // If the sheet fed `onChange` into anything OTHER than `columnMap` state directly — a debounce,
     // a batched update, a dropped call — the seed `ColumnMapStep` computes on mount would never land
     // back in `value`, and both rows would still read "Not mapped" here (this is exactly the bug
@@ -1790,17 +1861,18 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await advanceToMapping();
     expect(await screen.findByLabelText('MFL Code')).toHaveTextContent('national_code');
 
     // The File input lives on Source, not Mapping — go back to reach it, pick a DIFFERENT file
-    // (headers the first file's mapping decisions know nothing about), then Continue again to see
-    // the mapping panel react to it.
+    // (headers the first file's mapping decisions know nothing about), then store and reach Mapping
+    // again to see the panel react to it. Picking a new file drops the first file's stored run
+    // (`selectFile`'s own `setRunId(null)`), so this is a second store, not a re-upload.
     fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
     fireEvent.change(screen.getByLabelText('File'), {
       target: { files: [csvFile('Code,Facility Name\nX,Y\n')] },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await advanceToMapping();
 
     expect(await screen.findByLabelText('Code')).toHaveTextContent('Keep as extra data');
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
@@ -1846,7 +1918,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await advanceToMapping();
     await screen.findByLabelText('MFL Code');
     await uploadNow();
 
@@ -1865,7 +1937,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
     expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
     // And the sheet really did stay put: Mapping is still current, not Review.
-    expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
   });
 
   it('does not render the columnMapErrors block, or keep the panel mounted, once the file parses cleanly', async () => {
@@ -1883,11 +1955,11 @@ describe('ImportFacilitiesSheet', () => {
     await screen.findByText(/facility row\(s\) will be created/i);
     expect(screen.queryByText(/both map to/)).not.toBeInTheDocument();
     // Whole-branch review, FINDING 5: this does NOT credit the panel's own render gate for the
-    // absence below. A clean summary puts the sheet on Review (step 3), so
-    // `queryByLabelText('MFL Code')` is absent because `step !== 2`, not because
+    // absence below. A clean summary puts the sheet on Review (step 4), so
+    // `queryByLabelText('MFL Code')` is absent because `step !== 3`, not because
     // `columnMapPanelShown`'s own clause excluded it while still on Mapping. The "keeps
     // ColumnMapStep mounted through a refusal" test above is the one that actually exercises that
-    // clause, by staying on step 2 the whole time.
+    // clause, by staying on step 3 the whole time.
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
   });
 
@@ -1910,8 +1982,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('Code,Facility Name\nA,B\nC,D\n');
-    // The row-count hint and the notice both live in ColumnMapStep, on Mapping (step 2).
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    // The row-count hint and the notice both live in ColumnMapStep, on Mapping (step 3).
+    await advanceToMapping();
 
     // onValidityChange wired: neither header satisfies a required field, so the notice shows.
     expect(await screen.findByText(/still preview or upload/i)).toBeInTheDocument();
@@ -1933,7 +2005,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await advanceToMapping();
     await screen.findByLabelText('MFL Code');
     expect(screen.queryByText(/still preview or upload/i)).not.toBeInTheDocument();
   });
@@ -1973,7 +2045,7 @@ describe('ImportFacilitiesSheet', () => {
     // poll answering AND that retreat settling, rather than checking each in its own turn.
     await waitFor(() => {
       expect(screen.getByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step');
+      expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
     });
     expect(screen.getByLabelText('Province')).toBeInTheDocument();
     expect(screen.getByLabelText('Zone')).toBeInTheDocument();
@@ -2014,7 +2086,7 @@ describe('ImportFacilitiesSheet', () => {
     // Round-2 fix: the sheet retreats to Mapping once the refusal is known — see the "keeps
     // ColumnMapStep mounted" test above for why this needs its own wait. The panel is on screen
     // once this settles, no back-click needed to reach it.
-    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
 
     // Fix it in place: send Zone to extras, which is what actually releases its passthrough claim.
     fireEvent.click(screen.getByLabelText('Zone'));
@@ -2029,7 +2101,45 @@ describe('ImportFacilitiesSheet', () => {
     expect(mocked(api.revalidateFacilityImportRun).mock.calls[0][1]).toEqual(
       expect.objectContaining({ columnMap: expect.objectContaining({ extras: ['Zone'] }) }),
     );
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment). The
+    // corrected map above went through `revalidateFacilityImportRun`, not a third upload.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
+  });
+
+  // ⛔ CRITICAL, code review: the reachability regression the widened step model shipped with.
+  // `hasStoredFile` used to be hardcoded `true`, so `furthestStep` reached 3 the moment a file and
+  // a register were picked, before any upload, while the sheet's own content still rendered
+  // Mapping at `step === 2` and Review at `step === 3`. Clicking strip position 3, labelled
+  // "Mapping", actually showed REVIEW'S content: an operator could reach "Confirm import" with an
+  // "Upload and validate" action and no column map ever shown. This test pins the fix directly: it
+  // fails against the old code (Mapping reachable pre-upload, and its strip position rendering
+  // Review) and passes only once the sheet's own step numbers agree with the strip's labels.
+  it('picking a file and a register alone does not open Mapping, and Mapping never renders as Review', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+
+    // Before ANY upload, Data, Mapping and Review must all stay behind Source. This is exactly
+    // what the hardcoded `hasStoredFile: true` broke: it earned Mapping's strip position on a
+    // file and a register alone.
+    expect(screen.getByRole('button', { name: /2\s*Data/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /4\s*Review/ })).toBeDisabled();
+
+    // Storing the file (Continue) opens Data and earns Mapping, but not Review, which needs a
+    // real validate the operator has not asked for yet.
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+      .toHaveAttribute('aria-current', 'step'));
+    expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /4\s*Review/ })).toBeDisabled();
+
+    // The regression, pinned directly: strip position 3 must render MAPPING'S content, its own
+    // re-upload action, never Review's verdict screen with no column map in sight.
+    fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+    expect(await screen.findByRole('button', { name: 'Check again with this map' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/review the summary below/i)).not.toBeInTheDocument();
   });
 
   describe('the step shell', () => {
@@ -2042,7 +2152,9 @@ describe('ImportFacilitiesSheet', () => {
       expect(screen.getByRole('button', { name: /2\s*Data/ })).toBeDisabled();
     });
 
-    it('opens Mapping once Continue is pressed, and shows the column map there', async () => {
+    // Fix for the reachability regression: Continue used to open Mapping directly. It now stores
+    // the file first and lands on Data, so the column map is one more click away, on Mapping.
+    it('Continue stores the file and opens Data; Mapping shows the column map once reached', async () => {
       mocked(api.suggestColumnMap).mockResolvedValueOnce({
         headers: ['MFL Code'],
         columns: [{ header: 'MFL Code', candidates: [] }],
@@ -2055,36 +2167,35 @@ describe('ImportFacilitiesSheet', () => {
       expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
+      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+        .toHaveAttribute('aria-current', 'step'));
+      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
       expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
     });
 
-    // The register picker and the file input belong to step 1 and must not be on screen at step 2:
+    // The register picker and the file input belong to step 1 and must not be on screen past it:
     // leaving them there is what made five stages read as one scrolling surface.
     it('hides the source inputs once past Source', async () => {
-      mocked(api.suggestColumnMap).mockResolvedValueOnce({
-        headers: ['MFL Code'],
-        columns: [{ header: 'MFL Code', candidates: [] }],
-      });
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
       await pickFileAndSystem();
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-      await screen.findByLabelText('MFL Code');
+      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+        .toHaveAttribute('aria-current', 'step'));
 
       expect(screen.queryByLabelText('File')).not.toBeInTheDocument();
       expect(screen.queryByRole('combobox', { name: 'National system' })).not.toBeInTheDocument();
     });
 
     it('goes back to Source and shows those inputs again', async () => {
-      mocked(api.suggestColumnMap).mockResolvedValueOnce({
-        headers: ['MFL Code'],
-        columns: [{ header: 'MFL Code', candidates: [] }],
-      });
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
       await pickFileAndSystem();
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-      await screen.findByLabelText('MFL Code');
+      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+        .toHaveAttribute('aria-current', 'step'));
       fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
 
       expect(await screen.findByLabelText('File')).toBeInTheDocument();
@@ -2092,9 +2203,10 @@ describe('ImportFacilitiesSheet', () => {
 
   });
 
-  // Whole-branch review, FINDING 2: `ColumnMapStep` is the only thing gated to step 2, so every
-  // state that hides it — a JSONL release, or a map that has already been sent and cannot be
-  // changed here any more — left Mapping a blank pane with no explanation at all.
+  // Whole-branch review, FINDING 2: `ColumnMapStep` is the only thing gated to Mapping (step 3,
+  // renumbered by the reachability fix above), so every state that hides it (a JSONL release, or
+  // a map that has already been sent and cannot be changed here any more) left Mapping a blank
+  // pane with no explanation at all.
   describe('when Mapping has nothing to show', () => {
     it('says a JSONL release has no column map to set', async () => {
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
@@ -2102,7 +2214,7 @@ describe('ImportFacilitiesSheet', () => {
       await pickFileAndSystem();
       fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
       fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
-      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      await advanceToMapping();
 
       expect(await screen.findByText(/no column map to set/i)).toBeInTheDocument();
       expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
@@ -2122,7 +2234,7 @@ describe('ImportFacilitiesSheet', () => {
       await screen.findByText(/facility row\(s\) will be created/i);
 
       // The clean summary auto-advances to Review, so go back to Mapping.
-      fireEvent.click(screen.getByRole('button', { name: /2\s*Data/ }));
+      fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
 
       // ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: that Mapping had no panel to show and said so,
       // "already been sent with the upload". True at the time, and useless to the operator who
@@ -2140,7 +2252,10 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   describe('the primary action', () => {
-    it('offers Continue on Source and Upload and validate on Mapping', async () => {
+    // Fix for the reachability regression: Continue's own click now lands on Data, which has no
+    // primary action of its own yet (a later task adds one alongside the grid). Mapping is where
+    // the re-upload action actually shows, one strip click further on.
+    it('offers Continue on Source, nothing yet on Data, and a re-upload action on Mapping', async () => {
       mocked(api.suggestColumnMap).mockResolvedValueOnce({
         headers: ['MFL Code'],
         columns: [{ header: 'MFL Code', candidates: [] }],
@@ -2155,8 +2270,17 @@ describe('ImportFacilitiesSheet', () => {
       expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-      expect(await screen.findByRole('button', { name: 'Upload and validate' })).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+        .toHaveAttribute('aria-current', 'step'));
       expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Check again with this map' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+      // Mapping's own button can no longer read "Upload and validate": Mapping is only ever
+      // reachable once `runId` is already set (Source's store is what earns `hasStoredFile`), so
+      // this reads as a re-upload from the moment it first renders.
+      expect(await screen.findByRole('button', { name: 'Check again with this map' })).toBeInTheDocument();
     });
 
     // The whole point of the exception to AGENTS.md section 5: the action that advances is visible,
@@ -2173,8 +2297,8 @@ describe('ImportFacilitiesSheet', () => {
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
       await pickFileAndSystem();
-      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-      await screen.findByRole('button', { name: 'Upload and validate' });
+      await advanceToMapping();
+      await screen.findByRole('button', { name: 'Check again with this map' });
 
       expect(screen.queryByRole('button', { name: /^Preview$/ })).not.toBeInTheDocument();
       openMenu();
@@ -2203,7 +2327,7 @@ describe('ImportFacilitiesSheet', () => {
       await screen.findByText(/import complete/i);
 
       // The run finished, so Back is offered again (`canGoBack`) and the step strip reopens.
-      fireEvent.click(screen.getByRole('button', { name: /2\s*Data/ }));
+      fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
 
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
     });
@@ -2237,7 +2361,7 @@ describe('ImportFacilitiesSheet', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/"MFL Code 2" and "MFL Code" both map to "national_code"/)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step');
+        expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
       });
       expect(screen.getByRole('button', { name: 'Check again with the corrected map' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
@@ -2326,6 +2450,11 @@ describe('the file drop zone', () => {
     mocked(api.suggestColumnMap).mockResolvedValue({ headers: [], columns: [] });
     mocked(api.suggestValueMappings).mockResolvedValue({ values: [], notValidated: false });
     mocked(api.writeFacilityValueMappings).mockResolvedValue({ written: 0, superseded: [] });
+    // Fix for the reachability regression: Continue now stores the file, a real network call.
+    // See the main suite's own `beforeEach` for why this is defaulted rather than arranged by
+    // hand in every test that clicks it.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-default' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'stored' }));
   });
 
   const dropZone = () => screen.getByRole('button', { name: /drag a \.csv/i });
@@ -2387,7 +2516,7 @@ describe('the file drop zone', () => {
     await waitFor(() => expect(trigger).toBeEnabled());
     fireEvent.click(trigger);
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await advanceToMapping();
 
     // The column map is on screen, and the sheet does not claim a map was already sent.
     expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
