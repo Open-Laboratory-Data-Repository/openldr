@@ -64,4 +64,57 @@ describe('DataGridStep', () => {
     render(<DataGridStep runId="fir_1" />);
     expect(await screen.findByText(/could not be read/i)).toBeInTheDocument();
   });
+
+  // ⛔ THE OPERATOR MUST LEARN IT IS THEIR FILE. This copy used to read "Check the connection and
+  // open this step again", which sends someone to look at their network over a bad line in their
+  // own CSV. The server's message names the run and the line, so it is shown.
+  it('shows what the server said went wrong, and does not blame the connection', async () => {
+    mocked(api.readFacilityImportRows).mockRejectedValue(
+      new Error('read import rows failed: import run fir_1: this file could not be read as CSV at line 12'),
+    );
+    render(<DataGridStep runId="fir_1" />);
+    expect(await screen.findByText(/at line 12/i)).toBeInTheDocument();
+    expect(screen.queryByText(/connection/i)).not.toBeInTheDocument();
+  });
+
+  // ⛔ SKIPPED LINES ARE REPORTED, NOT SWALLOWED. One unreadable JSONL line in a 3 788-line release
+  // must not hide the other 3 787, and it must not silently vanish either: the operator has to know
+  // the table is short and which lines are missing from it.
+  it('names the lines the server could not read, above the table', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['MFL Code', 'Name'],
+      rows: [['100001', 'Chunga Clinic']],
+      offset: 0, limit: 100, total: 1, skipped: 2, skippedLines: [4, 9],
+    });
+    render(<DataGridStep runId="fir_1" />);
+    await screen.findByText('Chunga Clinic');
+    expect(screen.getByText(/4, 9/)).toBeInTheDocument();
+  });
+
+  it('says nothing about skipped lines for a clean file', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['MFL Code', 'Name'],
+      rows: [['100001', 'Chunga Clinic']],
+      offset: 0, limit: 100, total: 1, skipped: 0, skippedLines: [],
+    });
+    render(<DataGridStep runId="fir_1" />);
+    await screen.findByText('Chunga Clinic');
+    expect(screen.queryByText(/could not be read and/i)).not.toBeInTheDocument();
+  });
+
+  // ⛔ THE NOTICE IS WHAT MAKES THE SPEC'S RECORDED EXCEPTION TO AGENTS.md §6 LEGITIMATE. The design
+  // says stage 2 "says plainly that it needs a wider screen rather than rendering something
+  // unusable". Without it, 21 columns render at 375px and scroll sideways.
+  it('asks for a wider screen instead of rendering 21 columns on a phone', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width: 767px'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    render(<DataGridStep runId="fir_1" />);
+    expect(await screen.findByText(/wider screen/i)).toBeInTheDocument();
+    expect(screen.queryByText('Chunga Clinic')).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
 });

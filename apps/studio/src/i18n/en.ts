@@ -949,8 +949,14 @@ export const en = {
       completeReleaseHint: 'Only a complete release lets rows this file is silent about be checked against the registry as absent.',
       releaseVersionLabel: 'Release version',
       releaseVersionPlaceholder: 'optional',
-      rowsFailed: 'The file could not be read. Check the connection and open this step again.',
+      // ⛔ NO LONGER BLAMES THE CONNECTION. It used to read "Check the connection and open this step
+      // again", which sent an operator to look at their network over a bad line in their own file.
+      // What actually went wrong is shown underneath, in the server's own words.
+      rowsFailed: 'This file could not be read.',
       rowsEmpty: 'This file has no rows.',
+      rowsSkipped_one: '{{count}} line in this file could not be read and is not shown. Line {{lines}}.',
+      rowsSkipped_other: '{{count}} lines in this file could not be read and are not shown. Lines {{lines}}.',
+      rowsDesktopOnly: 'This step needs a wider screen. Open this import on a desktop to read the file. The other steps work here.',
       noRowsFound: 'No facility rows were found in this file. Confirm it is a compatible CSV export before trying again.',
       noRowsFoundSkipped: '{{skipped}} row(s) in this file were skipped for missing required fields, and none were imported. Confirm it is a compatible CSV export before trying again.',
       unknownColumnsTitle: 'Unrecognised columns',

@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TablePagination } from '@/components/ui/table-pagination';
 import { LoadingState } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { useIsNarrowViewport } from '@/lib/viewport';
 import { readFacilityImportRows, type FacilityImportRows } from '@/api';
 
 export interface DataGridStepProps {
@@ -20,34 +21,71 @@ export interface DataGridStepProps {
  *  this stage, so there is no contract field to validate a cell against and no way to tell a bad
  *  value from an unfamiliar one. Editing arrives with Mapping, where a target field exists.
  *
- *  Not wired into `ImportFacilitiesSheet.tsx` yet. That is a separate task, so it can land
- *  without colliding with this one. */
+ *  ⛔ DESKTOP ONLY, AND IT SAYS SO. This is the one deliberate exception to AGENTS.md §6 item 4 in
+ *  this wizard, recorded in the design (`docs/superpowers/specs/2026-09-08-facility-import-data-
+ *  stage-design.md`, "Two deliberate exceptions"): a 21-column spreadsheet at 375px is not usable
+ *  by anyone. The exception is only legitimate BECAUSE of the notice below. Rendering the grid
+ *  anyway, to scroll sideways off the screen, is what the operator was promised would not happen.
+ *  Steps 1, 3 and 4 stay usable on a phone, so the notice sends them on rather than stopping them. */
 export function DataGridStep({ runId }: DataGridStepProps): JSX.Element {
   const { t } = useTranslation();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(100);
   const [data, setData] = useState<FacilityImportRows | null>(null);
-  const [failed, setFailed] = useState(false);
+  /** The SERVER'S OWN WORDS, not a generic failure. It names the run and, for a file that cannot be
+   *  parsed at all, the line. Kept because the copy this replaced ("check the connection") sent an
+   *  operator to look at their network over a bad line in their own file. */
+  const [failure, setFailure] = useState<string | null>(null);
+  const narrow = useIsNarrowViewport();
 
   useEffect(() => {
+    // No request at all on a phone: the notice below is the whole of this step there, and paging a
+    // national register to render nothing is a download the operator did not ask for.
+    if (narrow) return undefined;
     let cancelled = false;
-    setFailed(false);
+    setFailure(null);
     readFacilityImportRows(runId, { offset: page * pageSize, limit: pageSize })
       .then((res) => { if (!cancelled) setData(res); })
-      .catch(() => { if (!cancelled) setFailed(true); });
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setFailure(err instanceof Error ? err.message : String(err));
+      });
     return () => { cancelled = true; };
-  }, [runId, page, pageSize]);
+  }, [runId, page, pageSize, narrow]);
 
-  if (failed) {
-    return <p className="mx-6 mt-4 text-sm text-destructive">{t('facilities.import.rowsFailed')}</p>;
+  if (narrow) {
+    return (
+      <div className="mx-6 mt-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+        {t('facilities.import.rowsDesktopOnly')}
+      </div>
+    );
+  }
+  if (failure !== null) {
+    return (
+      <div className="mx-6 mt-4 space-y-1">
+        <p className="text-sm text-destructive">{t('facilities.import.rowsFailed')}</p>
+        <p className="text-sm text-muted-foreground">{failure}</p>
+      </div>
+    );
   }
   if (!data) return <LoadingState className="min-h-[16rem] flex-1" />;
   if (data.rows.length === 0) {
     return <StripedEmpty className="min-h-[16rem] flex-1">{t('facilities.import.rowsEmpty')}</StripedEmpty>;
   }
 
+  // The server caps how many line numbers it names (a file with 3 000 bad lines has one problem,
+  // not 3 000), so the count and the list can disagree. The trailing marker says the list is
+  // partial rather than letting the operator read it as the whole set.
+  const skippedLines = (data.skippedLines ?? []).join(', ')
+    + ((data.skippedLines ?? []).length < (data.skipped ?? 0) ? ', …' : '');
+
   return (
     <div className="mx-6 mt-4 flex min-h-0 flex-1 flex-col">
+      {(data.skipped ?? 0) > 0 && (
+        <div className="mb-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
+          {t('facilities.import.rowsSkipped', { count: data.skipped, lines: skippedLines })}
+        </div>
+      )}
       <Table wrapperClassName="min-h-0 flex-1">
         <TableHeader>
           <TableRow>

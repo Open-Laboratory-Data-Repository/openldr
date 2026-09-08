@@ -1612,6 +1612,13 @@ export interface FacilityImportRows {
   offset: number;
   limit: number;
   total: number;
+  /** How many lines the server could not read at all, and so left out of `rows` and `total`. Zero
+   *  for a clean file, which is the ordinary case. Only a JSONL release can produce these: a line
+   *  that is not JSON, or one that is JSON but not an object. */
+  skipped?: number;
+  /** 1-based line numbers of those lines, capped by the server. Shorter than `skipped` when the
+   *  cap bit, which is why the count is sent separately. */
+  skippedLines?: number[];
 }
 
 export const readFacilityImportRows = (
