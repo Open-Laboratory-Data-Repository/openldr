@@ -7,6 +7,7 @@ const runStore = (run: unknown, requeue = vi.fn().mockResolvedValue(true)) => ({
 } as never);
 
 const parked = { id: 'fir_1', status: 'awaiting_confirmation', blobKey: 'b1' };
+const stored = { id: 'fir_4', status: 'stored', blobKey: 'b4' };
 
 describe('revalidateImportRun', () => {
   it('requeues a run that is parked for a decision, with the options it was given', async () => {
@@ -16,6 +17,34 @@ describe('revalidateImportRun', () => {
     });
     expect(out).toEqual({ ok: true });
     expect(requeue).toHaveBeenCalledWith('fir_1', 'awaiting_confirmation', { columnMap: { columns: {} } });
+  });
+
+  // ⛔ Task 6's open concern: Source stores a file but validates nothing, so the FIRST validate a
+  // register ever gets has to run from `stored`, with the column map Mapping just built. Without
+  // this, the only way to check a `stored` run at all was to send the whole file again.
+  it('requeues a stored run for its first validate, with the column map it was given', async () => {
+    const requeue = vi.fn().mockResolvedValue(true);
+    const out = await revalidateImportRun(runStore(stored, requeue), {
+      runId: 'fir_4', options: { columnMap: { columns: { name: 'facility_name' } } },
+    });
+    expect(out).toEqual({ ok: true });
+    // The CAS target is `stored`, the status this run was actually read at, not the
+    // `awaiting_confirmation` literal the old single-status guard always used.
+    expect(requeue).toHaveBeenCalledWith('fir_4', 'stored', { columnMap: { columns: { name: 'facility_name' } } });
+  });
+
+  // ⛔ The operator's ruling: widening the guard for `stored` must not also widen what an
+  // `awaiting_confirmation` run can do. `confirmed` is the state where the operator's approval
+  // actually lives (see `REVALIDATABLE_STATUSES`'s own comment), so a parse-changing option sent
+  // against a confirmed run must still be refused on status, before the option is ever read, with
+  // the same code and message shape a status refusal always had.
+  it('refuses a confirmed run a column map, naming the status, exactly like before', async () => {
+    const out = await revalidateImportRun(
+      runStore({ id: 'fir_5', status: 'confirmed', blobKey: 'b5' }),
+      { runId: 'fir_5', options: { columnMap: { columns: { name: 'facility_name' } }, allowUnknownColumns: true } },
+    );
+    expect(out).toMatchObject({ ok: false, code: 'not-revalidatable' });
+    expect((out as { message: string }).message).toContain('confirmed');
   });
 
   it('reports a run that does not exist', async () => {
@@ -37,8 +66,9 @@ describe('revalidateImportRun', () => {
   });
 
   // ⛔ Cancel DELETES the blob, so a cancelled run must be refused on STATUS before anything tries
-  // to read a key that points at nothing. Every non-parked state is refused for the same reason:
-  // only `awaiting_confirmation` has a file, a finished validate, and no work in flight.
+  // to read a key that points at nothing. Every state here is refused for the same reason: only
+  // `stored` and `awaiting_confirmation` have a file with no work in flight and no approval to
+  // disturb. `stored` is deliberately absent from this list now that it is revalidatable.
   it.each(['applied', 'failed', 'cancelled', 'applying', 'validating', 'queued', 'confirmed', 'previewed'])(
     'refuses a run in status %s, naming the status',
     async (status) => {

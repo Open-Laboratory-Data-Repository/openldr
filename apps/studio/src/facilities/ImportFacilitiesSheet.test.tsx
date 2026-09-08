@@ -206,20 +206,17 @@ async function advanceToMapping() {
 }
 
 /** Drives the two clicks an operator now needs for a first upload+validate: `advanceToMapping`
- *  above, then Mapping's own visible button ("Validate all"). `uploadFacilityImport` is therefore
- *  called TWICE by a full run through this helper, once to store and once to validate.
+ *  above, then Mapping's own visible button ("Validate all").
  *
- *  ⛔ TASK 6: STILL TWO CALLS, and that is a known, reported limit rather than an oversight. The
- *  button now goes through `handleRevalidate`, which checks an ALREADY-STORED run again without
- *  re-sending it, but only from `awaiting_confirmation`, the one status `revalidateImportRun`
- *  (packages/bootstrap/src/facility-revalidate.ts) accepts. The run this helper drives is
- *  `stored`, Source's own store-only status, so `canRevalidate` is false here and `handleRevalidate`
- *  falls back to `handleUpload`, exactly as it did before this task. Widening that guard to accept
- *  `stored` is a shared bootstrap/CLI decision (AGENTS.md §6 item 2) outside this task's file list.
- *  See `revalidateFacilityImportRun` calling this second, for the case this task's fix actually
- *  reaches once a run HAS reached `awaiting_confirmation`: "goes back to Mapping after a validate
- *  and checks the corrected map again without a third upload". Every caller that mocks
- *  `uploadFacilityImport` to resolve must expect two calls, not one. */
+ *  ⛔ ONE `uploadFacilityImport` CALL, NOT TWO. Source's Continue stores the file
+ *  (`validate=false`, minting a `stored` run) and Mapping's button then checks that SAME run
+ *  through `revalidateFacilityImportRun`, never sending the file again. This used to be two
+ *  `uploadFacilityImport` calls: `packages/bootstrap/src/facility-revalidate.ts`'s guard only
+ *  accepted `awaiting_confirmation`, so the run this helper drives (`stored`) fell back to a
+ *  second, full re-upload. That guard now accepts `stored` too, so `handleRevalidate`'s fallback
+ *  is never reached here. Every caller that mocks `uploadFacilityImport` to resolve must expect
+ *  exactly ONE call, and a caller asserting on the VALIDATE request's own arguments (columnMap,
+ *  allowUnknownColumns, …) now reads `revalidateFacilityImportRun`'s call instead. */
 async function uploadNow() {
   await advanceToMapping();
   // A failed store leaves Mapping unreachable and nothing left to drive here.
@@ -342,8 +339,9 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
     await uploadNow();
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
+    // ONE call: Source's own store. Mapping's validate goes through `revalidateFacilityImportRun`
+    // instead (see `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
     // ⛔ THE WHOLE POINT: the source's URI reaches the request, never its display name.
     // ⛔ The second argument is the progress callback. `uploadFacilityImport` takes two, and a
     // one-argument `toHaveBeenCalledWith` would fail on the arity rather than on the subject.
@@ -481,9 +479,9 @@ describe('ImportFacilitiesSheet', () => {
     // summary, and the next check is theirs to ask for.
     await backToMapping();
     expect(screen.getByRole('checkbox', { name: /import anyway/i })).toBeInTheDocument();
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
-    // Navigating back does not call it again.
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
+    // ONE call: Source's own store. Mapping's validate went through `revalidateFacilityImportRun`
+    // instead (see `uploadNow`'s own comment). Navigating back does not call it again.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
   // Task 5: surface Task 4's `quarantined` (facility-import.ts) — a structurally malformed row's
@@ -516,9 +514,10 @@ describe('ImportFacilitiesSheet', () => {
     // ticking it does NOT retire the Review the operator already has: they step straight back.
     await backToMapping();
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
-    // Ticking the checkbox does not re-check by itself, so this stays at two.
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
+    // ONE call: Source's own store. Mapping's validate went through `revalidateFacilityImportRun`
+    // instead (see `uploadNow`'s own comment). Ticking the checkbox does not re-check by itself,
+    // so this stays at one.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
     forwardToReview();
 
     expect(screen.getByRole('button', { name: 'Confirm import' })).toBeInTheDocument();
@@ -592,9 +591,10 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
     forwardToReview();
     expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
-    // Neither tick re-checks by itself, so this stays at two through both direction changes.
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
+    // ONE call: Source's own store. Mapping's validate went through `revalidateFacilityImportRun`
+    // instead (see `uploadNow`'s own comment). Neither tick re-checks by itself, so this stays at
+    // one through both direction changes.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
   it('surfaces duplicates as a plainly-visible warning, not a buried number', async () => {
@@ -915,8 +915,10 @@ describe('ImportFacilitiesSheet', () => {
 
     await uploadNow();
 
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
+    // ONE call: Source's own store, which already carries these three (set on Source before
+    // Continue). Mapping's validate goes through `revalidateFacilityImportRun` instead (see
+    // `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
     expect(api.uploadFacilityImport).toHaveBeenLastCalledWith(
       expect.objectContaining({ format: 'jsonl', completeRelease: true, releaseVersion: 'r7' }),
       expect.any(Function),
@@ -1074,8 +1076,10 @@ describe('ImportFacilitiesSheet', () => {
 
     await uploadNow();
 
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
+    // ONE call: Source's own store, which already carries the file, format and release version
+    // (all set on Source before Continue). Mapping's validate goes through
+    // `revalidateFacilityImportRun` instead (see `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
     // ⛔ `expect.any(File)` is the assertion that matters: the browser hands the File over as the
     // request body. A `csv: '<string>'` here would be the `f.text()` path this task removes.
     expect(api.uploadFacilityImport).toHaveBeenCalledWith(
@@ -1421,9 +1425,10 @@ describe('ImportFacilitiesSheet', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
     await uploadNow();
 
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment). Both
-    // read the same sheet state, so both carry the declaration.
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
+    // ONE call: Source's own store, which reads the same Source-scoped state and so carries the
+    // declaration. Mapping's validate goes through `revalidateFacilityImportRun` instead (see
+    // `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
     expect(api.uploadFacilityImport).toHaveBeenCalledWith(
       expect.objectContaining({ nationalSystem: 'HFR', completeRelease: true }),
       expect.any(Function),
@@ -1444,8 +1449,9 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment).
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
+    // ONE call: Source's own store. Mapping's validate goes through `revalidateFacilityImportRun`
+    // instead (see `uploadNow`'s own comment).
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
     expect(api.uploadFacilityImport).toHaveBeenCalledWith(
       expect.objectContaining({ completeRelease: false }), expect.any(Function),
     );
@@ -1580,13 +1586,10 @@ describe('ImportFacilitiesSheet', () => {
   // with an option the studio's upload did not expose; leave it and the apply parses nothing, writes
   // nothing and still reports `applied`. This is the affordance that 409 names.
   it('A2b: the run door re-uploads the same file with allowUnknownColumns, so the validate reviewed is the one applied', async () => {
-    // TWO uploads happen before the run under test even exists: Source's own store, then
-    // Mapping's real validate (see `uploadNow`'s own comment). `run-store` stands in for the
-    // first and is never read again; `run-b1` is Mapping's validate, the run whose summary this
-    // test is actually about.
-    mocked(api.uploadFacilityImport)
-      .mockResolvedValueOnce({ runId: 'run-store' })
-      .mockResolvedValueOnce({ runId: 'run-b1' });
+    // ONE upload mints the run: Source's own store. Mapping's own validate (`uploadNow`'s last
+    // click) and the later "check again" both check that SAME run through
+    // `revalidateFacilityImportRun`, never a second upload.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
     mocked(api.getFacilityImportRun)
       .mockResolvedValueOnce(runView({
         id: 'run-b1', status: 'awaiting_confirmation',
@@ -1599,9 +1602,9 @@ describe('ImportFacilitiesSheet', () => {
           blocked: true, blockedReason: 'unknown-columns',
         }),
       }))
-      // ⛔ The re-upload's own run is asked for and NEVER ANSWERS. That is what makes the assertions
+      // ⛔ The re-check's own poll is asked for and NEVER ANSWERS. That is what makes the assertions
       // at the end of this test discriminating: the only thing that can clear the superseded run's
-      // summary in that window is the sheet dropping it itself (`setRun(null)` in `handleUpload`).
+      // summary in that window is the sheet dropping it itself (`setRun(null)` in `handleRevalidate`).
       // With a mock that answers promptly, a poll would replace `run` either way and the assertion
       // would pass whether or not the sheet dropped anything — measured, it did.
       .mockReturnValue(new Promise<never>(() => { /* never settles */ }));
@@ -1611,10 +1614,11 @@ describe('ImportFacilitiesSheet', () => {
     await uploadNow();
     await screen.findByText(/ward_code/);
 
-    // The FIRST upload (Source's store) carried no override. Otherwise the second assertion
-    // below would be measuring a value that was always there.
-    expect(api.uploadFacilityImport).toHaveBeenNthCalledWith(
-      1, expect.objectContaining({ allowUnknownColumns: false }), expect.any(Function),
+    // The upload (Source's store) carried no override. Mapping's own first validate is what
+    // carried `allowUnknownColumns: false`, through `revalidateFacilityImportRun`, not this call.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+    expect(api.revalidateFacilityImportRun).toHaveBeenNthCalledWith(
+      1, 'run-b1', expect.objectContaining({ allowUnknownColumns: false }),
     );
 
     clickMenuItem('Check again keeping unrecognised columns');
@@ -1622,13 +1626,13 @@ describe('ImportFacilitiesSheet', () => {
     // ⛔ THE FILE IS NOT SENT AGAIN. Plan B's route re-checks the blob the run already stored, so
     // the override reaches the validate that produces the next summary without a second upload of a
     // register that can run to tens of thousands of rows.
-    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
-    expect(api.revalidateFacilityImportRun).toHaveBeenCalledWith(
-      'run-b1', expect.objectContaining({ allowUnknownColumns: true }),
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(2));
+    expect(api.revalidateFacilityImportRun).toHaveBeenNthCalledWith(
+      2, 'run-b1', expect.objectContaining({ allowUnknownColumns: true }),
     );
-    // Still just the two calls `uploadNow` made (Source's store, then Mapping's validate). The
-    // re-check above went through `revalidateFacilityImportRun`, not a third upload.
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
+    // Still the ONE upload `uploadNow` made (Source's store). Both validates above went through
+    // `revalidateFacilityImportRun`, never a second upload.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
     // ⛔ And the superseded run's summary — with its Confirm — leaves the screen rather than inviting
     // a decision about a run the register no longer belongs to.
     expect(await screen.findByText(/checking the import run/i)).toBeInTheDocument();
@@ -1698,14 +1702,15 @@ describe('ImportFacilitiesSheet', () => {
 
     clickMenuItem('Check again keeping rows with an invalid coordinate');
 
-    // Re-checked, not re-uploaded: the stored file is reused.
-    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
-    expect(api.revalidateFacilityImportRun).toHaveBeenCalledWith(
-      'run-b1', expect.objectContaining({ allowInvalidCoordinates: true }),
+    // Re-checked, not re-uploaded: the stored file is reused. Two calls total: `uploadNow`'s own
+    // first validate, then this one.
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(2));
+    expect(api.revalidateFacilityImportRun).toHaveBeenNthCalledWith(
+      2, 'run-b1', expect.objectContaining({ allowInvalidCoordinates: true }),
     );
-    // Still just the two calls `uploadNow` made (Source's store, then Mapping's validate). The
-    // re-check above went through `revalidateFacilityImportRun`, not a third upload.
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
+    // Still the ONE upload `uploadNow` made (Source's store). Both validates above went through
+    // `revalidateFacilityImportRun`, never a second upload.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
 
     // The second run's stored options say the validate ran with it, so the notice changes and the
     // menu item retires — a second identical check would change nothing.
@@ -1746,20 +1751,20 @@ describe('ImportFacilitiesSheet', () => {
   // ⛔ IN THE SHEET BODY. Radix unmounts the ⋯ menu when its item is selected, so a percentage shown
   // only on the menu item is invisible for the entire transfer — which is the one thing the XHR
   // client gives up `fetch` for.
+  // ⛔ SOURCE'S OWN STORE, not Mapping's validate. `revalidateFacilityImportRun` (`api.ts`) sends a
+  // small JSON body and takes no progress callback at all. There is no byte transfer left to
+  // measure once Mapping's validate stopped re-sending the file. Source's Continue is the one call
+  // that still streams the whole register, so it is the one this test can still watch progress on.
   it('A2b: the upload percentage is rendered where the operator can see it, not only on the menu item', async () => {
     let report: ((f: number | null) => void) | undefined;
-    // Source's own store resolves normally, so the sheet actually reaches Mapping. It is
-    // Mapping's own upload (the second call) whose progress this test watches.
-    mocked(api.uploadFacilityImport)
-      .mockResolvedValueOnce({ runId: 'run-store' })
-      .mockImplementation((_p: unknown, onProgress: unknown) => {
-        report = onProgress as (f: number | null) => void;
-        return new Promise<never>(() => { /* never settles: the upload stays in flight */ });
-      });
+    mocked(api.uploadFacilityImport).mockImplementation((_p: unknown, onProgress: unknown) => {
+      report = onProgress as (f: number | null) => void;
+      return new Promise<never>(() => { /* never settles: the upload stays in flight */ });
+    });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-    await uploadNow();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     // Task 4: the same "Uploading…" copy now also renders on the visible primary action button
     // (Mapping's own primary action while an upload is in flight) — `{ selector: 'p' }` keeps this
@@ -1845,14 +1850,14 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByLabelText('Name')).toHaveTextContent('name');
 
     await uploadNow();
-    // ⛔ The map is an OBJECT on the params, not a query string. `uploadFacilityImport` is what is
-    // mocked, and it serialises the map itself (api.ts) — so this asserts what the sheet handed
-    // over, which is the subject, rather than how the client encodes it.
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+    // ⛔ The map reaches `revalidateFacilityImportRun`, NOT `uploadFacilityImport`: this run is
+    // `stored` (Source's own store-only call never carried a map, since none existed yet), so
+    // Mapping's own first validate is the FIRST validate this run gets, through the run door.
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledWith(
+      'run-b1',
       expect.objectContaining({
         columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' }, constants: {}, extras: [] },
       }),
-      expect.any(Function),
     ));
   });
 
@@ -1901,9 +1906,10 @@ describe('ImportFacilitiesSheet', () => {
     // file does not even have — and the run would have been validated against a map the server's
     // own `validateColumnMap` would then refuse (`missing_required` for `national_code`/`name`, since
     // no header of THIS file actually claims them). Nothing was ever chosen for the second file, so
-    // no columnMap is sent at all.
-    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledWith(
-      expect.objectContaining({ columnMap: undefined }), expect.any(Function),
+    // no columnMap is sent at all. Asserted on `revalidateFacilityImportRun`, the second file's own
+    // first validate, not on either store call (which never carries a map at all).
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledWith(
+      'run-b1', expect.objectContaining({ columnMap: undefined }),
     ));
   });
 
@@ -2080,9 +2086,9 @@ describe('ImportFacilitiesSheet', () => {
         { header: 'Zone', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
       ],
     });
-    mocked(api.uploadFacilityImport)
-      .mockResolvedValueOnce({ runId: 'run-b1' })
-      .mockResolvedValueOnce({ runId: 'run-b2' });
+    // ONE run, minted by Source's store. Mapping's own first validate (from `uploadNow`) and the
+    // later "check again with the corrected map" both check that SAME run.
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
     mocked(api.getFacilityImportRun)
       .mockResolvedValueOnce(runView({
         id: 'run-b1', status: 'awaiting_confirmation',
@@ -2093,8 +2099,8 @@ describe('ImportFacilitiesSheet', () => {
           ],
         }),
       }))
-      // Same discipline as the unknown-columns re-upload test above: the second run never answers,
-      // so nothing but the sheet's own `setRun(null)` can clear the superseded summary.
+      // Same discipline as the unknown-columns re-upload test above: the second validate's own poll
+      // never answers, so nothing but the sheet's own `setRun(null)` can clear the superseded summary.
       .mockReturnValue(new Promise<never>(() => { /* never settles */ }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
@@ -2114,14 +2120,14 @@ describe('ImportFacilitiesSheet', () => {
 
     // ⛔ The CORRECTED MAP reaches the validate, and the file does not move: this is the case plan
     // B exists for, since a column-map refusal on a national register used to cost a full re-upload
-    // to fix one header.
-    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
-    expect(mocked(api.revalidateFacilityImportRun).mock.calls[0][1]).toEqual(
+    // to fix one header. Two calls total: `uploadNow`'s own first validate, then this one.
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(2));
+    expect(mocked(api.revalidateFacilityImportRun).mock.calls[1][1]).toEqual(
       expect.objectContaining({ columnMap: expect.objectContaining({ extras: ['Zone'] }) }),
     );
-    // TWO calls: Source's own store, then Mapping's validate (see `uploadNow`'s own comment). The
-    // corrected map above went through `revalidateFacilityImportRun`, not a third upload.
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
+    // ONE call: Source's own store. Both validates above went through `revalidateFacilityImportRun`,
+    // never a second upload.
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
   // ⛔ CRITICAL, code review: the reachability regression the widened step model shipped with.
@@ -2284,13 +2290,14 @@ describe('ImportFacilitiesSheet', () => {
       const validateAgain = screen.getByRole('button', { name: 'Validate all' });
       expect(validateAgain).toBeInTheDocument();
 
-      // Task 6: THIS is the case the fix actually reaches. The run is already
-      // `awaiting_confirmation` (see `reviewWithSummary`'s mock), so clicking here goes through
-      // `revalidateFacilityImportRun`, a check against the blob already on the server, rather
-      // than a THIRD `uploadFacilityImport` of the same file.
+      // Task 6: the run is already `awaiting_confirmation` (see `reviewWithSummary`'s mock), so
+      // clicking here goes through `revalidateFacilityImportRun` again, a second check against the
+      // blob already on the server, rather than a SECOND `uploadFacilityImport` of the same file.
+      // `reviewWithSummary`'s own `uploadNow` already made the FIRST `revalidateFacilityImportRun`
+      // call (Mapping's first validate, per Task 6's own fix), so this is the second.
       fireEvent.click(validateAgain);
-      await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
-      expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2);
+      await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalledTimes(2));
+      expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
     });
   });
 

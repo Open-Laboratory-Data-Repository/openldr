@@ -27,11 +27,16 @@ vi.mock('@/api', async (orig) => {
     bulkDeleteFacilities: vi.fn(),
     listPublishedForms: vi.fn(),
     getForm: vi.fn(),
-    // The import sheet's own three clients. This page drives the sheet end to end, so all three
-    // have to be here: absent from this factory they are `undefined`, and every call throws.
+    // The import sheet's own clients. This page drives the sheet end to end, so all of these have
+    // to be here: absent from this factory they are `undefined`, and every call throws.
     uploadFacilityImport: vi.fn(),
     getFacilityImportRun: vi.fn(),
     confirmFacilityImportRun: vi.fn(),
+    // Task 6: Mapping's own first validate now goes through this, not a second
+    // `uploadFacilityImport` (packages/bootstrap/src/facility-revalidate.ts's guard now accepts a
+    // `stored` run). Stubbed here for the same "absent means every call throws" reason as the
+    // three above.
+    revalidateFacilityImportRun: vi.fn(),
     // Task 6: Data's own grid (DataGridStep) reads the stored file's rows directly, stubbed here
     // for the same reason as the three above: this page renders the real sheet, and the flow below
     // passes through Data on its way to Mapping.
@@ -65,7 +70,7 @@ const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
 import { toast } from 'sonner';
-import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, listFacilityImportSources, readFacilityImportRows, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
+import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, revalidateFacilityImportRun, listFacilityImportSources, readFacilityImportRows, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
@@ -500,6 +505,7 @@ describe('Facilities page', () => {
       .mockResolvedValueOnce(runViewFixture({ status: 'awaiting_confirmation', phase: 'validated', summary: VALIDATED }))
       .mockResolvedValue(runViewFixture({ status: 'applied', summary: APPLIED }));
     (confirmFacilityImportRun as ReturnType<typeof vi.fn>).mockResolvedValue({ runId: 'run-1', status: 'confirmed' });
+    (revalidateFacilityImportRun as ReturnType<typeof vi.fn>).mockResolvedValue({ runId: 'run-1', status: 'queued' });
     show();
     await waitFor(() => expect(screen.getByText(/no facilities yet/i)).toBeInTheDocument());
 
@@ -526,8 +532,10 @@ describe('Facilities page', () => {
       .toHaveAttribute('aria-current', 'step'));
     fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Validate all' }));
-    // TWO calls: Source's own store, then Mapping's validate.
-    await waitFor(() => expect(uploadFacilityImport).toHaveBeenCalledTimes(2));
+    // ONE call: Source's own store. Mapping's validate goes through `revalidateFacilityImportRun`
+    // instead (Task 6: the run this drives is `stored`, and that guard now accepts it).
+    await waitFor(() => expect(uploadFacilityImport).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(revalidateFacilityImportRun).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm import' }));

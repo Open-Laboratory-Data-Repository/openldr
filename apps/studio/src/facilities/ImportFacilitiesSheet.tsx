@@ -671,14 +671,27 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *
    * ⛔ THE FALLBACK IS NOT DEAD CODE, though half its old reason is gone. It used to cover a run
    * from the inline preview door, which stored no file at all; every run now stores one, so
-   * `blobKey` is never null. The other half is still live: a run that has moved on from
-   * `awaiting_confirmation` cannot be re-checked either, and `canRevalidate` tests both. For that
-   * one, sending the file again is the only thing that can work.
+   * `blobKey` is never null. The other half is still live: a run that has moved on to a state
+   * `revalidateImportRun` refuses (`confirmed`, `applying`, a terminal state, …) cannot be
+   * re-checked either, and `canRevalidate` tests both. For that one, sending the file again is the
+   * only thing that can work.
+   *
+   * ⛔ `run === null` COUNTS AS REVALIDATABLE, and that is deliberate, not a gap. Source's
+   * store-only call never sets `pollRunId` (see that state's own comment: nothing is "going to
+   * happen" to a `stored` run until a real validate asks for one), so `run` is never fetched and
+   * stays `null` all the way to Mapping's first click. `packages/bootstrap/src/facility-revalidate.ts`
+   * widened its guard the same way this reads it: `stored` is revalidatable, and a `stored` run is
+   * exactly what `runId !== null && run === null` describes here, since `stepGate.hasStoredFile`
+   * already means Mapping is unreachable without one. Every OTHER non-revalidatable status
+   * (`confirmed`, a terminal state, `queued`/`validating` again) is only reachable AFTER a real
+   * validate has run, which is what populates `run` in the first place. So `run === null` never
+   * means one of those. `run?.blobKey` dropped from the check for the same reason the comment above
+   * `handleUpload` gives: every run stores a file now, so it was never the fact doing the gating.
    */
   const handleRevalidate = async (
     overrides?: { allowUnknownColumns?: boolean; allowInvalidCoordinates?: boolean },
   ): Promise<void> => {
-    const canRevalidate = !!runId && run?.status === 'awaiting_confirmation' && !!run?.blobKey;
+    const canRevalidate = !!runId && (run === null || run.status === 'awaiting_confirmation');
     if (!canRevalidate) { await handleUpload(overrides); return; }
 
     const allowUnknown = overrides?.allowUnknownColumns ?? allowUnknownColumns;
@@ -698,11 +711,20 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       // The run is back in the validate queue. Dropping the stale summary here is what stops the
       // previous verdict sitting on screen with its Confirm.
       //
-      // ⛔ THE NONCE IS NOT OPTIONAL. The poller keys on `[runId, refreshNonce]` and stops once a
-      // run reaches a status it does not poll — `awaiting_confirmation` is exactly that. A re-check
+      // ⛔ THE NONCE IS NOT OPTIONAL. The poller keys on `[pollRunId, refreshNonce]` and stops once a
+      // run reaches a status it does not poll. `awaiting_confirmation` is exactly that. A re-check
       // reuses the SAME `runId`, so without bumping the nonce nothing ever asks again and the sheet
       // sits on "Checking the import run" forever. The upload path never hit this because a new
       // upload changes `runId` and restarts the effect on its own.
+      //
+      // ⛔ `setPollRunId` IS NEW HERE, and it is what makes the `stored` case actually work rather
+      // than just satisfying the guard. A `stored` run never set `pollRunId` in the first place (its
+      // own upload deliberately left it `null`), so without this call the poll effect's own
+      // `if (!pollRunId) return` would skip it forever and the sheet would sit on "Checking the
+      // import run" with nothing ever asking. Harmless for the `awaiting_confirmation` case: it is
+      // already the same id, so React does not even re-render for it, and the nonce bump above is
+      // what does the work there.
+      setPollRunId(runId as string);
       setRun(null);
       setSummaryAt(signatureWith(overrides));
       setRefreshNonce((n) => n + 1);
@@ -1805,15 +1827,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               time or the fifth.
               ⛔ `handleRevalidate`, NOT `handleUpload`, and that is Task 6's own fix for the double
               upload this button used to cause on every click. It checks the run ALREADY on the
-              server again rather than sending the file a second time, but only from
-              `awaiting_confirmation`, the one status `revalidateImportRun`
-              (packages/bootstrap/src/facility-revalidate.ts) accepts; `handleRevalidate` falls back
-              to `handleUpload` for any other status. Mapping's run is `stored` (Source's own
-              store-only upload never validates it), so the FIRST click here still falls back and
-              still re-sends the file, a real gap this task's report names rather than papering
-              over by widening that guard, which is a shared bootstrap/CLI decision outside this
-              task's file list. Once a run HAS reached `awaiting_confirmation` (an operator stepping
-              back to Mapping to fix something) this same click checks it again for free. */}
+              server again rather than sending the file a second time, from either status
+              `revalidateImportRun` (packages/bootstrap/src/facility-revalidate.ts) accepts:
+              `stored`, Mapping's run on its FIRST click (Source's own store-only upload never
+              validates it), and `awaiting_confirmation`, an operator stepping back to Mapping to
+              fix something after a first validate already ran. `handleRevalidate` falls back to
+              `handleUpload` only for a status neither of those (a run that moved on while this
+              sheet was open), where sending the file again is the only thing left that can work. */}
           {step === 3 && (
             <Button
               size="sm"

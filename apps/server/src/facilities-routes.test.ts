@@ -6480,6 +6480,43 @@ describe('POST /api/facilities/import/runs/:id/revalidate', () => {
     expect(after.active_key).toBe(before.active_key);
   });
 
+  // ⛔ Task 6's open concern. Source's own upload stores a file without validating it
+  // (`validate=false`, tested above), so a national register's FIRST validate has to start from
+  // `stored`, not `awaiting_confirmation`. Before this fix the only way to check a `stored` run at
+  // all was a second upload of the whole file. One object stored, asserted below, is the proof that
+  // did not happen here.
+  it('validates a stored run for the first time, with its column map, without a second upload', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(upload.statusCode).toBe(202);
+    const runId = upload.json().runId as string;
+    const before = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    expect(before.status).toBe('stored');
+
+    const res = await app.inject({
+      method: 'POST', url: revalidateUrl(runId),
+      payload: { columnMap: { columns: { Name: 'name' } }, allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId, status: VALIDATE_PHASE.from });
+    const after = await db.selectFrom('facility_import_runs')
+      .select(['status', 'options', 'blob_key'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(after.status).toBe(VALIDATE_PHASE.from);
+    expect(after.options).toMatchObject({ columnMap: { columns: { Name: 'name' } }, allowUnknownColumns: true });
+    expect(after.blob_key).toBe(before.blobKey);
+    // Exactly the ONE object the store-only upload wrote. A second upload would have added a second.
+    onlyStoredObject(ctx);
+  });
+
   // ⛔ THE WIRE SHAPE, which `typecheck` green does not pin. A body may carry the map; it may not
   // move the run onto another register.
   it('ignores identity fields in the body rather than honouring them', async () => {
