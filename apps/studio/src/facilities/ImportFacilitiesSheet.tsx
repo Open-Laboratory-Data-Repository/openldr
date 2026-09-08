@@ -1208,7 +1208,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
+      {/* ⛔ FULL WIDTH ON A PHONE. `SheetContent`'s own base caps at `max-w-[90vw]`, so a strip of
+          the page behind shows down one side. On a desktop that strip is the tap target that
+          dismisses the sheet. On a 412px phone it is a tenth of the screen taken from a wizard
+          that needs every pixel, and the X in the header closes it anyway. */}
+      <SheetContent className="flex w-full max-w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>{t('facilities.import.title')}</SheetTitle>
           <SheetDescription>{t('facilities.import.description')}</SheetDescription>

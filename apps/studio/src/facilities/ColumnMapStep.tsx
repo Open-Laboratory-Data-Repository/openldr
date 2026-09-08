@@ -247,7 +247,7 @@ export function ColumnMapStep({
 
   return (
     <div className="space-y-4 text-sm">
-      <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
+      <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
         {headers.map((header) => {
           const top = suggestionByHeader.get(header)?.candidates[0] ?? null;
           const selected = selectedTarget(header);
@@ -316,7 +316,7 @@ export function ColumnMapStep({
             <p className="font-medium">{t('facilities.import.columnMap.constantsTitle')}</p>
             <p className="text-xs text-muted-foreground">{t('facilities.import.columnMap.constantsHint')}</p>
           </div>
-          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
+          <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
             {constantFields.map((field) => (
               <Fragment key={field}>
                 <Label htmlFor={`column-map-constant-${field}`} className="break-words">{field}</Label>
