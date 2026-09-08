@@ -33,8 +33,10 @@ Revisão. Clique num passo dessa faixa para se mover entre eles. Não há um bot
   Mapeamento na faixa de passos.
 - **Mapeamento.** Todas as decisões vivem aqui: o mapeamento de colunas, os valores fixos, o que
   fazer com conflitos, ausências e remoções, e que palavras do próprio registo correspondem ao
-  vocabulário. A sua ação, Validar tudo, executa a primeira verificação sobre o ficheiro já
-  guardado no passo Origem. Não envia o ficheiro uma segunda vez.
+  vocabulário. Cada linha também tem o seu próprio ícone de estado, descrito mais abaixo, para
+  verificar uma só coluna depressa. A sua ação principal, Validar tudo, executa a primeira
+  verificação completa sobre o ficheiro já guardado no passo Origem. Não envia o ficheiro uma
+  segunda vez.
 - **Revisão.** Relata o que a verificação encontrou e oferece uma única ação, Aplicar. Nada nela é
   editável.
 
@@ -59,9 +61,29 @@ encontrou: as escolhas de conflitos, ausências e remoções, que se aplicam no 
 e não na leitura do ficheiro, e a opção de importar apesar de linhas ilegíveis, que apenas decide
 se a importação pode prosseguir.
 
-A lista de valores não reconhecidos é mantida enquanto trabalha nela. Guardar um mapeamento não faz
-desaparecer as linhas restantes, e já não repete a verificação sozinho. Peça a verificação seguinte
-quando estiver pronto.
+Os valores não reconhecidos de um campo aparecem sob a sua própria linha de mapeamento, cada um com
+a sua lista de escolha, em vez de numa caixa mais abaixo. A lista é mantida enquanto trabalha nela:
+guardar um mapeamento não faz desaparecer as linhas restantes, e já não repete a verificação
+sozinho. Peça a verificação seguinte quando estiver pronto.
+
+### O ícone de estado em cada linha
+
+Cada linha de mapeamento tem um pequeno ícone junto ao seu seletor de campo. Tem quatro estados:
+
+- Um visto cinzento significa que a linha ainda não foi verificada.
+- Um visto verde significa que foi verificada e nada está errado.
+- Um ícone vermelho significa que algo está errado. Passe o rato por cima para ver o quê.
+- Um visto cinzento outra vez significa que o mapeamento mudou desde a última verificação. A dica
+  diz isso mesmo, para não se confundir com "ainda não verificada".
+
+O ícone mantém-se clicável em todos os estados. Uma nova verificação nunca é recusada.
+
+Uma coluna cujo campo sugerido é uma correspondência exata, e que nenhuma outra coluna reclama,
+fica verde sozinha. Não precisa de clicar nela.
+
+Clicar no ícone verifica só essa coluna. Lê os valores dessa coluna no ficheiro que já enviou no
+passo Origem, sem verificar todo o ficheiro de novo. Use Validar tudo quando quiser uma verificação
+completa de todas as colunas de uma vez.
 
 ### A ortografia não é problema seu
 
@@ -145,7 +167,8 @@ servidor:
   registo. Saia do passo Origem para carregar e guardar o ficheiro. O passo Dados mostra o ficheiro
   como uma tabela em apenas leitura. O passo Mapeamento abre a seguir com uma sugestão já
   preenchida. Uma marca de visto junto a uma linha significa que a sugestão é segura, e um selo
-  **Verificar isto** significa que deve ser revista antes de continuar.
+  **Verificar isto** significa que deve ser revista antes de continuar. Essa marca de visto é o
+  próprio ícone de estado da linha, descrito mais acima, e mantém-se clicável depois disso.
 - **A partir da CLI:** execute `openldr facilities suggest-map <path>`. Mostra o mesmo mapeamento
   sugerido em formato de tabela, assinala qualquer colisão que a própria sugestão causaria, e
   indica como devolver o resultado: `openldr facilities import <path> --column-map <file.json>`.

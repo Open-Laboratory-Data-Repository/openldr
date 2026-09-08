@@ -28,9 +28,10 @@ step in that strip to move between them. There is no separate Back button.
   table is paged from the server, one page at a time, and it works the same way for a CSV file and
   a JSONL release. There is no button here: move on by clicking Mapping in the step strip.
 - **Mapping.** Every decision lives here: the column map, fixed values, what to do with conflicts,
-  absences and deletions, and which of the register's own words map onto the vocabulary. Its
-  action, Validate all, runs the first check against the file already stored at Source. It does
-  not send the file a second time.
+  absences and deletions, and which of the register's own words map onto the vocabulary. Each row
+  also carries its own status icon, described below, for a quick check of one column. Its main
+  action, Validate all, runs the first full check against the file already stored at Source. It
+  does not send the file a second time.
 - **Review.** Reports what the check found and offers one action, Apply. Nothing on it is editable.
 
 ### Mapping decides, Review reports
@@ -53,9 +54,29 @@ conflict, absent and deleted choices, which are applied when you import rather t
 is read, and the option to import past rows that could not be read at all, which only decides
 whether the import may proceed.
 
-The list of unrecognised values is kept while you work through it. Saving a mapping does not make
+A field's unrecognised values appear under its own mapping row, each with a pick list, instead of
+in one box lower down. The list is kept while you work through it: saving a mapping does not make
 the remaining rows vanish, and it no longer re-runs the check by itself. Ask for the next check
 when you are ready.
+
+### The status icon on each row
+
+Every mapping row carries a small icon next to its field picker. It has four states:
+
+- A gray tick means the row has not been checked yet.
+- A green tick means it has been checked, and nothing is wrong.
+- A red icon means something is wrong. Hover it to read what.
+- A gray tick again means the mapping changed since its last check. The tooltip says so, so it
+  does not read the same as "not checked yet".
+
+The icon is always clickable, in every state. A re-check is never refused.
+
+A column whose suggested field is an exact match, with no other column claiming the same field,
+turns green on its own. You do not have to click it.
+
+Clicking the icon checks that one column only. It reads that column's values from the file you
+already uploaded at Source, and does not re-check the whole file. Use Validate all when you want
+a full check of every column at once.
 
 ### Spelling is not your problem
 
@@ -134,7 +155,9 @@ headers and propose a map offline, with no server round trip:
 - **In the wizard:** open **Facilities**, choose **Import**, select the file, and pick the register.
   Leave Source to upload and store the file. The Data step shows the file as a read only table. The
   Mapping step opens next with a suggested map already filled in. A checkmark next to a row means
-  the suggestion is confident, and a **Check this** badge means it should be reviewed before you continue.
+  the suggestion is confident, and a **Check this** badge means it should be reviewed before you
+  continue. That checkmark is the row's own status icon, described above, and stays clickable
+  after this.
 - **From the CLI:** run `openldr facilities suggest-map <path>`. It prints the same suggested map as
   a table, flags any collision the suggestion itself would cause, and tells you how to feed the
   result back in: `openldr facilities import <path> --column-map <file.json>`.
