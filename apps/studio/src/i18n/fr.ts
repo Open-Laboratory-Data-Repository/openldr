@@ -954,6 +954,7 @@ export const fr: EnShape = {
       previewSummary: '{{parsed}} ligne(s) seront importées ({{skipped}} ignorée(s)).',
       duplicatesWarning: '{{count}} code(s) national(aux) en doublon ont été trouvés dans ce fichier ; seule la dernière ligne de chacun a été conservée.',
       emptyFileHint: 'Ce fichier est vide. Choisissez un autre fichier avant de lancer l’aperçu.',
+      noHeaderRowHint: 'Aucune ligne d’en-tête n’a pu être lue. La première ligne du fichier doit nommer les colonnes.',
       doneTitle: 'Importation terminée',
         nothingImportedTitle: 'Rien n’a été importé',
         nothingImportedBody: 'Ce fichier n’a produit aucune ligne, donc rien n’a été écrit dans le registre.',
@@ -1028,6 +1029,7 @@ export const fr: EnShape = {
       columnMapIncompleteHint: 'Vous pouvez tout de même prévisualiser ou téléverser avec ce mappage incomplet — l’import expliquera précisément ce qu’il reste à mapper.',
       columnMapNotApplicableJsonl: 'Un fichier de publication utilise déjà les noms de champs du contrat, il n’y a donc aucune correspondance de colonnes à définir.',
       columnMapAlreadySent: 'La correspondance de colonnes de ce fichier a déjà été envoyée avec le téléversement et ne peut plus être modifiée.',
+      columnMapUnavailable: 'Aucune colonne n’a pu être lue dans ce fichier, il n’y a donc rien à mapper ici.',
       columnMap: {
         notMapped: 'Conserver en donnée supplémentaire',
         checkThisBadge: 'À vérifier',

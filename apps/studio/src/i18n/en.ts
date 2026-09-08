@@ -975,6 +975,7 @@ export const en = {
       previewSummary: '{{parsed}} row(s) will be imported ({{skipped}} skipped).',
       duplicatesWarning: '{{count}} duplicate national code(s) were found in this file; only the last row for each was kept.',
       emptyFileHint: 'This file is empty. Choose a different file before previewing.',
+      noHeaderRowHint: 'No header row could be read. The first line of the file has to name the columns.',
       doneTitle: 'Import complete',
         nothingImportedTitle: 'Nothing was imported',
         nothingImportedBody: 'This file produced no rows, so nothing was written to the registry.',
@@ -1082,6 +1083,7 @@ export const en = {
       // this says why instead of leaving the pane blank.
       columnMapNotApplicableJsonl: 'A release file already uses the contract’s own field names, so there is no column map to set.',
       columnMapAlreadySent: 'This file’s column map has already been sent with the upload and cannot be changed now.',
+      columnMapUnavailable: 'No columns could be read from this file, so there is nothing to map here.',
       // Task 7: the column-mapping panel — one row per file header, a Select over the 16 contract
       // fields, and a constants section for a field no column carries (`country` is the case that
       // forced it).

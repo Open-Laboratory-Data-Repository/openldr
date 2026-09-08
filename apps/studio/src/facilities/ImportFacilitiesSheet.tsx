@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'r
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { MoreHorizontal, Upload } from 'lucide-react';
+import { Divider } from '@/components/ui/bleed';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -229,6 +230,24 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  drops `hasReview` and the view falls back on its own, with no extra reset to remember. */
   const [requestedStep, setRequestedStep] = useState<ImportStep>(1);
   const [csvHead, setCsvHead] = useState<string | null>(null);
+  /** ⛔ WHY A COUNTER AND NOT JUST `csvHead`. Choosing the SAME file twice (browse it, then drag it
+   *  in, which is what an operator did on the real Zambia export) reads a byte-identical head. React
+   *  bails out of a state update whose value is `Object.is`-equal to the current one, so `csvHead`
+   *  never "changes", the effect below never re-runs, and the header list `selectFile` just cleared
+   *  is never refilled. The Mapping step then has no column map to offer and says the map was
+   *  already sent with the upload, which is untrue and cost that operator a whole refused import.
+   *  This counter advances on every completed read, so a fresh read always re-derives the headers
+   *  whether or not its text differs. */
+  const [csvHeadReads, setCsvHeadReads] = useState(0);
+  /** Did BOTH ways of reading a header row come up with nothing?
+   *
+   *  ⛔ NOT `columnMapHeaders.length === 0`, and that distinction is load-bearing. An empty list is
+   *  also what you have before the read runs at all, and what a `suggest-map` response would mean
+   *  if it ever returned one — it does not, it answers an unreadable head with a 400. Inferring the
+   *  refusal from an empty list therefore fires on states that are not refusals. This is set only on
+   *  the path that genuinely means it: the request failed AND the client's own fallback split of the
+   *  first line produced no fields either. */
+  const [headerRowMissing, setHeaderRowMissing] = useState(false);
   // B1 Task 9: holds the CHOSEN SOURCE'S URI, and only ever that — see `handleNationalSystemChange`
   // and the `Select` below. Before this task it was a free-text box hashed straight into every
   // facility's permanent id (`idFor`, facility-csv.ts); the import routes now refuse anything that
@@ -499,7 +518,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     // The upload path touches neither: the `File` itself is the request body (see
     // `uploadFacilityImport`), which is what keeps a national register out of this tab's memory.
     if (!f) { setCsvHead(null); return; }
-    void f.slice(0, HEAD_BYTES).text().then(setCsvHead).catch((err: unknown) => {
+    void f.slice(0, HEAD_BYTES).text().then((text) => {
+      // Both setters in one handler so React batches them: the effect below sees the new text and
+      // the new read count together, and never fires once for each.
+      setCsvHead(text);
+      setCsvHeadReads((n) => n + 1);
+    }).catch((err: unknown) => {
       setCsvHead(null);
       setError(err instanceof Error ? err.message : String(err));
     });
@@ -537,14 +561,18 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // `ColumnMapStep`'s own seed effect is gated on a header SIGNATURE alone, so headers arriving
   // before their matching suggestions would let it seed nothing and then never retry once the real
   // suggestions landed a moment later). Re-runs whenever the file's text OR the declared format
-  // changes — `format` because switching to `jsonl` must clear any CSV-only header list, `csv`
+  // changes, and on every completed head READ even when the text is unchanged (see `csvHeadReads`
+  // above: re-choosing the same file must re-derive the headers `selectFile` just cleared).
+  // `format` because switching to `jsonl` must clear any CSV-only header list, `csv`
   // because a new file means new headers.
   useEffect(() => {
     if (!csvHead || format !== 'csv') {
       setColumnMapHeaders([]);
       setColumnMapSuggestions([]);
+      setHeaderRowMissing(false);
       return;
     }
+    setHeaderRowMissing(false);
     let cancelled = false;
     suggestColumnMap(csvHead)
       .then((res) => {
@@ -564,9 +592,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         const headers = firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
         setColumnMapHeaders(headers);
         setColumnMapSuggestions([]);
+        setHeaderRowMissing(headers.length === 0);
       });
     return () => { cancelled = true; };
-  }, [csvHead, format]);
+  }, [csvHead, format, csvHeadReads]);
 
   const handleNationalSystemChange = (value: string) => {
     setNationalSystem(value);
@@ -990,6 +1019,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // window in which `uploadDisabled` let a doomed click through. `size` is known the instant the
   // file is chosen.
   const emptyFile = !!file && file.size === 0;
+  /** ⛔ A CSV WHOSE FIRST LINE NAMES NOTHING. The route answers such a head with a 400 and the
+   *  client's own fallback split filters it to nothing, so both paths land here. `parseFacilityCsv`
+   *  refuses the file anyway, so this is refused on SOURCE rather than after a 626 KB upload and an
+   *  empty Mapping step. Gated on `headersResolved` so it cannot flash before the read has run.
+   *  Only an empty FIRST LINE reaches this: a data-only CSV still has one, whose values become the
+   *  headers, and a 0-byte file is `emptyFile` above. */
+  const noHeaderRow = format === 'csv' && !!file && !emptyFile && headerRowMissing;
   // `!csvHead` matters as its own gate, distinct from `!file`: reading the file's text back out is
   // asynchronous (File.text()), so there is a real window after picking a file where `file` is
   // already set but `csv` has not resolved yet. Without this, a click in that window would fall
@@ -997,7 +1033,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // A2b: Upload deliberately does NOT wait on `csv` — the File is the request body, so there is
   // nothing to read first. `emptyFile` is still a gate: the upload route refuses a 0-byte body with a
   // 400, and a request that cannot succeed is never worth sending.
-  const uploadDisabled = !file || !nationalSystem.trim() || uploading || emptyFile;
+  const uploadDisabled = !file || !nationalSystem.trim() || uploading || emptyFile || noHeaderRow;
   // parsed === 0 covers BOTH the "nothing recognised" trap (unknownColumns populated, blocked
   // outright) and the "wrong file entirely" trap (parsed 0, unknownColumns empty) — neither has
   // anything to apply. Over the row cap is refused for the same reason a doomed request is: never
@@ -1214,7 +1250,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
              the full-width File row spanning them overflowed the pane. AGENTS.md §5 sets the desktop
              layout; §6 item 4 (it has to work on a phone) is why stacking wins at this width. Same
              treatment, same reason, as `ImportPolicyPanel`. */
-          <div className="grid grid-cols-1 gap-y-1 px-6 py-4 border-b border-border sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
+          <div className="grid grid-cols-1 gap-y-1 px-6 py-4 sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
             {/* ⛔ THE ONE ROW THAT BREAKS THE GRID, deliberately. AGENTS.md §5 puts the label left
                 and the input right, and every other control on this step does. A drop target wants
                 to be big: half a row is a small thing to hit, most of all on a phone. So this spans
@@ -1224,7 +1260,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 ("never a native `<input>`") and, styled only through the `file:` pseudo-element, had
                 no border or background of its own: on the dark theme it read as bare text. */}
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="facility-import-file">{t('facilities.import.fileLabel')}</Label>
+              {/* ⛔ sr-only, NOT deleted. The operator asked for the visible "File" label to go:
+                  a dashed target that says "Drag a .csv or .jsonl here" does not need naming twice.
+                  But the real `<input>` below is `sr-only` and takes its accessible name from this
+                  Label, so deleting the element outright would leave a screen reader announcing an
+                  unnamed file input. Hidden, not removed. */}
+              <Label htmlFor="facility-import-file" className="sr-only">{t('facilities.import.fileLabel')}</Label>
               <div
                 role="button"
                 tabIndex={inputsDisabled ? -1 : 0}
@@ -1281,7 +1322,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {emptyFile && (
                 <p className="text-xs text-destructive">{t('facilities.import.emptyFileHint')}</p>
               )}
+              {noHeaderRow && (
+                <p className="text-xs text-destructive">{t('facilities.import.noHeaderRowHint')}</p>
+              )}
             </div>
+
+            {/* Separates the drop target from the fields that describe it. `-mx-6` because this
+                container pads `px-6` and `Divider` defaults to the `-mx-4` of a standard page. */}
+            <Divider className="-mx-6 my-2 sm:col-span-2" />
 
             {/* B1 Task 9: a `Select` over registered sources, never a free-text box — the whole point
                 being that `nationalSystem` can no longer be TYPED. `handleNationalSystemChange`
@@ -1501,11 +1549,18 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               with nothing on it at all. Two messages, not five: JSONL has no column map to set at
               all; every other case's map already went out with the upload and cannot be changed
               from here now. */}
+          {/* ⛔ IT MAY ONLY SAY "already sent" WHEN A RUN EXISTS. This was one string standing in
+              for five states, so a hidden column map always claimed the map had gone out with an
+              upload. An operator read that on a file they had not uploaded, took it to mean mapping
+              was closed to them, uploaded with no map, and had all 21 columns refused as
+              unrecognised. `runId` is the only thing that makes that sentence true. */}
           {step === 2 && !columnMapPanelShown && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">
               {format === 'jsonl'
                 ? t('facilities.import.columnMapNotApplicableJsonl')
-                : t('facilities.import.columnMapAlreadySent')}
+                : runId
+                  ? t('facilities.import.columnMapAlreadySent')
+                  : t('facilities.import.columnMapUnavailable')}
             </p>
           )}
 
@@ -1650,7 +1705,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           ) : (
             <Button
               size="sm"
-              disabled={!stepGate.hasFile || !stepGate.hasRegister}
+              disabled={!stepGate.hasFile || !stepGate.hasRegister || noHeaderRow}
               onClick={() => setRequestedStep(2)}
             >
               {t('facilities.import.continueAction')}
