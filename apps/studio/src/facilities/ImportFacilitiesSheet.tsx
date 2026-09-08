@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'r
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { MoreHorizontal, Upload } from 'lucide-react';
+import { Divider } from '@/components/ui/bleed';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -1214,7 +1215,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
              the full-width File row spanning them overflowed the pane. AGENTS.md §5 sets the desktop
              layout; §6 item 4 (it has to work on a phone) is why stacking wins at this width. Same
              treatment, same reason, as `ImportPolicyPanel`. */
-          <div className="grid grid-cols-1 gap-y-1 px-6 py-4 border-b border-border sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
+          <div className="grid grid-cols-1 gap-y-1 px-6 py-4 sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
             {/* ⛔ THE ONE ROW THAT BREAKS THE GRID, deliberately. AGENTS.md §5 puts the label left
                 and the input right, and every other control on this step does. A drop target wants
                 to be big: half a row is a small thing to hit, most of all on a phone. So this spans
@@ -1224,7 +1225,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 ("never a native `<input>`") and, styled only through the `file:` pseudo-element, had
                 no border or background of its own: on the dark theme it read as bare text. */}
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="facility-import-file">{t('facilities.import.fileLabel')}</Label>
+              {/* ⛔ sr-only, NOT deleted. The operator asked for the visible "File" label to go:
+                  a dashed target that says "Drag a .csv or .jsonl here" does not need naming twice.
+                  But the real `<input>` below is `sr-only` and takes its accessible name from this
+                  Label, so deleting the element outright would leave a screen reader announcing an
+                  unnamed file input. Hidden, not removed. */}
+              <Label htmlFor="facility-import-file" className="sr-only">{t('facilities.import.fileLabel')}</Label>
               <div
                 role="button"
                 tabIndex={inputsDisabled ? -1 : 0}
@@ -1282,6 +1288,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 <p className="text-xs text-destructive">{t('facilities.import.emptyFileHint')}</p>
               )}
             </div>
+
+            {/* Separates the drop target from the fields that describe it. `-mx-6` because this
+                container pads `px-6` and `Divider` defaults to the `-mx-4` of a standard page. */}
+            <Divider className="-mx-6 my-2 sm:col-span-2" />
 
             {/* B1 Task 9: a `Select` over registered sources, never a free-text box — the whole point
                 being that `nationalSystem` can no longer be TYPED. `handleNationalSystemChange`
