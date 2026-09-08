@@ -989,6 +989,7 @@ export const fr: EnShape = {
       policyFoundInvalid: 'La dernière vérification a trouvé {{count}} ligne(s) aux coordonnées inutilisables.',
       unmappedField: '{{field}} : {{count}} valeur(s) non reconnue(s), dont {{values}}.',
       unmappedFixOnMapping: 'Mappez-les à l’étape Correspondance, puis vérifiez de nouveau. Ce qui reste non mappé est importé tel quel.',
+      unmappedGoToMapping: 'Mapper ces valeurs',
       unmappedTitle: 'Valeurs sans correspondance canonique',
       unmappedMessage: '{{count}} valeur(s) de {{field}} n’ont pas de correspondance canonique et ont été conservées telles quelles : {{values}}',
       notValidatedMessage: 'Non vérifié par rapport à un ensemble de valeurs canonique sur cette installation : {{fields}}.',
