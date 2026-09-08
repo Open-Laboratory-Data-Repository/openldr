@@ -1123,6 +1123,26 @@ export const en = {
         keptAsExtraBadge: 'Kept as extra data',
         collisionTitle: 'This column map cannot be used',
         collision: '“{{a}}” and “{{b}}” both claim {{field}} — only one may.',
+        // Task 4: the per-row status icon's accessible name. It is always clickable, so every one
+        // of these ends the same way, "Check again" or "Check this mapping". A re-check is never
+        // gated on the app agreeing that something changed.
+        rowStatusNeutral: '{{header}}: not checked yet. Check this mapping',
+        rowStatusValid: '{{header}}: checked, nothing wrong. Check again',
+        rowStatusInvalid: '{{header}}: {{detail}}. Check again',
+        rowStatusStale: '{{header}}: changed since the last check. Check again',
+        rowStatusUnrecognised: '{{count}} value(s) are not recognised',
+        rowStatusCollides: 'another column already claims this field',
+        // Shown only when the caller has not said why a row is invalid. Names no cause.
+        // Guessing one, a collision or unrecognised values, could name the wrong one.
+        rowStatusUnknown: 'something is wrong',
+        // Task 5: a truncated column has more distinct values than a person should be asked to
+        // map, almost always the wrong field. Named by count, not listed, because the values
+        // themselves are not the point.
+        rowStatusTooManyValues: '{{count}} distinct values found. This column is probably mapped to the wrong field.',
+        // Task 5: before an upload there is no stored file, so a click cannot check anything yet.
+        // The icon stays neutral; this is what the click reports instead of doing nothing.
+        rowCheckBlockedNoRun: 'Upload the file first. There is nothing stored yet to check.',
+        rowCheckFailed: 'Could not check this column. Try again.',
       },
       // Task 8: the value-mapping panel — one row per unmapped raw value (level/status/country),
       // grouped by field, each with a ranked Select over that field's own value set. An unmapped

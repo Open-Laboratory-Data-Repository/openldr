@@ -1,23 +1,22 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   suggestValueMappings, writeFacilityValueMappings,
   type ControlledField, type ValueMappingEntry, type ValueSetOption, type ValueSuggestion,
 } from '@/api';
-import { sortValueSetOptions } from './sortValueSetOptions';
+import { ValueMapRow, VALUE_MAP_UNMAPPED } from './ValueMapRow';
 
 // CT-3 (whole-branch review): mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS` — same "mirrored,
 // not shared" idiom `ImportFacilitiesSheet.tsx` already uses (this app has no dependency on that
 // package).
 const CONTROLLED_FIELDS: ControlledField[] = ['level', 'status', 'country'];
 
-/** Not a real value-set code — a real one could never collide with it. */
-const UNMAPPED = '__not_mapped__';
+/** Not a real value-set code, and a real one could never collide with it. Task 6: re-exported from
+ *  `ValueMapRow` now, so this panel and `ColumnMapStep`'s own embedded worklist agree on the wire
+ *  value "nothing chosen" means, without either importing the other. */
+const UNMAPPED = VALUE_MAP_UNMAPPED;
 
 type Candidates = ValueSuggestion['candidates'];
 
@@ -64,7 +63,7 @@ export interface ValueMapPanelProps {
  *  render a value with no suggestion at all — it just shows `Not mapped`, same as a value the
  *  operator has not gotten to yet. */
 export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPanelProps): JSX.Element {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   const fields = useMemo(
     () => CONTROLLED_FIELDS.filter((f) => unmapped[f].length > 0),
@@ -220,54 +219,22 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
             <p className="text-muted-foreground">{t('facilities.import.valueMap.noValueSet')}</p>
           )}
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2">
+            {/* Task 6: the per-value row itself moved to `ValueMapRow`, shared with `ColumnMapStep`'s
+                own embedded worklist. Same ranked-head/sorted-tail ordering either way, one copy of
+                that logic rather than two that could drift. */}
             {unmapped[field].map((value) => {
               const key = rowKey(field, value);
               const candidates = candidatesByKey.get(key) ?? [];
               const selected = choices[key] ?? UNMAPPED;
-              const top = candidates[0] ?? null;
-              // Naturally absent when the row is a collision-free exact match, or unmatched — see
-              // the seeding effect above.
-              const showBadge = top?.confidence === 'likely' && selected === top.target;
               return (
-                <Fragment key={value}>
-                  <Label className="whitespace-nowrap text-foreground" title={value}>{value}</Label>
-                  <div className="flex items-center gap-2">
-                    <Select value={selected} onValueChange={(v) => setChoice(field, value, v)}>
-                      <SelectTrigger aria-label={value} className="h-8 flex-1 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      {/* ⛔ RANKED FIRST, THEN THE REST OF THE SET. `candidates` is what the ranker
-                          thinks this value looks like and is legitimately empty when nothing
-                          resembles it. Listing only those left `Functional` with no way to reach
-                          `active`, because it resembles none of active/suspended/inactive. The
-                          ranking still earns the top slots; the rest of the set is what makes a
-                          human judgement expressible at all. */}
-                      <SelectContent>
-                        <SelectItem value={UNMAPPED}>{t('facilities.import.valueMap.notMapped')}</SelectItem>
-                        {candidates.map((c) => (
-                          <SelectItem key={c.target} value={c.target}>{c.display ?? c.target}</SelectItem>
-                        ))}
-                        {/* ⛔ SORTED, BUT ONLY THIS TAIL. The ranked candidates above keep their
-                            scored order, which is the whole point of ranking them; what follows is
-                            the rest of the set in EXPANSION order, which is seed order, and 63
-                            facility types that way cannot be searched by eye. */}
-                        {sortValueSetOptions(
-                          (optionsByField.get(field) ?? [])
-                            .filter((o) => !candidates.some((c) => c.target === o.code)),
-                          i18n.language,
-                        )
-                          .map((o) => (
-                            <SelectItem key={o.code} value={o.code}>{o.display ?? o.code}</SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    {showBadge && (
-                      <Badge variant="outline" className="shrink-0">
-                        {t('facilities.import.columnMap.checkThisBadge')}
-                      </Badge>
-                    )}
-                  </div>
-                </Fragment>
+                <ValueMapRow
+                  key={value}
+                  value={value}
+                  candidates={candidates}
+                  options={optionsByField.get(field) ?? []}
+                  selected={selected}
+                  onSelect={(v) => setChoice(field, value, v)}
+                />
               );
             })}
           </div>

@@ -18,7 +18,7 @@ import {
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
-  revalidateImportRun, readFileRows, FacilityFileUnreadableError,
+  revalidateImportRun, readFileRows, readColumnValues, FacilityFileUnreadableError,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
   type ValueMappingEntry,
 } from '@openldr/bootstrap';
@@ -2966,6 +2966,62 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         skipped: window.skipped,
         skippedLines: window.skippedLines,
       };
+    } catch (err) {
+      // Not a 500 either: the file cannot be read AS THE FORMAT THE UPLOAD DECLARED, which is a
+      // fact about the operator's own file. 422, and the message names the line when the parser
+      // knew it.
+      if (err instanceof FacilityFileUnreadableError) {
+        reply.code(422);
+        return { error: `import run ${id}: ${err.message}`, line: err.line };
+      }
+      throw err;
+    }
+  });
+
+  // Task 2 (mapping-answers-back, Slice B): one column's vocabulary, so the mapping step can check
+  // a single field without validating the whole register. Same run lookup, blob guards and error
+  // mapping as the rows route above, copied rather than shared: this route reads the file
+  // differently (`readColumnValues`, one column, capped and deduped) and returns a different shape.
+  //
+  // ⛔ `MANAGE`, NOT `VIEW`, for the same reason the rows route needs it: this hands back the RAW
+  // CONTENTS of an uploaded file, one column's worth. Reading it back is manage work, not view work.
+  app.get('/api/facilities/import/runs/:id/columns/:header/values', MANAGE, async (req, reply) => {
+    const { id, header } = req.params as { id: string; header: string };
+    const q = req.query as { limit?: string };
+    // NaN check instead of || operator: 0 is a valid value, and `||` would silently yield the
+    // DEFAULT instead of the FLOOR for `limit=0`. Same bug class the rows route's review caught.
+    const parsedLimit = Number.parseInt(q.limit ?? '200', 10);
+    const limit = Math.min(1000, Math.max(1, Number.isNaN(parsedLimit) ? 200 : parsedLimit));
+
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
+    // Same case the rows route guards: a run previewed inline carries its CSV in the request body
+    // and stores nothing. 409, not 404: the run exists, it just has no file to read a column out of.
+    if (!run.blobKey) {
+      reply.code(409);
+      return { error: `import run ${id} has no stored file` };
+    }
+
+    // ⛔ GUARDED, same as the rows route: an unhandled throw here is a 500 and the studio reports a
+    // 500 on this route as a network fault. `getStream` throws for a key that points at nothing,
+    // which a run row can carry after its blob was reaped or a restore put the rows back without the
+    // objects. The run is what is wrong, so this answers with the run, in the same 409 shape.
+    let stream: Awaited<ReturnType<typeof ctx.blob.getStream>>;
+    try {
+      stream = await ctx.blob.getStream(run.blobKey);
+    } catch (err) {
+      ctx.logger?.warn?.({ err, runId: id, blobKey: run.blobKey }, 'facility import column values: stored file unreadable');
+      reply.code(409);
+      return { error: `import run ${id} has a stored file that can no longer be read` };
+    }
+
+    try {
+      const out = await readColumnValues(stream, {
+        format: run.sourceFormat === 'jsonl' ? 'jsonl' : 'csv',
+        header,
+        limit,
+      });
+      return { header, ...out };
     } catch (err) {
       // Not a 500 either: the file cannot be read AS THE FORMAT THE UPLOAD DECLARED, which is a
       // fact about the operator's own file. 422, and the message names the line when the parser

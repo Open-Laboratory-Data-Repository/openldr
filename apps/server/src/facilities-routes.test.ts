@@ -4385,6 +4385,259 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
   });
 });
 
+// --- Task 2 (mapping-answers-back, Slice B): GET .../runs/:id/columns/:header/values ------------
+//
+// The mapping step can now ask "is this one column mapped sensibly?" without validating the whole
+// register. This route streams the stored file through `readColumnValues` (Task 1) for one header
+// at a time. It shares the rows route's run lookup, blob guards and `MANAGE` gate, copied line for
+// line rather than reused, since the two routes read the file differently.
+describe('GET /api/facilities/import/runs/:id/columns/:header/values', () => {
+  it("returns one column's distinct values from the stored file", async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,Health Post\n2,Health Centre\n3,Health Post\n', 'utf8'),
+    });
+    expect(upload.statusCode).toBe(202);
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/${encodeURIComponent('type')}/values`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      header: 'type', values: ['Health Post', 'Health Centre'], distinct: 2, truncated: false,
+    });
+  });
+
+  // ⛔ `MANAGE`, NOT `VIEW`, for the same reason the rows route needs it: this hands back the RAW
+  // CONTENTS of an uploaded file. Reading it back is manage work, not view work.
+  it('refuses a view-only actor, the same capability the rows route needs', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const manager = await appWith(ctx);
+
+    const upload = await manager.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,Health Post\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const viewer = await appWith(ctx, ['facilities.view']);
+    const res = await viewer.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values`,
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // Same case the rows route guards: a run previewed inline stores nothing, so there is no file to
+  // read a column out of. 409, matching the rows route's own message shape.
+  it('409s a run that has no stored file, same as the rows route does', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,Health Post\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+    await db.updateTable('facility_import_runs').set({ blob_key: null }).where('id', '=', runId).execute();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values`,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/no stored file/i);
+  });
+
+  // `readColumnValues` never throws for a header the file does not have, it just finds nothing in
+  // every row (see facility-column-values.ts). This is a 200 with an empty vocabulary, not an error.
+  it('returns an empty vocabulary for a header the file does not have', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,Health Post\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/${encodeURIComponent('not_a_column')}/values`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      header: 'not_a_column', values: [], distinct: 0, truncated: false,
+    });
+  });
+
+  it('clamps a limit over the 1000 ceiling', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const csv = Array.from({ length: 1100 }, (_, i) => `${i},type${i}`).join('\n');
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(`code,type\n${csv}\n`, 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values?limit=5000`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().distinct).toBe(1100);
+    expect(res.json().values.length).toBe(1000);
+    expect(res.json().truncated).toBe(true);
+  });
+
+  it('clamps a limit of 0 to the floor of 1', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,Alpha\n2,Beta\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values?limit=0`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().values.length).toBe(1);
+    expect(res.json().distinct).toBe(2);
+    expect(res.json().truncated).toBe(true);
+  });
+
+  it('404s for a run that does not exist', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/facilities/import/runs/fir_missing/columns/type/values',
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('answers 422 when the stored file cannot be read as CSV', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,"Health Post\n2,Health Centre\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values`,
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toMatch(/this file could not be read as CSV/);
+    expect(res.json().line).toBeDefined();
+  });
+
+  // Final review, M6: the route picks its read format off `run.sourceFormat`, and nothing here
+  // covered the jsonl side of that branch. A JSONL release is the other of the two shapes this
+  // wizard accepts, so the branch is not an edge case.
+  it("reads a JSONL run's column through the jsonl branch, not the CSV one", async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'jsonl', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(
+        '{"code":"1","type":"Health Post"}\n'
+        + '{"code":"2","type":"Health Centre"}\n'
+        + '{"code":"3","type":"Health Post"}\n',
+        'utf8',
+      ),
+    });
+    expect(upload.statusCode).toBe(202);
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      header: 'type', values: ['Health Post', 'Health Centre'], distinct: 2, truncated: false,
+    });
+  });
+
+  // Final review, M6: the same stale-blob-key case the rows route already covers. `getStream`
+  // throws for an object that is not there, and an unhandled throw is a 500 the studio reports as a
+  // network fault. The run row is what is wrong, so the answer says so, in 409.
+  it('answers 409 rather than throwing when the stored file is gone', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,type\n1,Health Post\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+    await db.updateTable('facility_import_runs')
+      .set({ blob_key: 'facility-imports/gone' }).where('id', '=', runId).execute();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/facilities/import/runs/${runId}/columns/type/values`,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/can no longer be read/i);
+  });
+});
+
 // --- A2b Task 5: POST /api/facilities/import/runs/:id/confirm ----------------------------------
 //
 // The operator's decision, and the ONLY writer of `APPLY_PHASE.from` — the state the worker's apply

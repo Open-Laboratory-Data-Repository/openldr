@@ -948,11 +948,18 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByText(/line 2 — latitude: 95\.0/)).toBeInTheDocument();
   });
 
-  // Task 8: this used to assert a static warning sentence — `ValueMapPanel` now renders that same
-  // spot as an interactive picker (see ImportFacilitiesSheet.tsx's comment on why the heading copy
-  // is unchanged). The `notValidated` half of this test is untouched: that stays the sheet's own
-  // plain informational line, not part of the panel.
+  // Task 8: this used to assert a static warning sentence. `ValueMapPanel` used to render that same
+  // spot as an interactive picker. Task 6 moved the pick-lists again, into `ColumnMapStep` itself:
+  // one worklist per row, under the mapping it belongs to, so this test now needs a header that
+  // actually claims `level` for the worklist to attach to; the beforeEach's own `suggestColumnMap`
+  // default (`headers: []`) deliberately keeps `ColumnMapStep` off screen for every OTHER test, and
+  // this one now overrides it. The `notValidated` half of this test is untouched: that stays the
+  // sheet's own plain informational line, not part of the worklist.
   it('CT-3/Task 8: renders one pick-list row per unmapped controlled-field value, and which fields could not be validated at all', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValue({
+      headers: ['Type'],
+      columns: [{ header: 'Type', candidates: [{ target: 'level', display: null, score: 1, confidence: 'exact' }] }],
+    });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await reviewWithSummary(baseResult({
@@ -985,7 +992,13 @@ describe('ImportFacilitiesSheet', () => {
   // that an unmapped value is a WARNING and never blocks: importing with values left unmapped is a
   // supported outcome, so a sheet that bounced them to Mapping on every check would turn that
   // warning into a soft block they could never clear.
+  // Task 6: moved with the test above. Needs a header claiming `level` for the worklist `Zonal
+  // Hospital` now renders under to exist at all (see that test's own comment).
   it('offers a way back to Mapping from the values Review reports, rather than only naming the step', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValue({
+      headers: ['Type'],
+      columns: [{ header: 'Type', candidates: [{ target: 'level', display: null, score: 1, confidence: 'exact' }] }],
+    });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await reviewWithSummary(baseResult({
