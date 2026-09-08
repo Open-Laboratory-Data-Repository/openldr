@@ -4057,6 +4057,57 @@ describe('POST /api/facilities/import/upload', () => {
     expect(secondRun.status).toBe('queued');
     expect(secondRun.nationalSystem).toBe(SYSTEM);
   });
+
+  // ── Task 2 (facility-import-data-stage, Slice A): the upload can store without validating ──────
+  //
+  // Today the upload always mints a `queued` run, which the worker's `claimNext(VALIDATE_PHASE.from,
+  // …)` picks up on its own — this route has no separate job-queue call for a validate, the run's own
+  // `status` column IS the queue head. `validate=false` is the new opt-in: it mints a `stored` run
+  // instead, which is not `queued` and so nothing will ever claim it. That is deliberate — a `stored`
+  // run has no column map yet, and a validate run now would refuse every column as unrecognised. This
+  // flag is OPT-IN so every existing caller (the CLI, any script) keeps upload-and-validate unchanged.
+  it('validate=false stores the file and leaves the run unqueued, so it waits for a map', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(202);
+    const runId = res.json().runId as string;
+
+    // The file was still stored, byte for byte — only the VALIDATE is skipped, not the transfer.
+    const stored = onlyStoredObject(ctx);
+    expect(stored.bytes.toString('utf8')).toBe(csv);
+
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    expect(run.status).toBe('stored');
+    // ⛔ NOT `queued`. `CLAIMABLE_RUN_STATES` (facility-import-run-states.ts) is derived from
+    // `VALIDATE_PHASE.from`, which is exactly `'queued'` — a `stored` run is not in it, so
+    // `claimNext` will never select this row. There is no separate job-store call to assert against
+    // for this route: unlike `facility-map-rebuild`/`registry-projection` (fakeImportCtx's
+    // `facilityJobs`), the validate phase has no `.enqueue` call to spy on, only this status column.
+    expect(run.blobKey).toBe(stored.key);
+  });
+
+  it('without the flag, an upload still reaches `queued` — the default path is unchanged', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.status).toBe('queued');
+  });
 });
 
 // --- A2b Task 5: POST /api/facilities/import/runs/:id/confirm ----------------------------------

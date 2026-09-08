@@ -2352,6 +2352,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     }
     const releaseVersion = ownFirstString(q, 'releaseVersion') ?? null;
 
+    // Task 2 (facility-import-data-stage, Slice A): OPT-IN, so every existing caller (the CLI, any
+    // script) keeps upload-and-validate. Only the studio's Source step asks for a store, because
+    // only it has a Mapping step to supply the map later — a validate run now would refuse every
+    // column as unrecognised, which is the screen this whole slice exists to retire.
+    const storeOnly = ownFirstString(q, 'validate') === 'false';
+
     // The file DECLARES ITSELF the whole of this register — the one claim that lets a row's absence
     // from it mean anything at all (`FacilityImportResult.absent`). It rides the query string like
     // every other upload parameter and is stored on the run below, where the worker's
@@ -2543,6 +2549,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         fileHash,
         byteSize,
         releaseVersion,
+        // Task 2: a `validate=false` upload mints a `stored` run rather than `queued`, so the
+        // worker's validate phase (`CLAIMABLE_RUN_STATES`, derived from `VALIDATE_PHASE.from`) never
+        // claims it. Omitted (not `undefined`-spread) for every other caller, so `startUpload` keeps
+        // its own default.
+        ...(storeOnly ? { status: 'stored' as const } : {}),
         // Only what the request actually chose. The import options proper (allowUnknownColumns,
         // onConflict, …) are the CONFIRM step's, not the upload's — recording a made-up set here
         // would put a decision in the durable record that no operator ever made.
