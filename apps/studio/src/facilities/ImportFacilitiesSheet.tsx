@@ -1624,6 +1624,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 headers={columnMapHeaders}
                 suggestions={columnMapSuggestions}
                 value={columnMap}
+                runId={runId}
                 // ⛔ STILL A DIRECT, SYNCHRONOUS ROUND-TRIP — see `columnMap`'s own state comment
                 // above. The only addition is counting OPERATOR edits, which is what the summary's
                 // lifetime keys on; the write to `columnMap` itself is unconditional as before.

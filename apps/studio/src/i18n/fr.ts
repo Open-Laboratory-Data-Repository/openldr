@@ -1067,6 +1067,9 @@ export const fr: EnShape = {
         rowStatusUnrecognised: '{{count}} valeur(s) non reconnue(s)',
         rowStatusCollides: 'une autre colonne revendique déjà ce champ',
         rowStatusUnknown: 'quelque chose ne va pas',
+        rowStatusTooManyValues: '{{count}} valeurs distinctes trouvées. Cette colonne est probablement mappée au mauvais champ.',
+        rowCheckBlockedNoRun: 'Téléversez d’abord le fichier. Rien n’est encore stocké à vérifier.',
+        rowCheckFailed: 'Impossible de vérifier cette colonne. Réessayez.',
       },
       valueMap: {
         saveAction: 'Enregistrer les mappages',

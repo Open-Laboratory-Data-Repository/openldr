@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -9,8 +9,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { ColumnSuggestion, ControlledField, FacilityColumnMap } from '@/api';
+import {
+  readFacilityImportColumnValues, suggestValueMappings,
+  type ColumnSuggestion, type ControlledField, type FacilityColumnMap,
+} from '@/api';
 import { ConstantValueField } from './ConstantValueField';
+import { mappingRowState } from './mappingRowState';
+import { MappingRowStatus } from './MappingRowStatus';
 
 // Task 7: mirrors packages/terminology/src/facility-csv.ts's REQUIRED/OPTIONAL — "mirrored, not
 // shared", the same idiom every other facility-import type in this app already follows (this app
@@ -64,6 +69,10 @@ export interface ColumnMapStepProps {
    *  it by `header`, so this need not be in the same order as `headers`. */
   suggestions: ColumnSuggestion[];
   value: FacilityColumnMap;
+  /** Task 5: the stored run's id, so a row's status icon can read that column back and check it.
+   *  `null` before an upload — there is nothing stored yet, so nothing can be read. A click still
+   *  does something in that case: it tells the operator to upload first, rather than doing nothing. */
+  runId: string | null;
   /** ⛔ THE SECOND ARGUMENT IS LOAD-BEARING. `'seed'` is this panel's one-time opening offer,
    *  written when the asynchronous suggestion call resolves; `'edit'` is the operator deciding
    *  something. They look identical in `next` and they are not the same event.
@@ -92,9 +101,21 @@ export interface ColumnMapStepProps {
  *  pre-selected; both are left `Not mapped` and need an explicit decision. See `autoTargetByHeader`
  *  below. */
 export function ColumnMapStep({
-  headers, suggestions, value, onChange, onValidityChange,
+  headers, suggestions, value, runId, onChange, onValidityChange,
 }: ColumnMapStepProps): JSX.Element {
   const { t } = useTranslation();
+
+  // Task 5: the per-field check. One entry per header that has ever been checked, holding what
+  // the check found AND the target it ran against — `stale` below is the comparison of that
+  // stored target against the row's CURRENT target, not a boolean flag anyone sets by hand.
+  const [checkedByHeader, setCheckedByHeader] = useState<Record<string, {
+    target: string; unrecognised: number; truncated: boolean; distinct: number;
+  }>>({});
+  const [busyHeaders, setBusyHeaders] = useState<Set<string>>(new Set());
+  // Two ephemeral, header-keyed notices that are NOT part of `checkedByHeader`: neither one is a
+  // real check result, so neither should make `mappingRowState` call the row valid or invalid.
+  const [blockedHeader, setBlockedHeader] = useState<string | null>(null);
+  const [erroredHeader, setErroredHeader] = useState<string | null>(null);
 
   const suggestionByHeader = useMemo(() => {
     const m = new Map<string, ColumnSuggestion>();
@@ -245,6 +266,51 @@ export function ColumnMapStep({
     onChange({ ...value, constants }, 'edit');
   };
 
+  /** Task 5: check ONE header's current target against that column's own values — never the
+   *  whole register. Reads the column back through Task 2's route, then, only for a controlled
+   *  target, ranks those values through the same engine the value-mapping panel already uses. A
+   *  target with no bound vocabulary has nothing to rank, so it records zero unrecognised values
+   *  rather than staying stuck unchecked forever. */
+  const checkRow = async (header: string): Promise<void> => {
+    const target = selectedTarget(header);
+    if (!runId) {
+      // Nothing stored to read yet. The icon stays in whatever state it already carries
+      // (`checked` is untouched); this is what the click reports instead.
+      setBlockedHeader(header);
+      return;
+    }
+    setBlockedHeader((h) => (h === header ? null : h));
+    setErroredHeader((h) => (h === header ? null : h));
+    setBusyHeaders((prev) => new Set(prev).add(header));
+    try {
+      const { values, distinct, truncated } = await readFacilityImportColumnValues(runId, header);
+      if (truncated) {
+        // Thousands of distinct values almost always means the wrong field. Report the count,
+        // never the sample: listing 200 of 3,788 values would look like the whole picture.
+        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised: distinct, truncated: true, distinct } }));
+        return;
+      }
+      if (!CONTROLLED_CONSTANT_FIELDS.has(target)) {
+        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised: 0, truncated: false, distinct } }));
+        return;
+      }
+      const ranked = await suggestValueMappings(target as ControlledField, values);
+      const unrecognised = ranked.values.filter((v) => {
+        const topCandidate = v.candidates[0];
+        return !topCandidate || topCandidate.confidence === 'weak';
+      }).length;
+      setCheckedByHeader((prev) => ({ ...prev, [header]: { target, unrecognised, truncated: false, distinct } }));
+    } catch {
+      setErroredHeader(header);
+    } finally {
+      setBusyHeaders((prev) => {
+        const next = new Set(prev);
+        next.delete(header);
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="space-y-4 text-sm">
       <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[minmax(0,auto)_1fr] sm:items-center sm:gap-x-4 sm:gap-y-3">
@@ -255,6 +321,43 @@ export function ColumnMapStep({
           // Naturally absent for a colliding header: a collision is never auto-selected, so
           // `selected` there is `Not mapped`, never `top.target`.
           const showBadge = top?.confidence === 'likely' && selected === top.target;
+
+          // Task 5: this row's status icon. `confidence` only speaks for the CURRENT target —
+          // an operator who picked something the ranker did not suggest gets `null`, not a
+          // borrowed answer for a different field.
+          const confidenceForSelected = top && top.target === selected ? top.confidence : null;
+          const collidesHere = collisions.some((c) => c.a === header || c.b === header);
+          const check = checkedByHeader[header];
+          const stale = !!check && check.target !== selected;
+          const rowState = mappingRowState({
+            collides: collidesHere,
+            confidence: confidenceForSelected,
+            checked: check ? { unrecognised: check.unrecognised } : null,
+            stale,
+          });
+          // What the tooltip/aria-label names as the cause of an invalid row. Collision outranks
+          // a check result for the same reason `mappingRowState` itself ranks it first.
+          const detail = collidesHere
+            ? t('facilities.import.columnMap.rowStatusCollides')
+            : check?.truncated
+              ? t('facilities.import.columnMap.rowStatusTooManyValues', { count: check.distinct })
+              : check && check.unrecognised > 0
+                ? t('facilities.import.columnMap.rowStatusUnrecognised', { count: check.unrecognised })
+                : null;
+          // The row's own visible line, under the controls — distinct from `detail` above, which
+          // only ever surfaces on hover/focus via the tooltip. Collision is left out here: the
+          // collision block below the whole table already names both claimants, and repeating it
+          // per row would say the same thing twice for no added information.
+          const rowNotice = blockedHeader === header
+            ? { text: t('facilities.import.columnMap.rowCheckBlockedNoRun'), destructive: false }
+            : erroredHeader === header
+              ? { text: t('facilities.import.columnMap.rowCheckFailed'), destructive: true }
+              : check?.truncated
+                ? { text: t('facilities.import.columnMap.rowStatusTooManyValues', { count: check.distinct }), destructive: true }
+                : check && !stale && check.unrecognised > 0
+                  ? { text: t('facilities.import.columnMap.rowStatusUnrecognised', { count: check.unrecognised }), destructive: true }
+                  : null;
+
           return (
             <Fragment key={header}>
               {/* ⛔ NOT `whitespace-nowrap`. Every label shares one `auto` grid column, so the
@@ -266,44 +369,60 @@ export function ColumnMapStep({
               {/* `min-w-0` on BOTH: a grid item and a flex child each default to a min-width of
                   auto, so without it neither can shrink below its content and the row pins the
                   column open. The trigger already truncates its own label ([&>span]:truncate in
-                  select.tsx); this is what lets that truncation actually engage. */}
-              <div className="flex min-w-0 items-center gap-2">
-                <Select value={selected} onValueChange={(v) => setColumn(header, v)}>
-                  <SelectTrigger aria-label={header} className="h-9 min-w-0 flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={UNMAPPED}>{t('facilities.import.columnMap.notMapped')}</SelectItem>
-                    {CONTRACT_FIELDS.map((field) => (
-                      <SelectItem key={field} value={field}>{field}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {showBadge && (
-                  <Badge variant="outline" className="shrink-0">
-                    {t('facilities.import.columnMap.checkThisBadge')}
-                  </Badge>
+                  select.tsx); this is what lets that truncation actually engage. Wrapped in a
+                  column so Task 5's own notice line can sit under the controls without touching
+                  the two-track grid the row itself lives in. */}
+              <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Select value={selected} onValueChange={(v) => setColumn(header, v)}>
+                    <SelectTrigger aria-label={header} className="h-9 min-w-0 flex-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNMAPPED}>{t('facilities.import.columnMap.notMapped')}</SelectItem>
+                      {CONTRACT_FIELDS.map((field) => (
+                        <SelectItem key={field} value={field}>{field}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {showBadge && (
+                    <Badge variant="outline" className="shrink-0">
+                      {t('facilities.import.columnMap.checkThisBadge')}
+                    </Badge>
+                  )}
+                  <MappingRowStatus
+                    state={rowState}
+                    label={header}
+                    busy={busyHeaders.has(header)}
+                    detail={detail}
+                    onCheck={() => { void checkRow(header); }}
+                  />
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        aria-label={t('facilities.import.columnMap.rowActions', { header })}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => keepAsExtra(header)}>
+                        {t('facilities.import.columnMap.keepAsExtra')}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => clearHeader(header)}>
+                        {t('facilities.import.columnMap.clear')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                {rowNotice && (
+                  <p className={rowNotice.destructive ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
+                    {rowNotice.text}
+                  </p>
                 )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0"
-                      aria-label={t('facilities.import.columnMap.rowActions', { header })}
-                    >
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => keepAsExtra(header)}>
-                      {t('facilities.import.columnMap.keepAsExtra')}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => clearHeader(header)}>
-                      {t('facilities.import.columnMap.clear')}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             </Fragment>
           );

@@ -9,7 +9,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 // and rejects on a relative URL.
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, suggestValueMappings: vi.fn() };
+  return {
+    ...actual,
+    suggestValueMappings: vi.fn(),
+    // Task 5: the per-field check and the two calls it must never make. `uploadFacilityImport`
+    // and `revalidateFacilityImportRun` are mocked purely so `.not.toHaveBeenCalled()` below can
+    // tell "never called" apart from "not a mock" — this file never invokes either for real.
+    readFacilityImportColumnValues: vi.fn(),
+    uploadFacilityImport: vi.fn(),
+    revalidateFacilityImportRun: vi.fn(),
+  };
 });
 
 import * as api from '@/api';
@@ -47,9 +56,10 @@ function openRowMenu(name: string) {
  *  parent that stores `value` in state and re-renders on every `onChange`. This wrapper is that
  *  parent, so every test below exercises the real contract, not a stub that happens to look right
  *  once. `onChangeSpy` (when passed) still observes every call, same as a `vi.fn()` would. */
-function Controlled({ initial, onChangeSpy, ...rest }: {
+function Controlled({ initial, onChangeSpy, runId = null, ...rest }: {
   initial: FacilityColumnMap;
   onChangeSpy?: (next: FacilityColumnMap) => void;
+  runId?: string | null;
   headers: string[];
   suggestions: ColumnSuggestion[];
   onValidityChange?: (valid: boolean) => void;
@@ -58,6 +68,7 @@ function Controlled({ initial, onChangeSpy, ...rest }: {
   return (
     <ColumnMapStep
       {...rest}
+      runId={runId}
       value={value}
       onChange={(next) => {
         onChangeSpy?.(next);
@@ -261,12 +272,12 @@ describe('ColumnMapStep', () => {
     const onValidityChange = vi.fn();
     const { rerender } = render(<ColumnMapStep headers={['Province']} suggestions={[suggestions[1]]}
       value={{ columns: { Province: 'zone' }, constants: {}, extras: [] }} onChange={() => {}}
-      onValidityChange={onValidityChange} />);
+      runId={null} onValidityChange={onValidityChange} />);
     expect(onValidityChange).toHaveBeenLastCalledWith(false);
 
     rerender(<ColumnMapStep headers={['Province']} suggestions={[suggestions[1]]}
       value={{ columns: { Province: 'zone' }, constants: { national_code: 'X', name: 'Y' }, extras: [] }}
-      onChange={() => {}} onValidityChange={onValidityChange} />);
+      onChange={() => {}} runId={null} onValidityChange={onValidityChange} />);
     expect(onValidityChange).toHaveBeenLastCalledWith(true);
   });
 
@@ -359,6 +370,96 @@ describe('ColumnMapStep', () => {
       expect(screen.getByLabelText('country')).toHaveValue('ZMB');
       fireEvent.change(screen.getByLabelText('country'), { target: { value: '' } });
       expect(screen.getByLabelText('country')).toHaveValue('');
+    });
+  });
+
+  describe('⛔ Task 5 — the per-field check (checks one column, never the whole register)', () => {
+    // Call history is NOT cleared between tests anywhere else in this file (no global
+    // `clearMocks`/`resetMocks`), and the "was X called" assertions in this group depend on a
+    // clean slate — without this, an earlier test's own click leaks into a later test's "not
+    // called" assertion.
+    beforeEach(() => {
+      mockedApi(api.readFacilityImportColumnValues).mockClear();
+      mockedApi(api.suggestValueMappings).mockClear();
+      mockedApi(api.uploadFacilityImport).mockClear();
+      mockedApi(api.revalidateFacilityImportRun).mockClear();
+    });
+
+    it('checks one field on its own, and does not validate the whole register to do it', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Health Post', '1st Level Hospital'], distinct: 2, truncated: false,
+      });
+      // A conditional implementation, not `mockResolvedValueOnce`: the two unclaimed constant
+      // fields (`status`, `country`) each fetch their own value set through this same mock on
+      // mount, and a queued "once" answer would go to whichever of those wins the race instead
+      // of to the click below.
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string, values: string[]) => {
+        if (field === 'level' && values.includes('Health Post')) {
+          return {
+            values: [
+              { value: 'Health Post', candidates: [{ target: 'health-post', display: null, score: 1, confidence: 'exact' }] },
+              { value: '1st Level Hospital', candidates: [] },
+            ],
+            options: [],
+            notValidated: false,
+          };
+        }
+        return { values: [], options: [], notValidated: false };
+      });
+
+      render(<Controlled runId="run-1" headers={['Type']} suggestions={[]}
+        initial={{ columns: { Type: 'level' }, constants: {}, extras: [] }} />);
+
+      // `/^Type:/` picks the status button on purpose: the row's own ⋯ menu trigger is named
+      // "Actions for Type", which also contains the word "Type" and would make a bare /Type/
+      // match two buttons.
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      // The row reports what the check found, in the row.
+      expect(await screen.findByText(/1 value\(s\) are not recognised/i)).toBeInTheDocument();
+      // AND THE REGISTER WAS NOT RE-VALIDATED. That is the whole point of the route this uses.
+      expect(api.uploadFacilityImport).not.toHaveBeenCalled();
+      expect(api.revalidateFacilityImportRun).not.toHaveBeenCalled();
+    });
+
+    it('says so when a column has more distinct values than a person should be asked to map', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Name', values: ['a', 'b'], distinct: 3788, truncated: true,
+      });
+      render(<Controlled runId="run-1" headers={['Name']} suggestions={[]}
+        initial={{ columns: { Name: 'level' }, constants: {}, extras: [] }} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Name:/ }));
+
+      expect(await screen.findByText(/3,?788 distinct/i)).toBeInTheDocument();
+      // A truncated column is never sent to the ranker — its values were never even collected.
+      expect(api.suggestValueMappings).not.toHaveBeenCalledWith('level', expect.anything());
+    });
+
+    it('cannot check anything before a file is uploaded, and says so without touching the API', () => {
+      render(<Controlled runId={null} headers={['Type']} suggestions={[]}
+        initial={{ columns: { Type: 'level' }, constants: {}, extras: [] }} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      expect(screen.getByText(/upload the file first/i)).toBeInTheDocument();
+      expect(api.readFacilityImportColumnValues).not.toHaveBeenCalled();
+    });
+
+    it('a target with no vocabulary goes green on a check, honestly', async () => {
+      // `address` is not one of the three controlled fields, so there is no vocabulary to check
+      // it against — judged case: the check still runs (it reads the column) but records zero
+      // unrecognised values, and the row goes green rather than staying stuck unchecked.
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Address', values: ['1 Main St', '2 Main St'], distinct: 2, truncated: false,
+      });
+      render(<Controlled runId="run-1" headers={['Address']} suggestions={[]}
+        initial={{ columns: { Address: 'address' }, constants: {}, extras: [] }} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Address:/ }));
+
+      expect(await screen.findByRole('button', { name: /^Address: checked, nothing wrong/i })).toBeInTheDocument();
+      expect(api.suggestValueMappings).not.toHaveBeenCalledWith('address', expect.anything());
     });
   });
 });

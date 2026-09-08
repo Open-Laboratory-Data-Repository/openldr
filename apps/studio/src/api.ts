@@ -1291,6 +1291,30 @@ export const suggestColumnMap = (csv: string): Promise<{ headers: string[]; colu
   authFetch('/api/facilities/import/suggest-map', jbody({ csv }, 'POST'))
     .then((r) => okJson<{ headers: string[]; columns: ColumnSuggestion[] }>(r, 'suggest column map'));
 
+// ── Task 5 (mapping-answers-back, Slice B): one column's values, so the mapping step can check a
+// single field without validating the whole register (Task 2's route). ────────────────────────────
+
+export interface FacilityImportColumnValues {
+  header: string;
+  values: string[];
+  distinct: number;
+  /** `distinct` exceeded the cap, so `values` is a sample. A column with hundreds of distinct
+   *  values is usually one that was mapped wrongly, and the row says so rather than listing them. */
+  truncated: boolean;
+}
+
+/** `GET /api/facilities/import/runs/:id/columns/:header/values` — that column's distinct
+ *  non-empty values, capped at `limit`. Reads the ONE stored file column, never the whole
+ *  register: this is what lets a single mapping row be checked on its own. */
+export const readFacilityImportColumnValues = (
+  runId: string,
+  header: string,
+  limit = 200,
+): Promise<FacilityImportColumnValues> =>
+  authFetch(
+    `/api/facilities/import/runs/${encodeURIComponent(runId)}/columns/${encodeURIComponent(header)}/values?limit=${limit}`,
+  ).then((r) => okJson<FacilityImportColumnValues>(r, 'read column values'));
+
 // ── Task 8: value-mapping suggestions and writes (Task 4's route/Task 2's engine; Task 6's route) ──
 
 /** Mirrors the server's `ValueSuggestion` (packages/bootstrap/src/facility-mapping-suggest.ts) — the

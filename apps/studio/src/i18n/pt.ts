@@ -1067,6 +1067,9 @@ export const pt: EnShape = {
         rowStatusUnrecognised: '{{count}} valor(es) não reconhecido(s)',
         rowStatusCollides: 'outra coluna já reivindica este campo',
         rowStatusUnknown: 'algo está errado',
+        rowStatusTooManyValues: '{{count}} valores distintos encontrados. Esta coluna está provavelmente mapeada para o campo errado.',
+        rowCheckBlockedNoRun: 'Carregue primeiro o ficheiro. Ainda não há nada guardado para verificar.',
+        rowCheckFailed: 'Não foi possível verificar esta coluna. Tente novamente.',
       },
       valueMap: {
         saveAction: 'Guardar mapeamentos',
