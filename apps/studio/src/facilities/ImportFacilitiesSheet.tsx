@@ -239,6 +239,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  This counter advances on every completed read, so a fresh read always re-derives the headers
    *  whether or not its text differs. */
   const [csvHeadReads, setCsvHeadReads] = useState(0);
+  /** Did BOTH ways of reading a header row come up with nothing?
+   *
+   *  ⛔ NOT `columnMapHeaders.length === 0`, and that distinction is load-bearing. An empty list is
+   *  also what you have before the read runs at all, and what a `suggest-map` response would mean
+   *  if it ever returned one — it does not, it answers an unreadable head with a 400. Inferring the
+   *  refusal from an empty list therefore fires on states that are not refusals. This is set only on
+   *  the path that genuinely means it: the request failed AND the client's own fallback split of the
+   *  first line produced no fields either. */
+  const [headerRowMissing, setHeaderRowMissing] = useState(false);
   // B1 Task 9: holds the CHOSEN SOURCE'S URI, and only ever that — see `handleNationalSystemChange`
   // and the `Select` below. Before this task it was a free-text box hashed straight into every
   // facility's permanent id (`idFor`, facility-csv.ts); the import routes now refuse anything that
@@ -560,8 +569,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     if (!csvHead || format !== 'csv') {
       setColumnMapHeaders([]);
       setColumnMapSuggestions([]);
+      setHeaderRowMissing(false);
       return;
     }
+    setHeaderRowMissing(false);
     let cancelled = false;
     suggestColumnMap(csvHead)
       .then((res) => {
@@ -581,6 +592,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         const headers = firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
         setColumnMapHeaders(headers);
         setColumnMapSuggestions([]);
+        setHeaderRowMissing(headers.length === 0);
       });
     return () => { cancelled = true; };
   }, [csvHead, format, csvHeadReads]);
@@ -1007,6 +1019,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // window in which `uploadDisabled` let a doomed click through. `size` is known the instant the
   // file is chosen.
   const emptyFile = !!file && file.size === 0;
+  /** ⛔ A CSV WHOSE FIRST LINE NAMES NOTHING. The route answers such a head with a 400 and the
+   *  client's own fallback split filters it to nothing, so both paths land here. `parseFacilityCsv`
+   *  refuses the file anyway, so this is refused on SOURCE rather than after a 626 KB upload and an
+   *  empty Mapping step. Gated on `headersResolved` so it cannot flash before the read has run.
+   *  Only an empty FIRST LINE reaches this: a data-only CSV still has one, whose values become the
+   *  headers, and a 0-byte file is `emptyFile` above. */
+  const noHeaderRow = format === 'csv' && !!file && !emptyFile && headerRowMissing;
   // `!csvHead` matters as its own gate, distinct from `!file`: reading the file's text back out is
   // asynchronous (File.text()), so there is a real window after picking a file where `file` is
   // already set but `csv` has not resolved yet. Without this, a click in that window would fall
@@ -1014,7 +1033,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // A2b: Upload deliberately does NOT wait on `csv` — the File is the request body, so there is
   // nothing to read first. `emptyFile` is still a gate: the upload route refuses a 0-byte body with a
   // 400, and a request that cannot succeed is never worth sending.
-  const uploadDisabled = !file || !nationalSystem.trim() || uploading || emptyFile;
+  const uploadDisabled = !file || !nationalSystem.trim() || uploading || emptyFile || noHeaderRow;
   // parsed === 0 covers BOTH the "nothing recognised" trap (unknownColumns populated, blocked
   // outright) and the "wrong file entirely" trap (parsed 0, unknownColumns empty) — neither has
   // anything to apply. Over the row cap is refused for the same reason a doomed request is: never
@@ -1303,6 +1322,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {emptyFile && (
                 <p className="text-xs text-destructive">{t('facilities.import.emptyFileHint')}</p>
               )}
+              {noHeaderRow && (
+                <p className="text-xs text-destructive">{t('facilities.import.noHeaderRowHint')}</p>
+              )}
             </div>
 
             {/* Separates the drop target from the fields that describe it. `-mx-6` because this
@@ -1527,11 +1549,18 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               with nothing on it at all. Two messages, not five: JSONL has no column map to set at
               all; every other case's map already went out with the upload and cannot be changed
               from here now. */}
+          {/* ⛔ IT MAY ONLY SAY "already sent" WHEN A RUN EXISTS. This was one string standing in
+              for five states, so a hidden column map always claimed the map had gone out with an
+              upload. An operator read that on a file they had not uploaded, took it to mean mapping
+              was closed to them, uploaded with no map, and had all 21 columns refused as
+              unrecognised. `runId` is the only thing that makes that sentence true. */}
           {step === 2 && !columnMapPanelShown && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">
               {format === 'jsonl'
                 ? t('facilities.import.columnMapNotApplicableJsonl')
-                : t('facilities.import.columnMapAlreadySent')}
+                : runId
+                  ? t('facilities.import.columnMapAlreadySent')
+                  : t('facilities.import.columnMapUnavailable')}
             </p>
           )}
 
@@ -1676,7 +1705,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           ) : (
             <Button
               size="sm"
-              disabled={!stepGate.hasFile || !stepGate.hasRegister}
+              disabled={!stepGate.hasFile || !stepGate.hasRegister || noHeaderRow}
               onClick={() => setRequestedStep(2)}
             >
               {t('facilities.import.continueAction')}

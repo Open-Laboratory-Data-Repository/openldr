@@ -954,6 +954,7 @@ export const pt: EnShape = {
       previewSummary: '{{parsed}} linha(s) serão importadas ({{skipped}} ignorada(s)).',
       duplicatesWarning: 'Foram encontrados {{count}} código(s) nacional(ais) duplicado(s) neste ficheiro; apenas a última linha de cada um foi mantida.',
       emptyFileHint: 'Este ficheiro está vazio. Escolha outro ficheiro antes de pré-visualizar.',
+      noHeaderRowHint: 'Não foi possível ler nenhuma linha de cabeçalho. A primeira linha do ficheiro tem de nomear as colunas.',
       doneTitle: 'Importação concluída',
         nothingImportedTitle: 'Nada foi importado',
         nothingImportedBody: 'Este ficheiro não produziu linhas, por isso nada foi escrito no registo.',
@@ -1028,6 +1029,7 @@ export const pt: EnShape = {
       columnMapIncompleteHint: 'Ainda pode pré-visualizar ou carregar com este mapeamento incompleto — a importação explicará exatamente o que falta mapear.',
       columnMapNotApplicableJsonl: 'Um ficheiro de lançamento já usa os próprios nomes de campo do contrato, por isso não há mapeamento de colunas a definir.',
       columnMapAlreadySent: 'O mapeamento de colunas deste ficheiro já foi enviado com o carregamento e não pode ser alterado agora.',
+      columnMapUnavailable: 'Não foi possível ler nenhuma coluna deste ficheiro, por isso não há nada para mapear aqui.',
       columnMap: {
         notMapped: 'Manter como dado extra',
         checkThisBadge: 'Verificar',

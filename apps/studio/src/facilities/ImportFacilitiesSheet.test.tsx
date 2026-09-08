@@ -2388,6 +2388,44 @@ describe('the file drop zone', () => {
     expect(screen.queryByText(/already been sent/i)).not.toBeInTheDocument();
   });
 
+  // ⛔ NOTHING TO MAP MEANS DO NOT GO TO MAPPING. Raised by the operator while the same-file-twice
+  // bug above was being fixed: both faults end on an empty Mapping step, and this one genuinely has
+  // no columns. The parser refuses such a file anyway, so letting Continue through only spends a
+  // 626 KB upload to learn that. Only a file whose FIRST LINE is empty lands here: a data-only CSV
+  // still has a first line, whose values become the headers, and a 0-byte file has its own hint.
+  it('⛔ refuses a csv whose header row cannot be read, on Source, instead of an empty Mapping step', async () => {
+    // What the route does with such a head, mirrored by the client's own fallback split.
+    mocked(api.suggestColumnMap).mockRejectedValue(new Error('no header row found in the supplied file'));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    const headerless = ['', '100001,Chunga Clinic', ''].join('\n');
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile(headerless)] } });
+
+    expect(await screen.findByText(/no header row/i)).toBeInTheDocument();
+    const trigger = await screen.findByRole('combobox', { name: 'National system' });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
+    // Even with a register chosen, this file cannot go forward.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled());
+  });
+
+  // ⛔ THE MESSAGE MUST NOT CLAIM AN UPLOAD THAT NEVER HAPPENED. One string used to cover five
+  // states, so a hidden column map always read as "already sent with the upload" — which an
+  // operator saw on a file they had not uploaded, and reasonably took to mean mapping was closed to
+  // them. It may only say that when a run actually exists.
+  it('⛔ only says the map went with the upload when a run actually exists', async () => {
+    mocked(api.suggestColumnMap).mockRejectedValue(new Error('no header row found in the supplied file'));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('File'), {
+      target: { files: [csvFile(['', '100001,Chunga Clinic', ''].join('\n'))] },
+    });
+    await screen.findByText(/no header row/i);
+
+    expect(screen.queryByText(/already been sent/i)).not.toBeInTheDocument();
+  });
+
   it('accepts a dropped csv and treats it exactly like a browsed one', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
     drop(dropZone(), csvFile());
