@@ -1679,7 +1679,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByText(/ward_code/)).not.toBeInTheDocument();
     openMenu();
     // Positive control on the same open menu, so the absence beside it means something.
-    expect(screen.getByRole('menuitem', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Close' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
   });
 
@@ -2368,10 +2368,10 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   describe('the primary action', () => {
-    // Fix for the reachability regression: Continue's own click now lands on Data, which has no
-    // primary action of its own yet (a later task adds one alongside the grid). Mapping is where
-    // the re-upload action actually shows, one strip click further on.
-    it('offers Continue on Source, nothing yet on Data, and a re-upload action on Mapping', async () => {
+    // Continue's own click lands on Data, which now carries a Continue of its own (it used to
+    // carry nothing, leaving an empty footer bar under the grid). Mapping is where the re-upload
+    // action shows, one step further on.
+    it('offers Continue on Source and on Data, and a re-upload action on Mapping', async () => {
       mocked(api.suggestColumnMap).mockResolvedValueOnce({
         headers: ['MFL Code'],
         columns: [{ header: 'MFL Code', candidates: [] }],
@@ -2388,7 +2388,8 @@ describe('ImportFacilitiesSheet', () => {
 
       await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
         .toHaveAttribute('aria-current', 'step'));
-      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+      // Data's own Continue, and NEITHER validate action: nothing on Data sends anything.
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Validate all' })).not.toBeInTheDocument();
 
@@ -2715,6 +2716,63 @@ describe('the file drop zone', () => {
     fireEvent.keyDown(dropZone(), { key: 'Enter' });
     expect(clicked).toHaveBeenCalled();
     clicked.mockRestore();
+  });
+
+  // ── The two menu items that both said "cancel" ──────────────────────────────────────────────
+
+  // Reported from the screenshots: the menu read "Cancel this import" above a bare "Cancel", and
+  // nothing said the first kills the run on the server while the second only shuts the sheet. The
+  // second one already read "Close" once a run had finished; it now reads that always, because
+  // closing is all it has ever done.
+  it('names the item that only shuts the sheet "Close", never "Cancel"', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem();
+    openMenu();
+
+    expect(screen.getByRole('menuitem', { name: 'Close' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Cancel' })).not.toBeInTheDocument();
+  });
+
+  it('still shuts the sheet without touching the run', async () => {
+    const onOpenChange = vi.fn();
+    render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={vi.fn()} />);
+    await pickFileAndSystem();
+    clickMenuItem('Close');
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(api.cancelFacilityImportRun).not.toHaveBeenCalled();
+  });
+
+  // ── Data's own footer action ────────────────────────────────────────────────────────────────
+
+  // Reported from the screenshots: Source, Mapping and Review each carry a button in the footer
+  // bar and Data carried none, so the bar rendered empty under the grid and the only way forward
+  // was the step strip. Nothing about Data justified the exception.
+  it('offers a way forward from Data, instead of an empty footer under the grid', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
+  });
+
+  // ⛔ Data's Continue must NOT store the file a second time. Source's own Continue already did
+  // that, and a second `uploadFacilityImport` either supersedes the run this sheet is watching or
+  // 409s. Data only moves the operator along.
+  it('the Continue on Data moves a step without re-uploading the file', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step'));
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
   // ── The check survives the step strip ───────────────────────────────────────────────────────

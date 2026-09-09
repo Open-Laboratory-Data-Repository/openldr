@@ -1327,8 +1327,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   {cancelling ? t('facilities.import.cancellingAction') : t('facilities.import.cancelRunAction')}
                 </DropdownMenuItem>
               )}
+              {/* ⛔ ALWAYS "Close", NEVER "Cancel". This item shuts the sheet and does nothing else:
+                  a stored or running import survives it untouched. It used to read "Cancel" until
+                  a run reached a terminal state, which put a bare "Cancel" directly under "Cancel
+                  this import" — two items a word apart, one of which kills the run on the server
+                  and one of which does not. The operator could not tell them apart, and the words
+                  were the only thing that could have told them. */}
               <DropdownMenuItem disabled={uploading} onClick={() => onOpenChange(false)}>
-                {runFinished ? t('common.close') : t('common.cancel')}
+                {t('common.close')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1847,6 +1853,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {uploading ? uploadLabel : t('facilities.import.continueAction')}
             </Button>
           ))}
+          {/* Data's own way forward. Source, Mapping and Review each carried a footer button and
+              Data carried none, so the bar rendered empty under the grid and the strip was the
+              only way on. Nothing about Data earned that exception: it is a read-only view of a
+              file that is already stored.
+              ⛔ IT ONLY MOVES A STEP. Source's Continue already stored the file, and a second
+              `uploadFacilityImport` either supersedes the run this sheet is watching or 409s (see
+              the dropdown's own Upload gate). This shares Source's label because it is the same
+              promise to the operator, and deliberately not its handler. */}
+          {step === 2 && (
+            <Button size="sm" onClick={() => setRequestedStep(3)}>
+              {t('facilities.import.continueAction')}
+            </Button>
+          )}
           {/* Whole-branch review, FINDING 1: this button used to check only `uploadDisabled` — the
               dropdown's own Upload item ALSO checks `!applyResult && !runId` (see that item's own
               comment for why: a second upload either supersedes the run this sheet is watching or
