@@ -67,6 +67,9 @@ Every mapping row carries a small icon next to its field picker. It has four sta
 - A green tick in a circle means it has been checked, and nothing is wrong.
 - A red circle means something is wrong. The row says what, in a line under it.
 - A gray circular arrow means the mapping changed since its last check.
+- A muted circle with a dash means the column is kept as extra data. It claims no contract field, so
+  there is nothing to check it against and the icon does nothing. Most of a real export's columns
+  look like this, which is what keeps the icons that need attention easy to pick out.
 
 Each state draws its own shape, not just its own colour, so they still read apart on a phone, where
 a tooltip cannot be opened at all.

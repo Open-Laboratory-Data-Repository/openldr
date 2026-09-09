@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { mappingRowState } from './mappingRowState';
 
-const base = { collides: false, confidence: null, checked: null, stale: false } as const;
+const base = { collides: false, confidence: null, checked: null, stale: false, mapped: true } as const;
 
 describe('mappingRowState', () => {
   it('a collision is invalid, whatever else is true', () => {
@@ -44,5 +44,21 @@ describe('mappingRowState', () => {
 
   it('nothing known at all is neutral', () => {
     expect(mappingRowState(base)).toBe('neutral');
+  });
+
+  // A column kept as extra data is not going into a contract field, so there is nothing to check it
+  // against and no reason to ask the operator to look at it. It outranks everything except a
+  // collision: a stored check describes a target the column no longer claims.
+  it('a column kept as extra data has nothing to check', () => {
+    expect(mappingRowState({ ...base, mapped: false })).toBe('skipped');
+    expect(mappingRowState({ ...base, mapped: false, confidence: 'exact' })).toBe('skipped');
+    expect(mappingRowState({ ...base, mapped: false, checked: { unrecognised: 3 } })).toBe('skipped');
+    expect(mappingRowState({ ...base, mapped: false, checked: { unrecognised: 0 }, stale: true })).toBe('skipped');
+  });
+
+  // A collision still outranks it. Two headers cannot both claim one field, and the map is refused
+  // while one stands, whatever either header is set to.
+  it('a collision still beats a kept-as-extra column', () => {
+    expect(mappingRowState({ ...base, mapped: false, collides: true })).toBe('invalid');
   });
 });

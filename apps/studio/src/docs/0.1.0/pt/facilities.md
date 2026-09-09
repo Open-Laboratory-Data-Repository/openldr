@@ -74,6 +74,9 @@ Cada linha de mapeamento tem um pequeno ícone junto ao seu seletor de campo. Te
 - Um visto verde dentro de um círculo significa que foi verificada e nada está errado.
 - Um círculo vermelho significa que algo está errado. A linha diz o quê, logo por baixo.
 - Uma seta circular cinzenta significa que o mapeamento mudou desde a última verificação.
+- Um círculo discreto com um traço significa que a coluna é guardada como dados extra. Não reclama
+  nenhum campo do contrato, por isso não há nada a verificar e o ícone não faz nada. A maioria das
+  colunas de um export real está assim, o que deixa as outras sobressair.
 
 Cada estado tem a sua própria forma, e não apenas a sua própria cor, para que continuem distintos
 num telemóvel, onde a dica não chega sequer a abrir.

@@ -1130,6 +1130,7 @@ export const en = {
         rowStatusValid: '{{header}}: checked, nothing wrong. Check again',
         rowStatusInvalid: '{{header}}: {{detail}}. Check again',
         rowStatusStale: '{{header}}: changed since the last check. Check again',
+        rowStatusSkipped: '{{header}}: kept as extra data, so there is nothing to check',
         rowStatusUnrecognised: '{{count}} value(s) are not recognised',
         rowStatusUnsavedPicks: '{{count}} chosen, not saved yet',
         rowStatusCollides: 'another column already claims this field',

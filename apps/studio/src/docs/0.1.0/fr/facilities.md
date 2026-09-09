@@ -76,6 +76,9 @@ Chaque ligne de mappage porte une petite icône à côté de son sélecteur de c
 - Une coche verte dans un cercle signifie qu'elle a été vérifiée et que rien ne cloche.
 - Un cercle rouge signifie qu'un problème existe. La ligne dit lequel, juste en dessous.
 - Une flèche circulaire grise signifie que le mappage a changé depuis sa dernière vérification.
+- Un cercle discret barré d'un tiret signifie que la colonne est gardée en données supplémentaires.
+  Elle ne revendique aucun champ du contrat, il n'y a donc rien à vérifier et l'icône ne fait rien.
+  La plupart des colonnes d'un export réel sont dans ce cas, ce qui laisse ressortir les autres.
 
 Chaque état a sa propre forme, pas seulement sa propre couleur, pour qu'ils restent distincts sur
 un téléphone, où l'infobulle ne s'ouvre pas du tout.

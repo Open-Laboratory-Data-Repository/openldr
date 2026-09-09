@@ -74,6 +74,8 @@ Every row on the Mapping step carries a small icon next to its field picker, wit
 - A green tick in a circle: it has been checked, and nothing is wrong.
 - A red circle: something is wrong. The row says what, in a line under it.
 - A gray circular arrow: the mapping changed since its last check.
+- A muted circle with a dash: the column is kept as extra data, claims no contract field, and has
+  nothing to check. The icon does nothing on those rows.
 
 Each state has its own shape, not just its own colour, so they still read apart on a phone.
 

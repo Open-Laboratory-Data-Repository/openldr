@@ -1064,6 +1064,7 @@ export const pt: EnShape = {
         rowStatusValid: '{{header}}: verificado, nada de errado. Verificar novamente',
         rowStatusInvalid: '{{header}}: {{detail}}. Verificar novamente',
         rowStatusStale: '{{header}}: alterado desde a última verificação. Verificar novamente',
+        rowStatusSkipped: '{{header}}: guardado como dados extra, não há nada a verificar',
         rowStatusUnrecognised: '{{count}} valor(es) não reconhecido(s)',
         rowStatusUnsavedPicks: '{{count}} escolhido(s), ainda não guardado(s)',
         rowStatusCollides: 'outra coluna já reivindica este campo',

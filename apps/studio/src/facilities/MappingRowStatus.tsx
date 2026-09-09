@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertCircle, Info, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, MinusCircle, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -62,6 +62,8 @@ export function MappingRowStatus({
         });
       case 'stale':
         return t('facilities.import.columnMap.rowStatusStale', { header: label });
+      case 'skipped':
+        return t('facilities.import.columnMap.rowStatusSkipped', { header: label });
       case 'neutral':
       default:
         return t('facilities.import.columnMap.rowStatusNeutral', { header: label });
@@ -78,7 +80,32 @@ export function MappingRowStatus({
           // Not a warning colour. A stale row is not wrong, it just has not been looked at since it
           // changed, so it stays quieter than unchecked and differs in shape from everything else.
           ? <RefreshCw className="h-4 w-4 text-muted-foreground" />
-          : <Info className="h-4 w-4 text-amber-600" />;
+          : state === 'skipped'
+            ? <MinusCircle className="h-4 w-4 text-muted-foreground" />
+            : <Info className="h-4 w-4 text-amber-600" />;
+
+  // ⛔ NOT A BUTTON WHEN SKIPPED, and that is the one exception to "always clickable". A column kept
+  // as extra data claims no contract field, so a check has nothing to compare it against and could
+  // only ever report success it did not earn. Offering a control that cannot do anything is worse
+  // than offering none. Keeps its tooltip and its `aria-label`, so it still says what it is.
+  if (state === 'skipped' && !busy) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span
+              className="flex h-8 w-8 shrink-0 items-center justify-center"
+              aria-label={statusText}
+              tabIndex={0}
+            >
+              {icon}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{statusText}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider>

@@ -623,6 +623,9 @@ export function ColumnMapStep({
             confidence: confidenceForSelected,
             checked: check ? { unrecognised } : null,
             stale,
+            // "Keep as extra data" claims no contract field, so there is nothing to check it
+            // against. See `mappingRowState`'s own note on why those rows go quiet.
+            mapped: selected !== UNMAPPED,
           });
           // What the tooltip/aria-label names as the cause of an invalid row. Collision outranks
           // a check result for the same reason `mappingRowState` itself ranks it first.
