@@ -39,7 +39,7 @@ new outcomes clear the row through machinery that shipped on 2026-09-09 in `dbed
 
 ## Decisions taken
 
-Five, by the operator, before this was written.
+Six, by the operator, before this was written.
 
 1. **An added type is scoped to its register.** Zambia's vocabulary is not Tanzania's. The shared
    list stays as seeded.
@@ -51,6 +51,8 @@ Five, by the operator, before this was written.
    vocabulary, so it is gated like a vocabulary write.
 5. **Both pick lists get a section for outcomes that are not "map to a code"**, separated from the
    real choices, and anything of that kind added later joins that section.
+6. **Ignore and add are `level` only.** `status` and `country` keep today's pick list. See the scope
+   section for why, and for the symptom that would reopen it.
 
 ## The data model
 
@@ -125,8 +127,9 @@ otherwise.
 
 ### The pick list gains a section
 
-`Not mapped`, `Ignore this value`, and `Add "<value>" as a new type…`, then a separator, then the
-concepts. All three answer the question the operator actually faces: this value is not in the list,
+For a row whose target is `level`: `Not mapped`, `Ignore this value`, and
+`Add "<value>" as a new type…`, then a separator, then the concepts. For `status` and `country`:
+`Not mapped`, then a separator, then the concepts, which is decision 6. All three answer the question the operator actually faces: this value is not in the list,
 so what now. Burying the add below 63 concepts hides it on the one path that needs it, and on a phone
 that is a long scroll.
 
@@ -178,9 +181,19 @@ would be the dots-menu argument again. The docs say where to go.
 
 **Renaming an added concept.** Same reason.
 
-**The other two controlled fields.** `status` and `country` get the same pick list and the same
-ignore, because they share one component. Neither is expected to need `add`, and neither gets a
-register-scoped value set until someone adds to it.
+**The other two controlled fields.** `status` and `country` share the pick-list component with
+`level`, and neither gets `Ignore this value` or `Add as a new type`. Their vocabularies are small
+and closed: the Zambia export's four status words all map cleanly, and `country` is a fixed value
+rather than a column. Offering an outcome nobody needs on two of the three fields is three times the
+surface for one field's problem.
+
+⛔ THIS IS A GATE ON THE FIELD, NOT AN ACCIDENT OF WIRING. `ValueMapRow` renders every controlled
+field's values, so the option has to be withheld deliberately, keyed on the row's target being
+`level`. A later reader who removes the check to "clean it up" has widened the feature.
+
+The symptom that would justify widening it: a register whose `status` column carries a word that is
+genuinely not a status, so the row cannot go green and every import re-asks. Nothing in the Zambia
+export does that today.
 
 ## Verification, and its limits
 
