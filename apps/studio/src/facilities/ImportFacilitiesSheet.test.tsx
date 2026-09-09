@@ -2802,7 +2802,10 @@ describe('the file drop zone', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^Type:/ }));
     const picker = await screen.findByRole('combobox', { name: /1st Level Hospital/i });
     fireEvent.keyDown(picker, { key: 'Enter' });
-    fireEvent.click(await screen.findByRole('option', { name: /Hospital/ }));
+    // ⛔ Slice B, Task 5: exact match, not `/Hospital/`. The raw value itself is "1st Level
+    // Hospital", so `ValueMapRow`'s own "Add "1st Level Hospital" as a new type…" option now
+    // ALSO contains "Hospital" and a substring regex matches both, ambiguously.
+    fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
     mocked(api.writeFacilityValueMappings).mockClear();
 
     fireEvent.click(screen.getByRole('button', { name: 'Validate all' }));
@@ -2873,7 +2876,9 @@ describe('the file drop zone', () => {
 
     const picker = await screen.findByRole('combobox', { name: /1st Level Hospital/i });
     fireEvent.keyDown(picker, { key: 'Enter' });
-    fireEvent.click(await screen.findByRole('option', { name: /Hospital/ }));
+    // ⛔ Slice B, Task 5: exact match. See the sibling test above's own note on why `/Hospital/`
+    // is now ambiguous against `ValueMapRow`'s own "Add … as a new type" option.
+    fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
     await waitFor(() => expect(picker).toHaveTextContent(/Hospital/));
 
     goToStep(/2\s*Data/);

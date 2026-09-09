@@ -1355,9 +1355,9 @@ export interface ValueSetOption {
  *  what an operator picks from when the ranker has nothing to say. Rendering only candidates left
  *  the most obvious mapping in a national export unexpressible. */
 export const suggestValueMappings = (
-  field: ControlledField, values: string[],
+  field: ControlledField, values: string[], nationalSystem: string,
 ): Promise<{ values: ValueSuggestion[]; options: ValueSetOption[]; notValidated: boolean }> =>
-  authFetch('/api/facilities/import/suggest-values', jbody({ field, values }, 'POST'))
+  authFetch('/api/facilities/import/suggest-values', jbody({ field, values, nationalSystem }, 'POST'))
     .then((r) => okJson<{
       values: ValueSuggestion[]; options: ValueSetOption[]; notValidated: boolean;
     }>(r, 'suggest value mappings'));
@@ -1386,6 +1386,25 @@ export const writeFacilityValueMappings = (
 ): Promise<{ written: number; superseded: string[] }> =>
   authFetch('/api/facilities/import/value-mappings', jbody({ nationalSystem, mappings }, 'POST'))
     .then((r) => okJson<{ written: number; superseded: string[] }>(r, 'write facility value mappings'));
+
+/** A collision carries the concept it hit, so the caller can offer that instead of a second one. */
+export interface FacilityTypeCollision { code: string; display: string | null }
+
+/** `POST /api/facilities/import/facility-types`. `AddFacilityTypeDialog`'s own save action. Adds a
+ *  new `level` concept to one register, from the mapping step's own "Add as a new type" option. A
+ *  409 carries the concept the new display would have collided with, so the dialog can tell the
+ *  operator to map to that instead of adding a second one. */
+export const addFacilityType = (
+  nationalSystem: string, display: string,
+): Promise<{ code: string; system: string; valueSetUrl: string }> =>
+  authFetch('/api/facilities/import/facility-types', jbody({ nationalSystem, display }, 'POST'))
+    .then(async (r) => {
+      if (r.status === 409) {
+        const body = await r.json() as { error: string; collidesWith: FacilityTypeCollision };
+        throw Object.assign(new Error(body.error), { collidesWith: body.collidesWith });
+      }
+      return okJson<{ code: string; system: string; valueSetUrl: string }>(r, 'add facility type');
+    });
 
 /** `POST /api/facilities/import/sources` — the ONLY way a fresh install ever gets a register the
  *  import sheet's `Select` can offer (review fix, B1 Task 9: the route existed and was tested, but

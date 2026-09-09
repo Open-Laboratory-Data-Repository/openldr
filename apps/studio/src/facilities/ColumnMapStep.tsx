@@ -17,6 +17,7 @@ import {
   type ColumnSuggestion, type ControlledField, type FacilityColumnMap,
   type ValueMappingEntry, type ValueSuggestion,
 } from '@/api';
+import { AddFacilityTypeDialog } from './AddFacilityTypeDialog';
 import { ConstantValueField } from './ConstantValueField';
 import {
   pendingValueMappings, resolvedValueKey, useMappingCheckState, valueChoice, valueChoiceKey,
@@ -24,7 +25,7 @@ import {
 import type { MappingCheckState, RowCheck, WorklistEntry } from './mappingCheckState';
 import { mappingRowState } from './mappingRowState';
 import { MappingRowStatus } from './MappingRowStatus';
-import { ValueMapRow, VALUE_MAP_UNMAPPED } from './ValueMapRow';
+import { ValueMapRow, VALUE_MAP_ADD, VALUE_MAP_UNMAPPED } from './ValueMapRow';
 
 // Task 7: mirrors packages/terminology/src/facility-csv.ts's REQUIRED/OPTIONAL — "mirrored, not
 // shared", the same idiom every other facility-import type in this app already follows (this app
@@ -167,6 +168,12 @@ export interface ColumnMapStepProps {
    *  (or a row's own check) actually has something to save; unused otherwise. Mirrors
    *  `ValueMapPanel`'s own `nationalSystem` prop exactly. */
   nationalSystem?: string;
+  /** A friendly name for `nationalSystem`, for `AddFacilityTypeDialog`'s own description. The
+   *  operator picked this register from a `Select` whose rows carry both `url` and `name`
+   *  (`ImportFacilitiesSheet.tsx`'s `listFacilityImportSources()`), and the name is what reads
+   *  sensibly there, not the raw URI. Omitted ⇒ falls back to `nationalSystem` itself, so a
+   *  register reached by free text (not this component's own concern) still shows something. */
+  registerName?: string;
   /** Fires once Save has written the chosen value mappings (or found nothing to write). Same
    *  contract as `ValueMapPanel`'s own `onSaved`: a just-written mapping only takes effect on a
    *  fresh parse, so the caller retires the summary on screen. */
@@ -195,7 +202,7 @@ export interface ColumnMapStepProps {
  *  below. */
 export function ColumnMapStep({
   headers, suggestions, value, runId, onChange, onValidityChange,
-  unmappedByField, nationalSystem, onValueMappingsSaved, checkState,
+  unmappedByField, nationalSystem, registerName, onValueMappingsSaved, checkState,
 }: ColumnMapStepProps): JSX.Element {
   const { t } = useTranslation();
 
@@ -228,6 +235,9 @@ export function ColumnMapStep({
   // notices cannot step on one another.
   const [blockedHeaders, setBlockedHeaders] = useState<Set<string>>(new Set());
   const [erroredHeaders, setErroredHeaders] = useState<Set<string>>(new Set());
+  // Task 5: which row's `VALUE_MAP_ADD` opened the dialog, and for which raw value. `null` means
+  // closed. `VALUE_MAP_ADD` itself never lands here as a stored choice; see `handleValueSelect`.
+  const [addDialogFor, setAddDialogFor] = useState<{ header: string; value: string } | null>(null);
 
   const suggestionByHeader = useMemo(() => {
     const m = new Map<string, ColumnSuggestion>();
@@ -428,7 +438,7 @@ export function ColumnMapStep({
         setCheckedByHeader((prev) => ({ ...prev, [header]: { target, truncated: true, distinct } }));
         return;
       }
-      const ranked = await suggestValueMappings(target as ControlledField, values);
+      const ranked = await suggestValueMappings(target as ControlledField, values, nationalSystem ?? '');
       // Fix pass (Critical finding): the ranker's confidence still decides which of THESE values
       // look unrecognised from this row's own click. It never decides whether a value the server
       // already reported unmapped (`unmappedByField`) stays on the worklist. That is added
@@ -505,7 +515,7 @@ export function ColumnMapStep({
       const alreadyCovered = !!existing && existing.target === field
         && values.every((v) => existing.values?.some((ev) => ev.value === v));
       if (alreadyCovered) continue;
-      void suggestValueMappings(field, values).then((res) => {
+      void suggestValueMappings(field, values, nationalSystem ?? '').then((res) => {
         if (cancelled) return;
         const fresh: WorklistEntry[] = values.map((v) => ({
           value: v, candidates: res.values.find((r) => r.value === v)?.candidates ?? [],
@@ -544,6 +554,33 @@ export function ColumnMapStep({
 
   const setValueChoice = (header: string, entryValue: string, toCode: string): void => {
     setValueChoices((prev) => ({ ...prev, [valueChoiceKey(header, entryValue)]: toCode }));
+  };
+
+  /** ⛔ `VALUE_MAP_ADD` IS A DOOR, NOT AN OUTCOME. Every other code `ValueMapRow` can emit is a
+   *  real decision and goes straight to `setValueChoice`, which is what `pendingValueMappings`
+   *  reads to build the next write. This one sentinel never reaches that function: selecting it
+   *  opens `AddFacilityTypeDialog` for the row's raw value instead, and the Select's own displayed
+   *  value is left exactly where it was (`valueChoiceFor` below never returns this sentinel,
+   *  because nothing ever stores it). If it reached the wire as a `toCode` it would be written
+   *  into `term_mappings` and then read straight into the `level` field of every matching facility. */
+  const handleValueSelect = (header: string, entryValue: string, toCode: string): void => {
+    if (toCode === VALUE_MAP_ADD) {
+      setAddDialogFor({ header, value: entryValue });
+      return;
+    }
+    setValueChoice(header, entryValue, toCode);
+  };
+
+  /** The dialog succeeded: the server minted `code` for `addDialogFor.value` in this register. Set
+   *  it as that value's choice (a real decision now, unlike the sentinel that opened the dialog)
+   *  and re-run the row's own check, the same action the status icon performs, so the new concept
+   *  is ranked into the pick-list rather than leaving the operator to find it by hand. */
+  const handleTypeAdded = (code: string): void => {
+    if (!addDialogFor) return;
+    const { header, value: entryValue } = addDialogFor;
+    setValueChoice(header, entryValue, code);
+    setAddDialogFor(null);
+    void checkRow(header);
   };
 
   /** ⛔ THERE IS NO SAVE BUTTON. The status icon is the save.
@@ -753,7 +790,7 @@ export function ColumnMapStep({
                         candidates={candidates}
                         options={check?.options ?? []}
                         selected={valueChoiceFor(header, entryValue, candidates)}
-                        onSelect={(code) => setValueChoice(header, entryValue, code)}
+                        onSelect={(code) => handleValueSelect(header, entryValue, code)}
                         field={check?.target ?? ''}
                       />
                     ))}
@@ -789,6 +826,7 @@ export function ColumnMapStep({
                     field={field as ControlledField}
                     value={value.constants?.[field] ?? ''}
                     onChange={(next) => setConstant(field, next)}
+                    nationalSystem={nationalSystem ?? ''}
                   />
                 ) : (
                   <Input
@@ -827,6 +865,19 @@ export function ColumnMapStep({
           ))}
         </div>
       )}
+
+      {/* Task 5: opened by a row's own `VALUE_MAP_ADD` pick, never rendered standalone. Task 6
+          (Slice B): `registerName` now reaches this step from `ImportFacilitiesSheet.tsx`, which
+          knows the friendly name the operator picked from its own `Select`. Falls back to the raw
+          URI when no name is known (a register typed rather than picked), same as before. */}
+      <AddFacilityTypeDialog
+        open={!!addDialogFor}
+        nationalSystem={nationalSystem ?? ''}
+        registerName={registerName ?? nationalSystem ?? ''}
+        rawValue={addDialogFor?.value ?? ''}
+        onOpenChange={(open) => { if (!open) setAddDialogFor(null); }}
+        onAdded={handleTypeAdded}
+      />
     </div>
   );
 }

@@ -72,6 +72,14 @@ valor que ninguém mapeou, e a linha deixa de o contar. A decisão fica guardada
 isso a próxima importação do mesmo ficheiro não volta a perguntar. Só é oferecido para `level`:
 `status` e `country` têm vocabulários pequenos e fechados, sem nada neles que valha a pena ignorar.
 
+**Um valor de nível que a lista não tem pode ser adicionado a ela.** Escolha **Adicionar "…" como
+novo tipo** no topo da lista. Abre-se uma confirmação com o nome, que pode corrigir, e o código que
+vai receber, que não pode. O tipo é adicionado só a esse registo: cada outro registo mantém a lista
+que tem. Se o nome escrito já corresponder a algo na lista, a adição é recusada e nomeia o que
+encontrou, porque duas entradas que se leem da mesma forma deixariam as duas de resolver. Adicionar
+um tipo exige a capacidade `terminology.manage` além de `facilities.manage`; sem ela, a opção fica
+desativada e ainda pode mapear ou ignorar.
+
 ### O ícone de estado em cada linha
 
 Cada linha de mapeamento tem um pequeno ícone junto ao seu seletor de campo. Tem quatro estados:

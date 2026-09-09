@@ -65,6 +65,14 @@ mapped, and the row stops counting it. The decision is stored against the regist
 import of the same file does not ask again. It is offered for Level only: Status and Country have
 small, closed vocabularies with nothing in them worth ignoring.
 
+**A level value the list does not have can be added to it.** Pick **Add "…" as a new type** from the
+top of the list. A confirm opens showing the name, which you can correct, and the code it will get,
+which you cannot. The type is added to that register only: every other register keeps the list it
+has. If the name you typed already matches something in the list, the add is refused and names what
+it matched, because two entries that read alike would stop both of them resolving. Adding a type
+needs the `terminology.manage` capability as well as `facilities.manage`; without it the option is
+disabled and you can still map or ignore.
+
 ### The status icon on each row
 
 Every mapping row carries a small icon next to its field picker. It has four states:

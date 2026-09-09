@@ -1712,9 +1712,17 @@ export { readColumnValues, type ColumnValues, type ReadColumnValuesOptions } fro
 export {
   CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS, observedFieldSystem,
   resolveControlledFields, applyControlledFields,
-  FACILITY_IGNORE_MAP_TYPE,
+  FACILITY_IGNORE_MAP_TYPE, registerSlug,
 } from './facility-controlled-fields';
 export type { ControlledField, ControlledResolution } from './facility-controlled-fields';
+// Task 1 (facility-level add-type, slice B): a register's own facility-type vocabulary, scoped by
+// the register it came from. `valueSetForField`/`registerValueSetUrl` are declared in
+// `facility-controlled-fields.ts` (see that file) and re-exported from the vocabulary module; both
+// are exported here from the same module so callers have one import path.
+export {
+  registerLocalSystem, registerValueSetUrl, valueSetForField, addRegisterFacilityType,
+  FacilityTypeCollisionError,
+} from './facility-register-vocabulary';
 // Task 2 (facility import mapping): offline column/value suggestion engine. Task 4 (HTTP route) and
 // Task 9 (CLI) both call it — shared here so neither consumer re-declares the SYNONYMS table.
 export {

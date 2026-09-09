@@ -6,6 +6,7 @@ import {
   Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import type { ValueSetOption, ValueSuggestion } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
 import { sortValueSetOptions } from './sortValueSetOptions';
 
 /** Not a real value-set code, and a real one could never collide with it. Shared by every caller of
@@ -15,6 +16,13 @@ export const VALUE_MAP_UNMAPPED = '__not_mapped__';
 /** Not a real value-set code either. Selected, it means "write an UNMAPPED-FROM row for this value",
  *  which is a DECISION, unlike `VALUE_MAP_UNMAPPED` which means the operator has not answered yet. */
 export const VALUE_MAP_IGNORE = '__ignore__';
+
+/** ⛔ A DOOR, NOT AN OUTCOME. Selecting this never reaches `pendingValueMappings` and is never
+ *  stored as a row's lasting choice. `VALUE_MAP_IGNORE` above does become one; this does not. The
+ *  caller (`ColumnMapStep`) must intercept it and open `AddFacilityTypeDialog` instead of recording
+ *  it. If this sentinel ever reached the wire as a `toCode`, it would be written into
+ *  `term_mappings` and then read straight into the `level` field of every matching facility. */
+export const VALUE_MAP_ADD = '__add_type__';
 
 export interface ValueMapRowProps {
   /** The raw source value this row lets the operator map. */
@@ -45,6 +53,11 @@ export function ValueMapRow({
   value, candidates, options, selected, onSelect, field,
 }: ValueMapRowProps): JSX.Element {
   const { t, i18n } = useTranslation();
+  const { hasCapability } = useAuth();
+  // Same field gate as `Ignore this value` above (spec decision 6): `level` only. Withheld without
+  // the capability rather than hidden outright, so the operator learns why instead of wondering
+  // where it went. Map and Ignore still work either way, so the import is never blocked outright.
+  const canAddType = hasCapability('terminology.manage');
   const top = candidates[0] ?? null;
   // Naturally absent when the row is a collision-free exact match, or unmatched.
   const showBadge = top?.confidence === 'likely' && selected === top.target;
@@ -69,6 +82,15 @@ export function ValueMapRow({
             <SelectItem value={VALUE_MAP_UNMAPPED}>{t('facilities.import.valueMap.notMapped')}</SelectItem>
             {field === 'level' && (
               <SelectItem value={VALUE_MAP_IGNORE}>{t('facilities.import.valueMap.ignoreValue')}</SelectItem>
+            )}
+            {field === 'level' && (
+              <SelectItem
+                value={VALUE_MAP_ADD}
+                disabled={!canAddType}
+                title={canAddType ? undefined : t('facilities.import.valueMap.addTypeNeedsCapability')}
+              >
+                {t('facilities.import.valueMap.addTypeOption', { value })}
+              </SelectItem>
             )}
             {/* Radix's own `SelectSeparator` is `aria-hidden` and roleless, purely decorative.
                 This one marks a real boundary between two kinds of outcome, so it gets a role a

@@ -11,7 +11,7 @@ import {
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
   VALIDATE_PHASE,
 } from '@openldr/db';
-import { projectRegistryRows, observedFieldSystem } from '@openldr/bootstrap';
+import { projectRegistryRows, observedFieldSystem, addRegisterFacilityType } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
 // The over-cap upload test registers the REAL central error handler, as production does, so its 413
 // carries the app-wide {error, code, correlationId} contract rather than a bespoke body.
@@ -3357,6 +3357,41 @@ describe('POST /api/facilities/import/suggest-values', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  // Slice B, Task 3: a register that has added its own facility type sees that type in its own
+  // pick list, not just the 63 shared concepts. Built through `addRegisterFacilityType` rather than
+  // hand-written rows, so the test exercises the same shape the route sees in production.
+  it('ranks against the register\'s own list when one is named', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    await addRegisterFacilityType(ctx.terminology.admin, { nationalSystem: 'HFR', display: 'First-aid stations' });
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/suggest-values',
+      payload: { field: 'level', values: ['First-aid stations'], nationalSystem: 'HFR' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().options.map((o: { code: string }) => o.code)).toContain('first-aid-stations');
+  });
+
+  it('ranks against the shared list when no register is named', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    await addRegisterFacilityType(ctx.terminology.admin, { nationalSystem: 'HFR', display: 'First-aid stations' });
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/suggest-values',
+      payload: { field: 'level', values: ['First-aid stations'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().options.map((o: { code: string }) => o.code)).not.toContain('first-aid-stations');
+  });
 });
 
 // Task 6 (facility-import-mapping): the wizard's value panel writes its raw-string -> canonical-code
@@ -3468,6 +3503,102 @@ describe('POST /api/facilities/import/value-mappings', () => {
       },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+// FAC-P1-B Slice B, Task 4: the route that adds a facility type to one register's own list.
+// `addRegisterFacilityType` (@openldr/bootstrap) does the write; these tests exercise it through
+// the real store, the same way Task 3's suggest-values tests above do.
+// This route needs BOTH capabilities (spec decision 4), so the default `appWith` grant
+// (`facilities.view` + `facilities.manage`) is not enough on its own here.
+const ADD_TYPE_CAPS = ['facilities.manage', 'terminology.manage'];
+
+describe('POST /api/facilities/import/facility-types', () => {
+  it('adds a facility type to the register and returns its code', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ADD_TYPE_CAPS);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'First-aid stations' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().code).toBe('first-aid-stations');
+  });
+
+  // ⛔ A 409, not a 200 with a warning. Adding it would poison the normalised key and BOTH values
+  // would stop resolving, silently.
+  it('refuses a display that collides, and names what it hit', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ADD_TYPE_CAPS);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'Health Centre' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().collidesWith).toMatchObject({ code: 'health-center' });
+  });
+
+  it('refuses an empty display', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ADD_TYPE_CAPS);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: '   ' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  // Same register gate as value-mappings above: a typed label writes nothing. Without this check
+  // this route would be the one door where a typo mints vocabulary under a namespace nothing else
+  // resolves against.
+  it('refuses a nationalSystem that names no registered source', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeCreateCtx(internalDb), ADD_TYPE_CAPS);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'First-aid stations' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses a caller without terminology.manage', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ['facilities.manage']);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'First-aid stations' },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // Both capabilities are required, not just the one the brief's test names — a caller missing
+  // facilities.manage alone must be refused too.
+  it('refuses a caller without facilities.manage', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ['terminology.manage']);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'First-aid stations' },
+    });
+
+    expect(res.statusCode).toBe(403);
   });
 });
 

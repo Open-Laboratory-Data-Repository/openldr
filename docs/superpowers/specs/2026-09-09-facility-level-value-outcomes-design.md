@@ -26,10 +26,10 @@ RULE 0 first. Four things this could have built are already here.
 **Ignore already has a name.** `MapType` includes `UNMAPPED-FROM`
 (`packages/db/src/terminology-admin-store.ts:44`). Nothing writes it yet.
 
-**An added concept needs no mapping row.** `resolveControlledFields` indexes every concept by its
+**The display fold resolves raw values only when the display matches.** `resolveControlledFields` indexes every concept by its
 code AND its display, both normalised, and folds raw values onto that index
 (`packages/bootstrap/src/facility-controlled-fields.ts:181-193`). A concept whose display is
-`First-aid stations` therefore resolves the raw value with nothing else written.
+exactly `First-aid stations` therefore resolves that raw value with nothing else written. When the display differs from the raw value, the ordinary value mapping provides the connection.
 
 **An ignored value drops off Review by itself.** Step 2 of the resolver puts any value with an
 active mapping into `mapped`, and Review's list is built from `unmapped`. Nothing in Review changes.
@@ -83,11 +83,16 @@ It also puts the decision ahead of the automatic fold, which is the rule that fi
 the operator's own decision wins. Ignore `Health Centre` and it stays `Health Centre` rather than
 folding to `health-center`.
 
-### Add writes one concept and nothing else
+### Add writes the concept; the row's pick writes the mapping
 
-Create the concept in the register's own coding system with the confirmed display. No mapping row.
-The display fold resolves the raw value already, and a second mechanism answering the same question
-is how the two of them drift apart.
+Create the concept in the register's own coding system with the confirmed display. That write alone
+is not enough, because the operator can edit the display before confirming, and the minted code can
+carry a numeric suffix when the derived one was already taken. Add "Optic Clinic" for a raw value of
+"Optic Clinics" and the fold has nothing left to match.
+
+So the row's chosen value still commits an ordinary mapping, through the same path any other pick
+uses. That mapping, not the fold, is what makes an edited display or a suffixed code resolve on the
+next import.
 
 ### One exclusivity change is needed
 

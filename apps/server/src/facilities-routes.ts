@@ -14,11 +14,12 @@ import { idFor } from '@openldr/terminology';
 // `requiredFieldsError` below for how this route scopes it.
 import { validateAnswers } from '@openldr/forms';
 import {
-  importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
+  importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, valueSetForField,
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   revalidateImportRun, readFileRows, readColumnValues, FacilityFileUnreadableError,
+  addRegisterFacilityType, FacilityTypeCollisionError,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
   type ValueMappingEntry,
 } from '@openldr/bootstrap';
@@ -1932,7 +1933,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   });
 
   app.post('/api/facilities/import/suggest-values', IMPORT, async (req, reply) => {
-    const reqBody = (req.body ?? {}) as { field?: string; values?: unknown };
+    const reqBody = (req.body ?? {}) as { field?: string; values?: unknown; nationalSystem?: unknown };
     const field = reqBody.field as ControlledField | undefined;
     if (!field || !CONTROLLED_FIELDS.includes(field)) {
       reply.code(400);
@@ -1950,7 +1951,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     }
     const values = Array.isArray(reqBody.values) ? (reqBody.values as string[]) : [];
 
-    const vs = await ctx.terminology.admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
+    // Optional on the wire so an older client keeps working and gets the shared list. Present, it
+    // selects the register's own list, which is what the studio always sends.
+    const nationalSystem = typeof reqBody.nationalSystem === 'string' ? reqBody.nationalSystem : '';
+    const vs = await ctx.terminology.admin.valueSets.getByUrl(
+      await valueSetForField(ctx.terminology.admin, field, nationalSystem),
+    );
     if (!vs) {
       // The field's value set is not seeded on this install — the same condition
       // `resolveControlledFields` reports as `notValidated`. No candidates exist to rank against.
@@ -2004,6 +2010,56 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       metadata: {
         nationalSystem: register.source.url, written: result.written, superseded: result.superseded.length,
       },
+    });
+    return result;
+  });
+
+  // FAC-P1-B Slice B, Task 4: lets an operator add a facility type the shared list does not have,
+  // scoped to the register it came from. `addRegisterFacilityType` (@openldr/bootstrap) does the
+  // write; this route is the HTTP door plus the capability gate and the audit entry.
+  //
+  // ⛔ TWO CAPABILITIES, and that is the point of this route existing rather than the operator
+  // being sent to the Terminology page. It writes to the vocabulary, so it is gated like a
+  // vocabulary write, on top of the facilities gate every route in this file carries. An importer
+  // without `terminology.manage` still maps and ignores, so the import is never blocked outright,
+  // only this one outcome.
+  //
+  // Same register gate as the value-mappings route above (`resolveFacilityRegisterForImport`):
+  // `nationalSystem` must name a REGISTERED facility register, never a typed label. Skipping the
+  // gate here would make this the one place an operator can write vocabulary under a typo.
+  app.post('/api/facilities/import/facility-types', {
+    preHandler: [requireCapability('facilities.manage'), requireCapability('terminology.manage')],
+  }, async (req, reply) => {
+    const p = z.object({
+      nationalSystem: z.string().min(1),
+      display: z.string().trim().min(1),
+    }).safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const register = await resolveFacilityRegisterForImport(registerSources, p.data.nationalSystem);
+    if (!register.ok) { reply.code(400); return { error: register.error }; }
+
+    let result;
+    try {
+      result = await addRegisterFacilityType(ctx.terminology.admin, {
+        nationalSystem: register.source.url, display: p.data.display,
+      });
+    } catch (err) {
+      if (err instanceof FacilityTypeCollisionError) {
+        reply.code(409);
+        return { error: err.message, collidesWith: err.collidesWith };
+      }
+      reply.code(400);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'facility.type-added',
+      entityType: 'facility',
+      entityId: register.source.url,
+      before: null,
+      after: null,
+      metadata: { nationalSystem: register.source.url, code: result.code, display: p.data.display },
     });
     return result;
   });

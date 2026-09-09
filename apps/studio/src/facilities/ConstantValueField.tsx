@@ -13,6 +13,10 @@ export interface ConstantValueFieldProps {
    *  either. A leading space really is a different value. */
   value: string;
   onChange: (next: string) => void;
+  /** The register this picker's list belongs to. Not optional: `suggestValueMappings` takes it as a
+   *  required third argument, so a caller that has none passes `''` and gets the shared list, the
+   *  same as an older client would. Mirrors `ColumnMapStep`'s own `nationalSystem` prop. */
+  nationalSystem: string;
 }
 
 /** A fixed value for ONE controlled field, picked from that field's own value set.
@@ -32,7 +36,9 @@ export interface ConstantValueFieldProps {
  *  distinct and are shown distinctly. `ValueMapPanel` shipped with the last two collapsed and an
  *  operator could not tell an empty picker from a broken one. Never warn in any of the three: the
  *  warning claims the value was checked, and in all three it was not. */
-export function ConstantValueField({ id, field, value, onChange }: ConstantValueFieldProps): JSX.Element {
+export function ConstantValueField({
+  id, field, value, onChange, nationalSystem,
+}: ConstantValueFieldProps): JSX.Element {
   const { t, i18n } = useTranslation();
   const [options, setOptions] = useState<ValueSetOption[]>([]);
   const [status, setStatus] = useState<SuggestStatus>('loading');
@@ -50,7 +56,7 @@ export function ConstantValueField({ id, field, value, onChange }: ConstantValue
     setStatus('loading');
     setNotSeeded(false);
     setOptions([]);
-    void suggestValueMappings(field, [])
+    void suggestValueMappings(field, [], nationalSystem)
       .then((res) => {
         if (cancelled) return;
         // `?? []` because the route omits `options` when the value set is missing, and several
@@ -63,7 +69,7 @@ export function ConstantValueField({ id, field, value, onChange }: ConstantValue
         if (!cancelled) setStatus('error');
       });
     return () => { cancelled = true; };
-  }, [field]);
+  }, [field, nationalSystem]);
 
   /** ⛔ SORTED. Nothing ranks this list, so it would otherwise render in expansion order, which is
    *  seed order: 249 countries and 63 facility types that way are unsearchable by eye. */

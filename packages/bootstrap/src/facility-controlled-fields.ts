@@ -44,6 +44,19 @@ function djb2Hex(s: string): string {
   return `${h.toString(16)}-${s.length.toString(16)}`;
 }
 
+/** The register uri as one path segment: non-alphanumeric runs to underscores, trimmed, lowercased,
+ *  with a hash fallback for a uri that has no alphanumeric characters at all. Shared by
+ *  `observedFieldSystem` and by the register-scoped vocabulary names, so the two can never disagree
+ *  about what one register is called. */
+export function registerSlug(nationalSystem: string): string {
+  const trimmed = (nationalSystem ?? '').trim();
+  const slug = trimmed
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+  return slug.length > 0 ? slug : djb2Hex(trimmed);
+}
+
 /** Per-source observed system for a controlled field, e.g.
  *  `urn:openldr:cs:facility-level:urn_tz_hfr`. Mirrors `observedSystemForFeed`'s slugify-with-
  *  hash-fallback pattern (`packages/db/src/facility-observed.ts`) so a punctuation-only source name
@@ -68,13 +81,36 @@ function djb2Hex(s: string): string {
  *  by `term_mappings.from_system`. What changed is its INPUT, not its behaviour — do not "fix" the
  *  asymmetry by making `idFor` lowercase too, which would silently re-key every id already written. */
 export function observedFieldSystem(field: ControlledField, nationalSystem: string): string {
-  const trimmed = (nationalSystem ?? '').trim();
-  const slug = trimmed
-    .replace(/[^a-zA-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .toLowerCase();
-  const suffix = slug.length > 0 ? slug : djb2Hex(trimmed);
-  return `${CONTROLLED_SYSTEM_PREFIX}${field}:${suffix}`;
+  return `${CONTROLLED_SYSTEM_PREFIX}${field}:${registerSlug(nationalSystem)}`;
+}
+
+/** The register's own facility-type value set, importing the shared one and adding its own concepts
+ *  beside it. Lives here, not in `facility-register-vocabulary.ts`, because `valueSetForField` below
+ *  needs it and that module imports this file. Declaring either one there would be an import cycle.
+ *  Re-exported from `facility-register-vocabulary.ts` for callers that think of it as part of that
+ *  module. */
+export function registerValueSetUrl(nationalSystem: string): string {
+  return `urn:openldr:valueset:facility-type:${registerSlug(nationalSystem)}`;
+}
+
+/** Which list a controlled field's values are checked against, for THIS register.
+ *
+ *  ⛔ A LOOKUP, NOT A CONSTANT, and every caller that used to read `CONTROLLED_VALUE_SETS[field]`
+ *  to expand a value set must come through here. A register that has never added anything gets the
+ *  shared set and behaves exactly as it did before Slice B, so no install grows an empty value set.
+ *
+ *  Lives here, not in `facility-register-vocabulary.ts`, for the same import-cycle reason as
+ *  `registerValueSetUrl` above: a later task needs THIS file to call it, and this file is what the
+ *  vocabulary module imports. */
+export async function valueSetForField(
+  admin: TerminologyAdminStore,
+  field: ControlledField,
+  nationalSystem: string,
+): Promise<string> {
+  if (field !== 'level') return CONTROLLED_VALUE_SETS[field];
+  const url = registerValueSetUrl(nationalSystem);
+  const existing = await admin.valueSets.getByUrl(url);
+  return existing ? url : CONTROLLED_VALUE_SETS.level;
 }
 
 /**
@@ -158,7 +194,10 @@ export async function resolveControlledFields(
     }
     if (rawValues.size === 0) continue;
 
-    const vs = await admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
+    // ⛔ THE REGISTER'S OWN LIST WHEN IT HAS ONE. A register that has added a facility type checks
+    // its values against the shared 63 PLUS its own; one that has added nothing behaves exactly as
+    // it did before Slice B. See `valueSetForField`.
+    const vs = await admin.valueSets.getByUrl(await valueSetForField(admin, field, nationalSystem));
     if (!vs) {
       notValidated.push(field);
       continue;
