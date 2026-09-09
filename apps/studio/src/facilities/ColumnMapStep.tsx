@@ -9,7 +9,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   readFacilityImportColumnValues, suggestValueMappings, writeFacilityValueMappings,
   type ColumnSuggestion, type ControlledField, type FacilityColumnMap,
@@ -687,6 +689,9 @@ export function ColumnMapStep({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={UNMAPPED}>{t('facilities.import.columnMap.notMapped')}</SelectItem>
+                      {/* Same section rule as the value pick list: outcomes that are not "map to a field"
+                          sit above the separator, and anything of that kind added later joins them. */}
+                      <SelectSeparator role="separator" aria-hidden={false} />
                       {CONTRACT_FIELDS.map((field) => (
                         <SelectItem key={field} value={field}>{field}</SelectItem>
                       ))}

@@ -411,6 +411,21 @@ describe('ColumnMapStep', () => {
     });
   });
 
+  describe('Task 5: the column-map dropdown separates its passthrough option', () => {
+    it('separates Keep as extra data from the contract fields', async () => {
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByLabelText('Type'));
+
+      await screen.findByRole('option', { name: 'Keep as extra data' });
+      const listbox = screen.getByRole('listbox');
+      expect(within(listbox).getAllByRole('separator')).toHaveLength(1);
+    });
+  });
+
   describe('⛔ Task 5: the per-field check (checks one column, never the whole register)', () => {
     // Call history is NOT cleared between tests anywhere else in this file (no global
     // `clearMocks`/`resetMocks`), and the "was X called" assertions in this group depend on a
