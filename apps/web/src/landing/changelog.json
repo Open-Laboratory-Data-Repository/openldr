@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "27bac780",
+          "type": "fix",
+          "scope": "db",
+          "title": "An explicit seeded flag repairs a row an earlier version stuck"
+        },
+        {
+          "hash": "0abd2a8f",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A register's own type system can be deleted again"
+        },
+        {
           "hash": "7f0ce0b3",
           "type": "fix",
           "scope": "bootstrap",
