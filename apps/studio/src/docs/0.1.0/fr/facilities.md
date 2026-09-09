@@ -139,6 +139,31 @@ ne se termine. Si la vérification trouve un problème dans la correspondance de
 l'assistant vous ramène à Mappage et affiche les erreurs à cet endroit, pour que vous puissiez
 corriger la correspondance sur place.
 
+### Corriger une cellule à l'étape Données
+
+L'étape Données montre votre fichier sous forme de tableau. Cliquez sur une cellule pour changer ce
+qu'elle dit.
+
+Vos changements ne sont pas réécrits dans le fichier importé. Ils sont enregistrés à part, contre
+le fichier lui-même, donc un nouvel import du même fichier garde chaque correction faite. Si le
+fichier change, les corrections cessent de s'appliquer, car les numéros de ligne qu'elles nomment
+ne veulent plus rien dire.
+
+Une cellule corrigée porte un trait ambre sur son bord gauche, et un bouton pour annuler. Annuler
+remet la valeur du fichier.
+
+Corriger une cellule dans une colonne mappée sur `level`, `status` ou `country` pose une question :
+changer cette ligne, ou changer toutes les lignes qui disent la même chose. Les catégories se
+répètent souvent, donc une valeur corrigée une fois est en général fausse partout où elle apparaît.
+
+Deux choses qu'une correction ne peut pas faire. Elle ne peut pas sauver une ligne dont le nombre de
+colonnes ne correspond pas à l'en-tête : cette ligne est mise de côté avant qu'aucune cellule
+n'existe, donc corrigez-la dans le CSV. Et elle ne peut ni ajouter ni retirer une ligne. Une ligne
+qui ne doit pas être importée est une ligne à retirer du CSV.
+
+Corriger une cellule rend votre dernière vérification périmée. Vérifiez de nouveau la colonne, puis
+validez, avant de passer à l'étape Vérification.
+
 ## Ce qu'est une correspondance de colonnes
 
 Le contrat d'import d'OpenLDR a un ensemble fixe de champs : `national_code` et `name`

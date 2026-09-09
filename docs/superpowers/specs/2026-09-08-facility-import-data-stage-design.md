@@ -1,7 +1,7 @@
 # A data stage for the facility import, and a mapping step that answers back
 
 Date: 2026-09-08
-Status: Slices A and B built; the status-icon rules revised 2026-09-09, see below
+Status: Slices A, B and C built; the status-icon rules revised 2026-09-09, see below
 
 ## The problem
 
@@ -220,7 +220,24 @@ and the value worklist moved inline under the mapping row it belongs to. Reuses 
 collision computation. No grid editing. This alone retires the confusion that started this.
 
 **Slice C: cell edits.** The edits table and its migration, the map-everywhere versus this-row
-choice, and apply and re-validate reading the file through the edit overlay.
+choice, and apply and re-validate reading the file through the edit overlay. Built 2026-09-10.
+Rulings taken during the build:
+
+1. The editable grid is the Data step's grid, not a second grid under Mapping. The stage 3
+   paragraph above said the grid sits below Mapping. Slice A had already shipped it as its own
+   step, and two grids over one file would mean two paging states over a 64 MB register.
+2. CSV only. `parseFacilityRelease` takes no overlay, and the studio hides editing for a JSONL run.
+3. Two edit shapes share one table. A line-scoped edit names one cell. A value-scoped edit names
+   every cell in one column holding one value, which is what "change it everywhere" writes: one row
+   instead of 3,788. A line edit beats a value edit on the same cell.
+4. "Change it everywhere" writes a value-scoped edit, not a terminology mapping. Slice B's value
+   worklist already owns raw-value-to-code, and a cell edit is a typed string, not a code from a
+   value set. Extras columns are editable too and have no value set at all.
+5. Two facts the spec did not anticipate. First, `csv-parse`'s `info.lines` names the line a record
+   finishes on, so a row with a quoted newline is keyed by its last line; the paged read and the
+   parser both use that same raw value, so they agree. Second, the paged read does not lowercase
+   its headers, while `parseFacilityCsv` does, so the edits table stores the header as the file
+   spells it and the parser folds the case itself.
 
 ## Verification, and its limits
 

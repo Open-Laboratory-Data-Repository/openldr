@@ -133,6 +133,30 @@ sozinho assim que a verificação começa, antes de ela terminar. Se a verifica�
 problema no mapeamento de colunas, o assistente devolve-o ao Mapeamento e mostra os erros ali, para
 que possa corrigir o mapeamento no mesmo sítio.
 
+### Corrigir uma célula no passo Dados
+
+O passo Dados mostra o seu ficheiro como uma tabela. Clique numa célula para mudar o que ela diz.
+
+As suas alterações não são escritas de volta no ficheiro que enviou. Ficam guardadas à parte,
+contra o próprio ficheiro, por isso enviar o mesmo ficheiro outra vez mantém cada correção feita.
+Se o ficheiro mudar, as correções deixam de se aplicar, porque os números de linha que nomeiam já
+não querem dizer nada.
+
+Uma célula corrigida ganha um traço âmbar na margem esquerda e um botão para anular. Anular repõe
+o valor do ficheiro.
+
+Corrigir uma célula numa coluna mapeada para `level`, `status` ou `country` faz uma pergunta: mudar
+só esta linha, ou mudar todas as linhas que dizem a mesma coisa. As categorias costumam repetir-se,
+por isso um valor corrigido uma vez costuma estar errado onde quer que apareça.
+
+Duas coisas que uma correção não pode fazer. Não pode recuperar uma linha cujo número de colunas
+não corresponde ao cabeçalho: essa linha é posta de lado antes de existir qualquer célula, por isso
+corrija-a no CSV. E não pode acrescentar nem remover uma linha. Uma linha que não deva ser importada
+é uma linha a remover do CSV.
+
+Corrigir uma célula torna a sua última verificação desatualizada. Verifique a coluna de novo,
+depois valide, antes de avançar para a Revisão.
+
 ## O que é um mapeamento de colunas
 
 O contrato de importação do OpenLDR tem um conjunto fixo de campos: `national_code` e `name`
