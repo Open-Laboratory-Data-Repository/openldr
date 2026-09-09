@@ -68,13 +68,15 @@ export async function addRegisterFacilityType(
   const current = await admin.valueSets.getByUrl(currentUrl);
   const codes = current ? (await admin.valueSets.expand(current.id)).codes : [];
 
-  // ⛔ DISPLAY ONLY, NEVER CODE. A generated code colliding with an existing one is handled below by
-  // suffixing, not refused here — two different concepts can share a slug (`optic-clinics` the code
-  // vs `Optic Clinics` the display of an unrelated concept) without their DISPLAYS reading alike to
-  // an operator. Checking a normalised code here as well would refuse that legitimate case.
+  // ⛔ BOTH TOKENS, CODE AND DISPLAY. `resolveControlledFields` folds its lookup index from both the
+  // code and the display of every concept (facility-controlled-fields.ts:181); a key claimed by two
+  // different codes is poisoned and deleted, so both values silently stop resolving. A new display
+  // that normalises onto an existing CODE poisons that key exactly as surely as matching its display,
+  // so both comparisons must refuse here, before the register ever holds the poisoning pair.
   const key = normaliseControlledValue(display);
   for (const c of codes) {
-    if (c.display && normaliseControlledValue(c.display) === key) {
+    if (normaliseControlledValue(c.code) === key
+      || (c.display && normaliseControlledValue(c.display) === key)) {
       throw new FacilityTypeCollisionError({ code: c.code, display: c.display ?? null });
     }
   }

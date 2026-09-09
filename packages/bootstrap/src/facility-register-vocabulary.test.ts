@@ -91,13 +91,15 @@ describe('addRegisterFacilityType', () => {
     expect(res.code).toBe('optic-clinics');
   });
 
-  it('suffixes a code already taken in the register\'s own system', async () => {
+  it('suffixes a code already taken when nothing collides', async () => {
     const admin = fakeAdmin({
       [SHARED_VS]: [],
-      [LOCAL_VS]: [{ code: 'optic-clinics', display: 'Optic Clinics' }],
+      [LOCAL_VS]: [{ code: 'optic-clinics', display: null }],
     });
 
-    const res = await addRegisterFacilityType(admin, { nationalSystem: SYSTEM, display: 'Optic-Clinics' });
+    // Key is `optic clinics`, which nothing claims. The derived slug `optic-clinics` is taken, so
+    // the code gets a suffix and the display is free to stand on its own.
+    const res = await addRegisterFacilityType(admin, { nationalSystem: SYSTEM, display: 'Optic Clinics' });
 
     expect(res.code).toBe('optic-clinics-2');
   });
@@ -108,6 +110,16 @@ describe('addRegisterFacilityType', () => {
     const admin = fakeAdmin({ [SHARED_VS]: [{ code: 'health-center', display: 'Health Center' }] });
 
     await expect(addRegisterFacilityType(admin, { nationalSystem: SYSTEM, display: 'Health Centre' }))
+      .rejects.toBeInstanceOf(FacilityTypeCollisionError);
+  });
+
+  // ⛔ THE CODE HALF OF THE GUARD. `byKey` indexes a concept by its CODE as well as its display, so
+  // a display that normalises onto an existing CODE poisons that key just as surely. Dropping this
+  // comparison passes every display-only test and still lets the silent failure through.
+  it('refuses a display that normalises onto an existing code', async () => {
+    const admin = fakeAdmin({ [SHARED_VS]: [{ code: 'health-post', display: null }] });
+
+    await expect(addRegisterFacilityType(admin, { nationalSystem: SYSTEM, display: 'Health-Post' }))
       .rejects.toBeInstanceOf(FacilityTypeCollisionError);
   });
 
