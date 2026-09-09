@@ -1,6 +1,7 @@
 import type { MapType, TerminologyAdminStore } from '@openldr/db';
 import {
   CONTROLLED_VALUE_SETS, observedFieldSystem, type ControlledField,
+  FACILITY_IGNORE_MAP_TYPE, LEVEL_CANONICAL_SYSTEM,
 } from './facility-controlled-fields';
 
 /**
@@ -20,15 +21,21 @@ import {
  */
 export const FACILITY_VALUE_MAP_TYPE: MapType = 'SAME-AS';
 
+/** ⛔ EXACTLY ONE of `toCode` and `ignore`. Both, or neither, is refused rather than guessed:
+ *  guessing here writes a real row into a shared register that nobody asked for. */
 export interface ValueMappingEntry {
   field: ControlledField;
   /** The source value EXACTLY as the parser produced it — trimmed, since `text()` already trimmed
    *  it (`packages/terminology/src/facility-csv.ts:114`). `resolveControlledFields` looks it up by
    *  exact string, so a differently-spaced copy would never resolve. */
   rawValue: string;
-  /** A code from the field's bound value set. */
-  toCode: string;
+  /** A code from the field's bound value set. Absent when `ignore` is set. */
+  toCode?: string;
+  /** The operator decided this value belongs to no concept. `level` only, spec decision 6. */
+  ignore?: boolean;
 }
+
+export { FACILITY_IGNORE_MAP_TYPE, LEVEL_CANONICAL_SYSTEM } from './facility-controlled-fields';
 
 export interface SaveValueMappingsResult {
   written: number;
@@ -52,7 +59,16 @@ export async function saveFacilityValueMappings(
 ): Promise<SaveValueMappingsResult> {
   // Validate EVERY entry before writing ANY of them: a half-applied mapping set is worse than a
   // refused one, because the operator cannot tell which half landed.
-  //
+  for (const entry of entries) {
+    const hasCode = typeof entry.toCode === 'string' && entry.toCode.length > 0;
+    if (hasCode === !!entry.ignore) {
+      throw new Error(`${entry.field} "${entry.rawValue}": an entry needs either a toCode or ignore, not both and not neither`);
+    }
+    if (entry.ignore && entry.field !== 'level') {
+      throw new Error(`${entry.field} "${entry.rawValue}": only level values can be ignored`);
+    }
+  }
+
   // ⛔ `toSystem` for a mapping is the CODE'S OWN coding system (e.g.
   // `urn:openldr:cs:facility-type`), never the value-set url that merely bounds valid choices
   // (`urn:openldr:valueset:facility-type`). `terminology_concepts` rows are only ever inserted
@@ -64,6 +80,7 @@ export async function saveFacilityValueMappings(
   // captured here rather than re-derived or hardcoded.
   const expansions = new Map<ControlledField, Map<string, { display: string | null; system: string }>>();
   for (const entry of entries) {
+    if (entry.ignore) continue;
     if (!expansions.has(entry.field)) {
       const vs = await admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[entry.field]);
       if (!vs) throw new Error(`no ${entry.field} value set is seeded on this install`);
@@ -89,7 +106,7 @@ export async function saveFacilityValueMappings(
       }
       expansions.set(entry.field, byCode);
     }
-    if (!expansions.get(entry.field)!.has(entry.toCode)) {
+    if (!expansions.get(entry.field)!.has(entry.toCode!)) {
       throw new Error(
         `${entry.toCode} is not in the ${entry.field} value set — refusing rather than minting a draft concept`,
       );
@@ -104,7 +121,6 @@ export async function saveFacilityValueMappings(
 
   for (const entry of entries) {
     const fromSystem = observedFieldSystem(entry.field, nationalSystem);
-    const target = expansions.get(entry.field)!.get(entry.toCode)!;
 
     if (!upsertedSystems.has(entry.field)) {
       await admin.codingSystems.upsertByUrl({
@@ -123,15 +139,41 @@ export async function saveFacilityValueMappings(
       system: fromSystem, code: entry.rawValue, display: entry.rawValue, status: 'ACTIVE',
     });
 
-    const res = await admin.termMappings.saveExclusive({
-      fromSystem,
-      fromCode: entry.rawValue,
-      toSystem: target.system,
-      toCode: entry.toCode,
-      toDisplay: target.display,
-      mapType: FACILITY_VALUE_MAP_TYPE,
-      isActive: true,
-    });
+    // ⛔ ACROSS map types, which `saveExclusive` cannot do: it scopes exclusivity by
+    // `(toSystem, mapType)` (terminology-admin-store.ts:168-194), so an ignore row and a real
+    // mapping for one raw value would BOTH stay active and
+    // `listOutgoing(...).find((m) => m.isActive)` would take whichever came back first. Changing
+    // an ignore into a mapping, or the reverse, has to clear the other one here.
+    //
+    // Two statements rather than one transaction. A crash between them leaves the value with no
+    // active row, which resolves it as written. That is the same outcome as never having decided,
+    // and the safe direction to fail in.
+    const wantedType = entry.ignore ? FACILITY_IGNORE_MAP_TYPE : FACILITY_VALUE_MAP_TYPE;
+    for (const rival of await admin.termMappings.listOutgoing(fromSystem, entry.rawValue)) {
+      if (!rival.isActive || rival.mapType === wantedType) continue;
+      await admin.termMappings.update(rival.id, { ...rival, isActive: false });
+      superseded.push(rival.id);
+    }
+
+    const res = await admin.termMappings.saveExclusive(entry.ignore
+      ? {
+        fromSystem,
+        fromCode: entry.rawValue,
+        toSystem: LEVEL_CANONICAL_SYSTEM,
+        toCode: entry.rawValue,
+        toDisplay: null,
+        mapType: FACILITY_IGNORE_MAP_TYPE,
+        isActive: true,
+      }
+      : {
+        fromSystem,
+        fromCode: entry.rawValue,
+        toSystem: expansions.get(entry.field)!.get(entry.toCode!)!.system,
+        toCode: entry.toCode!,
+        toDisplay: expansions.get(entry.field)!.get(entry.toCode!)!.display,
+        mapType: FACILITY_VALUE_MAP_TYPE,
+        isActive: true,
+      });
     superseded.push(...res.superseded);
     written += 1;
   }

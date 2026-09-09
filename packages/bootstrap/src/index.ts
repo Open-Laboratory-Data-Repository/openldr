@@ -1712,6 +1712,7 @@ export { readColumnValues, type ColumnValues, type ReadColumnValuesOptions } fro
 export {
   CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS, observedFieldSystem,
   resolveControlledFields, applyControlledFields,
+  FACILITY_IGNORE_MAP_TYPE, LEVEL_CANONICAL_SYSTEM,
 } from './facility-controlled-fields';
 export type { ControlledField, ControlledResolution } from './facility-controlled-fields';
 // Task 2 (facility import mapping): offline column/value suggestion engine. Task 4 (HTTP route) and

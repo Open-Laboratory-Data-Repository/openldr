@@ -26,12 +26,13 @@ const EXPANSIONS: Record<string, { system: string; code: string; display: string
   ],
 };
 
-function fakeAdmin() {
+function fakeAdmin(mappings: Record<string, any[]> = {}) {
   const saved: any[] = [];
   const systems: any[] = [];
   const createdTerms: any[] = [];
+  const deactivated: string[] = [];
   return {
-    saved, systems, createdTerms,
+    saved, systems, createdTerms, deactivated,
     valueSets: {
       getByUrl: async (url: string) => ({ id: url }),
       expand: async (id: string) => ({ codes: EXPANSIONS[id] ?? [] }),
@@ -39,6 +40,15 @@ function fakeAdmin() {
     codingSystems: { upsertByUrl: async (i: any) => { systems.push(i); } },
     terms: { create: async (i: any) => { createdTerms.push(i); } },
     termMappings: {
+      // Keyed `${fromSystem}|${fromCode}`, the SAME key shape
+      // `facility-controlled-fields.test.ts`'s own fake already uses, so the two read alike.
+      listOutgoing: async (system: string, code: string) => (
+        (mappings[`${system}|${code}`] ?? []).map((m) => ({
+          toSystem: '', toDisplay: null, relationship: null, owner: null,
+          fromSystem: system, fromCode: code, ...m,
+        }))
+      ),
+      update: async (id: string, i: any) => { if (i.isActive === false) deactivated.push(id); return i; },
       saveExclusive: async (i: any) => { saved.push(i); return { mapping: i, draftCreated: false, superseded: [] }; },
     },
   } as any;
@@ -149,5 +159,94 @@ describe('saveFacilityValueMappings', () => {
     ]);
     expect(admin.systems).toHaveLength(1);
     expect(admin.systems[0]).toMatchObject({ url: observedFieldSystem('level', SYSTEM) });
+  });
+});
+
+describe('ignore', () => {
+  it('writes UNMAPPED-FROM pointing at the raw value, never a sentinel', async () => {
+    const admin = fakeAdmin();
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Others', ignore: true },
+    ]);
+
+    expect(admin.saved[0]).toMatchObject({
+      fromSystem: observedFieldSystem('level', SYSTEM),
+      fromCode: 'Others',
+      toSystem: 'urn:openldr:cs:facility-type',
+      toCode: 'Others',
+      mapType: 'UNMAPPED-FROM',
+      isActive: true,
+    });
+  });
+
+  it('deactivates a rival mapping of a different mapType for the same value', async () => {
+    const admin = fakeAdmin({
+      [`${observedFieldSystem('level', SYSTEM)}|Others`]: [
+        { id: 'tm-old', mapType: 'SAME-AS', isActive: true, toCode: 'health-center' },
+      ],
+    });
+
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Others', ignore: true },
+    ]);
+
+    expect(admin.deactivated).toEqual(['tm-old']);
+  });
+
+  it('deactivates an ignore row when the operator maps the value instead', async () => {
+    const admin = fakeAdmin({
+      [`${observedFieldSystem('level', SYSTEM)}|Others`]: [
+        { id: 'tm-ign', mapType: 'UNMAPPED-FROM', isActive: true, toCode: 'Others' },
+      ],
+    });
+
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Others', toCode: 'health-center' },
+    ]);
+
+    expect(admin.deactivated).toEqual(['tm-ign']);
+  });
+
+  it('leaves an already-inactive rival alone', async () => {
+    const admin = fakeAdmin({
+      [`${observedFieldSystem('level', SYSTEM)}|Others`]: [
+        { id: 'tm-dead', mapType: 'SAME-AS', isActive: false, toCode: 'health-center' },
+      ],
+    });
+
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Others', ignore: true },
+    ]);
+
+    expect(admin.deactivated).toEqual([]);
+  });
+
+  it('refuses an entry that is neither a mapping nor an ignore', async () => {
+    await expect(saveFacilityValueMappings(fakeAdmin(), SYSTEM, [
+      { field: 'level', rawValue: 'Others' } as never,
+    ])).rejects.toThrow(/either a toCode or ignore/i);
+  });
+
+  it('refuses an entry that is both', async () => {
+    await expect(saveFacilityValueMappings(fakeAdmin(), SYSTEM, [
+      { field: 'level', rawValue: 'Others', toCode: 'health-center', ignore: true } as never,
+    ])).rejects.toThrow(/either a toCode or ignore/i);
+  });
+
+  it('refuses an ignore on a field other than level', async () => {
+    await expect(saveFacilityValueMappings(fakeAdmin(), SYSTEM, [
+      { field: 'status', rawValue: 'Functional', ignore: true },
+    ])).rejects.toThrow(/only level values can be ignored/i);
+  });
+
+  it('still creates the source concept, so the decision is editable in Terminology', async () => {
+    const admin = fakeAdmin();
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Others', ignore: true },
+    ]);
+
+    expect(admin.createdTerms).toContainEqual(expect.objectContaining({
+      system: observedFieldSystem('level', SYSTEM), code: 'Others', display: 'Others',
+    }));
   });
 });

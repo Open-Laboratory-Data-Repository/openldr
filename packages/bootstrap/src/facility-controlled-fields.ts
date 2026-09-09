@@ -1,4 +1,4 @@
-import type { FacilityRecord, TerminologyAdminStore } from '@openldr/db';
+import type { FacilityRecord, MapType, TerminologyAdminStore } from '@openldr/db';
 
 // FAC-P1-05 (A2a): the CSV importer writes whatever string a national register contains straight
 // into `level`/`status`/`country` — columns the facility FORM already treats as coded against three
@@ -17,6 +17,21 @@ export const CONTROLLED_VALUE_SETS: Record<ControlledField, string> = {
   status: 'urn:openldr:valueset:location-status',
   country: 'urn:openldr:valueset:country',
 };
+
+/** ⛔ The row an IGNORE writes, and it points at the raw value itself, never at a sentinel.
+ *
+ *  `to_system` and `to_code` are both NOT NULL (`013_term_mappings.ts:10-11`), so the row needs
+ *  values. `resolveControlledFields` reads `active.toCode` straight into the field
+ *  (`facility-controlled-fields.ts:212`), so a sentinel such as `__unmapped__` would land in `level`
+ *  the day any reader forgot the `mapType` check. Pointing at the raw value fails safe: a reader
+ *  that checks `mapType` knows the operator decided, and a reader that does not writes the raw
+ *  value, which is exactly what already happens to a value with no mapping at all. */
+export const FACILITY_IGNORE_MAP_TYPE: MapType = 'UNMAPPED-FROM';
+
+/** The SHARED canonical system for `level`, used as an ignore row's `toSystem` even for a register
+ *  that later grows its own. The row marks a decision rather than pointing at a concept, and a
+ *  register-scoped system here would imply a concept that does not exist. */
+export const LEVEL_CANONICAL_SYSTEM = 'urn:openldr:cs:facility-type';
 
 /** `urn:openldr:` namespace shared with `FACILITY_REGISTRY_SYSTEM`/`DEFAULT_OBSERVED_FACILITY_SYSTEM`
  *  in `packages/db/src/facility-observed.ts`. `cs:facility-<field>:` rather than reusing that file's
