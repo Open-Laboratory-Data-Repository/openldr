@@ -846,6 +846,38 @@ describe('createFacilityImportWorker: cell edits overlay', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.level).toBe('Others');
   });
+
+  // Task 4 fix round, Finding 1: the two tests above check `facility_registry`, and only the APPLY
+  // call writes that table. Deleting `cellEditsFor(run)` from the VALIDATE call site alone leaves
+  // both green, so they do not pin the validate phase even though the task report said they did.
+  //
+  // This test pins validate on its own, with an edit that changes what VALIDATE reports rather than
+  // what APPLY writes. Line 2 has no `name`, so `parseFacilityCsv` counts it in `skipped` and keeps
+  // it out of `records` (packages/terminology/src/facility-csv.ts: `if (!nationalCode || !name) {
+  // skipped += 1; continue; }`). The edit supplies the missing name before that check runs. The
+  // assertion reads the run while it is still `awaiting_confirmation`, before any confirm or apply,
+  // so the summary it checks is the one VALIDATE itself wrote.
+  it('the validate summary alone proves the overlay: a row missing its name is skipped without the edit, parsed with it', async () => {
+    const edits: FacilityImportEditStore = {
+      list: async () => [{
+        id: 'fie_2', nationalSystem: SYSTEM, fileHash: 'h1', header: 'name',
+        line: 2, fromValue: null, toValue: 'Alpha',
+        createdBy: null, createdAt: new Date().toISOString(),
+      }],
+      put: async () => { throw new Error('not used'); },
+      remove: async () => false,
+      clear: async () => 0,
+    };
+    const { runs, worker } = await harness('national_code,name\n1,\n', undefined, { edits });
+    const run = await runs.startUpload(upload());
+
+    await worker.tickOnce();
+    await worker.stop();
+
+    const after = await runs.get(run.id);
+    expect(after?.status).toBe('awaiting_confirmation');
+    expect(after?.summary).toMatchObject({ parsed: 1, skipped: 0 });
+  });
 });
 
 // ── Whole-branch review C1: who may sweep, and what a sweep may reach ──────────────────────────
