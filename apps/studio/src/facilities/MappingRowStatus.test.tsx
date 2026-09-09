@@ -15,6 +15,27 @@ describe('MappingRowStatus', () => {
     expect(onCheck).toHaveBeenCalledTimes(1);
   });
 
+  // ⛔ THE ONE STATE THAT IS NOT A BUTTON. A column kept as extra data claims no contract field, so
+  // there is nothing to check it against and a check would be a promise the app cannot keep. It also
+  // has to stay quiet: eleven of the Zambia export's twenty-one headers are extras, and amber on all
+  // of them buried the one red row in noise.
+  it('is not clickable when the column is kept as extra data', () => {
+    const onCheck = vi.fn();
+    render(<MappingRowStatus state="skipped" label="Zone" busy={false} detail={null} onCheck={onCheck} />);
+
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Zone/)).toBeInTheDocument();
+  });
+
+  it('paints a kept-as-extra column muted, not amber', () => {
+    const { container } = render(
+      <MappingRowStatus state="skipped" label="Zone" busy={false} detail={null} onCheck={vi.fn()} />,
+    );
+    const cls = container.querySelector('svg')?.getAttribute('class') ?? '';
+    expect(cls).toMatch(/muted-foreground/);
+    expect(cls).not.toMatch(/amber/);
+  });
+
   it('names its state in the accessible name, so the icon is not the only carrier', () => {
     render(<MappingRowStatus state="invalid" label="Type" busy={false} detail="3 values are not recognised" onCheck={vi.fn()} />);
     expect(screen.getByRole('button', { name: /not recognised/i })).toBeInTheDocument();
@@ -71,18 +92,21 @@ describe('MappingRowStatus', () => {
   // half of the same problem the auto-green caused: an unchecked row wore the same glyph as a
   // checked one, so nothing invited the click. Unchecked now says "look at me" in its own shape.
   it('draws a distinct glyph for every state, so touch never depends on a tooltip', () => {
-    const glyphFor = (state: 'neutral' | 'valid' | 'invalid' | 'stale'): string => {
+    const glyphFor = (state: 'neutral' | 'valid' | 'invalid' | 'stale' | 'skipped'): string => {
       const { container, unmount } = render(
         <MappingRowStatus state={state} label="Type" busy={false} detail={null} onCheck={vi.fn()} />,
       );
-      const markup = container.querySelector('button svg')?.innerHTML ?? '';
+      // Not `button svg`: the skipped state deliberately renders no button.
+      const markup = container.querySelector('svg')?.innerHTML ?? '';
       unmount();
       return markup;
     };
 
-    const glyphs = [glyphFor('neutral'), glyphFor('valid'), glyphFor('invalid'), glyphFor('stale')];
+    const glyphs = [
+      glyphFor('neutral'), glyphFor('valid'), glyphFor('invalid'), glyphFor('stale'), glyphFor('skipped'),
+    ];
     expect(glyphs.every((g) => g.length > 0)).toBe(true);
-    expect(new Set(glyphs).size).toBe(4);
+    expect(new Set(glyphs).size).toBe(5);
   });
 
   // The operator's own wording: an unchecked row should read as "look at this", not as a pass.

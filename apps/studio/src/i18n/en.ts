@@ -1130,7 +1130,9 @@ export const en = {
         rowStatusValid: '{{header}}: checked, nothing wrong. Check again',
         rowStatusInvalid: '{{header}}: {{detail}}. Check again',
         rowStatusStale: '{{header}}: changed since the last check. Check again',
+        rowStatusSkipped: '{{header}}: kept as extra data, so there is nothing to check',
         rowStatusUnrecognised: '{{count}} value(s) are not recognised',
+        rowStatusUnsavedPicks: '{{count}} chosen, not saved yet',
         rowStatusCollides: 'another column already claims this field',
         // Shown only when the caller has not said why a row is invalid. Names no cause.
         // Guessing one, a collision or unrecognised values, could name the wrong one.
@@ -1148,8 +1150,6 @@ export const en = {
       // ranked Select over that field's own value set. An unmapped value never blocks the import,
       // so there is deliberately no "cannot continue"-style copy anywhere in this group.
       valueMap: {
-        saveAction: 'Save mappings',
-        saving: 'Saving…',
         notMapped: 'Not mapped',
         savedCount: '{{count}} mapping(s) written.',
       },

@@ -67,6 +67,9 @@ Every mapping row carries a small icon next to its field picker. It has four sta
 - A green tick in a circle means it has been checked, and nothing is wrong.
 - A red circle means something is wrong. The row says what, in a line under it.
 - A gray circular arrow means the mapping changed since its last check.
+- A muted circle with a dash means the column is kept as extra data. It claims no contract field, so
+  there is nothing to check it against and the icon does nothing. Most of a real export's columns
+  look like this, which is what keeps the icons that need attention easy to pick out.
 
 Each state draws its own shape, not just its own colour, so they still read apart on a phone, where
 a tooltip cannot be opened at all.
@@ -94,11 +97,14 @@ the vocabulary, so it waits for your decision, which is the point.
 **A mapping you made by hand always wins.** Nothing decided automatically overrules a decision you
 made, so a register that deliberately maps a word somewhere unusual keeps that.
 
-Source, Mapping and Review each show one button, for the action that moves you forward. Data shows
-none: it is for looking at the file, not for acting on it. Every other action, including the three
-check-again options, Cancel, and Close, stays in the page's `⋯` menu. The one other visible button
-is **Save mappings**, on the value-mapping panel. It writes the value decisions you have made, and
-tells you how many it wrote.
+Every step shows one button, for the action that moves you forward. Every other action, including
+the three check-again options and Close, stays in the page's `⋯` menu.
+
+**There is no Save button. The status icon is the save.** Pick values from the lists under a row,
+then press that row's icon: it writes your picks, re-reads the column, and turns the row green if
+nothing is left. Validate all does the same for every row before it checks the whole file. Until you
+press one of them the row's line says what is waiting, for example "4 value(s) are not recognised.
+2 chosen, not saved yet".
 
 You cannot click a step you have not reached yet, and you cannot go back to an earlier step
 while a background check is running. Clicking Validate all on Mapping moves you to Review on its

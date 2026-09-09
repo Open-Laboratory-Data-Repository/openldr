@@ -74,6 +74,9 @@ Cada linha de mapeamento tem um pequeno ícone junto ao seu seletor de campo. Te
 - Um visto verde dentro de um círculo significa que foi verificada e nada está errado.
 - Um círculo vermelho significa que algo está errado. A linha diz o quê, logo por baixo.
 - Uma seta circular cinzenta significa que o mapeamento mudou desde a última verificação.
+- Um círculo discreto com um traço significa que a coluna é guardada como dados extra. Não reclama
+  nenhum campo do contrato, por isso não há nada a verificar e o ícone não faz nada. A maioria das
+  colunas de um export real está assim, o que deixa as outras sobressair.
 
 Cada estado tem a sua própria forma, e não apenas a sua própria cor, para que continuem distintos
 num telemóvel, onde a dica não chega sequer a abrir.
@@ -101,11 +104,14 @@ nada no vocabulário, por isso espera pela sua decisão, que é precisamente o o
 **Um mapeamento que fez à mão ganha sempre.** Nada decidido automaticamente passa por cima de uma
 decisão que tomou.
 
-Origem, Mapeamento e Revisão mostram cada uma um único botão, o que avança para o passo seguinte.
-Dados não mostra nenhum: este passo serve para olhar para o ficheiro, não para agir sobre ele.
-Qualquer outra ação, incluindo as três opções de verificar de novo, Cancelar e Fechar, fica no menu
-`⋯` da página. O único outro botão visível é **Guardar mapeamentos**, no painel de mapeamento de
-valores. Guarda as decisões que tomou e diz-lhe quantas guardou.
+Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
+as três opções de verificar de novo e Fechar, fica no menu `⋯` da página.
+
+**Não há botão Guardar. O ícone de estado é o guardar.** Escolha os valores nas listas por baixo de
+uma linha e depois carregue no ícone dessa linha: guarda as suas escolhas, lê a coluna outra vez e
+põe a linha a verde se não sobrar nada. Validar tudo faz o mesmo para todas as linhas antes de
+verificar o ficheiro inteiro. Até lá a linha diz o que está à espera, por exemplo «4 valor(es) não
+reconhecido(s). 2 escolhido(s), ainda não guardado(s)».
 
 Não pode clicar num passo que ainda não alcançou, nem voltar a um passo anterior enquanto uma
 verificação em segundo plano está a decorrer. Clicar em Validar tudo no Mapeamento leva-o à Revisão

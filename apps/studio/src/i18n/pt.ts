@@ -1064,7 +1064,9 @@ export const pt: EnShape = {
         rowStatusValid: '{{header}}: verificado, nada de errado. Verificar novamente',
         rowStatusInvalid: '{{header}}: {{detail}}. Verificar novamente',
         rowStatusStale: '{{header}}: alterado desde a última verificação. Verificar novamente',
+        rowStatusSkipped: '{{header}}: guardado como dados extra, não há nada a verificar',
         rowStatusUnrecognised: '{{count}} valor(es) não reconhecido(s)',
+        rowStatusUnsavedPicks: '{{count}} escolhido(s), ainda não guardado(s)',
         rowStatusCollides: 'outra coluna já reivindica este campo',
         rowStatusUnknown: 'algo está errado',
         rowStatusTooManyValues: '{{count}} valores distintos encontrados. Esta coluna está provavelmente mapeada para o campo errado.',
@@ -1072,8 +1074,6 @@ export const pt: EnShape = {
         rowCheckFailed: 'Não foi possível verificar esta coluna. Tente novamente.',
       },
       valueMap: {
-        saveAction: 'Guardar mapeamentos',
-        saving: 'A guardar…',
         notMapped: 'Não mapeado',
         savedCount: '{{count}} mapeamento(s) guardado(s).',
       },

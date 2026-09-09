@@ -1,6 +1,16 @@
 import { useCallback, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { ValueSetOption, ValueSuggestion } from '@/api';
+import type { ControlledField, ValueMappingEntry, ValueSetOption, ValueSuggestion } from '@/api';
+import { VALUE_MAP_UNMAPPED } from './ValueMapRow';
+
+/** A pick is keyed by (header, value): one panel row per HEADER, and the same raw value can appear
+ *  under two headers claiming different fields. `JSON.stringify` of a tuple, so a header containing
+ *  the separator cannot collide with a different pair. */
+export const valueChoiceKey = (header: string, value: string): string => JSON.stringify([header, value]);
+
+/** A WRITTEN mapping is keyed by (field, value), which is what the register stores. Two headers
+ *  mapped to the same field share one written mapping, correctly. */
+export const resolvedValueKey = (field: string, value: string): string => JSON.stringify([field, value]);
 
 /** One row of a header's value worklist: a raw value plus the ranker's own candidates for it. */
 export type WorklistEntry = { value: string; candidates: ValueSuggestion['candidates'] };
@@ -63,4 +73,52 @@ export function useMappingCheckState(): MappingCheckState {
     valueChoices, setValueChoices,
     reset,
   };
+}
+
+/** The choice standing for one value: the operator's own pick, else the ranker's top candidate when
+ *  it is confident enough to act on, else nothing. */
+export function valueChoice(
+  choices: Record<string, string>,
+  header: string,
+  entryValue: string,
+  candidates: ValueSuggestion['candidates'],
+): string {
+  const chosen = choices[valueChoiceKey(header, entryValue)];
+  if (chosen) return chosen;
+  const top = candidates[0];
+  return top && top.confidence !== 'weak' ? top.target : VALUE_MAP_UNMAPPED;
+}
+
+/** Every value mapping this sheet has a choice for but has not written yet.
+ *
+ *  ⛔ TWO CALLERS, ONE ANSWER, and that is the point of it living here. A row's status icon writes
+ *  its own header's entries before re-reading the column; "Validate all" writes every row's before
+ *  re-validating the run. When only the icon wrote, an operator who picked values and then pressed
+ *  Validate all got the original bug back through the other door: nothing written, so the check
+ *  reported the same values unrecognised and Review named them again.
+ *
+ *  `targetFor` is the header's CURRENT contract field. A check recorded against a target the header
+ *  no longer maps to describes a different field's values and is skipped, exactly as the render
+ *  loop skips showing it.
+ *
+ *  @param header Restrict to one header. Omitted, every header is considered.
+ */
+export function pendingValueMappings(
+  state: Pick<MappingCheckState, 'checkedByHeader' | 'valueChoices' | 'resolvedValues'>,
+  targetFor: (header: string) => string,
+  header?: string,
+): ValueMappingEntry[] {
+  const entries: ValueMappingEntry[] = [];
+  for (const [h, check] of Object.entries(state.checkedByHeader)) {
+    if (header !== undefined && h !== header) continue;
+    if (check.target !== targetFor(h) || !check.values) continue;
+    for (const { value: entryValue, candidates } of check.values) {
+      const toCode = valueChoice(state.valueChoices, h, entryValue, candidates);
+      if (toCode && toCode !== VALUE_MAP_UNMAPPED
+        && !state.resolvedValues.has(resolvedValueKey(check.target, entryValue))) {
+        entries.push({ field: check.target as ControlledField, rawValue: entryValue, toCode });
+      }
+    }
+  }
+  return entries;
 }

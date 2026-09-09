@@ -76,6 +76,9 @@ Chaque ligne de mappage porte une petite icône à côté de son sélecteur de c
 - Une coche verte dans un cercle signifie qu'elle a été vérifiée et que rien ne cloche.
 - Un cercle rouge signifie qu'un problème existe. La ligne dit lequel, juste en dessous.
 - Une flèche circulaire grise signifie que le mappage a changé depuis sa dernière vérification.
+- Un cercle discret barré d'un tiret signifie que la colonne est gardée en données supplémentaires.
+  Elle ne revendique aucun champ du contrat, il n'y a donc rien à vérifier et l'icône ne fait rien.
+  La plupart des colonnes d'un export réel sont dans ce cas, ce qui laisse ressortir les autres.
 
 Chaque état a sa propre forme, pas seulement sa propre couleur, pour qu'ils restent distincts sur
 un téléphone, où l'infobulle ne s'ouvre pas du tout.
@@ -104,11 +107,14 @@ dans le vocabulaire : il attend donc votre décision, et c'est bien le but.
 **Une correspondance que vous avez faite à la main l'emporte toujours.** Rien de décidé
 automatiquement ne passe outre une décision que vous avez prise.
 
-Source, Mappage et Vérification affichent chacune un seul bouton, celui qui fait avancer. Données
-n'en affiche aucun : cette étape sert à regarder le fichier, pas à agir dessus. Toute autre action,
-dont les trois options de nouvelle vérification, Annuler et Fermer, reste dans le menu `⋯` de la
-page. Le seul autre bouton visible est **Enregistrer les mappages**, sur le panneau de mappage des
-valeurs. Il enregistre les décisions que vous avez prises et vous dit combien il en a enregistré.
+Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont les trois
+options de nouvelle vérification et Fermer, reste dans le menu `⋯` de la page.
+
+**Il n'y a pas de bouton Enregistrer. L'icône d'état est l'enregistrement.** Choisissez les valeurs
+dans les listes sous une ligne, puis appuyez sur l'icône de cette ligne : elle enregistre vos choix,
+relit la colonne et passe la ligne au vert s'il ne reste rien. Tout valider fait la même chose pour
+toutes les lignes avant de vérifier le fichier entier. D'ici là, la ligne dit ce qui attend, par
+exemple « 4 valeur(s) non reconnue(s). 2 choisie(s), pas encore enregistrée(s) ».
 
 Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
 étape antérieure pendant qu'une vérification en arrière-plan est en cours. Cliquer sur Tout valider

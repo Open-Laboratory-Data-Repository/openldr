@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -25,6 +26,7 @@ import {
   suggestColumnMap,
   uploadFacilityImport,
   revalidateFacilityImportRun,
+  writeFacilityValueMappings,
   type ColumnMapError,
   type ColumnSuggestion,
   type ControlledField,
@@ -36,7 +38,7 @@ import {
   type FacilityRegisterSource,
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
-import { useMappingCheckState } from './mappingCheckState';
+import { pendingValueMappings, resolvedValueKey, useMappingCheckState } from './mappingCheckState';
 import { DataGridStep } from './DataGridStep';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
 import { summarySignature, worklistSignature, type ImportInputs } from './importInputsSignature';
@@ -700,11 +702,40 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    * means one of those. `run?.blobKey` dropped from the check for the same reason the comment above
    * `handleUpload` gives: every run stores a file now, so it was never the fact doing the gating.
    */
+  /** Write every value pick the mapping step is holding but has not saved. Shares
+   *  `pendingValueMappings` with `ColumnMapStep`'s own per-row commit, so the two doors can never
+   *  disagree about what counts as pending. Returns false only when the write itself failed. */
+  const commitPendingValueMappings = async (): Promise<boolean> => {
+    const entries = pendingValueMappings(checkState, (header) => columnMap.columns[header] ?? '');
+    if (entries.length === 0) return true;
+    try {
+      const result = await writeFacilityValueMappings(nationalSystem.trim(), entries);
+      checkState.setResolvedValues((prev) => {
+        const next = new Set(prev);
+        for (const entry of entries) next.add(resolvedValueKey(entry.field, entry.rawValue));
+        return next;
+      });
+      toast.success(t('facilities.import.valueMap.savedCount', { count: result.written }));
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+      return false;
+    }
+  };
+
   const handleRevalidate = async (
     overrides?: { allowUnknownColumns?: boolean; allowInvalidCoordinates?: boolean },
   ): Promise<void> => {
     const canRevalidate = !!runId && (run === null || run.status === 'awaiting_confirmation');
     if (!canRevalidate) { await handleUpload(overrides); return; }
+
+    // ⛔ WRITE THE OPERATOR'S PICKS FIRST. A row's own status icon already does this before it
+    // re-reads that column; this is the same rule for the button that checks every column at once.
+    // Without it the reported bug came back through the other door: pick four values, press
+    // Validate all rather than the icon, and the check reports the same four unrecognised because
+    // nothing was ever written. A failed write stops here rather than producing a summary that
+    // describes decisions the register does not carry.
+    if (!await commitPendingValueMappings()) return;
 
     const allowUnknown = overrides?.allowUnknownColumns ?? allowUnknownColumns;
     const allowInvalid = overrides?.allowInvalidCoordinates ?? allowInvalidCoordinates;

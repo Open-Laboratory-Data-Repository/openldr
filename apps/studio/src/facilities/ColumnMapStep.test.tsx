@@ -576,6 +576,9 @@ describe('ColumnMapStep', () => {
     beforeEach(() => {
       mockedApi(api.readFacilityImportColumnValues).mockClear();
       mockedApi(api.suggestValueMappings).mockClear();
+      // ⛔ Now that a CHECK writes, this one leaks between tests too: an earlier test's own write
+      // made "was it called" assertions here pass or fail on the wrong test's history.
+      mockedApi(api.writeFacilityValueMappings).mockClear();
     });
 
     // ⛔ Deviation from the brief's literal snippet: `/Type/` alone matches TWO buttons on this row:
@@ -604,6 +607,128 @@ describe('ColumnMapStep', () => {
       const row = (await screen.findByText('1st Level Hospital')).closest('[data-mapping-row="Type"]');
       expect(row).not.toBeNull();
       expect(within(row as HTMLElement).getByLabelText('1st Level Hospital')).toBeInTheDocument();
+    });
+
+    // ⛔ THE REPORTED BUG, AND ITS SECOND ROUND. A separate Save button was the wrong answer to it:
+    // the operator's own words were "after mapping I am going to press the info button again, why
+    // not make that a save, cause I am trying to get it to be green". The status icon is already
+    // the control they press to get a row green, so it is the control that writes. There is no
+    // Save button anywhere on the step now.
+    it('writes the picks on a row when its status icon is clicked, then re-reads the column', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['1st Level Hospital'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: '1st Level Hospital', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('1st Level Hospital'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Health Post' }));
+      expect(api.writeFacilityValueMappings).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledWith(
+        'urn:zm:mfl', [{ field: 'level', rawValue: '1st Level Hospital', toCode: 'health-post' }],
+      ));
+      // And the row goes green, which is the whole reason the operator pressed it.
+      expect(await screen.findByRole('button', { name: /^Type: checked, nothing wrong/i })).toBeInTheDocument();
+    });
+
+    it('has no Save button anywhere', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['1st Level Hospital'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: '1st Level Hospital', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByText('1st Level Hospital');
+
+      expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
+    });
+
+    // A check with nothing chosen must not call the write route at all. Otherwise every click on
+    // an untouched row posts an empty write and toasts "0 mapping(s) written".
+    it('writes nothing when the row has no picks', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['1st Level Hospital'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: '1st Level Hospital', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByText('1st Level Hospital');
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      await waitFor(() => expect(api.readFacilityImportColumnValues).toHaveBeenCalledTimes(2));
+      expect(api.writeFacilityValueMappings).not.toHaveBeenCalled();
+    });
+
+    // The other half of the same report. With all four pick-lists filled, the row still read a flat
+    // "4 value(s) are not recognised", which looks like a contradiction and says nothing about what
+    // would close it. It now names the pending picks, so the Save beside it has a reason.
+    it('says how many picks are waiting to be saved', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Zonal Hospital'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Zonal Hospital', candidates: [] }],
+        options: [{ code: 'hospital', display: 'Hospital' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByLabelText('Zonal Hospital');
+      // Nothing chosen yet: the line says only what the check found.
+      expect(screen.queryByText(/not saved/i)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Zonal Hospital'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
+
+      expect(await screen.findByText(/1 chosen, not saved/i)).toBeInTheDocument();
+    });
+
+    // A row with no worklist has nothing to save, so it carries no Save at all.
+    it('offers no Save on a row whose check found nothing to map', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Address', values: ['1 Main St'], distinct: 1, truncated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Address'],
+        value: { columns: { Address: 'address' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Address:/ }));
+      await screen.findByRole('button', { name: /^Address: checked, nothing wrong/i });
+
+      expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
     });
 
     it('shows the OTHER unrecognised value in the same row too', async () => {
@@ -787,15 +912,19 @@ describe('ColumnMapStep', () => {
       // ranker's fresh (and different) guess.
       expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Health Post');
 
-      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
-      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
-
+      // The check itself is the write, so the choice that survived the re-check above is what the
+      // NEXT check sends. (The re-check above wrote it too; this asserts the payload.)
       await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledWith(
         'urn:zm:mfl', [{ field: 'level', rawValue: 'Zonal Hospital', toCode: 'health-post' }],
       ));
     });
 
-    it('aggregates mappings chosen under two different headers into one Save call', async () => {
+    // ⛔ REVERSAL. This used to assert one Save aggregating BOTH headers' picks into a single call.
+    // That Save lived after every mapping row, a screen away from the values it wrote, and the
+    // operator never found it. Each worklist now carries its own Save, and each writes only its own
+    // header's values: a Save that also commits picks on a row the operator has scrolled past and
+    // never looked at is writing decisions nobody made.
+    it('each row saves only its own values, never a neighbouring row', async () => {
       mockedApi(api.readFacilityImportColumnValues).mockImplementation(
         async (_runId: string, header: string) => {
           if (header === 'Type') return { header, values: ['Zonal Hospital'], distinct: 1, truncated: false };
@@ -836,17 +965,23 @@ describe('ColumnMapStep', () => {
       fireEvent.click(screen.getByLabelText('Functional'));
       fireEvent.click(await screen.findByRole('option', { name: 'Active' }));
 
-      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 2, superseded: [] });
-      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
+      mockedApi(api.writeFacilityValueMappings).mockClear();
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
 
+      // Re-check the Type row. It writes `level` and says nothing about `status`, even though the
+      // Condition row has a pick sitting on screen at the same moment.
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
       await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(1));
-      const [system, entries] = mockedApi(api.writeFacilityValueMappings).mock.calls[0];
-      expect(system).toBe('urn:zm:mfl');
-      expect(entries).toEqual(expect.arrayContaining([
-        { field: 'level', rawValue: 'Zonal Hospital', toCode: 'hospital' },
-        { field: 'status', rawValue: 'Functional', toCode: 'active' },
-      ]));
-      expect(entries).toHaveLength(2);
+      expect(api.writeFacilityValueMappings).toHaveBeenNthCalledWith(
+        1, 'urn:zm:mfl', [{ field: 'level', rawValue: 'Zonal Hospital', toCode: 'hospital' }],
+      );
+
+      // Re-check the Condition row. Separately, and only `status`.
+      fireEvent.click(screen.getByRole('button', { name: /^Condition:/ }));
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(2));
+      expect(api.writeFacilityValueMappings).toHaveBeenNthCalledWith(
+        2, 'urn:zm:mfl', [{ field: 'status', rawValue: 'Functional', toCode: 'active' }],
+      );
     });
   });
 
@@ -890,10 +1025,9 @@ describe('ColumnMapStep', () => {
       fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
 
       mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
-      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
-      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(1));
-
+      // One click, not two: the status icon writes the pick and then re-reads the column.
       fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(1));
 
       expect(await screen.findByRole('button', { name: /^Type: checked, nothing wrong/i })).toBeInTheDocument();
       // Sticky membership: the row the operator worked through is still on screen with their pick
@@ -901,7 +1035,7 @@ describe('ColumnMapStep', () => {
       expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Hospital');
     });
 
-    it('a value left unmapped still counts, so Save alone does not turn a row green', async () => {
+    it('a value left unmapped still counts, so mapping one of two does not turn a row green', async () => {
       mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
         header: 'Type', values: ['Zonal Hospital', 'Others'], distinct: 2, truncated: false,
       });
@@ -927,7 +1061,7 @@ describe('ColumnMapStep', () => {
       fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
 
       mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
-      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
       await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(1));
 
       expect(await screen.findByRole('button', { name: /^Type: 1 value\(s\) are not recognised/i })).toBeInTheDocument();

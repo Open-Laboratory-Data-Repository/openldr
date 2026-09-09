@@ -74,6 +74,8 @@ Every row on the Mapping step carries a small icon next to its field picker, wit
 - A green tick in a circle: it has been checked, and nothing is wrong.
 - A red circle: something is wrong. The row says what, in a line under it.
 - A gray circular arrow: the mapping changed since its last check.
+- A muted circle with a dash: the column is kept as extra data, claims no contract field, and has
+  nothing to check. The icon does nothing on those rows.
 
 Each state has its own shape, not just its own colour, so they still read apart on a phone.
 
@@ -82,10 +84,12 @@ already stored at Source, and does not re-check the whole file or send it again.
 on its own: the suggestion scores the column's NAME and cannot know what is inside the column. Use
 Validate all when you want every column checked at once.
 
-A controlled field's unrecognised values appear under the mapping row that produced them, each
-with a pick list. Saving those mappings does not make the rows vanish, so a choice can still be
-corrected; the values that were saved simply stop counting against the row, and the row goes green
-once none are left unanswered.
+A controlled field's unrecognised values appear under the mapping row that produced them, each with
+a pick list. There is no Save button: the row's status icon is the save. Pressing it writes that
+row's picks, re-reads the column, and turns the row green if nothing is left. Validate all does the
+same for every row first. Until then the row's line says what is waiting, for example "4 value(s)
+are not recognised. 2 chosen, not saved yet". Writing does not make the rows vanish, so a choice can
+still be corrected; the values that were written simply stop counting against the row.
 
 Mapping decides; Review reports. If a check turns up something worth changing, go back to Mapping,
 change it, and come forward again. **A file uploaded through the background door is checked again in

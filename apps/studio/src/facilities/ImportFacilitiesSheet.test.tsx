@@ -2774,6 +2774,45 @@ describe('the file drop zone', () => {
     expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
+  // ── Validate all commits what the operator picked ───────────────────────────────────────────
+
+  // The row's own status icon writes its picks before re-reading. Validate all has to do the same
+  // for every row, or the reported bug comes back through the other door: pick four values, press
+  // Validate all instead of the icon, and Review names the same four values because nothing was
+  // ever written.
+  it('writes pending value picks before it re-validates the run', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValue({
+      headers: ['Type'],
+      columns: [{ header: 'Type', candidates: [{ target: 'level', display: null, score: 1, confidence: 'exact' }] }],
+    });
+    mocked(api.readFacilityImportColumnValues).mockResolvedValue({
+      values: ['1st Level Hospital'], distinct: 1, truncated: false,
+    });
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [{ value: '1st Level Hospital', candidates: [] }],
+      notValidated: false,
+      options: [{ code: 'hospital', display: 'Hospital' }],
+    });
+    mocked(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem('Type\n1st Level Hospital\n');
+    await advanceToMapping();
+
+    fireEvent.click(await screen.findByRole('button', { name: /^Type:/ }));
+    const picker = await screen.findByRole('combobox', { name: /1st Level Hospital/i });
+    fireEvent.keyDown(picker, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: /Hospital/ }));
+    mocked(api.writeFacilityValueMappings).mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Validate all' }));
+
+    await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledWith(
+      'HFR', [{ field: 'level', rawValue: '1st Level Hospital', toCode: 'hospital' }],
+    ));
+    await waitFor(() => expect(api.revalidateFacilityImportRun).toHaveBeenCalled());
+  }, 20000);
+
   // ── The check survives the step strip ───────────────────────────────────────────────────────
 
   /** Reported from the real Zambia export: check a row, see it go red, click Data, click back to
