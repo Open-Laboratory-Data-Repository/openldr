@@ -104,6 +104,39 @@ describe('terminology admin store', () => {
     await expect(s.codingSystems.delete(seedId, { cascade: true })).rejects.toThrow(/system-managed coding system/i);
   });
 
+  // ⛔ A system a FEATURE conjured is not a system seed. `upsertByUrl` hardcoded `seeded: true`, so
+  // the coding system the facility import creates to hold one register's own added types could never
+  // be deleted: the guard above refuses any seeded system with no ingest job, and a feature-created
+  // one never has a job. Found by a live check, where the container survived deleting everything in
+  // it. Every existing caller keeps the seeded default; only the caller that means it opts out.
+  it('upsertByUrl({ seeded: false }) creates a system an operator can delete', async () => {
+    const { db, s } = await store();
+    await s.codingSystems.upsertByUrl({
+      url: 'http://feature.test', systemCode: 'FEAT', systemName: 'Feature made this',
+      systemVersion: null, publisherId: null, seeded: false,
+    });
+    const id = (await s.codingSystems.getByUrl('http://feature.test'))!.id;
+    await db.insertInto('terminology_concepts')
+      .values({ system: 'http://feature.test', code: 'a', display: 'A', status: 'ACTIVE' } as never).execute();
+
+    await s.codingSystems.delete(id, { cascade: true });
+
+    expect(await s.codingSystems.getByUrl('http://feature.test')).toBeNull();
+    const remaining = await db.selectFrom('terminology_concepts').selectAll()
+      .where('system', '=', 'http://feature.test').execute();
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('upsertByUrl still defaults to seeded, so every existing caller is unchanged', async () => {
+    const { s } = await store();
+    await s.codingSystems.upsertByUrl({
+      url: 'http://default.test', systemCode: 'DFT', systemName: 'D', systemVersion: null, publisherId: null,
+    });
+    const id = (await s.codingSystems.getByUrl('http://default.test'))!.id;
+
+    await expect(s.codingSystems.delete(id, { cascade: true })).rejects.toThrow(/system-managed coding system/i);
+  });
+
   describe('codingSystems.getByUrl', () => {
     it('returns the coding system for a known url, null when absent', async () => {
       const { s } = await store();

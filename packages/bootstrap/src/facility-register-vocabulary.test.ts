@@ -66,6 +66,18 @@ describe('addRegisterFacilityType', () => {
   });
 
   // ⛔ TWO CLAUSES. One clause naming both would expand to their intersection, which is empty.
+  // ⛔ NOT A SYSTEM SEED. `upsertByUrl` defaults to `seeded: true`, and a seeded system with no
+  // ingest job is permanently undeletable. A live check found the container outliving everything in
+  // it: the operator could delete the type they added and the value set, and was then stuck with an
+  // empty coding system forever. This system is the operator's, so they can remove it.
+  it('creates the register system as not seeded, so an operator can delete it again', async () => {
+    const admin = fakeAdmin({ [SHARED_VS]: [] });
+
+    await addRegisterFacilityType(admin, { nationalSystem: SYSTEM, display: 'First-aid stations' });
+
+    expect(admin.savedSystems[0]).toMatchObject({ url: LOCAL_SYS, seeded: false });
+  });
+
   it('composes the register set as two include clauses, imported set and own system', async () => {
     const admin = fakeAdmin({ [SHARED_VS]: [] });
 
