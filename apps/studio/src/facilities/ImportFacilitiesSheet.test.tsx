@@ -2774,6 +2774,34 @@ describe('the file drop zone', () => {
     expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
   });
 
+  // ── Validate all comes back to Review ───────────────────────────────────────────────────────
+
+  /** Reported from the real Zambia export. Validate all carried the operator to Review the first
+   *  time. They clicked back to Mapping to deal with the values Review named, pressed Validate all
+   *  again, and the sheet stayed on Mapping. Review was still clickable, which is the tell: the
+   *  step was still EARNED, only the auto-advance never fired.
+   *
+   *  The advance is an effect keyed on `furthest` reaching 4. `furthest` stays 4 once a summary
+   *  matches its inputs, so a second check over the same inputs never moves it, never changes the
+   *  effect's dependencies, and never re-runs it. */
+  it('comes back to Review on a second Validate all, after a trip to Mapping', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await reviewWithSummary(baseResult({ parsed: 2 }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
+      .toHaveAttribute('aria-current', 'step'));
+
+    fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
+      .toHaveAttribute('aria-current', 'step'));
+
+    // Nothing changed in between: no new file, no column-map edit, no value mapping written. That
+    // is the case the effect cannot see.
+    fireEvent.click(screen.getByRole('button', { name: 'Validate all' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
+      .toHaveAttribute('aria-current', 'step'));
+  }, 20000);
+
   // ── Validate all commits what the operator picked ───────────────────────────────────────────
 
   // The row's own status icon writes its picks before re-reading. Validate all has to do the same
