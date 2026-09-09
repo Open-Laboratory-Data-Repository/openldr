@@ -29,8 +29,8 @@ Revisão. Clique num passo dessa faixa para se mover entre eles. Não há um bot
   não existe nenhum mapeamento de colunas.
 - **Dados.** Mostra o ficheiro guardado como uma tabela, só de leitura. Nada é editável neste
   passo. A tabela é paginada a partir do servidor, uma página de cada vez, e funciona da mesma
-  forma para um ficheiro CSV e para uma versão JSONL. Não há botão aqui: avance clicando em
-  Mapeamento na faixa de passos.
+  forma para um ficheiro CSV e para uma versão JSONL. Continuar avança para o Mapeamento. Não
+  envia nada: o ficheiro já está guardado.
 - **Mapeamento.** Todas as decisões vivem aqui: o mapeamento de colunas, os valores fixos, o que
   fazer com conflitos, ausências e remoções, e que palavras do próprio registo correspondem ao
   vocabulário. Cada linha também tem o seu próprio ícone de estado, descrito mais abaixo, para
@@ -70,17 +70,20 @@ sozinho. Peça a verificação seguinte quando estiver pronto.
 
 Cada linha de mapeamento tem um pequeno ícone junto ao seu seletor de campo. Tem quatro estados:
 
-- Um visto cinzento significa que a linha ainda não foi verificada.
-- Um visto verde significa que foi verificada e nada está errado.
-- Um ícone vermelho significa que algo está errado. A linha diz o quê, logo por baixo.
-- Uma seta circular cinzenta significa que o mapeamento mudou desde a última verificação. A forma
-  é diferente do visto cinzento de propósito, para que os dois não se confundam num telemóvel,
-  onde a dica não chega sequer a abrir.
+- Um círculo de informação âmbar significa que a linha ainda não foi verificada.
+- Um visto verde dentro de um círculo significa que foi verificada e nada está errado.
+- Um círculo vermelho significa que algo está errado. A linha diz o quê, logo por baixo.
+- Uma seta circular cinzenta significa que o mapeamento mudou desde a última verificação.
+
+Cada estado tem a sua própria forma, e não apenas a sua própria cor, para que continuem distintos
+num telemóvel, onde a dica não chega sequer a abrir.
 
 O ícone mantém-se clicável em todos os estados. Uma nova verificação nunca é recusada.
 
-Uma coluna cujo campo sugerido é uma correspondência exata, e que nenhuma outra coluna reclama,
-fica verde sozinha. Não precisa de clicar nela.
+Nenhuma linha fica verde sozinha, por melhor que pareça o campo sugerido. A sugestão avalia o NOME
+da coluna. Não consegue saber o que está dentro da coluna, e os nomes que reconhece com mais
+confiança costumam ser os dos campos controlados cujos valores mais precisam de verificação. Verde
+quer dizer que uma verificação leu a coluna.
 
 Clicar no ícone verifica só essa coluna. Lê os valores dessa coluna no ficheiro que já enviou no
 passo Origem, sem verificar todo o ficheiro de novo. Use Validar tudo quando quiser uma verificação
@@ -167,9 +170,9 @@ servidor:
 - **No assistente:** abra **Unidades**, escolha **Importar**, selecione o ficheiro e escolha o
   registo. Saia do passo Origem para carregar e guardar o ficheiro. O passo Dados mostra o ficheiro
   como uma tabela em apenas leitura. O passo Mapeamento abre a seguir com uma sugestão já
-  preenchida. Uma marca de visto junto a uma linha significa que a sugestão é segura, e um selo
-  **Verificar isto** significa que deve ser revista antes de continuar. Essa marca de visto é o
-  próprio ícone de estado da linha, descrito mais acima, e mantém-se clicável depois disso.
+  preenchida. Cada linha começa com um ícone de estado âmbar, descrito mais acima, porque nada leu
+  ainda o ficheiro. Clique num ícone para verificar essa coluna, ou em Validar tudo para verificar
+  todas.
 - **A partir da CLI:** execute `openldr facilities suggest-map <path>`. Mostra o mesmo mapeamento
   sugerido em formato de tabela, assinala qualquer colisão que a própria sugestão causaria, e
   indica como devolver o resultado: `openldr facilities import <path> --column-map <file.json>`.

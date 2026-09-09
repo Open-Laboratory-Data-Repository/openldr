@@ -30,8 +30,8 @@ de bouton Retour séparé.
   aucune correspondance de colonnes n'existe encore.
 - **Données.** Montre le fichier stocké sous forme de tableau, en lecture seule. Rien n'est
   modifiable à cette étape. Le tableau est paginé depuis le serveur, une page à la fois, et
-  fonctionne de la même façon pour un fichier CSV et pour une version JSONL. Il n'y a pas de bouton
-  ici : passez à la suite en cliquant sur Mappage dans la bande d'étapes.
+  fonctionne de la même façon pour un fichier CSV et pour une version JSONL. Continuer passe au
+  Mappage. Rien n'est envoyé : le fichier est déjà stocké.
 - **Mappage.** Toutes les décisions se prennent ici : la correspondance de colonnes, les valeurs
   fixes, que faire des conflits, des absences et des suppressions, et quels mots du registre
   correspondent au vocabulaire. Chaque ligne porte aussi sa propre icône d'état, décrite plus bas,
@@ -72,17 +72,20 @@ relance plus la vérification tout seul. Demandez la vérification suivante quan
 Chaque ligne de mappage porte une petite icône à côté de son sélecteur de champ. Elle a quatre
 états :
 
-- Une coche grise signifie que la ligne n'a pas encore été vérifiée.
-- Une coche verte signifie qu'elle a été vérifiée et que rien ne cloche.
-- Une icône rouge signifie qu'un problème existe. La ligne dit lequel, juste en dessous.
+- Un cercle d'information ambre signifie que la ligne n'a pas encore été vérifiée.
+- Une coche verte dans un cercle signifie qu'elle a été vérifiée et que rien ne cloche.
+- Un cercle rouge signifie qu'un problème existe. La ligne dit lequel, juste en dessous.
 - Une flèche circulaire grise signifie que le mappage a changé depuis sa dernière vérification.
-  La forme diffère de la coche grise à dessein, pour que les deux ne se confondent pas sur un
-  téléphone, où l'infobulle ne s'ouvre pas du tout.
+
+Chaque état a sa propre forme, pas seulement sa propre couleur, pour qu'ils restent distincts sur
+un téléphone, où l'infobulle ne s'ouvre pas du tout.
 
 L'icône reste cliquable dans tous les états. Une nouvelle vérification n'est jamais refusée.
 
-Une colonne dont le champ suggéré est une correspondance exacte, et qu'aucune autre colonne ne
-réclame, devient verte toute seule. Vous n'avez pas besoin de cliquer dessus.
+Aucune ligne ne devient verte toute seule, même quand le champ suggéré paraît juste. La suggestion
+note le NOM de la colonne. Elle ne peut pas savoir ce que la colonne contient, et les noms qu'elle
+reconnaît le plus sûrement sont souvent ceux des champs contrôlés dont les valeurs demandent le
+plus de vérification. Le vert veut dire qu'une vérification a lu la colonne.
 
 Cliquer sur l'icône ne vérifie que cette colonne. Elle lit les valeurs de cette colonne dans le
 fichier déjà envoyé à l'étape Source, sans revérifier tout le fichier. Utilisez Tout valider quand
@@ -175,9 +178,9 @@ ligne, sans aller-retour serveur :
 - **Dans l'assistant :** ouvrez **Établissements**, choisissez **Importer**, sélectionnez le fichier
   et choisissez le registre. Quittez l'étape Source pour envoyer et stocker le fichier. L'étape
   Données affiche le fichier sous forme de tableau en lecture seule. L'étape Mappage s'ouvre ensuite
-  avec une suggestion déjà remplie. Une coche à côté d'une ligne signifie que la suggestion est sûre,
-  et un badge **À vérifier** signifie qu'elle doit être revue avant de continuer. Cette coche est
-  l'icône d'état de la ligne elle-même, décrite plus haut, et elle reste cliquable ensuite.
+  avec une suggestion déjà remplie. Chaque ligne démarre avec une icône d'état ambre, décrite plus
+  haut, car rien n'a encore lu le fichier. Cliquez sur une icône pour vérifier cette colonne, ou
+  sur Tout valider pour les vérifier toutes.
 - **Depuis la CLI :** exécutez `openldr facilities suggest-map <path>`. Elle affiche la même
   correspondance suggérée sous forme de tableau, signale toute collision que la suggestion
   provoquerait elle-même, et indique comment réinjecter le résultat :

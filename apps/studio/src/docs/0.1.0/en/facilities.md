@@ -26,7 +26,7 @@ step in that strip to move between them. There is no separate Back button.
   The file is stored, not checked, because no column map exists yet.
 - **Data.** Shows the stored file as a table, read only. Nothing on this step can be edited. The
   table is paged from the server, one page at a time, and it works the same way for a CSV file and
-  a JSONL release. There is no button here: move on by clicking Mapping in the step strip.
+  a JSONL release. Continue moves on to Mapping. It sends nothing: the file is already stored.
 - **Mapping.** Every decision lives here: the column map, fixed values, what to do with conflicts,
   absences and deletions, and which of the register's own words map onto the vocabulary. Each row
   also carries its own status icon, described below, for a quick check of one column. Its main
@@ -63,17 +63,20 @@ when you are ready.
 
 Every mapping row carries a small icon next to its field picker. It has four states:
 
-- A gray tick means the row has not been checked yet.
-- A green tick means it has been checked, and nothing is wrong.
-- A red icon means something is wrong. The row says what, in a line under it.
-- A gray circular arrow means the mapping changed since its last check. It is a different shape
-  from the gray tick on purpose, so the two do not read the same on a phone, where a tooltip
-  cannot be opened at all.
+- An amber information circle means the row has not been checked yet.
+- A green tick in a circle means it has been checked, and nothing is wrong.
+- A red circle means something is wrong. The row says what, in a line under it.
+- A gray circular arrow means the mapping changed since its last check.
+
+Each state draws its own shape, not just its own colour, so they still read apart on a phone, where
+a tooltip cannot be opened at all.
 
 The icon is always clickable, in every state. A re-check is never refused.
 
-A column whose suggested field is an exact match, with no other column claiming the same field,
-turns green on its own. You do not have to click it.
+No row turns green on its own, however good the suggested field looks. The suggestion scores the
+column's NAME. It cannot know what is inside the column, and the names it matches most confidently
+tend to be the controlled fields whose values need the most checking. Green means a check has read
+the column.
 
 Clicking the icon checks that one column only. It reads that column's values from the file you
 already uploaded at Source, and does not re-check the whole file. Use Validate all when you want
@@ -155,10 +158,9 @@ headers and propose a map offline, with no server round trip:
 
 - **In the wizard:** open **Facilities**, choose **Import**, select the file, and pick the register.
   Leave Source to upload and store the file. The Data step shows the file as a read only table. The
-  Mapping step opens next with a suggested map already filled in. A checkmark next to a row means
-  the suggestion is confident, and a **Check this** badge means it should be reviewed before you
-  continue. That checkmark is the row's own status icon, described above, and stays clickable
-  after this.
+  Mapping step opens next with a suggested map already filled in. Every row starts with an amber
+  status icon, described above, because nothing has read the file yet. Click one to check that
+  column, or Validate all to check them all.
 - **From the CLI:** run `openldr facilities suggest-map <path>`. It prints the same suggested map as
   a table, flags any collision the suggestion itself would cause, and tells you how to feed the
   result back in: `openldr facilities import <path> --column-map <file.json>`.
