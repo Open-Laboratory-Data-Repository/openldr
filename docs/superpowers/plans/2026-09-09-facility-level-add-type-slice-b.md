@@ -437,13 +437,11 @@ In `packages/bootstrap/src/facility-value-mappings.test.ts`:
 
 ```ts
 it('accepts a toCode that only the register\'s own list carries', async () => {
-  const admin = fakeAdmin();
-  admin.valueSetsByUrl = {
-    ...EXPANSIONS,
+  const admin = fakeAdmin({}, {
     'urn:openldr:valueset:facility-type:urn_zmb_mfl': [
       { system: 'urn:openldr:cs:facility-type:local:urn_zmb_mfl', code: 'first-aid-stations', display: 'First-aid stations' },
     ],
-  };
+  });
 
   const res = await saveFacilityValueMappings(admin, SYSTEM, [
     { field: 'level', rawValue: 'FAS', toCode: 'first-aid-stations' },
@@ -456,7 +454,26 @@ it('accepts a toCode that only the register\'s own list carries', async () => {
 });
 ```
 
-The existing `fakeAdmin` in each file resolves value sets from a fixed table. Widen each so a test can supply extra urls, in the shape the test above uses. Do not add a second fake.
+⛔ THE TWO FAKES ARE NOT THE SAME SHAPE, so widen them differently and read each before touching it.
+
+`facility-controlled-fields.test.ts`'s `fakeAdmin({ valueSets, mappings })` already takes its value
+sets as an argument, so the first test above needs no change to it at all.
+
+`facility-value-mappings.test.ts`'s `fakeAdmin(mappings)` resolves from a MODULE-LEVEL `EXPANSIONS`
+const (that file, around line 15) and takes no value-set argument. Give it a SECOND optional
+argument, merged over `EXPANSIONS`, which is the shape the test above uses:
+
+```ts
+function fakeAdmin(
+  mappings: Record<string, any[]> = {},
+  extraExpansions: Record<string, { system: string; code: string; display: string }[]> = {},
+) {
+  const expansions = { ...EXPANSIONS, ...extraExpansions };
+  // ... unchanged, except getByUrl and expand read `expansions` instead of `EXPANSIONS`
+}
+```
+
+Every pre-existing call passes at most one argument and keeps working. Do not add a second fake.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
