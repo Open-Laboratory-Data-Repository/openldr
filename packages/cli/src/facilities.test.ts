@@ -99,6 +99,9 @@ vi.mock('@openldr/bootstrap', async () => {
     suggestValues: actual.suggestValues,
     CONTROLLED_FIELDS: actual.CONTROLLED_FIELDS,
     CONTROLLED_VALUE_SETS: actual.CONTROLLED_VALUE_SETS,
+    // Pure, same as `suggestColumns`/`suggestValues` above: `valueSetForField` only calls
+    // `admin.valueSets.getByUrl`, which this file's fake `ctx` already stubs per test.
+    valueSetForField: actual.valueSetForField,
     resolveControlledFields: mocks.resolveControlledFields,
     saveFacilityValueMappings: mocks.saveFacilityValueMappings,
     // The delete command's cleanup pair. Mocked rather than real: both reach into the terminology

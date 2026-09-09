@@ -9,7 +9,7 @@ import {
   // `@openldr/bootstrap` functions the HTTP routes call (Task 4/6, apps/server/src/facilities-routes.ts).
   // Reused verbatim below; nothing here re-implements ranking or validation.
   suggestColumns, suggestValues, saveFacilityValueMappings, resolveControlledFields,
-  CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
+  CONTROLLED_FIELDS, valueSetForField,
   // The SAME cleanup helpers the delete route calls, in the same order — see runFacilitiesDelete.
   retireRegistryConcepts, reprojectAfterRegistryDelete, revalidateImportRun,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
@@ -823,7 +823,9 @@ export async function runFacilitiesSuggestValues(
         byField[field] = { notValidated: false, values: [] };
         continue;
       }
-      const vs = await ctx.terminology.admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
+      const vs = await ctx.terminology.admin.valueSets.getByUrl(
+        await valueSetForField(ctx.terminology.admin, field, opts.nationalSystem),
+      );
       const candidates = vs
         ? (await ctx.terminology.admin.valueSets.expand(vs.id)).codes.map(
           (c: { code: string; display: string | null }) => ({ code: c.code, display: c.display ?? null }),

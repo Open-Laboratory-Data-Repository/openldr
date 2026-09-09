@@ -11,7 +11,7 @@ import {
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
   VALIDATE_PHASE,
 } from '@openldr/db';
-import { projectRegistryRows, observedFieldSystem } from '@openldr/bootstrap';
+import { projectRegistryRows, observedFieldSystem, addRegisterFacilityType } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
 // The over-cap upload test registers the REAL central error handler, as production does, so its 413
 // carries the app-wide {error, code, correlationId} contract rather than a bespoke body.
@@ -3356,6 +3356,41 @@ describe('POST /api/facilities/import/suggest-values', () => {
       payload: { field: 'status', values: [42] },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // Slice B, Task 3: a register that has added its own facility type sees that type in its own
+  // pick list, not just the 63 shared concepts. Built through `addRegisterFacilityType` rather than
+  // hand-written rows, so the test exercises the same shape the route sees in production.
+  it('ranks against the register\'s own list when one is named', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    await addRegisterFacilityType(ctx.terminology.admin, { nationalSystem: 'HFR', display: 'First-aid stations' });
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/suggest-values',
+      payload: { field: 'level', values: ['First-aid stations'], nationalSystem: 'HFR' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().options.map((o: { code: string }) => o.code)).toContain('first-aid-stations');
+  });
+
+  it('ranks against the shared list when no register is named', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    await addRegisterFacilityType(ctx.terminology.admin, { nationalSystem: 'HFR', display: 'First-aid stations' });
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/suggest-values',
+      payload: { field: 'level', values: ['First-aid stations'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().options.map((o: { code: string }) => o.code)).not.toContain('first-aid-stations');
   });
 });
 

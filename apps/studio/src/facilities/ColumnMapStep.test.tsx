@@ -127,14 +127,30 @@ beforeEach(() => {
 describe('ColumnMapStep', () => {
   it('gives the three controlled fields a picker and every other field a plain box', async () => {
     render(<Controlled headers={suggestions.map((s) => s.header)} suggestions={suggestions} initial={emptyMap} />);
-    await waitFor(() => expect(api.suggestValueMappings).toHaveBeenCalledWith('level', []));
-    expect(api.suggestValueMappings).toHaveBeenCalledWith('status', []);
-    expect(api.suggestValueMappings).toHaveBeenCalledWith('country', []);
+    await waitFor(() => expect(api.suggestValueMappings).toHaveBeenCalledWith('level', [], ''));
+    expect(api.suggestValueMappings).toHaveBeenCalledWith('status', [], '');
+    expect(api.suggestValueMappings).toHaveBeenCalledWith('country', [], '');
     expect(api.suggestValueMappings).toHaveBeenCalledTimes(3);
 
     // A picker is a combobox; a plain box is not.
     expect(screen.getByLabelText('level')).toHaveAttribute('role', 'combobox');
     expect(screen.getByLabelText('village')).not.toHaveAttribute('role', 'combobox');
+  });
+
+  // Slice B, Task 3: a row's own check must tell suggest-values which register the values came
+  // from, so the studio shows a register's own facility types, not just the shared list.
+  it('tells suggest-values which register the values came from', async () => {
+    mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+      header: 'Type', values: ['Others'], distinct: 1, truncated: false,
+    });
+    renderColumnMapStep({
+      runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+      value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+    await waitFor(() => expect(api.suggestValueMappings).toHaveBeenCalledWith('level', ['Others'], 'urn:zm:mfl'));
   });
 
   it('picking a level writes the CODE into the column map', async () => {

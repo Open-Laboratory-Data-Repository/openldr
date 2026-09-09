@@ -38,7 +38,7 @@ function fakeAdmin(
   return {
     saved, systems, createdTerms, deactivated,
     valueSets: {
-      // Present only for a url this fake actually carries an expansion for — the same
+      // Present only for a url this fake actually carries an expansion for: the same
       // "found or not" shape `valueSetForField` reads, so a register with nothing of its own
       // still falls back to the shared list instead of resolving to an empty one.
       getByUrl: async (url: string) => (expansions[url] ? { id: url } : null),

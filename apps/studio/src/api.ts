@@ -1355,9 +1355,9 @@ export interface ValueSetOption {
  *  what an operator picks from when the ranker has nothing to say. Rendering only candidates left
  *  the most obvious mapping in a national export unexpressible. */
 export const suggestValueMappings = (
-  field: ControlledField, values: string[],
+  field: ControlledField, values: string[], nationalSystem: string,
 ): Promise<{ values: ValueSuggestion[]; options: ValueSetOption[]; notValidated: boolean }> =>
-  authFetch('/api/facilities/import/suggest-values', jbody({ field, values }, 'POST'))
+  authFetch('/api/facilities/import/suggest-values', jbody({ field, values, nationalSystem }, 'POST'))
     .then((r) => okJson<{
       values: ValueSuggestion[]; options: ValueSetOption[]; notValidated: boolean;
     }>(r, 'suggest value mappings'));

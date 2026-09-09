@@ -351,7 +351,7 @@ describe('an ignored value', () => {
   });
 });
 
-describe('resolveControlledFields — the register\'s own facility-type list', () => {
+describe('resolveControlledFields: the register\'s own facility-type list', () => {
   it('checks values against the register\'s own list once it has one', async () => {
     const admin = fakeAdmin({
       valueSets: {

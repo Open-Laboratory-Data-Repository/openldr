@@ -428,7 +428,7 @@ export function ColumnMapStep({
         setCheckedByHeader((prev) => ({ ...prev, [header]: { target, truncated: true, distinct } }));
         return;
       }
-      const ranked = await suggestValueMappings(target as ControlledField, values);
+      const ranked = await suggestValueMappings(target as ControlledField, values, nationalSystem ?? '');
       // Fix pass (Critical finding): the ranker's confidence still decides which of THESE values
       // look unrecognised from this row's own click. It never decides whether a value the server
       // already reported unmapped (`unmappedByField`) stays on the worklist. That is added
@@ -505,7 +505,7 @@ export function ColumnMapStep({
       const alreadyCovered = !!existing && existing.target === field
         && values.every((v) => existing.values?.some((ev) => ev.value === v));
       if (alreadyCovered) continue;
-      void suggestValueMappings(field, values).then((res) => {
+      void suggestValueMappings(field, values, nationalSystem ?? '').then((res) => {
         if (cancelled) return;
         const fresh: WorklistEntry[] = values.map((v) => ({
           value: v, candidates: res.values.find((r) => r.value === v)?.candidates ?? [],
@@ -789,6 +789,7 @@ export function ColumnMapStep({
                     field={field as ControlledField}
                     value={value.constants?.[field] ?? ''}
                     onChange={(next) => setConstant(field, next)}
+                    nationalSystem={nationalSystem ?? ''}
                   />
                 ) : (
                   <Input
