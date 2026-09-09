@@ -6,6 +6,78 @@
       "version": null,
       "entries": [
         {
+          "hash": "7f0ce0b3",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Correct a stale comment on the value-mapping code lookup"
+        },
+        {
+          "hash": "ad074a4a",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Add-type gates --national-system through the register store"
+        },
+        {
+          "hash": "ca9ce08d",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Remove em dash from add-type --national-system option"
+        },
+        {
+          "hash": "35a71668",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Add-type --help carries the free-text national-system warning"
+        },
+        {
+          "hash": "77f537b0",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Openldr facilities add-type, and the operator docs"
+        },
+        {
+          "hash": "92ed9ec9",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Add a facility type from the mapping step"
+        },
+        {
+          "hash": "1111ce90",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A route that adds a facility type to one register"
+        },
+        {
+          "hash": "0d1ff4e8",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Suggest-values ranks against the register's own list"
+        },
+        {
+          "hash": "f6b58192",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Value checks read the register's own list"
+        },
+        {
+          "hash": "5237deb6",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Close the mirror side of the facility-type collision guard"
+        },
+        {
+          "hash": "aed6de4d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Restore the code half of the collision guard"
+        },
+        {
+          "hash": "b41dcd6c",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A register can carry its own facility types"
+        },
+        {
           "hash": "6f9278fa",
           "type": "fix",
           "scope": "facilities",
