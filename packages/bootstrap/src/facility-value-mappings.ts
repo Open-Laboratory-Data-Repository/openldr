@@ -1,6 +1,6 @@
 import type { MapType, TerminologyAdminStore } from '@openldr/db';
 import {
-  CONTROLLED_VALUE_SETS, observedFieldSystem, type ControlledField,
+  observedFieldSystem, valueSetForField, type ControlledField,
   FACILITY_IGNORE_MAP_TYPE,
 } from './facility-controlled-fields';
 
@@ -82,7 +82,9 @@ export async function saveFacilityValueMappings(
   for (const entry of entries) {
     if (entry.ignore) continue;
     if (!expansions.has(entry.field)) {
-      const vs = await admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[entry.field]);
+      // The same list the operator picked from. Validating a register-scoped code against the
+      // shared set alone would refuse the very type this register just added.
+      const vs = await admin.valueSets.getByUrl(await valueSetForField(admin, entry.field, nationalSystem));
       if (!vs) throw new Error(`no ${entry.field} value set is seeded on this install`);
       const { codes } = await admin.valueSets.expand(vs.id);
       // ⛔ Fix pass (whole-branch review, M4): keyed by CODE ALONE, safe today only because the

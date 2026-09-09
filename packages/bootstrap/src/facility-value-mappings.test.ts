@@ -26,7 +26,11 @@ const EXPANSIONS: Record<string, { system: string; code: string; display: string
   ],
 };
 
-function fakeAdmin(mappings: Record<string, any[]> = {}) {
+function fakeAdmin(
+  mappings: Record<string, any[]> = {},
+  extraExpansions: Record<string, { system: string; code: string; display: string }[]> = {},
+) {
+  const expansions = { ...EXPANSIONS, ...extraExpansions };
   const saved: any[] = [];
   const systems: any[] = [];
   const createdTerms: any[] = [];
@@ -34,8 +38,11 @@ function fakeAdmin(mappings: Record<string, any[]> = {}) {
   return {
     saved, systems, createdTerms, deactivated,
     valueSets: {
-      getByUrl: async (url: string) => ({ id: url }),
-      expand: async (id: string) => ({ codes: EXPANSIONS[id] ?? [] }),
+      // Present only for a url this fake actually carries an expansion for — the same
+      // "found or not" shape `valueSetForField` reads, so a register with nothing of its own
+      // still falls back to the shared list instead of resolving to an empty one.
+      getByUrl: async (url: string) => (expansions[url] ? { id: url } : null),
+      expand: async (id: string) => ({ codes: expansions[id] ?? [] }),
     },
     codingSystems: { upsertByUrl: async (i: any) => { systems.push(i); } },
     terms: { create: async (i: any) => { createdTerms.push(i); } },
@@ -268,5 +275,30 @@ describe('ignore', () => {
     expect(admin.createdTerms).toContainEqual(expect.objectContaining({
       system: observedFieldSystem('level', SYSTEM), code: 'Others', display: 'Others',
     }));
+  });
+});
+
+describe('a register\'s own facility-type list', () => {
+  // ⛔ NOT `SYSTEM`. That constant slugifies to `urn_zm_mfl`, one letter short of the
+  // register-scoped url this test checks against (`urn_zmb_mfl`). A register-specific
+  // nationalSystem is used here on purpose, so the slug this test asserts against is the one
+  // `registerValueSetUrl` actually produces for it.
+  const ZMB = 'urn:zmb:mfl';
+
+  it('accepts a toCode that only the register\'s own list carries', async () => {
+    const admin = fakeAdmin({}, {
+      'urn:openldr:valueset:facility-type:urn_zmb_mfl': [
+        { system: 'urn:openldr:cs:facility-type:local:urn_zmb_mfl', code: 'first-aid-stations', display: 'First-aid stations' },
+      ],
+    });
+
+    const res = await saveFacilityValueMappings(admin, ZMB, [
+      { field: 'level', rawValue: 'FAS', toCode: 'first-aid-stations' },
+    ]);
+
+    expect(res.written).toBe(1);
+    expect(admin.saved[0]).toMatchObject({
+      toSystem: 'urn:openldr:cs:facility-type:local:urn_zmb_mfl', toCode: 'first-aid-stations',
+    });
   });
 });

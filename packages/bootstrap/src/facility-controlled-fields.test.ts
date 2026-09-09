@@ -350,3 +350,32 @@ describe('an ignored value', () => {
     expect(res.unmapped.level).toEqual(['Others']);
   });
 });
+
+describe('resolveControlledFields — the register\'s own facility-type list', () => {
+  it('checks values against the register\'s own list once it has one', async () => {
+    const admin = fakeAdmin({
+      valueSets: {
+        'urn:openldr:valueset:facility-type': [{ code: 'health-center', display: 'Health Center' }],
+        'urn:openldr:valueset:facility-type:urn_tz_hfr': [
+          { code: 'health-center', display: 'Health Center' },
+          { code: 'first-aid-stations', display: 'First-aid stations' },
+        ],
+      },
+    });
+
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'First-aid stations' })]);
+
+    // Resolved through the register's own concept, so it is neither unmapped nor rewritten.
+    expect(res.unmapped.level).toEqual([]);
+  });
+
+  it('falls back to the shared list for a register that has added nothing', async () => {
+    const admin = fakeAdmin({
+      valueSets: { 'urn:openldr:valueset:facility-type': [{ code: 'health-center', display: 'Health Center' }] },
+    });
+
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'First-aid stations' })]);
+
+    expect(res.unmapped.level).toEqual(['First-aid stations']);
+  });
+});

@@ -194,7 +194,10 @@ export async function resolveControlledFields(
     }
     if (rawValues.size === 0) continue;
 
-    const vs = await admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
+    // ⛔ THE REGISTER'S OWN LIST WHEN IT HAS ONE. A register that has added a facility type checks
+    // its values against the shared 63 PLUS its own; one that has added nothing behaves exactly as
+    // it did before Slice B. See `valueSetForField`.
+    const vs = await admin.valueSets.getByUrl(await valueSetForField(admin, field, nationalSystem));
     if (!vs) {
       notValidated.push(field);
       continue;
