@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   readFacilityImportColumnValues, suggestValueMappings, writeFacilityValueMappings,
   type ColumnSuggestion, type ControlledField, type FacilityColumnMap,
-  type ValueMappingEntry, type ValueSetOption, type ValueSuggestion,
+  type ValueMappingEntry, type ValueSuggestion,
 } from '@/api';
 import { ConstantValueField } from './ConstantValueField';
 import { useMappingCheckState } from './mappingCheckState';
