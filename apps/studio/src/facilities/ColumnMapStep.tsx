@@ -215,7 +215,9 @@ export function ColumnMapStep({
     resolvedValues, setResolvedValues,
     valueChoices, setValueChoices,
   } = checkState ?? ownCheckState;
-  const [savingValueMappings, setSavingValueMappings] = useState(false);
+  /** Which header's Save is in flight, or null. Per header, not a single flag: each row has its
+   *  own Save now, and one global boolean would disable all of them at once. */
+  const [savingHeader, setSavingHeader] = useState<string | null>(null);
   const [busyHeaders, setBusyHeaders] = useState<Set<string>>(new Set());
   // Two ephemeral, per-header notices that are NOT part of `checkedByHeader`: neither one is a
   // real check result, so neither should make `mappingRowState` call the row valid or invalid.
@@ -543,21 +545,24 @@ export function ColumnMapStep({
   /** Is there anything on screen worth a Save click? Only a header whose worklist matches its
    *  CURRENT target. A stale one is not shown (see the render loop below) and must not be saved
    *  either, since it describes a field the header no longer maps to. */
-  const hasValueWorklist = Object.entries(checkedByHeader).some(
-    ([header, check]) => check.target === selectedTarget(header) && (check.values?.length ?? 0) > 0,
-  );
-
-  /** Task 6: the panel's own Save, for every worklist currently on screen at once. Same single
-   *  `writeFacilityValueMappings` call and the same toast `ValueMapPanel` already used, just
-   *  gathering entries from `checkedByHeader` (one worklist per header) instead of from `unmapped`
-   *  (one list per field). An unmapped value never blocks: nothing here disables Save, and Save
-   *  with nothing chosen still completes, writing nothing, exactly as `ValueMapPanel` always did. */
-  const handleSaveValueMappings = async (): Promise<void> => {
-    setSavingValueMappings(true);
+  /** ⛔ ONE SAVE PER ROW, and it writes ONLY that row's values.
+   *
+   *  This used to be one Save for every worklist at once, rendered after the whole `headers.map`
+   *  grid. Measured live against the Zambia export: it sat 561px and seven mapping rows below the
+   *  "4 value(s) are not recognised" line it belonged to. The operator filled in all four
+   *  pick-lists, never saw a Save, and reported that the row stayed red and that Review still
+   *  named the same four values. Both were the same fact: nothing had been written. A control
+   *  that commits what is on screen has to be on screen with it. Same rule that moved
+   *  `ValueMapPanel`'s Save out of a ⋯ menu.
+   *
+   *  Writing only this header's entries is the other half. A global Save wrote every worklist's
+   *  picks, including ones the operator had scrolled past and never looked at. */
+  const handleSaveValueMappings = async (header: string): Promise<void> => {
+    setSavingHeader(header);
     try {
       const entries: ValueMappingEntry[] = [];
-      for (const [header, check] of Object.entries(checkedByHeader)) {
-        if (check.target !== selectedTarget(header) || !check.values) continue;
+      const check = checkedByHeader[header];
+      if (check && check.target === selectedTarget(header) && check.values) {
         for (const { value: entryValue, candidates } of check.values) {
           const toCode = valueChoiceFor(header, entryValue, candidates);
           if (toCode && toCode !== VALUE_MAP_UNMAPPED) {
@@ -585,7 +590,7 @@ export function ColumnMapStep({
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
-      setSavingValueMappings(false);
+      setSavingHeader(null);
     }
   };
 
@@ -609,6 +614,20 @@ export function ColumnMapStep({
           const stale = !!check && check.target !== selected;
           // Final review, C1: derived, never stored. See `unresolvedCount`'s own docblock.
           const unrecognised = check ? unresolvedCount(check, resolvedValues) : 0;
+          // Task 6: the worklist this row shows, if any. Never a stale one: a header just
+          // re-targeted describes a DIFFERENT field's values now, and rendering them here would
+          // let the operator map "Health Centre" onto whatever `check.target` used to be.
+          const worklist = check && !stale ? check.values ?? [] : [];
+          /** Picks made on this row that no save has written yet. The row's own count cannot see
+           *  these: `unresolvedCount` only subtracts what the server accepted, deliberately, so a
+           *  chosen-but-unsaved value still counts against the row. Without naming them the line
+           *  read "4 value(s) are not recognised" beside four filled-in pick-lists, which looks
+           *  like the app disagreeing with itself and gives no clue that Save is what closes it. */
+          const unsavedPicks = check ? worklist.filter(({ value: entryValue, candidates }) => {
+            const toCode = valueChoiceFor(header, entryValue, candidates);
+            return !!toCode && toCode !== VALUE_MAP_UNMAPPED
+              && !resolvedValues.has(resolvedValueKey(check.target, entryValue));
+          }).length : 0;
           const rowState = mappingRowState({
             collides: collidesHere,
             confidence: confidenceForSelected,
@@ -635,13 +654,13 @@ export function ColumnMapStep({
               : check?.truncated
                 ? { text: t('facilities.import.columnMap.rowStatusTooManyValues', { count: check.distinct }), destructive: true }
                 : !stale && unrecognised > 0
-                  ? { text: t('facilities.import.columnMap.rowStatusUnrecognised', { count: unrecognised }), destructive: true }
+                  ? {
+                    text: unsavedPicks > 0
+                      ? `${t('facilities.import.columnMap.rowStatusUnrecognised', { count: unrecognised })}. ${t('facilities.import.columnMap.rowStatusUnsavedPicks', { count: unsavedPicks })}`
+                      : t('facilities.import.columnMap.rowStatusUnrecognised', { count: unrecognised }),
+                    destructive: true,
+                  }
                   : null;
-
-          // Task 6: the worklist this row shows, if any. Never a stale one: a header just
-          // re-targeted describes a DIFFERENT field's values now, and rendering them here would
-          // let the operator map "Health Centre" onto whatever `check.target` used to be.
-          const worklist = check && !stale ? check.values ?? [] : [];
 
           return (
             // ⛔ `className="contents"`, NOT a real box. The two-column grid above is shared across
@@ -738,26 +757,24 @@ export function ColumnMapStep({
                       />
                     ))}
                   </div>
+                  {/* Inside the box, under the picks it writes. See `handleSaveValueMappings`. */}
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      size="sm" className="text-xs"
+                      disabled={savingHeader !== null}
+                      onClick={() => { void handleSaveValueMappings(header); }}
+                    >
+                      {savingHeader === header
+                        ? t('facilities.import.valueMap.saving')
+                        : t('facilities.import.valueMap.saveAction')}
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
           );
         })}
       </div>
-
-      {hasValueWorklist && (
-        <div className="flex justify-end">
-          <Button
-            size="sm" className="text-xs"
-            disabled={savingValueMappings}
-            onClick={() => { void handleSaveValueMappings(); }}
-          >
-            {savingValueMappings
-              ? t('facilities.import.valueMap.saving')
-              : t('facilities.import.valueMap.saveAction')}
-          </Button>
-        </div>
-      )}
 
       {constantFields.length > 0 && (
         <div className="space-y-2">

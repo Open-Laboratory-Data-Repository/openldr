@@ -1131,6 +1131,7 @@ export const en = {
         rowStatusInvalid: '{{header}}: {{detail}}. Check again',
         rowStatusStale: '{{header}}: changed since the last check. Check again',
         rowStatusUnrecognised: '{{count}} value(s) are not recognised',
+        rowStatusUnsavedPicks: '{{count}} chosen, not saved yet',
         rowStatusCollides: 'another column already claims this field',
         // Shown only when the caller has not said why a row is invalid. Names no cause.
         // Guessing one, a collision or unrecognised values, could name the wrong one.

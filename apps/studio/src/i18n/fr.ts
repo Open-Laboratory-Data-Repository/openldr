@@ -1065,6 +1065,7 @@ export const fr: EnShape = {
         rowStatusInvalid: '{{header}} : {{detail}}. Vérifier à nouveau',
         rowStatusStale: '{{header}} : modifié depuis la dernière vérification. Vérifier à nouveau',
         rowStatusUnrecognised: '{{count}} valeur(s) non reconnue(s)',
+        rowStatusUnsavedPicks: '{{count}} choisie(s), pas encore enregistrée(s)',
         rowStatusCollides: 'une autre colonne revendique déjà ce champ',
         rowStatusUnknown: 'quelque chose ne va pas',
         rowStatusTooManyValues: '{{count}} valeurs distinctes trouvées. Cette colonne est probablement mappée au mauvais champ.',

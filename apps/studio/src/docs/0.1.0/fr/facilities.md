@@ -104,11 +104,16 @@ dans le vocabulaire : il attend donc votre décision, et c'est bien le but.
 **Une correspondance que vous avez faite à la main l'emporte toujours.** Rien de décidé
 automatiquement ne passe outre une décision que vous avez prise.
 
-Source, Mappage et Vérification affichent chacune un seul bouton, celui qui fait avancer. Données
-n'en affiche aucun : cette étape sert à regarder le fichier, pas à agir dessus. Toute autre action,
-dont les trois options de nouvelle vérification, Annuler et Fermer, reste dans le menu `⋯` de la
-page. Le seul autre bouton visible est **Enregistrer les mappages**, sur le panneau de mappage des
-valeurs. Il enregistre les décisions que vous avez prises et vous dit combien il en a enregistré.
+Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont les trois
+options de nouvelle vérification et Fermer, reste dans le menu `⋯` de la page. Le seul autre bouton
+visible est **Enregistrer les mappages**, placé à l'intérieur de la liste des valeurs non reconnues
+de chaque ligne, sous les choix qu'il enregistre. Il n'enregistre que les décisions de cette
+ligne-là et vous dit combien il en a enregistré.
+
+**Vos choix ne font rien tant que vous ne les enregistrez pas.** D'ici là, la ligne le dit, par
+exemple « 4 valeur(s) non reconnue(s). 2 choisie(s), pas encore enregistrée(s) », et elle reste
+rouge. Une valeur enregistrée cesse de compter contre la ligne, qui passe au vert quand il n'en
+reste aucune.
 
 Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
 étape antérieure pendant qu'une vérification en arrière-plan est en cours. Cliquer sur Tout valider

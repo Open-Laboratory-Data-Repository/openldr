@@ -94,11 +94,14 @@ the vocabulary, so it waits for your decision, which is the point.
 **A mapping you made by hand always wins.** Nothing decided automatically overrules a decision you
 made, so a register that deliberately maps a word somewhere unusual keeps that.
 
-Source, Mapping and Review each show one button, for the action that moves you forward. Data shows
-none: it is for looking at the file, not for acting on it. Every other action, including the three
-check-again options, Cancel, and Close, stays in the page's `⋯` menu. The one other visible button
-is **Save mappings**, on the value-mapping panel. It writes the value decisions you have made, and
-tells you how many it wrote.
+Every step shows one button, for the action that moves you forward. Every other action, including
+the three check-again options and Close, stays in the page's `⋯` menu. The one other visible button
+is **Save mappings**, which sits inside each row's list of unrecognised values, under the picks it
+writes. It writes only that row's decisions and tells you how many it wrote.
+
+**Your picks do nothing until you save them.** Until then the row's line says so, for example
+"4 value(s) are not recognised. 2 chosen, not saved yet", and the row stays red. A saved value stops
+counting against the row, and the row turns green once none are left.
 
 You cannot click a step you have not reached yet, and you cannot go back to an earlier step
 while a background check is running. Clicking Validate all on Mapping moves you to Review on its

@@ -82,10 +82,12 @@ already stored at Source, and does not re-check the whole file or send it again.
 on its own: the suggestion scores the column's NAME and cannot know what is inside the column. Use
 Validate all when you want every column checked at once.
 
-A controlled field's unrecognised values appear under the mapping row that produced them, each
-with a pick list. Saving those mappings does not make the rows vanish, so a choice can still be
-corrected; the values that were saved simply stop counting against the row, and the row goes green
-once none are left unanswered.
+A controlled field's unrecognised values appear under the mapping row that produced them, each with
+a pick list, and that row's own **Save mappings** sits directly under them. It writes only that
+row's decisions. Picks do nothing until saved: until then the row's line says so, for example
+"4 value(s) are not recognised. 2 chosen, not saved yet". Saving does not make the rows vanish, so a
+choice can still be corrected; the values that were saved simply stop counting against the row, and
+the row goes green once none are left unanswered.
 
 Mapping decides; Review reports. If a check turns up something worth changing, go back to Mapping,
 change it, and come forward again. **A file uploaded through the background door is checked again in

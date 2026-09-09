@@ -101,11 +101,14 @@ nada no vocabulário, por isso espera pela sua decisão, que é precisamente o o
 **Um mapeamento que fez à mão ganha sempre.** Nada decidido automaticamente passa por cima de uma
 decisão que tomou.
 
-Origem, Mapeamento e Revisão mostram cada uma um único botão, o que avança para o passo seguinte.
-Dados não mostra nenhum: este passo serve para olhar para o ficheiro, não para agir sobre ele.
-Qualquer outra ação, incluindo as três opções de verificar de novo, Cancelar e Fechar, fica no menu
-`⋯` da página. O único outro botão visível é **Guardar mapeamentos**, no painel de mapeamento de
-valores. Guarda as decisões que tomou e diz-lhe quantas guardou.
+Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
+as três opções de verificar de novo e Fechar, fica no menu `⋯` da página. O único outro botão
+visível é **Guardar mapeamentos**, dentro da lista de valores não reconhecidos de cada linha, por
+baixo das escolhas que guarda. Guarda apenas as decisões dessa linha e diz-lhe quantas guardou.
+
+**As suas escolhas não fazem nada até as guardar.** Até lá a linha diz isso mesmo, por exemplo
+«4 valor(es) não reconhecido(s). 2 escolhido(s), ainda não guardado(s)», e fica vermelha. Um valor
+guardado deixa de contar contra a linha, que fica verde quando não sobra nenhum.
 
 Não pode clicar num passo que ainda não alcançou, nem voltar a um passo anterior enquanto uma
 verificação em segundo plano está a decorrer. Clicar em Validar tudo no Mapeamento leva-o à Revisão

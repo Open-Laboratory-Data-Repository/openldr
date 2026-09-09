@@ -606,6 +606,97 @@ describe('ColumnMapStep', () => {
       expect(within(row as HTMLElement).getByLabelText('1st Level Hospital')).toBeInTheDocument();
     });
 
+    // ⛔ THE REPORTED BUG. The Save that commits these picks used to render after EVERY mapping
+    // row, outside the worklist it belongs to. Measured live against the Zambia export: 561px and
+    // seven more rows below the "4 value(s) are not recognised" line. The operator picked all four
+    // values, never saw a Save, and reported both that the row stayed red and that Review still
+    // named the same values. Nothing had been written. The Save now belongs to the row.
+    it('puts the Save inside the row whose values it writes', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['1st Level Hospital'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: '1st Level Hospital', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      const row = (await screen.findByText('1st Level Hospital')).closest('[data-mapping-row="Type"]');
+      expect(within(row as HTMLElement).getByRole('button', { name: /save/i })).toBeInTheDocument();
+    });
+
+    // And nowhere else. One Save per worklist, so there is never a second door that writes a
+    // different subset than the one the operator is looking at.
+    it('has no other Save on the step', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['1st Level Hospital'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: '1st Level Hospital', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByText('1st Level Hospital');
+
+      expect(screen.getAllByRole('button', { name: /save/i })).toHaveLength(1);
+    });
+
+    // The other half of the same report. With all four pick-lists filled, the row still read a flat
+    // "4 value(s) are not recognised", which looks like a contradiction and says nothing about what
+    // would close it. It now names the pending picks, so the Save beside it has a reason.
+    it('says how many picks are waiting to be saved', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Zonal Hospital'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Zonal Hospital', candidates: [] }],
+        options: [{ code: 'hospital', display: 'Hospital' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      await screen.findByLabelText('Zonal Hospital');
+      // Nothing chosen yet: the line says only what the check found.
+      expect(screen.queryByText(/not saved/i)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText('Zonal Hospital'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
+
+      expect(await screen.findByText(/1 chosen, not saved/i)).toBeInTheDocument();
+    });
+
+    // A row with no worklist has nothing to save, so it carries no Save at all.
+    it('offers no Save on a row whose check found nothing to map', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Address', values: ['1 Main St'], distinct: 1, truncated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Address'],
+        value: { columns: { Address: 'address' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Address:/ }));
+      await screen.findByRole('button', { name: /^Address: checked, nothing wrong/i });
+
+      expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
+    });
+
     it('shows the OTHER unrecognised value in the same row too', async () => {
       mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
         header: 'Type', values: ['1st Level Hospital', 'Others'], distinct: 2, truncated: false,
@@ -796,7 +887,12 @@ describe('ColumnMapStep', () => {
       ));
     });
 
-    it('aggregates mappings chosen under two different headers into one Save call', async () => {
+    // ⛔ REVERSAL. This used to assert one Save aggregating BOTH headers' picks into a single call.
+    // That Save lived after every mapping row, a screen away from the values it wrote, and the
+    // operator never found it. Each worklist now carries its own Save, and each writes only its own
+    // header's values: a Save that also commits picks on a row the operator has scrolled past and
+    // never looked at is writing decisions nobody made.
+    it('each row saves only its own values, never a neighbouring row', async () => {
       mockedApi(api.readFacilityImportColumnValues).mockImplementation(
         async (_runId: string, header: string) => {
           if (header === 'Type') return { header, values: ['Zonal Hospital'], distinct: 1, truncated: false };
@@ -837,17 +933,27 @@ describe('ColumnMapStep', () => {
       fireEvent.click(screen.getByLabelText('Functional'));
       fireEvent.click(await screen.findByRole('option', { name: 'Active' }));
 
-      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 2, superseded: [] });
-      fireEvent.click(screen.getByRole('button', { name: /save mappings/i }));
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+      const saves = screen.getAllByRole('button', { name: /save mappings/i });
+      expect(saves).toHaveLength(2);
+
+      // The Type row's own Save. It writes `level` and says nothing about `status`.
+      const typeRow = screen.getByLabelText('Zonal Hospital').closest('[data-mapping-row="Type"]');
+      fireEvent.click(within(typeRow as HTMLElement).getByRole('button', { name: /save mappings/i }));
 
       await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(1));
-      const [system, entries] = mockedApi(api.writeFacilityValueMappings).mock.calls[0];
-      expect(system).toBe('urn:zm:mfl');
-      expect(entries).toEqual(expect.arrayContaining([
-        { field: 'level', rawValue: 'Zonal Hospital', toCode: 'hospital' },
-        { field: 'status', rawValue: 'Functional', toCode: 'active' },
-      ]));
-      expect(entries).toHaveLength(2);
+      expect(api.writeFacilityValueMappings).toHaveBeenNthCalledWith(
+        1, 'urn:zm:mfl', [{ field: 'level', rawValue: 'Zonal Hospital', toCode: 'hospital' }],
+      );
+
+      // The Condition row's own Save, separately, writing only `status`.
+      const condRow = screen.getByLabelText('Functional').closest('[data-mapping-row="Condition"]');
+      fireEvent.click(within(condRow as HTMLElement).getByRole('button', { name: /save mappings/i }));
+
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledTimes(2));
+      expect(api.writeFacilityValueMappings).toHaveBeenNthCalledWith(
+        2, 'urn:zm:mfl', [{ field: 'status', rawValue: 'Functional', toCode: 'active' }],
+      );
     });
   });
 
