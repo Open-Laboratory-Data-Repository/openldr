@@ -1110,6 +1110,24 @@ describe('facilities import CLI', () => {
       expect(saveOrder).toBeLessThan(applyOrder);
     });
 
+    it('a --value-map file can carry an ignore entry', async () => {
+      const IGNORE_ENTRIES = [{ field: 'level', rawValue: 'Others', ignore: true }];
+      mocks.readFileSync.mockImplementation((p: string) => (
+        String(p).endsWith('value-map.json') ? JSON.stringify(IGNORE_ENTRIES) : ZM_MFL_CSV
+      ));
+      mocks.saveFacilityValueMappings.mockResolvedValue({ written: 1, superseded: [] });
+      mocks.importFacilities.mockResolvedValue(CLEAN_RESULT);
+
+      const code = await runFacilitiesImport('/some/zm-mfl-head.csv', {
+        nationalSystem: 'urn:tz:hfr', valueMap: 'value-map.json', apply: true, json: false,
+      });
+
+      expect(code).toBe(0);
+      expect(mocks.saveFacilityValueMappings).toHaveBeenCalledWith(
+        mocks.ctx.terminology.admin, 'urn:tz:hfr', IGNORE_ENTRIES,
+      );
+    });
+
     it('a dry run writes NO value mappings — --value-map alone, without --apply, writes nothing', async () => {
       mocks.readFileSync.mockImplementation((p: string) => (
         String(p).endsWith('value-map.json') ? JSON.stringify(ENTRIES) : ZM_MFL_CSV
