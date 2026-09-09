@@ -3060,7 +3060,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   const EditScopeSchema = z.object({
     header: z.string().min(1),
     line: z.number().int().positive().optional(),
-    fromValue: z.string().optional(),
+    // `min(1)`: the grid never sends an empty `fromValue`, so one arriving here names no real
+    // sweep. Without this an empty string still counted as "present" and slipped past the
+    // line-or-value check below.
+    fromValue: z.string().min(1).optional(),
   });
   const EditSchema = EditScopeSchema.extend({ toValue: z.string() });
 
@@ -3084,7 +3087,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     }
     const run = await importRuns.get(id);
     if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
-    return importEdits.put({
+    const saved = await importEdits.put({
       nationalSystem: run.nationalSystem,
       fileHash: run.fileHash,
       header,
@@ -3093,15 +3096,41 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       toValue,
       createdBy: actorFromRequest(req).actorId,
     });
+    // The design spec claims every edit is auditable. `before` is left null rather than the row
+    // this replaced: the store's own `onConflict` upsert never hands that row back, and a second
+    // read just to fill this field would be a write path slowed down for an audit nicety.
+    await recordAudit(ctx, req, {
+      action: 'facility.import.edit',
+      entityType: 'facility-import-edit',
+      entityId: saved.id,
+      before: null,
+      after: saved,
+      metadata: { runId: id, header, line: line ?? null, fromValue: fromValue ?? null },
+    });
+    return saved;
   });
 
   app.delete('/api/facilities/import/runs/:id/edits', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const q = req.query as { header?: string; line?: string; fromValue?: string };
     if (!q.header) { reply.code(400); return { error: 'header is required' }; }
-    // NaN check, not `||`: the same trap the rows route documents on its own numeric params.
-    const parsedLine = q.line === undefined ? undefined : Number.parseInt(q.line, 10);
-    const line = parsedLine === undefined || Number.isNaN(parsedLine) ? undefined : parsedLine;
+    // `fromValue=''` names no sweep, same reason the PUT schema now refuses it.
+    if (q.fromValue !== undefined && q.fromValue.length === 0) {
+      reply.code(400);
+      return { error: 'fromValue must not be empty' };
+    }
+    // ⛔ A QUERY PARAM THAT FAILS TO PARSE IS NOT "ABSENT". The rows route's `||`-vs-NaN note is
+    // about a MISSING param falling back to a default; this is a PRESENT param that does not name a
+    // line at all. Silently downgrading `line=abc` to "no line" let a bad line, plus a `fromValue`
+    // the studio never sends alongside one, delete the whole column sweep instead of failing.
+    let line: number | undefined;
+    if (q.line !== undefined) {
+      if (!/^[1-9]\d*$/.test(q.line)) {
+        reply.code(400);
+        return { error: 'line must be a positive integer' };
+      }
+      line = Number.parseInt(q.line, 10);
+    }
     if ((line === undefined) === (q.fromValue === undefined)) {
       reply.code(400);
       return { error: 'an edit names a line or a value, never both and never neither' };
@@ -3111,7 +3140,20 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const key = line === undefined
       ? { header: q.header, fromValue: q.fromValue as string }
       : { header: q.header, line };
-    return { removed: await importEdits.remove(run.nationalSystem, run.fileHash, key) };
+    const removed = await importEdits.remove(run.nationalSystem, run.fileHash, key);
+    // Nothing changed when there was nothing there, so nothing is audited — same rule the rest of
+    // this file already follows for a no-op write.
+    if (removed) {
+      await recordAudit(ctx, req, {
+        action: 'facility.import.edit.delete',
+        entityType: 'facility-import-edit',
+        entityId: id,
+        before: null,
+        after: null,
+        metadata: { header: q.header, line: line ?? null, fromValue: q.fromValue ?? null },
+      });
+    }
+    return { removed };
   });
 
   // Task 2 (mapping-answers-back, Slice B): one column's vocabulary, so the mapping step can check

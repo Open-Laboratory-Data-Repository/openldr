@@ -4647,11 +4647,12 @@ async function makeStoredRun(app: any, nationalSystem = SYSTEM): Promise<string>
 
 describe('facility import cell edits', () => {
   let app: any;
+  let ctx: any;
   let runId: string;
 
   beforeEach(async () => {
     const db = await importDb();
-    const ctx = fakeImportCtx(db);
+    ctx = fakeImportCtx(db);
     app = await appWith(ctx);
     runId = await makeStoredRun(app);
   });
@@ -4721,6 +4722,76 @@ describe('facility import cell edits', () => {
     const second = await makeStoredRun(app);
     const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${second}/edits` });
     expect((read.json() as { edits: unknown[] }).edits).toHaveLength(1);
+  });
+
+  // Finding 4: a `line` that fails to parse is a bad request, not "no line at all". Before this
+  // fix, `line=abc` became `undefined`, and with `fromValue` also present the request matched the
+  // sweep-delete shape instead of getting refused.
+  it('refuses a DELETE whose line does not parse, rather than deleting the sweep it named by mistake', async () => {
+    await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', fromValue: 'Others', toValue: 'Health Post' },
+    });
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/api/facilities/import/runs/${runId}/edits?header=level&line=abc&fromValue=Others`,
+    });
+    expect(del.statusCode).toBe(400);
+    const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/edits` });
+    expect((read.json() as { edits: unknown[] }).edits).toHaveLength(1); // the sweep survives
+  });
+
+  it('refuses a DELETE whose line is present but not a positive integer', async () => {
+    const del = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&line=0`,
+    });
+    expect(del.statusCode).toBe(400);
+  });
+
+  it('refuses an empty fromValue on PUT', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', fromValue: '', toValue: 'Health Post' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses an empty fromValue on DELETE', async () => {
+    const res = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&fromValue=`,
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // Finding 5: the design spec claims every edit is auditable.
+  it('audits a written edit', async () => {
+    const before = ctx.__audit.length; // makeStoredRun's own upload already audited once
+    const put = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(ctx.__audit.slice(before).map((a: any) => a.action)).toEqual(['facility.import.edit']);
+  });
+
+  it('audits an undo, and does not audit undoing something already gone', async () => {
+    const before = ctx.__audit.length; // makeStoredRun's own upload already audited once
+    await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    const del = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&line=2`,
+    });
+    expect(del.statusCode).toBe(200);
+    expect(ctx.__audit.slice(before).map((a: any) => a.action))
+      .toEqual(['facility.import.edit', 'facility.import.edit.delete']);
+
+    const del2 = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&line=2`,
+    });
+    expect(del2.json()).toEqual({ removed: false });
+    expect(ctx.__audit.length - before).toBe(2); // the removal wrote nothing, so nothing is audited
   });
 });
 
