@@ -358,6 +358,18 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  below, which is what makes Review "current or absent" rather than "present but possibly
    *  stale". */
   const [summaryAt, setSummaryAt] = useState<string | null>(null);
+  /** How many checks have been ASKED FOR. Bumped beside every `setSummaryAt`, and read only by the
+   *  auto-advance effect.
+   *
+   *  ⛔ A COUNTER, BECAUSE THE OTHER SIGNALS CANNOT SEE A REPEAT. The advance used to key on
+   *  `furthest` alone. `furthest` is a derived high-water mark: it reaches 4 when a summary matches
+   *  its inputs and STAYS there while they still match. An operator who reached Review, clicked
+   *  back to Mapping and pressed Validate all again over unchanged inputs produced an identical
+   *  summary signature, so `furthest` never moved, the effect's dependencies never changed, and it
+   *  never re-ran. The sheet stayed on Mapping with Review still clickable, which is the tell:
+   *  the step was earned, only the move never happened. `summaryAt` cannot stand in for this
+   *  either, since React bails on a set that writes the same string. */
+  const [checksAsked, setChecksAsked] = useState(0);
   /** Bumped by `handleValueMappingsSaved`. Feeds `summarySignature` only: the worklist deliberately
    *  does not read it, so saving one mapping never empties the list being worked through. */
   const [valueMappingsSavedAt, setValueMappingsSavedAt] = useState(0);
@@ -770,6 +782,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       setPollRunId(runId as string);
       setRun(null);
       setSummaryAt(signatureWith(overrides));
+      setChecksAsked((n) => n + 1);
       setRefreshNonce((n) => n + 1);
     } catch (err) {
       setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
@@ -862,6 +875,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         // above and then awaits, so on a fast response React may not have re-rendered and the ref
         // would still hold the pre-override value.
         setSummaryAt(signatureWith(overrides));
+        setChecksAsked((n) => n + 1);
       }
     } catch (err) {
       setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
@@ -1125,6 +1139,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // strip position 3 ("Mapping") landed on this sheet's Review content instead. Upload was never
   // shown. The retreat below now targets 3 (Mapping's real number), and the advance targets 4
   // (Review's real number).
+  //
+  // ⛔ ROUND-4 FIX: `checksAsked` is in the dependencies, and without it a SECOND check over
+  // unchanged inputs never moves the sheet. `furthest` is a high-water mark that stays 4 once a
+  // summary matches its inputs, so an operator who reached Review, clicked back to Mapping and
+  // pressed Validate all again saw nothing happen: same `furthest`, same dependencies, no re-run.
+  // Review stayed clickable throughout, which is how the report described it. Reported against the
+  // real Zambia export. See `checksAsked`'s own docblock for why neither `furthest` nor `summaryAt`
+  // can carry this signal.
   useEffect(() => {
     if (columnMapRefused) {
       setRequestedStep((prev) => (prev !== 3 ? 3 : prev));
@@ -1132,7 +1154,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     }
     if (furthest < 4) return;
     setRequestedStep((prev) => (prev < 4 ? 4 : prev));
-  }, [furthest, columnMapRefused]);
+  }, [furthest, columnMapRefused, checksAsked]);
 
   /** Task 5: a fresh install has NO register: migration 082's back-fill seeds only from
    *  `national_system` values a pre-existing `facility_registry` already carries. Import is then
