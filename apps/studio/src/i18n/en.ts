@@ -961,7 +961,6 @@ export const en = {
       rowsDesktopOnly: 'This step needs a wider screen. Open this import on a desktop to read the file. The other steps work here.',
       editCellLabel: 'Edit {{header}} on line {{line}}',
       editUndo: 'Undo this change',
-      editFailed: 'This change could not be saved.',
       noRowsFound: 'No facility rows were found in this file. Confirm it is a compatible CSV export before trying again.',
       noRowsFoundSkipped: '{{skipped}} row(s) in this file were skipped for missing required fields, and none were imported. Confirm it is a compatible CSV export before trying again.',
       unknownColumnsTitle: 'Unrecognised columns',

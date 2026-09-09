@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Undo2 } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
 import { LoadingState } from '@/components/ui/spinner';
@@ -134,7 +135,17 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
     // Nothing typed, or typed back to what it already read. No write: an edit row that changes
     // nothing still marks the cell as edited, which would tell the operator they changed something.
     if (draft === current) return;
-    // Back to what the FILE says, with an edit standing. That is an undo, not a new edit.
+    // Back to what the FILE says, with a LINE edit standing on this cell. That is an undo, not a
+    // new edit: the operator is reversing the one change they made to this cell.
+    //
+    // ⛔ DELIBERATE: this does NOT also match a VALUE-scoped edit (`standing` only looks for
+    // `line === line`, never `line === null`). A value edit is a column sweep: every "Others" in
+    // this header becomes "Health Post", say. Retyping the file's own value on ONE row under that
+    // sweep is the opposite of undoing it: it is the operator opting THIS row out while the sweep
+    // still applies to every other row. The only way to record "this row, not the sweep" is a line
+    // edit whose `toValue` happens to equal the file value, which is exactly what falls through to
+    // below. The cell then reads correctly (the file value) and is correctly marked as edited,
+    // because it is edited relative to the sweep, even though it matches the file.
     const standing = edits.find((e) => e.line === line && e.header === header);
     if (draft === fileValue && standing) { await undo(standing); return; }
     // The choice dialog (Task 7) intercepts a controlled-field column before this runs.
@@ -250,8 +261,24 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
                     // The marker for an edited cell. A left rule, not a background: a background
                     // over a 21-column grid reads as a selection, and every third cell edited would
                     // make the table unreadable.
-                    className={edit ? 'border-l-2 border-l-amber-500' : undefined}
+                    className={cn(edit && 'border-l-2 border-l-amber-500', editable && 'cursor-pointer')}
+                    // Keyboard route in, editable cells only. A read-only grid must not become a
+                    // tab stop on every cell: `tabIndex` and `onKeyDown` are both left off entirely
+                    // when `editable` is false, not just made no-ops.
+                    tabIndex={editable ? 0 : undefined}
+                    role={editable ? 'button' : undefined}
+                    aria-label={editable ? t('facilities.import.editCellLabel', { header: h, line }) : undefined}
                     onClick={editable ? () => openCell(line, h, value) : undefined}
+                    onKeyDown={editable ? (e) => {
+                      // Only when the cell itself has focus. The undo button inside is its own tab
+                      // stop and handles its own Enter/Space; without this check, pressing either
+                      // one there would also reopen the cell underneath it.
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openCell(line, h, value);
+                      }
+                    } : undefined}
                   >
                     <span className="inline-flex items-center gap-1">
                       {value}

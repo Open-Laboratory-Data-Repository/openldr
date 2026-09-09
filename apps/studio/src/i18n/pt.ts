@@ -941,7 +941,6 @@ export const pt: EnShape = {
       rowsDesktopOnly: 'Este passo precisa de um ecrã mais largo. Abra esta importação num computador para ler o ficheiro. Os outros passos funcionam aqui.',
       editCellLabel: 'Editar {{header}} na linha {{line}}',
       editUndo: 'Desfazer esta alteração',
-      editFailed: 'Não foi possível guardar esta alteração.',
       noRowsFound: 'Não foram encontradas linhas de unidades neste ficheiro. Confirme que se trata de uma exportação CSV compatível antes de tentar novamente.',
       noRowsFoundSkipped: '{{skipped}} linha(s) deste ficheiro foram ignoradas por falta de campos obrigatórios, e nenhuma foi importada. Confirme que se trata de uma exportação CSV compatível antes de tentar novamente.',
       unknownColumnsTitle: 'Colunas não reconhecidas',

@@ -189,6 +189,34 @@ describe('DataGridStep', () => {
     expect(screen.getByText('Others')).toBeInTheDocument();
   });
 
+  // Controller ruling: retyping the file's own value under a column sweep is NOT an undo of that
+  // sweep. It is one row opting out while the sweep still applies everywhere else, and the only way
+  // to record that is a line edit whose value happens to match the file. `commit` must write that
+  // line edit, not call `deleteFacilityImportEdit`, and the cell must still show as edited.
+  it('writes a line edit, not an undo, when a row retypes the file value under a sweep', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['level'], rows: [['Others']], lines: [2], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([
+      { header: 'level', line: null, fromValue: 'Others', toValue: 'Health Post' },
+    ]);
+    mocked(api.putFacilityImportEdit).mockResolvedValue({
+      header: 'level', line: 2, fromValue: 'Others', toValue: 'Others',
+    });
+    render(<DataGridStep runId="fir_1" editable />);
+    await userEvent.click(await screen.findByText('Health Post'));
+    const box = screen.getByRole('textbox');
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Others{Enter}');
+    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledWith('fir_1', {
+      header: 'level', line: 2, toValue: 'Others',
+    }));
+    expect(api.deleteFacilityImportEdit).not.toHaveBeenCalled();
+    // The file value shows, and the cell still carries the edited marker (the undo control).
+    expect(await screen.findByText('Others')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /undo this change/i })).toBeInTheDocument();
+  });
+
   it('undoes an edit and puts the file value back', async () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
       headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
@@ -217,6 +245,43 @@ describe('DataGridStep', () => {
     expect(api.readFacilityImportEdits).not.toHaveBeenCalled();
   });
 
+  // A keyboard-only or screen-reader operator has no mouse to click a cell open with. The cell
+  // itself has to be a tab stop, and Enter or Space has to open it, without a click anywhere.
+  it('opens a cell with the keyboard, no click', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    render(<DataGridStep runId="fir_1" editable />);
+    const cell = (await screen.findByText('Alpha')).closest('td') as HTMLElement;
+    cell.focus();
+    expect(cell).toHaveFocus();
+    fireEvent.keyDown(cell, { key: 'Enter' });
+    expect(await screen.findByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('opens a cell with Space as well as Enter', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    render(<DataGridStep runId="fir_1" editable />);
+    const cell = (await screen.findByText('Alpha')).closest('td') as HTMLElement;
+    cell.focus();
+    fireEvent.keyDown(cell, { key: ' ' });
+    expect(await screen.findByRole('textbox')).toBeInTheDocument();
+  });
+
+  // A read-only grid must not become a tab stop on every cell. Only an editable one is.
+  it('does not put a read-only cell in the tab order', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    render(<DataGridStep runId="fir_1" />);
+    const cell = (await screen.findByText('Alpha')).closest('td') as HTMLElement;
+    expect(cell).not.toHaveAttribute('tabindex');
+  });
+
   it('escape leaves the cell as it was', async () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
       headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
@@ -231,8 +296,27 @@ describe('DataGridStep', () => {
   });
 
   // Controller ruling: commit must not run twice for one keystroke. Enter calls commit, which
-  // unmounts the Input, which fires blur, which would call commit again with the same draft.
-  it('commits once on Enter, not again when the blur that follows fires', async () => {
+  // unmounts the Input, which fires blur in a real browser, which would call commit again with the
+  // same draft.
+  //
+  // ⛔ WHY THIS TEST LOOKS THE WAY IT DOES. A plain "press Enter, then call box.blur()" does not
+  // prove anything: React removes the Input from the document synchronously, inside the same
+  // `fireEvent.keyDown` call, before that call even returns (checked directly with
+  // `document.body.contains(box)`, which is already `false` the instant `fireEvent.keyDown`
+  // returns). jsdom also does not run a real browser's "fire blur when the focused element is
+  // removed" step. So by the time test code can call `blur()` on that Input, it is a detached node
+  // with no path back to React's root listener, and the real `onBlur` handler never runs, no matter
+  // how it is called afterwards.
+  //
+  // So the two commit attempts are made to land in the same synchronous window a different way:
+  // a plain DOM listener is attached directly on the Input for 'keydown'. The DOM always runs a
+  // listener on the event's own target before the event bubbles up to an ancestor, and React's
+  // onKeyDown is one such ancestor listener (delegated to the root). So firing `blur` from inside
+  // that target-level listener fires it, for real, on the Input while it is still mounted, and
+  // React's own `onBlur` handler runs, THEN the event keeps bubbling up and React's `onKeyDown`
+  // (Enter) fires. Two real commit attempts, same synchronous stretch, same draft: exactly what the
+  // guard exists to stop, whichever of the two fires first.
+  it('commits once when two commit triggers land in the same synchronous window', async () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
       headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
     });
@@ -242,12 +326,11 @@ describe('DataGridStep', () => {
     });
     render(<DataGridStep runId="fir_1" editable />);
     await screen.findByText('Alpha');
-    await userEvent.click(screen.getByText('Alpha'));
+    fireEvent.click(screen.getByText('Alpha'));
     const box = screen.getByRole('textbox');
-    await userEvent.clear(box);
-    await userEvent.type(box, 'Beta{Enter}');
-    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledTimes(1));
-    box.blur();
+    fireEvent.change(box, { target: { value: 'Beta' } });
+    box.addEventListener('keydown', () => { fireEvent.blur(box); }, { once: true });
+    fireEvent.keyDown(box, { key: 'Enter' });
     await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledTimes(1));
   });
 });
