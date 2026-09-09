@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import { sql } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
@@ -4627,6 +4627,100 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toMatch(/stored file/i);
+  });
+});
+
+// --- Slice C: PUT/GET/DELETE .../runs/:id/edits ---------------------------------------------
+//
+// Same upload every rows-route test above repeats, factored out here since these tests need it
+// more than once each (twice, for the last one).
+async function makeStoredRun(app: any, nationalSystem = SYSTEM): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: uploadUrl({ nationalSystem, format: 'csv', validate: 'false' }),
+    headers: UPLOAD_HEADERS,
+    payload: Buffer.from('code,name,level\n1,Alpha,Others\n2,Beta,Others\n', 'utf8'),
+  });
+  expect(res.statusCode).toBe(202);
+  return res.json().runId as string;
+}
+
+describe('facility import cell edits', () => {
+  let app: any;
+  let runId: string;
+
+  beforeEach(async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    app = await appWith(ctx);
+    runId = await makeStoredRun(app);
+  });
+
+  it('writes a cell edit and reads it back for the run', async () => {
+    const put = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    expect(put.statusCode).toBe(200);
+    const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/edits` });
+    expect(read.statusCode).toBe(200);
+    expect((read.json() as { edits: unknown[] }).edits).toHaveLength(1);
+  });
+
+  it('writes a value-scoped edit', async () => {
+    const put = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', fromValue: 'Others', toValue: 'Health Post' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect((put.json() as { line: number | null }).line).toBeNull();
+  });
+
+  it('refuses an edit naming neither a line nor a value', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', toValue: 'Health Post' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses an edit naming both a line and a value', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, fromValue: 'Others', toValue: 'Health Post' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('undoes one edit', async () => {
+    await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    const del = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&line=2`,
+    });
+    expect(del.statusCode).toBe(200);
+    expect(del.json()).toEqual({ removed: true });
+    const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/edits` });
+    expect((read.json() as { edits: unknown[] }).edits).toEqual([]);
+  });
+
+  it('reports 404 for a run that does not exist', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs/fir_missing/edits' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('a second run over the same file sees the first run edits', async () => {
+    await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    // Same register, same bytes, so the same fileHash. A new run row, minted the same way the
+    // first one was. This is the whole point of keying edits off the file, not the run.
+    const second = await makeStoredRun(app);
+    const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${second}/edits` });
+    expect((read.json() as { edits: unknown[] }).edits).toHaveLength(1);
   });
 });
 
