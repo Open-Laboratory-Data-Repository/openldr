@@ -123,6 +123,17 @@ describe('addRegisterFacilityType', () => {
       .rejects.toBeInstanceOf(FacilityTypeCollisionError);
   });
 
+  // ⛔ THE MIRROR OF THE DISPLAY GUARD. `codeFor` hyphenates where `normaliseControlledValue` does
+  // not, so a display that clears the refusal can still MINT a code whose normalised form is
+  // already claimed by another concept's display. That poisons the key from the code side.
+  it('suffixes a code whose normalised form an existing display already claims', async () => {
+    const admin = fakeAdmin({ [SHARED_VS]: [{ code: 'abc', display: 'Widget-Shop' }] });
+
+    const res = await addRegisterFacilityType(admin, { nationalSystem: SYSTEM, display: 'Widget Shop' });
+
+    expect(res.code).toBe('widget-shop-2');
+  });
+
   it('names what it collided with, so the operator can map to it instead', async () => {
     const admin = fakeAdmin({ [SHARED_VS]: [{ code: 'health-center', display: 'Health Center' }] });
 

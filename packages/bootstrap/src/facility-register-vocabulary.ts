@@ -6,13 +6,13 @@ import {
 
 // FAC-P1-B (Slice B, Task 1): lets an operator add a facility type the vocabulary does not have
 // yet, scoped to the register it came from. The shared `urn:openldr:valueset:facility-type` is
-// never touched — a register that adds a type gets its own system and its own value set, which
+// never touched. A register that adds a type gets its own system and its own value set, which
 // imports the shared one so the register's pick list still shows all 63 seeded concepts plus its
 // own additions.
 
 // `registerValueSetUrl` and `valueSetForField` are declared in `facility-controlled-fields.ts`,
 // not here. `addRegisterFacilityType` below needs `valueSetForField`, and a later task needs
-// `facility-controlled-fields.ts` to call it too — this module imports that file, so declaring
+// `facility-controlled-fields.ts` to call it too. This module imports that file, so declaring
 // either one here would be an import cycle. Re-exported so callers and this module's own tests can
 // import both from this one module.
 export { registerValueSetUrl, valueSetForField };
@@ -68,24 +68,38 @@ export async function addRegisterFacilityType(
   const current = await admin.valueSets.getByUrl(currentUrl);
   const codes = current ? (await admin.valueSets.expand(current.id)).codes : [];
 
-  // ⛔ BOTH TOKENS, CODE AND DISPLAY. `resolveControlledFields` folds its lookup index from both the
-  // code and the display of every concept (facility-controlled-fields.ts:181); a key claimed by two
-  // different codes is poisoned and deleted, so both values silently stop resolving. A new display
-  // that normalises onto an existing CODE poisons that key exactly as surely as matching its display,
-  // so both comparisons must refuse here, before the register ever holds the poisoning pair.
-  const key = normaliseControlledValue(display);
+  // ⛔ BOTH TOKENS, CODE AND DISPLAY, BUILT ONCE AND READ BY BOTH DECISIONS BELOW.
+  // `resolveControlledFields` folds its lookup index from both the code and the display of every
+  // concept (facility-controlled-fields.ts:181); a key claimed by two different codes is poisoned
+  // and deleted, so both values silently stop resolving. A new display that normalises onto an
+  // existing CODE poisons that key exactly as surely as matching its display, so the refusal below
+  // must check both. The same set also has to gate the code this function mints further down:
+  // `codeFor` turns spaces into hyphens while `normaliseControlledValue` does not, so a display that
+  // clears the refusal (its own key is free) can still mint a code whose NORMALISED form is already
+  // claimed from the code side, poisoning the key just the same.
+  const claimedKeys = new Set<string>();
   for (const c of codes) {
-    if (normaliseControlledValue(c.code) === key
-      || (c.display && normaliseControlledValue(c.display) === key)) {
-      throw new FacilityTypeCollisionError({ code: c.code, display: c.display ?? null });
-    }
+    claimedKeys.add(normaliseControlledValue(c.code));
+    if (c.display) claimedKeys.add(normaliseControlledValue(c.display));
+  }
+
+  const key = normaliseControlledValue(display);
+  if (claimedKeys.has(key)) {
+    const hit = codes.find((c) => normaliseControlledValue(c.code) === key
+      || (c.display && normaliseControlledValue(c.display) === key));
+    throw new FacilityTypeCollisionError({ code: hit!.code, display: hit!.display ?? null });
   }
 
   // A code already taken is not a collision: two different types can share a slug without their
-  // displays normalising alike. Suffix rather than refuse.
-  const taken = new Set(codes.map((c) => c.code));
+  // displays normalising alike. Suffix rather than refuse. A candidate is skipped both when it is
+  // an existing code verbatim AND when its normalised form is already claimed (by either an
+  // existing code or an existing display). The mint is the deriver's problem to route around, not
+  // the operator's display to correct.
+  const takenCodes = new Set(codes.map((c) => c.code));
   let code = base;
-  for (let n = 2; taken.has(code); n += 1) code = `${base}-${n}`;
+  for (let n = 2; takenCodes.has(code) || claimedKeys.has(normaliseControlledValue(code)); n += 1) {
+    code = `${base}-${n}`;
+  }
 
   if (!(await admin.valueSets.getByUrl(valueSetUrl))) {
     await admin.codingSystems.upsertByUrl({

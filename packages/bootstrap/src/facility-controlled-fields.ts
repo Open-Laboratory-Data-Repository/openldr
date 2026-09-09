@@ -86,8 +86,9 @@ export function observedFieldSystem(field: ControlledField, nationalSystem: stri
 
 /** The register's own facility-type value set, importing the shared one and adding its own concepts
  *  beside it. Lives here, not in `facility-register-vocabulary.ts`, because `valueSetForField` below
- *  needs it and that module imports this file — declaring either there would be a cycle. Re-exported
- *  from `facility-register-vocabulary.ts` for callers that think of it as part of that module. */
+ *  needs it and that module imports this file. Declaring either one there would be an import cycle.
+ *  Re-exported from `facility-register-vocabulary.ts` for callers that think of it as part of that
+ *  module. */
 export function registerValueSetUrl(nationalSystem: string): string {
   return `urn:openldr:valueset:facility-type:${registerSlug(nationalSystem)}`;
 }
