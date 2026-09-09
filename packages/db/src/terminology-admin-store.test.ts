@@ -127,6 +127,42 @@ describe('terminology admin store', () => {
     expect(remaining).toHaveLength(0);
   });
 
+  // ⛔ SELF-HEALING, on purpose. A row a buggy earlier version inserted as seeded stays undeletable
+  // forever otherwise, because ON CONFLICT never rewrote the flag. An explicit `seeded` now updates
+  // it, so the next add repairs the install. An OMITTED `seeded` still leaves the row alone, which
+  // is what keeps a genuine install seed safe from any caller that does not mention it.
+  it('upsertByUrl({ seeded: false }) repairs a row an earlier version inserted as seeded', async () => {
+    const { s } = await store();
+    await s.codingSystems.upsertByUrl({
+      url: 'http://stuck.test', systemCode: 'STK', systemName: 'S', systemVersion: null, publisherId: null,
+    });
+    const id = (await s.codingSystems.getByUrl('http://stuck.test'))!.id;
+    await expect(s.codingSystems.delete(id, { cascade: true })).rejects.toThrow(/system-managed/i);
+
+    await s.codingSystems.upsertByUrl({
+      url: 'http://stuck.test', systemCode: 'STK', systemName: 'S', systemVersion: null, publisherId: null, seeded: false,
+    });
+
+    await s.codingSystems.delete(id, { cascade: true });
+    expect(await s.codingSystems.getByUrl('http://stuck.test')).toBeNull();
+  });
+
+  it('upsertByUrl leaves the flag alone when it is omitted, so a real seed stays protected', async () => {
+    const { db, s } = await store();
+    await s.codingSystems.upsertByUrl({
+      url: 'http://seedagain.test', systemCode: 'SDA', systemName: 'S', systemVersion: null, publisherId: null,
+    });
+    const id = (await s.codingSystems.getByUrl('http://seedagain.test'))!.id;
+
+    await s.codingSystems.upsertByUrl({
+      url: 'http://seedagain.test', systemCode: 'SDA', systemName: 'S renamed', systemVersion: null, publisherId: null,
+    });
+
+    const row = await db.selectFrom('coding_systems').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+    expect(row.seeded).toBe(true);
+    expect(row.system_name).toBe('S renamed');
+  });
+
   it('upsertByUrl still defaults to seeded, so every existing caller is unchanged', async () => {
     const { s } = await store();
     await s.codingSystems.upsertByUrl({

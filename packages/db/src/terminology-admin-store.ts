@@ -613,6 +613,12 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             seeded: input.seeded ?? true,
           }).onConflict((oc) => oc.column('url').doUpdateSet({
             system_name: input.systemName, system_version: input.systemVersion ?? null, publisher_id: input.publisherId,
+            // ⛔ ONLY WHEN THE CALLER SAID SO. An omitted `seeded` leaves the stored flag untouched,
+            // which is what keeps a genuine install seed protected from any caller that does not
+            // mention it. An EXPLICIT one rewrites it, so a row an earlier version inserted as
+            // seeded stops being undeletable forever: without this the repair would need a
+            // migration, and the install that found this bug still has such a row.
+            ...(input.seeded === undefined ? {} : { seeded: input.seeded }),
           })).execute();
           // Idempotency key is `url`; read the resulting row to key the capture by its real id
           // (an ON CONFLICT update keeps the pre-existing id, so hash the persisted row).
