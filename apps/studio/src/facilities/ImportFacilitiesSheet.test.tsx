@@ -33,6 +33,8 @@ vi.mock('@/api', async (orig) => {
     // Task 6: Data's own grid reads the stored file's rows directly; it never touches this
     // sheet's own state (see DataGridStep.tsx's own doc comment on why).
     readFacilityImportRows: vi.fn(),
+    // The per-row check's own read, behind `MappingRowStatus`'s click.
+    readFacilityImportColumnValues: vi.fn(),
   };
 });
 
@@ -2714,4 +2716,74 @@ describe('the file drop zone', () => {
     expect(clicked).toHaveBeenCalled();
     clicked.mockRestore();
   });
+
+  // ── The check survives the step strip ───────────────────────────────────────────────────────
+
+  /** Reported from the real Zambia export: check a row, see it go red, click Data, click back to
+   *  Mapping, and every icon is back to its opening state. `ColumnMapStep` is gated on
+   *  `step === 3`, so leaving Mapping unmounted the whole panel and took its check results, its
+   *  saved-value set and the operator's unsaved pick-list choices with it.
+   *
+   *  These drive the real panel end to end rather than asserting on props: the bug was entirely
+   *  about WHERE the state lives, and a prop-level test would have passed before the fix. */
+  async function mappingWithACheckedRow(): Promise<void> {
+    mocked(api.suggestColumnMap).mockResolvedValue({
+      headers: ['Type'],
+      columns: [{ header: 'Type', candidates: [{ target: 'level', display: null, score: 1, confidence: 'exact' }] }],
+    });
+    mocked(api.readFacilityImportColumnValues).mockResolvedValue({
+      values: ['1st Level Hospital', 'Others'], distinct: 2, truncated: false,
+    });
+    // Neither value resolves, so the row's own check finds two unrecognised values and goes red.
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [
+        { value: '1st Level Hospital', candidates: [] },
+        { value: 'Others', candidates: [] },
+      ],
+      notValidated: false,
+      options: [{ code: 'hospital', display: 'Hospital' }],
+    });
+
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem('Type\n1st Level Hospital\n');
+    await advanceToMapping();
+
+    // `/^Type:/` picks the status button on purpose: the row's own ⋯ trigger is named "Actions for
+    // Type" and a bare /Type/ would match both.
+    fireEvent.click(await screen.findByRole('button', { name: /^Type:/ }));
+    await screen.findByRole('button', { name: /Type:.*not recognised/i });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Type:.*not recognised/i })).toBeInTheDocument());
+  }
+
+  function goToStep(label: RegExp): void {
+    fireEvent.click(screen.getByRole('button', { name: label }));
+  }
+
+  it('keeps a checked row red after a trip to Data and back, instead of resetting it', async () => {
+    await mappingWithACheckedRow();
+
+    goToStep(/2\s*Data/);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Type:/ })).not.toBeInTheDocument());
+    goToStep(/3\s*Mapping/);
+
+    expect(await screen.findByRole('button', { name: /Type:.*not recognised/i })).toBeInTheDocument();
+  }, 20000);
+
+  // The same unmount threw away pick-list choices the operator had made but not yet saved, which
+  // is the more expensive half of the bug: an icon can be re-earned with one click, and twelve
+  // re-typed value decisions cannot.
+  it('keeps an unsaved value-mapping choice after a trip to Data and back', async () => {
+    await mappingWithACheckedRow();
+
+    const picker = await screen.findByRole('combobox', { name: /1st Level Hospital/i });
+    fireEvent.keyDown(picker, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: /Hospital/ }));
+    await waitFor(() => expect(picker).toHaveTextContent(/Hospital/));
+
+    goToStep(/2\s*Data/);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Type:/ })).not.toBeInTheDocument());
+    goToStep(/3\s*Mapping/);
+
+    expect(await screen.findByRole('combobox', { name: /1st Level Hospital/i })).toHaveTextContent(/Hospital/);
+  }, 20000);
 });
