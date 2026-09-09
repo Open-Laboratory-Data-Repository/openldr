@@ -102,13 +102,13 @@ nada no vocabulário, por isso espera pela sua decisão, que é precisamente o o
 decisão que tomou.
 
 Cada passo mostra um único botão, o que avança para o passo seguinte. Qualquer outra ação, incluindo
-as três opções de verificar de novo e Fechar, fica no menu `⋯` da página. O único outro botão
-visível é **Guardar mapeamentos**, dentro da lista de valores não reconhecidos de cada linha, por
-baixo das escolhas que guarda. Guarda apenas as decisões dessa linha e diz-lhe quantas guardou.
+as três opções de verificar de novo e Fechar, fica no menu `⋯` da página.
 
-**As suas escolhas não fazem nada até as guardar.** Até lá a linha diz isso mesmo, por exemplo
-«4 valor(es) não reconhecido(s). 2 escolhido(s), ainda não guardado(s)», e fica vermelha. Um valor
-guardado deixa de contar contra a linha, que fica verde quando não sobra nenhum.
+**Não há botão Guardar. O ícone de estado é o guardar.** Escolha os valores nas listas por baixo de
+uma linha e depois carregue no ícone dessa linha: guarda as suas escolhas, lê a coluna outra vez e
+põe a linha a verde se não sobrar nada. Validar tudo faz o mesmo para todas as linhas antes de
+verificar o ficheiro inteiro. Até lá a linha diz o que está à espera, por exemplo «4 valor(es) não
+reconhecido(s). 2 escolhido(s), ainda não guardado(s)».
 
 Não pode clicar num passo que ainda não alcançou, nem voltar a um passo anterior enquanto uma
 verificação em segundo plano está a decorrer. Clicar em Validar tudo no Mapeamento leva-o à Revisão

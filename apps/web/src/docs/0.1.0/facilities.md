@@ -83,11 +83,11 @@ on its own: the suggestion scores the column's NAME and cannot know what is insi
 Validate all when you want every column checked at once.
 
 A controlled field's unrecognised values appear under the mapping row that produced them, each with
-a pick list, and that row's own **Save mappings** sits directly under them. It writes only that
-row's decisions. Picks do nothing until saved: until then the row's line says so, for example
-"4 value(s) are not recognised. 2 chosen, not saved yet". Saving does not make the rows vanish, so a
-choice can still be corrected; the values that were saved simply stop counting against the row, and
-the row goes green once none are left unanswered.
+a pick list. There is no Save button: the row's status icon is the save. Pressing it writes that
+row's picks, re-reads the column, and turns the row green if nothing is left. Validate all does the
+same for every row first. Until then the row's line says what is waiting, for example "4 value(s)
+are not recognised. 2 chosen, not saved yet". Writing does not make the rows vanish, so a choice can
+still be corrected; the values that were written simply stop counting against the row.
 
 Mapping decides; Review reports. If a check turns up something worth changing, go back to Mapping,
 change it, and come forward again. **A file uploaded through the background door is checked again in

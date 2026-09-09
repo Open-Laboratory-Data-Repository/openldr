@@ -16,7 +16,9 @@ import {
   type ValueMappingEntry, type ValueSuggestion,
 } from '@/api';
 import { ConstantValueField } from './ConstantValueField';
-import { useMappingCheckState } from './mappingCheckState';
+import {
+  pendingValueMappings, resolvedValueKey, useMappingCheckState, valueChoice, valueChoiceKey,
+} from './mappingCheckState';
 import type { MappingCheckState, RowCheck, WorklistEntry } from './mappingCheckState';
 import { mappingRowState } from './mappingRowState';
 import { MappingRowStatus } from './MappingRowStatus';
@@ -53,14 +55,14 @@ const UNMAPPED = '__not_mapped__';
 
 /** Task 6: a (header, value) pair as one Map/Record key, same reasoning as `ValueMapPanel`'s own
  *  `rowKey`: `JSON.stringify` escapes its own separators, so two distinct pairs can never collide. */
-const valueChoiceKey = (header: string, value: string): string => JSON.stringify([header, value]);
+
 
 /** Final review, C1: a (field, raw value) pair as one Set key. Keyed on the FIELD, not the header,
  *  because that is what a written mapping is keyed on: `writeFacilityValueMappings` sends
  *  `{ field, rawValue, toCode }` and the server writes it under the register's own namespace for
  *  that field. Two headers pointing at the same field therefore share a resolution, which is the
  *  truth on the server. Same `JSON.stringify` collision argument as `valueChoiceKey` above. */
-const resolvedValueKey = (field: string, value: string): string => JSON.stringify([field, value]);
+
 
 /** Fix pass (Critical finding, mapping-answers-back Slice B Task 6 review): a row's worklist is the
  *  UNION of everything any source has ever reported for the row's current target, never a
@@ -215,9 +217,6 @@ export function ColumnMapStep({
     resolvedValues, setResolvedValues,
     valueChoices, setValueChoices,
   } = checkState ?? ownCheckState;
-  /** Which header's Save is in flight, or null. Per header, not a single flag: each row has its
-   *  own Save now, and one global boolean would disable all of them at once. */
-  const [savingHeader, setSavingHeader] = useState<string | null>(null);
   const [busyHeaders, setBusyHeaders] = useState<Set<string>>(new Set());
   // Two ephemeral, per-header notices that are NOT part of `checkedByHeader`: neither one is a
   // real check result, so neither should make `mappingRowState` call the row valid or invalid.
@@ -404,6 +403,11 @@ export function ColumnMapStep({
     });
     setBusyHeaders((prev) => new Set(prev).add(header));
     try {
+      // ⛔ WRITE FIRST, THEN READ. The operator's picks are what they want this check to take into
+      // account; re-reading before writing them would report the same values unrecognised again
+      // and the row could never go green. A failed write reports itself and stops here rather than
+      // running a check whose answer would be stale by design.
+      if (!await commitRowValueMappings(header)) return;
       const { values, distinct, truncated } = await readFacilityImportColumnValues(runId, header);
       if (!CONTROLLED_CONSTANT_FIELDS.has(target)) {
         // ⛔ FIX PASS (review Finding 1, CRITICAL): a non-controlled target has no bound
@@ -531,66 +535,52 @@ export function ColumnMapStep({
   /** The choice for one (header, value) row: the operator's own pick if they made one, otherwise
    *  the same "confident top candidate, else Not mapped" default `ValueMapPanel` seeds into state.
    *  Computed here instead, since nothing about it needs to survive a `StrictMode` double-render. */
-  const valueChoiceFor = (header: string, entryValue: string, candidates: ValueSuggestion['candidates']): string => {
-    const chosen = valueChoices[valueChoiceKey(header, entryValue)];
-    if (chosen) return chosen;
-    const top = candidates[0];
-    return top && top.confidence !== 'weak' ? top.target : VALUE_MAP_UNMAPPED;
-  };
+  const valueChoiceFor = (header: string, entryValue: string, candidates: ValueSuggestion['candidates']): string =>
+    valueChoice(valueChoices, header, entryValue, candidates);
 
   const setValueChoice = (header: string, entryValue: string, toCode: string): void => {
     setValueChoices((prev) => ({ ...prev, [valueChoiceKey(header, entryValue)]: toCode }));
   };
 
-  /** Is there anything on screen worth a Save click? Only a header whose worklist matches its
-   *  CURRENT target. A stale one is not shown (see the render loop below) and must not be saved
-   *  either, since it describes a field the header no longer maps to. */
-  /** ⛔ ONE SAVE PER ROW, and it writes ONLY that row's values.
+  /** ⛔ THERE IS NO SAVE BUTTON. The status icon is the save.
    *
-   *  This used to be one Save for every worklist at once, rendered after the whole `headers.map`
-   *  grid. Measured live against the Zambia export: it sat 561px and seven mapping rows below the
-   *  "4 value(s) are not recognised" line it belonged to. The operator filled in all four
-   *  pick-lists, never saw a Save, and reported that the row stayed red and that Review still
-   *  named the same four values. Both were the same fact: nothing had been written. A control
-   *  that commits what is on screen has to be on screen with it. Same rule that moved
-   *  `ValueMapPanel`'s Save out of a ⋯ menu.
+   *  This was a separate Save, and before that one global Save rendered after every mapping row,
+   *  561px and seven rows below the worklist it belonged to on the real Zambia export. The
+   *  operator filled in four pick-lists, never found it, and reported that the row stayed red and
+   *  that Review still named the same values. Both were one fact: nothing had been written.
    *
-   *  Writing only this header's entries is the other half. A global Save wrote every worklist's
-   *  picks, including ones the operator had scrolled past and never looked at. */
-  const handleSaveValueMappings = async (header: string): Promise<void> => {
-    setSavingHeader(header);
+   *  A button beside the picks would have fixed that, and the operator rejected it as one step too
+   *  many: "after mapping I am going to press the info button again, why not make that a save,
+   *  cause I am trying to get it to be green". They are right. The status icon is already the
+   *  control that means "apply what I decided and tell me if the row is good now", so it writes
+   *  first and then re-reads. Nothing else on the step writes value mappings.
+   *
+   *  Only THIS header's picks, never another row's: a write that also committed decisions on a row
+   *  the operator had scrolled past would be writing choices nobody made. */
+  const commitRowValueMappings = async (header: string): Promise<boolean> => {
+    const entries = pendingValueMappings(
+      { checkedByHeader, valueChoices, resolvedValues }, selectedTarget, header,
+    );
+    // Nothing chosen since the last write. Never call the route: an empty write would toast
+    // "0 mapping(s) written" on every ordinary re-check of an untouched row.
+    if (entries.length === 0) return true;
     try {
-      const entries: ValueMappingEntry[] = [];
-      const check = checkedByHeader[header];
-      if (check && check.target === selectedTarget(header) && check.values) {
-        for (const { value: entryValue, candidates } of check.values) {
-          const toCode = valueChoiceFor(header, entryValue, candidates);
-          if (toCode && toCode !== VALUE_MAP_UNMAPPED) {
-            entries.push({ field: check.target as ControlledField, rawValue: entryValue, toCode });
-          }
-        }
-      }
-      const result = entries.length > 0
-        ? await writeFacilityValueMappings(nationalSystem ?? '', entries)
-        : { written: 0, superseded: [] };
+      const result = await writeFacilityValueMappings(nationalSystem ?? '', entries);
       // Final review, C1: this is the moment a value stops being unresolved, and this call is the
-      // only thing that knows it. Recorded AFTER the write returns, never before: a save that threw
-      // wrote nothing, and marking a value resolved on an optimistic guess would turn a row green
-      // over a mapping the register does not carry. A value left at "Not mapped" is not in
-      // `entries`, so it is not recorded and goes on counting.
-      if (entries.length > 0) {
-        setResolvedValues((prev) => {
-          const next = new Set(prev);
-          for (const entry of entries) next.add(resolvedValueKey(entry.field, entry.rawValue));
-          return next;
-        });
-      }
+      // only thing that knows it. Recorded AFTER the write returns, never before: a write that
+      // threw wrote nothing, and marking a value resolved on an optimistic guess would turn a row
+      // green over a mapping the register does not carry.
+      setResolvedValues((prev) => {
+        const next = new Set(prev);
+        for (const entry of entries) next.add(resolvedValueKey(entry.field, entry.rawValue));
+        return next;
+      });
       toast.success(t('facilities.import.valueMap.savedCount', { count: result.written }));
       onValueMappingsSaved?.();
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSavingHeader(null);
+      return false;
     }
   };
 
@@ -756,18 +746,6 @@ export function ColumnMapStep({
                         onSelect={(code) => setValueChoice(header, entryValue, code)}
                       />
                     ))}
-                  </div>
-                  {/* Inside the box, under the picks it writes. See `handleSaveValueMappings`. */}
-                  <div className="mt-2 flex justify-end">
-                    <Button
-                      size="sm" className="text-xs"
-                      disabled={savingHeader !== null}
-                      onClick={() => { void handleSaveValueMappings(header); }}
-                    >
-                      {savingHeader === header
-                        ? t('facilities.import.valueMap.saving')
-                        : t('facilities.import.valueMap.saveAction')}
-                    </Button>
                   </div>
                 </div>
               )}

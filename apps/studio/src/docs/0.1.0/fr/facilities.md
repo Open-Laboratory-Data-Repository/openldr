@@ -105,15 +105,13 @@ dans le vocabulaire : il attend donc votre décision, et c'est bien le but.
 automatiquement ne passe outre une décision que vous avez prise.
 
 Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont les trois
-options de nouvelle vérification et Fermer, reste dans le menu `⋯` de la page. Le seul autre bouton
-visible est **Enregistrer les mappages**, placé à l'intérieur de la liste des valeurs non reconnues
-de chaque ligne, sous les choix qu'il enregistre. Il n'enregistre que les décisions de cette
-ligne-là et vous dit combien il en a enregistré.
+options de nouvelle vérification et Fermer, reste dans le menu `⋯` de la page.
 
-**Vos choix ne font rien tant que vous ne les enregistrez pas.** D'ici là, la ligne le dit, par
-exemple « 4 valeur(s) non reconnue(s). 2 choisie(s), pas encore enregistrée(s) », et elle reste
-rouge. Une valeur enregistrée cesse de compter contre la ligne, qui passe au vert quand il n'en
-reste aucune.
+**Il n'y a pas de bouton Enregistrer. L'icône d'état est l'enregistrement.** Choisissez les valeurs
+dans les listes sous une ligne, puis appuyez sur l'icône de cette ligne : elle enregistre vos choix,
+relit la colonne et passe la ligne au vert s'il ne reste rien. Tout valider fait la même chose pour
+toutes les lignes avant de vérifier le fichier entier. D'ici là, la ligne dit ce qui attend, par
+exemple « 4 valeur(s) non reconnue(s). 2 choisie(s), pas encore enregistrée(s) ».
 
 Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
 étape antérieure pendant qu'une vérification en arrière-plan est en cours. Cliquer sur Tout valider

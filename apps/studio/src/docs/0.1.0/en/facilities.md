@@ -95,13 +95,13 @@ the vocabulary, so it waits for your decision, which is the point.
 made, so a register that deliberately maps a word somewhere unusual keeps that.
 
 Every step shows one button, for the action that moves you forward. Every other action, including
-the three check-again options and Close, stays in the page's `⋯` menu. The one other visible button
-is **Save mappings**, which sits inside each row's list of unrecognised values, under the picks it
-writes. It writes only that row's decisions and tells you how many it wrote.
+the three check-again options and Close, stays in the page's `⋯` menu.
 
-**Your picks do nothing until you save them.** Until then the row's line says so, for example
-"4 value(s) are not recognised. 2 chosen, not saved yet", and the row stays red. A saved value stops
-counting against the row, and the row turns green once none are left.
+**There is no Save button. The status icon is the save.** Pick values from the lists under a row,
+then press that row's icon: it writes your picks, re-reads the column, and turns the row green if
+nothing is left. Validate all does the same for every row before it checks the whole file. Until you
+press one of them the row's line says what is waiting, for example "4 value(s) are not recognised.
+2 chosen, not saved yet".
 
 You cannot click a step you have not reached yet, and you cannot go back to an earlier step
 while a background check is running. Clicking Validate all on Mapping moves you to Review on its
