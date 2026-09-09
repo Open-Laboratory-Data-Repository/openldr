@@ -29,6 +29,11 @@ export interface DataGridStepProps {
   /** Source header -> the controlled field it maps to, for the headers that map to one. A cell in
    *  one of these opens the this-row-versus-everywhere choice instead of writing straight away. */
   controlledHeaders?: Record<string, ControlledField>;
+  /** Fires once per successful edit write or undo (Slice C, Task 8). Never on a failed one, and
+   *  never on a keystroke that changed nothing. The sheet uses this to bump `cellEditsAt`, which
+   *  invalidates the validated summary: an edit changes what the file parses to, and a summary
+   *  computed before it is no longer a claim about this file. */
+  onEditsChanged?: () => void;
 }
 
 /** The uploaded file as a table, read only, one page at a time.
@@ -47,7 +52,7 @@ export interface DataGridStepProps {
  *  by anyone. The exception is only legitimate BECAUSE of the notice below. Rendering the grid
  *  anyway, to scroll sideways off the screen, is what the operator was promised would not happen.
  *  Steps 1, 3 and 4 stay usable on a phone, so the notice sends them on rather than stopping them. */
-export function DataGridStep({ runId, editable, controlledHeaders }: DataGridStepProps): JSX.Element {
+export function DataGridStep({ runId, editable, controlledHeaders, onEditsChanged }: DataGridStepProps): JSX.Element {
   const { t } = useTranslation();
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(100);
@@ -162,6 +167,7 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
     try {
       const saved = await putFacilityImportEdit(runId, { header, line, toValue: draft });
       setEdits((prev) => [...prev.filter((e) => !(e.line === line && e.header === header)), saved]);
+      onEditsChanged?.();
     } catch (err) {
       setFailure(err instanceof Error ? err.message : String(err));
     }
@@ -183,6 +189,7 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
           && !(e.line === null && e.header === header && e.fromValue === fromValue)),
         saved,
       ]);
+      onEditsChanged?.();
     } catch (err) {
       setFailure(err instanceof Error ? err.message : String(err));
     }
@@ -194,6 +201,7 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
         ? { header: edit.header, fromValue: edit.fromValue as string }
         : { header: edit.header, line: edit.line });
       setEdits((prev) => prev.filter((e) => e !== edit));
+      onEditsChanged?.();
     } catch (err) {
       setFailure(err instanceof Error ? err.message : String(err));
     }

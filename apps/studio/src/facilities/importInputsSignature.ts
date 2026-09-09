@@ -36,6 +36,11 @@ export interface ImportInputs {
    *  `term_mappings` and only take effect on a fresh parse, so the sheet cannot compare them; a
    *  monotonic stamp is what makes "something was saved" comparable at all. */
   valueMappingsSavedAt: number;
+  /** Bumped every time the Data grid writes or undoes a cell edit (Slice C). In
+   *  `summarySignature` but NOT in `worklistSignature`: an edit changes what the file parses to, so
+   *  a validated summary computed before it is no longer a claim about this file. The worklist is
+   *  left alone deliberately, for the reason `worklistSignature`'s own note gives about a save. */
+  cellEditsAt: number;
 }
 
 /** `JSON.stringify` over an explicit array, not over the object: key order in an object literal is
@@ -52,7 +57,7 @@ export function summarySignature(i: ImportInputs): string {
   return sig([
     i.fileName, i.fileSize, i.nationalSystem, i.format, i.completeRelease, i.releaseVersion,
     i.columnMapEdits, i.allowUnknownColumns, i.allowInvalidCoordinates,
-    i.valueMappingsSavedAt,
+    i.valueMappingsSavedAt, i.cellEditsAt,
   ]);
 }
 

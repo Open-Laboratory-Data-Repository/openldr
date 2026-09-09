@@ -234,6 +234,56 @@ describe('DataGridStep', () => {
     expect(await screen.findByText('Alpha')).toBeInTheDocument();
   });
 
+  // Slice C, Task 8: `onEditsChanged` is how the sheet learns a stored summary no longer describes
+  // this file. It must fire once per real write, an undo counts as a write, and a keystroke that
+  // changed nothing must never fire it.
+  it('reports every successful edit write so the sheet can invalidate its summary', async () => {
+    const onEditsChanged = vi.fn();
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    mocked(api.putFacilityImportEdit).mockResolvedValue({
+      header: 'name', line: 7, fromValue: null, toValue: 'Beta',
+    });
+    render(<DataGridStep runId="fir_1" editable onEditsChanged={onEditsChanged} />);
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByText('Alpha'));
+    const box = screen.getByRole('textbox');
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Beta{Enter}');
+    await waitFor(() => expect(onEditsChanged).toHaveBeenCalledTimes(1));
+  });
+
+  it('reports an undo as well, since it changes the file just as much', async () => {
+    const onEditsChanged = vi.fn();
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([
+      { header: 'name', line: 7, fromValue: null, toValue: 'Beta' },
+    ]);
+    mocked(api.deleteFacilityImportEdit).mockResolvedValue({ removed: true });
+    render(<DataGridStep runId="fir_1" editable onEditsChanged={onEditsChanged} />);
+    await screen.findByText('Beta');
+    await userEvent.click(screen.getByRole('button', { name: /undo this change/i }));
+    await waitFor(() => expect(onEditsChanged).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not report a keystroke that changed nothing', async () => {
+    const onEditsChanged = vi.fn();
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    render(<DataGridStep runId="fir_1" editable onEditsChanged={onEditsChanged} />);
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByText('Alpha'));
+    await userEvent.type(screen.getByRole('textbox'), '{Enter}');
+    expect(api.putFacilityImportEdit).not.toHaveBeenCalled();
+    expect(onEditsChanged).not.toHaveBeenCalled();
+  });
+
   it('does not offer editing when the run is not editable', async () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
       headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,

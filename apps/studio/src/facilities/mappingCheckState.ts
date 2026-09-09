@@ -25,6 +25,9 @@ export interface RowCheck {
   distinct: number;
   values?: WorklistEntry[];
   options?: ValueSetOption[];
+  /** The `cellEditsAt` this check ran at. A later value means the file has changed underneath the
+   *  answer, which is exactly what `stale` is for. */
+  editsAt: number;
 }
 
 /** Everything the mapping step learns that must outlive the mapping step being on screen.
