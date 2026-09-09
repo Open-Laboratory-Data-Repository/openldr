@@ -335,6 +335,22 @@ export interface FacilityImportRunsTable {
   active_key: string | null;
 }
 
+/** Slice C: one operator repair on the Data grid, keyed on the register and the file rather than on
+ *  the run, so a re-upload of the same bytes keeps them. `edit_key` is a computed uniqueness key,
+ *  not data: see migration 091 for why a plain index over it beats two partial indexes. */
+export interface FacilityImportEditsTable {
+  id: string;
+  national_system: string;
+  file_hash: string;
+  header: string;
+  line: number | null;
+  from_value: string | null;
+  to_value: string;
+  edit_key: string;
+  created_by: string | null;
+  created_at: Generated<Date>;
+}
+
 /** Pre-existing violations of "one active SAME-AS resolution per observed facility key", recorded by
  *  migration 078 when it closed that invariant at the database, for an operator to settle.
  *
@@ -900,6 +916,7 @@ export interface InternalSchema {
   facility_mapping_conflicts: FacilityMappingConflictsTable;
   facility_jobs: FacilityJobsTable;
   facility_import_runs: FacilityImportRunsTable;
+  facility_import_edits: FacilityImportEditsTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;
