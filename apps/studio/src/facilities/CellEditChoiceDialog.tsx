@@ -40,6 +40,13 @@ export function CellEditChoiceDialog({
         // whichever choice sits first, before the operator ever reads the question. Default
         // autofocus is skipped and the dialog's own container takes focus instead, which is not
         // a button and cannot be clicked by the key still being released.
+        // `tabIndex={-1}` makes the container's focusability an explicit, tested fact of this
+        // component instead of an implicit side effect of how Radix's FocusScope happens to
+        // render today. (Traced: FocusScope also applies its own default `tabIndex={-1}` to this
+        // same element via `asChild`, so `.focus()` below already worked before this line. This
+        // line does not change behaviour; it stops that behaviour from depending on an internal
+        // Radix default this file never asked for.)
+        tabIndex={-1}
         onOpenAutoFocus={(e) => { e.preventDefault(); (e.target as HTMLElement).focus(); }}
       >
         <DialogTitle>{t('facilities.import.editScopeTitle')}</DialogTitle>

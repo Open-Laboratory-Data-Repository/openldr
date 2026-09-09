@@ -29,4 +29,11 @@ describe('CellEditChoiceDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: /every row/i }));
     expect(onChoose).toHaveBeenCalledWith('everywhere');
   });
+
+  it('moves focus into the dialog on open, not onto a button', () => {
+    render(<CellEditChoiceDialog {...base} onChoose={() => {}} />);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement);
+    expect(document.activeElement).not.toHaveAttribute('type', 'button');
+  });
 });
