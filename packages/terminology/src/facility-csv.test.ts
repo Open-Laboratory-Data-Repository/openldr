@@ -624,3 +624,108 @@ describe('a column map is the decision about every column', () => {
     });
   });
 });
+
+describe('parseFacilityCsv cell edits', () => {
+  const base = { nationalSystem: 'urn:zm:mfl' };
+  const csv = 'national_code,name,level\n'
+    + '1,Alpha,Health Centre\n'
+    + '2,Beta,Others\n'
+    + '3,Gamma,Others\n';
+
+  it('replaces one cell on the line the edit names', () => {
+    const res = parseFacilityCsv(csv, {
+      ...base,
+      cellEdits: { byLine: { 3: { level: 'Health Post' } }, byValue: {} },
+    });
+    expect(res.records.map((r) => r.level)).toEqual(['Health Centre', 'Health Post', 'Others']);
+  });
+
+  it('replaces a value everywhere it appears in that column', () => {
+    const res = parseFacilityCsv(csv, {
+      ...base,
+      cellEdits: { byLine: {}, byValue: { level: { Others: 'Health Post' } } },
+    });
+    expect(res.records.map((r) => r.level)).toEqual(['Health Centre', 'Health Post', 'Health Post']);
+  });
+
+  it('leaves the same value in another column alone', () => {
+    const two = 'national_code,name,level\n1,Others,Health Centre\n';
+    const res = parseFacilityCsv(two, {
+      ...base,
+      cellEdits: { byLine: {}, byValue: { level: { Others: 'Health Post' } } },
+    });
+    expect(res.records[0].name).toBe('Others');
+  });
+
+  it('a line edit wins over a value edit on the same cell', () => {
+    const res = parseFacilityCsv(csv, {
+      ...base,
+      cellEdits: {
+        byLine: { 3: { level: 'from the line' } },
+        byValue: { level: { Others: 'from the value' } },
+      },
+    });
+    expect(res.records[1].level).toBe('from the line');
+    expect(res.records[2].level).toBe('from the value');
+  });
+
+  it('an edit names the SOURCE header, so it works through a column map', () => {
+    const mapped = 'code,facility,Type\n1,Alpha,Others\n';
+    const res = parseFacilityCsv(mapped, {
+      ...base,
+      columnMap: { columns: { code: 'national_code', facility: 'name', Type: 'level' } },
+      cellEdits: { byLine: {}, byValue: { Type: { Others: 'Health Post' } } },
+    });
+    expect(res.records[0].level).toBe('Health Post');
+  });
+
+  it('an edit reaches a column carried through as extra data', () => {
+    // 'Ward' from the brief is a known OPTIONAL contract field once lowercased (facility-csv.ts:9),
+    // so it never reaches extras at all. 'Remarks' is not in the contract, so it does.
+    const extra = 'national_code,name,Remarks\n1,Alpha,typo\n';
+    const res = parseFacilityCsv(extra, {
+      ...base,
+      allowUnknownColumns: true,
+      cellEdits: { byLine: { 2: { Remarks: 'Chilenje' } }, byValue: {} },
+    });
+    // extras keys stay lowercased on the record, per the existing convention this file already
+    // documents (facility-csv.ts:24) and other tests already rely on.
+    expect(res.records[0].extras?.remarks).toBe('Chilenje');
+  });
+
+  it('a corrected coordinate stops being invalid', () => {
+    const coords = 'national_code,name,latitude,longitude\n1,Alpha,N/A,28.3\n';
+    const res = parseFacilityCsv(coords, {
+      ...base,
+      cellEdits: { byLine: { 2: { latitude: '-15.4' } }, byValue: {} },
+    });
+    expect(res.invalid).toEqual([]);
+    expect(res.records[0].latitude).toBe(-15.4);
+  });
+
+  it('a corrected required field rescues a row the parser would have skipped', () => {
+    const missing = 'national_code,name\n1,\n';
+    const res = parseFacilityCsv(missing, {
+      ...base,
+      cellEdits: { byLine: { 2: { name: 'Alpha' } }, byValue: {} },
+    });
+    expect(res.skipped).toBe(0);
+    expect(res.records[0].name).toBe('Alpha');
+  });
+
+  it('cannot rescue a row quarantined for its field count', () => {
+    const ragged = 'national_code,name\n1,Alpha,extra\n';
+    const res = parseFacilityCsv(ragged, {
+      ...base,
+      cellEdits: { byLine: { 2: { name: 'Beta' } }, byValue: {} },
+    });
+    expect(res.quarantined).toHaveLength(1);
+    expect(res.records).toEqual([]);
+  });
+
+  it('parses identically when no edits are supplied', () => {
+    const withOut = parseFacilityCsv(csv, base);
+    const withEmpty = parseFacilityCsv(csv, { ...base, cellEdits: { byLine: {}, byValue: {} } });
+    expect(withEmpty.records).toEqual(withOut.records);
+  });
+});

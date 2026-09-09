@@ -49,6 +49,21 @@ export interface ColumnMapError {
 export const FACILITY_CSV_TEMPLATE =
   'national_code,name,level,ownership,status,country,zone,region,district,council,ward,village,address,phone,latitude,longitude\n';
 
+/** The operator's repairs to this file, as the Data grid recorded them (Slice C). Two shapes,
+ *  because a sweep across 3 788 rows must not cost 3 788 rows in a table.
+ *
+ *  Both key on the SOURCE HEADER, never a contract field: every column is editable, and a column
+ *  carried through as extra data has no contract field to name.
+ *
+ *  Values are compared AFTER trimming, because this parser runs with `trim: true` and so does the
+ *  reader that showed the operator the cell. Both sides trim, so both sides agree. */
+export interface FacilityCellEdits {
+  /** file line -> source header -> replacement value. Wins over `byValue` on the same cell. */
+  byLine: Record<number, Record<string, string>>;
+  /** source header -> current value -> replacement value. */
+  byValue: Record<string, Record<string, string>>;
+}
+
 export interface FacilityCsvOptions {
   /** Which national register these codes belong to, as that register's CANONICAL URI (e.g.
    *  `urn:tz:hfr`) — the `url` of a `coding_systems` row marked as a facility register, never a
@@ -69,6 +84,9 @@ export interface FacilityCsvOptions {
   /** Map this file's headers onto the contract. Omitted ⇒ headers must already BE the contract,
    *  exactly as before this option existed. */
   columnMap?: FacilityColumnMap;
+  /** Apply the operator's cell repairs while parsing (Slice C). Omitted means the file parses
+   *  exactly as it was uploaded, which is what every caller predating this option gets. */
+  cellEdits?: FacilityCellEdits;
 }
 
 export interface QuarantinedRow {
@@ -383,6 +401,22 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     return { records: [], unknownColumns, duplicateColumns: [], columnMapErrors, quarantined: [], skipped: 0, invalid: [] };
   }
 
+  // Cell edits key on the SOURCE HEADER as the operator saw it in the grid, but `headers` above is
+  // already lowercased — the same fold `columnMap` applies a few lines up, so `Type` and `type` are
+  // one column there too. Fold the edit keys once here, not once per row.
+  const cellEditsByLine = new Map<number, Record<string, string>>();
+  const cellEditsByValue = new Map<string, Record<string, string>>();
+  if (opts.cellEdits) {
+    for (const [line, edits] of Object.entries(opts.cellEdits.byLine)) {
+      const folded: Record<string, string> = {};
+      for (const [header, value] of Object.entries(edits)) folded[header.trim().toLowerCase()] = value;
+      cellEditsByLine.set(Number(line), folded);
+    }
+    for (const [header, valueMap] of Object.entries(opts.cellEdits.byValue)) {
+      cellEditsByValue.set(header.trim().toLowerCase(), valueMap);
+    }
+  }
+
   const quarantined: QuarantinedRow[] = [];
   let skipped = 0;
   const records: FacilityRecord[] = [];
@@ -396,6 +430,29 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
         reason: record.length > headers.length ? 'too_many_fields' : 'too_few_fields',
       });
       continue;
+    }
+
+    // Slice C: the operator's cell repairs, patched into the SPLIT RECORD by column index before
+    // the field map below is built. That is what carries an edit into a contract field or into
+    // `extras` according to what the column maps to, and what lets it take part in every check
+    // that follows: a corrected coordinate becomes valid, a corrected name rescues a row that
+    // would otherwise be skipped.
+    //
+    // AFTER the field-count quarantine above, deliberately and unavoidably. A ragged row is
+    // rejected before the field map exists, so no edit can rescue it; that row is fixed in the
+    // CSV, which is what the parser already tells the operator.
+    //
+    // A LINE edit beats a VALUE edit on the same cell. The operator repaired that exact cell after
+    // asking for the sweep, so the later, narrower decision is the one that stands.
+    if (opts.cellEdits) {
+      const lineEdits = cellEditsByLine.get(info.lines);
+      for (let i = 0; i < headers.length; i += 1) {
+        const header = headers[i];
+        const fromLine = lineEdits?.[header];
+        if (fromLine !== undefined) { record[i] = fromLine; continue; }
+        const fromValue = cellEditsByValue.get(header)?.[record[i]];
+        if (fromValue !== undefined) record[i] = fromValue;
+      }
     }
 
     // ⛔ Fix pass (MUST FIX 1): a header explicitly opted into `extras` must NOT also land in `r`
