@@ -2871,9 +2871,10 @@ describe('runFacilitiesImportRunRevalidate', () => {
 // ── Task 6 (Slice B): `openldr facilities add-type <display> --national-system <uri>` ──────────
 //
 // CLI parity for `POST /api/facilities/import/facility-types` (apps/server/src/facilities-routes.ts),
-// calling the SAME `addRegisterFacilityType` (`@openldr/bootstrap`) the route calls. Same free-text
-// `--national-system` as `facilities import`'s own option: a mistyped register writes vocabulary
-// under a register-scoped list nothing will ever read, and nothing errors.
+// calling the SAME `addRegisterFacilityType` (`@openldr/bootstrap`) the route calls. Fix 1
+// (whole-branch review): `--national-system` now resolves through `resolveFacilityRegisterForImport`
+// first, same as `facilities import`'s own option, so a mistyped register refuses instead of
+// minting vocabulary nothing will ever read.
 describe('add-type', () => {
   let stdoutSpy: ReturnType<typeof vi.fn>;
   let stderrSpy: ReturnType<typeof vi.fn>;
@@ -2884,6 +2885,11 @@ describe('add-type', () => {
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
     mocks.createAppContext.mockResolvedValue(mocks.ctx);
     mocks.ctx.close.mockResolvedValue(undefined);
+    // Fix 1 (whole-branch review): the same register gate `facilities import` already has. Every
+    // test in this block names `urn:tz:hfr`, which resolves by default; the gate tests below
+    // override `getByUrl` themselves.
+    mocks.createFacilityRegisterSourceStore.mockReturnValue(mocks.registerStore);
+    mocks.registerStore.getByUrl.mockResolvedValue(HFR_SOURCE);
   });
 
   afterEach(() => {
@@ -2906,6 +2912,45 @@ describe('add-type', () => {
     const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(out).toMatch(/first-aid-stations/);
     expect(mocks.ctx.close).toHaveBeenCalled();
+  });
+
+  // ── Fix 1 (whole-branch review): the register gate ──────────────────────────────────────────
+  //
+  // `runFacilitiesAddType` passed `opts.nationalSystem` straight to `addRegisterFacilityType`,
+  // unlike the HTTP route and `runFacilitiesImport`, both of which resolve it through
+  // `resolveFacilityRegisterForImport` first. A mistyped register minted a coding system and a
+  // value set under a name nothing will ever read.
+
+  it('refuses an unregistered --national-system and never calls addRegisterFacilityType', async () => {
+    mocks.registerStore.getByUrl.mockResolvedValue(null);
+
+    const code = await runFacilitiesAddType('First-aid stations', { nationalSystem: 'HFR', json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.addRegisterFacilityType).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/"HFR" is not a known facility register/);
+    expect(mocks.ctx.close).toHaveBeenCalled();
+  });
+
+  // A registered alias must still succeed, and the write must land under the register's own
+  // canonical url, not the string the operator typed. Same reason `runFacilitiesImport` passes
+  // `register.source.url`, not `opts.nationalSystem`, to the importer.
+  it('resolves a registered --national-system and passes the resolved url through', async () => {
+    mocks.registerStore.getByUrl.mockResolvedValue(HFR_SOURCE);
+    mocks.addRegisterFacilityType.mockResolvedValue({
+      code: 'first-aid-stations',
+      system: 'urn:openldr:cs:facility-type:local:urn_tz_hfr',
+      valueSetUrl: 'urn:openldr:valueset:facility-type:urn_tz_hfr',
+    });
+
+    const code = await runFacilitiesAddType('First-aid stations', { nationalSystem: 'HFR', json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.registerStore.getByUrl).toHaveBeenCalledWith('HFR');
+    expect(mocks.addRegisterFacilityType).toHaveBeenCalledWith(
+      mocks.ctx.terminology.admin, { nationalSystem: HFR_SOURCE.url, display: 'First-aid stations' },
+    );
   });
 
   it('prints its code as JSON with --json', async () => {

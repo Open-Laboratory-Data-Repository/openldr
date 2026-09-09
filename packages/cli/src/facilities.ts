@@ -881,11 +881,17 @@ function formatSuggestValuesHuman(byField: Record<ControlledField, SuggestValues
 // calling the SAME `addRegisterFacilityType` (`@openldr/bootstrap`) the route calls. The route adds
 // two capability checks (`facilities.manage` and `terminology.manage`) on top of whatever this
 // process already runs as; the CLI has no such gate, same as every other write in this file.
+//
+// Fix 1 (whole-branch review): `opts.nationalSystem` is resolved through the SAME
+// `resolveFacilityRegisterForImport` (@openldr/db) that `runFacilitiesImport` above and the HTTP
+// route both already use. Before this fix the value went straight to `addRegisterFacilityType`
+// with no check at all, so a mistyped register minted a coding system and a value set under a
+// name the import sheet's picklist would never offer and nothing would ever read.
 
 export interface FacilitiesAddTypeOpts {
-  /** ⛔ FREE TEXT, same as `facilities import`'s own `--national-system`. See that option's doc
-   *  comment. This command does NOT gate it through the registered-source lookup either: a typo
-   *  here writes vocabulary under a register-scoped list nothing will ever read, and nothing errors. */
+  /** Resolved through `resolveFacilityRegisterForImport` before the write, same as
+   *  `facilities import`'s own `--national-system`. An unregistered or deactivated value refuses
+   *  before `addRegisterFacilityType` is ever called. */
   nationalSystem: string;
   json: boolean;
 }
@@ -894,8 +900,21 @@ export interface FacilitiesAddTypeOpts {
 export async function runFacilitiesAddType(display: string, opts: FacilitiesAddTypeOpts): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
+    // Same gate, same failure shape and exit code as `runFacilitiesImport`'s own register check
+    // above: resolve first, write nothing if it refuses.
+    const register = await resolveFacilityRegisterForImport(
+      createFacilityRegisterSourceStore(ctx.internalDb), opts.nationalSystem,
+    );
+    if (!register.ok) {
+      if (opts.json) process.stdout.write(JSON.stringify({ error: register.error }) + '\n');
+      else process.stderr.write(`facilities add-type refused: ${register.error}\n`);
+      return 1;
+    }
+
+    // The RESOLVED url, not the typed string, so an alias writes under the register's one
+    // canonical identity.
     const result = await addRegisterFacilityType(
-      ctx.terminology.admin, { nationalSystem: opts.nationalSystem, display },
+      ctx.terminology.admin, { nationalSystem: register.source.url, display },
     );
     if (opts.json) {
       process.stdout.write(JSON.stringify(result, null, 2) + '\n');
