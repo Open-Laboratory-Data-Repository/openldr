@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "a4a62986",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A column kept as extra data goes quiet"
+        },
+        {
+          "hash": "595ca2d5",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The status icon writes the picks, and the Save button goes"
+        },
+        {
+          "hash": "077f08fa",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The value-map Save moves into the row it writes"
+        },
+        {
           "hash": "90926d51",
           "type": "fix",
           "scope": "facilities",
