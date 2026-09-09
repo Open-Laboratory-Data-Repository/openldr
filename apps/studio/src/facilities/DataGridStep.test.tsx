@@ -17,6 +17,7 @@ beforeEach(() => {
   mocked(api.readFacilityImportRows).mockResolvedValue({
     headers: ['MFL Code', 'Name'],
     rows: [['100001', 'Chunga Clinic'], ['100002', 'Ngwerere Health Post']],
+    lines: [2, 3],
     offset: 0, limit: 100, total: 3788,
   });
 });
@@ -44,6 +45,7 @@ describe('DataGridStep', () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
       headers: ['MFL Code', 'Name'],
       rows: [['100101', 'Nampundwe Health Post'], ['100102', 'Mbewe Clinic']],
+      lines: [102, 103],
       offset: 100, limit: 100, total: 3788,
     });
 
@@ -84,6 +86,7 @@ describe('DataGridStep', () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
       headers: ['MFL Code', 'Name'],
       rows: [['100001', 'Chunga Clinic']],
+      lines: [2],
       offset: 0, limit: 100, total: 1, skipped: 2, skippedLines: [4, 9],
     });
     render(<DataGridStep runId="fir_1" />);
@@ -97,7 +100,7 @@ describe('DataGridStep', () => {
   // of which could be read. The skipped-line information must survive the empty check.
   it('names the skipped lines instead of saying the file is empty, when every row was skipped', async () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
-      headers: [], rows: [], offset: 0, limit: 100, total: 0, skipped: 3, skippedLines: [1, 2, 3],
+      headers: [], rows: [], lines: [], offset: 0, limit: 100, total: 0, skipped: 3, skippedLines: [1, 2, 3],
     });
     render(<DataGridStep runId="fir_1" />);
     expect(await screen.findByText(/1, 2, 3/)).toBeInTheDocument();
@@ -108,6 +111,7 @@ describe('DataGridStep', () => {
     mocked(api.readFacilityImportRows).mockResolvedValue({
       headers: ['MFL Code', 'Name'],
       rows: [['100001', 'Chunga Clinic']],
+      lines: [2],
       offset: 0, limit: 100, total: 1, skipped: 0, skippedLines: [],
     });
     render(<DataGridStep runId="fir_1" />);

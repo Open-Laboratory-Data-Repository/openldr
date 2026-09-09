@@ -307,7 +307,7 @@ describe('ImportFacilitiesSheet', () => {
     // here for the same reason `uploadFacilityImport` is above: an unmocked call has no
     // `mockResolvedValue` and returns `undefined`, and `undefined.then` throws inside the effect.
     mocked(api.readFacilityImportRows).mockResolvedValue({
-      headers: [], rows: [], offset: 0, limit: 100, total: 0,
+      headers: [], rows: [], lines: [], offset: 0, limit: 100, total: 0,
     });
   });
 
@@ -2295,7 +2295,7 @@ describe('ImportFacilitiesSheet', () => {
     it('Continue lands on Data, and Data shows the stored file on screen', async () => {
       mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-a' });
       mocked(api.readFacilityImportRows).mockResolvedValue({
-        headers: ['MFL Code', 'Name'], rows: [['100001', 'Chunga Clinic']], offset: 0, limit: 100, total: 1,
+        headers: ['MFL Code', 'Name'], rows: [['100001', 'Chunga Clinic']], lines: [2], offset: 0, limit: 100, total: 1,
       });
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
@@ -2572,7 +2572,7 @@ describe('the file drop zone', () => {
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-default' });
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'stored' }));
     mocked(api.readFacilityImportRows).mockResolvedValue({
-      headers: [], rows: [], offset: 0, limit: 100, total: 0,
+      headers: [], rows: [], lines: [], offset: 0, limit: 100, total: 0,
     });
   });
 

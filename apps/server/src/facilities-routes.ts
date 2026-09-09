@@ -3024,6 +3024,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return {
         headers: window.headers,
         rows: window.rows,
+        lines: window.lines,
         offset,
         limit,
         total: window.scanned,

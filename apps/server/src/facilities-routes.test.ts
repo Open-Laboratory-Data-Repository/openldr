@@ -4369,12 +4369,35 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
     expect(res.json()).toEqual({
       headers: ['code', 'name'],
       rows: [['2', 'Beta']],
+      lines: [3],
       offset: 1,
       limit: 1,
       total: 3,
       skipped: 0,
       skippedLines: [],
     });
+  });
+
+  it('returns the file line of every row it pages back', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n2,Beta\n3,Gamma\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET', url: `/api/facilities/import/runs/${runId}/rows?offset=0&limit=2`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { rows: string[][]; lines: number[] };
+    expect(body.lines).toHaveLength(body.rows.length);
+    expect(body.lines[0]).toBe(2);
   });
 
   it('defaults offset to 0 and limit to 100 when the query omits them', async () => {
@@ -4396,6 +4419,7 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
     expect(res.json()).toEqual({
       headers: ['code', 'name'],
       rows: [['1', 'Alpha'], ['2', 'Beta']],
+      lines: [2, 3],
       offset: 0,
       limit: 100,
       total: 2,

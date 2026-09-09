@@ -1657,6 +1657,9 @@ export const getFacilityImportRun = (id: string): Promise<FacilityImportRunView>
 export interface FacilityImportRows {
   headers: string[];
   rows: string[][];
+  /** The FILE LINE each entry in `rows` came from, 1-based, same order and same length. A cell edit
+   *  is keyed on this number, so the grid must never compute it from `offset`. */
+  lines: number[];
   offset: number;
   limit: number;
   total: number;
