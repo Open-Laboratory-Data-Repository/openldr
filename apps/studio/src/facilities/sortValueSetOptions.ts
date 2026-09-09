@@ -19,7 +19,7 @@ import type { ValueSetOption } from '@/api';
  * order case-insensitive, so a lowercase entry does not sort after every capitalised one.
  *
  * ⛔ NOT FOR A RANKED LIST. Where a ranker has already scored candidates, those keep their scored
- * order and this sorts only what is left underneath them (see `ValueMapPanel`). Alphabetising a
+ * order and this sorts only what is left underneath them (see `ValueMapRow`). Alphabetising a
  * ranking would throw away the thing that makes the top of it useful.
  *
  * Returns a new array; the input is not mutated.

@@ -1373,7 +1373,7 @@ export interface ValueMappingEntry {
   toCode: string;
 }
 
-/** `POST /api/facilities/import/value-mappings` — `ValueMapPanel`'s Save action. Validates every
+/** `POST /api/facilities/import/value-mappings` — `ColumnMapStep`'s Save action. Validates every
  *  entry against its field's value set BEFORE writing any of them; refuses with 400 (writing
  *  nothing) on the first `toCode` that is not in that set. `written`/`superseded` mirror the server's
  *  `SaveValueMappingsResult` (facility-value-mappings.ts) — `superseded` lists the mapping ids

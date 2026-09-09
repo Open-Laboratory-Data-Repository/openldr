@@ -39,10 +39,12 @@ export function ConstantValueField({ id, field, value, onChange }: ConstantValue
   const [notSeeded, setNotSeeded] = useState(false);
 
   // ⛔ NO REF GUARD. `[field]` is already the correct and sufficient guard, and a ref set before the
-  // await is exactly what made `ValueMapPanel` render empty pickers under React 18 StrictMode in
-  // dev: pass one started the request and set the ref, cleanup set `cancelled`, pass two saw the
-  // ref match and returned, and the first request resolved into a cancelled closure. See that
-  // file's own docblock at `ValueMapPanel.tsx:100-108`.
+  // await is exactly what made the old value-map panel render empty pickers under React 18
+  // StrictMode in dev: pass one started the request and set the ref, cleanup set `cancelled`, pass
+  // two saw the ref match and returned, and the first request resolved into a cancelled closure. An
+  // operator hit that on a real import and asked what to do with twenty-three unmappable values;
+  // the panel had never loaded anything at all. The dependency array had already ruled out the
+  // re-run the ref was guarding against, so the ref bought nothing and cost that failure.
   useEffect(() => {
     let cancelled = false;
     setStatus('loading');

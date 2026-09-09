@@ -40,8 +40,8 @@ export const CONTRACT_FIELDS: readonly string[] = [...REQUIRED_FIELDS, ...OPTION
 const CONTRACT_FIELD_SET = new Set<string>(CONTRACT_FIELDS);
 
 /** The three fields bound to a value set. Mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS`, the
- *  same "mirrored, not shared" idiom `ValueMapPanel.tsx:19` and this file's own `CONTRACT_FIELDS`
- *  already use, because this app has no dependency on that package. */
+ *  same "mirrored, not shared" idiom this file's own `CONTRACT_FIELDS` already uses, because this
+ *  app has no dependency on that package. */
 const CONTROLLED_CONSTANT_FIELDS = new Set<string>(['level', 'status', 'country']);
 
 /** Task 6: the same three fields, as an array. This file already has the Set above for a
@@ -470,10 +470,10 @@ export function ColumnMapStep({
   // same ranking `checkRow` would, so the row renders one worklist regardless of which of the two
   // ways found it.
   //
-  // ⛔ SIGNATURE-GUARDED, same idiom as `ValueMapPanel`'s own fetch effect and this file's own
-  // header-seed effect: a string built from the data itself, so an unrelated re-render cannot
-  // re-fire this and a genuinely new set always does. `checkedByHeader` is read inside but
-  // deliberately NOT a dependency, because including it would re-run this the moment it sets state below.
+  // ⛔ SIGNATURE-GUARDED, same idiom as this file's own header-seed effect: a string built from the
+  // data itself, so an unrelated re-render cannot re-fire this and a genuinely new set always does.
+  // `checkedByHeader` is read inside but deliberately NOT a dependency, because including it would
+  // re-run this the moment it sets state below.
   const unmappedByFieldSignature = JSON.stringify(
     CONTROLLED_FIELDS_LIST.map((f) => [f, unmappedByField?.[f] ?? []]),
   );
@@ -527,8 +527,8 @@ export function ColumnMapStep({
   }, [unmappedByFieldSignature, claimedTargets, headers]);
 
   /** The choice for one (header, value) row: the operator's own pick if they made one, otherwise
-   *  the same "confident top candidate, else Not mapped" default `ValueMapPanel` seeds into state.
-   *  Computed here instead, since nothing about it needs to survive a `StrictMode` double-render. */
+   *  the same "confident top candidate, else Not mapped" default the old value-map panel seeded
+   *  into state. Computed here, since nothing about it needs to survive a `StrictMode` double-render. */
   const valueChoiceFor = (header: string, entryValue: string, candidates: ValueSuggestion['candidates']): string => {
     const chosen = valueChoices[valueChoiceKey(header, entryValue)];
     if (chosen) return chosen;
@@ -722,8 +722,8 @@ export function ColumnMapStep({
                   next row. At the mobile breakpoint the grid is already a single column, so this is
                   a no-op there and the block simply stacks like everything else. Reuses
                   `ValueMapRow` (Task 6): ranked candidates first in score order, then the rest of the
-                  value set sorted, `Not mapped` always first. The same ordering `ValueMapPanel`
-                  still uses for Review's own copy of these values, from the same component. */}
+                  value set sorted, `Not mapped` always first. Review reports the same values but
+                  offers no pick-list of its own; the decision is made here. */}
               {worklist.length > 0 && (
                 <div className="min-w-0 sm:col-span-2">
                   <div className="grid grid-cols-[minmax(0,auto)_1fr] items-center gap-x-4 gap-y-2 rounded-md border border-border/60 bg-muted/30 p-2">

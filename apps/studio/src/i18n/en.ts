@@ -1144,16 +1144,13 @@ export const en = {
         rowCheckBlockedNoRun: 'Upload the file first. There is nothing stored yet to check.',
         rowCheckFailed: 'Could not check this column. Try again.',
       },
-      // Task 8: the value-mapping panel — one row per unmapped raw value (level/status/country),
-      // grouped by field, each with a ranked Select over that field's own value set. An unmapped
-      // value never blocks — see ValueMapPanel.tsx's own docblock — so there is deliberately no
-      // "cannot continue"-style copy anywhere in this group.
+      // Slice B: the value worklist moved inline into `ColumnMapStep`, one per mapping row, each a
+      // ranked Select over that field's own value set. An unmapped value never blocks the import,
+      // so there is deliberately no "cannot continue"-style copy anywhere in this group.
       valueMap: {
         saveAction: 'Save mappings',
         saving: 'Saving…',
         notMapped: 'Not mapped',
-        loadFailed: 'The options for this field could not be loaded. Check the connection and reopen this panel.',
-        noValueSet: 'This field has no value set on this install, so there is nothing to map onto yet. Add one under Terminology.',
         savedCount: '{{count}} mapping(s) written.',
       },
     },

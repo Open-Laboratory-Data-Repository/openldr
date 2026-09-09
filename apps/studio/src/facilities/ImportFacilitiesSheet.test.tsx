@@ -22,9 +22,8 @@ vi.mock('@/api', async (orig) => {
     // `RegisterSourceDialog` (rendered by `ImportFacilitiesSheet` itself) — mocked here for the
     // same "one factory, not two" reason as `listFacilityImportSources` above.
     createFacilityImportSource: vi.fn(),
-    // Task 8: `ColumnMapStep`'s own header+suggestion fetch, and `ValueMapPanel`'s two calls
-    // (rendered by `ImportFacilitiesSheet` itself, same as `RegisterSourceDialog` above) — mocked
-    // here for the same "one factory, not two" reason.
+    // Task 8: `ColumnMapStep`'s own header+suggestion fetch, plus the two calls its inline value
+    // worklist makes, mocked here for the same "one factory, not two" reason.
     suggestColumnMap: vi.fn(),
     suggestValueMappings: vi.fn(),
     writeFacilityValueMappings: vi.fn(),

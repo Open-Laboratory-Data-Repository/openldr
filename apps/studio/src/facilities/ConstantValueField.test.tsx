@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
-// `ConstantValueField` fetches its own value set, the same way `ValueMapPanel` does and unlike
-// `ColumnMapStep`, which takes its column suggestions as a prop. There is no global `fetch` stub in
-// `setupTests.ts`, so an unmocked call would hit Node's own `fetch` and reject on a relative URL.
+// `ConstantValueField` fetches its own value set, the same way the old value-map panel did, and
+// unlike `ColumnMapStep`, which takes its column suggestions as a prop. There is no global `fetch`
+// stub in `setupTests.ts`, so an unmocked call would hit Node's own `fetch` and reject on a
+// relative URL.
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual, suggestValueMappings: vi.fn() };

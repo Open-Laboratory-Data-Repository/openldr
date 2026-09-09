@@ -631,9 +631,8 @@ describe('ColumnMapStep', () => {
     });
 
     // Final review, M1: the test above used to claim this ordering in its name and never open a
-    // Select. `ValueMapPanel.test.tsx` asserts the same ordering for its own copy of these rows,
-    // but that does not prove THIS panel feeds `ValueMapRow` the right `options`: the two read
-    // them from different places, `check.options` here and the panel's own fetch there.
+    // Select. Opening one is the only thing that proves this step feeds `ValueMapRow` the right
+    // `options`, which it reads off `check.options`.
     it('puts the ranked candidates in score order at the top and sorts the tail after them', async () => {
       mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
         header: 'Type', values: ['Zonal Hospital'], distinct: 1, truncated: false,
