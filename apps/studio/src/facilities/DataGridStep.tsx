@@ -9,6 +9,7 @@ import { StripedEmpty } from '@/components/ui/striped-empty';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useIsNarrowViewport } from '@/lib/viewport';
+import { CellEditChoiceDialog } from './CellEditChoiceDialog';
 import {
   readFacilityImportRows,
   readFacilityImportEdits,
@@ -63,7 +64,10 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
    *  render's closure calls it. See `commit`'s own comment for why that matters. */
   const editingRef = useRef<{ line: number; header: string } | null>(null);
   const [draft, setDraft] = useState('');
-  void controlledHeaders; // Task 7 reads this to open the this-row-versus-everywhere choice.
+  /** A typed change waiting on the this-row-versus-everywhere answer. `null` when nothing waits. */
+  const [pending, setPending] = useState<
+    { line: number; header: string; fromValue: string; toValue: string } | null
+  >(null);
 
   useEffect(() => {
     // Not fetched at all when editing is off: a read-only grid has nothing to overlay, and this
@@ -148,10 +152,37 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
     // because it is edited relative to the sweep, even though it matches the file.
     const standing = edits.find((e) => e.line === line && e.header === header);
     if (draft === fileValue && standing) { await undo(standing); return; }
-    // The choice dialog (Task 7) intercepts a controlled-field column before this runs.
+    // A controlled-field column with a non-blank value asks first. A blank cell never sweeps: a
+    // blank is not a category, and filling in every blank in a column writes data the file never
+    // carried.
+    if (controlledHeaders?.[header] && fileValue !== '') {
+      setPending({ line, header, fromValue: fileValue, toValue: draft });
+      return;
+    }
     try {
       const saved = await putFacilityImportEdit(runId, { header, line, toValue: draft });
       setEdits((prev) => [...prev.filter((e) => !(e.line === line && e.header === header)), saved]);
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function resolvePending(scope: 'row' | 'everywhere'): Promise<void> {
+    if (!pending) return;
+    const { line, header, fromValue, toValue } = pending;
+    setPending(null);
+    try {
+      const saved = await putFacilityImportEdit(runId, scope === 'row'
+        ? { header, line, toValue }
+        : { header, fromValue, toValue });
+      setEdits((prev) => [
+        // A sweep supersedes any line edit on the same cell only in what the server stores. Here
+        // the line edit is dropped from the local list for the same reason, so the grid keeps
+        // agreeing with the parser's precedence.
+        ...prev.filter((e) => !(e.line === line && e.header === header)
+          && !(e.line === null && e.header === header && e.fromValue === fromValue)),
+        saved,
+      ]);
     } catch (err) {
       setFailure(err instanceof Error ? err.message : String(err));
     }
@@ -265,8 +296,13 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
                     // Keyboard route in, editable cells only. A read-only grid must not become a
                     // tab stop on every cell: `tabIndex` and `onKeyDown` are both left off entirely
                     // when `editable` is false, not just made no-ops.
+                    //
+                    // No `role="button"` here. This table has no `role="grid"`, so a plain `<td>`
+                    // already reads as a table cell to a screen reader, which is what it is.
+                    // `role="button"` used to hide that from the reader. `tabIndex` and the key
+                    // handlers below make the cell focusable and keyboard-openable on their own;
+                    // neither needs a role to work.
                     tabIndex={editable ? 0 : undefined}
-                    role={editable ? 'button' : undefined}
                     aria-label={editable ? t('facilities.import.editCellLabel', { header: h, line }) : undefined}
                     onClick={editable ? () => openCell(line, h, value) : undefined}
                     onKeyDown={editable ? (e) => {
@@ -308,6 +344,16 @@ export function DataGridStep({ runId, editable, controlledHeaders }: DataGridSte
         onPageChange={setPage}
         onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
       />
+      {pending && (
+        <CellEditChoiceDialog
+          open
+          header={pending.header}
+          fromValue={pending.fromValue}
+          toValue={pending.toValue}
+          onOpenChange={(o) => { if (!o) setPending(null); }}
+          onChoose={(scope) => { void resolvePending(scope); }}
+        />
+      )}
     </div>
   );
 }

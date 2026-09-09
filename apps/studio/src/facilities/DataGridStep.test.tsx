@@ -333,4 +333,81 @@ describe('DataGridStep', () => {
     fireEvent.keyDown(box, { key: 'Enter' });
     await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledTimes(1));
   });
+
+  it('asks before changing a controlled-field cell, then sweeps the value', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['Type'], rows: [['Others']], lines: [2], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    mocked(api.putFacilityImportEdit).mockResolvedValue({
+      header: 'Type', line: null, fromValue: 'Others', toValue: 'Health Post',
+    });
+    render(<DataGridStep runId="fir_1" editable controlledHeaders={{ Type: 'level' }} />);
+    await screen.findByText('Others');
+    await userEvent.click(screen.getByText('Others'));
+    const box = screen.getByRole('textbox');
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Health Post{Enter}');
+    // Nothing is written until the operator has answered.
+    expect(api.putFacilityImportEdit).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole('button', { name: /every row/i }));
+    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledWith('fir_1', {
+      header: 'Type', fromValue: 'Others', toValue: 'Health Post',
+    }));
+  });
+
+  it('writes only the row when the operator says just this row', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['Type'], rows: [['Others']], lines: [2], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    mocked(api.putFacilityImportEdit).mockResolvedValue({
+      header: 'Type', line: 2, fromValue: null, toValue: 'Health Post',
+    });
+    render(<DataGridStep runId="fir_1" editable controlledHeaders={{ Type: 'level' }} />);
+    await screen.findByText('Others');
+    await userEvent.click(screen.getByText('Others'));
+    const box = screen.getByRole('textbox');
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Health Post{Enter}');
+    await userEvent.click(await screen.findByRole('button', { name: /just this row/i }));
+    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledWith('fir_1', {
+      header: 'Type', line: 2, toValue: 'Health Post',
+    }));
+  });
+
+  it('does not ask on an ordinary column', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [2], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    mocked(api.putFacilityImportEdit).mockResolvedValue({
+      header: 'name', line: 2, fromValue: null, toValue: 'Beta',
+    });
+    render(<DataGridStep runId="fir_1" editable controlledHeaders={{ Type: 'level' }} />);
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByText('Alpha'));
+    const box = screen.getByRole('textbox');
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Beta{Enter}');
+    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /every row/i })).not.toBeInTheDocument();
+  });
+
+  it('does not ask on a controlled column whose cell is blank', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['Type'], rows: [['']], lines: [2], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    mocked(api.putFacilityImportEdit).mockResolvedValue({
+      header: 'Type', line: 2, fromValue: null, toValue: 'Health Post',
+    });
+    render(<DataGridStep runId="fir_1" editable controlledHeaders={{ Type: 'level' }} />);
+    await screen.findAllByRole('row');
+    await userEvent.click(screen.getAllByRole('cell')[0]);
+    await userEvent.type(screen.getByRole('textbox'), 'Health Post{Enter}');
+    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledWith('fir_1', {
+      header: 'Type', line: 2, toValue: 'Health Post',
+    }));
+  });
 });
