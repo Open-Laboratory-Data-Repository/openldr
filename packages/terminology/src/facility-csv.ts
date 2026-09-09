@@ -402,8 +402,11 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
   }
 
   // Cell edits key on the SOURCE HEADER as the operator saw it in the grid, but `headers` above is
-  // already lowercased — the same fold `columnMap` applies a few lines up, so `Type` and `type` are
-  // one column there too. Fold the edit keys once here, not once per row.
+  // already lowercased. That is the same fold `columnMap` applies a few lines up, so `Type` and
+  // `type` are one column there too. Fold the edit keys once here, not once per row.
+  //
+  // If a caller ever passes two differently-cased keys for the same header (`Type` and `type`),
+  // this fold lets the last one win with no error. Whoever writes that caller should dedupe first.
   const cellEditsByLine = new Map<number, Record<string, string>>();
   const cellEditsByValue = new Map<string, Record<string, string>>();
   if (opts.cellEdits) {
