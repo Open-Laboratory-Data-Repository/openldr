@@ -1,10 +1,106 @@
 {
-  "generatedAt": "2026-09-09",
+  "generatedAt": "2026-09-10",
   "days": [
+    {
+      "date": "2026-09-10",
+      "version": null,
+      "entries": [
+        {
+          "hash": "5b931b18",
+          "type": "fix",
+          "scope": "",
+          "title": "Remove em dash from facilities-routes comment"
+        },
+        {
+          "hash": "f1ac4ed4",
+          "type": "fix",
+          "scope": "docs",
+          "title": "Cell-edit section names level, status, country by identifier"
+        },
+        {
+          "hash": "a07e57a3",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A ragged row cannot open, a write failure keeps the table, and undo names its blast radius"
+        },
+        {
+          "hash": "dfad09f8",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Refuse a bad edit line and audit the edits routes"
+        },
+        {
+          "hash": "7cd4bab8",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A cell edit makes the check and the review summary stale"
+        },
+        {
+          "hash": "9c0e676b",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Make cell edit dialog focus explicit, not a Radix default"
+        },
+        {
+          "hash": "798b2c16",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A repaired category value can change one row or every matching row"
+        },
+        {
+          "hash": "d88a2f10",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Keyboard route into a cell, a real double-commit test, and dead copy removed"
+        }
+      ]
+    },
     {
       "date": "2026-09-09",
       "version": null,
       "entries": [
+        {
+          "hash": "58517bf6",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The data grid edits a cell, marks it, and undoes it"
+        },
+        {
+          "hash": "73876dc2",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Routes to record, read and undo a cell edit"
+        },
+        {
+          "hash": "cd84aa68",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Validate and apply read the file through the cell edits"
+        },
+        {
+          "hash": "e6cd025e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Drop an em dash from the cell-edits fold comment"
+        },
+        {
+          "hash": "7ba2b026",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The CSV parser reads a file through the operator's cell edits"
+        },
+        {
+          "hash": "e361a938",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The paged file read names each row's file line"
+        },
+        {
+          "hash": "5bcce271",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A table for cell edits, keyed on the register and the file"
+        },
         {
           "hash": "b2b0247a",
           "type": "fix",
