@@ -3379,6 +3379,55 @@ describe('POST /api/facilities/import/value-mappings', () => {
     expect(res.statusCode).toBe(400);
     expect(ctx.__audit).toHaveLength(0);
   });
+
+  // Task 3 (facility-level-ignore): the operator marks a raw level value as belonging to no
+  // concept. `saveFacilityValueMappings` skips the value-set lookup entirely for an ignore entry
+  // (facility-value-mappings.ts:83), so this needs no level value set seeded on the db.
+  it('accepts an ignore entry for level and writes it', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: {
+        nationalSystem: SYSTEM,
+        mappings: [{ field: 'level', rawValue: 'Others', ignore: true }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().written).toBe(1);
+  });
+
+  // Ignore is level-only (spec decision 6). The schema refuses this at the door, before the
+  // request ever reaches `saveFacilityValueMappings`'s own copy of the same rule.
+  it('refuses an ignore entry for a field other than level', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const app = await appWith(fakeCreateCtx(internalDb));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: {
+        nationalSystem: SYSTEM,
+        mappings: [{ field: 'status', rawValue: 'Functional', ignore: true }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses an entry carrying neither toCode nor ignore', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const app = await appWith(fakeCreateCtx(internalDb));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: {
+        nationalSystem: SYSTEM,
+        mappings: [{ field: 'level', rawValue: 'Others' }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 // --- A2b Task 3: POST /api/facilities/import/upload -------------------------------------------

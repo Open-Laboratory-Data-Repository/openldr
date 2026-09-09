@@ -288,10 +288,18 @@ const SourceCreateSchema = z.object({
 // code decision per entry, forwarded verbatim to Task 5's `saveFacilityValueMappings`. `field` is
 // restricted to CONTROLLED_FIELDS (not a free string) so a typo lands as a 400 here rather than as
 // a silently-ignored `entry.field` inside that function.
+// ⛔ The refusals live HERE as well as in `saveFacilityValueMappings`, deliberately. This one gives
+// the operator a 400 naming the bad entry; that one guards the CLI, which never passes through this
+// schema at all. Neither is redundant with the other.
 const ValueMappingEntrySchema = z.object({
   field: z.enum(CONTROLLED_FIELDS),
   rawValue: z.string().min(1),
-  toCode: z.string().min(1),
+  toCode: z.string().min(1).optional(),
+  ignore: z.literal(true).optional(),
+}).refine((e) => (e.toCode === undefined) !== (e.ignore === undefined), {
+  message: 'an entry needs either a toCode or ignore, not both and not neither',
+}).refine((e) => !e.ignore || e.field === 'level', {
+  message: 'only level values can be ignored',
 });
 
 const ValueMappingsSchema = z.object({
