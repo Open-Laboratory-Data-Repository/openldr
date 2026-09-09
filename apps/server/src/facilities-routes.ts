@@ -26,7 +26,7 @@ import {
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
-  createFacilityRegisterSourceStore, resolveFacilityRegisterForImport,
+  createFacilityRegisterSourceStore, resolveFacilityRegisterForImport, createFacilityImportEditStore,
   SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable, APPLY_PHASE,
   VALIDATE_PHASE,
 } from '@openldr/db';
@@ -813,6 +813,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // import route below). Constructed once per registration, not per request: it is a thin closure
   // over `ctx.internalDb`, the same db this file already reads directly in several routes.
   const importRuns = createFacilityImportRunStore(ctx.internalDb);
+
+  // Slice C: the operator's cell repairs, keyed off the same (nationalSystem, fileHash) pair the
+  // edits routes below resolve from a run row. Constructed once per registration, the same reason
+  // `importRuns` above is.
+  const importEdits = createFacilityImportEditStore(ctx.internalDb);
 
   // B1 Task 3: the registers an import may name. Constructed once per registration for the same
   // reason `importRuns` above is — a thin closure over `ctx.internalDb`.
@@ -3024,6 +3029,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return {
         headers: window.headers,
         rows: window.rows,
+        lines: window.lines,
         offset,
         limit,
         total: window.scanned,
@@ -3040,6 +3046,114 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       }
       throw err;
     }
+  });
+
+  // Slice C: the operator's cell repairs for one run's file.
+  //
+  // KEYED OFF THE RUN, and resolved to `(nationalSystem, fileHash)` from the run row. That is the
+  // guard as well as the lookup: an operator holds a run id and nothing else, and cannot name a
+  // register or a file they never uploaded. It is also why a re-upload of the same bytes keeps the
+  // repairs, which is the whole reason these are not run-scoped.
+  //
+  // MANAGE, not VIEW, for the reason the rows route above documents: these read and write the raw
+  // content of an uploaded file.
+  const EditScopeSchema = z.object({
+    header: z.string().min(1),
+    line: z.number().int().positive().optional(),
+    // `min(1)`: the grid never sends an empty `fromValue`, so one arriving here names no real
+    // sweep. Without this an empty string still counted as "present" and slipped past the
+    // line-or-value check below.
+    fromValue: z.string().min(1).optional(),
+  });
+  const EditSchema = EditScopeSchema.extend({ toValue: z.string() });
+
+  app.get('/api/facilities/import/runs/:id/edits', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
+    return { edits: await importEdits.list(run.nationalSystem, run.fileHash) };
+  });
+
+  app.put('/api/facilities/import/runs/:id/edits', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const parsed = EditSchema.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.issues[0]?.message ?? 'invalid edit' }; }
+    const { header, line, fromValue, toValue } = parsed.data;
+    // Refused HERE as well as in the store, because a 500 from the store's own throw would tell the
+    // studio this was a server fault when it is a request that names no cell.
+    if ((line === undefined) === (fromValue === undefined)) {
+      reply.code(400);
+      return { error: 'an edit names a line or a value, never both and never neither' };
+    }
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
+    const saved = await importEdits.put({
+      nationalSystem: run.nationalSystem,
+      fileHash: run.fileHash,
+      header,
+      line: line ?? null,
+      fromValue: fromValue ?? null,
+      toValue,
+      createdBy: actorFromRequest(req).actorId,
+    });
+    // The design spec claims every edit is auditable. `before` is left null rather than the row
+    // this replaced: the store's own `onConflict` upsert never hands that row back, and a second
+    // read just to fill this field would be a write path slowed down for an audit nicety.
+    await recordAudit(ctx, req, {
+      action: 'facility.import.edit',
+      entityType: 'facility-import-edit',
+      entityId: saved.id,
+      before: null,
+      after: saved,
+      metadata: { runId: id, header, line: line ?? null, fromValue: fromValue ?? null },
+    });
+    return saved;
+  });
+
+  app.delete('/api/facilities/import/runs/:id/edits', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { header?: string; line?: string; fromValue?: string };
+    if (!q.header) { reply.code(400); return { error: 'header is required' }; }
+    // `fromValue=''` names no sweep, same reason the PUT schema now refuses it.
+    if (q.fromValue !== undefined && q.fromValue.length === 0) {
+      reply.code(400);
+      return { error: 'fromValue must not be empty' };
+    }
+    // ⛔ A QUERY PARAM THAT FAILS TO PARSE IS NOT "ABSENT". The rows route's `||`-vs-NaN note is
+    // about a MISSING param falling back to a default; this is a PRESENT param that does not name a
+    // line at all. Silently downgrading `line=abc` to "no line" let a bad line, plus a `fromValue`
+    // the studio never sends alongside one, delete the whole column sweep instead of failing.
+    let line: number | undefined;
+    if (q.line !== undefined) {
+      if (!/^[1-9]\d*$/.test(q.line)) {
+        reply.code(400);
+        return { error: 'line must be a positive integer' };
+      }
+      line = Number.parseInt(q.line, 10);
+    }
+    if ((line === undefined) === (q.fromValue === undefined)) {
+      reply.code(400);
+      return { error: 'an edit names a line or a value, never both and never neither' };
+    }
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
+    const key = line === undefined
+      ? { header: q.header, fromValue: q.fromValue as string }
+      : { header: q.header, line };
+    const removed = await importEdits.remove(run.nationalSystem, run.fileHash, key);
+    // Nothing changed when there was nothing there, so nothing is audited: same rule the rest of
+    // this file already follows for a no-op write.
+    if (removed) {
+      await recordAudit(ctx, req, {
+        action: 'facility.import.edit.delete',
+        entityType: 'facility-import-edit',
+        entityId: id,
+        before: null,
+        after: null,
+        metadata: { header: q.header, line: line ?? null, fromValue: q.fromValue ?? null },
+      });
+    }
+    return { removed };
   });
 
   // Task 2 (mapping-answers-back, Slice B): one column's vocabulary, so the mapping step can check

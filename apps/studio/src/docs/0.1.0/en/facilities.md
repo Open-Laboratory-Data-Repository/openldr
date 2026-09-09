@@ -126,6 +126,31 @@ own as soon as the check starts, before the check itself finishes. If the check 
 with the column map, the wizard sends you back to Mapping and shows the errors there, so you can
 fix the map in place.
 
+### Repairing a cell on the Data step
+
+The Data step shows your file as a table. Click a cell to change what it says.
+
+Your changes are not written back to the file you uploaded. They are recorded against
+the file itself, so uploading the same file again keeps every repair you made. Change the
+file and the repairs stop applying, because the line numbers they name no longer mean
+anything.
+
+A repaired cell gets an amber rule down its left edge and an undo button. Undo puts the
+file's own value back. Undoing a sweep puts back every row the sweep changed, not just
+the one cell you clicked.
+
+Repairing a cell in a column you mapped to `level`, `status` or `country` asks one question,
+unless the cell is blank: change this row, or change every row that reads the same thing.
+A blank is not a category, so filling one in changes only that row. Categories usually
+repeat, so a value you correct once is usually wrong everywhere it appears.
+
+Two things a repair cannot do. It cannot rescue a row whose column count does not match the
+header: that row is set aside before any cell exists, so fix it in the CSV. And it cannot add
+or remove a row. A row that should not be imported is a row to remove from the CSV.
+
+Repairing a cell makes your last check stale. Check the column again, then validate, before
+you go on to Review.
+
 ## What a column map is
 
 OpenLDR's import contract has a fixed set of fields: `national_code` and `name` (required), plus

@@ -57,6 +57,8 @@ export * from './terminology-ingest-job-store';
 export { createFacilityJobStore } from './facility-job-store';
 export type { FacilityJob, FacilityJobKind, FacilityJobStatus, FacilityJobStore } from './facility-job-store';
 export { createFacilityImportRunStore, type FacilityImportRun, type FacilityImportRunStore } from './facility-import-run-store';
+export { createFacilityImportEditStore } from './facility-import-edit-store';
+export type { FacilityImportEdit, FacilityImportEditStore } from './facility-import-edit-store';
 export { createFacilityRegisterSourceStore, resolveFacilityRegisterForImport } from './facility-register-sources';
 export type { FacilityRegisterSource, FacilityRegisterSourceStore, FacilityRegisterImportGate } from './facility-register-sources';
 // `FacilityImportRunStatus` comes from HERE, not from the store — the store re-exports this same

@@ -1,7 +1,7 @@
 # A data stage for the facility import, and a mapping step that answers back
 
 Date: 2026-09-08
-Status: Slices A and B built; the status-icon rules revised 2026-09-09, see below
+Status: Slices A, B and C built; the status-icon rules revised 2026-09-09, see below
 
 ## The problem
 
@@ -43,8 +43,21 @@ Five, by the operator, before this was written.
    retyped.
 3. **The file is uploaded when leaving Source, and rows are paged from the server.** The tab never
    holds more than the header row, exactly as now.
-4. **Edits live server-side, attached to the run.** The uploaded blob is never rewritten.
+4. **Edits live server-side, keyed on the register and the file, not the run.** The uploaded blob is
+   never rewritten. An earlier draft attached them to the run; a re-upload mints a new run, so
+   twenty repairs would vanish the moment the operator re-uploaded for an unrelated reason. The key
+   is `(nationalSystem, fileHash)`. `file_hash` is a sha256 of the bytes, computed as they stream,
+   and `notNull` on every run (`080_facility_import_runs.ts:24`), so it is already there. A file
+   that changed gets a different hash and its old edits stop applying, which is right: the line
+   numbers they name would no longer mean anything.
 5. **The per-field control is a status icon, not a button.** States below.
+6. **Every column is editable, extras included.** An edit therefore names a SOURCE HEADER, not a
+   contract field, which is also what makes it work for a column carried through as extra data.
+7. **An edit can be taken back.** The grid marks an edited cell and offers to clear it. Without that
+   a mistyped repair is permanent for as long as the file is.
+
+Decisions 6 and 7 were taken on 2026-09-09, when planning found the original paragraph did not
+answer them.
 
 ## The four stages
 
@@ -149,9 +162,24 @@ one live run at a time, which is the behaviour the unique index on `active_key` 
 to return the rows a check flagged, so the grid can go to line 1512 without the operator scrolling
 3788 rows to find it.
 
-**An edits table, attached to the run.** One row per edit: run, line, field, value. The blob is never
-rewritten, so "what did they actually send us" stays answerable and every edit is auditable. Apply
-and re-validate both read the file through this overlay.
+**An edits table, keyed on the register and the file.** One row per edit: national system, file
+hash, line, header, value. The blob is never rewritten, so "what did they actually send us" stays
+answerable and every edit is auditable. Apply and re-validate both read the file through this
+overlay.
+
+**The overlay lives INSIDE the parser, and that is not where the first draft of this spec put it.**
+The worker reads the whole blob into a string and hands it to `importFacilities`
+(`facility-import-worker.ts:396`), so nothing here streams and no injection is needed. Better,
+`parseFacilityCsv` splits each row and then builds its field map from the split record
+(`facility-csv.ts:406`). Patching the SPLIT RECORD, by column index, before that map is built costs
+no CSV re-serialisation, carries an edit into a contract field or into extras according to what that
+column maps to, and lets the edit take part in every parse-time check. A corrected coordinate
+becomes valid; a corrected name rescues a row the parser would have skipped. It keys on
+`info.lines`, the same line number quarantine already reports.
+
+⛔ ONE BOUNDARY THE OVERLAY CANNOT CROSS. A row quarantined for the wrong field COUNT is rejected
+before the field map exists (`facility-csv.ts:392`), so no cell edit can rescue it. That row still
+needs fixing in the CSV, which is what the coordinate refusal already tells the operator to do.
 
 Slice C carries the table and the overlay. Slice A needs only the paged read.
 
@@ -192,7 +220,24 @@ and the value worklist moved inline under the mapping row it belongs to. Reuses 
 collision computation. No grid editing. This alone retires the confusion that started this.
 
 **Slice C: cell edits.** The edits table and its migration, the map-everywhere versus this-row
-choice, and apply and re-validate reading the file through the edit overlay.
+choice, and apply and re-validate reading the file through the edit overlay. Built 2026-09-10.
+Rulings taken during the build:
+
+1. The editable grid is the Data step's grid, not a second grid under Mapping. The stage 3
+   paragraph above said the grid sits below Mapping. Slice A had already shipped it as its own
+   step, and two grids over one file would mean two paging states over a 64 MB register.
+2. CSV only. `parseFacilityRelease` takes no overlay, and the studio hides editing for a JSONL run.
+3. Two edit shapes share one table. A line-scoped edit names one cell. A value-scoped edit names
+   every cell in one column holding one value, which is what "change it everywhere" writes: one row
+   instead of 3,788. A line edit beats a value edit on the same cell.
+4. "Change it everywhere" writes a value-scoped edit, not a terminology mapping. Slice B's value
+   worklist already owns raw-value-to-code, and a cell edit is a typed string, not a code from a
+   value set. Extras columns are editable too and have no value set at all.
+5. Two facts the spec did not anticipate. First, `csv-parse`'s `info.lines` names the line a record
+   finishes on, so a row with a quoted newline is keyed by its last line; the paged read and the
+   parser both use that same raw value, so they agree. Second, the paged read does not lowercase
+   its headers, while `parseFacilityCsv` does, so the edits table stores the header as the file
+   spells it and the parser folds the case itself.
 
 ## Verification, and its limits
 

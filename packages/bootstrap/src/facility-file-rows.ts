@@ -5,6 +5,11 @@ import { parse as parseCsvStream } from 'csv-parse';
 export interface FileRowWindow {
   headers: string[];
   rows: string[][];
+  /** The FILE LINE each entry in `rows` came from, 1-based, same order and same length. Read off
+   *  `csv-parse`'s own `info.lines`, which is the number `parseFacilityCsv` quarantines by
+   *  (facility-csv.ts) and the number a cell edit is keyed on. NOT `offset + index + 2`: one quoted
+   *  field containing a newline puts every later row on a line that arithmetic cannot reach. */
+  lines: number[];
   /** Every data row the stream yielded. The stream is always drained, so this is the file's true
    *  row count, which is what the caller needs to paginate. */
   scanned: number;
@@ -70,7 +75,7 @@ async function readCsvRows(
   stream: Readable,
   offset: number,
   limit: number,
-): Promise<{ headers: string[]; rows: string[][]; scanned: number }> {
+): Promise<{ headers: string[]; rows: string[][]; lines: number[]; scanned: number }> {
   const parser = stream.pipe(parseCsvStream({
     columns: false,
     skip_empty_lines: true,
@@ -78,21 +83,29 @@ async function readCsvRows(
     bom: true,
     relax_column_count: true,
     relax_quotes: true,
+    // The record's true file line. Everything else here is unchanged; `info: true` only changes the
+    // SHAPE of what the iterator yields, from `string[]` to `{ record, info }`.
+    info: true,
   }));
 
   let headers: string[] = [];
   const rows: string[][] = [];
+  const lines: number[] = [];
   let scanned = 0;
   let first = true;
 
   try {
-    for await (const record of parser as AsyncIterable<string[]>) {
+    for await (const entry of parser as AsyncIterable<{ record: string[]; info: { lines: number } }>) {
+      const record = entry.record;
       if (first) {
         headers = record.map((h, i) => (i === 0 ? stripBom(h) : h));
         first = false;
         continue;
       }
-      if (scanned >= offset && rows.length < limit) rows.push(record);
+      if (scanned >= offset && rows.length < limit) {
+        rows.push(record);
+        lines.push(entry.info.lines);
+      }
       scanned += 1;
     }
   } catch (err) {
@@ -107,7 +120,7 @@ async function readCsvRows(
     );
   }
 
-  return { headers, rows, scanned };
+  return { headers, rows, lines, scanned };
 }
 
 /**
@@ -151,6 +164,7 @@ export async function readFileRows(
   const rl = createInterface({ input: stream, crlfDelay: Infinity });
   const headers: string[] = [];
   const rows: string[][] = [];
+  const lines: number[] = [];
   const skippedLines: number[] = [];
   let scanned = 0;
   let skipped = 0;
@@ -170,9 +184,10 @@ export async function readFileRows(
     }
     if (scanned >= offset && rows.length < limit) {
       rows.push(headers.map((h) => (obj[h] === undefined || obj[h] === null ? '' : String(obj[h]))));
+      lines.push(lineNumber);
     }
     scanned += 1;
   }
   rl.close();
-  return { headers, rows, scanned, skippedLines, skipped };
+  return { headers, rows, lines, scanned, skippedLines, skipped };
 }

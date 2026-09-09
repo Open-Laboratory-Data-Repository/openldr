@@ -77,4 +77,28 @@ describe('readFileRows', () => {
     const w = await readFileRows(streamOf('code\n1\n'), { format: 'csv', offset: 0, limit: 10 });
     expect(w.skippedLines).toEqual([]);
   });
+
+  it('names each row file line, counting a quoted newline as part of its row', async () => {
+    const csv = 'code,name\n'
+      + '1,Alpha\n'
+      + '2,"Beta\nsecond half"\n'
+      + '3,Gamma\n';
+    const w = await readFileRows(streamOf(csv), { format: 'csv', offset: 0, limit: 10 });
+    // Row 2 spans file lines 3-4. `csv-parse`'s own `info.lines` names the line a record's
+    // parsing FINISHED on, not the line it started on, so row 2 reports 4, not 3. Row 3 then
+    // sits on line 5, not line 4: `offset + index + 2` arithmetic could never reach either number.
+    expect(w.lines).toEqual([2, 4, 5]);
+  });
+
+  it('names the line of each row in a later window, not of the window', async () => {
+    const csv = 'code,name\n' + Array.from({ length: 6 }, (_, i) => `${i},row${i}`).join('\n') + '\n';
+    const w = await readFileRows(streamOf(csv), { format: 'csv', offset: 4, limit: 2 });
+    expect(w.lines).toEqual([6, 7]);
+  });
+
+  it('names each JSONL row line, skipping the lines it could not read', async () => {
+    const jsonl = '{"code":"1"}\nnot json\n{"code":"3"}\n';
+    const w = await readFileRows(streamOf(jsonl), { format: 'jsonl', offset: 0, limit: 10 });
+    expect(w.lines).toEqual([1, 3]);
+  });
 });

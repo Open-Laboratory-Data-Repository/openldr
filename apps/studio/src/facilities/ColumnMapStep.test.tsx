@@ -83,6 +83,7 @@ function Controlled({ initial, onChangeSpy, runId = null, ...rest }: {
   nationalSystem?: string;
   registerName?: string;
   onValueMappingsSaved?: () => void;
+  cellEditsAt?: number;
 }) {
   const [value, setValue] = useState(initial);
   return (
@@ -604,6 +605,32 @@ describe('ColumnMapStep', () => {
       // `status`, so it must stop speaking for this row.
       fireEvent.click(screen.getByLabelText('Type'));
       fireEvent.click(await screen.findByRole('option', { name: 'status' }));
+
+      expect(screen.getByRole('button', { name: /^Type: changed since the last check/i })).toBeInTheDocument();
+    });
+
+    // Slice C, Task 8: the OTHER way a checked row goes stale. A cell edit changes what the column
+    // holds without touching the row's target at all, so `stale` has to compare `cellEditsAt` too,
+    // not just `target`.
+    it('a checked row goes stale when a cell edit moves cellEditsAt, with the target untouched', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Health Post'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Health Post', candidates: [{ target: 'health-post', display: null, score: 1, confidence: 'exact' }] }],
+        options: [],
+        notValidated: false,
+      });
+
+      const { rerender } = render(<Controlled runId="run-1" headers={['Type']} suggestions={[]}
+        initial={{ columns: { Type: 'level' }, constants: {}, extras: [] }} cellEditsAt={1} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      expect(await screen.findByRole('button', { name: /^Type: checked, nothing wrong/i })).toBeInTheDocument();
+
+      // No re-target. Only `cellEditsAt` moves, the way the Data grid bumps it on a write.
+      rerender(<Controlled runId="run-1" headers={['Type']} suggestions={[]}
+        initial={{ columns: { Type: 'level' }, constants: {}, extras: [] }} cellEditsAt={2} />);
 
       expect(screen.getByRole('button', { name: /^Type: changed since the last check/i })).toBeInTheDocument();
     });

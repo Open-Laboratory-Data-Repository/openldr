@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { MoreHorizontal, Upload } from 'lucide-react';
@@ -38,6 +38,7 @@ import {
   type FacilityRegisterSource,
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
+import { CONTROLLED_FIELDS } from './controlledFields';
 import { pendingValueMappings, resolvedValueKey, useMappingCheckState } from './mappingCheckState';
 import { DataGridStep } from './DataGridStep';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
@@ -304,6 +305,16 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // suggestion must stick"). Debouncing, batching, or dropping this call makes the panel look broken
   // for reasons that are not in the panel.
   const [columnMap, setColumnMap] = useState<FacilityColumnMap>(EMPTY_COLUMN_MAP);
+  /** Source header -> the controlled field it maps to, for the headers that map to one. Empty
+   *  until the operator has mapped something, which is the ordinary state on a first pass through
+   *  Data. A cell in one of these opens the this-row-versus-everywhere choice. */
+  const controlledHeaders = useMemo(() => {
+    const out: Record<string, ControlledField> = {};
+    for (const [header, target] of Object.entries(columnMap?.columns ?? {})) {
+      if ((CONTROLLED_FIELDS as string[]).includes(target)) out[header] = target as ControlledField;
+    }
+    return out;
+  }, [columnMap]);
   /** ⛔ THE MAPPING STEP'S CHECK RESULTS LIVE HERE, NOT IN `ColumnMapStep`. That panel renders only
    *  while `step === 3`, so state it owned itself was destroyed by an ordinary click on Data and
    *  rebuilt empty on the way back: a row the operator had just checked came back unchecked, and
@@ -311,6 +322,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  panel. It describes the file this run is importing, which is the sheet's own subject.
    *  `selectFile` below is the one place it is thrown away. */
   const checkState = useMappingCheckState();
+  /** Bumped by the Data grid on every successful edit write or undo. Feeds `summarySignature`, so a
+   *  validated summary computed before the edit stops matching and Review falls away, and feeds
+   *  every row's `stale`, so the mapping step invites the re-check that would answer differently. */
+  const [cellEditsAt, setCellEditsAt] = useState(0);
   // The current file's header row and this app's own ranked suggestions for it — CSV only (see the
   // effect below); a JSONL release never renders `ColumnMapStep` at all (a map for one is meaningless
   // — Task 3's own doc comment on `FacilityImportOptions.columnMap`).
@@ -544,6 +559,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     // also why it happened on an ordinary trip to Data, where it was flatly wrong. Now the sheet
     // owns it and discards it exactly here, at the one event that really does invalidate it.
     checkState.reset();
+    // (4) And the edit count itself. A new file has no edits on it yet, and a stale counter left
+    // over from the old one would make the new file's own first check read as already stale.
+    setCellEditsAt(0);
     // A2b: a new file starts a new import in every sense. The picker is disabled while a run is
     // live (see `inputsDisabled`), so this only ever discards a run that has already finished.
     setRunId(null);
@@ -1030,6 +1048,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     allowUnknownColumns,
     allowInvalidCoordinates,
     valueMappingsSavedAt,
+    cellEditsAt,
   };
   const currentSummarySignature = summarySignature(inputs);
 
@@ -1412,7 +1431,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               because the type is `string | null` and the component's own prop is not. */}
           {step === 2 && runId && (
             <div className="flex min-h-0 flex-1 flex-col">
-              <DataGridStep runId={runId} />
+              <DataGridStep
+                runId={runId}
+                // CSV only. A JSONL release is the publisher's file in the contract's own shape, and
+                // the parser takes no overlay for one (see `FacilityImportOptions.cellEdits`).
+                editable={format === 'csv'}
+                controlledHeaders={controlledHeaders}
+                onEditsChanged={() => setCellEditsAt((n) => n + 1)}
+              />
             </div>
           )}
 
@@ -1710,6 +1736,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 // guarded by `worklistSignature`. See `ImportPolicyPanel`'s own `findings` prop,
                 // fed the exact same value for the exact same reason.
                 checkState={checkState}
+                cellEditsAt={cellEditsAt}
                 unmappedByField={liveFindings?.unmapped}
                 nationalSystem={nationalSystem.trim()}
                 // Task 6 (Slice B): the friendly name for `AddFacilityTypeDialog`'s own

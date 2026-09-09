@@ -7,7 +7,8 @@ import {
   FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTER_STATE_DROPPED, FACILITY_REGISTER_STATE_IN_REGISTER,
   type InternalSchema, type TerminologyAdminStore, type FacilityJobStore,
 } from '@openldr/db';
-import { importFacilities, type FacilityImportDeps } from './facility-import';
+import { importFacilities, toCellEdits, type FacilityImportDeps } from './facility-import';
+import type { FacilityImportEdit } from '@openldr/db';
 import { CONTROLLED_VALUE_SETS, observedFieldSystem } from './facility-controlled-fields';
 
 const SYSTEM = 'urn:tz:hfr';
@@ -1428,5 +1429,46 @@ describe('per-facility audit rows for changed facilities (Task 7)', () => {
     // logging, never a reason to refuse the operator's confirmed import.
     await expect(importFacilities(deps, renamed, applyOpts)).resolves.toMatchObject({ changed: 1 });
     expect((await rowFor(deps.db, '100'))?.name).toBe('Alpha Renamed');
+  });
+});
+
+// Task 4 fix round, Finding 2: `toCellEdits` is exported and untested. It has three branches:
+// line-scoped, value-scoped, and neither. The store's own contract says the third one is
+// impossible to write, but it must still be skipped rather than thrown on (see the function's comment).
+describe('toCellEdits', () => {
+  const editFor = (over: Partial<FacilityImportEdit>): FacilityImportEdit => ({
+    id: 'fie_1', nationalSystem: 'urn:tz:hfr', fileHash: 'h1', header: 'level',
+    line: null, fromValue: null, toValue: 'Health Post',
+    createdBy: null, createdAt: new Date().toISOString(),
+    ...over,
+  });
+
+  it('folds a line-scoped edit into byLine, keyed on line and header', () => {
+    const result = toCellEdits([editFor({ line: 2, header: 'level', toValue: 'Health Post' })]);
+    expect(result).toEqual({ byLine: { 2: { level: 'Health Post' } }, byValue: {} });
+  });
+
+  it('folds a value-scoped edit into byValue, keyed on header and fromValue', () => {
+    const result = toCellEdits([editFor({ line: null, header: 'level', fromValue: 'Others', toValue: 'Health Post' })]);
+    expect(result).toEqual({ byLine: {}, byValue: { level: { Others: 'Health Post' } } });
+  });
+
+  it('folds a line-scoped and a value-scoped edit together, each into its own scope', () => {
+    const result = toCellEdits([
+      editFor({ line: 2, header: 'name', toValue: 'Alpha' }),
+      editFor({ line: null, header: 'level', fromValue: 'Others', toValue: 'Health Post' }),
+    ]);
+    expect(result).toEqual({
+      byLine: { 2: { name: 'Alpha' } },
+      byValue: { level: { Others: 'Health Post' } },
+    });
+  });
+
+  it('skips a row with neither line nor fromValue, rather than throwing', () => {
+    // The store refuses to write a row like this (see the interface comment on `FacilityImportEdit`
+    // in packages/db/src/facility-import-edit-store.ts), but `toCellEdits` must not assume the store
+    // is the only caller that will ever exist, so it drops the row instead of crashing the parse.
+    const result = toCellEdits([editFor({ line: null, fromValue: null })]);
+    expect(result).toEqual({ byLine: {}, byValue: {} });
   });
 });

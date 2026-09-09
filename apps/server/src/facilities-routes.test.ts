@@ -1,6 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import { sql } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
@@ -4369,12 +4369,35 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
     expect(res.json()).toEqual({
       headers: ['code', 'name'],
       rows: [['2', 'Beta']],
+      lines: [3],
       offset: 1,
       limit: 1,
       total: 3,
       skipped: 0,
       skippedLines: [],
     });
+  });
+
+  it('returns the file line of every row it pages back', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const upload = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from('code,name\n1,Alpha\n2,Beta\n3,Gamma\n', 'utf8'),
+    });
+    const runId = upload.json().runId as string;
+
+    const res = await app.inject({
+      method: 'GET', url: `/api/facilities/import/runs/${runId}/rows?offset=0&limit=2`,
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { rows: string[][]; lines: number[] };
+    expect(body.lines).toHaveLength(body.rows.length);
+    expect(body.lines[0]).toBe(2);
   });
 
   it('defaults offset to 0 and limit to 100 when the query omits them', async () => {
@@ -4396,6 +4419,7 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
     expect(res.json()).toEqual({
       headers: ['code', 'name'],
       rows: [['1', 'Alpha'], ['2', 'Beta']],
+      lines: [2, 3],
       offset: 0,
       limit: 100,
       total: 2,
@@ -4603,6 +4627,171 @@ describe('GET /api/facilities/import/runs/:id/rows', () => {
 
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toMatch(/stored file/i);
+  });
+});
+
+// --- Slice C: PUT/GET/DELETE .../runs/:id/edits ---------------------------------------------
+//
+// Same upload every rows-route test above repeats, factored out here since these tests need it
+// more than once each (twice, for the last one).
+async function makeStoredRun(app: any, nationalSystem = SYSTEM): Promise<string> {
+  const res = await app.inject({
+    method: 'POST',
+    url: uploadUrl({ nationalSystem, format: 'csv', validate: 'false' }),
+    headers: UPLOAD_HEADERS,
+    payload: Buffer.from('code,name,level\n1,Alpha,Others\n2,Beta,Others\n', 'utf8'),
+  });
+  expect(res.statusCode).toBe(202);
+  return res.json().runId as string;
+}
+
+describe('facility import cell edits', () => {
+  let app: any;
+  let ctx: any;
+  let runId: string;
+
+  beforeEach(async () => {
+    const db = await importDb();
+    ctx = fakeImportCtx(db);
+    app = await appWith(ctx);
+    runId = await makeStoredRun(app);
+  });
+
+  it('writes a cell edit and reads it back for the run', async () => {
+    const put = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    expect(put.statusCode).toBe(200);
+    const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/edits` });
+    expect(read.statusCode).toBe(200);
+    expect((read.json() as { edits: unknown[] }).edits).toHaveLength(1);
+  });
+
+  it('writes a value-scoped edit', async () => {
+    const put = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', fromValue: 'Others', toValue: 'Health Post' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect((put.json() as { line: number | null }).line).toBeNull();
+  });
+
+  it('refuses an edit naming neither a line nor a value', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', toValue: 'Health Post' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses an edit naming both a line and a value', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, fromValue: 'Others', toValue: 'Health Post' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('undoes one edit', async () => {
+    await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    const del = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&line=2`,
+    });
+    expect(del.statusCode).toBe(200);
+    expect(del.json()).toEqual({ removed: true });
+    const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/edits` });
+    expect((read.json() as { edits: unknown[] }).edits).toEqual([]);
+  });
+
+  it('reports 404 for a run that does not exist', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs/fir_missing/edits' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('a second run over the same file sees the first run edits', async () => {
+    await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    // Same register, same bytes, so the same fileHash. A new run row, minted the same way the
+    // first one was. This is the whole point of keying edits off the file, not the run.
+    const second = await makeStoredRun(app);
+    const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${second}/edits` });
+    expect((read.json() as { edits: unknown[] }).edits).toHaveLength(1);
+  });
+
+  // Finding 4: a `line` that fails to parse is a bad request, not "no line at all". Before this
+  // fix, `line=abc` became `undefined`, and with `fromValue` also present the request matched the
+  // sweep-delete shape instead of getting refused.
+  it('refuses a DELETE whose line does not parse, rather than deleting the sweep it named by mistake', async () => {
+    await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', fromValue: 'Others', toValue: 'Health Post' },
+    });
+    const del = await app.inject({
+      method: 'DELETE',
+      url: `/api/facilities/import/runs/${runId}/edits?header=level&line=abc&fromValue=Others`,
+    });
+    expect(del.statusCode).toBe(400);
+    const read = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}/edits` });
+    expect((read.json() as { edits: unknown[] }).edits).toHaveLength(1); // the sweep survives
+  });
+
+  it('refuses a DELETE whose line is present but not a positive integer', async () => {
+    const del = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&line=0`,
+    });
+    expect(del.statusCode).toBe(400);
+  });
+
+  it('refuses an empty fromValue on PUT', async () => {
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', fromValue: '', toValue: 'Health Post' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses an empty fromValue on DELETE', async () => {
+    const res = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&fromValue=`,
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // Finding 5: the design spec claims every edit is auditable.
+  it('audits a written edit', async () => {
+    const before = ctx.__audit.length; // makeStoredRun's own upload already audited once
+    const put = await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(ctx.__audit.slice(before).map((a: any) => a.action)).toEqual(['facility.import.edit']);
+  });
+
+  it('audits an undo, and does not audit undoing something already gone', async () => {
+    const before = ctx.__audit.length; // makeStoredRun's own upload already audited once
+    await app.inject({
+      method: 'PUT', url: `/api/facilities/import/runs/${runId}/edits`,
+      payload: { header: 'level', line: 2, toValue: 'Health Post' },
+    });
+    const del = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&line=2`,
+    });
+    expect(del.statusCode).toBe(200);
+    expect(ctx.__audit.slice(before).map((a: any) => a.action))
+      .toEqual(['facility.import.edit', 'facility.import.edit.delete']);
+
+    const del2 = await app.inject({
+      method: 'DELETE', url: `/api/facilities/import/runs/${runId}/edits?header=level&line=2`,
+    });
+    expect(del2.json()).toEqual({ removed: false });
+    expect(ctx.__audit.length - before).toBe(2); // the removal wrote nothing, so nothing is audited
   });
 });
 

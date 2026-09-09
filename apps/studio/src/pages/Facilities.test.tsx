@@ -195,7 +195,7 @@ describe('Facilities page', () => {
     // Data itself. An unmocked call has no `mockResolvedValue` and returns `undefined`, and
     // `undefined.then` throws inside the effect.
     (readFacilityImportRows as ReturnType<typeof vi.fn>).mockResolvedValue({
-      headers: [], rows: [], offset: 0, limit: 100, total: 0,
+      headers: [], rows: [], lines: [], offset: 0, limit: 100, total: 0,
     });
     (expandValueSet as ReturnType<typeof vi.fn>).mockImplementation((id: string) =>
       Promise.resolve(id === 'vs-location-status' ? STATUS_CODES : LEVEL_CODES));

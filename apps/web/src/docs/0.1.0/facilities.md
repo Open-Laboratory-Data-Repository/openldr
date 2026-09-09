@@ -117,6 +117,21 @@ summary that no longer matches what is about to be imported is never left on scr
 absent and deleted choices are the exception: they are applied at import time rather than when the
 file is read, so they cannot change what a check found and do not discard it.
 
+### Repairing a cell on the Data step
+
+The Data step's table is editable for a CSV file. Click a cell to change what it says. The edit is
+stored against the file, not written back into it, so re-uploading the same file keeps every
+repair. Change the file and the repairs stop applying, since the line numbers they name no longer
+match.
+
+A repaired cell shows an amber rule and an undo button. Undoing a sweep puts back every row the
+sweep changed, not just the one cell you clicked. Editing a cell mapped to `level`, `status` or
+`country` asks whether to change just that row or every row with the same value, unless the cell is blank: a
+blank is not a category, so filling one in changes only that row. Otherwise a bad category value
+usually repeats. A repair cannot rescue a row with the wrong column count, and cannot add or remove
+a row; both go back to the CSV. Repairing a cell makes the last check stale, so re-check the column
+and validate before Review.
+
 ## Getting a suggested map
 
 Both surfaces can propose a map from a file's headers offline, with no server round trip:
