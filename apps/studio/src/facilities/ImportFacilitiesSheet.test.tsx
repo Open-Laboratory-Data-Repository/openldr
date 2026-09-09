@@ -33,6 +33,8 @@ vi.mock('@/api', async (orig) => {
     // Task 6: Data's own grid reads the stored file's rows directly; it never touches this
     // sheet's own state (see DataGridStep.tsx's own doc comment on why).
     readFacilityImportRows: vi.fn(),
+    // The per-row check's own read, behind `MappingRowStatus`'s click.
+    readFacilityImportColumnValues: vi.fn(),
   };
 });
 
@@ -1677,7 +1679,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByText(/ward_code/)).not.toBeInTheDocument();
     openMenu();
     // Positive control on the same open menu, so the absence beside it means something.
-    expect(screen.getByRole('menuitem', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Close' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
   });
 
@@ -2366,10 +2368,10 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   describe('the primary action', () => {
-    // Fix for the reachability regression: Continue's own click now lands on Data, which has no
-    // primary action of its own yet (a later task adds one alongside the grid). Mapping is where
-    // the re-upload action actually shows, one strip click further on.
-    it('offers Continue on Source, nothing yet on Data, and a re-upload action on Mapping', async () => {
+    // Continue's own click lands on Data, which now carries a Continue of its own (it used to
+    // carry nothing, leaving an empty footer bar under the grid). Mapping is where the re-upload
+    // action shows, one step further on.
+    it('offers Continue on Source and on Data, and a re-upload action on Mapping', async () => {
       mocked(api.suggestColumnMap).mockResolvedValueOnce({
         headers: ['MFL Code'],
         columns: [{ header: 'MFL Code', candidates: [] }],
@@ -2386,7 +2388,8 @@ describe('ImportFacilitiesSheet', () => {
 
       await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
         .toHaveAttribute('aria-current', 'step'));
-      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+      // Data's own Continue, and NEITHER validate action: nothing on Data sends anything.
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Validate all' })).not.toBeInTheDocument();
 
@@ -2714,4 +2717,131 @@ describe('the file drop zone', () => {
     expect(clicked).toHaveBeenCalled();
     clicked.mockRestore();
   });
+
+  // ── The two menu items that both said "cancel" ──────────────────────────────────────────────
+
+  // Reported from the screenshots: the menu read "Cancel this import" above a bare "Cancel", and
+  // nothing said the first kills the run on the server while the second only shuts the sheet. The
+  // second one already read "Close" once a run had finished; it now reads that always, because
+  // closing is all it has ever done.
+  it('names the item that only shuts the sheet "Close", never "Cancel"', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem();
+    openMenu();
+
+    expect(screen.getByRole('menuitem', { name: 'Close' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Cancel' })).not.toBeInTheDocument();
+  });
+
+  it('still shuts the sheet without touching the run', async () => {
+    const onOpenChange = vi.fn();
+    render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={vi.fn()} />);
+    await pickFileAndSystem();
+    clickMenuItem('Close');
+
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(api.cancelFacilityImportRun).not.toHaveBeenCalled();
+  });
+
+  // ── Data's own footer action ────────────────────────────────────────────────────────────────
+
+  // Reported from the screenshots: Source, Mapping and Review each carry a button in the footer
+  // bar and Data carried none, so the bar rendered empty under the grid and the only way forward
+  // was the step strip. Nothing about Data justified the exception.
+  it('offers a way forward from Data, instead of an empty footer under the grid', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
+  });
+
+  // ⛔ Data's Continue must NOT store the file a second time. Source's own Continue already did
+  // that, and a second `uploadFacilityImport` either supersedes the run this sheet is watching or
+  // 409s. Data only moves the operator along.
+  it('the Continue on Data moves a step without re-uploading the file', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step'));
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
+    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
+  });
+
+  // ── The check survives the step strip ───────────────────────────────────────────────────────
+
+  /** Reported from the real Zambia export: check a row, see it go red, click Data, click back to
+   *  Mapping, and every icon is back to its opening state. `ColumnMapStep` is gated on
+   *  `step === 3`, so leaving Mapping unmounted the whole panel and took its check results, its
+   *  saved-value set and the operator's unsaved pick-list choices with it.
+   *
+   *  These drive the real panel end to end rather than asserting on props: the bug was entirely
+   *  about WHERE the state lives, and a prop-level test would have passed before the fix. */
+  async function mappingWithACheckedRow(): Promise<void> {
+    mocked(api.suggestColumnMap).mockResolvedValue({
+      headers: ['Type'],
+      columns: [{ header: 'Type', candidates: [{ target: 'level', display: null, score: 1, confidence: 'exact' }] }],
+    });
+    mocked(api.readFacilityImportColumnValues).mockResolvedValue({
+      values: ['1st Level Hospital', 'Others'], distinct: 2, truncated: false,
+    });
+    // Neither value resolves, so the row's own check finds two unrecognised values and goes red.
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [
+        { value: '1st Level Hospital', candidates: [] },
+        { value: 'Others', candidates: [] },
+      ],
+      notValidated: false,
+      options: [{ code: 'hospital', display: 'Hospital' }],
+    });
+
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    await pickFileAndSystem('Type\n1st Level Hospital\n');
+    await advanceToMapping();
+
+    // `/^Type:/` picks the status button on purpose: the row's own ⋯ trigger is named "Actions for
+    // Type" and a bare /Type/ would match both.
+    fireEvent.click(await screen.findByRole('button', { name: /^Type:/ }));
+    await screen.findByRole('button', { name: /Type:.*not recognised/i });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Type:.*not recognised/i })).toBeInTheDocument());
+  }
+
+  function goToStep(label: RegExp): void {
+    fireEvent.click(screen.getByRole('button', { name: label }));
+  }
+
+  it('keeps a checked row red after a trip to Data and back, instead of resetting it', async () => {
+    await mappingWithACheckedRow();
+
+    goToStep(/2\s*Data/);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Type:/ })).not.toBeInTheDocument());
+    goToStep(/3\s*Mapping/);
+
+    expect(await screen.findByRole('button', { name: /Type:.*not recognised/i })).toBeInTheDocument();
+  }, 20000);
+
+  // The same unmount threw away pick-list choices the operator had made but not yet saved, which
+  // is the more expensive half of the bug: an icon can be re-earned with one click, and twelve
+  // re-typed value decisions cannot.
+  it('keeps an unsaved value-mapping choice after a trip to Data and back', async () => {
+    await mappingWithACheckedRow();
+
+    const picker = await screen.findByRole('combobox', { name: /1st Level Hospital/i });
+    fireEvent.keyDown(picker, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: /Hospital/ }));
+    await waitFor(() => expect(picker).toHaveTextContent(/Hospital/));
+
+    goToStep(/2\s*Data/);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Type:/ })).not.toBeInTheDocument());
+    goToStep(/3\s*Mapping/);
+
+    expect(await screen.findByRole('combobox', { name: /1st Level Hospital/i })).toHaveTextContent(/Hospital/);
+  }, 20000);
 });

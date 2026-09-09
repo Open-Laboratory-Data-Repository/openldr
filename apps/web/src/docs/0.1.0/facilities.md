@@ -59,7 +59,8 @@ no-op.
 ## The import wizard's four steps
 
 The Studio wizard has four steps: Source (pick the file and register), Data (the stored file as a
-read-only table, paged from the server), Mapping (every decision: the column map, fixed values,
+read-only table, paged from the server, with a Continue that only moves on), Mapping (every
+decision: the column map, fixed values,
 what to do with conflicts, absences and deletions, and the value map), and Review (a read-only
 report of what the check found, plus Apply).
 
@@ -69,16 +70,17 @@ Move between them with the step strip at the top. There is no separate Back butt
 
 Every row on the Mapping step carries a small icon next to its field picker, with four states:
 
-- A gray tick: the row has not been checked yet.
-- A green tick: it has been checked, and nothing is wrong.
-- A red icon: something is wrong. The row says what, in a line under it.
-- A gray circular arrow: the mapping changed since its last check. A different shape from the gray
-  tick, so the two do not read the same on a phone.
+- An amber information circle: the row has not been checked yet.
+- A green tick in a circle: it has been checked, and nothing is wrong.
+- A red circle: something is wrong. The row says what, in a line under it.
+- A gray circular arrow: the mapping changed since its last check.
+
+Each state has its own shape, not just its own colour, so they still read apart on a phone.
 
 Clicking the icon checks that one column only. It reads that column's values back from the file
-already stored at Source, and does not re-check the whole file or send it again. A column whose
-suggested field is an exact match, with no other column claiming the same field, turns green with
-no click. Use Validate all when you want every column checked at once.
+already stored at Source, and does not re-check the whole file or send it again. No row turns green
+on its own: the suggestion scores the column's NAME and cannot know what is inside the column. Use
+Validate all when you want every column checked at once.
 
 A controlled field's unrecognised values appear under the mapping row that produced them, each
 with a pick list. Saving those mappings does not make the rows vanish, so a choice can still be
@@ -99,9 +101,8 @@ file is read, so they cannot change what a check found and do not discard it.
 Both surfaces can propose a map from a file's headers offline, with no server round trip:
 
 - **Studio wizard:** open **Facilities → Import**, choose the file, and the column-mapping step
-  opens with a suggestion already filled in. A **Check this** badge marks a row worth reviewing
-  before you continue, and each row's status icon, described above, checks that one column on its
-  own.
+  opens with a suggestion already filled in. Every row starts amber, because nothing has read the
+  file yet; each row's status icon, described above, checks that one column on its own.
 - **CLI:** put the CSV in the install directory's `data/` folder first, so the wrapper can
   see it.
 

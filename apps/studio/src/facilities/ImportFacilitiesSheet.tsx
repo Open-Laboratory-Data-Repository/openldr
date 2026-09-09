@@ -36,6 +36,7 @@ import {
   type FacilityRegisterSource,
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
+import { useMappingCheckState } from './mappingCheckState';
 import { DataGridStep } from './DataGridStep';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
 import { summarySignature, worklistSignature, type ImportInputs } from './importInputsSignature';
@@ -301,6 +302,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // suggestion must stick"). Debouncing, batching, or dropping this call makes the panel look broken
   // for reasons that are not in the panel.
   const [columnMap, setColumnMap] = useState<FacilityColumnMap>(EMPTY_COLUMN_MAP);
+  /** ⛔ THE MAPPING STEP'S CHECK RESULTS LIVE HERE, NOT IN `ColumnMapStep`. That panel renders only
+   *  while `step === 3`, so state it owned itself was destroyed by an ordinary click on Data and
+   *  rebuilt empty on the way back: a row the operator had just checked came back unchecked, and
+   *  pick-list choices they had made but not yet saved were lost outright. None of it describes the
+   *  panel. It describes the file this run is importing, which is the sheet's own subject.
+   *  `selectFile` below is the one place it is thrown away. */
+  const checkState = useMappingCheckState();
   // The current file's header row and this app's own ranked suggestions for it — CSV only (see the
   // effect below); a JSONL release never renders `ColumnMapStep` at all (a map for one is meaningless
   // — Task 3's own doc comment on `FacilityImportOptions.columnMap`).
@@ -516,6 +524,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setColumnMapHeaders([]);
     setColumnMapSuggestions([]);
     setColumnMapValid(true);
+    // (3) And every answer the mapping step had already collected about the OLD file: which rows
+    // were checked, which values were written, which picks are pending. This used to happen by
+    // accident, because `ColumnMapStep` owned that state and unmounting threw it away — which is
+    // also why it happened on an ordinary trip to Data, where it was flatly wrong. Now the sheet
+    // owns it and discards it exactly here, at the one event that really does invalidate it.
+    checkState.reset();
     // A2b: a new file starts a new import in every sense. The picker is disabled while a run is
     // live (see `inputsDisabled`), so this only ever discards a run that has already finished.
     setRunId(null);
@@ -1313,8 +1327,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   {cancelling ? t('facilities.import.cancellingAction') : t('facilities.import.cancelRunAction')}
                 </DropdownMenuItem>
               )}
+              {/* ⛔ ALWAYS "Close", NEVER "Cancel". This item shuts the sheet and does nothing else:
+                  a stored or running import survives it untouched. It used to read "Cancel" until
+                  a run reached a terminal state, which put a bare "Cancel" directly under "Cancel
+                  this import" — two items a word apart, one of which kills the run on the server
+                  and one of which does not. The operator could not tell them apart, and the words
+                  were the only thing that could have told them. */}
               <DropdownMenuItem disabled={uploading} onClick={() => onOpenChange(false)}>
-                {runFinished ? t('common.close') : t('common.cancel')}
+                {t('common.close')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -1636,6 +1656,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 // their own separate block below. `liveFindings` is already the last check's result
                 // guarded by `worklistSignature`. See `ImportPolicyPanel`'s own `findings` prop,
                 // fed the exact same value for the exact same reason.
+                checkState={checkState}
                 unmappedByField={liveFindings?.unmapped}
                 nationalSystem={nationalSystem.trim()}
                 onValueMappingsSaved={handleValueMappingsSaved}
@@ -1832,6 +1853,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {uploading ? uploadLabel : t('facilities.import.continueAction')}
             </Button>
           ))}
+          {/* Data's own way forward. Source, Mapping and Review each carried a footer button and
+              Data carried none, so the bar rendered empty under the grid and the strip was the
+              only way on. Nothing about Data earned that exception: it is a read-only view of a
+              file that is already stored.
+              ⛔ IT ONLY MOVES A STEP. Source's Continue already stored the file, and a second
+              `uploadFacilityImport` either supersedes the run this sheet is watching or 409s (see
+              the dropdown's own Upload gate). This shares Source's label because it is the same
+              promise to the operator, and deliberately not its handler. */}
+          {step === 2 && (
+            <Button size="sm" onClick={() => setRequestedStep(3)}>
+              {t('facilities.import.continueAction')}
+            </Button>
+          )}
           {/* Whole-branch review, FINDING 1: this button used to check only `uploadDisabled` — the
               dropdown's own Upload item ALSO checks `!applyResult && !runId` (see that item's own
               comment for why: a second upload either supersedes the run this sheet is watching or

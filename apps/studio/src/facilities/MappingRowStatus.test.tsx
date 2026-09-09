@@ -63,24 +63,43 @@ describe('MappingRowStatus', () => {
     expect(neutralTip).not.toEqual(staleTip);
   });
 
-  // Final review, I2: a Radix Tooltip is inert on touch, and the tooltip was the ONLY thing telling
-  // neutral from stale. The operator's primary device is a phone, so on a phone the two states were
-  // indistinguishable. The spec allows the escape: stale takes its own glyph, neutral keeps the tick.
-  it('gives stale its own glyph, so a phone can tell it from neutral without a tooltip', () => {
-    const glyphFor = (state: 'neutral' | 'valid' | 'stale'): string => {
+  // Finding I2: a Radix Tooltip is inert on touch, and on a phone the tooltip was the ONLY thing
+  // telling two same-shaped states apart. Every state now draws its own shape, so shape alone
+  // carries the difference on the operator's primary device.
+  //
+  // Neutral used to share the tick with valid, differing only in colour. That was the misleading
+  // half of the same problem the auto-green caused: an unchecked row wore the same glyph as a
+  // checked one, so nothing invited the click. Unchecked now says "look at me" in its own shape.
+  it('draws a distinct glyph for every state, so touch never depends on a tooltip', () => {
+    const glyphFor = (state: 'neutral' | 'valid' | 'invalid' | 'stale'): string => {
       const { container, unmount } = render(
         <MappingRowStatus state={state} label="Type" busy={false} detail={null} onCheck={vi.fn()} />,
       );
-      const svg = container.querySelector('button svg');
-      const markup = svg?.innerHTML ?? '';
+      const markup = container.querySelector('button svg')?.innerHTML ?? '';
       unmount();
       return markup;
     };
 
-    // Neutral keeps the tick. It draws the same shape as valid; only the colour differs.
-    expect(glyphFor('neutral')).toEqual(glyphFor('valid'));
-    // Stale draws something else entirely, so a touch user who cannot open a tooltip still sees it.
-    expect(glyphFor('stale')).not.toEqual(glyphFor('neutral'));
+    const glyphs = [glyphFor('neutral'), glyphFor('valid'), glyphFor('invalid'), glyphFor('stale')];
+    expect(glyphs.every((g) => g.length > 0)).toBe(true);
+    expect(new Set(glyphs).size).toBe(4);
+  });
+
+  // The operator's own wording: an unchecked row should read as "look at this", not as a pass.
+  // Amber is the colour this feature already uses for "needs a decision" (ColumnMapStep's own
+  // worklist notice, DataGridStep's narrow-screen notice).
+  it('paints an unchecked row amber, not the green of a checked one', () => {
+    const colourFor = (state: 'neutral' | 'valid'): string => {
+      const { container, unmount } = render(
+        <MappingRowStatus state={state} label="Type" busy={false} detail={null} onCheck={vi.fn()} />,
+      );
+      const cls = container.querySelector('button svg')?.getAttribute('class') ?? '';
+      unmount();
+      return cls;
+    };
+
+    expect(colourFor('neutral')).toMatch(/amber/);
+    expect(colourFor('valid')).toMatch(/emerald/);
   });
 
   // Finding 2: a null `detail` on an invalid row must not assert a cause it does not know.

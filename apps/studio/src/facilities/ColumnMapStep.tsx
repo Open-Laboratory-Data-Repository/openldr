@@ -13,9 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   readFacilityImportColumnValues, suggestValueMappings, writeFacilityValueMappings,
   type ColumnSuggestion, type ControlledField, type FacilityColumnMap,
-  type ValueMappingEntry, type ValueSetOption, type ValueSuggestion,
+  type ValueMappingEntry, type ValueSuggestion,
 } from '@/api';
 import { ConstantValueField } from './ConstantValueField';
+import { useMappingCheckState } from './mappingCheckState';
+import type { MappingCheckState, RowCheck, WorklistEntry } from './mappingCheckState';
 import { mappingRowState } from './mappingRowState';
 import { MappingRowStatus } from './MappingRowStatus';
 import { ValueMapRow, VALUE_MAP_UNMAPPED } from './ValueMapRow';
@@ -60,9 +62,6 @@ const valueChoiceKey = (header: string, value: string): string => JSON.stringify
  *  truth on the server. Same `JSON.stringify` collision argument as `valueChoiceKey` above. */
 const resolvedValueKey = (field: string, value: string): string => JSON.stringify([field, value]);
 
-/** One row of a header's value worklist: a raw value plus the ranker's own candidates for it. */
-type WorklistEntry = { value: string; candidates: ValueSuggestion['candidates'] };
-
 /** Fix pass (Critical finding, mapping-answers-back Slice B Task 6 review): a row's worklist is the
  *  UNION of everything any source has ever reported for the row's current target, never a
  *  replacement. `checkRow`'s own click and the `unmappedByField` effect both call this, so neither
@@ -87,21 +86,6 @@ function mergeWorklistEntries(existing: WorklistEntry[], fresh: WorklistEntry[])
   for (const entry of existing) byValue.set(entry.value, entry);
   for (const entry of fresh) byValue.set(entry.value, entry);
   return Array.from(byValue.values());
-}
-
-/** One shape, holding one header's last check. Final review, C1: it deliberately carries NO
- *  `unrecognised` count any more. It used to, set to the length of the union above, and because a
- *  union never shrinks the count never shrank either: one unrecognised value made the row red for
- *  the life of the sheet, and the spec's Valid state was unreachable for any controlled column that
- *  ever reported one. Two different things were sharing one number. Membership in `values` is
- *  sticky, so a choice the operator already made is never dropped; the count is derived instead, by
- *  `unresolvedCount` below, from what is still genuinely unresolved. */
-interface RowCheck {
-  target: string;
-  truncated: boolean;
-  distinct: number;
-  values?: WorklistEntry[];
-  options?: ValueSetOption[];
 }
 
 /** How many of a row's values still need an answer. This is the row's status, and it is not the
@@ -183,6 +167,15 @@ export interface ColumnMapStepProps {
    *  contract as `ValueMapPanel`'s own `onSaved`: a just-written mapping only takes effect on a
    *  fresh parse, so the caller retires the summary on screen. */
   onValueMappingsSaved?: () => void;
+  /** What the operator has learned about this file so far: which rows have been checked, which
+   *  values have been written, and which picks they have made but not yet saved.
+   *
+   *  ⛔ SUPPLY THIS FROM THE SHEET. This panel only renders while the wizard is on the Mapping
+   *  step, so anything it owns itself dies on the way to Data and is reborn empty on the way back:
+   *  a row the operator had just checked red came back unchecked, and unsaved pick-list choices
+   *  were lost outright. Omitting it falls back to panel-owned state, which is right for a
+   *  standalone render (this component's own tests) and wrong inside the wizard. */
+  checkState?: MappingCheckState;
 }
 
 /** The column-mapping panel — one row per file header, a `Select` over the 16 contract fields, and
@@ -198,7 +191,7 @@ export interface ColumnMapStepProps {
  *  below. */
 export function ColumnMapStep({
   headers, suggestions, value, runId, onChange, onValidityChange,
-  unmappedByField, nationalSystem, onValueMappingsSaved,
+  unmappedByField, nationalSystem, onValueMappingsSaved, checkState,
 }: ColumnMapStepProps): JSX.Element {
   const { t } = useTranslation();
 
@@ -213,19 +206,15 @@ export function ColumnMapStep({
   // fills `values` with EVERY value it was handed, and those are already known unmapped by a full
   // check, not merely "the ranker was not confident"). Either way the render loop reads the same
   // two fields, so it does not need to know which origin populated them.
-  const [checkedByHeader, setCheckedByHeader] = useState<Record<string, RowCheck>>({});
-  /** Final review, C1: every (field, raw value) this sheet has actually written a mapping for.
-   *  This is what lets a red row go back to green, and it is deliberately separate from the
-   *  worklist: the worklist is what the operator can still edit, this is what no longer counts
-   *  against them. Only a save that the server accepted adds to it. */
-  const [resolvedValues, setResolvedValues] = useState<ReadonlySet<string>>(new Set());
-  /** Task 6: the operator's own value-mapping choices, keyed by `valueChoiceKey(header, value)`.
-   *  This is the same shape `ValueMapPanel`'s own `choices` state uses, keyed by (field, value) there because it
-   *  has one row per field; this panel has one row per header instead. An explicit choice always
-   *  wins; anything absent falls back to the top ranked candidate (if confident) via
-   *  `defaultValueChoice` below, computed at render/save time rather than seeded into state. There
-   *  is nothing here that a `StrictMode` double-fetch could race, since it never runs twice. */
-  const [valueChoices, setValueChoices] = useState<Record<string, string>>({});
+  /** ⛔ ALWAYS CALLED, and then usually ignored. The hook has to run on every render to keep hook
+   *  order stable, so it cannot sit behind `checkState ?? …`. Inside the wizard the sheet supplies
+   *  `checkState` and this instance goes unread; a standalone render falls back to it. */
+  const ownCheckState = useMappingCheckState();
+  const {
+    checkedByHeader, setCheckedByHeader,
+    resolvedValues, setResolvedValues,
+    valueChoices, setValueChoices,
+  } = checkState ?? ownCheckState;
   const [savingValueMappings, setSavingValueMappings] = useState(false);
   const [busyHeaders, setBusyHeaders] = useState<Set<string>>(new Set());
   // Two ephemeral, per-header notices that are NOT part of `checkedByHeader`: neither one is a

@@ -557,14 +557,17 @@ describe('ColumnMapStep', () => {
       expect(screen.getByRole('button', { name: /^Type: changed since the last check/i })).toBeInTheDocument();
     });
 
-    // ⛔ FIX PASS (review Finding 2): wiring test for the other half of the pure-function
-    // coverage: an exact, collision-free suggestion must read green with no click, i.e. `ColumnMapStep`
-    // must actually pass `confidence: 'exact'` through to `mappingRowState` for the selected
-    // target, not just leave a row neutral until it is manually checked.
-    it('an exact suggestion with no collision reads green with no click at all', () => {
+    // ⛔ REVERSAL, 2026-09-09. This used to assert the opposite: an exact, collision-free
+    // suggestion read green with no click. The ranker scores the COLUMN NAME, and on the real
+    // Zambia export the two headers it scored 1.0 hardest ("Type", "Operational status") are the
+    // only two whose VALUES needed checking, so the green tick landed exactly where it was least
+    // earned and told the operator not to click the control that would have found the problem.
+    // A row is green only once a check has actually read the column. See `mappingRowState.ts`.
+    it('an exact suggestion is still unchecked, because it scored the name and not the values', () => {
       render(<Controlled runId="run-1" headers={['MFL Code']} suggestions={[suggestions[0]]} initial={emptyMap} />);
 
-      expect(screen.getByRole('button', { name: /^MFL Code: checked, nothing wrong/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^MFL Code: not checked yet/i })).toBeInTheDocument();
+      // Still no automatic read: the row waits for the operator, it does not check itself.
       expect(api.readFacilityImportColumnValues).not.toHaveBeenCalled();
     });
   });

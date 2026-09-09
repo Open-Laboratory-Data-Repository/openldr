@@ -1,7 +1,7 @@
 # A data stage for the facility import, and a mapping step that answers back
 
 Date: 2026-09-08
-Status: approved, not yet planned
+Status: Slices A and B built; the status-icon rules revised 2026-09-09, see below
 
 ## The problem
 
@@ -94,6 +94,33 @@ is the busywork this stage exists to remove.
 **Neutral and stale are the same gray tick, deliberately.** The operator chose that. They are told
 apart by the tooltip, which reads "not checked yet" against "changed since the last check". If they
 later need to differ at a glance, stale takes a different glyph and neutral keeps the tick.
+
+### Both of those were reversed on 2026-09-09, after seeing them run
+
+The two rules above came out of a mockup, before anyone had put the real Zambia export through the
+built thing. The operator ran it and asked for both to go. What replaced them:
+
+**Nothing goes green without a check.** The ranker scores the column NAME. It says nothing about
+the values inside the column, and `facility-mapping-suggest.ts`'s synonym table hands a hardcoded
+1.0 to `type -> level` and `operational status -> status` — the only two headers in the export
+whose values need checking at all. So the auto-green fired hardest exactly where it was least
+earned, and a green tick there is an instruction not to click the one control that would have found
+the 16 unrecognised values behind it. The busywork it saved was never the expensive part.
+
+**Four states, four shapes, and unchecked is amber.** Unchecked is an amber information circle,
+valid a green tick in a circle, invalid a red circle, stale the circular arrows. A gray tick for
+unchecked was the same shape as valid in a quieter colour, so it read as a pass and invited nothing.
+Amber is the colour this feature already uses for "needs a decision".
+
+**The check results outlive the panel.** `ColumnMapStep` renders only on step 3, so a trip to Data
+unmounted it and destroyed every check result, every written value and every unsaved pick-list
+choice. That state describes the run, not the panel, so `ImportFacilitiesSheet` owns it now
+(`mappingCheckState.ts`) and discards it only when the file changes.
+
+Two smaller things from the same pass. Data had no footer button while every other step did, so the
+bar rendered empty under the grid; it has a Continue that only moves a step. And the sheet menu read
+"Cancel this import" above a bare "Cancel", one of which kills the run on the server and one of
+which only shuts the sheet; the second reads "Close".
 
 ## Splitting the store from the validate
 
