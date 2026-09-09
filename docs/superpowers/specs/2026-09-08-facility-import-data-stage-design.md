@@ -43,8 +43,21 @@ Five, by the operator, before this was written.
    retyped.
 3. **The file is uploaded when leaving Source, and rows are paged from the server.** The tab never
    holds more than the header row, exactly as now.
-4. **Edits live server-side, attached to the run.** The uploaded blob is never rewritten.
+4. **Edits live server-side, keyed on the register and the file, not the run.** The uploaded blob is
+   never rewritten. An earlier draft attached them to the run; a re-upload mints a new run, so
+   twenty repairs would vanish the moment the operator re-uploaded for an unrelated reason. The key
+   is `(nationalSystem, fileHash)`. `file_hash` is a sha256 of the bytes, computed as they stream,
+   and `notNull` on every run (`080_facility_import_runs.ts:24`), so it is already there. A file
+   that changed gets a different hash and its old edits stop applying, which is right: the line
+   numbers they name would no longer mean anything.
 5. **The per-field control is a status icon, not a button.** States below.
+6. **Every column is editable, extras included.** An edit therefore names a SOURCE HEADER, not a
+   contract field, which is also what makes it work for a column carried through as extra data.
+7. **An edit can be taken back.** The grid marks an edited cell and offers to clear it. Without that
+   a mistyped repair is permanent for as long as the file is.
+
+Decisions 6 and 7 were taken on 2026-09-09, when planning found the original paragraph did not
+answer them.
 
 ## The four stages
 
@@ -149,9 +162,24 @@ one live run at a time, which is the behaviour the unique index on `active_key` 
 to return the rows a check flagged, so the grid can go to line 1512 without the operator scrolling
 3788 rows to find it.
 
-**An edits table, attached to the run.** One row per edit: run, line, field, value. The blob is never
-rewritten, so "what did they actually send us" stays answerable and every edit is auditable. Apply
-and re-validate both read the file through this overlay.
+**An edits table, keyed on the register and the file.** One row per edit: national system, file
+hash, line, header, value. The blob is never rewritten, so "what did they actually send us" stays
+answerable and every edit is auditable. Apply and re-validate both read the file through this
+overlay.
+
+**The overlay lives INSIDE the parser, and that is not where the first draft of this spec put it.**
+The worker reads the whole blob into a string and hands it to `importFacilities`
+(`facility-import-worker.ts:396`), so nothing here streams and no injection is needed. Better,
+`parseFacilityCsv` splits each row and then builds its field map from the split record
+(`facility-csv.ts:406`). Patching the SPLIT RECORD, by column index, before that map is built costs
+no CSV re-serialisation, carries an edit into a contract field or into extras according to what that
+column maps to, and lets the edit take part in every parse-time check. A corrected coordinate
+becomes valid; a corrected name rescues a row the parser would have skipped. It keys on
+`info.lines`, the same line number quarantine already reports.
+
+⛔ ONE BOUNDARY THE OVERLAY CANNOT CROSS. A row quarantined for the wrong field COUNT is rejected
+before the field map exists (`facility-csv.ts:392`), so no cell edit can rescue it. That row still
+needs fixing in the CSV, which is what the coordinate refusal already tells the operator to do.
 
 Slice C carries the table and the overlay. Slice A needs only the paged read.
 
