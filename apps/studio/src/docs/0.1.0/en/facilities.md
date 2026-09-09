@@ -139,7 +139,7 @@ A repaired cell gets an amber rule down its left edge and an undo button. Undo p
 file's own value back. Undoing a sweep puts back every row the sweep changed, not just
 the one cell you clicked.
 
-Repairing a cell in a column you mapped to Level, Status or Country asks one question,
+Repairing a cell in a column you mapped to `level`, `status` or `country` asks one question,
 unless the cell is blank: change this row, or change every row that reads the same thing.
 A blank is not a category, so filling one in changes only that row. Categories usually
 repeat, so a value you correct once is usually wrong everywhere it appears.

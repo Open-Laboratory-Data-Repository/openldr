@@ -153,7 +153,7 @@ Une cellule corrigée porte un trait ambre sur son bord gauche, et un bouton pou
 remet la valeur du fichier. Annuler une correction sur toute la colonne remet chaque ligne que
 cette correction a changée, pas seulement la cellule cliquée.
 
-Corriger une cellule dans une colonne mappée sur Niveau, Statut ou Pays pose une question, sauf si
+Corriger une cellule dans une colonne mappée sur `level`, `status` ou `country` pose une question, sauf si
 la cellule est vide : changer cette ligne, ou changer toutes les lignes qui disent la même chose.
 Une cellule vide n'est pas une catégorie, donc la remplir ne change que cette ligne. Les catégories
 se répètent souvent, donc une valeur corrigée une fois est en général fausse partout où elle

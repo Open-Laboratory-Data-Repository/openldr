@@ -125,8 +125,8 @@ repair. Change the file and the repairs stop applying, since the line numbers th
 match.
 
 A repaired cell shows an amber rule and an undo button. Undoing a sweep puts back every row the
-sweep changed, not just the one cell you clicked. Editing a cell mapped to Level, Status or Country
-asks whether to change just that row or every row with the same value, unless the cell is blank: a
+sweep changed, not just the one cell you clicked. Editing a cell mapped to `level`, `status` or
+`country` asks whether to change just that row or every row with the same value, unless the cell is blank: a
 blank is not a category, so filling one in changes only that row. Otherwise a bad category value
 usually repeats. A repair cannot rescue a row with the wrong column count, and cannot add or remove
 a row; both go back to the CSV. Repairing a cell makes the last check stale, so re-check the column

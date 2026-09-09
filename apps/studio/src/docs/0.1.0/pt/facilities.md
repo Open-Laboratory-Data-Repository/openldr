@@ -146,7 +146,7 @@ Uma célula corrigida ganha um traço âmbar na margem esquerda e um botão para
 o valor do ficheiro. Anular uma correção feita em toda a coluna repõe cada linha que essa correção
 mudou, não só a célula clicada.
 
-Corrigir uma célula numa coluna mapeada para Nível, Estado ou País faz uma pergunta, exceto quando
+Corrigir uma célula numa coluna mapeada para `level`, `status` ou `country` faz uma pergunta, exceto quando
 a célula está vazia: mudar só esta linha, ou mudar todas as linhas que dizem a mesma coisa. Uma
 célula vazia não é uma categoria, por isso preenchê-la só muda essa linha. As categorias costumam
 repetir-se, por isso um valor corrigido uma vez costuma estar errado onde quer que apareça.
