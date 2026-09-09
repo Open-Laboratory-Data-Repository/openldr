@@ -1369,8 +1369,11 @@ export interface ValueMappingEntry {
   /** The source value exactly as the parser produced it. `resolveControlledFields` looks it up by
    *  exact string, so a differently-spaced copy would never resolve. */
   rawValue: string;
-  /** A code from the field's bound value set. */
-  toCode: string;
+  /** A code from the field's bound value set. Exactly one of `toCode` and `ignore` is set, never
+   *  both and never neither; the server rejects either violation with 400. */
+  toCode?: string;
+  /** Writes an UNMAPPED-FROM row instead of a code. `level` only; the server 400s on another field. */
+  ignore?: true;
 }
 
 /** `POST /api/facilities/import/value-mappings` — `ColumnMapStep`'s Save action. Validates every

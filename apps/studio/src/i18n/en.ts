@@ -1151,6 +1151,8 @@ export const en = {
       // so there is deliberately no "cannot continue"-style copy anywhere in this group.
       valueMap: {
         notMapped: 'Not mapped',
+        ignoreValue: 'Ignore this value',
+        ignoreValueHint: 'Imported exactly as written, and not asked about again',
         savedCount: '{{count}} mapping(s) written.',
       },
     },

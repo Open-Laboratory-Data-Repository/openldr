@@ -749,6 +749,7 @@ export function ColumnMapStep({
                         options={check?.options ?? []}
                         selected={valueChoiceFor(header, entryValue, candidates)}
                         onSelect={(code) => setValueChoice(header, entryValue, code)}
+                        field={check?.target ?? ''}
                       />
                     ))}
                   </div>
