@@ -81,6 +81,7 @@ function Controlled({ initial, onChangeSpy, runId = null, ...rest }: {
   onValidityChange?: (valid: boolean) => void;
   unmappedByField?: Record<ControlledField, string[]>;
   nationalSystem?: string;
+  registerName?: string;
   onValueMappingsSaved?: () => void;
 }) {
   const [value, setValue] = useState(initial);
@@ -112,6 +113,7 @@ function renderColumnMapStep(props: {
   onValidityChange?: (valid: boolean) => void;
   unmappedByField?: Record<ControlledField, string[]>;
   nationalSystem?: string;
+  registerName?: string;
   onValueMappingsSaved?: () => void;
 }) {
   return render(
@@ -124,6 +126,7 @@ function renderColumnMapStep(props: {
       onValidityChange={props.onValidityChange}
       unmappedByField={props.unmappedByField}
       nationalSystem={props.nationalSystem}
+      registerName={props.registerName}
       onValueMappingsSaved={props.onValueMappingsSaved}
     />,
   );
@@ -1060,6 +1063,62 @@ describe('ColumnMapStep', () => {
       // stale "Health Post" option.
       await waitFor(() => expect(suggestCalls).toBe(2));
       expect(await screen.findByLabelText('First-aid stations')).toHaveTextContent('First-aid stations (new)');
+    });
+
+    // Task 6 (Slice B): `registerName` is a friendly name threaded down from
+    // `ImportFacilitiesSheet.tsx`, which reads it off the same `sources` rows its own `Select`
+    // renders. The dialog's description must show that name, not the raw register URI, once one
+    // is known. It must still show the URI when none is passed, for a register reached by free
+    // text, or a caller that predates this prop.
+    it('shows the friendly register name in the dialog when one is supplied', async () => {
+      useAuthMock.mockReturnValue({
+        user: null, loading: false, hasCapability: (c: string) => c === 'terminology.manage',
+        signOut: () => {}, authEnforced: true,
+      });
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['First-aid stations'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'First-aid stations', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl', registerName: 'Zambia MFL',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('First-aid stations'));
+      fireEvent.click(await screen.findByRole('option', { name: /Add "First-aid stations" as a new type/ }));
+
+      expect(await screen.findByText(/Added to Zambia MFL only/)).toBeInTheDocument();
+      expect(screen.queryByText(/Added to urn:zm:mfl only/)).not.toBeInTheDocument();
+    });
+
+    it('falls back to the raw register URI when no friendly name is supplied', async () => {
+      useAuthMock.mockReturnValue({
+        user: null, loading: false, hasCapability: (c: string) => c === 'terminology.manage',
+        signOut: () => {}, authEnforced: true,
+      });
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['First-aid stations'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'First-aid stations', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('First-aid stations'));
+      fireEvent.click(await screen.findByRole('option', { name: /Add "First-aid stations" as a new type/ }));
+
+      expect(await screen.findByText(/Added to urn:zm:mfl only/)).toBeInTheDocument();
     });
 
     it('sends ignore: true, and no toCode, when the operator picks Ignore', async () => {

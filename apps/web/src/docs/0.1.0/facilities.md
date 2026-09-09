@@ -96,6 +96,18 @@ list: it imports exactly as written and stops being counted, and the choice is r
 next import of the same file does not ask again. Status and Country have no such option, because
 their vocabularies are small and closed.
 
+A level value the list does not have can instead be picked as **Add "…" as a new type**, at the
+same spot. The confirm that opens lets you correct the name; the code it will get is shown but not
+editable. The type reaches that register only, and every other register keeps its own list unchanged.
+A name that already matches an entry is refused, naming what it matched, rather than added as a
+second entry that would leave both unresolved. Adding a type needs the `terminology.manage`
+capability as well as `facilities.manage`; without it the option is disabled, and mapping and
+ignoring still work. The CLI has the same write:
+
+```bash
+./openldr facilities add-type "First-aid stations" --national-system urn:zm:mfl
+```
+
 Mapping decides; Review reports. If a check turns up something worth changing, go back to Mapping,
 change it, and come forward again. **A file uploaded through the background door is checked again in
 place**, against the copy the server already holds, so a national register is never sent twice to

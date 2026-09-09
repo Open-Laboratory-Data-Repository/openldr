@@ -168,6 +168,12 @@ export interface ColumnMapStepProps {
    *  (or a row's own check) actually has something to save; unused otherwise. Mirrors
    *  `ValueMapPanel`'s own `nationalSystem` prop exactly. */
   nationalSystem?: string;
+  /** A friendly name for `nationalSystem`, for `AddFacilityTypeDialog`'s own description. The
+   *  operator picked this register from a `Select` whose rows carry both `url` and `name`
+   *  (`ImportFacilitiesSheet.tsx`'s `listFacilityImportSources()`), and the name is what reads
+   *  sensibly there, not the raw URI. Omitted ⇒ falls back to `nationalSystem` itself, so a
+   *  register reached by free text (not this component's own concern) still shows something. */
+  registerName?: string;
   /** Fires once Save has written the chosen value mappings (or found nothing to write). Same
    *  contract as `ValueMapPanel`'s own `onSaved`: a just-written mapping only takes effect on a
    *  fresh parse, so the caller retires the summary on screen. */
@@ -196,7 +202,7 @@ export interface ColumnMapStepProps {
  *  below. */
 export function ColumnMapStep({
   headers, suggestions, value, runId, onChange, onValidityChange,
-  unmappedByField, nationalSystem, onValueMappingsSaved, checkState,
+  unmappedByField, nationalSystem, registerName, onValueMappingsSaved, checkState,
 }: ColumnMapStepProps): JSX.Element {
   const { t } = useTranslation();
 
@@ -860,13 +866,14 @@ export function ColumnMapStep({
         </div>
       )}
 
-      {/* Task 5: opened by a row's own `VALUE_MAP_ADD` pick, never rendered standalone. No prop for
-          a friendlier register display name reaches this step (the brief's own scope stops short
-          of `ImportFacilitiesSheet.tsx`), so the register's own URI is what the description names. */}
+      {/* Task 5: opened by a row's own `VALUE_MAP_ADD` pick, never rendered standalone. Task 6
+          (Slice B): `registerName` now reaches this step from `ImportFacilitiesSheet.tsx`, which
+          knows the friendly name the operator picked from its own `Select`. Falls back to the raw
+          URI when no name is known (a register typed rather than picked), same as before. */}
       <AddFacilityTypeDialog
         open={!!addDialogFor}
         nationalSystem={nationalSystem ?? ''}
-        registerName={nationalSystem ?? ''}
+        registerName={registerName ?? nationalSystem ?? ''}
         rawValue={addDialogFor?.value ?? ''}
         onOpenChange={(open) => { if (!open) setAddDialogFor(null); }}
         onAdded={handleTypeAdded}

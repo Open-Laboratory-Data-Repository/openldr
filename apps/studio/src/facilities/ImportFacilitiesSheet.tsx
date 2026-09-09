@@ -1690,6 +1690,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 checkState={checkState}
                 unmappedByField={liveFindings?.unmapped}
                 nationalSystem={nationalSystem.trim()}
+                // Task 6 (Slice B): the friendly name for `AddFacilityTypeDialog`'s own
+                // description. This sheet is the one place that knows it, from the SAME
+                // `sources` rows the national-system `Select` above renders. Undefined when the
+                // chosen value matches no known source; `ColumnMapStep` falls back to the URI.
+                registerName={sources.find((s) => s.url === nationalSystem.trim())?.name}
                 onValueMappingsSaved={handleValueMappingsSaved}
               />
               {/* Non-blocking — see `columnMapValid`'s own state comment for why this never

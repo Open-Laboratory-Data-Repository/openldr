@@ -10,6 +10,9 @@ import {
   // Reused verbatim below; nothing here re-implements ranking or validation.
   suggestColumns, suggestValues, saveFacilityValueMappings, resolveControlledFields,
   CONTROLLED_FIELDS, valueSetForField,
+  // Task 6 (Slice B): the SAME writer `POST /api/facilities/import/facility-types`
+  // (apps/server/src/facilities-routes.ts) calls. See runFacilitiesAddType below.
+  addRegisterFacilityType, FacilityTypeCollisionError,
   // The SAME cleanup helpers the delete route calls, in the same order — see runFacilitiesDelete.
   retireRegistryConcepts, reprojectAfterRegistryDelete, revalidateImportRun,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
@@ -870,6 +873,58 @@ function formatSuggestValuesHuman(byField: Record<ControlledField, SuggestValues
     }
   }
   return lines.join('\n');
+}
+
+// ── Task 6 (Slice B): `openldr facilities add-type <display> --national-system <uri>` ─────────
+//
+// CLI parity for `POST /api/facilities/import/facility-types` (apps/server/src/facilities-routes.ts),
+// calling the SAME `addRegisterFacilityType` (`@openldr/bootstrap`) the route calls. The route adds
+// two capability checks (`facilities.manage` and `terminology.manage`) on top of whatever this
+// process already runs as; the CLI has no such gate, same as every other write in this file.
+
+export interface FacilitiesAddTypeOpts {
+  /** ⛔ FREE TEXT, same as `facilities import`'s own `--national-system`. See that option's doc
+   *  comment. This command does NOT gate it through the registered-source lookup either: a typo
+   *  here writes vocabulary under a register-scoped list nothing will ever read, and nothing errors. */
+  nationalSystem: string;
+  json: boolean;
+}
+
+/** `openldr facilities add-type <display> --national-system <uri> [--json]` */
+export async function runFacilitiesAddType(display: string, opts: FacilitiesAddTypeOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const result = await addRegisterFacilityType(
+      ctx.terminology.admin, { nationalSystem: opts.nationalSystem, display },
+    );
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatAddTypeHuman(result) + '\n');
+    }
+    return 0;
+  } catch (err) {
+    if (err instanceof FacilityTypeCollisionError) {
+      const msg = `${err.message} (code: ${err.collidesWith.code})`;
+      if (opts.json) process.stdout.write(JSON.stringify({ error: msg, collidesWith: err.collidesWith }) + '\n');
+      else process.stderr.write(`facilities add-type refused: ${msg}\n`);
+      return 1;
+    }
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities add-type failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatAddTypeHuman(result: { code: string; system: string; valueSetUrl: string }): string {
+  return [
+    `code:       ${result.code}`,
+    `system:     ${result.system}`,
+    `value set:  ${result.valueSetUrl}`,
+  ].join('\n');
 }
 
 // ── Task 12: `openldr facilities import-runs` / `import-run <id>` ─────────────────────────────

@@ -74,6 +74,15 @@ enregistrée pour ce registre, donc le prochain import du même fichier ne la re
 n'est proposée que pour `level` : `status` et `country` ont de petits vocabulaires fermés, sans
 rien à y ignorer.
 
+**Une valeur de niveau absente de la liste peut y être ajoutée.** Choisissez **Ajouter « … » comme
+nouveau type** en haut de la liste. Une confirmation s'ouvre avec le nom, que vous pouvez corriger,
+et le code qu'il recevra, que vous ne pouvez pas. Le type est ajouté à ce registre seulement :
+chaque autre registre garde la liste qu'il a. Si le nom tapé correspond déjà à quelque chose dans
+la liste, l'ajout est refusé et nomme ce qu'il a rencontré, car deux entrées qui se lisent pareil
+empêcheraient les deux de se résoudre. Ajouter un type demande la capacité `terminology.manage` en
+plus de `facilities.manage` ; sans elle, l'option est désactivée et vous pouvez toujours mapper ou
+ignorer.
+
 ### L'icône d'état sur chaque ligne
 
 Chaque ligne de mappage porte une petite icône à côté de son sélecteur de champ. Elle a quatre

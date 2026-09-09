@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   // actual matcher, not a stub that could agree with itself.
   resolveControlledFields: vi.fn(),
   saveFacilityValueMappings: vi.fn(),
+  addRegisterFacilityType: vi.fn(),
   referenceCapture: { marker: 'referenceCapture' },
   readFileSync: vi.fn(),
   // Task 12: `createFacilityImportRunStore` is a factory (`(db) => store`) — `createFacilityImportRunStore`
@@ -104,6 +105,10 @@ vi.mock('@openldr/bootstrap', async () => {
     valueSetForField: actual.valueSetForField,
     resolveControlledFields: mocks.resolveControlledFields,
     saveFacilityValueMappings: mocks.saveFacilityValueMappings,
+    addRegisterFacilityType: mocks.addRegisterFacilityType,
+    // REAL, not mocked: `runFacilitiesAddType` catches it with `instanceof`, and the test constructs
+    // one to reject with. Both sides need the SAME class reference, not a copy.
+    FacilityTypeCollisionError: actual.FacilityTypeCollisionError,
     // The delete command's cleanup pair. Mocked rather than real: both reach into the terminology
     // admin store and the projection table, which this file's fake ctx does not model — the ORDER
     // they run in is what matters here, and the real behaviour is proven in bootstrap's own tests.
@@ -143,11 +148,14 @@ import {
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
   runFacilitiesImportSources,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList, runFacilitiesDelete,
+  runFacilitiesAddType,
 } from './facilities';
 // Task 9: real, PURE constant — see the `@openldr/bootstrap` mock factory above for why it is not
 // faked. Used to tell `mocks.ctx.terminology.admin.valueSets.getByUrl` which url each controlled
 // field resolves to, the same way `runFacilitiesSuggestValues` itself does.
-import { CONTROLLED_VALUE_SETS } from '@openldr/bootstrap';
+// Task 6 (Slice B): `FacilityTypeCollisionError` is the real class (see the mock factory above),
+// constructed here with the same shape `addRegisterFacilityType` throws it with.
+import { CONTROLLED_VALUE_SETS, FacilityTypeCollisionError } from '@openldr/bootstrap';
 // Fix pass (finding 3): real, pure constant — NOT mocked (this file never mocks
 // `@openldr/terminology`) — so the count named in `describeColumnMapError`'s `unknown_target`
 // message can be asserted against the SAME source the fix reads, not a copy that could drift.
@@ -2857,5 +2865,91 @@ describe('runFacilitiesImportRunRevalidate', () => {
 
     expect(code).toBe(1);
     expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+});
+
+// ── Task 6 (Slice B): `openldr facilities add-type <display> --national-system <uri>` ──────────
+//
+// CLI parity for `POST /api/facilities/import/facility-types` (apps/server/src/facilities-routes.ts),
+// calling the SAME `addRegisterFacilityType` (`@openldr/bootstrap`) the route calls. Same free-text
+// `--national-system` as `facilities import`'s own option: a mistyped register writes vocabulary
+// under a register-scoped list nothing will ever read, and nothing errors.
+describe('add-type', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('adds the type and prints its code', async () => {
+    mocks.addRegisterFacilityType.mockResolvedValue({
+      code: 'first-aid-stations',
+      system: 'urn:openldr:cs:facility-type:local:urn_tz_hfr',
+      valueSetUrl: 'urn:openldr:valueset:facility-type:urn_tz_hfr',
+    });
+
+    const code = await runFacilitiesAddType('First-aid stations', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.addRegisterFacilityType).toHaveBeenCalledWith(
+      mocks.ctx.terminology.admin, { nationalSystem: 'urn:tz:hfr', display: 'First-aid stations' },
+    );
+    const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(out).toMatch(/first-aid-stations/);
+    expect(mocks.ctx.close).toHaveBeenCalled();
+  });
+
+  it('prints its code as JSON with --json', async () => {
+    mocks.addRegisterFacilityType.mockResolvedValue({
+      code: 'first-aid-stations',
+      system: 'urn:openldr:cs:facility-type:local:urn_tz_hfr',
+      valueSetUrl: 'urn:openldr:valueset:facility-type:urn_tz_hfr',
+    });
+
+    const code = await runFacilitiesAddType('First-aid stations', { nationalSystem: 'urn:tz:hfr', json: true });
+
+    expect(code).toBe(0);
+    const out = JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
+    expect(out).toEqual({
+      code: 'first-aid-stations',
+      system: 'urn:openldr:cs:facility-type:local:urn_tz_hfr',
+      valueSetUrl: 'urn:openldr:valueset:facility-type:urn_tz_hfr',
+    });
+  });
+
+  // A `FacilityTypeCollisionError` must name what it collided with, not just fail generically. The
+  // operator has to know which existing concept is blocking the add.
+  it('exits non-zero and names the collision rather than adding a second one', async () => {
+    mocks.addRegisterFacilityType.mockRejectedValue(
+      new FacilityTypeCollisionError({ code: 'health-center', display: 'Health Center' }),
+    );
+
+    const code = await runFacilitiesAddType('Health Centre', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/Health Center/);
+    expect(mocks.ctx.close).toHaveBeenCalled();
+  });
+
+  it('a display with no letters or digits refuses, same as the route', async () => {
+    mocks.addRegisterFacilityType.mockRejectedValue(
+      new Error('a facility type needs at least one letter or digit'),
+    );
+
+    const code = await runFacilitiesAddType('!!!', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/at least one letter or digit/);
   });
 });
