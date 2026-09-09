@@ -350,7 +350,7 @@ export function buildProgram(): Command {
   facilities
     .command('add-type <display>')
     .description('Add a facility type to one register\'s own list. The shared list every other register sees is untouched.')
-    .requiredOption('--national-system <uri>', 'the register this type belongs to. WARNING: free text on this command — a mistyped register creates a register-scoped list nothing will ever read, silently, with no error anywhere; spell it exactly as `facilities import-sources` prints it')
+    .requiredOption('--national-system <uri>', 'the register this type belongs to; spell it exactly as `facilities import-sources` prints it. WARNING: free text on this command. A mistyped register creates a register-scoped list that nothing will ever read, silently, with no error anywhere')
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (display: string, opts: { nationalSystem: string; json: boolean }) => {
       process.exitCode = await runFacilitiesAddType(display, opts);
