@@ -235,6 +235,24 @@ describe('terminology admin store', () => {
       expect(proj[0].target_code).toBe('Z2');
       expect(proj[0].equivalence).toBe('NARROWER-THAN');
     });
+    // ⛔ Deactivating through `update` must take the mirror row with it. `sync-serve.ts` publishes
+    // `concept_map_elements` as the local FHIR ConceptMap, so a re-inserted mirror says a mapping is
+    // live when it is not. Migration 078 exists to clear exactly that drift out of older installs.
+    it('update with isActive false removes the projection and does not re-add it', async () => {
+      const { db, s } = await store();
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true });
+      await s.termMappings.update(res.mapping.id, { fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: false });
+      expect(await db.selectFrom('concept_map_elements').selectAll().where('source_code', '=', 'AMP').execute()).toHaveLength(0);
+      expect((await db.selectFrom('term_mappings').select(['is_active']).where('id', '=', res.mapping.id).execute())[0].is_active).toBe(false);
+    });
+
+    it('update with isActive true still leaves exactly one projection row', async () => {
+      const { db, s } = await store();
+      const res = await s.termMappings.create({ fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true });
+      await s.termMappings.update(res.mapping.id, { fromSystem: 'http://x', fromCode: 'AMP', toSystem: 'http://y', toCode: 'Z', toDisplay: 'Zed', mapType: 'SAME-AS', relationship: null, owner: null, isActive: true });
+      expect(await db.selectFrom('concept_map_elements').selectAll().where('source_code', '=', 'AMP').execute()).toHaveLength(1);
+    });
+
     it('throws not-found on update of a missing mapping', async () => {
       const { s } = await store();
       await expect(

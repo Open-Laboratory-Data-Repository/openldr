@@ -67,6 +67,13 @@ liste de choix, au lieu d'une seule zone plus bas. La liste est conservée penda
 traitez : enregistrer une correspondance ne fait pas disparaître les lignes restantes, et ne
 relance plus la vérification tout seul. Demandez la vérification suivante quand vous êtes prêt.
 
+**Une valeur de niveau qui n'appartient à aucun type peut être ignorée.** Choisissez **Ignorer
+cette valeur** en haut de la liste. La valeur est importée exactement comme écrite, ce qui est déjà
+le cas d'une valeur que personne n'a mappée, et la ligne cesse de la compter. La décision est
+enregistrée pour ce registre, donc le prochain import du même fichier ne la redemande pas. Elle
+n'est proposée que pour `level` : `status` et `country` ont de petits vocabulaires fermés, sans
+rien à y ignorer.
+
 ### L'icône d'état sur chaque ligne
 
 Chaque ligne de mappage porte une petite icône à côté de son sélecteur de champ. Elle a quatre

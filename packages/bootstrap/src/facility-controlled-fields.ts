@@ -1,4 +1,4 @@
-import type { FacilityRecord, TerminologyAdminStore } from '@openldr/db';
+import type { FacilityRecord, MapType, TerminologyAdminStore } from '@openldr/db';
 
 // FAC-P1-05 (A2a): the CSV importer writes whatever string a national register contains straight
 // into `level`/`status`/`country` — columns the facility FORM already treats as coded against three
@@ -17,6 +17,16 @@ export const CONTROLLED_VALUE_SETS: Record<ControlledField, string> = {
   status: 'urn:openldr:valueset:location-status',
   country: 'urn:openldr:valueset:country',
 };
+
+/** ⛔ The row an IGNORE writes, and it points at the raw value itself, never at a sentinel.
+ *
+ *  `to_system` and `to_code` are both NOT NULL (`013_term_mappings.ts:10-11`), so the row needs
+ *  values. `resolveControlledFields` reads `active.toCode` straight into the field
+ *  (`facility-controlled-fields.ts:212`), so a sentinel such as `__unmapped__` would land in `level`
+ *  the day any reader forgot the `mapType` check. Pointing at the raw value fails safe: a reader
+ *  that checks `mapType` knows the operator decided, and a reader that does not writes the raw
+ *  value, which is exactly what already happens to a value with no mapping at all. */
+export const FACILITY_IGNORE_MAP_TYPE: MapType = 'UNMAPPED-FROM';
 
 /** `urn:openldr:` namespace shared with `FACILITY_REGISTRY_SYSTEM`/`DEFAULT_OBSERVED_FACILITY_SYSTEM`
  *  in `packages/db/src/facility-observed.ts`. `cs:facility-<field>:` rather than reusing that file's
@@ -209,6 +219,14 @@ export async function resolveControlledFields(
       // mapping per `(fromSystem, fromCode)` within a scope.
       const outgoing = await admin.termMappings.listOutgoing(fromSystem, raw);
       const active = outgoing.find((m) => m.isActive);
+      // ⛔ AN IGNORE IS A DECISION, so it lands in NEITHER bucket. Not `mapped`, because there is
+      // nothing to rewrite the field to: the value stays exactly as the register wrote it, the
+      // same as case 1 above. Not `unmapped`, because that list is the operator's worklist and the
+      // whole point is that they already answered. It also has to sit HERE, ahead of the fold
+      // below, or "Health Centre" would still be rewritten to `health-center` after the operator
+      // asked for it to be left alone. See `saveFacilityValueMappings`'s own note on why the row
+      // points at the raw value rather than a sentinel.
+      if (active?.mapType === FACILITY_IGNORE_MAP_TYPE) continue;
       if (active) { mapped[field].set(raw, active.toCode); continue; }
 
       // 3. The same word, read the way a person reads it. Resolves to the CODE so that every

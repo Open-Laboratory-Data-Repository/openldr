@@ -13,7 +13,7 @@ type ConceptFixture = string | { code: string; display: string | null };
 
 function fakeAdmin(opts: {
   valueSets?: Record<string, ConceptFixture[]>;
-  mappings?: Record<string, { toCode: string; isActive: boolean }[]>;
+  mappings?: Record<string, { toCode: string; isActive: boolean; mapType?: string }[]>;
 }) {
   return {
     valueSets: {
@@ -291,5 +291,62 @@ describe('resolveControlledFields: the four ordered steps', () => {
     });
     const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'health centre' })]);
     expect(res.mapped.level.get('health centre')).toBe('health-center');
+  });
+});
+
+describe('an ignored value', () => {
+  const LEVEL_VS = 'urn:openldr:valueset:facility-type';
+  const FROM = observedFieldSystem('level', 'urn:tz:hfr');
+
+  it('is neither mapped nor reported unmapped', async () => {
+    const admin = fakeAdmin({
+      valueSets: { [LEVEL_VS]: [{ code: 'health-center', display: 'Health Center' }] },
+      mappings: { [`${FROM}|Others`]: [{ toCode: 'Others', isActive: true, mapType: 'UNMAPPED-FROM' }] },
+    });
+
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'Others' })]);
+
+    expect(res.mapped.level.size).toBe(0);
+    expect(res.unmapped.level).toEqual([]);
+  });
+
+  // The whole point of the decision: it beats the automatic fold, which would otherwise rewrite
+  // the value the operator asked to leave alone. `Health Centre` folds to `health-center` without
+  // the ignore row, so this fails loudly if the check lands below the fold instead of above it.
+  it('beats the normalised fold, so the value stays exactly as written', async () => {
+    const admin = fakeAdmin({
+      valueSets: { [LEVEL_VS]: [{ code: 'health-center', display: 'Health Center' }] },
+      mappings: { [`${FROM}|Health Centre`]: [{ toCode: 'Health Centre', isActive: true, mapType: 'UNMAPPED-FROM' }] },
+    });
+
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'Health Centre' })]);
+
+    expect(res.mapped.level.size).toBe(0);
+    expect(res.unmapped.level).toEqual([]);
+  });
+
+  // A SAME-AS row must still resolve. Without this the check could be written as "any active row
+  // means leave it alone" and every existing mapping would silently stop working.
+  it('does not change what an ordinary mapping does', async () => {
+    const admin = fakeAdmin({
+      valueSets: { [LEVEL_VS]: [{ code: 'health-center', display: 'Health Center' }] },
+      mappings: { [`${FROM}|Others`]: [{ toCode: 'health-center', isActive: true, mapType: 'SAME-AS' }] },
+    });
+
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'Others' })]);
+
+    expect(res.mapped.level.get('Others')).toBe('health-center');
+  });
+
+  // An INACTIVE ignore row is a decision the operator took back.
+  it('is ignored itself once deactivated', async () => {
+    const admin = fakeAdmin({
+      valueSets: { [LEVEL_VS]: [{ code: 'health-center', display: 'Health Center' }] },
+      mappings: { [`${FROM}|Others`]: [{ toCode: 'Others', isActive: false, mapType: 'UNMAPPED-FROM' }] },
+    });
+
+    const res = await resolveControlledFields(admin, 'urn:tz:hfr', [rec({ level: 'Others' })]);
+
+    expect(res.unmapped.level).toEqual(['Others']);
   });
 });

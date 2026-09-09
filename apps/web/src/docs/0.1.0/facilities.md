@@ -91,6 +91,11 @@ same for every row first. Until then the row's line says what is waiting, for ex
 are not recognised. 2 chosen, not saved yet". Writing does not make the rows vanish, so a choice can
 still be corrected; the values that were written simply stop counting against the row.
 
+A level value that belongs to no type can be picked as **Ignore this value**, at the top of the
+list: it imports exactly as written and stops being counted, and the choice is remembered so the
+next import of the same file does not ask again. Status and Country have no such option, because
+their vocabularies are small and closed.
+
 Mapping decides; Review reports. If a check turns up something worth changing, go back to Mapping,
 change it, and come forward again. **A file uploaded through the background door is checked again in
 place**, against the copy the server already holds, so a national register is never sent twice to

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ControlledField, ValueMappingEntry, ValueSetOption, ValueSuggestion } from '@/api';
-import { VALUE_MAP_UNMAPPED } from './ValueMapRow';
+import { VALUE_MAP_IGNORE, VALUE_MAP_UNMAPPED } from './ValueMapRow';
 
 /** A pick is keyed by (header, value): one panel row per HEADER, and the same raw value can appear
  *  under two headers claiming different fields. `JSON.stringify` of a tuple, so a header containing
@@ -114,10 +114,14 @@ export function pendingValueMappings(
     if (check.target !== targetFor(h) || !check.values) continue;
     for (const { value: entryValue, candidates } of check.values) {
       const toCode = valueChoice(state.valueChoices, h, entryValue, candidates);
-      if (toCode && toCode !== VALUE_MAP_UNMAPPED
-        && !state.resolvedValues.has(resolvedValueKey(check.target, entryValue))) {
-        entries.push({ field: check.target as ControlledField, rawValue: entryValue, toCode });
-      }
+      if (!toCode || toCode === VALUE_MAP_UNMAPPED) continue;
+      if (state.resolvedValues.has(resolvedValueKey(check.target, entryValue))) continue;
+      // ⛔ `ignore: true` and NO `toCode`. The server refuses an entry carrying both, and the
+      // sentinel must never reach the wire as a code: `__ignore__` in `toCode` would be written
+      // into `term_mappings` and then read straight into `level`.
+      entries.push(toCode === VALUE_MAP_IGNORE
+        ? { field: check.target as ControlledField, rawValue: entryValue, ignore: true }
+        : { field: check.target as ControlledField, rawValue: entryValue, toCode });
     }
   }
   return entries;

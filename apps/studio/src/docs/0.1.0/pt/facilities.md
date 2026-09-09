@@ -66,6 +66,12 @@ a sua lista de escolha, em vez de numa caixa mais abaixo. A lista é mantida enq
 guardar um mapeamento não faz desaparecer as linhas restantes, e já não repete a verificação
 sozinho. Peça a verificação seguinte quando estiver pronto.
 
+**Um valor de nível que não pertence a nenhum tipo pode ser ignorado.** Escolha **Ignorar este
+valor** no topo da lista. O valor é importado exatamente como está escrito, o que já acontece a um
+valor que ninguém mapeou, e a linha deixa de o contar. A decisão fica guardada para o registo, por
+isso a próxima importação do mesmo ficheiro não volta a perguntar. Só é oferecido para `level`:
+`status` e `country` têm vocabulários pequenos e fechados, sem nada neles que valha a pena ignorar.
+
 ### O ícone de estado em cada linha
 
 Cada linha de mapeamento tem um pequeno ícone junto ao seu seletor de campo. Tem quatro estados:

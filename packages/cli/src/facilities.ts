@@ -79,8 +79,10 @@ export interface FacilitiesImportOpts {
    *  `FacilityImportOptions.columnMap` — a bad map is refused by the real parser (Task 1/3), not
    *  re-validated here, and its `columnMapErrors` are printed either way. */
   columnMap?: string;
-  /** Path to a value-map JSON file — a JSON array of `{ field, rawValue, toCode }` entries written
-   *  through `saveFacilityValueMappings` (Task 5), the SAME function the HTTP
+  /** Path to a value-map JSON file — a JSON array of `{ field, rawValue, toCode }` entries, or
+   *  `{ field: 'level', rawValue, ignore: true }` to record that a level value belongs to no
+   *  concept and should be left exactly as written. Each entry carries a `toCode` or an `ignore`,
+   *  never both. Written through `saveFacilityValueMappings` (Task 5), the SAME function the HTTP
    *  `/api/facilities/import/value-mappings` route (Task 6) calls. Written ONLY on `--apply`, and
    *  ONLY after the preview below has classified the file and confirmed it is NOT blocked — never
    *  before, and never on a refused import (fix pass, finding 1: this used to write unconditionally

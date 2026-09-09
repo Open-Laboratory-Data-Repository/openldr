@@ -58,10 +58,19 @@ Six, by the operator, before this was written.
 
 ### Ignore writes a mapping to itself
 
-`mapType: 'UNMAPPED-FROM'`, `toSystem` the field's SHARED canonical system
-(`urn:openldr:cs:facility-type` for `level`), `toCode` the raw value verbatim. The shared system even
-for a register that has its own, because this row marks a decision rather than pointing at a concept,
-and a register-scoped `toSystem` would imply a concept that does not exist.
+`mapType: 'UNMAPPED-FROM'`, `toSystem` the register's OWN observed system for the field
+(`observedFieldSystem('level', nationalSystem)`), `toCode` the raw value verbatim. Source and target
+are the same coordinates, which is the point: the value stands for itself inside this register.
+
+The observed system, not the shared canonical one. `saveExclusive` auto-drafts a target concept it
+cannot find (`terminology-admin-store.ts:876`). A raw value like `Others` is never a concept in the
+shared `urn:openldr:cs:facility-type`, so naming that system would insert one DRAFT concept with a
+null display per ignored value, into the vocabulary every register reads. The writer already files
+the raw value in the register's own observed system a few lines earlier, so pointing there finds an
+existing concept and drafts nothing.
+
+An earlier draft of this spec chose the shared system and gave the reason that a register-scoped
+target "would imply a concept that does not exist". That reason was wrong. This writer creates it.
 
 `to_system` and `to_code` are both `NOT NULL` (`013_term_mappings.ts:10-11`), so the row needs
 values. A sentinel such as `__unmapped__` is the wrong answer: `resolveControlledFields` reads

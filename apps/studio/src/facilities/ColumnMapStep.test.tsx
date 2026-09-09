@@ -411,6 +411,21 @@ describe('ColumnMapStep', () => {
     });
   });
 
+  describe('Task 5: the column-map dropdown separates its passthrough option', () => {
+    it('separates Keep as extra data from the contract fields', async () => {
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'],
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByLabelText('Type'));
+
+      await screen.findByRole('option', { name: 'Keep as extra data' });
+      const listbox = screen.getByRole('listbox');
+      expect(within(listbox).getAllByRole('separator')).toHaveLength(1);
+    });
+  });
+
   describe('⛔ Task 5: the per-field check (checks one column, never the whole register)', () => {
     // Call history is NOT cleared between tests anywhere else in this file (no global
     // `clearMocks`/`resetMocks`), and the "was X called" assertions in this group depend on a
@@ -797,9 +812,12 @@ describe('ColumnMapStep', () => {
       fireEvent.click(await screen.findByLabelText('Zonal Hospital'));
 
       const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
-      // `Not mapped` first, then the two ranked candidates in SCORE order, then the rest of the
-      // value set alphabetically. Clinic sorts before Health Post; seed order had it last.
-      expect(options).toEqual(['Not mapped', 'Zonal Hospital', 'Hospital', 'Clinic', 'Health Post']);
+      // `Not mapped` and `Ignore this value` first (this row maps `level`), then the two ranked
+      // candidates in SCORE order, then the rest of the value set alphabetically. Clinic sorts
+      // before Health Post; seed order had it last.
+      expect(options).toEqual([
+        'Not mapped', 'Ignore this value', 'Zonal Hospital', 'Hospital', 'Clinic', 'Health Post',
+      ]);
     });
 
     it('does not show a picklist for a row nothing has found unrecognised values for', () => {
@@ -810,6 +828,122 @@ describe('ColumnMapStep', () => {
       });
 
       expect(screen.queryByText('1st Level Hospital')).not.toBeInTheDocument();
+    });
+
+    it('offers Ignore this value on a level row', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Others'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Others', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('Others'));
+
+      expect(await screen.findByRole('option', { name: 'Ignore this value' })).toBeInTheDocument();
+    });
+
+    // Spec decision 6. Withheld deliberately, keyed on the row's target.
+    it('does not offer Ignore on a status row', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Operational status', values: ['Functional'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Functional', candidates: [] }],
+        options: [{ code: 'active', display: 'Active' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Operational status'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { 'Operational status': 'status' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Operational status:/ }));
+      fireEvent.click(await screen.findByLabelText('Functional'));
+
+      expect(await screen.findByRole('option', { name: 'Not mapped' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Ignore this value' })).not.toBeInTheDocument();
+    });
+
+    it('sends ignore: true, and no toCode, when the operator picks Ignore', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Others'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Others', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('Others'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Ignore this value' }));
+      mockedApi(api.writeFacilityValueMappings).mockClear();
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      await waitFor(() => expect(api.writeFacilityValueMappings).toHaveBeenCalledWith(
+        'urn:zm:mfl', [{ field: 'level', rawValue: 'Others', ignore: true }],
+      ));
+    });
+
+    // The reason the operator wanted this at all.
+    it('turns the row green once its only value is ignored', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Others'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Others', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('Others'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Ignore this value' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+
+      expect(await screen.findByRole('button', { name: /^Type: checked, nothing wrong/i })).toBeInTheDocument();
+    });
+
+    it('separates the outcomes that are not a code from the codes themselves', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Others'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Others', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('Others'));
+
+      await screen.findByRole('option', { name: 'Not mapped' });
+      const listbox = screen.getByRole('listbox');
+      const separators = within(listbox).getAllByRole('separator');
+      expect(separators).toHaveLength(1);
     });
   });
 

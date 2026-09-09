@@ -1151,6 +1151,7 @@ export const en = {
       // so there is deliberately no "cannot continue"-style copy anywhere in this group.
       valueMap: {
         notMapped: 'Not mapped',
+        ignoreValue: 'Ignore this value',
         savedCount: '{{count}} mapping(s) written.',
       },
     },

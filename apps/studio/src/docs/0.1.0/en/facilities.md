@@ -59,6 +59,12 @@ in one box lower down. The list is kept while you work through it: saving a mapp
 the remaining rows vanish, and it no longer re-runs the check by itself. Ask for the next check
 when you are ready.
 
+**A level value that belongs to no type can be ignored.** Pick **Ignore this value** from the top of
+the list. The value is imported exactly as written, which is what already happens to a value nobody
+mapped, and the row stops counting it. The decision is stored against the register, so the next
+import of the same file does not ask again. It is offered for Level only: Status and Country have
+small, closed vocabularies with nothing in them worth ignoring.
+
 ### The status icon on each row
 
 Every mapping row carries a small icon next to its field picker. It has four states:
