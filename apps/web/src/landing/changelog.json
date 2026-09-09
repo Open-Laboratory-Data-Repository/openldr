@@ -2,6 +2,24 @@
   "generatedAt": "2026-09-09",
   "days": [
     {
+      "date": "2026-09-09",
+      "version": null,
+      "entries": [
+        {
+          "hash": "90926d51",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Data gets a Continue, and the sheet menu says Close"
+        },
+        {
+          "hash": "c084aeb0",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "An unchecked mapping row no longer looks checked"
+        }
+      ]
+    },
+    {
       "date": "2026-09-08",
       "version": null,
       "entries": [
