@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { MoreHorizontal, Upload } from 'lucide-react';
@@ -38,6 +38,7 @@ import {
   type FacilityRegisterSource,
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
+import { CONTROLLED_FIELDS } from './controlledFields';
 import { pendingValueMappings, resolvedValueKey, useMappingCheckState } from './mappingCheckState';
 import { DataGridStep } from './DataGridStep';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
@@ -304,6 +305,16 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // suggestion must stick"). Debouncing, batching, or dropping this call makes the panel look broken
   // for reasons that are not in the panel.
   const [columnMap, setColumnMap] = useState<FacilityColumnMap>(EMPTY_COLUMN_MAP);
+  /** Source header -> the controlled field it maps to, for the headers that map to one. Empty
+   *  until the operator has mapped something, which is the ordinary state on a first pass through
+   *  Data. A cell in one of these opens the this-row-versus-everywhere choice. */
+  const controlledHeaders = useMemo(() => {
+    const out: Record<string, ControlledField> = {};
+    for (const [header, target] of Object.entries(columnMap?.columns ?? {})) {
+      if ((CONTROLLED_FIELDS as string[]).includes(target)) out[header] = target as ControlledField;
+    }
+    return out;
+  }, [columnMap]);
   /** ⛔ THE MAPPING STEP'S CHECK RESULTS LIVE HERE, NOT IN `ColumnMapStep`. That panel renders only
    *  while `step === 3`, so state it owned itself was destroyed by an ordinary click on Data and
    *  rebuilt empty on the way back: a row the operator had just checked came back unchecked, and
@@ -1412,7 +1423,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               because the type is `string | null` and the component's own prop is not. */}
           {step === 2 && runId && (
             <div className="flex min-h-0 flex-1 flex-col">
-              <DataGridStep runId={runId} />
+              <DataGridStep
+                runId={runId}
+                // CSV only. A JSONL release is the publisher's file in the contract's own shape, and
+                // the parser takes no overlay for one (see `FacilityImportOptions.cellEdits`).
+                editable={format === 'csv'}
+                controlledHeaders={controlledHeaders}
+              />
             </div>
           )}
 

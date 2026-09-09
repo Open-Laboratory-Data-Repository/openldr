@@ -1,10 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@/i18n';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, readFacilityImportRows: vi.fn() };
+  return {
+    ...actual,
+    readFacilityImportRows: vi.fn(),
+    readFacilityImportEdits: vi.fn(),
+    putFacilityImportEdit: vi.fn(),
+    deleteFacilityImportEdit: vi.fn(),
+  };
 });
 
 import * as api from '@/api';
@@ -133,5 +140,114 @@ describe('DataGridStep', () => {
     expect(await screen.findByText(/wider screen/i)).toBeInTheDocument();
     expect(screen.queryByText('Chunga Clinic')).not.toBeInTheDocument();
     vi.unstubAllGlobals();
+  });
+
+  it('writes a cell edit keyed on the row file line, not on its position', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['code', 'name'], rows: [['1', 'Alpha']], lines: [7],
+      offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    mocked(api.putFacilityImportEdit).mockResolvedValue({
+      header: 'name', line: 7, fromValue: null, toValue: 'Beta',
+    });
+    render(<DataGridStep runId="fir_1" editable />);
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByText('Alpha'));
+    const box = screen.getByRole('textbox');
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Beta{Enter}');
+    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledWith('fir_1', {
+      header: 'name', line: 7, toValue: 'Beta',
+    }));
+  });
+
+  it('shows a stored edit in place of the file value', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['code', 'name'], rows: [['1', 'Alpha']], lines: [7],
+      offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([
+      { header: 'name', line: 7, fromValue: null, toValue: 'Beta' },
+    ]);
+    render(<DataGridStep runId="fir_1" editable />);
+    expect(await screen.findByText('Beta')).toBeInTheDocument();
+    expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+  });
+
+  it('applies a value-scoped edit to every matching cell in its own column', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name', 'level'], rows: [['Others', 'Others'], ['Alpha', 'Others']], lines: [2, 3],
+      offset: 0, limit: 100, total: 2,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([
+      { header: 'level', line: null, fromValue: 'Others', toValue: 'Health Post' },
+    ]);
+    render(<DataGridStep runId="fir_1" editable />);
+    expect(await screen.findAllByText('Health Post')).toHaveLength(2);
+    // The same string in the `name` column is untouched: an edit names one header.
+    expect(screen.getByText('Others')).toBeInTheDocument();
+  });
+
+  it('undoes an edit and puts the file value back', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([
+      { header: 'name', line: 7, fromValue: null, toValue: 'Beta' },
+    ]);
+    mocked(api.deleteFacilityImportEdit).mockResolvedValue({ removed: true });
+    render(<DataGridStep runId="fir_1" editable />);
+    await screen.findByText('Beta');
+    await userEvent.click(screen.getByRole('button', { name: /undo this change/i }));
+    await waitFor(() => expect(api.deleteFacilityImportEdit).toHaveBeenCalledWith('fir_1', {
+      header: 'name', line: 7,
+    }));
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+  });
+
+  it('does not offer editing when the run is not editable', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    render(<DataGridStep runId="fir_1" />);
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByText('Alpha'));
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(api.readFacilityImportEdits).not.toHaveBeenCalled();
+  });
+
+  it('escape leaves the cell as it was', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    render(<DataGridStep runId="fir_1" editable />);
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByText('Alpha'));
+    await userEvent.type(screen.getByRole('textbox'), 'Beta{Escape}');
+    expect(api.putFacilityImportEdit).not.toHaveBeenCalled();
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+  });
+
+  // Controller ruling: commit must not run twice for one keystroke. Enter calls commit, which
+  // unmounts the Input, which fires blur, which would call commit again with the same draft.
+  it('commits once on Enter, not again when the blur that follows fires', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    mocked(api.putFacilityImportEdit).mockResolvedValue({
+      header: 'name', line: 7, fromValue: null, toValue: 'Beta',
+    });
+    render(<DataGridStep runId="fir_1" editable />);
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByText('Alpha'));
+    const box = screen.getByRole('textbox');
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Beta{Enter}');
+    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledTimes(1));
+    box.blur();
+    await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalledTimes(1));
   });
 });

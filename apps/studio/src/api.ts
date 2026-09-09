@@ -1679,6 +1679,47 @@ export const readFacilityImportRows = (
   authFetch(`/api/facilities/import/runs/${encodeURIComponent(runId)}/rows?offset=${p.offset}&limit=${p.limit}`)
     .then((r) => okJson<FacilityImportRows>(r, 'read import rows'));
 
+/** One operator repair on the Data grid, as `GET /api/facilities/import/runs/:id/edits` returns it.
+ *  Either `line` is set (one cell) or `fromValue` is set (every cell in that column holding that
+ *  value), never both and never neither. */
+export interface FacilityImportEdit {
+  header: string;
+  line: number | null;
+  fromValue: string | null;
+  toValue: string;
+}
+
+/** Every repair recorded against this run's FILE, which is not the same as against this run: the
+ *  server keys them on `(nationalSystem, fileHash)`, so a re-upload of the same bytes still sees
+ *  them. That is the whole reason this list can be non-empty on a run just created. */
+export const readFacilityImportEdits = (runId: string): Promise<FacilityImportEdit[]> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(runId)}/edits`)
+    .then((r) => okJson<{ edits: FacilityImportEdit[] }>(r, 'read import edits'))
+    .then((j) => j.edits);
+
+/** Records or replaces one repair. Pass `line` for one cell, `fromValue` for every cell in that
+ *  column holding that value. Passing both, or neither, is a 400. */
+export const putFacilityImportEdit = (
+  runId: string,
+  edit: { header: string; line?: number; fromValue?: string; toValue: string },
+): Promise<FacilityImportEdit> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(runId)}/edits`, jbody(edit, 'PUT'))
+    .then((r) => okJson<FacilityImportEdit>(r, 'write import edit'));
+
+/** The undo. `removed: false` means there was nothing there, which is not an error. */
+export const deleteFacilityImportEdit = (
+  runId: string,
+  key: { header: string; line?: number; fromValue?: string },
+): Promise<{ removed: boolean }> => {
+  const q = new URLSearchParams({ header: key.header });
+  if (key.line !== undefined) q.set('line', String(key.line));
+  if (key.fromValue !== undefined) q.set('fromValue', key.fromValue);
+  return authFetch(
+    `/api/facilities/import/runs/${encodeURIComponent(runId)}/edits?${q.toString()}`,
+    { method: 'DELETE' },
+  ).then((r) => okJson<{ removed: boolean }>(r, 'undo import edit'));
+};
+
 /** The operator's decision, as `POST /api/facilities/import/runs/:id/confirm` takes it.
  *
  *  ⛔ EVERY FIELD IS OPTIONAL AND STAYS OPTIONAL. The server records only the keys the request
