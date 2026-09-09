@@ -21,8 +21,21 @@ vi.mock('@/api', async (orig) => {
     // Fix pass (Critical finding, mapping-answers-back Slice B Task 6): the Save button aggregates
     // every row's chosen mappings into one call. No test in this file exercised it before this pass.
     writeFacilityValueMappings: vi.fn(),
+    // Slice B, Task 5: `AddFacilityTypeDialog`, rendered by this panel, calls this for real
+    // whenever a test opens it and clicks "Add type". Without a mock here that call would hit
+    // an actual (relative-URL) `fetch` under jsdom and reject, the same reason every other
+    // facility-import call in this factory is mocked.
+    addFacilityType: vi.fn(),
   };
 });
+
+// Slice B, Task 5: `ValueMapRow` gates `VALUE_MAP_ADD` on `useAuth().hasCapability('terminology.manage')`.
+// Mocked here, same idiom as `ObservedTab.test.tsx`'s own `useAuthMock`, with a default of false.
+// That is what the REAL `AuthProvider`'s context default already returns with no provider mounted
+// (`AuthProvider.tsx`'s `hasCapability: () => false`), so this mock only makes that default explicit
+// and lets individual tests override it.
+const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
+vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
 import * as api from '@/api';
 import { ColumnMapStep } from './ColumnMapStep';
@@ -121,6 +134,10 @@ beforeEach(() => {
     values: [],
     options: [{ code: 'health-center', display: 'Health Center' }],
     notValidated: false,
+  });
+  // Default falls to "cannot add". See this file's own top-of-file note on `useAuthMock`.
+  useAuthMock.mockReturnValue({
+    user: null, loading: false, hasCapability: () => false, signOut: () => {}, authEnforced: true,
   });
 });
 
@@ -828,11 +845,14 @@ describe('ColumnMapStep', () => {
       fireEvent.click(await screen.findByLabelText('Zonal Hospital'));
 
       const options = (await screen.findAllByRole('option')).map((o) => o.textContent);
-      // `Not mapped` and `Ignore this value` first (this row maps `level`), then the two ranked
-      // candidates in SCORE order, then the rest of the value set alphabetically. Clinic sorts
-      // before Health Post; seed order had it last.
+      // `Not mapped`, `Ignore this value` and `Add … as a new type` first (this row maps `level`;
+      // the suite's own default has no `terminology.manage`, so Add renders disabled but is still
+      // in the list, see this file's own `useAuthMock` note), then the two ranked candidates in
+      // SCORE order, then the rest of the value set alphabetically. Clinic sorts before Health
+      // Post; seed order had it last.
       expect(options).toEqual([
-        'Not mapped', 'Ignore this value', 'Zonal Hospital', 'Hospital', 'Clinic', 'Health Post',
+        'Not mapped', 'Ignore this value', 'Add "Zonal Hospital" as a new type…',
+        'Zonal Hospital', 'Hospital', 'Clinic', 'Health Post',
       ]);
     });
 
@@ -886,6 +906,160 @@ describe('ColumnMapStep', () => {
 
       expect(await screen.findByRole('option', { name: 'Not mapped' })).toBeInTheDocument();
       expect(screen.queryByRole('option', { name: 'Ignore this value' })).not.toBeInTheDocument();
+    });
+
+    // Task 5: the "Add a new type" door. Same field gate as Ignore above (`level` only), plus a
+    // second gate this one alone carries: `terminology.manage`.
+    it('offers Add as a new type on a level row', async () => {
+      // Arranged as the ENABLED case, explicitly. The suite's own default (see the top-of-file
+      // `useAuthMock` note) falls to "cannot add", and the disabled case right below already
+      // covers that default. This is the contrasting case: `terminology.manage` granted.
+      useAuthMock.mockReturnValue({
+        user: null, loading: false, hasCapability: (c: string) => c === 'terminology.manage',
+        signOut: () => {}, authEnforced: true,
+      });
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Others'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Others', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('Others'));
+
+      expect(await screen.findByRole('option', { name: /Add "Others" as a new type/ })).toBeInTheDocument();
+    });
+
+    // Same arrange as "does not offer Ignore on a status row" above, spec decision 6: withheld on
+    // any field but `level`, regardless of capability.
+    it('does not offer Add on a status row', async () => {
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Operational status', values: ['Functional'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Functional', candidates: [] }],
+        options: [{ code: 'active', display: 'Active' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Operational status'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { 'Operational status': 'status' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Operational status:/ }));
+      fireEvent.click(await screen.findByLabelText('Functional'));
+
+      expect(screen.queryByRole('option', { name: /as a new type/ })).not.toBeInTheDocument();
+    });
+
+    it('disables Add without terminology.manage and says why', async () => {
+      // Render inside an auth context whose hasCapability returns false for terminology.manage.
+      // That is the suite's own default (see the top-of-file `useAuthMock` note), made explicit
+      // here since this is the test the default exists for.
+      useAuthMock.mockReturnValue({
+        user: null, loading: false, hasCapability: () => false, signOut: () => {}, authEnforced: true,
+      });
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['Others'], distinct: 1, truncated: false,
+      });
+      mockedApi(api.suggestValueMappings).mockResolvedValue({
+        values: [{ value: 'Others', candidates: [] }],
+        options: [{ code: 'health-post', display: 'Health Post' }],
+        notValidated: false,
+      });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('Others'));
+
+      expect(await screen.findByRole('option', { name: /Add "Others" as a new type/ })).toHaveAttribute('data-disabled');
+    });
+
+    // ⛔ Not in the brief's own list, added to prove the invariant every other file in this task
+    // was warned about: `VALUE_MAP_ADD` is a door, not an outcome. Selecting it must open the
+    // dialog rather than land in `valueChoices` (and therefore `pendingValueMappings`), and a
+    // successful add must adopt the SERVER'S code, never the sentinel itself.
+    it('opens the add-type dialog instead of storing the sentinel, then adopts the minted code', async () => {
+      useAuthMock.mockReturnValue({
+        user: null, loading: false, hasCapability: (c: string) => c === 'terminology.manage',
+        signOut: () => {}, authEnforced: true,
+      });
+      mockedApi(api.readFacilityImportColumnValues).mockResolvedValue({
+        header: 'Type', values: ['First-aid stations'], distinct: 1, truncated: false,
+      });
+      // Filtered on `field === 'level'`: `ConstantValueField` fires its own `suggestValueMappings`
+      // call for the two unclaimed constant fields (`status`, `country`) on mount, and an unfiltered
+      // counter would count those too, tripping the "confident" branch below on the level row's own
+      // FIRST check.
+      let suggestCalls = 0;
+      mockedApi(api.suggestValueMappings).mockImplementation(async (field: string, values: string[]) => {
+        if (field !== 'level' || !values.includes('First-aid stations')) {
+          return { values: [], options: [], notValidated: false };
+        }
+        suggestCalls += 1;
+        // The FIRST check has no opinion, which is why the value is unrecognised and the operator
+        // opens the dialog for it at all. The SECOND check is the dialog's own success re-check.
+        // `handleTypeAdded` re-runs it so the concept the add call just minted is ranked into the
+        // list, and this response's DIFFERENT display is what proves that re-check actually ran,
+        // rather than the row still showing the first check's stale "Health Post" option.
+        if (suggestCalls > 1) {
+          return {
+            values: [{
+              value: 'First-aid stations',
+              candidates: [{
+                target: 'first-aid-stations', display: 'First-aid stations (new)', score: 1, confidence: 'exact' as const,
+              }],
+            }],
+            options: [{ code: 'first-aid-stations', display: 'First-aid stations (new)' }],
+            notValidated: false,
+          };
+        }
+        return {
+          values: [{ value: 'First-aid stations', candidates: [] }],
+          options: [{ code: 'health-post', display: 'Health Post' }],
+          notValidated: false,
+        };
+      });
+      mockedApi(api.addFacilityType).mockResolvedValue({
+        code: 'first-aid-stations', system: 'urn:openldr:cs:facility-type:local:zm-mfl',
+        valueSetUrl: 'urn:openldr:valueset:facility-type:zm-mfl',
+      });
+      mockedApi(api.writeFacilityValueMappings).mockResolvedValue({ written: 1, superseded: [] });
+      renderColumnMapStep({
+        runId: 'run-1', headers: ['Type'], nationalSystem: 'urn:zm:mfl',
+        value: { columns: { Type: 'level' }, constants: {}, extras: [] },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Type:/ }));
+      fireEvent.click(await screen.findByLabelText('First-aid stations'));
+      fireEvent.click(await screen.findByRole('option', { name: /Add "First-aid stations" as a new type/ }));
+
+      // The dialog is open, and the row's own Select still reads "Not mapped". The sentinel was
+      // never stored as this row's choice, so nothing about the trigger's own display changed.
+      expect(await screen.findByText('Add a facility type')).toBeInTheDocument();
+      expect(screen.getByLabelText('First-aid stations')).toHaveTextContent('Not mapped');
+
+      const addTypeActions = screen.getByRole('button', { name: /add type actions/i });
+      fireEvent.pointerDown(addTypeActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByRole('menu')) fireEvent.keyDown(addTypeActions, { key: 'Enter' });
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Add type' }));
+
+      await waitFor(() => expect(api.addFacilityType).toHaveBeenCalledWith('urn:zm:mfl', 'First-aid stations'));
+      // The re-check ran (proves the concept is ranked into the list, per the brief's own step 6),
+      // and the row shows the FRESH concept's display, not the sentinel and not the first check's
+      // stale "Health Post" option.
+      await waitFor(() => expect(suggestCalls).toBe(2));
+      expect(await screen.findByLabelText('First-aid stations')).toHaveTextContent('First-aid stations (new)');
     });
 
     it('sends ignore: true, and no toCode, when the operator picks Ignore', async () => {

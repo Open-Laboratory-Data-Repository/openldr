@@ -17,6 +17,7 @@ import {
   type ColumnSuggestion, type ControlledField, type FacilityColumnMap,
   type ValueMappingEntry, type ValueSuggestion,
 } from '@/api';
+import { AddFacilityTypeDialog } from './AddFacilityTypeDialog';
 import { ConstantValueField } from './ConstantValueField';
 import {
   pendingValueMappings, resolvedValueKey, useMappingCheckState, valueChoice, valueChoiceKey,
@@ -24,7 +25,7 @@ import {
 import type { MappingCheckState, RowCheck, WorklistEntry } from './mappingCheckState';
 import { mappingRowState } from './mappingRowState';
 import { MappingRowStatus } from './MappingRowStatus';
-import { ValueMapRow, VALUE_MAP_UNMAPPED } from './ValueMapRow';
+import { ValueMapRow, VALUE_MAP_ADD, VALUE_MAP_UNMAPPED } from './ValueMapRow';
 
 // Task 7: mirrors packages/terminology/src/facility-csv.ts's REQUIRED/OPTIONAL — "mirrored, not
 // shared", the same idiom every other facility-import type in this app already follows (this app
@@ -228,6 +229,9 @@ export function ColumnMapStep({
   // notices cannot step on one another.
   const [blockedHeaders, setBlockedHeaders] = useState<Set<string>>(new Set());
   const [erroredHeaders, setErroredHeaders] = useState<Set<string>>(new Set());
+  // Task 5: which row's `VALUE_MAP_ADD` opened the dialog, and for which raw value. `null` means
+  // closed. `VALUE_MAP_ADD` itself never lands here as a stored choice; see `handleValueSelect`.
+  const [addDialogFor, setAddDialogFor] = useState<{ header: string; value: string } | null>(null);
 
   const suggestionByHeader = useMemo(() => {
     const m = new Map<string, ColumnSuggestion>();
@@ -546,6 +550,33 @@ export function ColumnMapStep({
     setValueChoices((prev) => ({ ...prev, [valueChoiceKey(header, entryValue)]: toCode }));
   };
 
+  /** ⛔ `VALUE_MAP_ADD` IS A DOOR, NOT AN OUTCOME. Every other code `ValueMapRow` can emit is a
+   *  real decision and goes straight to `setValueChoice`, which is what `pendingValueMappings`
+   *  reads to build the next write. This one sentinel never reaches that function: selecting it
+   *  opens `AddFacilityTypeDialog` for the row's raw value instead, and the Select's own displayed
+   *  value is left exactly where it was (`valueChoiceFor` below never returns this sentinel,
+   *  because nothing ever stores it). If it reached the wire as a `toCode` it would be written
+   *  into `term_mappings` and then read straight into the `level` field of every matching facility. */
+  const handleValueSelect = (header: string, entryValue: string, toCode: string): void => {
+    if (toCode === VALUE_MAP_ADD) {
+      setAddDialogFor({ header, value: entryValue });
+      return;
+    }
+    setValueChoice(header, entryValue, toCode);
+  };
+
+  /** The dialog succeeded: the server minted `code` for `addDialogFor.value` in this register. Set
+   *  it as that value's choice (a real decision now, unlike the sentinel that opened the dialog)
+   *  and re-run the row's own check, the same action the status icon performs, so the new concept
+   *  is ranked into the pick-list rather than leaving the operator to find it by hand. */
+  const handleTypeAdded = (code: string): void => {
+    if (!addDialogFor) return;
+    const { header, value: entryValue } = addDialogFor;
+    setValueChoice(header, entryValue, code);
+    setAddDialogFor(null);
+    void checkRow(header);
+  };
+
   /** ⛔ THERE IS NO SAVE BUTTON. The status icon is the save.
    *
    *  This was a separate Save, and before that one global Save rendered after every mapping row,
@@ -753,7 +784,7 @@ export function ColumnMapStep({
                         candidates={candidates}
                         options={check?.options ?? []}
                         selected={valueChoiceFor(header, entryValue, candidates)}
-                        onSelect={(code) => setValueChoice(header, entryValue, code)}
+                        onSelect={(code) => handleValueSelect(header, entryValue, code)}
                         field={check?.target ?? ''}
                       />
                     ))}
@@ -828,6 +859,18 @@ export function ColumnMapStep({
           ))}
         </div>
       )}
+
+      {/* Task 5: opened by a row's own `VALUE_MAP_ADD` pick, never rendered standalone. No prop for
+          a friendlier register display name reaches this step (the brief's own scope stops short
+          of `ImportFacilitiesSheet.tsx`), so the register's own URI is what the description names. */}
+      <AddFacilityTypeDialog
+        open={!!addDialogFor}
+        nationalSystem={nationalSystem ?? ''}
+        registerName={nationalSystem ?? ''}
+        rawValue={addDialogFor?.value ?? ''}
+        onOpenChange={(open) => { if (!open) setAddDialogFor(null); }}
+        onAdded={handleTypeAdded}
+      />
     </div>
   );
 }
