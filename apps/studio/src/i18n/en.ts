@@ -1152,7 +1152,6 @@ export const en = {
       valueMap: {
         notMapped: 'Not mapped',
         ignoreValue: 'Ignore this value',
-        ignoreValueHint: 'Imported exactly as written, and not asked about again',
         savedCount: '{{count}} mapping(s) written.',
       },
     },

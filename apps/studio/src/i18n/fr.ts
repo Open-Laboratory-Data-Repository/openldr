@@ -1076,7 +1076,6 @@ export const fr: EnShape = {
       valueMap: {
         notMapped: 'Non mappé',
         ignoreValue: 'Ignorer cette valeur',
-        ignoreValueHint: 'Importée telle quelle, et plus jamais demandée',
         savedCount: '{{count}} mappage(s) enregistré(s).',
       },
     },
