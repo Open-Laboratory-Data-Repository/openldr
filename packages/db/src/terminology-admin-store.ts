@@ -759,10 +759,18 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             relationship: input.relationship ?? null, owner: input.owner ?? null, is_active: input.isActive,
             updated_at: sql`now()`,
           }).where('id', '=', id).execute();
-          await trx.insertInto('concept_map_elements').values({
-            map_url: LOCAL_MAP_URL, source_system: input.fromSystem, source_code: input.fromCode,
-            target_system: input.toSystem, target_code: input.toCode, equivalence: input.mapType,
-          }).execute();
+          // ⛔ A deactivated mapping must not go on being published. `sync-serve.ts` exports
+          // `concept_map_elements` as the local FHIR ConceptMap, so re-inserting the mirror here
+          // would tell every reader the mapping is live after the operator switched it off. The
+          // delete above stays unconditional; only the re-insert is skipped. `saveExclusive`'s
+          // supersede path already behaves this way, and migration 078 exists to clear the drift
+          // this guard stops from accumulating again.
+          if (input.isActive) {
+            await trx.insertInto('concept_map_elements').values({
+              map_url: LOCAL_MAP_URL, source_system: input.fromSystem, source_code: input.fromCode,
+              target_system: input.toSystem, target_code: input.toCode, equivalence: input.mapType,
+            }).execute();
+          }
           const persisted = await trx.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
           if (capture) await capture.record(trx, 'term_mapping', id, 'upsert', tmContentHash(persisted));
         });
