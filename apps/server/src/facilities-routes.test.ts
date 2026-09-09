@@ -3506,6 +3506,102 @@ describe('POST /api/facilities/import/value-mappings', () => {
   });
 });
 
+// FAC-P1-B Slice B, Task 4: the route that adds a facility type to one register's own list.
+// `addRegisterFacilityType` (@openldr/bootstrap) does the write; these tests exercise it through
+// the real store, the same way Task 3's suggest-values tests above do.
+// This route needs BOTH capabilities (spec decision 4), so the default `appWith` grant
+// (`facilities.view` + `facilities.manage`) is not enough on its own here.
+const ADD_TYPE_CAPS = ['facilities.manage', 'terminology.manage'];
+
+describe('POST /api/facilities/import/facility-types', () => {
+  it('adds a facility type to the register and returns its code', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ADD_TYPE_CAPS);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'First-aid stations' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().code).toBe('first-aid-stations');
+  });
+
+  // ⛔ A 409, not a 200 with a warning. Adding it would poison the normalised key and BOTH values
+  // would stop resolving, silently.
+  it('refuses a display that collides, and names what it hit', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ADD_TYPE_CAPS);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'Health Centre' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().collidesWith).toMatchObject({ code: 'health-center' });
+  });
+
+  it('refuses an empty display', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ADD_TYPE_CAPS);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: '   ' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  // Same register gate as value-mappings above: a typed label writes nothing. Without this check
+  // this route would be the one door where a typo mints vocabulary under a namespace nothing else
+  // resolves against.
+  it('refuses a nationalSystem that names no registered source', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeCreateCtx(internalDb), ADD_TYPE_CAPS);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'First-aid stations' },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses a caller without terminology.manage', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ['facilities.manage']);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'First-aid stations' },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // Both capabilities are required, not just the one the brief's test names — a caller missing
+  // facilities.manage alone must be refused too.
+  it('refuses a caller without facilities.manage', async () => {
+    const internalDb = await importDb(['HFR']);
+    const app = await appWith(fakeCreateCtx(internalDb), ['terminology.manage']);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/facilities/import/facility-types',
+      payload: { nationalSystem: 'HFR', display: 'First-aid stations' },
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 // --- A2b Task 3: POST /api/facilities/import/upload -------------------------------------------
 //
 // The upload END of the background import: the file goes to blob storage and a `queued` run is

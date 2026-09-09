@@ -19,6 +19,7 @@ import {
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   revalidateImportRun, readFileRows, readColumnValues, FacilityFileUnreadableError,
+  addRegisterFacilityType, FacilityTypeCollisionError,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
   type ValueMappingEntry,
 } from '@openldr/bootstrap';
@@ -2009,6 +2010,56 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       metadata: {
         nationalSystem: register.source.url, written: result.written, superseded: result.superseded.length,
       },
+    });
+    return result;
+  });
+
+  // FAC-P1-B Slice B, Task 4: lets an operator add a facility type the shared list does not have,
+  // scoped to the register it came from. `addRegisterFacilityType` (@openldr/bootstrap) does the
+  // write; this route is the HTTP door plus the capability gate and the audit entry.
+  //
+  // ⛔ TWO CAPABILITIES, and that is the point of this route existing rather than the operator
+  // being sent to the Terminology page. It writes to the vocabulary, so it is gated like a
+  // vocabulary write, on top of the facilities gate every route in this file carries. An importer
+  // without `terminology.manage` still maps and ignores, so the import is never blocked outright,
+  // only this one outcome.
+  //
+  // Same register gate as the value-mappings route above (`resolveFacilityRegisterForImport`):
+  // `nationalSystem` must name a REGISTERED facility register, never a typed label. Skipping the
+  // gate here would make this the one place an operator can write vocabulary under a typo.
+  app.post('/api/facilities/import/facility-types', {
+    preHandler: [requireCapability('facilities.manage'), requireCapability('terminology.manage')],
+  }, async (req, reply) => {
+    const p = z.object({
+      nationalSystem: z.string().min(1),
+      display: z.string().trim().min(1),
+    }).safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const register = await resolveFacilityRegisterForImport(registerSources, p.data.nationalSystem);
+    if (!register.ok) { reply.code(400); return { error: register.error }; }
+
+    let result;
+    try {
+      result = await addRegisterFacilityType(ctx.terminology.admin, {
+        nationalSystem: register.source.url, display: p.data.display,
+      });
+    } catch (err) {
+      if (err instanceof FacilityTypeCollisionError) {
+        reply.code(409);
+        return { error: err.message, collidesWith: err.collidesWith };
+      }
+      reply.code(400);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'facility.type-added',
+      entityType: 'facility',
+      entityId: register.source.url,
+      before: null,
+      after: null,
+      metadata: { nationalSystem: register.source.url, code: result.code, display: p.data.display },
     });
     return result;
   });
