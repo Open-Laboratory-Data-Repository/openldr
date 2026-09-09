@@ -11,7 +11,7 @@ import {
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
   VALIDATE_PHASE,
 } from '@openldr/db';
-import { projectRegistryRows } from '@openldr/bootstrap';
+import { projectRegistryRows, observedFieldSystem } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
 // The over-cap upload test registers the REAL central error handler, as production does, so its 413
 // carries the app-wide {error, code, correlationId} contract rather than a bespoke body.
@@ -1451,6 +1451,9 @@ const CONTROLLED_FORM_FIELDS = [
   { id: 'k3', apiProperty: 'status' },
   { id: 'k4', apiProperty: 'level' },
   { id: 'k5', apiProperty: 'country' },
+  // The ignore test below needs the record to name a register, because `controlledFieldsError`
+  // derives the `term_mappings` namespace from `facilitySystem`. No other test submits k6.
+  { id: 'k6', apiProperty: 'facilitySystem' },
 ];
 
 /** `fakeCreateCtx` above only registers `form-sample-facility` (FORM_FIELDS, no controlled
@@ -1567,6 +1570,44 @@ describe('Task 6: server-enforced controlled vocabulary on manual create/edit', 
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().status).toBe('suspended');
+  });
+
+  // ⛔ The widening this guard took when `level` ignore shipped, and the only test that pins it.
+  //
+  // `controlledFieldsError` refuses a controlled value the resolver reports in `mapped` OR
+  // `unmapped`. An ignored value lands in neither bucket, because step 2 of `resolveControlledFields`
+  // treats an active mapping as resolved and ignore writes an active `UNMAPPED-FROM` row. So a
+  // register that declared "Others stands for itself" now accepts "Others" typed by hand into that
+  // same register. That is intended: the two subsystems agree rather than disagreeing at the seam.
+  //
+  // The refusal half runs first, so a green second half cannot be the resolver failing to see the
+  // value at all.
+  it('accepts a hand-typed level that the register has an active UNMAPPED-FROM mapping for', async () => {
+    const internalDb = await makeMigratedDb();
+    await seedRegisterSource(internalDb, SYSTEM);
+    const ctx = fakeControlledCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const refused = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: controlledBody({ k1: 'CF10', k4: 'Others', k6: SYSTEM }),
+    });
+    expect(refused.statusCode).toBe(400);
+    expect(refused.json().error).toMatch(/level/i);
+
+    const observed = observedFieldSystem('level', SYSTEM);
+    await ctx.terminology.admin.termMappings.create({
+      fromSystem: observed, fromCode: 'Others', toSystem: observed, toCode: 'Others',
+      toDisplay: null, mapType: 'UNMAPPED-FROM', relationship: null, owner: null, isActive: true,
+    });
+
+    const accepted = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: controlledBody({ k1: 'CF11', k4: 'Others', k6: SYSTEM }),
+    });
+    expect(accepted.statusCode).toBe(201);
+    // Spec decision 2: ignore changes no data, so the raw value reaches the column verbatim.
+    expect(accepted.json().level).toBe('Others');
   });
 });
 
