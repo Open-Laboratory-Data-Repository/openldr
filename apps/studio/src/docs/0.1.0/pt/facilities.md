@@ -143,11 +143,13 @@ Se o ficheiro mudar, as correções deixam de se aplicar, porque os números de 
 não querem dizer nada.
 
 Uma célula corrigida ganha um traço âmbar na margem esquerda e um botão para anular. Anular repõe
-o valor do ficheiro.
+o valor do ficheiro. Anular uma correção feita em toda a coluna repõe cada linha que essa correção
+mudou, não só a célula clicada.
 
-Corrigir uma célula numa coluna mapeada para `level`, `status` ou `country` faz uma pergunta: mudar
-só esta linha, ou mudar todas as linhas que dizem a mesma coisa. As categorias costumam repetir-se,
-por isso um valor corrigido uma vez costuma estar errado onde quer que apareça.
+Corrigir uma célula numa coluna mapeada para Nível, Estado ou País faz uma pergunta, exceto quando
+a célula está vazia: mudar só esta linha, ou mudar todas as linhas que dizem a mesma coisa. Uma
+célula vazia não é uma categoria, por isso preenchê-la só muda essa linha. As categorias costumam
+repetir-se, por isso um valor corrigido uma vez costuma estar errado onde quer que apareça.
 
 Duas coisas que uma correção não pode fazer. Não pode recuperar uma linha cujo número de colunas
 não corresponde ao cabeçalho: essa linha é posta de lado antes de existir qualquer célula, por isso

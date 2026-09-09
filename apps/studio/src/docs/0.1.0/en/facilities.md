@@ -136,11 +136,13 @@ file and the repairs stop applying, because the line numbers they name no longer
 anything.
 
 A repaired cell gets an amber rule down its left edge and an undo button. Undo puts the
-file's own value back.
+file's own value back. Undoing a sweep puts back every row the sweep changed, not just
+the one cell you clicked.
 
-Repairing a cell in a column you mapped to Level, Status or Country asks one question:
-change this row, or change every row that reads the same thing. Categories usually repeat,
-so a value you correct once is usually wrong everywhere it appears.
+Repairing a cell in a column you mapped to Level, Status or Country asks one question,
+unless the cell is blank: change this row, or change every row that reads the same thing.
+A blank is not a category, so filling one in changes only that row. Categories usually
+repeat, so a value you correct once is usually wrong everywhere it appears.
 
 Two things a repair cannot do. It cannot rescue a row whose column count does not match the
 header: that row is set aside before any cell exists, so fix it in the CSV. And it cannot add
