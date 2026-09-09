@@ -108,6 +108,12 @@ export async function addRegisterFacilityType(
       url: system,
       systemVersion: null,
       publisherId: 'pub-system',
+      // ⛔ NOT SEEDED. `upsertByUrl` defaults to `seeded: true`, and a seeded coding system with no
+      // ingest job can never be deleted (terminology-admin-store.ts's own `delete` guard). This
+      // system holds one register's own added types, so it belongs to the operator who added them
+      // and has to be removable once it is empty. A live check found it outliving every concept in
+      // it, leaving an empty container nothing could clear.
+      seeded: false,
     });
     await admin.valueSets.save({
       url: valueSetUrl,

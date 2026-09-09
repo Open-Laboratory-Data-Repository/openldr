@@ -147,7 +147,12 @@ export interface TerminologyAdminStore {
      *  has no `terminology_concepts` and no `concept_map_elements` of its own, so the other two
      *  counts read 0 immediately before a delete that would orphan thousands of facilities. */
     deletionImpact(id: string): Promise<{ termCount: number; mappingCount: number; facilityCount: number }>;
-    upsertByUrl(input: { url: string; systemCode: string; systemName: string; systemVersion?: string | null; publisherId: string | null }): Promise<void>;
+    /** ⛔ `seeded` DEFAULTS TO TRUE, and that default is load-bearing for every caller that omits it:
+     *  a seeded system with no ingest job is protected from deletion (see `delete`). Pass `false`
+     *  when a FEATURE conjured the system on an operator's behalf rather than an install seeding it,
+     *  so the operator can delete it again. Only affects a fresh insert; the ON CONFLICT update
+     *  never rewrites the flag on a row that already exists. */
+    upsertByUrl(input: { url: string; systemCode: string; systemName: string; systemVersion?: string | null; publisherId: string | null; seeded?: boolean }): Promise<void>;
     getByUrl(url: string): Promise<CodingSystem | null>;
   };
   terms: {
@@ -604,9 +609,16 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         await db.transaction().execute(async (trx) => {
           await trx.insertInto('coding_systems').values({
             id: `cs-url-${input.systemCode}`, system_code: input.systemCode, system_name: input.systemName,
-            url: input.url, system_version: input.systemVersion ?? null, active: true, publisher_id: input.publisherId, seeded: true,
+            url: input.url, system_version: input.systemVersion ?? null, active: true, publisher_id: input.publisherId,
+            seeded: input.seeded ?? true,
           }).onConflict((oc) => oc.column('url').doUpdateSet({
             system_name: input.systemName, system_version: input.systemVersion ?? null, publisher_id: input.publisherId,
+            // ⛔ ONLY WHEN THE CALLER SAID SO. An omitted `seeded` leaves the stored flag untouched,
+            // which is what keeps a genuine install seed protected from any caller that does not
+            // mention it. An EXPLICIT one rewrites it, so a row an earlier version inserted as
+            // seeded stops being undeletable forever: without this the repair would need a
+            // migration, and the install that found this bug still has such a row.
+            ...(input.seeded === undefined ? {} : { seeded: input.seeded }),
           })).execute();
           // Idempotency key is `url`; read the resulting row to key the capture by its real id
           // (an ON CONFLICT update keeps the pre-existing id, so hash the persisted row).

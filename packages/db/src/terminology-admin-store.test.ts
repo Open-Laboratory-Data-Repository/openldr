@@ -104,6 +104,75 @@ describe('terminology admin store', () => {
     await expect(s.codingSystems.delete(seedId, { cascade: true })).rejects.toThrow(/system-managed coding system/i);
   });
 
+  // ⛔ A system a FEATURE conjured is not a system seed. `upsertByUrl` hardcoded `seeded: true`, so
+  // the coding system the facility import creates to hold one register's own added types could never
+  // be deleted: the guard above refuses any seeded system with no ingest job, and a feature-created
+  // one never has a job. Found by a live check, where the container survived deleting everything in
+  // it. Every existing caller keeps the seeded default; only the caller that means it opts out.
+  it('upsertByUrl({ seeded: false }) creates a system an operator can delete', async () => {
+    const { db, s } = await store();
+    await s.codingSystems.upsertByUrl({
+      url: 'http://feature.test', systemCode: 'FEAT', systemName: 'Feature made this',
+      systemVersion: null, publisherId: null, seeded: false,
+    });
+    const id = (await s.codingSystems.getByUrl('http://feature.test'))!.id;
+    await db.insertInto('terminology_concepts')
+      .values({ system: 'http://feature.test', code: 'a', display: 'A', status: 'ACTIVE' } as never).execute();
+
+    await s.codingSystems.delete(id, { cascade: true });
+
+    expect(await s.codingSystems.getByUrl('http://feature.test')).toBeNull();
+    const remaining = await db.selectFrom('terminology_concepts').selectAll()
+      .where('system', '=', 'http://feature.test').execute();
+    expect(remaining).toHaveLength(0);
+  });
+
+  // ⛔ SELF-HEALING, on purpose. A row a buggy earlier version inserted as seeded stays undeletable
+  // forever otherwise, because ON CONFLICT never rewrote the flag. An explicit `seeded` now updates
+  // it, so the next add repairs the install. An OMITTED `seeded` still leaves the row alone, which
+  // is what keeps a genuine install seed safe from any caller that does not mention it.
+  it('upsertByUrl({ seeded: false }) repairs a row an earlier version inserted as seeded', async () => {
+    const { s } = await store();
+    await s.codingSystems.upsertByUrl({
+      url: 'http://stuck.test', systemCode: 'STK', systemName: 'S', systemVersion: null, publisherId: null,
+    });
+    const id = (await s.codingSystems.getByUrl('http://stuck.test'))!.id;
+    await expect(s.codingSystems.delete(id, { cascade: true })).rejects.toThrow(/system-managed/i);
+
+    await s.codingSystems.upsertByUrl({
+      url: 'http://stuck.test', systemCode: 'STK', systemName: 'S', systemVersion: null, publisherId: null, seeded: false,
+    });
+
+    await s.codingSystems.delete(id, { cascade: true });
+    expect(await s.codingSystems.getByUrl('http://stuck.test')).toBeNull();
+  });
+
+  it('upsertByUrl leaves the flag alone when it is omitted, so a real seed stays protected', async () => {
+    const { db, s } = await store();
+    await s.codingSystems.upsertByUrl({
+      url: 'http://seedagain.test', systemCode: 'SDA', systemName: 'S', systemVersion: null, publisherId: null,
+    });
+    const id = (await s.codingSystems.getByUrl('http://seedagain.test'))!.id;
+
+    await s.codingSystems.upsertByUrl({
+      url: 'http://seedagain.test', systemCode: 'SDA', systemName: 'S renamed', systemVersion: null, publisherId: null,
+    });
+
+    const row = await db.selectFrom('coding_systems').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+    expect(row.seeded).toBe(true);
+    expect(row.system_name).toBe('S renamed');
+  });
+
+  it('upsertByUrl still defaults to seeded, so every existing caller is unchanged', async () => {
+    const { s } = await store();
+    await s.codingSystems.upsertByUrl({
+      url: 'http://default.test', systemCode: 'DFT', systemName: 'D', systemVersion: null, publisherId: null,
+    });
+    const id = (await s.codingSystems.getByUrl('http://default.test'))!.id;
+
+    await expect(s.codingSystems.delete(id, { cascade: true })).rejects.toThrow(/system-managed coding system/i);
+  });
+
   describe('codingSystems.getByUrl', () => {
     it('returns the coding system for a known url, null when absent', async () => {
       const { s } = await store();
