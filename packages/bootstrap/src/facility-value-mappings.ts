@@ -1,7 +1,7 @@
 import type { MapType, TerminologyAdminStore } from '@openldr/db';
 import {
   CONTROLLED_VALUE_SETS, observedFieldSystem, type ControlledField,
-  FACILITY_IGNORE_MAP_TYPE, LEVEL_CANONICAL_SYSTEM,
+  FACILITY_IGNORE_MAP_TYPE,
 } from './facility-controlled-fields';
 
 /**
@@ -35,7 +35,7 @@ export interface ValueMappingEntry {
   ignore?: boolean;
 }
 
-export { FACILITY_IGNORE_MAP_TYPE, LEVEL_CANONICAL_SYSTEM } from './facility-controlled-fields';
+export { FACILITY_IGNORE_MAP_TYPE } from './facility-controlled-fields';
 
 export interface SaveValueMappingsResult {
   written: number;
@@ -155,11 +155,18 @@ export async function saveFacilityValueMappings(
       superseded.push(rival.id);
     }
 
+    // ⛔ An ignore row points at the register's OWN observed system, not the shared
+    // `urn:openldr:cs:facility-type`. `saveExclusive` auto-drafts a target concept it cannot find
+    // (terminology-admin-store.ts:876), and a raw value like `Others` is never a concept in the
+    // shared system, so the shared system minted one DRAFT per ignored value into the vocabulary
+    // every register reads. `admin.terms.create` a few lines above already filed the raw value under
+    // `fromSystem`, so pointing there finds an existing concept and drafts nothing. The row then
+    // reads "this value stands for itself inside this register", which is what ignore means.
     const res = await admin.termMappings.saveExclusive(entry.ignore
       ? {
         fromSystem,
         fromCode: entry.rawValue,
-        toSystem: LEVEL_CANONICAL_SYSTEM,
+        toSystem: fromSystem,
         toCode: entry.rawValue,
         toDisplay: null,
         mapType: FACILITY_IGNORE_MAP_TYPE,

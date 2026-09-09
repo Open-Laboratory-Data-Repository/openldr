@@ -28,11 +28,6 @@ export const CONTROLLED_VALUE_SETS: Record<ControlledField, string> = {
  *  value, which is exactly what already happens to a value with no mapping at all. */
 export const FACILITY_IGNORE_MAP_TYPE: MapType = 'UNMAPPED-FROM';
 
-/** The SHARED canonical system for `level`, used as an ignore row's `toSystem` even for a register
- *  that later grows its own. The row marks a decision rather than pointing at a concept, and a
- *  register-scoped system here would imply a concept that does not exist. */
-export const LEVEL_CANONICAL_SYSTEM = 'urn:openldr:cs:facility-type';
-
 /** `urn:openldr:` namespace shared with `FACILITY_REGISTRY_SYSTEM`/`DEFAULT_OBSERVED_FACILITY_SYSTEM`
  *  in `packages/db/src/facility-observed.ts`. `cs:facility-<field>:` rather than reusing that file's
  *  `fac_` feed prefix, because the thing being namespaced here is a CONTROLLED FIELD, not an ingest

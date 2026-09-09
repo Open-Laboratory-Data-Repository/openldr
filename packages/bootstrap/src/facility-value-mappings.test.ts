@@ -172,11 +172,31 @@ describe('ignore', () => {
     expect(admin.saved[0]).toMatchObject({
       fromSystem: observedFieldSystem('level', SYSTEM),
       fromCode: 'Others',
-      toSystem: 'urn:openldr:cs:facility-type',
+      toSystem: observedFieldSystem('level', SYSTEM),
       toCode: 'Others',
       mapType: 'UNMAPPED-FROM',
       isActive: true,
     });
+  });
+
+  // ⛔ `saveExclusive` auto-drafts a target concept it cannot find
+  // (terminology-admin-store.ts:876). An ignore row therefore must only ever point at a concept
+  // this writer has already created. It points at the register's OWN observed system, where the
+  // raw value was just filed, so the lookup hits and nothing is drafted. Pointing at the shared
+  // `urn:openldr:cs:facility-type` instead put one DRAFT concept per ignored value into the
+  // vocabulary every register reads.
+  it('creates no concept beyond the source one, so an ignore drafts nothing', async () => {
+    const admin = fakeAdmin();
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Others', ignore: true },
+    ]);
+
+    expect(admin.createdTerms).toEqual([
+      { system: observedFieldSystem('level', SYSTEM), code: 'Others', display: 'Others', status: 'ACTIVE' },
+    ]);
+    // The target the row names is that same concept, which is what makes the auto-draft a no-op.
+    expect(admin.saved[0].toSystem).toBe(admin.createdTerms[0].system);
+    expect(admin.saved[0].toCode).toBe(admin.createdTerms[0].code);
   });
 
   it('deactivates a rival mapping of a different mapType for the same value', async () => {
