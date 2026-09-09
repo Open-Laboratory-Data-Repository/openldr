@@ -224,6 +224,14 @@ export async function resolveControlledFields(
       // mapping per `(fromSystem, fromCode)` within a scope.
       const outgoing = await admin.termMappings.listOutgoing(fromSystem, raw);
       const active = outgoing.find((m) => m.isActive);
+      // ⛔ AN IGNORE IS A DECISION, so it lands in NEITHER bucket. Not `mapped`, because there is
+      // nothing to rewrite the field to: the value stays exactly as the register wrote it, the
+      // same as case 1 above. Not `unmapped`, because that list is the operator's worklist and the
+      // whole point is that they already answered. It also has to sit HERE, ahead of the fold
+      // below, or "Health Centre" would still be rewritten to `health-center` after the operator
+      // asked for it to be left alone. See `saveFacilityValueMappings`'s own note on why the row
+      // points at the raw value rather than a sentinel.
+      if (active?.mapType === FACILITY_IGNORE_MAP_TYPE) continue;
       if (active) { mapped[field].set(raw, active.toCode); continue; }
 
       // 3. The same word, read the way a person reads it. Resolves to the CODE so that every
