@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "6f9278fa",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "An ignore no longer drafts a concept in the shared vocabulary"
+        },
+        {
+          "hash": "5615a9f1",
+          "type": "fix",
+          "scope": "db",
+          "title": "A deactivated mapping stops being published"
+        },
+        {
+          "hash": "06702093",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The column-map dropdown separates its passthrough option"
+        },
+        {
+          "hash": "1e4cfbb8",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Ignore this value, in its own section of the pick list"
+        },
+        {
+          "hash": "ad5c50a1",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The value-mapping route accepts an ignore for level"
+        },
+        {
+          "hash": "4095ba2b",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "An ignored level value is left exactly as written"
+        },
+        {
+          "hash": "f67000dd",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A level value can be ignored, not just mapped"
+        },
+        {
           "hash": "a4a62986",
           "type": "fix",
           "scope": "facilities",
