@@ -245,10 +245,6 @@ import {
 export const registerLocalSystem = (nationalSystem: string): string =>
   `urn:openldr:cs:facility-type:local:${registerSlug(nationalSystem)}`;
 
-/** The register's own list: everything the shared seeded set has, plus whatever this register added. */
-export const registerValueSetUrl = (nationalSystem: string): string =>
-  `urn:openldr:valueset:facility-type:${registerSlug(nationalSystem)}`;
-
 /** A display whose normalised form already names a concept in the list. Adding it would poison that
  *  key and BOTH values would stop resolving, with no error anywhere. Carries what it hit so the
  *  operator can be offered that concept instead. */
@@ -264,6 +260,13 @@ export class FacilityTypeCollisionError extends Error {
  *  ⛔ A LOOKUP, NOT A CONSTANT, and every caller that used to read `CONTROLLED_VALUE_SETS[field]`
  *  to expand a value set must come through here. A register that has never added anything gets the
  *  shared set and behaves exactly as it did before Slice B, so no install grows an empty value set. */
+⛔ THIS ONE GOES IN `facility-controlled-fields.ts`, NOT HERE, and is re-exported from this module.
+Task 2 needs `facility-controlled-fields.ts` to call it, and this module already imports that file,
+so declaring it here would be an import cycle. Same shape Slice A used for `FACILITY_IGNORE_MAP_TYPE`.
+Put this in `packages/bootstrap/src/facility-controlled-fields.ts`, and note it needs
+`registerValueSetUrl`, so move that one there too and re-export BOTH from this module:
+
+```ts
 export async function valueSetForField(
   admin: TerminologyAdminStore,
   field: ControlledField,
@@ -274,6 +277,15 @@ export async function valueSetForField(
   const existing = await admin.valueSets.getByUrl(url);
   return existing ? url : CONTROLLED_VALUE_SETS.level;
 }
+```
+
+Then in `facility-register-vocabulary.ts`:
+
+```ts
+export { registerValueSetUrl, valueSetForField } from './facility-controlled-fields';
+```
+
+Task 1's tests import both from `facility-register-vocabulary`, which the re-export satisfies.
 
 /** The code for a display: lowercase, non-alphanumeric runs to single hyphens, ends trimmed. */
 function codeFor(display: string): string {
