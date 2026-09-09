@@ -4,9 +4,11 @@ import type { AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
 import {
   VALIDATE_PHASE, APPLY_PHASE, type FacilityImportRun, type FacilityImportRunStore,
+  type FacilityImportEditStore,
 } from '@openldr/db';
+import type { FacilityCellEdits } from '@openldr/terminology';
 import {
-  importFacilities, resolveKnownNationalSystem,
+  importFacilities, resolveKnownNationalSystem, toCellEdits,
   type FacilityImportDeps, type FacilityImportOptions, type FacilityImportResult,
 } from './facility-import';
 
@@ -25,6 +27,9 @@ export interface FacilityImportWorkerDeps {
    *  omitted the apply still happens and the omission is logged — an unaudited write is a gap worth
    *  seeing, never a reason to refuse the operator's confirmed import. */
   audit?: Pick<AuditStore, 'record'>;
+  /** Slice C. Optional for the same reason `admin` is: a caller outside the app repo still works.
+   *  Absent means the file parses exactly as it was uploaded. */
+  edits?: FacilityImportEditStore;
   /** Poll interval, mirroring `createFacilityJobWorker`/`createTerminologyIngestWorker`. */
   intervalMs?: number;
   /** Overrides `FACILITY_IMPORT_STALE_LEASE_MS` — how long a run may sit in a RUNNING state before
@@ -243,14 +248,25 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     return Buffer.concat(chunks).toString('utf8');
   }
 
+  /** The overlay for one run's file, keyed on the register and the file hash rather than on the
+   *  run, so a re-upload of the same bytes keeps the repairs. `undefined` when no store is wired,
+   *  when the run has no edits, or when the file is a JSONL release, which takes no overlay. */
+  async function cellEditsFor(run: FacilityImportRun): Promise<FacilityCellEdits | undefined> {
+    if (!deps.edits || run.sourceFormat !== 'csv') return undefined;
+    const rows = await deps.edits.list(run.nationalSystem, run.fileHash);
+    return rows.length === 0 ? undefined : toCellEdits(rows);
+  }
+
   /** The options this phase runs `importFacilities` with.
    *
    *  ⛔ SPREAD FIRST, fixed fields after — the order is the point. Everything below the spread is
    *  read off the RUN ROW rather than off operator-supplied `options` JSON and must win over it:
    *  `nationalSystem` is the identity `active_key` locks on (a different one in the JSON would import
    *  under a register this run does not own), `format` is what the upload actually stored, and
-   *  `apply: false` is what makes this the VALIDATE phase at all. */
-  function validateOptions(run: FacilityImportRun): FacilityImportOptions {
+   *  `apply: false` is what makes this the VALIDATE phase at all. `cellEdits` belongs in the same
+   *  group: it comes from the edits store, never from `run.options`, so it must win over `stored`
+   *  the same way. */
+  function validateOptions(run: FacilityImportRun, cellEdits?: FacilityCellEdits): FacilityImportOptions {
     const stored = (run.options ?? {}) as Partial<FacilityImportOptions>;
     return {
       ...stored,
@@ -258,6 +274,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       format: run.sourceFormat,
       releaseVersion: run.releaseVersion,
       runId: run.id,
+      cellEdits,
       // ⛔ Nothing is written by a validate. The operator's confirm (Task 5) is what authorises the
       // write, and `previewedAt` is deliberately absent here: no preview has run yet, so conflicts
       // are NOT EVALUATED (`conflict: null`) rather than reported as 0.
@@ -289,7 +306,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
    *  anything. `null` means NOT EVALUATED and `0` would be a measurement nobody took — the exact
    *  defect FAC-P1-03 named. A `new Date(null)` would be worse still: epoch 0, against which every
    *  row in the register is "newer", turning the whole file into conflicts. */
-  function applyOptions(run: FacilityImportRun): FacilityImportOptions {
+  function applyOptions(run: FacilityImportRun, cellEdits?: FacilityCellEdits): FacilityImportOptions {
     const stored = (run.options ?? {}) as Partial<FacilityImportOptions>;
     return {
       ...stored,
@@ -297,6 +314,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       format: run.sourceFormat,
       releaseVersion: run.releaseVersion,
       runId: run.id,
+      cellEdits,
       apply: true,
       previewedAt: run.previewedAt === null ? null : new Date(run.previewedAt),
     };
@@ -393,7 +411,11 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       // first anyway, so this line and the apply's read the registry at the same point in their
       // phase and cannot answer differently for structural reasons.
       const knownNationalSystem = await resolveKnownNationalSystem(deps.importDeps.db, run.nationalSystem);
-      const summary = await importFacilities(deps.importDeps, body, validateOptions(run));
+      // Loaded BEFORE the parse, and once: the validate that produces the summary and the apply
+      // that writes the register must read the file through the same repairs, or the confirm gate
+      // would authorise a record set the operator never reviewed.
+      const cellEdits = await cellEditsFor(run);
+      const summary = await importFacilities(deps.importDeps, body, validateOptions(run, cellEdits));
       summary.knownNationalSystem = knownNationalSystem;
 
       // Cancel boundary 2 — before the summary is written. The flag cannot interrupt the call above,
@@ -472,7 +494,8 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       // The write, the projection through `deps.admin`, and the ONE `facility-map-rebuild` enqueue
       // all happen INSIDE it — none of them is repeated here, or an applied upload would rebuild the
       // dimension twice and could disagree with a pasted register about what the same file means.
-      summary = await importFacilities(deps.importDeps, body, applyOptions(run));
+      const cellEdits = await cellEditsFor(run);
+      summary = await importFacilities(deps.importDeps, body, applyOptions(run, cellEdits));
       // ⛔ ATTACHED BEFORE `finish` persists `summary`, for the reason the inline route's own note
       // spells out: the store `JSON.stringify`s the summary synchronously on the way in, so a field
       // set after that call reaches nothing.

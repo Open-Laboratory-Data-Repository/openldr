@@ -2,7 +2,7 @@ import { type Kysely, sql } from 'kysely';
 import {
   parseFacilityCsv, parseFacilityRelease,
   type FacilityReleaseResult, type FacilityReleaseMeta, type QuarantinedRow, type RowError,
-  type FacilityColumnMap, type ColumnMapError,
+  type FacilityColumnMap, type ColumnMapError, type FacilityCellEdits,
 } from '@openldr/terminology';
 import {
   type FacilityRecord,
@@ -10,6 +10,7 @@ import {
   type ReferenceCapture,
   type TerminologyAdminStore,
   type FacilityJobStore,
+  type FacilityImportEdit,
   insertBatchPg,
   facilityRecordToRow,
   FACILITY_REGISTER_STATE_DROPPED,
@@ -54,6 +55,27 @@ export async function resolveKnownNationalSystem(
   const known = await db.selectFrom('facility_registry').select('id')
     .where('facility_system', '=', nationalSystem).limit(1).executeTakeFirst();
   return !!known;
+}
+
+/** Fold the edits table's rows into the shape the parser takes. The two scopes stay separate all
+ *  the way down, because the parser decides between them per cell: a line edit wins.
+ *
+ *  `header` is passed through unchanged. The parser folds it to lowercase itself when it matches
+ *  against a row's own already-lowercased headers, so folding it again here would just repeat that
+ *  work. If the two folds ever disagreed, this one would be the wrong one to trust. */
+export function toCellEdits(edits: FacilityImportEdit[]): FacilityCellEdits {
+  const byLine: Record<number, Record<string, string>> = {};
+  const byValue: Record<string, Record<string, string>> = {};
+  for (const e of edits) {
+    if (e.line !== null) {
+      (byLine[e.line] ??= {})[e.header] = e.toValue;
+    } else if (e.fromValue !== null) {
+      (byValue[e.header] ??= {})[e.fromValue] = e.toValue;
+    }
+    // A row that is neither is impossible: the store refuses to write one. Skipped rather than
+    // thrown, because a parse must not fail over a row that cannot exist.
+  }
+  return { byLine, byValue };
 }
 
 export interface FacilityImportDeps {
@@ -125,6 +147,11 @@ export interface FacilityImportOptions {
    *  packages/terminology). CSV only — a JSONL release is already in the contract's own shape, so a
    *  map for one is meaningless and is ignored rather than erroring. */
   columnMap?: FacilityColumnMap;
+  /** The operator's cell repairs, from the Data grid (Slice C). Threaded straight into the parser,
+   *  which applies them to the split record before the field map is built. CSV only: a JSONL
+   *  release is a publisher's file in the contract's own shape, and `parseFacilityRelease` takes no
+   *  overlay, so this is ignored rather than erroring for `format: 'jsonl'`. */
+  cellEdits?: FacilityCellEdits;
   /** Apply despite structurally malformed rows (see `FacilityImportResult.quarantined`) — the
    *  explicit "I have seen the line numbers, import the rest" override, mirroring
    *  `allowUnknownColumns` above so a problem file has exactly one idiom for proceeding anyway.
@@ -694,6 +721,7 @@ export async function importFacilities(
     allowUnknownColumns: opts.allowUnknownColumns,
     allowInvalidCoordinates: opts.allowInvalidCoordinates,
     columnMap: opts.columnMap,
+    cellEdits: opts.cellEdits,
   };
   const parsed = isRelease ? parseFacilityRelease(input, parseOpts) : parseFacilityCsv(input, parseOpts);
   const {

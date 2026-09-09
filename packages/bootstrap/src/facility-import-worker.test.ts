@@ -5,7 +5,7 @@ import type { AuditEventInput } from '@openldr/audit';
 import { makeMigratedDb } from '@openldr/db/testing';
 import {
   createFacilityImportRunStore, referenceCapture, APPLY_PHASE,
-  type InternalSchema, type FacilityImportRunStore,
+  type InternalSchema, type FacilityImportRunStore, type FacilityImportEditStore,
 } from '@openldr/db';
 import { importFacilities } from './facility-import';
 import {
@@ -45,7 +45,7 @@ function fakeBlob(body: string | (() => string), onGet?: (key: string) => Promis
 async function harness(
   body: string | (() => string),
   onGet?: (key: string) => Promise<void> | void,
-  opts?: { maxBufferBytes?: number; perRowProgressMinRows?: number },
+  opts?: { maxBufferBytes?: number; perRowProgressMinRows?: number; edits?: FacilityImportEditStore },
 ) {
   const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
   const runs: FacilityImportRunStore = createFacilityImportRunStore(db);
@@ -61,6 +61,9 @@ async function harness(
     ...(opts?.maxBufferBytes === undefined ? {} : { maxBufferBytes: opts.maxBufferBytes }),
     ...(opts?.perRowProgressMinRows === undefined
       ? {} : { perRowProgressMinRows: opts.perRowProgressMinRows }),
+    // Slice C Task 4: absent unless a test wires one, matching the worker's own optionality.
+    // No store means the file parses exactly as uploaded.
+    ...(opts?.edits === undefined ? {} : { edits: opts.edits }),
   });
   return { db, runs, blob, logger, worker, audit, audited };
 }
@@ -787,6 +790,61 @@ describe('createFacilityImportWorker — apply phase', () => {
     expect(after?.status).toBe('failed');
     expect(after?.error).toMatch(/restart/i);
     expect((await rowFor(db, run.id)).active_key).toBeNull();
+  });
+});
+
+// Slice C Task 4: validate and apply must read the stored file through the operator's cell edits,
+// not the raw upload. Both phases call the same `cellEditsFor` loader, so one pass through
+// validate-then-confirm-then-apply proves the wiring for both: the row this test checks was written
+// by the APPLY call, which only runs after a validate already parked the run for confirmation.
+describe('createFacilityImportWorker: cell edits overlay', () => {
+  it('applies the file through the edits recorded for that register and hash', async () => {
+    const seen: { system?: string; hash?: string } = {};
+    const edits: FacilityImportEditStore = {
+      list: async (nationalSystem: string, fileHash: string) => {
+        seen.system = nationalSystem;
+        seen.hash = fileHash;
+        return [{
+          id: 'fie_1', nationalSystem, fileHash, header: 'level',
+          line: 2, fromValue: null, toValue: 'Health Post',
+          createdBy: null, createdAt: new Date().toISOString(),
+        }];
+      },
+      put: async () => { throw new Error('not used'); },
+      remove: async () => false,
+      clear: async () => 0,
+    };
+    // Line 2's level reads `Others` on disk. The edit above rewrites it before the field map
+    // is built, so a written row with `Others` would mean the overlay never reached the parse.
+    const { db, runs, worker } = await harness('national_code,name,level\n1,Alpha,Others\n', undefined, { edits });
+    const run = await runs.startUpload(upload());
+
+    await worker.tickOnce();
+    expect(await runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
+    await worker.tickOnce();
+    await worker.stop();
+
+    expect((await runs.get(run.id))?.status).toBe('applied');
+    // Both fields the worker must pass through the run, not a hardcoded value.
+    expect(seen).toEqual({ system: SYSTEM, hash: 'h1' });
+    const rows = await registryRows(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.level).toBe('Health Post');
+  });
+
+  it('applies the file as uploaded when no edits store is wired', async () => {
+    const { db, runs, worker } = await harness('national_code,name,level\n1,Alpha,Others\n');
+    const run = await runs.startUpload(upload());
+
+    await worker.tickOnce();
+    expect(await runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
+    await worker.tickOnce();
+    await worker.stop();
+
+    expect((await runs.get(run.id))?.status).toBe('applied');
+    const rows = await registryRows(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.level).toBe('Others');
   });
 });
 
