@@ -26,10 +26,10 @@ RULE 0 first. Four things this could have built are already here.
 **Ignore already has a name.** `MapType` includes `UNMAPPED-FROM`
 (`packages/db/src/terminology-admin-store.ts:44`). Nothing writes it yet.
 
-**An added concept needs no mapping row.** `resolveControlledFields` indexes every concept by its
+**The display fold resolves raw values only when the display matches.** `resolveControlledFields` indexes every concept by its
 code AND its display, both normalised, and folds raw values onto that index
 (`packages/bootstrap/src/facility-controlled-fields.ts:181-193`). A concept whose display is
-`First-aid stations` therefore resolves the raw value with nothing else written.
+exactly `First-aid stations` therefore resolves that raw value with nothing else written. When the display differs from the raw value, the ordinary value mapping provides the connection.
 
 **An ignored value drops off Review by itself.** Step 2 of the resolver puts any value with an
 active mapping into `mapped`, and Review's list is built from `unmapped`. Nothing in Review changes.
