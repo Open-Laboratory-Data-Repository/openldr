@@ -87,14 +87,15 @@ export async function saveFacilityValueMappings(
       const vs = await admin.valueSets.getByUrl(await valueSetForField(admin, entry.field, nationalSystem));
       if (!vs) throw new Error(`no ${entry.field} value set is seeded on this install`);
       const { codes } = await admin.valueSets.expand(vs.id);
-      // ⛔ Fix pass (whole-branch review, M4): keyed by CODE ALONE, safe today only because the
-      // three controlled value sets each compose exactly one coding system. Nothing else enforces
-      // that — an expansion carrying one code under two DIFFERENT systems would otherwise pick
-      // whichever `expand` happened to list last, silently, and could write a mapping under a
-      // `toSystem` the operator never chose. This is the one guard standing between that and the
-      // pinned `FACILITY_VALUE_MAP_TYPE` invariant this file's own docblock explains: `saveExclusive`
-      // scopes its exclusivity by `(toSystem, mapType)`, so two systems for one code silently
-      // defeats it.
+      // ⛔ Fix pass (whole-branch review, M4): keyed by CODE ALONE. A register's own level value
+      // set now composes two coding systems, the shared one plus the register's own, so the same
+      // code string can legally come from either. The loop below is what keeps that safe: it
+      // checks every code against what it has already seen, and throws the moment one code
+      // appears under two different systems, instead of silently keeping whichever `expand`
+      // listed last. Without that check a mapping could write under a `toSystem` the operator
+      // never chose, defeating the pinned `FACILITY_VALUE_MAP_TYPE` invariant this file's own
+      // docblock explains: `saveExclusive` scopes its exclusivity by `(toSystem, mapType)`, so two
+      // systems for one code silently breaks it.
       const byCode = new Map<string, { display: string | null; system: string }>();
       for (const c of codes) {
         const existing = byCode.get(c.code);
