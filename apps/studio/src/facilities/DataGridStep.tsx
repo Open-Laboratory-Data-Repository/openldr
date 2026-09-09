@@ -59,8 +59,18 @@ export function DataGridStep({ runId, editable, controlledHeaders, onEditsChange
   const [data, setData] = useState<FacilityImportRows | null>(null);
   /** The SERVER'S OWN WORDS, not a generic failure. It names the run and, for a file that cannot be
    *  parsed at all, the line. Kept because the copy this replaced ("check the connection") sent an
-   *  operator to look at their network over a bad line in their own file. */
+   *  operator to look at their network over a bad line in their own file.
+   *
+   *  ⛔ READ FAILURES ONLY. This drives the whole-grid "could not be read" screen below, which
+   *  replaces the table entirely. A rejected cell write is a different kind of failure: the table
+   *  the operator is looking at is fine, only their last keystroke was not saved. Blaming that on
+   *  the file and wiping the table would cost them the page they were on for a fault that has
+   *  nothing to do with reading it. See `writeFailure`. */
   const [failure, setFailure] = useState<string | null>(null);
+  /** The SERVER'S OWN WORDS for a rejected PUT or DELETE against one cell. Rendered above the
+   *  table, which stays on screen: the read that filled it never failed. Cleared at the start of
+   *  the next write attempt so an old failure does not linger once the operator tries again. */
+  const [writeFailure, setWriteFailure] = useState<string | null>(null);
   const narrow = useIsNarrowViewport();
   const [edits, setEdits] = useState<FacilityImportEdit[]>([]);
   /** Which cell is open for typing. `null` when none is. Drives the render. */
@@ -164,12 +174,13 @@ export function DataGridStep({ runId, editable, controlledHeaders, onEditsChange
       setPending({ line, header, fromValue: fileValue, toValue: draft });
       return;
     }
+    setWriteFailure(null);
     try {
       const saved = await putFacilityImportEdit(runId, { header, line, toValue: draft });
       setEdits((prev) => [...prev.filter((e) => !(e.line === line && e.header === header)), saved]);
       onEditsChanged?.();
     } catch (err) {
-      setFailure(err instanceof Error ? err.message : String(err));
+      setWriteFailure(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -177,6 +188,7 @@ export function DataGridStep({ runId, editable, controlledHeaders, onEditsChange
     if (!pending) return;
     const { line, header, fromValue, toValue } = pending;
     setPending(null);
+    setWriteFailure(null);
     try {
       const saved = await putFacilityImportEdit(runId, scope === 'row'
         ? { header, line, toValue }
@@ -191,11 +203,12 @@ export function DataGridStep({ runId, editable, controlledHeaders, onEditsChange
       ]);
       onEditsChanged?.();
     } catch (err) {
-      setFailure(err instanceof Error ? err.message : String(err));
+      setWriteFailure(err instanceof Error ? err.message : String(err));
     }
   }
 
   async function undo(edit: FacilityImportEdit): Promise<void> {
+    setWriteFailure(null);
     try {
       await deleteFacilityImportEdit(runId, edit.line === null
         ? { header: edit.header, fromValue: edit.fromValue as string }
@@ -203,7 +216,7 @@ export function DataGridStep({ runId, editable, controlledHeaders, onEditsChange
       setEdits((prev) => prev.filter((e) => e !== edit));
       onEditsChanged?.();
     } catch (err) {
-      setFailure(err instanceof Error ? err.message : String(err));
+      setWriteFailure(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -261,6 +274,16 @@ export function DataGridStep({ runId, editable, controlledHeaders, onEditsChange
           {t('facilities.import.rowsSkipped', { count: data.skipped, lines: skippedLines })}
         </div>
       )}
+      {writeFailure !== null && (
+        // ⛔ THE TABLE STAYS ON SCREEN. `failure` above replaces the whole table because the READ
+        // that fills it failed; this is the opposite case, a WRITE against one cell that the server
+        // refused. Wiping a table the operator can still see and use, over one rejected keystroke,
+        // cost them the page they were on for no reason connected to reading the file.
+        <div className="mx-6 mb-2 space-y-1">
+          <p className="text-sm text-destructive">{t('facilities.import.editWriteFailed')}</p>
+          <p className="text-sm text-muted-foreground">{writeFailure}</p>
+        </div>
+      )}
       <Table wrapperClassName="min-h-0 flex-1">
         <TableHeader>
           <TableRow>
@@ -268,81 +291,107 @@ export function DataGridStep({ runId, editable, controlledHeaders, onEditsChange
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.rows.map((row, i) => (
-            <TableRow key={data.offset + i}>
-              {data.headers.map((h, c) => {
-                const line = data.lines[i];
-                const fileValue = row[c] ?? '';
-                const { value, edit } = cellOf(line, h, fileValue);
-                const open = editable && editing?.line === line && editing.header === h;
-                if (open) {
+          {data.rows.map((row, i) => {
+            const line = data.lines[i];
+            // Finding 1: `readFileRows` runs with `relax_column_count`, the same as the
+            // authoritative parser, so a row can come back with a length that disagrees with
+            // `data.headers.length`. `facility-csv.ts` quarantines that row on field count BEFORE
+            // any overlay runs, so no edit here can ever reach the imported file. Opening the cell
+            // anyway would let an operator type a fix, see the amber marker, and still lose the row.
+            const ragged = row.length !== data.headers.length;
+            return (
+              <TableRow key={data.offset + i}>
+                {data.headers.map((h, c) => {
+                  const fileValue = row[c] ?? '';
+                  if (ragged) {
+                    return (
+                      <TableCell key={c}>
+                        <span>{fileValue}</span>
+                        {c === 0 && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {t('facilities.import.raggedRowNote')}
+                          </p>
+                        )}
+                      </TableCell>
+                    );
+                  }
+                  const { value, edit } = cellOf(line, h, fileValue);
+                  const open = editable && editing?.line === line && editing.header === h;
+                  if (open) {
+                    return (
+                      <TableCell key={c} className="p-1">
+                        <Input
+                          autoFocus
+                          aria-label={t('facilities.import.editCellLabel', { header: h, line })}
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { void commit(line, h, fileValue); }
+                            // Escape cancels. Without it the only way out of a mistyped cell is to
+                            // commit it and then undo, which is two writes to change nothing.
+                            if (e.key === 'Escape') { closeEditing(); }
+                          }}
+                          onBlur={() => { void commit(line, h, fileValue); }}
+                        />
+                      </TableCell>
+                    );
+                  }
                   return (
-                    <TableCell key={c} className="p-1">
-                      <Input
-                        autoFocus
-                        aria-label={t('facilities.import.editCellLabel', { header: h, line })}
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') { void commit(line, h, fileValue); }
-                          // Escape cancels. Without it the only way out of a mistyped cell is to
-                          // commit it and then undo, which is two writes to change nothing.
-                          if (e.key === 'Escape') { closeEditing(); }
-                        }}
-                        onBlur={() => { void commit(line, h, fileValue); }}
-                      />
+                    <TableCell
+                      key={c}
+                      // The marker for an edited cell. A left rule, not a background: a background
+                      // over a 21-column grid reads as a selection, and every third cell edited
+                      // would make the table unreadable.
+                      className={cn(edit && 'border-l-2 border-l-amber-500', editable && 'cursor-pointer')}
+                      // Keyboard route in, editable cells only. A read-only grid must not become a
+                      // tab stop on every cell: `tabIndex` and `onKeyDown` are both left off
+                      // entirely when `editable` is false, not just made no-ops.
+                      //
+                      // No `role="button"` here. This table has no `role="grid"`, so a plain `<td>`
+                      // already reads as a table cell to a screen reader, which is what it is.
+                      // `role="button"` used to hide that from the reader. `tabIndex` and the key
+                      // handlers below make the cell focusable and keyboard-openable on their own;
+                      // neither needs a role to work.
+                      tabIndex={editable ? 0 : undefined}
+                      aria-label={editable ? t('facilities.import.editCellLabel', { header: h, line }) : undefined}
+                      onClick={editable ? () => openCell(line, h, value) : undefined}
+                      onKeyDown={editable ? (e) => {
+                        // Only when the cell itself has focus. The undo button inside is its own
+                        // tab stop and handles its own Enter/Space; without this check, pressing
+                        // either one there would also reopen the cell underneath it.
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openCell(line, h, value);
+                        }
+                      } : undefined}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        {value}
+                        {edit && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5"
+                            // Finding 3: a value-scoped edit (`edit.line === null`) is a column
+                            // sweep. Undoing it reverts every row the sweep touched, not just this
+                            // cell, so it gets its own label rather than sharing the single-cell
+                            // one and letting the operator click it expecting one row back.
+                            aria-label={t(edit.line === null
+                              ? 'facilities.import.editUndoSweep'
+                              : 'facilities.import.editUndo')}
+                            onClick={(e) => { e.stopPropagation(); void undo(edit); }}
+                          >
+                            <Undo2 className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </span>
                     </TableCell>
                   );
-                }
-                return (
-                  <TableCell
-                    key={c}
-                    // The marker for an edited cell. A left rule, not a background: a background
-                    // over a 21-column grid reads as a selection, and every third cell edited would
-                    // make the table unreadable.
-                    className={cn(edit && 'border-l-2 border-l-amber-500', editable && 'cursor-pointer')}
-                    // Keyboard route in, editable cells only. A read-only grid must not become a
-                    // tab stop on every cell: `tabIndex` and `onKeyDown` are both left off entirely
-                    // when `editable` is false, not just made no-ops.
-                    //
-                    // No `role="button"` here. This table has no `role="grid"`, so a plain `<td>`
-                    // already reads as a table cell to a screen reader, which is what it is.
-                    // `role="button"` used to hide that from the reader. `tabIndex` and the key
-                    // handlers below make the cell focusable and keyboard-openable on their own;
-                    // neither needs a role to work.
-                    tabIndex={editable ? 0 : undefined}
-                    aria-label={editable ? t('facilities.import.editCellLabel', { header: h, line }) : undefined}
-                    onClick={editable ? () => openCell(line, h, value) : undefined}
-                    onKeyDown={editable ? (e) => {
-                      // Only when the cell itself has focus. The undo button inside is its own tab
-                      // stop and handles its own Enter/Space; without this check, pressing either
-                      // one there would also reopen the cell underneath it.
-                      if (e.target !== e.currentTarget) return;
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        openCell(line, h, value);
-                      }
-                    } : undefined}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      {value}
-                      {edit && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5"
-                          aria-label={t('facilities.import.editUndo')}
-                          onClick={(e) => { e.stopPropagation(); void undo(edit); }}
-                        >
-                          <Undo2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </span>
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-          ))}
+                })}
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
       <TablePagination

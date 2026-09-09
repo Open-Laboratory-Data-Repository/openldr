@@ -234,6 +234,58 @@ describe('DataGridStep', () => {
     expect(await screen.findByText('Alpha')).toBeInTheDocument();
   });
 
+  // Finding 3: the same undo button renders for a line-scoped edit and a value-scoped one, but
+  // `undo()` on a value-scoped edit reverts every row under that sweep. One label for both blast
+  // radii lets an operator click expecting one row back and revert a whole column instead.
+  it('labels a value-scoped edit\'s undo as a sweep, distinct from a single-cell undo', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['level'], rows: [['Others'], ['Others']], lines: [2, 3], offset: 0, limit: 100, total: 2,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([
+      { header: 'level', line: null, fromValue: 'Others', toValue: 'Health Post' },
+    ]);
+    render(<DataGridStep runId="fir_1" editable />);
+    await screen.findAllByText('Health Post');
+    // Both rows sit under the same sweep, so both carry the sweep label, one per row.
+    expect(screen.getAllByRole('button', { name: /everywhere in this column/i })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /^undo this change$/i })).not.toBeInTheDocument();
+  });
+
+  it('labels a line-scoped edit\'s undo as a single cell, not a sweep', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Beta']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([
+      { header: 'name', line: 7, fromValue: null, toValue: 'Beta' },
+    ]);
+    render(<DataGridStep runId="fir_1" editable />);
+    await screen.findByText('Beta');
+    expect(screen.getByRole('button', { name: /^undo this change$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /everywhere in this column/i })).not.toBeInTheDocument();
+  });
+
+  // Finding 2: a rejected write used to fall into the same `failure` state as a failed READ, which
+  // replaces the whole table with an error screen. The table the operator is looking at is fine;
+  // only the write failed, so it must stay on screen with its own message above it.
+  it('keeps the table on screen and shows its own message when a write is rejected', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['name'], rows: [['Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    mocked(api.putFacilityImportEdit).mockRejectedValue(new Error('write import edit failed: locked'));
+    render(<DataGridStep runId="fir_1" editable />);
+    await screen.findByText('Alpha');
+    await userEvent.click(screen.getByText('Alpha'));
+    const box = screen.getByRole('textbox');
+    await userEvent.clear(box);
+    await userEvent.type(box, 'Beta{Enter}');
+    expect(await screen.findByText(/locked/i)).toBeInTheDocument();
+    // The table is still here: the row, its pagination, and the value the operator typed over.
+    expect(screen.getByText('Alpha')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeInTheDocument();
+    expect(screen.queryByText('This file could not be read.')).not.toBeInTheDocument();
+  });
+
   // Slice C, Task 8: `onEditsChanged` is how the sheet learns a stored summary no longer describes
   // this file. It must fire once per real write, an undo counts as a write, and a keystroke that
   // changed nothing must never fire it.
@@ -442,6 +494,30 @@ describe('DataGridStep', () => {
     await userEvent.type(box, 'Beta{Enter}');
     await waitFor(() => expect(api.putFacilityImportEdit).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: /every row/i })).not.toBeInTheDocument();
+  });
+
+  // Finding 1: `relax_column_count` lets the rows route return a row whose length disagrees with
+  // `data.headers.length`. `facility-csv.ts` quarantines that row before any overlay runs, so a
+  // repair typed into one of its cells is accepted, marked, and then silently discarded on import.
+  // The cell must never open at all.
+  it('does not open a ragged row for editing, and says why', async () => {
+    mocked(api.readFacilityImportRows).mockResolvedValue({
+      headers: ['code', 'name', 'level'], rows: [['1', 'Alpha']], lines: [7], offset: 0, limit: 100, total: 1,
+    });
+    mocked(api.readFacilityImportEdits).mockResolvedValue([]);
+    render(<DataGridStep runId="fir_1" editable />);
+    const cell = (await screen.findByText('Alpha')).closest('td') as HTMLElement;
+    expect(cell).not.toHaveAttribute('tabindex');
+
+    await userEvent.click(cell);
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+    cell.focus();
+    fireEvent.keyDown(cell, { key: 'Enter' });
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+    expect(screen.getByText(/column count/i)).toBeInTheDocument();
+    expect(api.putFacilityImportEdit).not.toHaveBeenCalled();
   });
 
   it('does not ask on a controlled column whose cell is blank', async () => {
