@@ -1229,6 +1229,9 @@ export const pt: EnShape = {
   },
   widgetEditor: {
     insertToken: 'Inserir',
+    variableProblem: 'Esta variável não vai resolver. Abra Variáveis.',
+    bareRangeToken: 'Uma variável de intervalo de datas produz apenas os tokens _from e _to. O token simples neste SQL torna-se sempre NULL, e a condição é removida.',
+    typeMismatch: 'Tipos incompatíveis. Esta variável é {{varType}} e o filtro é {{filterType}}. Os valores nunca correspondem, por isso o widget ignora este filtro.',
     modeBuilder: 'Construtor',
     modeSql: 'SQL',
     ejectBanner: 'Este SQL busca as linhas; agrupamento temporal, rácios e top-N são aplicados depois e não aparecem aqui.',

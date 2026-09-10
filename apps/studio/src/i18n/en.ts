@@ -1339,6 +1339,9 @@ export const en = {
   },
   widgetEditor: {
     insertToken: 'Insert',
+    variableProblem: 'This variable will not resolve. Open Variables.',
+    bareRangeToken: 'A date-range variable resolves only to its _from and _to tokens. The bare token in this SQL always becomes NULL, so the condition is dropped.',
+    typeMismatch: 'Type mismatch. This variable is {{varType}} and the filter is {{filterType}}. Their values never line up, so the widget ignores this filter.',
     modeBuilder: 'Builder',
     modeSql: 'SQL',
     ejectBanner: 'This SQL fetches the rows; grain, ratios, and top-N are applied afterward and are not shown here.',

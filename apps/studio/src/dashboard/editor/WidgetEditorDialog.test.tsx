@@ -67,6 +67,84 @@ describe('WidgetEditorDialog', () => {
     });
   });
 
+  describe('Variables sheet', () => {
+    const RANGE_SQL = 'select 42 as value where d >= {{period_from}} and d <= {{period_to}}';
+    const openVariables = () => fireEvent.click(screen.getByText('{{period}}'));
+
+    function renderWith(sql: string, variables: Record<string, unknown>, opts: {
+      bindings?: Record<string, string>;
+      filters?: { id: string; label: string; type: 'text' | 'number' | 'date' | 'date-range' }[];
+    } = {}) {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+      const widget = {
+        ...sqlWidget,
+        query: { mode: 'sql', sql, variables, variableBindings: opts.bindings ?? {} },
+      } as unknown as WidgetConfig;
+      render(<WidgetEditorDialog open sqlEnabled initial={widget} dashboardFilters={opts.filters ?? []} onClose={() => {}} onSave={() => {}} />);
+    }
+
+    const periodRange = { period: { type: 'date-range', label: 'Period' } };
+
+    // The sheet used to head this variable `{{period}}`, which is the one token that cannot
+    // resolve. It names the variable, not what you write in SQL.
+    it('heads a date-range variable with both real tokens', () => {
+      renderWith(RANGE_SQL, periodRange);
+      openVariables();
+      expect(screen.getByText('{{period_from}}')).toBeInTheDocument();
+      expect(screen.getByText('{{period_to}}')).toBeInTheDocument();
+    });
+
+    it('warns when the bound filter is a different type', () => {
+      renderWith(RANGE_SQL, periodRange, {
+        bindings: { period: 'test' },
+        filters: [{ id: 'test', label: 'Test', type: 'text' }],
+      });
+      openVariables();
+      expect(screen.getByText(/type mismatch/i)).toBeInTheDocument();
+    });
+
+    it('stays quiet when the bound filter matches', () => {
+      renderWith(RANGE_SQL, periodRange, {
+        bindings: { period: 'period' },
+        filters: [{ id: 'period', label: 'Period', type: 'date-range' }],
+      });
+      openVariables();
+      expect(screen.queryByText(/type mismatch/i)).not.toBeInTheDocument();
+    });
+
+    it('warns when a date-range variable is written as a bare token', () => {
+      renderWith('select 42 as value where d >= {{period}}', periodRange);
+      openVariables();
+      expect(screen.getByText(/only to its .*_from.* and .*_to/i)).toBeInTheDocument();
+    });
+
+    // The toolbar chip row is visible without opening the sheet, so a variable that cannot
+    // resolve has to be marked there too.
+    it('marks a broken variable in the toolbar chip row', () => {
+      renderWith('select 42 as value where d >= {{period}}', periodRange);
+      expect(screen.getByTitle(/will not resolve/i)).toBeInTheDocument();
+    });
+
+    it('marks a mismatched binding in the toolbar chip row', () => {
+      renderWith(RANGE_SQL, periodRange, {
+        bindings: { period: 'test' },
+        filters: [{ id: 'test', label: 'Test', type: 'text' }],
+      });
+      expect(screen.getByTitle(/will not resolve/i)).toBeInTheDocument();
+    });
+
+    it('leaves a healthy variable unmarked', () => {
+      renderWith(RANGE_SQL, periodRange);
+      expect(screen.queryByTitle(/will not resolve/i)).not.toBeInTheDocument();
+    });
+
+    it('stays quiet on a one-sided range', () => {
+      renderWith('select 42 as value where d >= {{period_from}}', periodRange);
+      openVariables();
+      expect(screen.queryByText(/only to its .*_from.* and .*_to/i)).not.toBeInTheDocument();
+    });
+  });
+
   it('makes the SQL field read-only when sqlEnabled is false', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
     const { getByLabelText } = render(

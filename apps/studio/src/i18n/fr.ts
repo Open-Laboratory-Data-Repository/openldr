@@ -1229,6 +1229,9 @@ export const fr: EnShape = {
   },
   widgetEditor: {
     insertToken: 'Insérer',
+    variableProblem: 'Cette variable ne sera pas résolue. Ouvrez Variables.',
+    bareRangeToken: 'Une variable de type plage de dates ne produit que ses jetons _from et _to. Le jeton simple présent dans ce SQL devient toujours NULL, et la condition est supprimée.',
+    typeMismatch: 'Types incompatibles. Cette variable est {{varType}} et le filtre est {{filterType}}. Leurs valeurs ne correspondent jamais, donc le widget ignore ce filtre.',
     modeBuilder: 'Générateur',
     modeSql: 'SQL',
     ejectBanner: 'Ce SQL récupère les lignes ; le regroupement temporel, les ratios et le top-N sont appliqués ensuite et ne figurent pas ici.',

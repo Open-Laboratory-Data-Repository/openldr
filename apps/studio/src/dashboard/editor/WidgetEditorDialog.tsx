@@ -37,6 +37,7 @@ import {
 } from '../../api';
 import { renderWidget } from '../widgets';
 import { resolveValues, applyTemplate, filterTokens } from '../template';
+import { extractVariables, extractLogicalVariables, compatibleFilters, hasBareDateRangeToken } from './variables.model';
 import { BuilderForm } from './BuilderForm';
 import { buildSaveQuery, shouldRestoreEjected, measuresOf, type BuilderQuery } from './builderForm.model';
 
@@ -56,27 +57,6 @@ const WIDGET_TYPES: { value: string; label: string }[] = [
 ];
 
 type Visual = Record<string, unknown>;
-
-function extractVariables(s: string): string[] {
-  const m = s.match(/\{\{(\w+)\}\}/g);
-  return m ? [...new Set(m.map((x) => x.slice(2, -2)))] : [];
-}
-
-/** Collapse _from/_to of a date-range variable into its logical parent. */
-function extractLogicalVariables(s: string, defs: Record<string, WidgetVariableDef>): string[] {
-  const logical = new Set<string>();
-  for (const v of extractVariables(s)) {
-    if (v.endsWith('_from') || v.endsWith('_to')) {
-      const base = v.replace(/_(from|to)$/, '');
-      if (defs[base]?.type === 'date-range') {
-        logical.add(base);
-        continue;
-      }
-    }
-    logical.add(v);
-  }
-  return [...logical];
-}
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -529,14 +509,21 @@ export function WidgetEditorDialog({
                   {detectedVars.map((v) => {
                     const def = varDefs[v];
                     const configured = !!def;
+                    // A variable that cannot resolve is marked here, not only inside the sheet:
+                    // this row is what the author sees while writing the SQL.
+                    const boundType = dashboardFilters.find((f) => f.id === bindings[v])?.type;
+                    const broken =
+                      hasBareDateRangeToken(sqlText, v, def?.type ?? 'text') ||
+                      (boundType != null && def != null && boundType !== def.type);
                     return (
                       <button
                         key={v}
                         onClick={() => setShowVariables(true)}
-                        className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px] transition-colors ${configured ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}
+                        title={broken ? t('widgetEditor.variableProblem') : undefined}
+                        className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px] transition-colors ${broken ? 'border-destructive/40 bg-destructive/10 text-destructive' : configured ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}
                       >
                         <span>{`{{${v}}}`}</span>
-                        <span className={`text-[9px] uppercase ${configured ? 'text-primary/70' : 'text-muted-foreground/60'}`}>{def?.type ?? '?'}</span>
+                        <span className={`text-[9px] uppercase ${broken ? 'text-destructive/70' : configured ? 'text-primary/70' : 'text-muted-foreground/60'}`}>{def?.type ?? '?'}</span>
                       </button>
                     );
                   })}
@@ -736,12 +723,25 @@ export function WidgetEditorDialog({
                   const def = varDefs[v] ?? { type: 'text' as const, label: v };
                   const boundFilterId = bindings[v];
                   const updateDef = (patch: Partial<WidgetVariableDef>) => setVarDefs((d) => ({ ...d, [v]: { ...def, ...patch } }));
+                  // Same-type only, except the filter already bound: a saved mismatch stays
+                  // selectable so it can be seen and corrected rather than silently dropped.
+                  const pickableFilters = compatibleFilters(def.type, dashboardFilters, boundFilterId);
+                  const boundFilter = dashboardFilters.find((f) => f.id === boundFilterId);
+                  const typeMismatch = boundFilter != null && boundFilter.type !== def.type;
+                  const bareRangeToken = hasBareDateRangeToken(sqlText, v, def.type);
                   return (
                     <div key={v}>
                       <div className="-mx-6 border-b border-border" />
-                      <div className="flex items-center py-3">
-                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{`{{${v}}}`}</code>
+                      <div className="flex flex-wrap items-center gap-1 py-3">
+                        {/* The tokens this variable actually resolves to. A date-range splits,
+                            so heading it `{{v}}` would print the one token that cannot work. */}
+                        {filterTokens({ id: v, type: def.type }).map((token) => (
+                          <code key={token} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{`{{${token}}}`}</code>
+                        ))}
                       </div>
+                      {bareRangeToken && (
+                        <p className="pb-3 text-xs text-destructive">{t('widgetEditor.bareRangeToken')}</p>
+                      )}
                       <div className="-mx-6 border-b border-border" />
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 py-4">
                         <VarRow label="Type">
@@ -805,7 +805,7 @@ export function WidgetEditorDialog({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__local__">Local only</SelectItem>
-                              {dashboardFilters.map((f) => (
+                              {pickableFilters.map((f) => (
                                 <SelectItem key={f.id} value={f.id}>
                                   {f.label} ({f.id})
                                 </SelectItem>
@@ -813,6 +813,11 @@ export function WidgetEditorDialog({
                             </SelectContent>
                           </Select>
                         </VarRow>
+                        {typeMismatch && (
+                          <p className="col-span-2 text-xs text-destructive">
+                            {t('widgetEditor.typeMismatch', { varType: def.type, filterType: boundFilter?.type })}
+                          </p>
+                        )}
 
                         <div className="col-span-2 -mx-6 border-b border-border" />
 
