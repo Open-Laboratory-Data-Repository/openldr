@@ -4,6 +4,14 @@
 // receive the STORED template string (stable, vettable) plus opaque filter values, and apply
 // the substitution itself — the client never bakes arbitrary SQL into the submitted string.
 
+/** The `{{token}}` names a filter definition produces in SQL. A `date-range` splits into
+ *  `id_from` / `id_to` (see `resolveValues`), so `{{id}}` alone never resolves for one.
+ *  Both the filter editor and the widget SQL editor read this, so the hint shown to the
+ *  author cannot drift from the substitution. */
+export function filterTokens(f: { id: string; type: string }): string[] {
+  return f.type === 'date-range' ? [`${f.id}_from`, `${f.id}_to`] : [f.id];
+}
+
 /** Resolve a name→value map into the flat key set the SQL template references, splitting a
  *  date-range value (`{from,to}`) into `name_from` / `name_to`. */
 export function resolveValues(values: Record<string, unknown>): Record<string, string | number | null> {

@@ -32,6 +32,41 @@ describe('WidgetEditorDialog', () => {
     expect(getByLabelText('Data')).toBeInTheDocument();
   });
 
+  // The `_from`/`_to` naming of a date-range filter exists only inside resolveValues, so an
+  // author guessing `{{period}}` gets a silent NULL. These chips are the only place the widget
+  // editor states the real token names.
+  describe('available dashboard filter tokens', () => {
+    const period = { id: 'period', label: 'Period', type: 'date-range' as const };
+
+    it('offers both tokens of a date-range filter', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+      render(<WidgetEditorDialog open sqlEnabled initial={sqlWidget} dashboardFilters={[period]} onClose={() => {}} onSave={() => {}} />);
+      expect(screen.getByRole('button', { name: /insert \{\{period_from\}\}/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /insert \{\{period_to\}\}/i })).toBeInTheDocument();
+    });
+
+    it('inserts a token into the SQL', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+      const { getByLabelText } = render(<WidgetEditorDialog open sqlEnabled initial={sqlWidget} dashboardFilters={[period]} onClose={() => {}} onSave={() => {}} />);
+      fireEvent.click(screen.getByRole('button', { name: /insert \{\{period_from\}\}/i }));
+      expect((getByLabelText('SQL') as HTMLTextAreaElement).value).toContain('{{period_from}}');
+    });
+
+    it('drops a token the SQL already uses', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+      const used: WidgetConfig = { ...sqlWidget, query: { mode: 'sql', sql: 'select 42 as value where d >= {{period_from}}' } };
+      render(<WidgetEditorDialog open sqlEnabled initial={used} dashboardFilters={[period]} onClose={() => {}} onSave={() => {}} />);
+      expect(screen.queryByRole('button', { name: /insert \{\{period_from\}\}/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /insert \{\{period_to\}\}/i })).toBeInTheDocument();
+    });
+
+    it('stays out of builder mode, which binds filters through its own picker', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+      render(<WidgetEditorDialog open sqlEnabled initial={undefined} dashboardFilters={[period]} onClose={() => {}} onSave={() => {}} />);
+      expect(screen.queryByRole('button', { name: /insert \{\{period_from\}\}/i })).not.toBeInTheDocument();
+    });
+  });
+
   it('makes the SQL field read-only when sqlEnabled is false', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
     const { getByLabelText } = render(

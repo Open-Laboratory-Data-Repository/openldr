@@ -36,7 +36,7 @@ import {
   type ClientJoinableTable,
 } from '../../api';
 import { renderWidget } from '../widgets';
-import { resolveValues, applyTemplate } from '../template';
+import { resolveValues, applyTemplate, filterTokens } from '../template';
 import { BuilderForm } from './BuilderForm';
 import { buildSaveQuery, shouldRestoreEjected, measuresOf, type BuilderQuery } from './builderForm.model';
 
@@ -462,6 +462,21 @@ export function WidgetEditorDialog({
   const yKey = String(visual.yAxisKey ?? columns[1] ?? 'value');
   const errorMsg = error;
   const detectedVars = extractLogicalVariables(sqlText, varDefs);
+  // Dashboard filter tokens this SQL does not mention yet. `filterTokens` is the same rule
+  // `resolveValues` applies, so a date-range offers `_from`/`_to` and never the bare id — the
+  // guess that silently resolves to NULL. Builder mode binds filters through its own picker,
+  // and a read-only (flag-off) editor cannot accept an insert, so neither shows these.
+  const usedVars = new Set(extractVariables(sqlText));
+  const availableFilterTokens =
+    mode === 'sql' && !sqlReadOnly
+      ? dashboardFilters.flatMap(filterTokens).filter((tok) => !usedVars.has(tok))
+      : [];
+  const insertToken = (token: string) => {
+    const text = `{{${token}}}`;
+    // The view→state sync effect pushes this back into CodeMirror, so state stays the source.
+    const at = view.current?.state.selection.main.to ?? sqlText.length;
+    setSqlText(sqlText.slice(0, at) + text + sqlText.slice(at));
+  };
   const previewConfig: WidgetConfig = { id: 'preview', type, title, query: { mode: 'sql', sql: sqlText }, refreshIntervalSec: 0, visual };
   // measuresOf() returns [] for a truly measure-less query (metric absent, metrics absent/empty),
   // so an empty list means zero measures.
@@ -509,7 +524,7 @@ export function WidgetEditorDialog({
           </div>
           <div className="contents md:flex md:h-1/2 md:min-h-0 md:flex-row md:gap-3">
             <div className={cn('min-h-0 min-w-0 flex-col rounded-md border border-border md:flex md:flex-[3] md:rounded-b-none', mobileTab === 'build' ? 'flex flex-1' : 'hidden')}>
-              {detectedVars.length > 0 && (
+              {(detectedVars.length > 0 || availableFilterTokens.length > 0) && (
                 <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5">
                   {detectedVars.map((v) => {
                     const def = varDefs[v];
@@ -525,6 +540,16 @@ export function WidgetEditorDialog({
                       </button>
                     );
                   })}
+                  {availableFilterTokens.map((tok) => (
+                    <button
+                      key={tok}
+                      onClick={() => insertToken(tok)}
+                      aria-label={`${t('widgetEditor.insertToken')} {{${tok}}}`}
+                      className="inline-flex items-center gap-1 rounded border border-dashed border-border bg-transparent px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent"
+                    >
+                      {`{{${tok}}}`}
+                    </button>
+                  ))}
                 </div>
               )}
               <div className="min-h-0 flex-1 overflow-auto">

@@ -43,6 +43,8 @@ The dashboard reloads with the saved widget in place. Other users who can view t
 ## Advanced web usage
 
 - **Dashboard variables:** create text, number, date, or date-range variables so users can change filters without editing widgets.
+- **Naming a variable in SQL:** a filter whose Variable ID is `ward` is written `{{ward}}`. A date-range filter splits in two, so `period` is written `{{period_from}}` and `{{period_to}}`, and `{{period}}` on its own never resolves. The filter editor shows the exact tokens next to each filter, and the widget SQL editor lists the ones the query has not used yet.
+- **Leaving a variable blank:** an unset variable becomes `NULL`. To drop the whole condition instead, wrap it in double square brackets: `[[AND ward = {{ward}}]]` disappears when no ward is chosen.
 - **Builder versus SQL mode:** use Builder for portable dashboards and SQL only when the exact warehouse shape matters.
 - **Workflow-published datasets:** workflows can publish curated datasets that appear as dashboard sources, making complex transformations available through normal dashboard widgets.
 

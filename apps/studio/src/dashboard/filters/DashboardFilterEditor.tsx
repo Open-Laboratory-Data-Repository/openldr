@@ -1,17 +1,39 @@
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { MoreHorizontal } from 'lucide-react';
 import type { DashboardFilterDef } from '../../api';
+import { filterTokens } from '../template';
 
 type FilterType = DashboardFilterDef['type'];
 
 function newId(): string {
   return `f_${crypto.randomUUID().slice(0, 6)}`;
+}
+
+/** Label-left / control-right row, matching `FieldEditorSheet` and AGENTS.md §5. */
+function Row({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
+  return (
+    <>
+      <Label htmlFor={htmlFor} className="whitespace-nowrap text-xs text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </>
+  );
 }
 
 export function DashboardFilterEditor({
@@ -25,9 +47,10 @@ export function DashboardFilterEditor({
   onClose: () => void;
   onSave: (f: DashboardFilterDef[]) => void;
 }) {
+  const { t } = useTranslation();
   const [list, setList] = useState<DashboardFilterDef[]>(filters);
 
-  // Reset local state whenever the dialog (re)opens.
+  // Reset local state whenever the sheet (re)opens.
   useEffect(() => {
     if (open) setList(filters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,40 +70,118 @@ export function DashboardFilterEditor({
   const addFilter = () =>
     setList([...list, { id: newId(), label: 'New Filter', type: 'text' }]);
 
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="w-full max-w-lg max-h-[80vh] flex flex-col p-0">
-        <div className="border-b border-border px-6 py-4">
-          <DialogTitle className="text-base font-semibold">Dashboard Filters</DialogTitle>
-        </div>
+  const copyToken = (token: string) => {
+    void navigator.clipboard?.writeText(token).then(
+      () => toast.success(t('dashboard.filters.copiedToast')),
+      () => toast.error(t('dashboard.filters.copyFailedToast')),
+    );
+  };
 
-        <div className="flex-1 space-y-3 overflow-y-auto px-6 py-4">
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="w-[440px] max-w-[90vw] gap-0 p-0 sm:w-[440px]">
+        <SheetHeader className="border-b border-border px-6 py-4">
+          {/* pr-8 reserves room for SheetContent's absolute close X, which would otherwise
+              sit on top of this actions button. */}
+          <div className="flex items-center justify-between gap-2 pr-8">
+            <SheetTitle className="text-base font-semibold">{t('dashboard.filters.title')}</SheetTitle>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('dashboard.filters.actions')}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={addFilter}>{t('dashboard.filters.add')}</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => {
+                    onSave(list);
+                    onClose();
+                  }}
+                >
+                  {t('dashboard.filters.save')}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onClose}>{t('dashboard.filters.cancel')}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <SheetDescription className="text-xs text-muted-foreground">{t('dashboard.filters.tokenHelp')}</SheetDescription>
+        </SheetHeader>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-4">
           {list.length === 0 && (
-            <p className="text-sm text-muted-foreground">No filters yet. Add one below.</p>
+            <p className="text-sm text-muted-foreground">{t('dashboard.filters.empty')}</p>
           )}
           {list.map((f, i) => (
-            <div key={f.id} className="space-y-2 rounded-md border border-border p-3">
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Variable ID</Label>
+            <div key={f.id} className="rounded-md border border-border">
+              <div className="flex items-center justify-between gap-2 px-3 py-2">
+                <div className="flex min-w-0 flex-wrap gap-1">
+                  {filterTokens(f).map((token) => {
+                    const text = `{{${token}}}`;
+                    return (
+                      <button
+                        key={token}
+                        type="button"
+                        onClick={() => copyToken(text)}
+                        aria-label={`${t('dashboard.filters.copyToken')} ${text}`}
+                        className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-[11px] text-primary transition-colors hover:bg-primary/20"
+                      >
+                        {text}
+                      </button>
+                    );
+                  })}
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      aria-label={t('dashboard.filters.rowActions', { id: f.id })}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem disabled={i === 0} onSelect={() => move(i, -1)}>
+                      {t('dashboard.filters.moveUp')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={i === list.length - 1} onSelect={() => move(i, 1)}>
+                      {t('dashboard.filters.moveDown')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onSelect={() => setList(list.filter((_, j) => j !== i))}
+                    >
+                      {t('dashboard.filters.remove')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="border-t border-border" />
+
+              <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-3 py-3">
+                <Row label={t('dashboard.filters.variableId')}>
                   <Input
                     aria-label={`filter-${i}-id`}
                     className="h-8 text-xs"
                     value={f.id}
                     onChange={(e) => update(i, { id: e.target.value.replace(/[^a-zA-Z0-9_]/g, '') })}
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Label</Label>
+                </Row>
+
+                <Row label={t('dashboard.filters.label')}>
                   <Input
                     aria-label={`filter-${i}-label`}
                     className="h-8 text-xs"
                     value={f.label}
                     onChange={(e) => update(i, { label: e.target.value })}
                   />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Type</Label>
+                </Row>
+
+                <Row label={t('dashboard.filters.type')}>
                   <Select
                     value={f.type}
                     onValueChange={(v) =>
@@ -91,141 +192,84 @@ export function DashboardFilterEditor({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="text">text</SelectItem>
-                      <SelectItem value="number">number</SelectItem>
-                      <SelectItem value="date">date</SelectItem>
-                      <SelectItem value="date-range">date-range</SelectItem>
+                      <SelectItem value="text">{t('dashboard.filters.typeText')}</SelectItem>
+                      <SelectItem value="number">{t('dashboard.filters.typeNumber')}</SelectItem>
+                      <SelectItem value="date">{t('dashboard.filters.typeDate')}</SelectItem>
+                      <SelectItem value="date-range">{t('dashboard.filters.typeDateRange')}</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-              </div>
+                </Row>
 
-              {f.type === 'text' && (
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Options SQL</Label>
-                  <Input
-                    aria-label={`filter-${i}-options-sql`}
-                    className="h-8 font-mono text-xs"
-                    placeholder="optional — populates dropdown"
-                    value={f.optionsSql ?? ''}
-                    onChange={(e) => update(i, { optionsSql: e.target.value || undefined })}
-                  />
-                </div>
-              )}
+                {f.type === 'text' && (
+                  <Row label={t('dashboard.filters.optionsSql')}>
+                    <Input
+                      aria-label={`filter-${i}-options-sql`}
+                      className="h-8 font-mono text-xs"
+                      placeholder={t('dashboard.filters.optionsSqlPlaceholder')}
+                      value={f.optionsSql ?? ''}
+                      onChange={(e) => update(i, { optionsSql: e.target.value || undefined })}
+                    />
+                  </Row>
+                )}
 
-              {(f.type === 'text' || f.type === 'number') && (
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Default Value</Label>
-                  <Input
-                    aria-label={`filter-${i}-default`}
-                    type={f.type === 'number' ? 'number' : 'text'}
-                    className="h-8 text-xs"
-                    value={f.defaultValue == null ? '' : String(f.defaultValue)}
-                    onChange={(e) =>
-                      update(i, {
-                        defaultValue:
-                          e.target.value === ''
-                            ? null
-                            : f.type === 'number'
-                              ? Number(e.target.value)
-                              : e.target.value,
-                      })
-                    }
-                  />
-                </div>
-              )}
-
-              {f.type === 'date' && (
-                <div className="space-y-1">
-                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Default Value</Label>
-                  <DatePicker
-                    value={(f.defaultValue as string) ?? null}
-                    onChange={(v) => update(i, { defaultValue: v })}
-                    className="h-8 text-xs"
-                  />
-                </div>
-              )}
-
-              {f.type === 'date-range' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Default From</Label>
-                    <DatePicker
-                      value={f.defaultRange?.from ?? null}
-                      onChange={(v) =>
-                        update(i, { defaultRange: { from: v ?? '', to: f.defaultRange?.to ?? '' } })
+                {(f.type === 'text' || f.type === 'number') && (
+                  <Row label={t('dashboard.filters.defaultValue')}>
+                    <Input
+                      aria-label={`filter-${i}-default`}
+                      type={f.type === 'number' ? 'number' : 'text'}
+                      className="h-8 text-xs"
+                      value={f.defaultValue == null ? '' : String(f.defaultValue)}
+                      onChange={(e) =>
+                        update(i, {
+                          defaultValue:
+                            e.target.value === ''
+                              ? null
+                              : f.type === 'number'
+                                ? Number(e.target.value)
+                                : e.target.value,
+                        })
                       }
+                    />
+                  </Row>
+                )}
+
+                {f.type === 'date' && (
+                  <Row label={t('dashboard.filters.defaultValue')}>
+                    <DatePicker
+                      value={(f.defaultValue as string) ?? null}
+                      onChange={(v) => update(i, { defaultValue: v })}
                       className="h-8 text-xs"
                     />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Default To</Label>
-                    <DatePicker
-                      value={f.defaultRange?.to ?? null}
-                      onChange={(v) =>
-                        update(i, { defaultRange: { from: f.defaultRange?.from ?? '', to: v ?? '' } })
-                      }
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                </div>
-              )}
+                  </Row>
+                )}
 
-              <div className="flex items-center justify-end gap-1 pt-1">
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`filter-${i}-up`}
-                  className="h-7 w-7"
-                  disabled={i === 0}
-                  onClick={() => move(i, -1)}
-                >
-                  <ArrowUp className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`filter-${i}-down`}
-                  className="h-7 w-7"
-                  disabled={i === list.length - 1}
-                  onClick={() => move(i, 1)}
-                >
-                  <ArrowDown className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  aria-label={`filter-${i}-remove`}
-                  className="h-7 w-7 text-destructive"
-                  onClick={() => setList(list.filter((_, j) => j !== i))}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {f.type === 'date-range' && (
+                  <>
+                    <Row label={t('dashboard.filters.defaultFrom')}>
+                      <DatePicker
+                        value={f.defaultRange?.from ?? null}
+                        onChange={(v) =>
+                          update(i, { defaultRange: { from: v ?? '', to: f.defaultRange?.to ?? '' } })
+                        }
+                        className="h-8 text-xs"
+                      />
+                    </Row>
+                    <Row label={t('dashboard.filters.defaultTo')}>
+                      <DatePicker
+                        value={f.defaultRange?.to ?? null}
+                        onChange={(v) =>
+                          update(i, { defaultRange: { from: f.defaultRange?.from ?? '', to: v ?? '' } })
+                        }
+                        className="h-8 text-xs"
+                      />
+                    </Row>
+                  </>
+                )}
               </div>
             </div>
           ))}
         </div>
-
-        <div className="flex items-center justify-between border-t border-border px-6 py-4">
-          <Button variant="outline" size="sm" onClick={addFilter}>
-            Add Filter
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                onSave(list);
-                onClose();
-              }}
-            >
-              Save Filters
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
