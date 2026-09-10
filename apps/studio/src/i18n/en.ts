@@ -908,7 +908,6 @@ export const en = {
       steps: {
         label: 'Import steps',
         source: 'Source',
-        data: 'Data',
         mapping: 'Mapping',
         review: 'Review',
       },

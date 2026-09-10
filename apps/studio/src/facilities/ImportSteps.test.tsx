@@ -4,10 +4,9 @@ import '@/i18n';
 import { ImportSteps } from './ImportSteps';
 
 describe('ImportSteps', () => {
-  it('names all four steps and marks the current one', () => {
-    render(<ImportSteps current={3} furthest={3} allowBack onSelect={vi.fn()} />);
+  it('names all three steps and marks the current one', () => {
+    render(<ImportSteps current={2} furthest={2} allowBack onSelect={vi.fn()} />);
     expect(screen.getByText('Source')).toBeInTheDocument();
-    expect(screen.getByText('Data')).toBeInTheDocument();
     expect(screen.getByText('Mapping')).toBeInTheDocument();
     expect(screen.getByText('Review')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Mapping/ })).toHaveAttribute('aria-current', 'step');
@@ -37,7 +36,7 @@ describe('ImportSteps', () => {
   // exactly that case; see stepModel.ts).
   it('does not let the operator click an earlier step when allowBack is false, and does not fire onSelect', () => {
     const onSelect = vi.fn();
-    render(<ImportSteps current={4} furthest={4} allowBack={false} onSelect={onSelect} />);
+    render(<ImportSteps current={3} furthest={3} allowBack={false} onSelect={onSelect} />);
     const source = screen.getByRole('button', { name: /Source/ });
     expect(source).toBeDisabled();
     fireEvent.click(source);

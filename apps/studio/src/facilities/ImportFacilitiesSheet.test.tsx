@@ -29,9 +29,6 @@ vi.mock('@/api', async (orig) => {
     writeFacilityValueMappings: vi.fn(),
     // Plan B: the run door checks a stored file again instead of sending it twice.
     revalidateFacilityImportRun: vi.fn(),
-    // Task 6: Data's own grid reads the stored file's rows directly; it never touches this
-    // sheet's own state (see DataGridStep.tsx's own doc comment on why).
-    readFacilityImportRows: vi.fn(),
     // The per-row check's own read, behind `MappingRowStatus`'s click.
     readFacilityImportColumnValues: vi.fn(),
   };
@@ -85,13 +82,14 @@ async function pickFileAndSystem(contents?: string) {
   fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 }
 
-/** Fix for the reachability regression (Critical finding, code review): the strip shows four
- *  steps (Source, Data, Mapping, Review) and the sheet's OWN numbering now agrees with it: 1
- *  Source, 2 Data, 3 Mapping, 4 Review. Before this fix the sheet still rendered Mapping's panel
- *  at its own `step === 2` and Review's summary at `step === 3`, one slot behind the strip's real
- *  labels, so clicking strip position 3 ("Mapping") actually showed Review's content and an
- *  operator could reach it without ever seeing the column map. The helpers below click by the
- *  strip's real label at its real position, which is what an operator does. */
+/** Fix for the reachability regression (Critical finding, code review): the strip shows three
+ *  steps (Source, Mapping, Review) and the sheet's OWN numbering agrees with it: 1 Source,
+ *  2 Mapping, 3 Review. There used to be a fourth step, Data, between Source and Mapping; before
+ *  a past fix the sheet still rendered Mapping's panel at its own `step === 2` and Review's
+ *  summary at `step === 3` under THAT four-step model, one slot behind the strip's real labels,
+ *  so clicking strip position 3 ("Mapping") actually showed Review's content and an operator
+ *  could reach it without ever seeing the column map. The helpers below click by the strip's
+ *  real label at its real position, which is what an operator does. */
 
 /** Reading the File's text back out (`file.text()`) is genuinely asynchronous in jsdom, so the
  *  Preview action stays disabled until it resolves — this opens the menu and waits for THAT,
@@ -105,7 +103,7 @@ async function previewNow() {
   // ordinary thing for an operator to do, so the helper has to handle both.
   const continueButton = screen.queryByRole('button', { name: 'Continue' });
   if (continueButton) fireEvent.click(continueButton);
-  const mappingStep = screen.queryByRole('button', { name: /2\s*Data/ });
+  const mappingStep = screen.queryByRole('button', { name: /2\s*Mapping/ });
   if (mappingStep && mappingStep.getAttribute('aria-current') !== 'step' && !mappingStep.hasAttribute('disabled')) {
     fireEvent.click(mappingStep);
   }
@@ -122,9 +120,9 @@ async function backToMapping() {
   // ALREADY on Mapping, which does nothing, and the auto-advance effect then carries the operator
   // to Review the moment the result arrives. Measured: the click looked fine and the step went
   // forward anyway.
-  await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
     .toHaveAttribute('aria-current', 'step'));
-  fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+  fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
 }
 
 /** Step forward to Review WITHOUT re-checking. Only legal when the summary was never retired, i.e.
@@ -132,7 +130,7 @@ async function backToMapping() {
  *  change what the parser finds, only whether Apply may proceed, so it is deliberately absent from
  *  that signature and ticking it leaves the summary standing. */
 function forwardToReview() {
-  fireEvent.click(screen.getByRole('button', { name: /4\s*Review/ }));
+  fireEvent.click(screen.getByRole('button', { name: /3\s*Review/ }));
 }
 
 /** Every `FacilityImportResult` field, defaulted to "clean, nothing to reconcile" — every test
@@ -182,12 +180,12 @@ const mocked = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeo
 /** Drives the sheet from Source to Mapping, the first half of what an operator now needs to reach
  *  the column map at all, since the reachability fix moved storage ahead of Mapping.
  *
- *  Source's own visible button (`Continue`) now stores the file (`validate=false`) and lands on
- *  Data; only THEN is Mapping's own strip position reachable. `uploadFacilityImport` is called
- *  ONCE by this alone. Every caller that reaches this already past Source (nothing left to click,
- *  or Mapping already current) is a no-op. A failed store leaves Mapping unreachable and this
- *  returns having done nothing further: the caller's own assertions on the surfaced error are the
- *  point of that case. */
+ *  Source's own visible button (`Continue`) now stores the file (`validate=false`), which is what
+ *  makes Mapping's own strip position reachable. `uploadFacilityImport` is called ONCE by this
+ *  alone. Every caller that reaches this already past Source (nothing left to click, or Mapping
+ *  already current) is a no-op. A failed store leaves Mapping unreachable and this returns having
+ *  done nothing further: the caller's own assertions on the surfaced error are the point of that
+ *  case. */
 async function advanceToMapping() {
   const continueButton = screen.queryByRole('button', { name: 'Continue' });
   if (continueButton) {
@@ -200,7 +198,7 @@ async function advanceToMapping() {
       expect(stillOnSource === null || !stillOnSource.hasAttribute('disabled')).toBe(true);
     });
   }
-  const mappingStep = screen.queryByRole('button', { name: /3\s*Mapping/ });
+  const mappingStep = screen.queryByRole('button', { name: /2\s*Mapping/ });
   if (mappingStep && mappingStep.getAttribute('aria-current') !== 'step' && !mappingStep.hasAttribute('disabled')) {
     fireEvent.click(mappingStep);
   }
@@ -221,7 +219,7 @@ async function advanceToMapping() {
 async function uploadNow() {
   await advanceToMapping();
   // A failed store leaves Mapping unreachable and nothing left to drive here.
-  const mappingStep = screen.queryByRole('button', { name: /3\s*Mapping/ });
+  const mappingStep = screen.queryByRole('button', { name: /2\s*Mapping/ });
   if (!mappingStep || mappingStep.hasAttribute('disabled')) return;
   // Mapping's own button can no longer read "Upload and validate": Mapping is only ever reachable
   // once `runId` is already set (Source's store is what earns `hasStoredFile`), so its label is
@@ -235,7 +233,7 @@ async function uploadNow() {
 }
 
 /** Round-2 fix: the confirm-path equivalent of `uploadNow` above — drives the VISIBLE "Confirm
- *  import" button on Review (step 4, renumbered by the reachability fix above), which
+ *  import" button on Review (step 3, renumbered by the reachability fix above), which
  *  `canConfirmRun` renders once a run's own validated summary is on screen. Every caller has
  *  already awaited something that only exists once that summary rendered, so the button is
  *  present synchronously here. */
@@ -269,7 +267,7 @@ async function reviewWithSummary(
   await uploadNow();
   // ⛔ Waits for the STEP, not for a text match. Every caller then asserts its own copy, and a
   // helper that waited on one caller's string would silently pass for a summary that never rendered.
-  await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
+  await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
     .toHaveAttribute('aria-current', 'step'));
 }
 
@@ -297,18 +295,11 @@ describe('ImportFacilitiesSheet', () => {
     // Fix for the reachability regression: Source's own Continue button now stores the file
     // (`validate=false`), which is a real network call it never made before. Every test that
     // clicks Continue needs this to resolve, even the many that only care about navigating to
-    // Data or Mapping and never touch the run itself. Defaulted here so those tests do not each
+    // Mapping and never touch the run itself. Defaulted here so those tests do not each
     // have to arrange it by hand. Tests that care about the upload's own request or response
     // override this per-call, exactly as `suggestColumnMap` above is overridden.
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-default' });
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'stored' }));
-    // Task 6: Data's own grid fetches its own page the moment `runId` is set, which is true for
-    // every test that clicks Continue, whether or not the test itself is about Data. Defaulted
-    // here for the same reason `uploadFacilityImport` is above: an unmocked call has no
-    // `mockResolvedValue` and returns `undefined`, and `undefined.then` throws inside the effect.
-    mocked(api.readFacilityImportRows).mockResolvedValue({
-      headers: [], rows: [], lines: [], offset: 0, limit: 100, total: 0,
-    });
   });
 
   // ── B1 Task 9: the national-system picklist ─────────────────────────────────────────────────────
@@ -1009,7 +1000,7 @@ describe('ImportFacilitiesSheet', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /map these values/i }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ }))
       .toHaveAttribute('aria-current', 'step'));
     // And the worklist is there waiting, which is the point of going.
     expect(await screen.findByLabelText('Zonal Hospital')).toBeInTheDocument();
@@ -1067,7 +1058,7 @@ describe('ImportFacilitiesSheet', () => {
 
     await pickFileAndSystem();
     await uploadNow();
-    await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
       .toHaveAttribute('aria-current', 'step'));
 
     await backToMapping();
@@ -1565,7 +1556,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/ward_code/)).toBeInTheDocument();
     // This refusal is not a column-map one, so the sheet's own retreat effect never fires — the run
     // reaching Review on its own, proven only indirectly by the assertions below until now.
-    expect(screen.getByRole('button', { name: /4\s*Review/ })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('button', { name: /3\s*Review/ })).toHaveAttribute('aria-current', 'step');
     // ⛔ …and the tick that could only 409 is gone, replaced by the path that actually works.
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
     expect(screen.getByText(/the check has to run again with it/i)).toBeInTheDocument();
@@ -1878,8 +1869,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
-    // The column map lives on Mapping (step 3). Continue stores the file and lands on Data first,
-    // so reaching it now costs the extra strip click `advanceToMapping` makes.
+    // The column map lives on Mapping (step 2). Continue stores the file and lands directly on
+    // Mapping, so reaching it costs only the Continue click `advanceToMapping` makes.
     await advanceToMapping();
     // If the sheet fed `onChange` into anything OTHER than `columnMap` state directly — a debounce,
     // a batched update, a dropped call — the seed `ColumnMapStep` computes on mount would never land
@@ -2000,7 +1991,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
     expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
     // And the sheet really did stay put: Mapping is still current, not Review.
-    expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
   });
 
   it('does not render the columnMapErrors block, or keep the panel mounted, once the file parses cleanly', async () => {
@@ -2018,11 +2009,11 @@ describe('ImportFacilitiesSheet', () => {
     await screen.findByText(/facility row\(s\) will be created/i);
     expect(screen.queryByText(/both map to/)).not.toBeInTheDocument();
     // Whole-branch review, FINDING 5: this does NOT credit the panel's own render gate for the
-    // absence below. A clean summary puts the sheet on Review (step 4), so
-    // `queryByLabelText('MFL Code')` is absent because `step !== 3`, not because
+    // absence below. A clean summary puts the sheet on Review (step 3), so
+    // `queryByLabelText('MFL Code')` is absent because `step !== 2`, not because
     // `columnMapPanelShown`'s own clause excluded it while still on Mapping. The "keeps
     // ColumnMapStep mounted through a refusal" test above is the one that actually exercises that
-    // clause, by staying on step 3 the whole time.
+    // clause, by staying on step 2 the whole time.
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
   });
 
@@ -2045,7 +2036,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('Code,Facility Name\nA,B\nC,D\n');
-    // The row-count hint and the notice both live in ColumnMapStep, on Mapping (step 3).
+    // The row-count hint and the notice both live in ColumnMapStep, on Mapping (step 2).
     await advanceToMapping();
 
     // onValidityChange wired: neither header satisfies a required field, so the notice shows.
@@ -2108,7 +2099,7 @@ describe('ImportFacilitiesSheet', () => {
     // poll answering AND that retreat settling, rather than checking each in its own turn.
     await waitFor(() => {
       expect(screen.getByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
     });
     expect(screen.getByLabelText('Province')).toBeInTheDocument();
     expect(screen.getByLabelText('Zone')).toBeInTheDocument();
@@ -2149,7 +2140,7 @@ describe('ImportFacilitiesSheet', () => {
     // Round-2 fix: the sheet retreats to Mapping once the refusal is known — see the "keeps
     // ColumnMapStep mounted" test above for why this needs its own wait. The panel is on screen
     // once this settles, no back-click needed to reach it.
-    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
 
     // Fix it in place: send Zone to extras, which is what actually releases its passthrough claim.
     fireEvent.click(screen.getByLabelText('Zone'));
@@ -2182,24 +2173,23 @@ describe('ImportFacilitiesSheet', () => {
 
     await pickFileAndSystem();
 
-    // Before ANY upload, Data, Mapping and Review must all stay behind Source. This is exactly
-    // what the hardcoded `hasStoredFile: true` broke: it earned Mapping's strip position on a
-    // file and a register alone.
-    expect(screen.getByRole('button', { name: /2\s*Data/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /4\s*Review/ })).toBeDisabled();
+    // Before ANY upload, Mapping and Review must both stay behind Source. This is exactly what
+    // the hardcoded `hasStoredFile: true` broke: it earned Mapping's strip position on a file
+    // and a register alone.
+    expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /3\s*Review/ })).toBeDisabled();
 
-    // Storing the file (Continue) opens Data and earns Mapping, but not Review, which needs a
-    // real validate the operator has not asked for yet.
+    // Storing the file (Continue) earns Mapping and lands the operator there, but not Review,
+    // which needs a real validate the operator has not asked for yet.
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ }))
       .toHaveAttribute('aria-current', 'step'));
-    expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /4\s*Review/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /3\s*Review/ })).toBeDisabled();
 
-    // The regression, pinned directly: strip position 3 must render MAPPING'S content, its own
+    // The regression, pinned directly: strip position 2 must render MAPPING'S content, its own
     // validate action, never Review's verdict screen with no column map in sight.
-    fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
     expect(await screen.findByRole('button', { name: 'Validate all' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Confirm import' })).not.toBeInTheDocument();
     expect(screen.queryByText(/review the summary below/i)).not.toBeInTheDocument();
@@ -2216,7 +2206,7 @@ describe('ImportFacilitiesSheet', () => {
 
     await pickFileAndSystem();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ }))
       .toHaveAttribute('aria-current', 'step'));
 
     clickMenuItem('Cancel this import');
@@ -2238,12 +2228,14 @@ describe('ImportFacilitiesSheet', () => {
 
       expect(await screen.findByRole('button', { name: /1\s*Source/ }))
         .toHaveAttribute('aria-current', 'step');
-      expect(screen.getByRole('button', { name: /2\s*Data/ })).toBeDisabled();
+      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toBeDisabled();
     });
 
-    // Fix for the reachability regression: Continue used to open Mapping directly. It now stores
-    // the file first and lands on Data, so the column map is one more click away, on Mapping.
-    it('Continue stores the file and opens Data; Mapping shows the column map once reached', async () => {
+    // Fix for the reachability regression: Continue used to open Mapping directly, then later
+    // stored the file first and landed on an intermediate Data step, one more click from Mapping.
+    // Data is gone: Continue now stores the file and lands directly on Mapping, column map
+    // already on screen.
+    it('Continue stores the file and lands on Mapping with the column map already showing', async () => {
       mocked(api.suggestColumnMap).mockResolvedValueOnce({
         headers: ['MFL Code'],
         columns: [{ header: 'MFL Code', candidates: [] }],
@@ -2256,11 +2248,8 @@ describe('ImportFacilitiesSheet', () => {
       expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ }))
         .toHaveAttribute('aria-current', 'step'));
-      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
       expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
     });
 
@@ -2271,7 +2260,7 @@ describe('ImportFacilitiesSheet', () => {
 
       await pickFileAndSystem();
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ }))
         .toHaveAttribute('aria-current', 'step'));
 
       expect(screen.queryByLabelText('File')).not.toBeInTheDocument();
@@ -2283,34 +2272,16 @@ describe('ImportFacilitiesSheet', () => {
 
       await pickFileAndSystem();
       fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ }))
         .toHaveAttribute('aria-current', 'step'));
       fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
 
       expect(await screen.findByLabelText('File')).toBeInTheDocument();
     });
 
-    // Task 6: Data used to render nothing at all. `DataGridStep` (Task 5) reads the stored file's
-    // own rows, so the operator can see what they uploaded before they map a single column.
-    it('Continue lands on Data, and Data shows the stored file on screen', async () => {
-      mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-a' });
-      mocked(api.readFacilityImportRows).mockResolvedValue({
-        headers: ['MFL Code', 'Name'], rows: [['100001', 'Chunga Clinic']], lines: [2], offset: 0, limit: 100, total: 1,
-      });
-      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-      await pickFileAndSystem();
-      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
-        .toHaveAttribute('aria-current', 'step'));
-      expect(await screen.findByText('Chunga Clinic')).toBeInTheDocument();
-      expect(api.readFacilityImportRows).toHaveBeenCalledWith('run-a', { offset: 0, limit: 100 });
-    });
-
   });
 
-  // Whole-branch review, FINDING 2: `ColumnMapStep` is the only thing gated to Mapping (step 3,
+  // Whole-branch review, FINDING 2: `ColumnMapStep` is the only thing gated to Mapping (step 2,
   // renumbered by the reachability fix above), so every state that hides it (a JSONL release, or
   // a map that has already been sent and cannot be changed here any more) left Mapping a blank
   // pane with no explanation at all.
@@ -2341,7 +2312,7 @@ describe('ImportFacilitiesSheet', () => {
       await screen.findByText(/facility row\(s\) will be created/i);
 
       // The clean summary auto-advances to Review, so go back to Mapping.
-      fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+      fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
 
       // ⛔ THIS TEST USED TO ASSERT THE OPPOSITE: that Mapping had no panel to show and said so,
       // "already been sent with the upload". True at the time, and useless to the operator who
@@ -2367,38 +2338,6 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   describe('the primary action', () => {
-    // Continue's own click lands on Data, which now carries a Continue of its own (it used to
-    // carry nothing, leaving an empty footer bar under the grid). Mapping is where the re-upload
-    // action shows, one step further on.
-    it('offers Continue on Source and on Data, and a re-upload action on Mapping', async () => {
-      mocked(api.suggestColumnMap).mockResolvedValueOnce({
-        headers: ['MFL Code'],
-        columns: [{ header: 'MFL Code', candidates: [] }],
-      });
-      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-
-      expect(await screen.findByRole('button', { name: 'Continue' })).toBeInTheDocument();
-
-      await pickFileAndSystem();
-      // Picking a file and a register earns Mapping, but does not move the sheet there — Continue
-      // is still the visible action, on Source, until it is pressed.
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-      await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
-        .toHaveAttribute('aria-current', 'step'));
-      // Data's own Continue, and NEITHER validate action: nothing on Data sends anything.
-      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Validate all' })).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
-      // Mapping's own button can no longer read "Upload and validate": Mapping is only ever
-      // reachable once `runId` is already set (Source's store is what earns `hasStoredFile`), so
-      // this reads "Validate all" from the moment it first renders.
-      expect(await screen.findByRole('button', { name: 'Validate all' })).toBeInTheDocument();
-    });
-
     // The whole point of the exception to AGENTS.md section 5: the action that advances is visible,
     // and it is the ONLY visible one. Everything else stays in the dropdown.
     // ⛔ THE ONLY TEST IN THE SUITE THAT ASSERTS THE INLINE DOOR IS GONE. Everything else here
@@ -2443,7 +2382,7 @@ describe('ImportFacilitiesSheet', () => {
       await screen.findByText(/import complete/i);
 
       // The run finished, so Back is offered again (`canGoBack`) and the step strip reopens.
-      fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
+      fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
 
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
     });
@@ -2477,7 +2416,7 @@ describe('ImportFacilitiesSheet', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/"MFL Code 2" and "MFL Code" both map to "national_code"/)).toBeInTheDocument();
-        expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+        expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
       });
       expect(screen.getByRole('button', { name: 'Check again with the corrected map' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
@@ -2571,9 +2510,6 @@ describe('the file drop zone', () => {
     // hand in every test that clicks it.
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-default' });
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'stored' }));
-    mocked(api.readFacilityImportRows).mockResolvedValue({
-      headers: [], rows: [], lines: [], offset: 0, limit: 100, total: 0,
-    });
   });
 
   const dropZone = () => screen.getByRole('button', { name: /drag a \.csv/i });
@@ -2742,38 +2678,6 @@ describe('the file drop zone', () => {
     expect(api.cancelFacilityImportRun).not.toHaveBeenCalled();
   });
 
-  // ── Data's own footer action ────────────────────────────────────────────────────────────────
-
-  // Reported from the screenshots: Source, Mapping and Review each carry a button in the footer
-  // bar and Data carried none, so the bar rendered empty under the grid and the only way forward
-  // was the step strip. Nothing about Data justified the exception.
-  it('offers a way forward from Data, instead of an empty footer under the grid', async () => {
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-    await pickFileAndSystem();
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step'));
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
-  });
-
-  // ⛔ Data's Continue must NOT store the file a second time. Source's own Continue already did
-  // that, and a second `uploadFacilityImport` either supersedes the run this sheet is watching or
-  // 409s. Data only moves the operator along.
-  it('the Continue on Data moves a step without re-uploading the file', async () => {
-    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
-    await pickFileAndSystem();
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ })).toHaveAttribute('aria-current', 'step'));
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Continue' }));
-
-    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ })).toHaveAttribute('aria-current', 'step'));
-    expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1);
-  });
-
   // ── Validate all comes back to Review ───────────────────────────────────────────────────────
 
   /** Reported from the real Zambia export. Validate all carried the operator to Review the first
@@ -2781,24 +2685,24 @@ describe('the file drop zone', () => {
    *  again, and the sheet stayed on Mapping. Review was still clickable, which is the tell: the
    *  step was still EARNED, only the auto-advance never fired.
    *
-   *  The advance is an effect keyed on `furthest` reaching 4. `furthest` stays 4 once a summary
+   *  The advance is an effect keyed on `furthest` reaching 3. `furthest` stays 3 once a summary
    *  matches its inputs, so a second check over the same inputs never moves it, never changes the
    *  effect's dependencies, and never re-runs it. */
   it('comes back to Review on a second Validate all, after a trip to Mapping', async () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
     await reviewWithSummary(baseResult({ parsed: 2 }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
       .toHaveAttribute('aria-current', 'step'));
 
-    fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Mapping/ }))
+    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ }))
       .toHaveAttribute('aria-current', 'step'));
 
     // Nothing changed in between: no new file, no column-map edit, no value mapping written. That
     // is the case the effect cannot see.
     fireEvent.click(screen.getByRole('button', { name: 'Validate all' }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /4\s*Review/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /3\s*Review/ }))
       .toHaveAttribute('aria-current', 'step'));
   }, 20000);
 
@@ -2846,9 +2750,9 @@ describe('the file drop zone', () => {
 
   // ── The check survives the step strip ───────────────────────────────────────────────────────
 
-  /** Reported from the real Zambia export: check a row, see it go red, click Data, click back to
+  /** Reported from the real Zambia export: check a row, see it go red, click away and back to
    *  Mapping, and every icon is back to its opening state. `ColumnMapStep` is gated on
-   *  `step === 3`, so leaving Mapping unmounted the whole panel and took its check results, its
+   *  `step === 2`, so leaving Mapping unmounted the whole panel and took its check results, its
    *  saved-value set and the operator's unsaved pick-list choices with it.
    *
    *  These drive the real panel end to end rather than asserting on props: the bug was entirely
@@ -2886,12 +2790,12 @@ describe('the file drop zone', () => {
     fireEvent.click(screen.getByRole('button', { name: label }));
   }
 
-  it('keeps a checked row red after a trip to Data and back, instead of resetting it', async () => {
+  it('keeps a checked row red after a trip to Source and back, instead of resetting it', async () => {
     await mappingWithACheckedRow();
 
-    goToStep(/2\s*Data/);
+    goToStep(/1\s*Source/);
     await waitFor(() => expect(screen.queryByRole('button', { name: /^Type:/ })).not.toBeInTheDocument());
-    goToStep(/3\s*Mapping/);
+    goToStep(/2\s*Mapping/);
 
     expect(await screen.findByRole('button', { name: /Type:.*not recognised/i })).toBeInTheDocument();
   }, 20000);
@@ -2899,7 +2803,7 @@ describe('the file drop zone', () => {
   // The same unmount threw away pick-list choices the operator had made but not yet saved, which
   // is the more expensive half of the bug: an icon can be re-earned with one click, and twelve
   // re-typed value decisions cannot.
-  it('keeps an unsaved value-mapping choice after a trip to Data and back', async () => {
+  it('keeps an unsaved value-mapping choice after a trip to Source and back', async () => {
     await mappingWithACheckedRow();
 
     const picker = await screen.findByRole('combobox', { name: /1st Level Hospital/i });
@@ -2909,9 +2813,9 @@ describe('the file drop zone', () => {
     fireEvent.click(await screen.findByRole('option', { name: 'Hospital' }));
     await waitFor(() => expect(picker).toHaveTextContent(/Hospital/));
 
-    goToStep(/2\s*Data/);
+    goToStep(/1\s*Source/);
     await waitFor(() => expect(screen.queryByRole('button', { name: /^Type:/ })).not.toBeInTheDocument());
-    goToStep(/3\s*Mapping/);
+    goToStep(/2\s*Mapping/);
 
     expect(await screen.findByRole('combobox', { name: /1st Level Hospital/i })).toHaveTextContent(/Hospital/);
   }, 20000);
