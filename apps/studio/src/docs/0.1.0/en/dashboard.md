@@ -39,12 +39,14 @@ The dashboard reloads with the saved widget in place. Other users who can view t
 - **A widget is empty:** check its filters and date range first; then open edit mode and confirm the source query returns rows.
 - **SQL mode is missing:** SQL widgets are an advanced option and may be disabled for this deployment or unavailable for the connected warehouse.
 - **The query shows an error:** switch back to Builder mode if possible, or simplify the SQL query to a read-only `SELECT` that returns a small result.
+- **A widget ignores a dashboard filter:** open the widget editor and look at the variable chips above the query. A red chip means that variable cannot resolve, either because its type no longer matches the filter it is bound to, or because a date range is written as a single `{{name}}` instead of `{{name_from}}` and `{{name_to}}`. Open **Variables** for the full message.
 
 ## Advanced web usage
 
 - **Dashboard variables:** create text, number, date, or date-range variables so users can change filters without editing widgets.
 - **Naming a variable in SQL:** a filter whose Variable ID is `ward` is written `{{ward}}`. A date-range filter splits in two, so `period` is written `{{period_from}}` and `{{period_to}}`, and `{{period}}` on its own never resolves. The filter editor shows the exact tokens next to each filter, and the widget SQL editor lists the ones the query has not used yet.
 - **Leaving a variable blank:** an unset variable becomes `NULL`. To drop the whole condition instead, wrap it in double square brackets: `[[AND ward = {{ward}}]]` disappears when no ward is chosen.
+- **Binding a widget variable to a dashboard filter:** open **Variables** in the widget editor and pick a filter under **Dashboard Filter**. Only filters of the same type are listed, because a date range and a single value never line up. A saved binding whose type no longer matches stays in the list and is marked, so you can see it and correct it rather than lose it.
 - **Builder versus SQL mode:** use Builder for portable dashboards and SQL only when the exact warehouse shape matters.
 - **Workflow-published datasets:** workflows can publish curated datasets that appear as dashboard sources, making complex transformations available through normal dashboard widgets.
 
