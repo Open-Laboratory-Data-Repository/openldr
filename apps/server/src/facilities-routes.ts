@@ -2978,21 +2978,21 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const { id, header } = req.params as { id: string; header: string };
     const q = req.query as { limit?: string };
     // NaN check instead of || operator: 0 is a valid value, and `||` would silently yield the
-    // DEFAULT instead of the FLOOR for `limit=0`. Same bug class the rows route's review caught.
+    // DEFAULT instead of the FLOOR for `limit=0`.
     const parsedLimit = Number.parseInt(q.limit ?? '200', 10);
     const limit = Math.min(1000, Math.max(1, Number.isNaN(parsedLimit) ? 200 : parsedLimit));
 
     const run = await importRuns.get(id);
     if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
-    // Same case the rows route guards: a run previewed inline carries its CSV in the request body
-    // and stores nothing. 409, not 404: the run exists, it just has no file to read a column out of.
+    // A run previewed inline carries its CSV in the request body and stores nothing. 409, not
+    // 404: the run exists, it just has no file to read a column out of.
     if (!run.blobKey) {
       reply.code(409);
       return { error: `import run ${id} has no stored file` };
     }
 
-    // ⛔ GUARDED, same as the rows route: an unhandled throw here is a 500 and the studio reports a
-    // 500 on this route as a network fault. `getStream` throws for a key that points at nothing,
+    // ⛔ GUARDED: an unhandled throw here is a 500 and the studio reports a 500 on this route as a
+    // network fault. `getStream` throws for a key that points at nothing,
     // which a run row can carry after its blob was reaped or a restore put the rows back without the
     // objects. The run is what is wrong, so this answers with the run, in the same 409 shape.
     let stream: Awaited<ReturnType<typeof ctx.blob.getStream>>;

@@ -1700,10 +1700,9 @@ export type {
   FacilitySample, FacilityChangeSample, FacilityImportBlockedReason,
 } from './facility-import';
 export {
-  readFileRows, FacilityFileUnreadableError,
-  type FileRowWindow, type ReadFileRowsOptions,
-} from './facility-file-rows';
-export { readColumnValues, type ColumnValues, type ReadColumnValuesOptions } from './facility-column-values';
+  readColumnValues, FacilityFileUnreadableError,
+  type ColumnValues, type ReadColumnValuesOptions,
+} from './facility-column-values';
 // FAC-P1-05: the source→canonical controlled-field layer `importFacilities` now runs over every
 // parsed record. Exported because `FacilityImportResult.unmapped`/`notValidated` are keyed/typed by
 // `ControlledField`, so the route and the CLI cannot name those types without it — and because an

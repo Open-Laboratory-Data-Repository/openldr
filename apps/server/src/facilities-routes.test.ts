@@ -1858,9 +1858,9 @@ function fakeBlobStore() {
       objects.set(key, Buffer.concat(chunks));
     },
     async delete(key: string) { objects.delete(key); },
-    // Task 3 (facility-import-data-stage, Slice A): the rows route reads the stored file back
-    // through `getStream`, never `get` (see that route's own comment). This fake needs a
-    // stream to hand back, not just the map lookup the earlier tests were enough for.
+    // The column-values route reads the stored file back through `getStream`, never `get` (see
+    // that route's own comment). This fake needs a stream to hand back, not just the map lookup
+    // the earlier tests were enough for.
     async getStream(key: string) {
       const bytes = objects.get(key);
       if (!bytes) throw new Error(`no such object: ${key}`);
@@ -4371,9 +4371,9 @@ describe('GET /api/facilities/import/runs/:id/columns/:header/values', () => {
     });
   });
 
-  // ⛔ `MANAGE`, NOT `VIEW`, for the same reason the rows route needs it: this hands back the RAW
-  // CONTENTS of an uploaded file. Reading it back is manage work, not view work.
-  it('refuses a view-only actor, the same capability the rows route needs', async () => {
+  // ⛔ `MANAGE`, NOT `VIEW`: this hands back the RAW CONTENTS of an uploaded file. Reading it
+  // back is manage work, not view work.
+  it('refuses a view-only actor, this route requires manage capability', async () => {
     const db = await importDb();
     const ctx = fakeImportCtx(db);
     const manager = await appWith(ctx);
@@ -4395,9 +4395,9 @@ describe('GET /api/facilities/import/runs/:id/columns/:header/values', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  // Same case the rows route guards: a run previewed inline stores nothing, so there is no file to
-  // read a column out of. 409, matching the rows route's own message shape.
-  it('409s a run that has no stored file, same as the rows route does', async () => {
+  // A run previewed inline stores nothing, so there is no file to read a column out of. 409,
+  // not 404: the run exists, it just has no file.
+  it('409s a run that has no stored file', async () => {
     const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
@@ -4564,9 +4564,9 @@ describe('GET /api/facilities/import/runs/:id/columns/:header/values', () => {
     });
   });
 
-  // Final review, M6: the same stale-blob-key case the rows route already covers. `getStream`
-  // throws for an object that is not there, and an unhandled throw is a 500 the studio reports as a
-  // network fault. The run row is what is wrong, so the answer says so, in 409.
+  // Final review, M6: a stale blob key. `getStream` throws for an object that is not there,
+  // and an unhandled throw is a 500 the studio reports as a network fault. The run row is what
+  // is wrong, so the answer says so, in 409.
   it('answers 409 rather than throwing when the stored file is gone', async () => {
     const db = await importDb();
     const ctx = fakeImportCtx(db);
