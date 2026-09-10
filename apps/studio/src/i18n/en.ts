@@ -980,7 +980,10 @@ export const en = {
         nothingImportedTitle: 'Nothing was imported',
         nothingImportedBody: 'This file produced no rows, so nothing was written to the registry.',
         nothingImportedUnknownColumns: 'Unrecognised columns stopped the file from being read. Upload it again keeping them as extra data.',
-      doneSummary: 'Created {{created}}, updated {{updated}}, skipped {{skipped}}.',
+      // `unchanged` is here because without it a re-import of an already applied file reads
+      // "Created 0, updated 0, skipped 0" under a green heading, which looks like a failure. It
+      // is the count of rows checked and found already correct, and Review showed it all along.
+      doneSummary: 'Created {{created}}, updated {{updated}}, unchanged {{unchanged}}, skipped {{skipped}}.',
       // CT-3: rendered on the applied result, distinct from `summaryConflict` above (which is a
       // PREVIEW-time forecast) — this states what actually happened once the write ran.
       applyConflictSkipped: '{{count}} row(s) changed since the preview were left as-is — the conflict policy was skip.',

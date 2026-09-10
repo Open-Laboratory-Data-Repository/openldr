@@ -534,7 +534,7 @@ describe('Facilities page', () => {
     // The sheet must still be showing ITS OWN success confirmation after the background reload
     // settles — not a blank, freshly-remounted sheet with the result thrown away.
     expect(await screen.findByText(/import complete/i)).toBeInTheDocument();
-    expect(screen.getByText(/created 2, updated 1, skipped 0/i)).toBeInTheDocument();
+    expect(screen.getByText(/created 2, updated 1, unchanged 0, skipped 0/i)).toBeInTheDocument();
     // And the underlying table did actually pick up the refreshed row from the background reload.
     expect(await screen.findByText('Dodoma Regional Referral')).toBeInTheDocument();
   });

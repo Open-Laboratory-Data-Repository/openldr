@@ -887,7 +887,7 @@ describe('ImportFacilitiesSheet', () => {
       { status: 'applied' },
     );
 
-    expect(await screen.findByText(/created 2, updated 1, skipped 0/i)).toBeInTheDocument();
+    expect(await screen.findByText(/created 2, updated 1, unchanged 0, skipped 0/i)).toBeInTheDocument();
   });
 
   // ── CT-3 (whole-branch review): the whole preview surface actually reaches the wire ────────────
@@ -1292,7 +1292,7 @@ describe('ImportFacilitiesSheet', () => {
 
     await pickFileAndSystem();
     await uploadNow();
-    await screen.findByText(/created 3, updated 0, skipped 0/i);
+    await screen.findByText(/created 3, updated 0, unchanged 0, skipped 0/i);
 
     // …and a finished run cannot be cancelled either (the route 409s), so it is not offered.
     openMenu();
@@ -1383,7 +1383,7 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem();
     await uploadNow();
 
-    expect(await screen.findByText(/created 2, updated 1, skipped 0/i)).toBeInTheDocument();
+    expect(await screen.findByText(/created 2, updated 1, unchanged 0, skipped 0/i)).toBeInTheDocument();
     await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
   });
 
@@ -1592,6 +1592,28 @@ describe('ImportFacilitiesSheet', () => {
     // "Import complete. Created 0, updated 0, skipped 0." was the screenshot the operator sent.
     expect(await screen.findByText(/nothing was imported/i)).toBeInTheDocument();
     expect(screen.queryByText(/import complete/i)).not.toBeInTheDocument();
+  });
+
+  // The operator re-ran an import of a file already applied and got "Created 0, updated 0,
+  // skipped 0" under a green "Import complete". All three are true and none of them says what
+  // actually happened: every row was checked and every row already matched. `unchanged` carries
+  // that, the Review step already showed it, and the done line dropped it.
+  it('a re-import that changed nothing reports how many rows already matched', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-same' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'applied',
+      summary: baseResult({
+        parsed: 3776, skipped: 0, create: 0, changed: 0, unchanged: 3776,
+        written: { created: 0, updated: 0, retired: 0 },
+      }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/import complete/i)).toBeInTheDocument();
+    expect(screen.getByText(/unchanged 3776/i)).toBeInTheDocument();
   });
 
   it('still reports a real write as a completed import', async () => {

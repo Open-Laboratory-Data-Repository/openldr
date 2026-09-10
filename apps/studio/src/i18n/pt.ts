@@ -959,7 +959,7 @@ export const pt: EnShape = {
         nothingImportedTitle: 'Nada foi importado',
         nothingImportedBody: 'Este ficheiro não produziu linhas, por isso nada foi escrito no registo.',
         nothingImportedUnknownColumns: 'Colunas não reconhecidas impediram a leitura do ficheiro. Volte a carregá-lo mantendo-as como dados extra.',
-      doneSummary: '{{created}} criada(s), {{updated}} atualizada(s), {{skipped}} ignorada(s).',
+      doneSummary: '{{created}} criada(s), {{updated}} atualizada(s), {{unchanged}} inalterada(s), {{skipped}} ignorada(s).',
       applyConflictSkipped: '{{count}} linha(s) alteradas desde a pré-visualização foram deixadas como estavam — a política de conflito era ignorar.',
       applyConflictOverwritten: '{{count}} linha(s) alteradas desde a pré-visualização foram substituídas por esta importação — a política de conflito era substituir.',
       summaryCreate: '{{count}} linha(s) de unidade serão criadas.',

@@ -1822,7 +1822,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               ) : (
                 <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-700">
                   <p className="font-medium">{t('facilities.import.doneTitle')}</p>
-                  <p>{t('facilities.import.doneSummary', { created: appliedSummary.written.created, updated: appliedSummary.written.updated, skipped: appliedSummary.skipped })}</p>
+                  <p>{t('facilities.import.doneSummary', {
+                    created: appliedSummary.written.created,
+                    updated: appliedSummary.written.updated,
+                    unchanged: appliedSummary.unchanged,
+                    skipped: appliedSummary.skipped,
+                  })}</p>
                   {appliedSummary.duplicates > 0 && (
                     <p>{t('facilities.import.duplicatesWarning', { count: appliedSummary.duplicates })}</p>
                   )}
