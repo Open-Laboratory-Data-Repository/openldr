@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "6e3473d6",
+          "type": "feat",
+          "scope": "dashboard",
+          "title": "Filters state the SQL token they produce"
+        },
+        {
+          "hash": "b0a9a5b9",
+          "type": "fix",
+          "scope": "server",
+          "title": "Widen the terminology admin fake to the new deletionImpact shape"
+        },
+        {
           "hash": "ee49c833",
           "type": "fix",
           "scope": "terminology",
