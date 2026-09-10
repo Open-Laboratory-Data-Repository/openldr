@@ -42,6 +42,34 @@ export function compatibleFilters(
   return filters.filter((f) => f.type === varType || f.id === boundId);
 }
 
+/** Apply a type change to `name` and return a new def map.
+ *
+ *  A name ending in `_from` or `_to` can never itself be a date range: its own tokens would be
+ *  `period_from_from` and `period_from_to`, which are in nobody's SQL. Those names exist only
+ *  as the two halves a range produces, so choosing Date Range there means the range that owns
+ *  the half. The type lands on the base name and both halves' defs go, which lets
+ *  `extractLogicalVariables` fold them back into one variable.
+ *
+ *  Without this, turning a range into Text and back left a variable literally called
+ *  `period_from` typed as a range, with no way back to the range it came from. */
+export function setVariableType(
+  defs: Record<string, WidgetVariableDef>,
+  name: string,
+  type: VarType,
+): Record<string, WidgetVariableDef> {
+  const next = { ...defs };
+  const half = type === 'date-range' ? /_(from|to)$/.exec(name) : null;
+  if (half) {
+    const base = name.slice(0, -half[0].length);
+    delete next[`${base}_from`];
+    delete next[`${base}_to`];
+    next[base] = { ...(next[base] ?? { label: base }), type };
+    return next;
+  }
+  next[name] = { ...(next[name] ?? { label: name }), type };
+  return next;
+}
+
 /** True when a date-range variable's SQL writes the bare `{{name}}`.
  *
  *  `resolveValues` only ever produces `name_from` and `name_to` for a range, so the bare token

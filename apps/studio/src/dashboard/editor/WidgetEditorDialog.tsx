@@ -37,7 +37,7 @@ import {
 } from '../../api';
 import { renderWidget } from '../widgets';
 import { resolveValues, applyTemplate, filterTokens } from '../template';
-import { extractVariables, extractLogicalVariables, compatibleFilters, hasBareDateRangeToken } from './variables.model';
+import { extractVariables, extractLogicalVariables, compatibleFilters, hasBareDateRangeToken, setVariableType } from './variables.model';
 import { BuilderForm } from './BuilderForm';
 import { buildSaveQuery, shouldRestoreEjected, measuresOf, type BuilderQuery } from './builderForm.model';
 
@@ -753,7 +753,15 @@ export function WidgetEditorDialog({
                       <div className="-mx-6 border-b border-border" />
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 py-4">
                         <VarRow label="Type">
-                          <Select value={def.type} onValueChange={(t) => updateDef({ type: t as WidgetVariableDef['type'] })}>
+                          {/* Type goes through setVariableType, not updateDef: choosing Date
+                              Range on a `_from`/`_to` half has to land on the base name, or the
+                              variable ends up with `period_from_from` tokens and no way back. */}
+                          <Select
+                            value={def.type}
+                            onValueChange={(t) =>
+                              setVarDefs((d) => setVariableType(d, v, t as WidgetVariableDef['type']))
+                            }
+                          >
                             <SelectTrigger aria-label="Type" className="h-7 text-xs">
                               <SelectValue />
                             </SelectTrigger>
