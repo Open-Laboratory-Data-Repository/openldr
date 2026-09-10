@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { MoreHorizontal, Upload } from 'lucide-react';
@@ -29,7 +29,6 @@ import {
   writeFacilityValueMappings,
   type ColumnMapError,
   type ColumnSuggestion,
-  type ControlledField,
   type FacilityColumnMap,
   type FacilityImportConfirmOptions,
   type FacilityImportResult,
@@ -38,9 +37,7 @@ import {
   type FacilityRegisterSource,
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
-import { CONTROLLED_FIELDS } from './controlledFields';
 import { pendingValueMappings, resolvedValueKey, useMappingCheckState } from './mappingCheckState';
-import { DataGridStep } from './DataGridStep';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
 import { summarySignature, worklistSignature, type ImportInputs } from './importInputsSignature';
 import {
@@ -305,27 +302,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // suggestion must stick"). Debouncing, batching, or dropping this call makes the panel look broken
   // for reasons that are not in the panel.
   const [columnMap, setColumnMap] = useState<FacilityColumnMap>(EMPTY_COLUMN_MAP);
-  /** Source header -> the controlled field it maps to, for the headers that map to one. Empty
-   *  until the operator has mapped something, which is the ordinary state on a first pass through
-   *  Data. A cell in one of these opens the this-row-versus-everywhere choice. */
-  const controlledHeaders = useMemo(() => {
-    const out: Record<string, ControlledField> = {};
-    for (const [header, target] of Object.entries(columnMap?.columns ?? {})) {
-      if ((CONTROLLED_FIELDS as string[]).includes(target)) out[header] = target as ControlledField;
-    }
-    return out;
-  }, [columnMap]);
   /** ⛔ THE MAPPING STEP'S CHECK RESULTS LIVE HERE, NOT IN `ColumnMapStep`. That panel renders only
-   *  while `step === 3`, so state it owned itself was destroyed by an ordinary click on Data and
-   *  rebuilt empty on the way back: a row the operator had just checked came back unchecked, and
-   *  pick-list choices they had made but not yet saved were lost outright. None of it describes the
-   *  panel. It describes the file this run is importing, which is the sheet's own subject.
+   *  while `step === 2`, so state it owned itself was destroyed by leaving Mapping and coming back,
+   *  and rebuilt empty: a row the operator had just checked came back unchecked, and pick-list
+   *  choices they had made but not yet saved were lost outright. None of it describes the panel. It
+   *  describes the file this run is importing, which is the sheet's own subject.
    *  `selectFile` below is the one place it is thrown away. */
   const checkState = useMappingCheckState();
-  /** Bumped by the Data grid on every successful edit write or undo. Feeds `summarySignature`, so a
-   *  validated summary computed before the edit stops matching and Review falls away, and feeds
-   *  every row's `stale`, so the mapping step invites the re-check that would answer differently. */
-  const [cellEditsAt, setCellEditsAt] = useState(0);
   // The current file's header row and this app's own ranked suggestions for it — CSV only (see the
   // effect below); a JSONL release never renders `ColumnMapStep` at all (a map for one is meaningless
   // — Task 3's own doc comment on `FacilityImportOptions.columnMap`).
@@ -559,9 +542,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     // also why it happened on an ordinary trip to Data, where it was flatly wrong. Now the sheet
     // owns it and discards it exactly here, at the one event that really does invalidate it.
     checkState.reset();
-    // (4) And the edit count itself. A new file has no edits on it yet, and a stale counter left
-    // over from the old one would make the new file's own first check read as already stale.
-    setCellEditsAt(0);
     // A2b: a new file starts a new import in every sense. The picker is disabled while a run is
     // live (see `inputsDisabled`), so this only ever discards a run that has already finished.
     setRunId(null);
@@ -879,7 +859,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         // Source's own store-only call. Nothing has been checked, so there is no review to earn
         // yet: `summaryAt` stays as it was, and `hasStoredFile` (now `runId !== null`) is the only
         // gate this call moves. `pollRunId` stays null: a `stored` run has nothing worth polling
-        // for (see that field's own comment). Land on Data, the step this call belongs to.
+        // for (see that field's own comment). Land on Mapping, the step a stored file feeds.
         setPollRunId(null);
         setRequestedStep(2);
       } else {
@@ -1048,7 +1028,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     allowUnknownColumns,
     allowInvalidCoordinates,
     valueMappingsSavedAt,
-    cellEditsAt,
   };
   const currentSummarySignature = summarySignature(inputs);
 
@@ -1092,7 +1071,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     hasStoredFile: runId !== null,
     // ⛔ `summaryAt === currentSummarySignature` is what makes this "a summary that MATCHES THE
     // INPUTS", not merely "a summary exists". Change the file, the register, the map, a fixed
-    // value, an override or a policy and this goes false, `furthestStep` returns 3 and `clampStep`
+    // value, an override or a policy and this goes false, `furthestStep` returns 2 and `clampStep`
     // pulls the operator back to Mapping. That is the safety half of this slice: Review is either
     // current or absent, and never a number that is no longer true.
     //
@@ -1133,11 +1112,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // `ColumnMapStep` mounted through the refusal (see `columnMapRefused`'s own docblock).
   //
   // This has to be a RETREAT, not just a guard on the forward move: `hasReview` (and so `furthest`)
-  // turns 4 the instant Mapping's own Upload sets `runId` AND `summaryAt` together. See `handleUpload`'s
+  // turns 3 the instant Mapping's own Upload sets `runId` AND `summaryAt` together. See `handleUpload`'s
   // own comment on that pair. That is BEFORE the first poll has said anything about `blockedReason`.
   // Mapping's click already parked the operator there, so this effect's ordinary branch carries them
   // to Review immediately, exactly as it does for every other run. Only once the first poll answers
-  // does `columnMapRefused` turn true, by which point `requestedStep` already reads 4 (Review's own
+  // does `columnMapRefused` turn true, by which point `requestedStep` already reads 3 (Review's own
   // number, see the fix below). A guard that only ever refused to ADVANCE would never see this, and
   // the operator would stay stranded on Review with no way to fix the very thing that put them
   // there. This branch un-does that specific move, and only that one: any OTHER step the operator
@@ -1152,15 +1131,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // which step the operator was on when they triggered it.
   //
   // Fix for the reachability regression (Critical finding, code review): the sheet's OWN step
-  // numbers move here too, to agree with `furthestStep`'s model (1 Source, 2 Data, 3 Mapping,
-  // 4 Review). Before this fix the sheet still rendered Mapping at its own `step === 2` and Review
-  // at its own `step === 3`, one slot behind the strip's real labels, so an operator who clicked
-  // strip position 3 ("Mapping") landed on this sheet's Review content instead. Upload was never
-  // shown. The retreat below now targets 3 (Mapping's real number), and the advance targets 4
-  // (Review's real number).
+  // numbers must agree with `furthestStep`'s model. That model was once four steps (1 Source,
+  // 2 Data, 3 Mapping, 4 Review), and the sheet's own checks briefly lagged the strip by one slot:
+  // Mapping rendered at `step === 2` and Review at `step === 3`, so an operator who clicked strip
+  // position 3 ("Mapping") landed on this sheet's Review content instead, and Upload was never
+  // shown. The model is now three steps (1 Source, 2 Mapping, 3 Review), for exactly the same
+  // reason this task renumbers the sheet in the same commit as the model: doing it in two commits
+  // reintroduces this bug. The retreat below targets 2 (Mapping's real number), and the advance
+  // targets 3 (Review's real number).
   //
   // ⛔ ROUND-4 FIX: `checksAsked` is in the dependencies, and without it a SECOND check over
-  // unchanged inputs never moves the sheet. `furthest` is a high-water mark that stays 4 once a
+  // unchanged inputs never moves the sheet. `furthest` is a high-water mark that stays 3 once a
   // summary matches its inputs, so an operator who reached Review, clicked back to Mapping and
   // pressed Validate all again saw nothing happen: same `furthest`, same dependencies, no re-run.
   // Review stayed clickable throughout, which is how the report described it. Reported against the
@@ -1168,11 +1149,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // can carry this signal.
   useEffect(() => {
     if (columnMapRefused) {
-      setRequestedStep((prev) => (prev !== 3 ? 3 : prev));
+      setRequestedStep((prev) => (prev !== 2 ? 2 : prev));
       return;
     }
-    if (furthest < 4) return;
-    setRequestedStep((prev) => (prev < 4 ? 4 : prev));
+    if (furthest < 3) return;
+    setRequestedStep((prev) => (prev < 3 ? 3 : prev));
   }, [furthest, columnMapRefused, checksAsked]);
 
   /** Task 5: a fresh install has NO register: migration 082's back-fill seeds only from
@@ -1264,19 +1245,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const willWriteCount = awaitingSummary ? willWrite(awaitingSummary) : 0;
   /** Whole-branch review, FINDING 2: is `ColumnMapStep` actually on screen? Read by the panel's own
    *  render gate below AND by the empty-state note beside it, so the two can never drift apart —
-   *  the note is exactly "step 3, and this is false" (renumbered along with Mapping's own step, per
+   *  the note is exactly "step 2, and this is false" (renumbered along with Mapping's own step, per
    *  the reachability fix above). Before this fix only the panel had a gate: a JSONL release, an
    *  applied run, a run or a summary that is not a column-map refusal, and the brief window while
-   *  `File.text()` resolves all left step 3 completely blank, with nothing on screen to say why. */
+   *  `File.text()` resolves all left step 2 completely blank, with nothing on screen to say why. */
   //
   //  ⛔ NO LONGER GATED ON THE MAP HAVING BEEN REFUSED. It used to hide the moment a run existed
   //  unless `columnMapRefused`, so an operator who stepped back to Mapping found a step that
   //  explained itself and offered nothing: they could see the map had already been sent and could
   //  do nothing about it. Going back is only worth offering if something can change there, so the
-  //  panel stays and step 3's action becomes a re-upload. The RUN's map is still immutable, which
+  //  panel stays and step 2's action becomes a re-upload. The RUN's map is still immutable, which
   //  is what the confirm route's guarantees rest on: editing here mints a NEW run that supersedes
   //  this one, exactly as the refusal path already did.
-  const columnMapPanelShown = step === 3 && format === 'csv' && columnMapHeaders.length > 0
+  const columnMapPanelShown = step === 2 && format === 'csv' && columnMapHeaders.length > 0
     && !appliedSummary && !runInFlight;
   // While a run holds the register, the inputs it was uploaded with must not drift out from under
   // it — the run is for THAT file under THAT national system, and nothing here can retract it.
@@ -1350,9 +1331,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   because an enumeration that silently drops a member of the constant it cites is how
                   a later reader learns the wrong set. That is not hypothetical: `stored` was added
                   to the constant by this task and this comment still said FOUR. */}
-              {/* ⛔ NO UPLOAD ITEM HERE. It was gated on `!runId && step === 4`, which is dead: step
-                  4 is Review, Review requires `stepGate.hasReview`, and `hasReview` requires
-                  `runId !== null` (see its own note). `!runId` and `step === 4` can never both hold,
+              {/* ⛔ NO UPLOAD ITEM HERE. It was gated on `!runId && step === 3`, which is dead: step
+                  3 is Review, Review requires `stepGate.hasReview`, and `hasReview` requires
+                  `runId !== null` (see its own note). `!runId` and `step === 3` can never both hold,
                   so the item could not render. What it was for is covered by the three re-upload
                   items below, each offered where it can actually change something. */}
               {/* ⛔ Deliberately NOT rendered: Confirm is Review's visible button, and this menu is
@@ -1424,23 +1405,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           {error ? (
             <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
           ) : null}
-
-          {/* Task 6: Data (step 2), the file Source just stored, read back a page at a time.
-              `DataGridStep` fetches its own rows; this sheet never holds them. Guarded on `runId`
-              even though `stepGate.hasStoredFile` already requires it to reach step 2 at all,
-              because the type is `string | null` and the component's own prop is not. */}
-          {step === 2 && runId && (
-            <div className="flex min-h-0 flex-1 flex-col">
-              <DataGridStep
-                runId={runId}
-                // CSV only. A JSONL release is the publisher's file in the contract's own shape, and
-                // the parser takes no overlay for one (see `FacilityImportOptions.cellEdits`).
-                editable={format === 'csv'}
-                controlledHeaders={controlledHeaders}
-                onEditsChanged={() => setCellEditsAt((n) => n + 1)}
-              />
-            </div>
-          )}
 
           {/* Task 3: the source inputs — File, National system, File format, complete release and
               Release version — belong to Source (step 1) alone. Leaving them on screen at every step
@@ -1659,14 +1623,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           )}
           {/* ⚠ `!error` matters: the poll's catch STOPS the chain and leaves `run` null, so without
               it this line went on claiming an activity that had already given up — underneath the
-              error box explaining that it had. Task 3: gated to Review (step 4, renumbered by the
+              error box explaining that it had. Task 3: gated to Review (step 3, renumbered by the
               reachability fix above) with the rest of the run status blocks below. `hasReview`
-              (and so `step === 4`) turns true the instant Mapping's own Upload sets `runId` and
+              (and so `step === 3`) turns true the instant Mapping's own Upload sets `runId` and
               `summaryAt` together, so this shows exactly when it used to. */}
-          {step === 4 && runId && !run && !error && (
+          {step === 3 && runId && !run && !error && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">{t('facilities.import.runLoading')}</p>
           )}
-          {step === 4 && run && RUN_ACTIVE_STATUSES.includes(run.status) && (
+          {step === 3 && run && RUN_ACTIVE_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-border px-3 py-2 text-xs space-y-1">
               <p className="font-medium">{t(`facilities.import.runStatus.${run.status}`)}</p>
               {run.phase && <p className="text-muted-foreground">{t('facilities.import.runPhase', { phase: run.phase })}</p>}
@@ -1684,14 +1648,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               operator it was "cancelled" would be a claim about a national register that the server
               never made. Only the 200 `cancelled` answer — a run in a state no worker claims, which
               the route terminated itself — may say so. */}
-          {step === 4 && cancelOutcome && run && !RUN_TERMINAL_STATUSES.includes(run.status) && (
+          {step === 3 && cancelOutcome && run && !RUN_TERMINAL_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
               {cancelOutcome === 'requested'
                 ? t('facilities.import.cancelRequestedNotice')
                 : t('facilities.import.cancelledNotice')}
             </div>
           )}
-          {step === 4 && run?.status === 'cancelled' && (
+          {step === 3 && run?.status === 'cancelled' && (
             <div className="mx-6 mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
               {t('facilities.import.cancelledNotice')}
             </div>
@@ -1700,7 +1664,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               newer upload of the same register can take the run over and it ends here instead. The
               operator sees that only because the sheet kept polling — which is why this block
               exists at all rather than the run simply vanishing from the screen. */}
-          {step === 4 && run?.status === 'failed' && (
+          {step === 3 && run?.status === 'failed' && (
             <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <p className="font-medium">{t('facilities.import.runFailedTitle')}</p>
               {run.error && <p className="text-xs">{run.error}</p>}
@@ -1736,7 +1700,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 // guarded by `worklistSignature`. See `ImportPolicyPanel`'s own `findings` prop,
                 // fed the exact same value for the exact same reason.
                 checkState={checkState}
-                cellEditsAt={cellEditsAt}
                 unmappedByField={liveFindings?.unmapped}
                 nationalSystem={nationalSystem.trim()}
                 // Task 6 (Slice B): the friendly name for `AddFacilityTypeDialog`'s own
@@ -1756,7 +1719,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               )}
               {/* Round-2 fix: the refusal that keeps this panel mounted needs its OWN explanation
                   HERE too. `ReconciliationSummary`'s copy of this same block only ever renders on
-                  Review (step 4, renumbered by the reachability fix above). A column-map
+                  Review (step 3, renumbered by the reachability fix above). A column-map
                   refusal no longer reaches Review at all (see the auto-advance effect's
                   `columnMapRefused` guard), so without this the operator
                   would see the panel with no reason given for why it is still here. Same
@@ -1769,7 +1732,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </div>
           )}
 
-          {/* Whole-branch review, FINDING 2: step 3 (Mapping, renumbered by the reachability fix
+          {/* Whole-branch review, FINDING 2: step 2 (Mapping, renumbered by the reachability fix
               above) with nothing on it. `columnMapPanelShown` covers five distinct states with one
               gate: a JSONL release, an applied run, a run or a summary that is not a column-map
               refusal, and the brief window while `File.text()` is still resolving. Every one
@@ -1782,7 +1745,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               upload. An operator read that on a file they had not uploaded, took it to mean mapping
               was closed to them, uploaded with no map, and had all 21 columns refused as
               unrecognised. `runId` is the only thing that makes that sentence true. */}
-          {step === 3 && !columnMapPanelShown && (
+          {step === 2 && !columnMapPanelShown && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">
               {format === 'jsonl'
                 ? t('facilities.import.columnMapNotApplicableJsonl')
@@ -1797,7 +1760,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               overrides (and the absent/deleted policies) appear only once a check has actually
               reported the thing they answer. Before any check it renders the conflict policy alone,
               which is the one choice that can never be discovered from a summary. */}
-          {step === 3 && !runFinished && (
+          {step === 2 && !runFinished && (
             <div className="mx-6 mt-4">
               <ImportPolicyPanel
                 onConflict={onConflict}
@@ -1825,7 +1788,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               (the last check's findings guarded by `worklistSignature`) a few lines up. Review
               still reports the same values, read-only, from `ReconciliationSummary`. */}
 
-          {step === 4 && awaitingSummary && !appliedSummary && (
+          {step === 3 && awaitingSummary && !appliedSummary && (
             <ReconciliationSummary
               result={awaitingSummary}
               // A FACT about this result, not a control: what the upload recorded and the validate
@@ -1837,11 +1800,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               // a conflict, and a summary on screen means a run exists.
               showConflictChoice
               reupload={reupload}
-              onGoToMapping={() => setRequestedStep(3)}
+              onGoToMapping={() => setRequestedStep(2)}
             />
           )}
 
-          {step === 4 && appliedSummary && (
+          {step === 3 && appliedSummary && (
             <div className="mx-6 mt-4 space-y-2 text-sm">
               {/* ⛔ A file that produced NO ROWS is not a completed import, and saying so in green
                   is how the Zambia team read "Import complete. Created 0, updated 0, skipped 0."
@@ -1938,19 +1901,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {uploading ? uploadLabel : t('facilities.import.continueAction')}
             </Button>
           ))}
-          {/* Data's own way forward. Source, Mapping and Review each carried a footer button and
-              Data carried none, so the bar rendered empty under the grid and the strip was the
-              only way on. Nothing about Data earned that exception: it is a read-only view of a
-              file that is already stored.
-              ⛔ IT ONLY MOVES A STEP. Source's Continue already stored the file, and a second
-              `uploadFacilityImport` either supersedes the run this sheet is watching or 409s (see
-              the dropdown's own Upload gate). This shares Source's label because it is the same
-              promise to the operator, and deliberately not its handler. */}
-          {step === 2 && (
-            <Button size="sm" onClick={() => setRequestedStep(3)}>
-              {t('facilities.import.continueAction')}
-            </Button>
-          )}
           {/* Whole-branch review, FINDING 1: this button used to check only `uploadDisabled` — the
               dropdown's own Upload item ALSO checks `!applyResult && !runId` (see that item's own
               comment for why: a second upload either supersedes the run this sheet is watching or
@@ -1976,7 +1926,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               fix something after a first validate already ran. `handleRevalidate` falls back to
               `handleUpload` only for a status neither of those (a run that moved on while this
               sheet was open), where sending the file again is the only thing left that can work. */}
-          {step === 3 && (
+          {step === 2 && (
             <Button
               size="sm"
               disabled={uploadDisabled || confirming || cancelling}
@@ -1988,7 +1938,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               )}
             </Button>
           )}
-          {step === 4 && canConfirmRun && (
+          {step === 3 && canConfirmRun && (
             <Button size="sm" disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
               {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}
             </Button>

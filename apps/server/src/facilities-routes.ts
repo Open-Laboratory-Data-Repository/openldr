@@ -18,7 +18,7 @@ import {
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
-  revalidateImportRun, readFileRows, readColumnValues, FacilityFileUnreadableError,
+  revalidateImportRun, readColumnValues, FacilityFileUnreadableError,
   addRegisterFacilityType, FacilityTypeCollisionError,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
   type ValueMappingEntry,
@@ -26,7 +26,7 @@ import {
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
-  createFacilityRegisterSourceStore, resolveFacilityRegisterForImport, createFacilityImportEditStore,
+  createFacilityRegisterSourceStore, resolveFacilityRegisterForImport,
   SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable, APPLY_PHASE,
   VALIDATE_PHASE,
 } from '@openldr/db';
@@ -813,11 +813,6 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // import route below). Constructed once per registration, not per request: it is a thin closure
   // over `ctx.internalDb`, the same db this file already reads directly in several routes.
   const importRuns = createFacilityImportRunStore(ctx.internalDb);
-
-  // Slice C: the operator's cell repairs, keyed off the same (nationalSystem, fileHash) pair the
-  // edits routes below resolve from a run row. Constructed once per registration, the same reason
-  // `importRuns` above is.
-  const importEdits = createFacilityImportEditStore(ctx.internalDb);
 
   // B1 Task 3: the registers an import may name. Constructed once per registration for the same
   // reason `importRuns` above is — a thin closure over `ctx.internalDb`.
@@ -2973,215 +2968,31 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return run;
   });
 
-  // Task 3 (facility-import-data-stage, Slice A): the stored file as a table, one window at a
-  // time, so the studio can show the upload before any column map exists.
-  //
-  // ⛔ STREAMED, NEVER BUFFERED. `ctx.blob.get` would return the whole object; a 64MB national
-  // register through it would put the file in the API's memory on every page request. `getStream`
-  // is what keeps this constant-memory. `readFileRows` still drains the whole stream to learn the
-  // row count, so `scanned` is already the file's true total. There is no partial-scan case, and
-  // `total` below is always a number, never null.
-  //
-  // ⛔ `MANAGE`, NOT `VIEW`, and that is an ACCESS decision, unlike the revalidate route's note
-  // above. What this hands back is the RAW CONTENT of an uploaded file, cell for cell. Putting the
-  // file there takes `facilities.manage` (`UPLOAD` is `MANAGE` with a bigger `bodyLimit`), so
-  // reading it back takes the same: under `VIEW` a read-only actor could page an entire national
-  // register out of blob storage through a route that exists to show an operator their own upload.
-  app.get('/api/facilities/import/runs/:id/rows', MANAGE, async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const q = req.query as { offset?: string; limit?: string };
-    // NaN check instead of || operator: 0 is a valid value for both params.
-    // Number.parseInt returns NaN only on unparseable input, and that is when we use the default.
-    const parsedOffset = Number.parseInt(q.offset ?? '0', 10);
-    const offset = Math.max(0, Number.isNaN(parsedOffset) ? 0 : parsedOffset);
-    const parsedLimit = Number.parseInt(q.limit ?? '100', 10);
-    const limit = Math.min(500, Math.max(1, Number.isNaN(parsedLimit) ? 100 : parsedLimit));
-
-    const run = await importRuns.get(id);
-    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
-    // Same case the confirm and revalidate routes already guard: a run previewed inline carries
-    // its CSV in the request body and stores nothing. 409, not 404, matching those two routes.
-    // The run exists, it just has no file behind it to page through.
-    if (!run.blobKey) {
-      reply.code(409);
-      return { error: `import run ${id} has no stored file` };
-    }
-
-    // ⛔ GUARDED, because an unhandled throw here is a 500 and the studio reports a 500 on this
-    // route as a network fault. `getStream` throws for a key that points at nothing, which a run
-    // row can carry after its blob was reaped or a restore put the rows back without the objects.
-    // The run is what is wrong, so this answers with the run, in the same 409 shape the missing-key
-    // case two lines above already uses.
-    let stream: Awaited<ReturnType<typeof ctx.blob.getStream>>;
-    try {
-      stream = await ctx.blob.getStream(run.blobKey);
-    } catch (err) {
-      ctx.logger?.warn?.({ err, runId: id, blobKey: run.blobKey }, 'facility import rows: stored file unreadable');
-      reply.code(409);
-      return { error: `import run ${id} has a stored file that can no longer be read` };
-    }
-
-    try {
-      const window = await readFileRows(stream, { format: run.sourceFormat, offset, limit });
-      // ⛔ `skipped`/`skippedLines` TRAVEL WITH THE WINDOW. They are how the studio can say "this
-      // is your file, and it is line 412", instead of the generic read failure an operator reads
-      // as a connection problem. Zero and empty for a clean file, which is the ordinary case.
-      return {
-        headers: window.headers,
-        rows: window.rows,
-        lines: window.lines,
-        offset,
-        limit,
-        total: window.scanned,
-        skipped: window.skipped,
-        skippedLines: window.skippedLines,
-      };
-    } catch (err) {
-      // Not a 500 either: the file cannot be read AS THE FORMAT THE UPLOAD DECLARED, which is a
-      // fact about the operator's own file. 422, and the message names the line when the parser
-      // knew it.
-      if (err instanceof FacilityFileUnreadableError) {
-        reply.code(422);
-        return { error: `import run ${id}: ${err.message}`, line: err.line };
-      }
-      throw err;
-    }
-  });
-
-  // Slice C: the operator's cell repairs for one run's file.
-  //
-  // KEYED OFF THE RUN, and resolved to `(nationalSystem, fileHash)` from the run row. That is the
-  // guard as well as the lookup: an operator holds a run id and nothing else, and cannot name a
-  // register or a file they never uploaded. It is also why a re-upload of the same bytes keeps the
-  // repairs, which is the whole reason these are not run-scoped.
-  //
-  // MANAGE, not VIEW, for the reason the rows route above documents: these read and write the raw
-  // content of an uploaded file.
-  const EditScopeSchema = z.object({
-    header: z.string().min(1),
-    line: z.number().int().positive().optional(),
-    // `min(1)`: the grid never sends an empty `fromValue`, so one arriving here names no real
-    // sweep. Without this an empty string still counted as "present" and slipped past the
-    // line-or-value check below.
-    fromValue: z.string().min(1).optional(),
-  });
-  const EditSchema = EditScopeSchema.extend({ toValue: z.string() });
-
-  app.get('/api/facilities/import/runs/:id/edits', MANAGE, async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const run = await importRuns.get(id);
-    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
-    return { edits: await importEdits.list(run.nationalSystem, run.fileHash) };
-  });
-
-  app.put('/api/facilities/import/runs/:id/edits', MANAGE, async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const parsed = EditSchema.safeParse(req.body);
-    if (!parsed.success) { reply.code(400); return { error: parsed.error.issues[0]?.message ?? 'invalid edit' }; }
-    const { header, line, fromValue, toValue } = parsed.data;
-    // Refused HERE as well as in the store, because a 500 from the store's own throw would tell the
-    // studio this was a server fault when it is a request that names no cell.
-    if ((line === undefined) === (fromValue === undefined)) {
-      reply.code(400);
-      return { error: 'an edit names a line or a value, never both and never neither' };
-    }
-    const run = await importRuns.get(id);
-    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
-    const saved = await importEdits.put({
-      nationalSystem: run.nationalSystem,
-      fileHash: run.fileHash,
-      header,
-      line: line ?? null,
-      fromValue: fromValue ?? null,
-      toValue,
-      createdBy: actorFromRequest(req).actorId,
-    });
-    // The design spec claims every edit is auditable. `before` is left null rather than the row
-    // this replaced: the store's own `onConflict` upsert never hands that row back, and a second
-    // read just to fill this field would be a write path slowed down for an audit nicety.
-    await recordAudit(ctx, req, {
-      action: 'facility.import.edit',
-      entityType: 'facility-import-edit',
-      entityId: saved.id,
-      before: null,
-      after: saved,
-      metadata: { runId: id, header, line: line ?? null, fromValue: fromValue ?? null },
-    });
-    return saved;
-  });
-
-  app.delete('/api/facilities/import/runs/:id/edits', MANAGE, async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const q = req.query as { header?: string; line?: string; fromValue?: string };
-    if (!q.header) { reply.code(400); return { error: 'header is required' }; }
-    // `fromValue=''` names no sweep, same reason the PUT schema now refuses it.
-    if (q.fromValue !== undefined && q.fromValue.length === 0) {
-      reply.code(400);
-      return { error: 'fromValue must not be empty' };
-    }
-    // ⛔ A QUERY PARAM THAT FAILS TO PARSE IS NOT "ABSENT". The rows route's `||`-vs-NaN note is
-    // about a MISSING param falling back to a default; this is a PRESENT param that does not name a
-    // line at all. Silently downgrading `line=abc` to "no line" let a bad line, plus a `fromValue`
-    // the studio never sends alongside one, delete the whole column sweep instead of failing.
-    let line: number | undefined;
-    if (q.line !== undefined) {
-      if (!/^[1-9]\d*$/.test(q.line)) {
-        reply.code(400);
-        return { error: 'line must be a positive integer' };
-      }
-      line = Number.parseInt(q.line, 10);
-    }
-    if ((line === undefined) === (q.fromValue === undefined)) {
-      reply.code(400);
-      return { error: 'an edit names a line or a value, never both and never neither' };
-    }
-    const run = await importRuns.get(id);
-    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
-    const key = line === undefined
-      ? { header: q.header, fromValue: q.fromValue as string }
-      : { header: q.header, line };
-    const removed = await importEdits.remove(run.nationalSystem, run.fileHash, key);
-    // Nothing changed when there was nothing there, so nothing is audited: same rule the rest of
-    // this file already follows for a no-op write.
-    if (removed) {
-      await recordAudit(ctx, req, {
-        action: 'facility.import.edit.delete',
-        entityType: 'facility-import-edit',
-        entityId: id,
-        before: null,
-        after: null,
-        metadata: { header: q.header, line: line ?? null, fromValue: q.fromValue ?? null },
-      });
-    }
-    return { removed };
-  });
-
   // Task 2 (mapping-answers-back, Slice B): one column's vocabulary, so the mapping step can check
-  // a single field without validating the whole register. Same run lookup, blob guards and error
-  // mapping as the rows route above, copied rather than shared: this route reads the file
-  // differently (`readColumnValues`, one column, capped and deduped) and returns a different shape.
+  // a single field without validating the whole register. Reads the file with `readColumnValues`,
+  // one column, capped and deduped, rather than a full scan.
   //
-  // ⛔ `MANAGE`, NOT `VIEW`, for the same reason the rows route needs it: this hands back the RAW
-  // CONTENTS of an uploaded file, one column's worth. Reading it back is manage work, not view work.
+  // ⛔ `MANAGE`, NOT `VIEW`: this hands back the RAW CONTENTS of an uploaded file, one column's
+  // worth. Reading it back is manage work, not view work.
   app.get('/api/facilities/import/runs/:id/columns/:header/values', MANAGE, async (req, reply) => {
     const { id, header } = req.params as { id: string; header: string };
     const q = req.query as { limit?: string };
     // NaN check instead of || operator: 0 is a valid value, and `||` would silently yield the
-    // DEFAULT instead of the FLOOR for `limit=0`. Same bug class the rows route's review caught.
+    // DEFAULT instead of the FLOOR for `limit=0`.
     const parsedLimit = Number.parseInt(q.limit ?? '200', 10);
     const limit = Math.min(1000, Math.max(1, Number.isNaN(parsedLimit) ? 200 : parsedLimit));
 
     const run = await importRuns.get(id);
     if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
-    // Same case the rows route guards: a run previewed inline carries its CSV in the request body
-    // and stores nothing. 409, not 404: the run exists, it just has no file to read a column out of.
+    // A run previewed inline carries its CSV in the request body and stores nothing. 409, not
+    // 404: the run exists, it just has no file to read a column out of.
     if (!run.blobKey) {
       reply.code(409);
       return { error: `import run ${id} has no stored file` };
     }
 
-    // ⛔ GUARDED, same as the rows route: an unhandled throw here is a 500 and the studio reports a
-    // 500 on this route as a network fault. `getStream` throws for a key that points at nothing,
+    // ⛔ GUARDED: an unhandled throw here is a 500 and the studio reports a 500 on this route as a
+    // network fault. `getStream` throws for a key that points at nothing,
     // which a run row can carry after its blob was reaped or a restore put the rows back without the
     // objects. The run is what is wrong, so this answers with the run, in the same 409 shape.
     let stream: Awaited<ReturnType<typeof ctx.blob.getStream>>;

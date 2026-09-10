@@ -25,16 +25,13 @@ export interface RowCheck {
   distinct: number;
   values?: WorklistEntry[];
   options?: ValueSetOption[];
-  /** The `cellEditsAt` this check ran at. A later value means the file has changed underneath the
-   *  answer, which is exactly what `stale` is for. */
-  editsAt: number;
 }
 
 /** Everything the mapping step learns that must outlive the mapping step being on screen.
  *
  *  ⛔ THIS LIVES IN THE SHEET, NOT IN THE PANEL, and that is the whole point of the type existing.
- *  `ColumnMapStep` renders only while the sheet is on step 3, so every trip to Data unmounted it
- *  and took all three of these with it. The operator saw a row they had just checked red come back
+ *  `ColumnMapStep` renders only on Mapping, so a trip to Source or to Review unmounts it and
+ *  takes all three of these with it. The operator saw a row they had just checked red come back
  *  as unchecked, and, worse, lost every pick-list choice they had made but not yet saved. None of
  *  this describes the panel; it describes the RUN, and the sheet is what owns the run. */
 export interface MappingCheckState {

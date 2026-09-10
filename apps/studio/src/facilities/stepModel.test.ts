@@ -12,34 +12,45 @@ describe('furthestStep', () => {
     expect(furthestStep(gate({ hasRegister: true }))).toBe(1);
   });
 
-  it('Data is earned by a stored file, and Mapping only after it', () => {
+  it('Mapping is earned by a stored file, and Review only after it', () => {
     const base = { hasFile: true, hasRegister: true, hasStoredFile: false, hasReview: false, runActive: false };
     expect(furthestStep(base)).toBe(1);
-    expect(furthestStep({ ...base, hasStoredFile: true })).toBe(3);
-    expect(furthestStep({ ...base, hasStoredFile: true, hasReview: true })).toBe(4);
+    expect(furthestStep({ ...base, hasStoredFile: true })).toBe(2);
+    expect(furthestStep({ ...base, hasStoredFile: true, hasReview: true })).toBe(3);
   });
 
   it('opens Review once a validated summary exists', () => {
-    expect(furthestStep(gate({ hasFile: true, hasRegister: true, hasStoredFile: true, hasReview: true }))).toBe(4);
+    expect(furthestStep(gate({ hasFile: true, hasRegister: true, hasStoredFile: true, hasReview: true }))).toBe(3);
+  });
+
+  it('a stored file earns Mapping, which is now step 2', () => {
+    expect(furthestStep({
+      hasFile: true, hasRegister: true, hasStoredFile: true, hasReview: false, runActive: false,
+    })).toBe(2);
+  });
+
+  it('a summary earns Review, which is now step 3', () => {
+    expect(furthestStep({
+      hasFile: true, hasRegister: true, hasStoredFile: true, hasReview: true, runActive: false,
+    })).toBe(3);
   });
 });
 
 describe('clampStep', () => {
   it('refuses a step the operator has not earned', () => {
-    expect(clampStep(4, gate({ hasFile: true, hasRegister: true, hasStoredFile: true }))).toBe(3);
-    expect(clampStep(3, gate({ hasFile: true, hasRegister: true }))).toBe(1);
+    expect(clampStep(3, gate({ hasFile: true, hasRegister: true, hasStoredFile: true }))).toBe(2);
+    expect(clampStep(2, gate({ hasFile: true, hasRegister: true }))).toBe(1);
     expect(clampStep(2, gate())).toBe(1);
   });
 
   it('leaves a reachable step alone', () => {
     expect(clampStep(1, gate({ hasFile: true, hasRegister: true }))).toBe(1);
-    expect(clampStep(2, gate({ hasFile: true, hasRegister: true, hasStoredFile: true }))).toBe(2);
   });
 });
 
 describe('canGoBack', () => {
   it('allows going back from Mapping', () => {
-    expect(canGoBack(3, gate({ hasFile: true, hasRegister: true, hasStoredFile: true }))).toBe(true);
+    expect(canGoBack(2, gate({ hasFile: true, hasRegister: true, hasStoredFile: true }))).toBe(true);
   });
 
   it('never offers Back on the first step', () => {
@@ -49,12 +60,12 @@ describe('canGoBack', () => {
   // The run is for THAT file under THAT register and nothing in the sheet can retract it, which is
   // the same reason `inputsDisabled` freezes the inputs while a run is live.
   it('refuses to go back while a run is live', () => {
-    expect(canGoBack(4, gate({
+    expect(canGoBack(3, gate({
       hasFile: true, hasRegister: true, hasStoredFile: true, hasReview: true, runActive: true,
     }))).toBe(false);
   });
 
   it('allows going back from a parked review, where nothing is in flight', () => {
-    expect(canGoBack(4, gate({ hasFile: true, hasRegister: true, hasStoredFile: true, hasReview: true }))).toBe(true);
+    expect(canGoBack(3, gate({ hasFile: true, hasRegister: true, hasStoredFile: true, hasReview: true }))).toBe(true);
   });
 });

@@ -1,7 +1,6 @@
 import type { Readable } from 'node:stream';
 import { createInterface } from 'node:readline';
 import { parse as parseCsvStream } from 'csv-parse';
-import { FacilityFileUnreadableError } from './facility-file-rows';
 
 export interface ColumnValues {
   /** Distinct, non-empty, in first-seen order, capped at `limit`. */
@@ -19,6 +18,29 @@ export interface ReadColumnValuesOptions {
 }
 
 const stripBom = (s: string): string => (s.charCodeAt(0) === 0xfeff ? s.slice(1) : s);
+
+/**
+ * The file could not be read far enough to answer at all, as opposed to one line inside it that
+ * could not. Carries the line number when the parser knew it, so the message names the operator's
+ * own file rather than something vague.
+ *
+ * ⛔ THE CALLER MUST TURN THIS INTO A 4xx, NOT A 500. The reason it exists is that the studio's Data
+ * step reported an unhandled throw as "check the connection", sending an operator to look at their
+ * network for a bad line in their CSV.
+ *
+ * Defined here because this is the only thing that throws it. It used to live in
+ * `facility-file-rows.ts`, alongside the paged reader that fed the import wizard's Data step; that
+ * step and its reader were removed once every repair moved to the source file.
+ */
+export class FacilityFileUnreadableError extends Error {
+  readonly line: number | null;
+
+  constructor(message: string, line: number | null) {
+    super(message);
+    this.name = 'FacilityFileUnreadableError';
+    this.line = line;
+  }
+}
 
 /** One column's vocabulary, for checking a single mapping without validating the register.
  *
@@ -56,9 +78,9 @@ export async function readColumnValues(
   };
 
   if (format === 'csv') {
-    // Same parser and options as `readFileRows`'s `readCsvRows`: a real CSV parse, streamed, with
-    // `relax_column_count`/`relax_quotes` so one ragged row does not kill the whole read. A header
-    // the file does not have never throws here, it just finds nothing in every row.
+    // A real CSV parse, streamed, with `relax_column_count`/`relax_quotes` so one ragged row does
+    // not kill the whole read. A header the file does not have never throws here, it just finds
+    // nothing in every row.
     const parser = stream.pipe(parseCsvStream({
       columns: false,
       skip_empty_lines: true,
@@ -96,9 +118,9 @@ export async function readColumnValues(
       );
     }
   } else {
-    // Same line-by-line JSONL read as `readFileRows`: a line that is not JSON, or that is not an
-    // object, is skipped rather than thrown on. This module does not need the skip count itself,
-    // only the one column's values, so a bad line just contributes nothing.
+    // A line-by-line JSONL read: a line that is not JSON, or that is not an object, is skipped
+    // rather than thrown on. This module does not need the skip count itself, only the one
+    // column's values, so a bad line just contributes nothing.
     const rl = createInterface({ input: stream, crlfDelay: Infinity });
     let first = true;
 

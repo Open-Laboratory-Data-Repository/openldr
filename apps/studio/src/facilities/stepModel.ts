@@ -1,19 +1,23 @@
-/** Which of the import sheet's four steps the operator is on: 1 Source, 2 Data, 3 Mapping, 4 Review.
+/** Which of the import sheet's three steps the operator is on: 1 Source, 2 Mapping, 3 Review.
  *
  *  The sheet used to present five stages of work as one scrolling surface with no numbering and no
  *  way back, and every action for every stage in a single dropdown. This module is the "where am I"
  *  half of the fix. It holds no React state and no copy, so it can be tested as arithmetic.
- */
-export type ImportStep = 1 | 2 | 3 | 4;
+ *
+ *  There used to be a fourth step, Data, showing the uploaded file as a table. It was removed once
+ *  the wizard worked end to end: every repair is made on the source file instead. It had never been
+ *  on the forward path anyway, because this function never returned 2 for it. See the design spec's
+ *  own note on the removal. */
+export type ImportStep = 1 | 2 | 3;
 
 /** What the operator has actually supplied, as five booleans. Deliberately not the sheet's own
  *  state shape: this module must not know what a run, a preview or a summary is. */
 export interface StepGate {
   hasFile: boolean;
   hasRegister: boolean;
-  /** The file is uploaded and sitting in blob storage, so the Data stage has rows to show and
-   *  Mapping has something to map. Distinct from `hasFile`, which is only "the operator picked
-   *  one in the browser". */
+  /** The file is uploaded and sitting in blob storage, so a stored file is what gives Mapping
+   *  something to map. Distinct from `hasFile`, which is only "the operator picked one in the
+   *  browser". */
   hasStoredFile: boolean;
   /** An upload has been started, or a validated summary is on screen. Deliberately NOT "a summary
    *  exists": a background run has no summary while it validates, and gating the run's own progress
@@ -27,7 +31,7 @@ export interface StepGate {
 export function furthestStep(gate: StepGate): ImportStep {
   if (!gate.hasFile || !gate.hasRegister) return 1;
   if (!gate.hasStoredFile) return 1;
-  return gate.hasReview ? 4 : 3;
+  return gate.hasReview ? 3 : 2;
 }
 
 /** The step to actually render: what was asked for, or the furthest earned, whichever is lower. */

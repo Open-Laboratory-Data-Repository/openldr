@@ -1,7 +1,8 @@
 # A data stage for the facility import, and a mapping step that answers back
 
 Date: 2026-09-08
-Status: Slices A, B and C built; the status-icon rules revised 2026-09-09, see below
+Status: Slices A, B and C built; the status-icon rules revised 2026-09-09; the Data stage and
+Slice C removed 2026-09-10, see below
 
 ## The problem
 
@@ -254,3 +255,27 @@ report says what was measured in a real browser against the real export, or it s
 
 The mobile note in section 6 applies to stages 1, 3 and 4. Headless Chromium cannot see the
 `vh`-versus-`dvh` class of bug, so any bottom-anchored change says only a real phone can confirm it.
+
+## Removed, 2026-09-10
+
+The Data stage and all of Slice C were removed on 2026-09-10. The operator ran the whole wizard
+against the real Zambia export and reached a working import. Their verdict: overkill. Every repair
+is made on the source file, and the step did not work on a phone.
+
+The stage was never on the forward path. `stepModel.ts`'s `furthestStep` returned 1, 3 or 4 and
+never 2. Step 2 was only ever reachable by clicking it in the strip.
+
+The problem the stage was built for was solved by Slice B instead. This spec's case was "you map
+blind". Slice B answered it by putting a column's unrecognised values in a worklist under the
+mapping row they belong to.
+
+The parked finding about the confirm gate not pinning the overlay it validated is closed by the
+removal, not by a fix. `facilities-routes.ts` records the original guarantee: `ConfirmSchema` has
+no `columnMap` key, so an apply runs with the same map its validate did, by construction rather
+than by any comparison. Slice C broke that by adding a mutable overlay the worker read twice.
+Removing the overlay restores it.
+
+Two things were deliberately kept, so a later reader does not think they were missed. Migration
+`091` stays, because it is recorded on running installs, with `092` undoing its effect. And
+`FacilityFileUnreadableError` stays, moved to `facility-column-values.ts`, because Slice B's
+column-values reader still throws it.

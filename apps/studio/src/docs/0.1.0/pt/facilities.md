@@ -18,19 +18,15 @@ do assistente de importação ou da CLI `openldr`.
 - Mantenha o ficheiro de origem aberto algures para comparar a sua linha de cabeçalhos com os
   campos do contrato abaixo.
 
-## Os quatro passos do assistente de importação
+## Os três passos do assistente de importação
 
-O assistente de importação tem quatro passos, numerados no topo: Origem, Dados, Mapeamento e
+O assistente de importação tem três passos, numerados no topo: Origem, Mapeamento e
 Revisão. Clique num passo dessa faixa para se mover entre eles. Não há um botão Voltar separado.
 
 - **Origem.** Escolha o ficheiro e o registo a que pertence. Se esta instalação ainda não tiver
   nenhum registo, o botão aqui mostra "Registar uma fonte" em vez de "Continuar". Sair de Origem
   envia o ficheiro para o servidor. O ficheiro fica guardado, ainda não verificado, porque ainda
   não existe nenhum mapeamento de colunas.
-- **Dados.** Mostra o ficheiro guardado como uma tabela, só de leitura. Nada é editável neste
-  passo. A tabela é paginada a partir do servidor, uma página de cada vez, e funciona da mesma
-  forma para um ficheiro CSV e para uma versão JSONL. Continuar avança para o Mapeamento. Não
-  envia nada: o ficheiro já está guardado.
 - **Mapeamento.** Todas as decisões vivem aqui: o mapeamento de colunas, os valores fixos, o que
   fazer com conflitos, ausências e remoções, e que palavras do próprio registo correspondem ao
   vocabulário. Cada linha também tem o seu próprio ícone de estado, descrito mais abaixo, para
@@ -133,32 +129,6 @@ sozinho assim que a verificação começa, antes de ela terminar. Se a verifica�
 problema no mapeamento de colunas, o assistente devolve-o ao Mapeamento e mostra os erros ali, para
 que possa corrigir o mapeamento no mesmo sítio.
 
-### Corrigir uma célula no passo Dados
-
-O passo Dados mostra o seu ficheiro como uma tabela. Clique numa célula para mudar o que ela diz.
-
-As suas alterações não são escritas de volta no ficheiro que enviou. Ficam guardadas à parte,
-contra o próprio ficheiro, por isso enviar o mesmo ficheiro outra vez mantém cada correção feita.
-Se o ficheiro mudar, as correções deixam de se aplicar, porque os números de linha que nomeiam já
-não querem dizer nada.
-
-Uma célula corrigida ganha um traço âmbar na margem esquerda e um botão para anular. Anular repõe
-o valor do ficheiro. Anular uma correção feita em toda a coluna repõe cada linha que essa correção
-mudou, não só a célula clicada.
-
-Corrigir uma célula numa coluna mapeada para `level`, `status` ou `country` faz uma pergunta, exceto quando
-a célula está vazia: mudar só esta linha, ou mudar todas as linhas que dizem a mesma coisa. Uma
-célula vazia não é uma categoria, por isso preenchê-la só muda essa linha. As categorias costumam
-repetir-se, por isso um valor corrigido uma vez costuma estar errado onde quer que apareça.
-
-Duas coisas que uma correção não pode fazer. Não pode recuperar uma linha cujo número de colunas
-não corresponde ao cabeçalho: essa linha é posta de lado antes de existir qualquer célula, por isso
-corrija-a no CSV. E não pode acrescentar nem remover uma linha. Uma linha que não deva ser importada
-é uma linha a remover do CSV.
-
-Corrigir uma célula torna a sua última verificação desatualizada. Verifique a coluna de novo,
-depois valide, antes de avançar para a Revisão.
-
 ## O que é um mapeamento de colunas
 
 O contrato de importação do OpenLDR tem um conjunto fixo de campos: `national_code` e `name`
@@ -214,11 +184,10 @@ podem examinar os cabeçalhos de um ficheiro e propor um mapeamento offline, sem
 servidor:
 
 - **No assistente:** abra **Unidades**, escolha **Importar**, selecione o ficheiro e escolha o
-  registo. Saia do passo Origem para carregar e guardar o ficheiro. O passo Dados mostra o ficheiro
-  como uma tabela em apenas leitura. O passo Mapeamento abre a seguir com uma sugestão já
-  preenchida. Cada linha começa com um ícone de estado âmbar, descrito mais acima, porque nada leu
-  ainda o ficheiro. Clique num ícone para verificar essa coluna, ou em Validar tudo para verificar
-  todas.
+  registo. Saia do passo Origem para carregar e guardar o ficheiro. O passo Mapeamento abre a
+  seguir com uma sugestão já preenchida. Cada linha começa com um ícone de estado âmbar, descrito
+  mais acima, porque nada leu ainda o ficheiro. Clique num ícone para verificar essa coluna, ou em
+  Validar tudo para verificar todas.
 - **A partir da CLI:** execute `openldr facilities suggest-map <path>`. Mostra o mesmo mapeamento
   sugerido em formato de tabela, assinala qualquer colisão que a própria sugestão causaria, e
   indica como devolver o resultado: `openldr facilities import <path> --column-map <file.json>`.

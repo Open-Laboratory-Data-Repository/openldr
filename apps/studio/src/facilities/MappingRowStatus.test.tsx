@@ -111,7 +111,7 @@ describe('MappingRowStatus', () => {
 
   // The operator's own wording: an unchecked row should read as "look at this", not as a pass.
   // Amber is the colour this feature already uses for "needs a decision" (ColumnMapStep's own
-  // worklist notice, DataGridStep's narrow-screen notice).
+  // worklist notice, Source's own missing-register notice).
   it('paints an unchecked row amber, not the green of a checked one', () => {
     const colourFor = (state: 'neutral' | 'valid'): string => {
       const { container, unmount } = render(

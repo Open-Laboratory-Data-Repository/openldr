@@ -5,9 +5,8 @@ import type { ImportStep } from './stepModel';
 
 const STEPS: { step: ImportStep; key: string }[] = [
   { step: 1, key: 'facilities.import.steps.source' },
-  { step: 2, key: 'facilities.import.steps.data' },
-  { step: 3, key: 'facilities.import.steps.mapping' },
-  { step: 4, key: 'facilities.import.steps.review' },
+  { step: 2, key: 'facilities.import.steps.mapping' },
+  { step: 3, key: 'facilities.import.steps.review' },
 ];
 
 export interface ImportStepsProps {

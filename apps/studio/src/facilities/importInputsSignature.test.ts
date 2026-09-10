@@ -8,7 +8,6 @@ const base: ImportInputs = {
   columnMapEdits: 0,
   allowUnknownColumns: false, allowInvalidCoordinates: false,
   valueMappingsSavedAt: 0,
-  cellEditsAt: 0,
 };
 
 // ⛔ A POLICY CHOICE IS IN NEITHER SIGNATURE. `runPreview` never sends onConflict/onAbsent/onDeleted;
@@ -34,13 +33,6 @@ describe('summarySignature', () => {
   ])('changes when %s changes', (_label, patch) => {
     expect(summarySignature({ ...base, ...patch } as ImportInputs)).not.toBe(summarySignature(base));
   });
-
-  // Slice C, Task 8: an edit changes what the file parses to, so a summary computed before it is
-  // no longer a claim about this file.
-  it('a cell edit changes the summary signature', () => {
-    expect(summarySignature({ ...base, cellEditsAt: 1 }))
-      .not.toBe(summarySignature({ ...base, cellEditsAt: 2 }));
-  });
 });
 
 describe('worklistSignature', () => {
@@ -60,14 +52,6 @@ describe('worklistSignature', () => {
     ['the complete-release flag', { completeRelease: true }],
   ])('does NOT change when %s changes', (_label, patch) => {
     expect(worklistSignature({ ...base, ...patch } as ImportInputs)).toBe(worklistSignature(base));
-  });
-
-  // ⛔ THE ONE THING THIS TASK DELIBERATELY DOES NOT INVALIDATE. Throwing the worklist away on an
-  // edit would drop every unsaved pick the operator has made. A stale entry stays listed instead;
-  // the row goes stale and the re-check the stale icon invites re-reads the column and drops it.
-  it('a cell edit does NOT change the worklist signature', () => {
-    expect(worklistSignature({ ...base, cellEditsAt: 1 }))
-      .toBe(worklistSignature({ ...base, cellEditsAt: 2 }));
   });
 
   it.each([

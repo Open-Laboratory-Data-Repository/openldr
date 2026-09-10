@@ -1,3 +1,13 @@
+> **PARKED, 2026-09-10.** This slice was built, merged at `416d2131`, and then removed along with
+> the Data step it served. The operator's call after running the whole wizard against the real
+> Zambia export: overkill, and every repair is made on the source file instead. The removal is its
+> own plan, `2026-09-10-remove-the-data-step.md`, and the reasoning is recorded in the spec.
+>
+> Nothing below is wrong. If cell editing is ever wanted again, this is the design to start from,
+> with three things already known: `csv-parse`'s `info.lines` names the line a record FINISHES on;
+> the paged read does not lowercase headers while `parseFacilityCsv` does; and a row quarantined for
+> its field count cannot be rescued by any edit.
+
 # Facility import cell edits (Slice C) Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

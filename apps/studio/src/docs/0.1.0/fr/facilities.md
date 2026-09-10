@@ -18,9 +18,9 @@ d'une correspondance de valeurs, depuis l'assistant d'importation ou la CLI `ope
 - Garder le fichier source ouvert quelque part pour comparer sa ligne d'en-têtes aux champs du
   contrat ci-dessous.
 
-## Les quatre étapes de l'assistant d'importation
+## Les trois étapes de l'assistant d'importation
 
-L'assistant d'importation a quatre étapes, numérotées en haut : Source, Données, Mappage et
+L'assistant d'importation a trois étapes, numérotées en haut : Source, Mappage et
 Vérification. Cliquez sur une étape dans cette bande pour passer de l'une à l'autre. Il n'y a pas
 de bouton Retour séparé.
 
@@ -28,10 +28,6 @@ de bouton Retour séparé.
   encore aucun registre, le bouton affiche ici « Enregistrer un registre » au lieu de « Continuer ».
   Quitter Source envoie le fichier au serveur. Il est seulement stocké, pas encore vérifié, car
   aucune correspondance de colonnes n'existe encore.
-- **Données.** Montre le fichier stocké sous forme de tableau, en lecture seule. Rien n'est
-  modifiable à cette étape. Le tableau est paginé depuis le serveur, une page à la fois, et
-  fonctionne de la même façon pour un fichier CSV et pour une version JSONL. Continuer passe au
-  Mappage. Rien n'est envoyé : le fichier est déjà stocké.
 - **Mappage.** Toutes les décisions se prennent ici : la correspondance de colonnes, les valeurs
   fixes, que faire des conflits, des absences et des suppressions, et quels mots du registre
   correspondent au vocabulaire. Chaque ligne porte aussi sa propre icône d'état, décrite plus bas,
@@ -139,34 +135,6 @@ ne se termine. Si la vérification trouve un problème dans la correspondance de
 l'assistant vous ramène à Mappage et affiche les erreurs à cet endroit, pour que vous puissiez
 corriger la correspondance sur place.
 
-### Corriger une cellule à l'étape Données
-
-L'étape Données montre votre fichier sous forme de tableau. Cliquez sur une cellule pour changer ce
-qu'elle dit.
-
-Vos changements ne sont pas réécrits dans le fichier importé. Ils sont enregistrés à part, contre
-le fichier lui-même, donc un nouvel import du même fichier garde chaque correction faite. Si le
-fichier change, les corrections cessent de s'appliquer, car les numéros de ligne qu'elles nomment
-ne veulent plus rien dire.
-
-Une cellule corrigée porte un trait ambre sur son bord gauche, et un bouton pour annuler. Annuler
-remet la valeur du fichier. Annuler une correction sur toute la colonne remet chaque ligne que
-cette correction a changée, pas seulement la cellule cliquée.
-
-Corriger une cellule dans une colonne mappée sur `level`, `status` ou `country` pose une question, sauf si
-la cellule est vide : changer cette ligne, ou changer toutes les lignes qui disent la même chose.
-Une cellule vide n'est pas une catégorie, donc la remplir ne change que cette ligne. Les catégories
-se répètent souvent, donc une valeur corrigée une fois est en général fausse partout où elle
-apparaît.
-
-Deux choses qu'une correction ne peut pas faire. Elle ne peut pas sauver une ligne dont le nombre de
-colonnes ne correspond pas à l'en-tête : cette ligne est mise de côté avant qu'aucune cellule
-n'existe, donc corrigez-la dans le CSV. Et elle ne peut ni ajouter ni retirer une ligne. Une ligne
-qui ne doit pas être importée est une ligne à retirer du CSV.
-
-Corriger une cellule rend votre dernière vérification périmée. Vérifiez de nouveau la colonne, puis
-validez, avant de passer à l'étape Vérification.
-
 ## Ce qu'est une correspondance de colonnes
 
 Le contrat d'import d'OpenLDR a un ensemble fixe de champs : `national_code` et `name`
@@ -227,10 +195,9 @@ ligne, sans aller-retour serveur :
 
 - **Dans l'assistant :** ouvrez **Établissements**, choisissez **Importer**, sélectionnez le fichier
   et choisissez le registre. Quittez l'étape Source pour envoyer et stocker le fichier. L'étape
-  Données affiche le fichier sous forme de tableau en lecture seule. L'étape Mappage s'ouvre ensuite
-  avec une suggestion déjà remplie. Chaque ligne démarre avec une icône d'état ambre, décrite plus
-  haut, car rien n'a encore lu le fichier. Cliquez sur une icône pour vérifier cette colonne, ou
-  sur Tout valider pour les vérifier toutes.
+  Mappage s'ouvre ensuite avec une suggestion déjà remplie. Chaque ligne démarre avec une icône
+  d'état ambre, décrite plus haut, car rien n'a encore lu le fichier. Cliquez sur une icône pour
+  vérifier cette colonne, ou sur Tout valider pour les vérifier toutes.
 - **Depuis la CLI :** exécutez `openldr facilities suggest-map <path>`. Elle affiche la même
   correspondance suggérée sous forme de tableau, signale toute collision que la suggestion
   provoquerait elle-même, et indique comment réinjecter le résultat :

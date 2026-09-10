@@ -16,17 +16,14 @@ own, using a column map and a value map, from either the import wizard or the `o
   register must always be named the same way.
 - Have the source file open somewhere so you can compare its header row to the contract fields below.
 
-## The four steps of the import wizard
+## The three steps of the import wizard
 
-The import wizard has four steps, numbered at the top: Source, Data, Mapping, and Review. Click a
+The import wizard has three steps, numbered at the top: Source, Mapping, and Review. Click a
 step in that strip to move between them. There is no separate Back button.
 
 - **Source.** Pick the file and the register it belongs to. If this install has no register yet,
   the button here reads Register a source instead of Continue. Leaving Source uploads the file.
   The file is stored, not checked, because no column map exists yet.
-- **Data.** Shows the stored file as a table, read only. Nothing on this step can be edited. The
-  table is paged from the server, one page at a time, and it works the same way for a CSV file and
-  a JSONL release. Continue moves on to Mapping. It sends nothing: the file is already stored.
 - **Mapping.** Every decision lives here: the column map, fixed values, what to do with conflicts,
   absences and deletions, and which of the register's own words map onto the vocabulary. Each row
   also carries its own status icon, described below, for a quick check of one column. Its main
@@ -126,31 +123,6 @@ own as soon as the check starts, before the check itself finishes. If the check 
 with the column map, the wizard sends you back to Mapping and shows the errors there, so you can
 fix the map in place.
 
-### Repairing a cell on the Data step
-
-The Data step shows your file as a table. Click a cell to change what it says.
-
-Your changes are not written back to the file you uploaded. They are recorded against
-the file itself, so uploading the same file again keeps every repair you made. Change the
-file and the repairs stop applying, because the line numbers they name no longer mean
-anything.
-
-A repaired cell gets an amber rule down its left edge and an undo button. Undo puts the
-file's own value back. Undoing a sweep puts back every row the sweep changed, not just
-the one cell you clicked.
-
-Repairing a cell in a column you mapped to `level`, `status` or `country` asks one question,
-unless the cell is blank: change this row, or change every row that reads the same thing.
-A blank is not a category, so filling one in changes only that row. Categories usually
-repeat, so a value you correct once is usually wrong everywhere it appears.
-
-Two things a repair cannot do. It cannot rescue a row whose column count does not match the
-header: that row is set aside before any cell exists, so fix it in the CSV. And it cannot add
-or remove a row. A row that should not be imported is a row to remove from the CSV.
-
-Repairing a cell makes your last check stale. Check the column again, then validate, before
-you go on to Review.
-
 ## What a column map is
 
 OpenLDR's import contract has a fixed set of fields: `national_code` and `name` (required), plus
@@ -202,10 +174,9 @@ You rarely have to build a column map by hand. Both the wizard and the CLI can l
 headers and propose a map offline, with no server round trip:
 
 - **In the wizard:** open **Facilities**, choose **Import**, select the file, and pick the register.
-  Leave Source to upload and store the file. The Data step shows the file as a read only table. The
-  Mapping step opens next with a suggested map already filled in. Every row starts with an amber
-  status icon, described above, because nothing has read the file yet. Click one to check that
-  column, or Validate all to check them all.
+  Leave Source to upload and store the file. The Mapping step opens next with a suggested map
+  already filled in. Every row starts with an amber status icon, described above, because nothing
+  has read the file yet. Click one to check that column, or Validate all to check them all.
 - **From the CLI:** run `openldr facilities suggest-map <path>`. It prints the same suggested map as
   a table, flags any collision the suggestion itself would cause, and tells you how to feed the
   result back in: `openldr facilities import <path> --column-map <file.json>`.

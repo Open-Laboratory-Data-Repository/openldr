@@ -36,7 +36,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore, createFacilityImportEditStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -986,13 +986,8 @@ const reporting: ReportingApi = {
   // a live server is mid-apply on. See `createFacilityImportWorkerIfEnabled`. The two workers built
   // above are deliberately NOT gated: what a CLI process takes over there is a re-queueable job.
   const facilityImportRuns: FacilityImportRunStore = createFacilityImportRunStore(internal.db);
-  // Slice C Task 4: a thin closure over `internal.db`, same as `facilityImportRuns` above. Task 5's
-  // routes construct their own store the same way (see `importRuns` in facilities-routes.ts). This
-  // one exists only so the worker can read a run's file through the operator's cell repairs.
-  const facilityImportEdits = createFacilityImportEditStore(internal.db);
   const facilityImportWorker = createFacilityImportWorkerIfEnabled(opts.runFacilityImportWorker === true, {
     runs: facilityImportRuns,
-    edits: facilityImportEdits,
     blob,
     // ⛔ `audit` belongs on BOTH this literal and the worker's own `audit` below, and they are not the
     // same event (whole-branch Critical 2). This one reaches `importFacilities`' Task 7 per-facility
@@ -1705,10 +1700,9 @@ export type {
   FacilitySample, FacilityChangeSample, FacilityImportBlockedReason,
 } from './facility-import';
 export {
-  readFileRows, FacilityFileUnreadableError,
-  type FileRowWindow, type ReadFileRowsOptions,
-} from './facility-file-rows';
-export { readColumnValues, type ColumnValues, type ReadColumnValuesOptions } from './facility-column-values';
+  readColumnValues, FacilityFileUnreadableError,
+  type ColumnValues, type ReadColumnValuesOptions,
+} from './facility-column-values';
 // FAC-P1-05: the source→canonical controlled-field layer `importFacilities` now runs over every
 // parsed record. Exported because `FacilityImportResult.unmapped`/`notValidated` are keyed/typed by
 // `ControlledField`, so the route and the CLI cannot name those types without it — and because an
