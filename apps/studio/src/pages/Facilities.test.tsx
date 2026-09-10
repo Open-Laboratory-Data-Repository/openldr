@@ -37,10 +37,6 @@ vi.mock('@/api', async (orig) => {
     // `stored` run). Stubbed here for the same "absent means every call throws" reason as the
     // three above.
     revalidateFacilityImportRun: vi.fn(),
-    // Task 6: Data's own grid (DataGridStep) reads the stored file's rows directly, stubbed here
-    // for the same reason as the three above: this page renders the real sheet, and the flow below
-    // passes through Data on its way to Mapping.
-    readFacilityImportRows: vi.fn(),
     // The Observed tab (Task 9) is its own component with its own test suite
     // (ObservedTab.test.tsx) — stubbed here only so switching tabs on THIS page doesn't reach the
     // real network; Radix Tabs unmounts the inactive TabsContent, so these are untouched by every
@@ -70,7 +66,7 @@ const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
 import { toast } from 'sonner';
-import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, revalidateFacilityImportRun, listFacilityImportSources, readFacilityImportRows, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
+import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, revalidateFacilityImportRun, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
@@ -190,13 +186,6 @@ describe('Facilities page', () => {
     (retryFacilityJob as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([HFR_SOURCE]);
-    // Task 6: Data's own grid (DataGridStep) fetches its own page the moment a run's `runId` is
-    // set, true for every test that clicks Continue on the import sheet, not only the ones about
-    // Data itself. An unmocked call has no `mockResolvedValue` and returns `undefined`, and
-    // `undefined.then` throws inside the effect.
-    (readFacilityImportRows as ReturnType<typeof vi.fn>).mockResolvedValue({
-      headers: [], rows: [], lines: [], offset: 0, limit: 100, total: 0,
-    });
     (expandValueSet as ReturnType<typeof vi.fn>).mockImplementation((id: string) =>
       Promise.resolve(id === 'vs-location-status' ? STATUS_CODES : LEVEL_CODES));
     (getFacilityHistory as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [] });

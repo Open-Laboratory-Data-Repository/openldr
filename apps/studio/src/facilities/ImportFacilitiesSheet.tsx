@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { MoreHorizontal, Upload } from 'lucide-react';
@@ -29,7 +29,6 @@ import {
   writeFacilityValueMappings,
   type ColumnMapError,
   type ColumnSuggestion,
-  type ControlledField,
   type FacilityColumnMap,
   type FacilityImportConfirmOptions,
   type FacilityImportResult,
@@ -38,9 +37,7 @@ import {
   type FacilityRegisterSource,
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
-import { CONTROLLED_FIELDS } from './controlledFields';
 import { pendingValueMappings, resolvedValueKey, useMappingCheckState } from './mappingCheckState';
-import { DataGridStep } from './DataGridStep';
 import { ImportPolicyPanel } from './ImportPolicyPanel';
 import { summarySignature, worklistSignature, type ImportInputs } from './importInputsSignature';
 import {
@@ -305,16 +302,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // suggestion must stick"). Debouncing, batching, or dropping this call makes the panel look broken
   // for reasons that are not in the panel.
   const [columnMap, setColumnMap] = useState<FacilityColumnMap>(EMPTY_COLUMN_MAP);
-  /** Source header -> the controlled field it maps to, for the headers that map to one. Empty
-   *  until the operator has mapped something, which is the ordinary state on a first pass through
-   *  Data. A cell in one of these opens the this-row-versus-everywhere choice. */
-  const controlledHeaders = useMemo(() => {
-    const out: Record<string, ControlledField> = {};
-    for (const [header, target] of Object.entries(columnMap?.columns ?? {})) {
-      if ((CONTROLLED_FIELDS as string[]).includes(target)) out[header] = target as ControlledField;
-    }
-    return out;
-  }, [columnMap]);
   /** ⛔ THE MAPPING STEP'S CHECK RESULTS LIVE HERE, NOT IN `ColumnMapStep`. That panel renders only
    *  while `step === 2`, so state it owned itself was destroyed by leaving Mapping and coming back,
    *  and rebuilt empty: a row the operator had just checked came back unchecked, and pick-list

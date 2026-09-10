@@ -948,29 +948,6 @@ export const en = {
       completeReleaseHint: 'Only a complete release lets rows this file is silent about be checked against the registry as absent.',
       releaseVersionLabel: 'Release version',
       releaseVersionPlaceholder: 'optional',
-      // ⛔ NO LONGER BLAMES THE CONNECTION. It used to read "Check the connection and open this step
-      // again", which sent an operator to look at their network over a bad line in their own file.
-      // What actually went wrong is shown underneath, in the server's own words.
-      rowsFailed: 'This file could not be read.',
-      rowsEmpty: 'This file has no rows.',
-      rowsEmptySkipped_one: '{{count}} line in this file could not be read, and none of the file could be shown. Line {{lines}}.',
-      rowsEmptySkipped_other: '{{count}} lines in this file could not be read, and none of the file could be shown. Lines {{lines}}.',
-      rowsSkipped_one: '{{count}} line in this file could not be read and is not shown. Line {{lines}}.',
-      rowsSkipped_other: '{{count}} lines in this file could not be read and are not shown. Lines {{lines}}.',
-      rowsDesktopOnly: 'This step needs a wider screen. Open this import on a desktop to read the file. The other steps work here.',
-      editCellLabel: 'Edit {{header}} on line {{line}}',
-      editUndo: 'Undo this change',
-      editUndoSweep: 'Undo this change everywhere in this column',
-      editScopeTitle: 'Change this value where?',
-      editScopeBody: 'The {{header}} column reads "{{from}}" here. You changed it to "{{to}}".',
-      editScopeRow: 'Just this row',
-      editScopeEverywhere: 'Every row that reads this value',
-      // Finding 1: a row whose column count does not match the header is quarantined before any
-      // repair can reach it, so the cell must say that rather than pretend to open.
-      raggedRowNote: 'This row cannot be repaired here. Its column count does not match the header. Fix it in the CSV.',
-      // Finding 2: a failed edit write gets its own message. `rowsFailed` above is for the READ
-      // that fills the table; this is for a PUT or DELETE against one cell that the server refused.
-      editWriteFailed: 'This change could not be saved.',
       noRowsFound: 'No facility rows were found in this file. Confirm it is a compatible CSV export before trying again.',
       noRowsFoundSkipped: '{{skipped}} row(s) in this file were skipped for missing required fields, and none were imported. Confirm it is a compatible CSV export before trying again.',
       unknownColumnsTitle: 'Unrecognised columns',
