@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "255662d9",
+          "type": "fix",
+          "scope": "dashboard",
+          "title": "A range variable survives a type change and back"
+        },
+        {
           "hash": "c3a62a48",
           "type": "fix",
           "scope": "dashboard",
