@@ -903,6 +903,80 @@ describe('terminology admin store', () => {
       expect(await s.codingSystems.getByUrl(REGISTER_URL)).toBeNull();
     });
 
+    // ── Guarding the delete against a half-removed vocabulary ─────────────────────────────────
+    //
+    // A live incident: an operator deleted a register's own facility-type system. Its concepts and
+    // its value set both survived, so imports kept resolving through it, but the system vanished
+    // from terminology and `addRegisterFacilityType` could never put it back, because that function
+    // creates the system only when the register's value set is ABSENT. The result was a working
+    // vocabulary nobody could see or manage. These guards refuse that delete instead.
+
+    it('refuses to delete a coding system a value set still includes', async () => {
+      const { s } = await store();
+      const sys = await s.codingSystems.create({
+        systemCode: 'LOCAL', systemName: 'Local', url: 'urn:x:local', active: true, publisherId: null,
+      });
+      await s.valueSets.save({
+        url: 'urn:x:vs', name: 'vs', title: null, description: null, category: null,
+        compose: { include: [{ system: 'urn:x:local' }] },
+      } as never);
+
+      await expect(s.codingSystems.delete(sys.id, { cascade: true }))
+        .rejects.toThrow(/value set/i);
+      expect(await s.codingSystems.getByUrl('urn:x:local')).not.toBeNull();
+    });
+
+    it('refuses to delete a coding system an active mapping still resolves into', async () => {
+      const { s } = await store();
+      const sys = await s.codingSystems.create({
+        systemCode: 'LOCAL', systemName: 'Local', url: 'urn:x:local', active: true, publisherId: null,
+      });
+      await s.termMappings.create({
+        fromSystem: 'urn:x:observed', fromCode: 'Raw Value',
+        toSystem: 'urn:x:local', toCode: 'raw-value', toDisplay: 'Raw Value',
+        mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+      });
+
+      await expect(s.codingSystems.delete(sys.id, { cascade: true }))
+        .rejects.toThrow(/mapping/i);
+      expect(await s.codingSystems.getByUrl('urn:x:local')).not.toBeNull();
+    });
+
+    it('allows the delete once the only mapping into it is inactive', async () => {
+      const { s } = await store();
+      const sys = await s.codingSystems.create({
+        systemCode: 'LOCAL', systemName: 'Local', url: 'urn:x:local', active: true, publisherId: null,
+      });
+      await s.termMappings.create({
+        fromSystem: 'urn:x:observed', fromCode: 'Raw Value',
+        toSystem: 'urn:x:local', toCode: 'raw-value', toDisplay: 'Raw Value',
+        mapType: 'SAME-AS', relationship: null, owner: null, isActive: false,
+      });
+
+      await s.codingSystems.delete(sys.id, { cascade: true });
+      expect(await s.codingSystems.getByUrl('urn:x:local')).toBeNull();
+    });
+
+    it('deletionImpact reports what would block the delete', async () => {
+      const { s } = await store();
+      const sys = await s.codingSystems.create({
+        systemCode: 'LOCAL', systemName: 'Local', url: 'urn:x:local', active: true, publisherId: null,
+      });
+      await s.valueSets.save({
+        url: 'urn:x:vs', name: 'vs', title: null, description: null, category: null,
+        compose: { include: [{ system: 'urn:x:local' }] },
+      } as never);
+      await s.termMappings.create({
+        fromSystem: 'urn:x:observed', fromCode: 'Raw Value',
+        toSystem: 'urn:x:local', toCode: 'raw-value', toDisplay: 'Raw Value',
+        mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+      });
+
+      const impact = await s.codingSystems.deletionImpact(sys.id);
+      expect(impact.valueSetsIncludingIt).toEqual(['urn:x:vs']);
+      expect(impact.activeMappingsIntoIt).toBe(1);
+    });
+
     // Evidence for leaving `term_mappings` out of `mappingCount`: the store is the ONLY writer of
     // `term_mappings` (grep: two `insertInto('term_mappings')` sites, both here), and both mirror
     // the row into `concept_map_elements`. A mapping naming the register url is therefore already

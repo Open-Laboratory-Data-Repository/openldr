@@ -146,7 +146,12 @@ export interface TerminologyAdminStore {
      *  ONLY for a facility register. It is what makes the preview honest for one: a register normally
      *  has no `terminology_concepts` and no `concept_map_elements` of its own, so the other two
      *  counts read 0 immediately before a delete that would orphan thousands of facilities. */
-    deletionImpact(id: string): Promise<{ termCount: number; mappingCount: number; facilityCount: number }>;
+    /** `valueSetsIncludingIt` and `activeMappingsIntoIt` are what the delete now REFUSES on, so a
+     *  caller can warn before the click instead of surfacing a 409 after it. */
+    deletionImpact(id: string): Promise<{
+      termCount: number; mappingCount: number; facilityCount: number;
+      valueSetsIncludingIt: string[]; activeMappingsIntoIt: number;
+    }>;
     /** ⛔ `seeded` DEFAULTS TO TRUE, and that default is load-bearing for every caller that omits it:
      *  a seeded system with no ingest job is protected from deletion (see `delete`). Pass `false`
      *  when a FEATURE conjured the system on an operator's behalf rather than an install seeding it,
@@ -266,6 +271,32 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
     if (row.kind !== FACILITY_REGISTER_KIND || !row.url) return 0;
     const r = await db.selectFrom('facility_registry').select((eb) => eb.fn.countAll<number>().as('n'))
       .where('facility_system', '=', row.url).executeTakeFirst();
+    return Number(r?.n ?? 0);
+  }
+
+  /** Value sets whose compose still names this system, by url.
+   *
+   * ⛔ SCANNED IN JS, not with a JSONB predicate. `compose` is JSONB and pg-mem, which every test of
+   * this store runs on, cannot plan a containment query over it. A delete is rare and the table
+   * holds hundreds of rows, not millions, so reading them is the cheaper correctness. `exclude` is
+   * scanned beside `include`: a set that excludes this system still breaks if it disappears.
+   */
+  async function valueSetsIncluding(url: string): Promise<string[]> {
+    const rows = await db.selectFrom('value_sets').select(['url', 'compose']).execute();
+    const named: string[] = [];
+    for (const r of rows) {
+      const compose = r.compose as { include?: unknown[]; exclude?: unknown[] } | null;
+      const clauses = [...(compose?.include ?? []), ...(compose?.exclude ?? [])];
+      if (clauses.some((c) => (c as { system?: string } | null)?.system === url)) named.push(r.url);
+    }
+    return named;
+  }
+
+  /** Active mappings resolving INTO this system. Its own SELECT for the same reason
+   *  `facilitiesFiledUnder` has one: pg-mem has no correlated-subquery support. */
+  async function activeMappingsInto(url: string): Promise<number> {
+    const r = await db.selectFrom('term_mappings').select((eb) => eb.fn.countAll<number>().as('n'))
+      .where('to_system', '=', url).where('is_active', '=', true).executeTakeFirst();
     return Number(r?.n ?? 0);
   }
 
@@ -565,6 +596,32 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             'conflict',
           );
         }
+        // ⛔ REFUSE A HALF-REMOVED VOCABULARY. Deleting this row does not delete the concepts keyed
+        // on its url, nor the value sets that name it, so the vocabulary keeps resolving while the
+        // system itself disappears from terminology. Worse, `addRegisterFacilityType`
+        // (packages/bootstrap) creates a register's system only when that register's value set is
+        // ABSENT, so a surviving set makes the system unrecreatable through the normal path. A live
+        // incident left exactly that: 12 concepts and a working value set behind a system nobody
+        // could see or restore. Refusing costs one extra step; the state it prevents had no exit.
+        if (row.url) {
+          const named = await valueSetsIncluding(row.url);
+          if (named.length > 0) {
+            throw new TerminologyAdminError(
+              `Cannot delete this coding system: the value set ${named[0]} still includes it. `
+              + 'Remove it from that value set first, or the set keeps expanding over a system '
+              + 'nothing can recreate.',
+              'conflict',
+            );
+          }
+          const into = await activeMappingsInto(row.url);
+          if (into > 0) {
+            throw new TerminologyAdminError(
+              `Cannot delete this coding system: ${into === 1 ? '1 active mapping resolves' : `${into} active mappings resolve`} into it. `
+              + 'Deactivate or delete them first.',
+              'conflict',
+            );
+          }
+        }
         const jobCount = Number(
           (await db.selectFrom('terminology_ingest_jobs').select((eb) => eb.fn.countAll<number>().as('n'))
             .where('coding_system_id', '=', id).executeTakeFirst())?.n ?? 0,
@@ -596,11 +653,15 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         if (!sys) throw new TerminologyAdminError(`coding system not found: ${id}`, 'not-found');
         const url = sys.url;
         const facilityCount = await facilitiesFiledUnder(sys);
-        if (!url) return { termCount: 0, mappingCount: 0, facilityCount };
+        if (!url) return { termCount: 0, mappingCount: 0, facilityCount, valueSetsIncludingIt: [], activeMappingsIntoIt: 0 };
         const t = await db.selectFrom('terminology_concepts').select((eb) => eb.fn.countAll<number>().as('n')).where('system', '=', url).executeTakeFirst();
         const m = await db.selectFrom('concept_map_elements').select((eb) => eb.fn.countAll<number>().as('n'))
           .where((eb) => eb.or([eb('source_system', '=', url), eb('target_system', '=', url)])).executeTakeFirst();
-        return { termCount: Number(t?.n ?? 0), mappingCount: Number(m?.n ?? 0), facilityCount };
+        return {
+          termCount: Number(t?.n ?? 0), mappingCount: Number(m?.n ?? 0), facilityCount,
+          valueSetsIncludingIt: await valueSetsIncluding(url),
+          activeMappingsIntoIt: await activeMappingsInto(url),
+        };
       },
       async upsertByUrl(input) {
         // Idempotency key is `url` (ON CONFLICT), not id: a row seeded by the migration
