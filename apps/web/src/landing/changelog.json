@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "c3a62a48",
+          "type": "fix",
+          "scope": "dashboard",
+          "title": "An insert chip lands the token at the caret, not in front of SELECT"
+        },
+        {
           "hash": "cbdc0895",
           "type": "fix",
           "scope": "dashboard",
