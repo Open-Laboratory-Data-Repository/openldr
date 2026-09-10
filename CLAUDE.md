@@ -56,8 +56,17 @@ Ask before fanning out on anything already going badly.
 
 ## Test gate
 
-- Full gate: `pnpm turbo run test`. **Never pipe turbo through `tail`.** It truncates the
-  failure list and hides which package failed.
+- Full gate: `pnpm turbo run test --force` AND `pnpm turbo run typecheck --force`.
+  **Never pipe turbo through `tail`.** It truncates the failure list and hides which package
+  failed.
+- **Force both halves, every time.** Forcing the tests beside a bare `turbo run typecheck`
+  is half a check: the typecheck replays a cache and reports every package green whatever
+  the tree actually says. A broken `@openldr/server` typecheck survived four pushes that way
+  on 2026-09-10, while its own tests stayed green the whole time.
+- **Never read `$?` through a pipe.** `tsc --noEmit | tail -4; echo "exit=$?"` reports
+  `tail`'s status, and `tail` always exits 0. Redirect first, then read the code:
+  `tsc --noEmit > /tmp/tc.txt 2>&1; echo "exit=$?"`. This reported a clean typecheck over a
+  failing one for a whole session.
 - A gate failure is usually a **timeout, not a regression.** Grep the output for
   `Test timed out` and re-run that package alone before blaming a change.
 - `apps/server` is the only package with real lint. It enforces the return/await
