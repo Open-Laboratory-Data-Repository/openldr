@@ -109,8 +109,13 @@ function buildFakeAdmin(): FakeAdmin {
       async deletionImpact(id) {
         const s = systems.find((x) => x.id === id);
         if (!s) throw adminErr(`not found: ${id}`, 'not-found');
-        // termCount/mappingCount are not modelled here — this fake counts facilities only.
-        return { termCount: 0, mappingCount: 0, facilityCount: facilitiesFiledUnder(s.url) };
+        // termCount/mappingCount are not modelled here: this fake counts facilities only.
+        // The two blocker fields are likewise unmodelled and report nothing blocking, so a test
+        // exercising the facility refusal above is unaffected by them.
+        return {
+          termCount: 0, mappingCount: 0, facilityCount: facilitiesFiledUnder(s.url),
+          valueSetsIncludingIt: [], activeMappingsIntoIt: 0,
+        };
       },
       async upsertByUrl() { /* no-op in fake */ },
       async getByUrl(url) { return systems.find((s) => s.url === url) ?? null; },
