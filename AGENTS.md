@@ -109,6 +109,12 @@ a `MoreHorizontal` `DropdownMenu`. Never a standalone Create/New button. Never a
 Refs: `pages/settings/Connectors.tsx` (header), `forms-builder/FieldEditorSheet.tsx`
 (sheet), `pages/Users.tsx` (row).
 
+**Sheets, not dialogs.** Every editing, detail, or multi-field surface is a `Sheet`. Reach for
+a `Dialog` only when a sheet does not fit, which means a confirm prompt, a type-to-confirm
+destructive step, an image lightbox, or a full-bleed editor that needs the whole viewport.
+If you use a `Dialog`, say in your reply why a sheet does not work. The operator stated this
+preference on 2026-09-10. Ref: `forms-builder/FieldEditorSheet.tsx`.
+
 **Form fields put the label left and the input right.**
 `grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3`. Not stacked labels.
 Textareas use `items-start`. Ref: `Connectors.tsx`.
