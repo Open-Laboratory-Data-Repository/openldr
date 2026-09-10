@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import i18n from '@/i18n';
 import { toast } from 'sonner';
 import { Terminology } from './Terminology';
 import * as api from '../api';
@@ -479,6 +480,25 @@ describe('Terminology page', () => {
     render(<MemoryRouter><Terminology /></MemoryRouter>);
     await openDeleteCodingSystem();
     expect(screen.getByText(/1 active mapping resolves into it/)).toBeInTheDocument();
+  });
+
+  // These dialogs were the last hardcoded English on this page. A French operator deleting a
+  // coding system got an English refusal, which is the "partial translation ships broken" case
+  // AGENTS.md section 6 names. Language is restored afterwards so the rest of the file stays en.
+  it('renders the refusal in French when the language is fr', async () => {
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({
+      termCount: 12, mappingCount: 12, facilityCount: 0,
+      valueSetsIncludingIt: ['urn:openldr:valueset:facility-type:urn_zmb_mfl'], activeMappingsIntoIt: 0,
+    });
+    await i18n.changeLanguage('fr');
+    try {
+      render(<MemoryRouter><Terminology /></MemoryRouter>);
+      await openDeleteCodingSystem();
+      expect(screen.getByText(/ne peut pas être supprimé/i)).toBeInTheDocument();
+      expect(screen.getByText(/jeu de valeurs/i)).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('a register with 1 facility reads in the singular', async () => {

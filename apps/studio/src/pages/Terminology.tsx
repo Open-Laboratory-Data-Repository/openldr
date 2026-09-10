@@ -305,22 +305,17 @@ export function Terminology(): JSX.Element {
     try {
       const impact = await publisherDeletionImpact(pub.id);
       setConfirm({
-        title: 'Delete publisher',
+        title: t('terminology.del.publisherTitle'),
         confirmName: pub.name,
-        confirmLabel: 'Delete',
-        summary: (
-          <span>
-            Permanently deletes &ldquo;{pub.name}&rdquo; with {impact.systemCount} code system(s) and{' '}
-            {impact.termCount} term(s). This action cannot be undone.
-          </span>
-        ),
+        confirmLabel: t('terminology.del.action'),
+        summary: <span>{t('terminology.del.publisherBody', { name: pub.name, systems: impact.systemCount, terms: impact.termCount })}</span>,
         onConfirm: async () => {
           try {
             await deletePublisher(pub.id);
             setConfirm(null);
             setSelectedPublisherId('');
             await reload();
-            toast.success(`Deleted publisher "${pub.name}".`);
+            toast.success(t('terminology.del.publisherDone', { name: pub.name }));
           } catch (e: unknown) {
             setConfirm(null);
             toast.error(e instanceof Error ? e.message : String(e));
@@ -346,36 +341,20 @@ export function Terminology(): JSX.Element {
       const namedBy = impact.valueSetsIncludingIt[0];
       const blocked = impact.facilityCount > 0 || !!namedBy || impact.activeMappingsIntoIt > 0;
       setConfirm({
-        title: 'Delete coding system',
+        title: t('terminology.del.systemTitle'),
         confirmName: sys.systemCode,
-        confirmLabel: 'Delete',
+        confirmLabel: t('terminology.del.action'),
         blocked,
+        // The singular and plural forms are i18next's job now (`_one`/`_other`), not a ternary:
+        // French and Portuguese do not agree with English on where the boundary falls.
         summary: impact.facilityCount > 0 ? (
-          <span>
-            &ldquo;{sys.systemCode}&rdquo; cannot be deleted:{' '}
-            {impact.facilityCount === 1 ? '1 facility is' : `${impact.facilityCount} facilities are`}{' '}
-            filed under this facility register. Their permanent ids were derived from its URL, so
-            deleting it would orphan every one of them.
-          </span>
+          <span>{t('terminology.del.systemBlockedFacilities', { count: impact.facilityCount, code: sys.systemCode })}</span>
         ) : namedBy ? (
-          <span>
-            &ldquo;{sys.systemCode}&rdquo; cannot be deleted: the value set {namedBy} still includes
-            it. Remove it from that value set first, or the set keeps expanding over a system
-            nothing can recreate.
-          </span>
+          <span>{t('terminology.del.systemBlockedValueSet', { code: sys.systemCode, valueSet: namedBy })}</span>
         ) : impact.activeMappingsIntoIt > 0 ? (
-          <span>
-            &ldquo;{sys.systemCode}&rdquo; cannot be deleted:{' '}
-            {impact.activeMappingsIntoIt === 1
-              ? '1 active mapping resolves'
-              : `${impact.activeMappingsIntoIt} active mappings resolve`}{' '}
-            into it. Deactivate or delete them first.
-          </span>
+          <span>{t('terminology.del.systemBlockedMappings', { count: impact.activeMappingsIntoIt, code: sys.systemCode })}</span>
         ) : (
-          <span>
-            Permanently deletes &ldquo;{sys.systemCode}&rdquo; with {impact.termCount} term(s) and{' '}
-            {impact.mappingCount} mapping(s). This action cannot be undone.
-          </span>
+          <span>{t('terminology.del.systemBody', { code: sys.systemCode, terms: impact.termCount, mappings: impact.mappingCount })}</span>
         ),
         onConfirm: async () => {
           try {
@@ -383,7 +362,7 @@ export function Terminology(): JSX.Element {
             setConfirm(null);
             setSelectedSystemId('');
             await reload();
-            toast.success(`Deleted coding system ${sys.systemCode}.`);
+            toast.success(t('terminology.del.systemDone', { code: sys.systemCode }));
           } catch (e: unknown) {
             setConfirm(null);
             toast.error(e instanceof Error ? e.message : String(e));
@@ -418,16 +397,16 @@ export function Terminology(): JSX.Element {
 
   const handleValueSetDelete = (vs: ValueSetSummary): void => {
     setConfirm({
-      title: 'Delete value set',
+      title: t('terminology.del.valueSetTitle'),
       confirmName: vs.title ?? vs.url,
-      confirmLabel: 'Delete',
-      summary: <span>Permanently delete &ldquo;{vs.title ?? vs.url}&rdquo;? This cannot be undone.</span>,
+      confirmLabel: t('terminology.del.action'),
+      summary: <span>{t('terminology.del.valueSetBody', { name: vs.title ?? vs.url })}</span>,
       onConfirm: async () => {
         try {
           await deleteValueSet(vs.id);
           setConfirm(null);
           await reload();
-          toast.success('Value set deleted.');
+          toast.success(t('terminology.del.valueSetDone'));
         } catch (e: unknown) {
           setConfirm(null);
           toast.error(e instanceof Error ? e.message : String(e));
@@ -545,20 +524,15 @@ export function Terminology(): JSX.Element {
   ): void => {
     if (!publisherId || !systemType) return;
     setConfirm({
-      title: 'Delete stored distribution',
+      title: t('terminology.del.distributionTitle'),
       confirmName: label,
-      confirmLabel: 'Delete',
-      summary: (
-        <span>
-          Deletes the retained <b>{label}</b> distribution .zip. Already-ingested terms and ontology are{' '}
-          <b>not</b> affected.
-        </span>
-      ),
+      confirmLabel: t('terminology.del.action'),
+      summary: <span>{t('terminology.del.distributionBody', { label })}</span>,
       onConfirm: async () => {
         try {
           await purgeTerminologyDistribution(publisherId, systemType);
           setConfirm(null);
-          toast.success('Stored distribution deleted.');
+          toast.success(t('terminology.del.distributionDone'));
         } catch (e: unknown) {
           setConfirm(null);
           toast.error(e instanceof Error ? e.message : String(e));

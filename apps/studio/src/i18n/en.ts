@@ -146,6 +146,30 @@ export const en = {
     vsColSource: 'Source',
     vsColCodes: 'Codes',
     vsColStatus: 'Status',
+    del: {
+      action: 'Delete',
+      publisherTitle: 'Delete publisher',
+      publisherBody: 'Permanently deletes “{{name}}” with {{systems}} code system(s) and {{terms}} term(s). This action cannot be undone.',
+      publisherDone: 'Deleted publisher “{{name}}”.',
+      systemTitle: 'Delete coding system',
+      systemBody: 'Permanently deletes “{{code}}” with {{terms}} term(s) and {{mappings}} mapping(s). This action cannot be undone.',
+      systemDone: 'Deleted coding system {{code}}.',
+      // The three refusals the store raises a 409 on. Each drops the confirm control, so the copy
+      // has to say what blocks the delete rather than what the delete would do.
+      systemBlockedFacilities_one: '“{{code}}” cannot be deleted: 1 facility is filed under this facility register. Their permanent ids were derived from its URL, so deleting it would orphan every one of them.',
+      systemBlockedFacilities_other: '“{{code}}” cannot be deleted: {{count}} facilities are filed under this facility register. Their permanent ids were derived from its URL, so deleting it would orphan every one of them.',
+      systemBlockedValueSet: '“{{code}}” cannot be deleted: the value set {{valueSet}} still includes it. Remove it from that value set first, or the set keeps expanding over a system nothing can recreate.',
+      systemBlockedMappings_one: '“{{code}}” cannot be deleted: 1 active mapping resolves into it. Deactivate or delete them first.',
+      systemBlockedMappings_other: '“{{code}}” cannot be deleted: {{count}} active mappings resolve into it. Deactivate or delete them first.',
+      valueSetTitle: 'Delete value set',
+      valueSetBody: 'Permanently delete “{{name}}”? This cannot be undone.',
+      valueSetDone: 'Value set deleted.',
+      distributionTitle: 'Delete stored distribution',
+      // The bold on "not" went when this moved into the bundle: the studio uses no <Trans>
+      // anywhere, and splitting a sentence around a tag breaks word order in other languages.
+      distributionBody: 'Deletes the retained {{label}} distribution .zip. Already-ingested terms and ontology are not affected.',
+      distributionDone: 'Stored distribution deleted.',
+    },
   },
   sites: {
     count_one: '{{count}} site',
