@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "4539ef1f",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Refuse to delete a coding system something still names"
+        },
+        {
           "hash": "a0bf3e37",
           "type": "fix",
           "scope": "studio",
