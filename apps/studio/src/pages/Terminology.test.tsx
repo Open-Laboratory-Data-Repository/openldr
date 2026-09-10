@@ -419,7 +419,7 @@ describe('Terminology page', () => {
   }
 
   it('a facility register with facilities filed under it: the dialog states the refusal and offers no Delete', async () => {
-    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 0, mappingCount: 0, facilityCount: 2 });
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 0, mappingCount: 0, facilityCount: 2, valueSetsIncludingIt: [], activeMappingsIntoIt: 0 });
     const deleteSpy = vi.spyOn(api, 'deleteCodingSystem').mockResolvedValue(undefined as never);
 
     render(<MemoryRouter><Terminology /></MemoryRouter>);
@@ -436,15 +436,60 @@ describe('Terminology page', () => {
     expect(deleteSpy).not.toHaveBeenCalled();
   });
 
+  // The store refuses these two the same way it refuses a register with facilities, so the dialog
+  // has to state them the same way: no counts, no "cannot be undone", no confirm control. Without
+  // this the operator types the system code to confirm a request that can only come back a 409.
+  it('a system a value set still includes: the dialog states the refusal and offers no Delete', async () => {
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({
+      termCount: 12, mappingCount: 12, facilityCount: 0,
+      valueSetsIncludingIt: ['urn:openldr:valueset:facility-type:urn_zmb_mfl'], activeMappingsIntoIt: 0,
+    });
+    const deleteSpy = vi.spyOn(api, 'deleteCodingSystem').mockResolvedValue(undefined as never);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    await openDeleteCodingSystem();
+
+    expect(screen.getByText(/urn:openldr:valueset:facility-type:urn_zmb_mfl still includes it/)).toBeInTheDocument();
+    expect(screen.queryByText(/Permanently deletes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot be undone/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('a system active mappings still resolve into: the dialog states the refusal and offers no Delete', async () => {
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({
+      termCount: 12, mappingCount: 12, facilityCount: 0,
+      valueSetsIncludingIt: [], activeMappingsIntoIt: 12,
+    });
+    const deleteSpy = vi.spyOn(api, 'deleteCodingSystem').mockResolvedValue(undefined as never);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    await openDeleteCodingSystem();
+
+    expect(screen.getByText(/12 active mappings resolve into it/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('one active mapping reads in the singular', async () => {
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({
+      termCount: 1, mappingCount: 1, facilityCount: 0,
+      valueSetsIncludingIt: [], activeMappingsIntoIt: 1,
+    });
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    await openDeleteCodingSystem();
+    expect(screen.getByText(/1 active mapping resolves into it/)).toBeInTheDocument();
+  });
+
   it('a register with 1 facility reads in the singular', async () => {
-    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 0, mappingCount: 0, facilityCount: 1 });
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 0, mappingCount: 0, facilityCount: 1, valueSetsIncludingIt: [], activeMappingsIntoIt: 0 });
     render(<MemoryRouter><Terminology /></MemoryRouter>);
     await openDeleteCodingSystem();
     expect(screen.getByText(/1 facility is filed under this facility register/)).toBeInTheDocument();
   });
 
   it('a coding system with no facilities: the delete copy and the type-to-confirm flow are unchanged', async () => {
-    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 7, mappingCount: 3, facilityCount: 0 });
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 7, mappingCount: 3, facilityCount: 0, valueSetsIncludingIt: [], activeMappingsIntoIt: 0 });
     const deleteSpy = vi.spyOn(api, 'deleteCodingSystem').mockResolvedValue(undefined as never);
 
     render(<MemoryRouter><Terminology /></MemoryRouter>);

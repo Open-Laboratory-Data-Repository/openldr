@@ -340,18 +340,36 @@ export function Terminology(): JSX.Element {
       // a request that can only come back as an error toast. `blocked` drops the input and the
       // Delete button, and the summary REPLACES the delete copy rather than appending to it — the
       // counts and "cannot be undone" would both be false when nothing is going to happen.
-      const blocked = impact.facilityCount > 0;
+      // Three refusals, same shape, in the store's own order (terminology-admin-store.ts's
+      // `delete`). Each one drops the confirm input and the Delete button, because the request
+      // behind them can only come back a 409.
+      const namedBy = impact.valueSetsIncludingIt[0];
+      const blocked = impact.facilityCount > 0 || !!namedBy || impact.activeMappingsIntoIt > 0;
       setConfirm({
         title: 'Delete coding system',
         confirmName: sys.systemCode,
         confirmLabel: 'Delete',
         blocked,
-        summary: blocked ? (
+        summary: impact.facilityCount > 0 ? (
           <span>
             &ldquo;{sys.systemCode}&rdquo; cannot be deleted:{' '}
             {impact.facilityCount === 1 ? '1 facility is' : `${impact.facilityCount} facilities are`}{' '}
             filed under this facility register. Their permanent ids were derived from its URL, so
             deleting it would orphan every one of them.
+          </span>
+        ) : namedBy ? (
+          <span>
+            &ldquo;{sys.systemCode}&rdquo; cannot be deleted: the value set {namedBy} still includes
+            it. Remove it from that value set first, or the set keeps expanding over a system
+            nothing can recreate.
+          </span>
+        ) : impact.activeMappingsIntoIt > 0 ? (
+          <span>
+            &ldquo;{sys.systemCode}&rdquo; cannot be deleted:{' '}
+            {impact.activeMappingsIntoIt === 1
+              ? '1 active mapping resolves'
+              : `${impact.activeMappingsIntoIt} active mappings resolve`}{' '}
+            into it. Deactivate or delete them first.
           </span>
         ) : (
           <span>

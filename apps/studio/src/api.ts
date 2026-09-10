@@ -2095,7 +2095,14 @@ export async function deleteCodingSystem(id: string): Promise<void> {
 // whose permanent ids were hashed from this system's url. A register carries no terms and usually no
 // concept-map elements, so without this the dialog reads "0 term(s) and 0 mapping(s)" over a delete
 // the server now refuses.
-export const systemDeletionImpact = (id: string) => authFetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number; facilityCount: number }>(r, 'impact'));
+/** What a coding-system delete would touch, and what would REFUSE it. `facilityCount`,
+ *  `valueSetsIncludingIt` and `activeMappingsIntoIt` are the three the store raises a 409 on
+ *  (packages/db/src/terminology-admin-store.ts), so the dialog reads them to state the refusal
+ *  instead of asking the operator to confirm a request that cannot succeed. */
+export const systemDeletionImpact = (id: string) => authFetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{
+  termCount: number; mappingCount: number; facilityCount: number;
+  valueSetsIncludingIt: string[]; activeMappingsIntoIt: number;
+}>(r, 'impact'));
 
 // Value sets (SP3)
 export interface ValueSetComposeConcept { code: string; display?: string }
