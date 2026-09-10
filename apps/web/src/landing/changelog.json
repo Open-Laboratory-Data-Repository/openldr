@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "ee49c833",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "The delete dialogs speak French and Portuguese"
+        },
+        {
           "hash": "4ff2402b",
           "type": "fix",
           "scope": "facilities",
