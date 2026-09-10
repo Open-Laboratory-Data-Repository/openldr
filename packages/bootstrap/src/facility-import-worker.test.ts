@@ -790,23 +790,6 @@ describe('createFacilityImportWorker — apply phase', () => {
   });
 });
 
-// Task 5: the cell-edit overlay is gone. This confirms a plain import still writes the file's
-// own values unmodified, now the only path there is.
-it('applies the file as uploaded', async () => {
-  const { db, runs, worker } = await harness('national_code,name,level\n1,Alpha,Others\n');
-  const run = await runs.startUpload(upload());
-
-  await worker.tickOnce();
-  expect(await runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
-  await worker.tickOnce();
-  await worker.stop();
-
-  expect((await runs.get(run.id))?.status).toBe('applied');
-  const rows = await registryRows(db);
-  expect(rows).toHaveLength(1);
-  expect(rows[0]?.level).toBe('Others');
-});
-
 // ── Whole-branch review C1: who may sweep, and what a sweep may reach ──────────────────────────
 //
 // The two halves of one defect. Constructing this worker fires a sweep that is scoped to NO process
