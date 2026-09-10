@@ -513,13 +513,12 @@ describe('Facilities page', () => {
     fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
     // Fix for the reachability regression (ImportFacilitiesSheet.tsx): Continue now stores the
-    // file (`validate=false`) and lands on Data, not Mapping directly. Mapping's own action reads
-    // "Validate all" here, not "Upload and validate", because `runId` is already set by Source's
-    // own store. See that button's own comment.
+    // file (`validate=false`) and lands on Mapping directly, since the Data step is gone.
+    // Mapping's own action reads "Validate all" here, not "Upload and validate", because
+    // `runId` is already set by Source's own store. See that button's own comment.
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Data/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /2\s*Mapping/ }))
       .toHaveAttribute('aria-current', 'step'));
-    fireEvent.click(screen.getByRole('button', { name: /3\s*Mapping/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Validate all' }));
     // ONE call: Source's own store. Mapping's validate goes through `revalidateFacilityImportRun`
     // instead (Task 6: the run this drives is `stored`, and that guard now accepts it).
