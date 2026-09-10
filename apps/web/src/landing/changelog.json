@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "cbdc0895",
+          "type": "fix",
+          "scope": "dashboard",
+          "title": "A widget variable states its tokens and refuses a mismatched filter"
+        },
+        {
           "hash": "6e3473d6",
           "type": "feat",
           "scope": "dashboard",
