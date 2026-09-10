@@ -453,8 +453,12 @@ export function WidgetEditorDialog({
       : [];
   const insertToken = (token: string) => {
     const text = `{{${token}}}`;
+    // An editor the author has never clicked into still reports a caret at offset 0, which put
+    // the token in front of SELECT and broke the query on the first click. Trust the caret only
+    // once the view holds focus; otherwise append.
     // The view→state sync effect pushes this back into CodeMirror, so state stays the source.
-    const at = view.current?.state.selection.main.to ?? sqlText.length;
+    const v = view.current;
+    const at = v?.hasFocus ? v.state.selection.main.to : sqlText.length;
     setSqlText(sqlText.slice(0, at) + text + sqlText.slice(at));
   };
   const previewConfig: WidgetConfig = { id: 'preview', type, title, query: { mode: 'sql', sql: sqlText }, refreshIntervalSec: 0, visual };
@@ -530,6 +534,10 @@ export function WidgetEditorDialog({
                   {availableFilterTokens.map((tok) => (
                     <button
                       key={tok}
+                      // A button takes focus on mousedown, which blurs CodeMirror and loses the
+                      // caret before onClick runs. Keeping focus is what makes the insert land
+                      // where the author was typing instead of always at the end.
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => insertToken(tok)}
                       aria-label={`${t('widgetEditor.insertToken')} {{${tok}}}`}
                       className="inline-flex items-center gap-1 rounded border border-dashed border-border bg-transparent px-2 py-0.5 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent"

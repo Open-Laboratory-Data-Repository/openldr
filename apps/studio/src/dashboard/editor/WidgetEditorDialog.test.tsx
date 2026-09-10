@@ -52,6 +52,26 @@ describe('WidgetEditorDialog', () => {
       expect((getByLabelText('SQL') as HTMLTextAreaElement).value).toContain('{{period_from}}');
     });
 
+    // A button takes focus on mousedown, which would blur CodeMirror and destroy the caret
+    // before the click handler runs, making every insert an append.
+    it('does not take focus off the editor', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+      render(<WidgetEditorDialog open sqlEnabled initial={sqlWidget} dashboardFilters={[period]} onClose={() => {}} onSave={() => {}} />);
+      const chip = screen.getByRole('button', { name: /insert \{\{period_from\}\}/i });
+      const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+      chip.dispatchEvent(down);
+      expect(down.defaultPrevented).toBe(true);
+    });
+
+    // An editor nobody has clicked into reports a caret at offset 0, so trusting it put the
+    // token in front of SELECT and broke the query on the very first click.
+    it('appends when the editor has never been focused', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+      const { getByLabelText } = render(<WidgetEditorDialog open sqlEnabled initial={sqlWidget} dashboardFilters={[period]} onClose={() => {}} onSave={() => {}} />);
+      fireEvent.click(screen.getByRole('button', { name: /insert \{\{period_from\}\}/i }));
+      expect((getByLabelText('SQL') as HTMLTextAreaElement).value).toBe('select 42 as value{{period_from}}');
+    });
+
     it('drops a token the SQL already uses', () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
       const used: WidgetConfig = { ...sqlWidget, query: { mode: 'sql', sql: 'select 42 as value where d >= {{period_from}}' } };
@@ -69,7 +89,12 @@ describe('WidgetEditorDialog', () => {
 
   describe('Variables sheet', () => {
     const RANGE_SQL = 'select 42 as value where d >= {{period_from}} and d <= {{period_to}}';
-    const openVariables = () => fireEvent.click(screen.getByText('{{period}}'));
+    // Opening the sheet mounts a Radix portal. Wait for a control that only exists inside it,
+    // so no assertion races the mount. One gate run failed here while single runs passed.
+    const openVariables = async () => {
+      fireEvent.click(screen.getByText('{{period}}'));
+      await screen.findByLabelText('Dashboard filter');
+    };
 
     function renderWith(sql: string, variables: Record<string, unknown>, opts: {
       bindings?: Record<string, string>;
@@ -87,34 +112,34 @@ describe('WidgetEditorDialog', () => {
 
     // The sheet used to head this variable `{{period}}`, which is the one token that cannot
     // resolve. It names the variable, not what you write in SQL.
-    it('heads a date-range variable with both real tokens', () => {
+    it('heads a date-range variable with both real tokens', async () => {
       renderWith(RANGE_SQL, periodRange);
-      openVariables();
+      await openVariables();
       expect(screen.getByText('{{period_from}}')).toBeInTheDocument();
       expect(screen.getByText('{{period_to}}')).toBeInTheDocument();
     });
 
-    it('warns when the bound filter is a different type', () => {
+    it('warns when the bound filter is a different type', async () => {
       renderWith(RANGE_SQL, periodRange, {
         bindings: { period: 'test' },
         filters: [{ id: 'test', label: 'Test', type: 'text' }],
       });
-      openVariables();
+      await openVariables();
       expect(screen.getByText(/type mismatch/i)).toBeInTheDocument();
     });
 
-    it('stays quiet when the bound filter matches', () => {
+    it('stays quiet when the bound filter matches', async () => {
       renderWith(RANGE_SQL, periodRange, {
         bindings: { period: 'period' },
         filters: [{ id: 'period', label: 'Period', type: 'date-range' }],
       });
-      openVariables();
+      await openVariables();
       expect(screen.queryByText(/type mismatch/i)).not.toBeInTheDocument();
     });
 
-    it('warns when a date-range variable is written as a bare token', () => {
+    it('warns when a date-range variable is written as a bare token', async () => {
       renderWith('select 42 as value where d >= {{period}}', periodRange);
-      openVariables();
+      await openVariables();
       expect(screen.getByText(/only to its .*_from.* and .*_to/i)).toBeInTheDocument();
     });
 
@@ -138,9 +163,9 @@ describe('WidgetEditorDialog', () => {
       expect(screen.queryByTitle(/will not resolve/i)).not.toBeInTheDocument();
     });
 
-    it('stays quiet on a one-sided range', () => {
+    it('stays quiet on a one-sided range', async () => {
       renderWith('select 42 as value where d >= {{period_from}}', periodRange);
-      openVariables();
+      await openVariables();
       expect(screen.queryByText(/only to its .*_from.* and .*_to/i)).not.toBeInTheDocument();
     });
   });
