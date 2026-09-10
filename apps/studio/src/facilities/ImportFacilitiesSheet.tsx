@@ -1071,7 +1071,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     hasStoredFile: runId !== null,
     // ⛔ `summaryAt === currentSummarySignature` is what makes this "a summary that MATCHES THE
     // INPUTS", not merely "a summary exists". Change the file, the register, the map, a fixed
-    // value, an override or a policy and this goes false, `furthestStep` returns 3 and `clampStep`
+    // value, an override or a policy and this goes false, `furthestStep` returns 2 and `clampStep`
     // pulls the operator back to Mapping. That is the safety half of this slice: Review is either
     // current or absent, and never a number that is no longer true.
     //
@@ -1719,7 +1719,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               )}
               {/* Round-2 fix: the refusal that keeps this panel mounted needs its OWN explanation
                   HERE too. `ReconciliationSummary`'s copy of this same block only ever renders on
-                  Review (step 4, renumbered by the reachability fix above). A column-map
+                  Review (step 3, renumbered by the reachability fix above). A column-map
                   refusal no longer reaches Review at all (see the auto-advance effect's
                   `columnMapRefused` guard), so without this the operator
                   would see the panel with no reason given for why it is still here. Same
@@ -1732,7 +1732,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </div>
           )}
 
-          {/* Whole-branch review, FINDING 2: step 3 (Mapping, renumbered by the reachability fix
+          {/* Whole-branch review, FINDING 2: step 2 (Mapping, renumbered by the reachability fix
               above) with nothing on it. `columnMapPanelShown` covers five distinct states with one
               gate: a JSONL release, an applied run, a run or a summary that is not a column-map
               refusal, and the brief window while `File.text()` is still resolving. Every one
