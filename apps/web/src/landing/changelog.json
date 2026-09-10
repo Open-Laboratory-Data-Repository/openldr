@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "a0bf3e37",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Facilities.test.tsx waits on the real 2-Mapping step"
+        },
+        {
           "hash": "5b931b18",
           "type": "fix",
           "scope": "",
