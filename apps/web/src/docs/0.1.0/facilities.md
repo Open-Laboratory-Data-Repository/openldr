@@ -56,10 +56,9 @@ no-op.
 }
 ```
 
-## The import wizard's four steps
+## The import wizard's three steps
 
-The Studio wizard has four steps: Source (pick the file and register), Data (the stored file as a
-read-only table, paged from the server, with a Continue that only moves on), Mapping (every
+The Studio wizard has three steps: Source (pick the file and register), Mapping (every
 decision: the column map, fixed values,
 what to do with conflicts, absences and deletions, and the value map), and Review (a read-only
 report of what the check found, plus Apply).
@@ -116,21 +115,6 @@ fix one column map. Headless installs get the same thing as
 summary that no longer matches what is about to be imported is never left on screen. The conflict,
 absent and deleted choices are the exception: they are applied at import time rather than when the
 file is read, so they cannot change what a check found and do not discard it.
-
-### Repairing a cell on the Data step
-
-The Data step's table is editable for a CSV file. Click a cell to change what it says. The edit is
-stored against the file, not written back into it, so re-uploading the same file keeps every
-repair. Change the file and the repairs stop applying, since the line numbers they name no longer
-match.
-
-A repaired cell shows an amber rule and an undo button. Undoing a sweep puts back every row the
-sweep changed, not just the one cell you clicked. Editing a cell mapped to `level`, `status` or
-`country` asks whether to change just that row or every row with the same value, unless the cell is blank: a
-blank is not a category, so filling one in changes only that row. Otherwise a bad category value
-usually repeats. A repair cannot rescue a row with the wrong column count, and cannot add or remove
-a row; both go back to the CSV. Repairing a cell makes the last check stale, so re-check the column
-and validate before Review.
 
 ## Getting a suggested map
 
