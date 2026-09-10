@@ -187,11 +187,6 @@ export interface ColumnMapStepProps {
    *  were lost outright. Omitting it falls back to panel-owned state, which is right for a
    *  standalone render (this component's own tests) and wrong inside the wizard. */
   checkState?: MappingCheckState;
-  /** How many times the Data grid has written or undone a cell edit (Slice C). Stamped onto every
-   *  `RowCheck` this panel writes, so a later edit makes that row's answer `stale` even though its
-   *  target never moved. Defaults to 0 so this panel still works standalone, in its own tests and
-   *  in any caller that has no grid to bump it. */
-  cellEditsAt?: number;
 }
 
 /** The column-mapping panel — one row per file header, a `Select` over the 16 contract fields, and
@@ -208,7 +203,6 @@ export interface ColumnMapStepProps {
 export function ColumnMapStep({
   headers, suggestions, value, runId, onChange, onValidityChange,
   unmappedByField, nationalSystem, registerName, onValueMappingsSaved, checkState,
-  cellEditsAt = 0,
 }: ColumnMapStepProps): JSX.Element {
   const { t } = useTranslation();
 
@@ -433,7 +427,7 @@ export function ColumnMapStep({
         // sign. `name` and `national_code` are the two REQUIRED fields of every import, and
         // thousands of distinct values in them is the CORRECT case, not a finding. This must be
         // checked before `truncated` below, which is a controlled-field-only signal.
-        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, truncated: false, distinct, editsAt: cellEditsAt } }));
+        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, truncated: false, distinct } }));
         return;
       }
       if (truncated) {
@@ -441,7 +435,7 @@ export function ColumnMapStep({
         // field: `level`/`status`/`country` each draw on a small, bound vocabulary, so a column
         // this large cannot really belong to one. Report the count, never the sample: listing
         // 200 of 3,788 values would look like the whole picture.
-        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, truncated: true, distinct, editsAt: cellEditsAt } }));
+        setCheckedByHeader((prev) => ({ ...prev, [header]: { target, truncated: true, distinct } }));
         return;
       }
       const ranked = await suggestValueMappings(target as ControlledField, values, nationalSystem ?? '');
@@ -475,7 +469,6 @@ export function ColumnMapStep({
           ...prev,
           [header]: {
             target, truncated: false, distinct, values: merged, options: ranked.options ?? [],
-            editsAt: cellEditsAt,
           },
         };
       });
@@ -540,7 +533,6 @@ export function ColumnMapStep({
             [header]: {
               target: field, truncated: false, distinct: merged.length,
               values: merged, options: res.options ?? [],
-              editsAt: cellEditsAt,
             },
           };
         });
@@ -652,9 +644,9 @@ export function ColumnMapStep({
           const confidenceForSelected = top && top.target === selected ? top.confidence : null;
           const collidesHere = collisions.some((c) => c.a === header || c.b === header);
           const check = checkedByHeader[header];
-          // A row goes stale when its TARGET moved, or when a cell edit changed what the column
-          // holds. Both mean the last answer describes something that is no longer being imported.
-          const stale = !!check && (check.target !== selected || check.editsAt !== cellEditsAt);
+          // A row goes stale when its TARGET moved. That is the only thing that can change what a
+          // check would answer now: the file itself is immutable once stored.
+          const stale = !!check && check.target !== selected;
           // Final review, C1: derived, never stored. See `unresolvedCount`'s own docblock.
           const unrecognised = check ? unresolvedCount(check, resolvedValues) : 0;
           // Task 6: the worklist this row shows, if any. Never a stale one: a header just

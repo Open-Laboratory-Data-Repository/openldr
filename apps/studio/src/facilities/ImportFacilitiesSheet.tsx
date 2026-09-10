@@ -309,10 +309,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  describes the file this run is importing, which is the sheet's own subject.
    *  `selectFile` below is the one place it is thrown away. */
   const checkState = useMappingCheckState();
-  /** Bumped by the Data grid on every successful edit write or undo. Feeds `summarySignature`, so a
-   *  validated summary computed before the edit stops matching and Review falls away, and feeds
-   *  every row's `stale`, so the mapping step invites the re-check that would answer differently. */
-  const [cellEditsAt, setCellEditsAt] = useState(0);
   // The current file's header row and this app's own ranked suggestions for it — CSV only (see the
   // effect below); a JSONL release never renders `ColumnMapStep` at all (a map for one is meaningless
   // — Task 3's own doc comment on `FacilityImportOptions.columnMap`).
@@ -546,9 +542,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     // also why it happened on an ordinary trip to Data, where it was flatly wrong. Now the sheet
     // owns it and discards it exactly here, at the one event that really does invalidate it.
     checkState.reset();
-    // (4) And the edit count itself. A new file has no edits on it yet, and a stale counter left
-    // over from the old one would make the new file's own first check read as already stale.
-    setCellEditsAt(0);
     // A2b: a new file starts a new import in every sense. The picker is disabled while a run is
     // live (see `inputsDisabled`), so this only ever discards a run that has already finished.
     setRunId(null);
@@ -1035,7 +1028,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     allowUnknownColumns,
     allowInvalidCoordinates,
     valueMappingsSavedAt,
-    cellEditsAt,
   };
   const currentSummarySignature = summarySignature(inputs);
 
@@ -1708,7 +1700,6 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 // guarded by `worklistSignature`. See `ImportPolicyPanel`'s own `findings` prop,
                 // fed the exact same value for the exact same reason.
                 checkState={checkState}
-                cellEditsAt={cellEditsAt}
                 unmappedByField={liveFindings?.unmapped}
                 nationalSystem={nationalSystem.trim()}
                 // Task 6 (Slice B): the friendly name for `AddFacilityTypeDialog`'s own
