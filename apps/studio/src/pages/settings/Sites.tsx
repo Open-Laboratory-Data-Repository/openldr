@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Copy, MoreHorizontal, Building2 } from 'lucide-react';
+import { useAuth } from '@/auth/AuthProvider';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +43,8 @@ interface Reveal {
 
 export function Sites() {
   const { t } = useTranslation();
+  const { authCapabilities } = useAuth();
+  const syncClientAdmin = authCapabilities?.syncClientAdmin ?? true;
   const [rows, setRows] = useState<SyncSiteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
@@ -198,13 +201,14 @@ export function Sites() {
                   <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('sites.actions')}><MoreHorizontal className="h-4 w-4" /></Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={openEnroll}>{t('sites.enroll')}</DropdownMenuItem>
+                  {syncClientAdmin && <DropdownMenuItem onClick={openEnroll}>{t('sites.enroll')}</DropdownMenuItem>}
                   <DropdownMenuItem onClick={() => void doDownloadCert()}>{t('sites.downloadCert')}</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { void load(); }}>{t('sites.refresh')}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             }
           />
+          {!syncClientAdmin && <p className="px-3 py-2 text-xs text-muted-foreground">{t('sites.adminUnavailable')}</p>}
           <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
         </div>
 
@@ -225,7 +229,7 @@ export function Sites() {
                   <TableRow key={s.siteId}>
                     {table.visibleColumns.map((c) => <TableCell key={c.id} className={c.cellClassName}>{c.accessor(s)}</TableCell>)}
                     <TableCell>
-                      <div className="flex items-center justify-end">
+                      {syncClientAdmin && <div className="flex items-center justify-end">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" aria-label={t('sites.actionsFor', { siteId: s.siteId })}><MoreHorizontal className="h-4 w-4" /></Button>
@@ -241,7 +245,7 @@ export function Sites() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      </div>
+                      </div>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -256,7 +260,7 @@ export function Sites() {
                 icon={<Building2 className="h-6 w-6" />}
                 title={t('sites.emptyTitle')}
                 body={t('sites.emptyBody')}
-                action={<Button onClick={openEnroll}>{t('sites.enroll')}</Button>}
+                action={syncClientAdmin ? <Button onClick={openEnroll}>{t('sites.enroll')}</Button> : undefined}
               />
             ) : (
               <StripedEmpty className="flex-1">{t('sites.noMatch')}</StripedEmpty>

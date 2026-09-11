@@ -34,6 +34,7 @@ export const pt: EnShape = {
   }
 },
   common: {
+    localSignout: "Sessão terminada neste navegador. A sessão do provedor de identidade pode continuar ativa.",
     delete: 'Eliminar',
     save: 'Guardar',
     cancel: 'Cancelar',
@@ -98,6 +99,8 @@ export const pt: EnShape = {
     },
   },
   users: {
+    editRole: "Editar função",
+    identityAdminUnavailable: "Contacte o administrador do provedor de identidade para criar utilizadores, editar perfis, repor palavras-passe ou terminar sessões. As funções e o acesso OpenLDR continuam disponíveis.",
     directorySearch: "Pesquisar utilizador, nome ou e-mail",
     directoryAll: "Todos os estados",
     directoryOrder: "Ordem do fornecedor. A pesquisa e o estado aplicam-se a todo o diretório.",
@@ -206,6 +209,7 @@ export const pt: EnShape = {
     },
   },
   sites: {
+    adminUnavailable: "O registo de sites e a alteração de credenciais requerem a administração de clientes Keycloak.",
     count_one: '{{count}} site',
     count_other: '{{count}} sites',
     title: 'Sites',

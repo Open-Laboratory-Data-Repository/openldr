@@ -63,7 +63,7 @@ bundled containers; change them only when pointing at external infrastructure.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | `keycloak` | Identity provider backing sign-in. |
+| `AUTH_ADAPTER` | `keycloak` | Sign-in mode: `keycloak` or `oidc`. See [Authentication providers](/docs/auth-providers). |
 | `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. |
 | `EVENTING_ADAPTER` | `pg` | Event store used by workflow triggers. |
 | `TARGET_STORE_ADAPTER` | `pg` | Analytics warehouse engine: `pg`, `mssql`, or `mysql`. |
@@ -84,15 +84,14 @@ external storage instead.
 
 ## Authentication (Keycloak / OIDC)
 
-Sign-in runs through Keycloak. The installer registers this deployment's origin as a
-valid OIDC redirect automatically; you only touch these when using an external identity
-provider.
+Keycloak is the default. Generic OIDC uses discovery and JWT access tokens. See [Authentication providers](/docs/auth-providers) for setup, administration limits and issuer protection.
 
 | Variable | Purpose |
 | --- | --- |
-| `OIDC_ISSUER_URL` | Public issuer URL of the realm. |
-| `OIDC_INTERNAL_ISSUER_URL` | In-cluster realm base URL. Server-side token/admin/JWKS calls use it instead of the public issuer. |
-| `OIDC_INTERNAL_JWKS_URL` | In-cluster JWKS endpoint the API validates tokens against. |
+| `IDENTITY_ADMIN_ADAPTER` | `keycloak` or `none`; defaults to `keycloak` for Keycloak auth, `none` for generic OIDC. |
+| `OIDC_ISSUER_URL` | Public issuer URL. Keep the existing value on upgrade; later changes block startup. |
+| `OIDC_INTERNAL_ISSUER_URL` | Keycloak-only internal realm base URL. Generic OIDC ignores this value. |
+| `OIDC_INTERNAL_JWKS_URL` | Explicit internal signing-key endpoint override. Does not change the expected issuer. |
 | `TLS_CERT_PATH` | Path to this server's public TLS certificate (PEM). When set, the Sites page can offer it for download so a remote lab can trust a self-signed central. The installer mounts the certificate and sets this automatically. |
 | `OIDC_AUDIENCE` | Expected token audience. |
 | `OIDC_WEB_CLIENT_ID` | Public client ID the studio app authenticates with. |

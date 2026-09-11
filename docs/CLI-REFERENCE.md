@@ -41,6 +41,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr report-def list/delete` | Manage data-driven report definitions. |
 | `openldr report-design list/delete` | Manage Report Designer page designs. |
 | `openldr audit list` | Query append-only audit events. |
+| `openldr auth rebind-issuer --force` | Bind the database to a new `OIDC_ISSUER_URL` after the same provider moved address. Refuses without `--force`. Not for switching providers. |
 | `openldr users list` / `openldr user ...` | Manage local users and roles. |
 | `openldr roles ...` | Manage capability roles. `roles doctor` reports capability drift against the built-in role definitions. |
 | `openldr settings flags/numbers/sync/danger ...` | Read/write feature flags, numeric limits, sync config, and danger-zone actions. |

@@ -28,7 +28,8 @@ function formatDate(iso: string | null): string {
 
 export function Users() {
   const { t } = useTranslation();
-  const { user: me } = useAuth();
+  const { user: me, authCapabilities } = useAuth();
+  const identityAdmin = authCapabilities?.identityAdmin ?? true;
   const [rows, setRows] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -110,11 +111,11 @@ export function Users() {
                 <Button variant="ghost" size="icon" aria-label={`Actions for ${u.username}`}><MoreHorizontal className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setEditing(u)}>{t('users.edit')}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setEditing(u)}>{t(identityAdmin ? 'users.edit' : 'users.editRole')}</DropdownMenuItem>
                 <DropdownMenuItem disabled={isSelf} onClick={() => { if (!isSelf) setPendingToggle(u); }} className={u.enabled ? 'text-destructive focus:text-destructive' : ''}>
                   {u.enabled ? t('users.disable') : t('users.enable')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setResetting(u); }}>
+                {identityAdmin && <><DropdownMenuItem onClick={() => { setResetting(u); }}>
                   {t('users.resetPassword')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => { void doSendResetEmail(u); }}>
@@ -122,13 +123,13 @@ export function Users() {
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={isSelf} onClick={() => { if (!isSelf) setPendingLogout(u); }} className="text-destructive focus:text-destructive">
                   {t('users.forceSignOut')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
-                </DropdownMenuItem>
+                </DropdownMenuItem></>}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         );
       }, type: 'text', defaultVisible: true, sortable: false, filterable: false, headClassName: 'w-16' },
-  ], [me?.id, t, doSendResetEmail]);
+  ], [me?.id, t, doSendResetEmail, identityAdmin]);
 
   const table = useTableState({ columns });
 
@@ -156,7 +157,7 @@ export function Users() {
                 <Button variant="ghost" size="icon" className="h-8 w-8 sm:order-last sm:ml-auto" aria-label="User actions"><MoreHorizontal className="h-4 w-4" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setCreateOpen(true)}>{t('users.newUser')}</DropdownMenuItem>
+                {identityAdmin && <DropdownMenuItem onClick={() => setCreateOpen(true)}>{t('users.newUser')}</DropdownMenuItem>}
                 <DropdownMenuItem onClick={() => { void load(); }}>{t('users.refresh')}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -173,6 +174,7 @@ export function Users() {
             </div>
           </div>
           <p className="text-xs text-muted-foreground">{t('users.directoryOrder')}</p>
+          {!identityAdmin && <p className="text-xs text-muted-foreground">{t('users.identityAdminUnavailable')}</p>}
           {toast ? <div className={toast.kind === 'ok' ? 'rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700' : 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'}>{toast.text}</div> : null}
         </div>
 
@@ -200,7 +202,7 @@ export function Users() {
         <TablePagination page={page} pageSize={pageSize} total={null} rowCount={rows.length} hasMore={!loading && hasMore} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(0); }} />
 
         <UserDialog open={createOpen} onOpenChange={setCreateOpen} user={null} onSaved={onSaved} />
-        <UserDialog open={editing !== null} onOpenChange={(o) => { if (!o) setEditing(null); }} user={editing} onSaved={onSaved} />
+        <UserDialog identityAdmin={identityAdmin} open={editing !== null} onOpenChange={(o) => { if (!o) setEditing(null); }} user={editing} onSaved={onSaved} />
         <ConfirmDialog
           open={pendingToggle !== null}
           onOpenChange={(o) => { if (!o) setPendingToggle(null); }}

@@ -56,6 +56,22 @@ async function appWith(c: AppContext) {
 }
 
 describe('registerAuth', () => {
+  it('does not grant generic-provider users legacy Keycloak roles on first login', async () => {
+    const backfill = vi.fn(async () => {});
+    const c = ctx({
+      verify: async () => ({ sub: 'generic-1', realm_access: { roles: ['lab_admin'] } }),
+      user: { id: 'local-1', subject: 'generic-1', username: 'ada', displayName: null, roles: [], status: 'active', rbacInitialized: false },
+      roles: { backfillUserFromRoleNames: backfill },
+    });
+    c.cfg.AUTH_ADAPTER = 'oidc';
+    const app = await appWith(c);
+    try {
+      const response = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer valid' } });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().user).toMatchObject({ roles: [], capabilities: [] });
+      expect(backfill).toHaveBeenCalledWith('generic-1', []);
+    } finally { await app.close(); }
+  });
   it('leaves /health public (no actor required)', async () => {
     const app = await appWith(ctx({ bypass: false }));
     const res = await app.inject({ method: 'GET', url: '/health' });

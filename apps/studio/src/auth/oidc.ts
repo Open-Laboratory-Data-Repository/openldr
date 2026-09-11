@@ -7,7 +7,7 @@ let singletonKey = '';
 
 /** Returns a process-wide single OidcClient for the given config (one UserManager, shared PKCE state). */
 export function getOidc(cfg: OidcConfig): OidcClient {
-  const key = `${cfg.issuerUrl}|${cfg.clientId}|${cfg.audience ?? ''}`;
+  const key = `${cfg.scopes ?? 'openid profile email'}|${cfg.resource ?? ''}|${cfg.mode ?? 'keycloak'}|${cfg.issuerUrl}|${cfg.clientId}|${cfg.audience ?? ''}`;
   if (!singleton || singletonKey !== key) { singleton = createOidc(cfg); singletonKey = key; }
   return singleton;
 }
@@ -18,7 +18,7 @@ export function __resetOidc(): void { singleton = null; singletonKey = ''; }
 export interface OidcClient {
   signinRedirect(): Promise<void>;
   handleCallback(): Promise<User | null>;
-  signoutRedirect(): Promise<void>;
+  signoutRedirect(): Promise<'local' | 'provider'>;
   getStoredUser(): Promise<User | null>;
 }
 
@@ -47,12 +47,14 @@ function keycloakMetadata(issuerUrl: string) {
 export function createOidc(cfg: OidcConfig): OidcClient {
   const mgr = new UserManager({
     authority: cfg.issuerUrl,
-    metadata: keycloakMetadata(cfg.issuerUrl),
+    metadata: cfg.mode === 'oidc' ? undefined : keycloakMetadata(cfg.issuerUrl),
     client_id: cfg.clientId,
     redirect_uri: `${window.location.origin}/studio/auth/callback`,
     post_logout_redirect_uri: `${window.location.origin}/studio`,
     response_type: 'code',
-    scope: 'openid profile email',
+    scope: cfg.scopes ?? 'openid profile email',
+    resource: cfg.resource ?? undefined,
+    extraTokenParams: cfg.resource ? { resource: cfg.resource } : undefined,
     automaticSilentRenew: true,
     userStore: new WebStorageStateStore({ store: window.sessionStorage }),
     extraQueryParams: cfg.audience ? { audience: cfg.audience } : undefined,
@@ -110,7 +112,18 @@ export function createOidc(cfg: OidcConfig): OidcClient {
       }
       return callbackPromise;
     },
-    async signoutRedirect() { setAccessToken(null); await mgr.signoutRedirect(); },
+    async signoutRedirect() {
+      setUnauthorizedHandler(null);
+      mgr.stopSilentRenew();
+      setAccessToken(null);
+      const endpoint = cfg.mode === 'oidc' ? await mgr.metadataService.getEndSessionEndpoint().catch(() => undefined) : true;
+      if (!endpoint) {
+        await mgr.removeUser();
+        return 'local';
+      }
+      await mgr.signoutRedirect();
+      return 'provider';
+    },
     async getStoredUser() {
       const u = await mgr.getUser();
       if (!u || u.expired) return null;

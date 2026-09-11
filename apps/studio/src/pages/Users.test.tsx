@@ -21,11 +21,12 @@ vi.mock('@/api', async (orig) => {
     setUserRoles: vi.fn(),
   };
 });
+const providerState = vi.hoisted(() => ({ identityAdmin: true, syncClientAdmin: true }));
 vi.mock('@/auth/AuthProvider', () => ({
-  useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasCapability: () => true }),
+  useAuth: () => ({ authCapabilities: providerState, user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasCapability: () => true }),
 }));
 
-import { listUserDirectory, setUserStatus, createUser, updateUser, sendUserResetEmail, listPublishedForms, getForm, listRoles, getUserRoles, type UserSummary } from '@/api';
+import { listUserDirectory, setUserStatus, createUser, updateUser, sendUserResetEmail, listPublishedForms, getForm, listRoles, getUserRoles, setUserRoles, type UserSummary } from '@/api';
 import { Users } from './Users';
 
 // Minimal published form + schema for UserDialog tests
@@ -58,7 +59,7 @@ const rows: UserSummary[] = [
 ];
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.clearAllMocks(); providerState.identityAdmin = true;
   (listUserDirectory as ReturnType<typeof vi.fn>).mockImplementation(async ({ enabled }) => ({ rows: rows.filter((u) => enabled === undefined || u.enabled === enabled), total: null, hasMore: false }));
   (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([
     { id: 'form-1', name: 'Users Form', versionLabel: null, status: 'published', active: true, fhirResourceType: null, fieldCount: 2, updatedAt: '2026-01-01T00:00:00Z' },
@@ -242,4 +243,27 @@ it('ignores stale search responses', async () => {
   resolveOld({ rows: [{ ...rows[0], username: 'old-result' }], hasMore: true });
   await waitFor(() => expect(screen.queryByText('old-result')).toBeNull());
   expect(screen.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true);
+});
+
+describe('local-only administration', () => {
+  it('keeps roles and access controls without provider writes', async () => {
+    providerState.identityAdmin = false;
+    vi.mocked(listUserDirectory).mockResolvedValue({ rows: [{ ...rows[1], id: 'local-bob', subject: 'provider-bob' }], offset: 0, limit: 25, total: null, hasMore: false });
+    render(<MemoryRouter><Users /></MemoryRouter>);
+    await screen.findByText('bob');
+    expect(screen.getByText(/identity provider administrator/i)).toBeTruthy();
+    openDropdown(screen.getByLabelText('User actions'));
+    expect(screen.queryByRole('menuitem', { name: 'New user' })).toBeNull();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    openDropdown(screen.getByLabelText('Actions for bob'));
+    expect(screen.queryByRole('menuitem', { name: 'Reset password' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Disable' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit role' }));
+    await waitFor(() => expect(getUserRoles).toHaveBeenCalledWith('provider-bob'));
+    openDropdown(screen.getByRole('button', { name: 'Actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Save' }));
+    await waitFor(() => expect(setUserRoles).toHaveBeenCalledWith('provider-bob', []));
+    expect(updateUser).not.toHaveBeenCalled();
+    expect(listPublishedForms).not.toHaveBeenCalled();
+  });
 });

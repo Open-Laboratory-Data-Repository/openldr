@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import pg from 'pg';
 import { Kysely, sql } from 'kysely';
 import { createAuth } from '@openldr/adapter-auth';
+import { bindAuthIssuer } from './auth-issuer-binding';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { toS3BucketConfig } from './s3-config';
@@ -596,6 +597,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const logger = createLogger({ level: cfg.LOG_LEVEL });
 
   const auth = createAuth({
+    mode: cfg.AUTH_ADAPTER,
+    identityAdminAdapter: cfg.IDENTITY_ADMIN_ADAPTER,
     issuerUrl: cfg.OIDC_ISSUER_URL,
     audience: cfg.OIDC_AUDIENCE,
     internalJwksUrl: cfg.OIDC_INTERNAL_JWKS_URL,
@@ -603,11 +606,17 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
     adminClientId: cfg.KEYCLOAK_ADMIN_CLIENT_ID,
     adminClientSecret: cfg.KEYCLOAK_ADMIN_CLIENT_SECRET,
   });
+  const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
+  try {
+    if (!cfg.AUTH_DEV_BYPASS) await bindAuthIssuer(internal.db, cfg.OIDC_ISSUER_URL);
+  } catch (error) {
+    await internal.close();
+    throw error;
+  }
   const blob = createS3Bucket(toS3BucketConfig(cfg));
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
   const { store, engine } = selectTargetStore(cfg);
   const externalDb = store.db as unknown as Kysely<ExternalSchema>;
-  const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const audit = createAuditStore(internal.db);
   const reportRuns = createReportRunStore(internal.db);
   const reportSchedules = createReportScheduleStore(internal.db);
@@ -1775,6 +1784,7 @@ export {
 export type { EnrollResult } from './enrollment';
 export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
+export { readAuthIssuerBinding, rebindAuthIssuer } from './auth-issuer-binding';
 export { createPluginTarget } from './connector-target';
 export { createConnectorDb, type ConnectorDb } from './connector-db';
 export { testConnector } from './connector-test';

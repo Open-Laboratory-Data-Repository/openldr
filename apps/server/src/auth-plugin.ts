@@ -129,13 +129,14 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
       }
       // One-time migration: map the token's realm roles to system roles the first
       // time we see this user. After that, user_roles (DB) is authoritative.
+      const legacyRoles = ctx.cfg.AUTH_ADAPTER === 'oidc' ? [] : realmRolesFromClaims(claims);
       if (!u.rbacInitialized) {
-        await ctx.roles.backfillUserFromRoleNames(u.subject ?? (claims as { sub?: string }).sub ?? u.id, realmRolesFromClaims(claims));
+        await ctx.roles.backfillUserFromRoleNames(u.subject ?? (claims as { sub?: string }).sub ?? u.id, legacyRoles);
         await ctx.users.markRbacInitialized(u.id);
       }
       const subject = u.subject ?? (claims as { sub?: string }).sub ?? u.id;
       const capabilities = await ctx.roles.resolveCapabilities(subject);
-      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: realmRolesFromClaims(claims), capabilities };
+      req.user = { id: u.id, username: u.username, displayName: u.displayName, roles: legacyRoles, capabilities };
     } catch (e) {
       ctx.logger.error({ error: e instanceof Error ? e.message : String(e) }, 'user sync failed');
       recordAuthFailed(req, 'sync-failed', (claims as { sub?: string }).sub ?? null);

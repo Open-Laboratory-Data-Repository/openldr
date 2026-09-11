@@ -16,7 +16,8 @@ const mocks = vi.hoisted(() => ({
   listUserDirectory: vi.fn(),
 }));
 
-vi.mock('@openldr/config', () => ({
+vi.mock('@openldr/config', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@openldr/config')>(),
   loadConfig: vi.fn(() => ({ config: true })),
 }));
 
@@ -152,6 +153,20 @@ describe('user CLI provider status', () => {
       expect(f.provider.enabled).toBe(false);
       expect(await f.users.get(local.id)).toMatchObject({ status: 'disabled' });
       expect(mocks.recordAuditEvent).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ actorName: 'cli' }), expect.objectContaining({ action: 'user.status', entityId: f.provider.id }));
+    } finally { await f.db.destroy(); }
+  });
+  it('disables and enables a generic-provider local account through the shared service', async () => {
+    const f = await accountFixture();
+    try {
+      const local = await f.users.syncFromClaims({ sub: f.provider.id, preferred_username: 'ada' });
+      mocks.createAppContext.mockResolvedValue({ ...f.ctx, cfg: { AUTH_ADAPTER: 'oidc' }, close: async () => {} });
+      expect(await runUserSetStatus(local.id, 'disabled', { json: true })).toBe(0);
+      expect(await f.users.isSubjectBlocked(f.provider.id)).toBe(true);
+      expect(await runUserSetStatus(local.id, 'active', { json: true })).toBe(0);
+      expect(await f.users.isSubjectBlocked(f.provider.id)).toBe(false);
+      expect(f.directory.get).not.toHaveBeenCalled();
+      expect(f.directory.update).not.toHaveBeenCalled();
+      expect(mocks.recordAuditEvent).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ actorName: 'cli' }), expect.objectContaining({ action: 'user.status', metadata: expect.objectContaining({ backend: 'local' }) }));
     } finally { await f.db.destroy(); }
   });
   it('throws on provider failure without emitting success and preserves the local block', async () => {

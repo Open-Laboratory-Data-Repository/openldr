@@ -4,11 +4,14 @@ const signinRedirect = vi.fn();
 const signoutRedirect = vi.fn();
 const signinCallback = vi.fn();
 const getUser = vi.fn();
+const removeUser = vi.fn();
+const getEndSessionEndpoint = vi.fn();
 const addUserLoaded = vi.fn();
 const addAccessTokenExpired = vi.fn();
 vi.mock('oidc-client-ts', () => ({
   UserManager: vi.fn().mockImplementation(() => ({
-    signinRedirect, signoutRedirect, signinCallback, getUser,
+    signinRedirect, signoutRedirect, signinCallback, getUser, removeUser,
+    metadataService: { getEndSessionEndpoint }, stopSilentRenew: vi.fn(),
     events: { addUserLoaded, addAccessTokenExpired },
   })),
   WebStorageStateStore: vi.fn(),
@@ -146,4 +149,55 @@ describe('getOidc', () => {
     const b = getOidc(oidcCfg);
     expect(a).not.toBe(b);
   });
+});
+
+describe('generic OIDC', () => {
+  it('uses discovery without Keycloak paths', () => {
+    createOidc({ ...oidcCfg, mode: 'oidc' });
+    expect(vi.mocked(UserManager).mock.calls[0][0].metadata).toBeUndefined();
+  });
+  it('replaces the singleton when mode changes', () => {
+    expect(getOidc(oidcCfg)).not.toBe(getOidc({ ...oidcCfg, mode: 'oidc' }));
+  });
+  it('clears stored user without redirect when logout metadata is absent', async () => {
+    getEndSessionEndpoint.mockResolvedValue(undefined);
+    const result = await createOidc({ ...oidcCfg, mode: 'oidc' }).signoutRedirect();
+    expect(result).toBe('local');
+    expect(removeUser).toHaveBeenCalledOnce();
+    expect(setAccessToken).toHaveBeenCalledWith(null);
+    expect(signoutRedirect).not.toHaveBeenCalled();
+  });
+});
+
+
+it('passes provider scopes and resource through to authorization and token exchange', () => {
+  createOidc({ ...oidcCfg, mode: 'oidc', scopes: 'openid api', resource: 'https://api.example/' });
+  expect(vi.mocked(UserManager).mock.calls[0][0]).toMatchObject({ scope: 'openid api', resource: 'https://api.example/' });
+});
+it('replaces singleton when provider scopes or resource change', () => {
+  expect(getOidc(oidcCfg)).not.toBe(getOidc({ ...oidcCfg, scopes: 'openid api' }));
+  expect(getOidc(oidcCfg)).not.toBe(getOidc({ ...oidcCfg, resource: 'https://api.example/' }));
+});
+it('sends the resource in the real library token request', async () => {
+  const { OidcClient } = await vi.importActual<typeof import('oidc-client-ts')>('oidc-client-ts');
+  const { webcrypto } = await import('node:crypto');
+  vi.stubGlobal('crypto', webcrypto);
+  const requests: { url: string; body: string }[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    requests.push({ url, body: String(init?.body ?? '') });
+    if (url.endsWith('/.well-known/openid-configuration')) return new Response(JSON.stringify({ issuer: 'https://idp.example', authorization_endpoint: 'https://idp.example/authorize', token_endpoint: 'https://idp.example/token' }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: 'invalid_grant' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+  }));
+  try {
+    createOidc({ issuerUrl: 'https://idp.example', clientId: 'studio', audience: null, mode: 'oidc', scopes: 'openid api', resource: 'https://api.example/' });
+    const settings = vi.mocked(UserManager).mock.calls[0][0];
+    const client = new OidcClient({ ...settings, userStore: undefined } as never);
+    const request = await client.createSigninRequest({});
+    expect(new URL(request.url).searchParams.get('resource')).toBe('https://api.example/');
+    await expect(client.processSigninResponse(`${settings.redirect_uri}?code=fixture&state=${request.state.id}`)).rejects.toThrow();
+    const token = requests.find((r) => r.url === 'https://idp.example/token');
+    expect(token).toBeDefined();
+    expect(new URLSearchParams(token!.body).get('resource')).toBe('https://api.example/');
+  } finally { vi.unstubAllGlobals(); }
 });

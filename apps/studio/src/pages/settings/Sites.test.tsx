@@ -3,6 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
+const adminState = vi.hoisted(() => ({ syncClientAdmin: true, identityAdmin: true }));
+vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ authCapabilities: adminState }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -24,7 +26,7 @@ const siteB = {
 };
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.clearAllMocks(); adminState.syncClientAdmin = true;
   (api.fetchSites as any).mockResolvedValue([siteA, siteB]);
 });
 
@@ -51,4 +53,12 @@ describe('Sites page', () => {
     expect(screen.queryByText('lab-north')).toBeNull();
     expect(screen.getByText('lab-south')).toBeTruthy();
   });
+});
+
+it('hides enrollment and credential changes without client administration', async () => {
+  adminState.syncClientAdmin = false;
+  render(<MemoryRouter><Sites /></MemoryRouter>);
+  await screen.findByText('lab-north');
+  expect(screen.getByText(/require Keycloak client administration/)).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /actions for/i })).toBeNull();
 });

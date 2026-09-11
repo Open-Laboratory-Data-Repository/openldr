@@ -5,12 +5,12 @@ import { accountFixture } from '../../../packages/bootstrap/src/account-status.t
 import { registerUsersRoutes } from './users-routes';
 import { registerAuth } from './auth-plugin';
 
-async function setup() {
+async function setup(generic = false) {
   const f = await accountFixture();
   const claims = { sub: f.provider.id, preferred_username: 'ada' };
   const ctx = {
     ...f.ctx,
-    cfg: { AUTH_DEV_BYPASS: false },
+    cfg: { AUTH_DEV_BYPASS: false, AUTH_ADAPTER: generic ? 'oidc' : 'keycloak', KEYCLOAK_ADMIN_CLIENT_ID: 'fixture', KEYCLOAK_ADMIN_CLIENT_SECRET: 'fixture' },
     auth: { ...f.ctx.auth, verifyToken: async () => claims },
     roles: { resolveCapabilities: async () => ['users.view'], backfillUserFromRoleNames: async () => {} },
     userProfiles: { get: async () => undefined },
@@ -24,11 +24,29 @@ async function setup() {
   registerAuth(protectedApp, ctx);
   protectedApp.get('/api/probe', async () => ({ ok: true }));
   const probe = () => protectedApp.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer same-token' } });
-  const status = (enabled: boolean) => admin.inject({ method: 'POST', url: `/api/users/${f.provider.id}/status`, payload: { enabled } });
+  const status = async (enabled: boolean) => {
+    const id = generic ? (await f.users.getBySubject(f.provider.id))!.id : f.provider.id;
+    return admin.inject({ method: 'POST', url: `/api/users/${id}/status`, payload: { enabled } });
+  };
   return { ...f, probe, status, close: async () => { await admin.close(); await protectedApp.close(); await f.db.destroy(); } };
 }
 
 describe('account status route and authentication', () => {
+  it('blocks and restores the same generic-provider token using a local account ID', async () => {
+    const f = await setup(true);
+    try {
+      expect((await f.probe()).statusCode).toBe(200);
+      const user = (await f.users.getBySubject(f.provider.id))!;
+      const disabled = await f.status(false);
+      expect(disabled.statusCode).toBe(200);
+      expect(disabled.json()).toMatchObject({ id: user.id, subject: f.provider.id, enabled: false });
+      expect((await f.probe()).statusCode).toBe(403);
+      expect((await f.status(true)).statusCode).toBe(200);
+      expect((await f.probe()).statusCode).toBe(200);
+      expect(f.directory.get).not.toHaveBeenCalled();
+      expect(f.directory.update).not.toHaveBeenCalled();
+    } finally { await f.close(); }
+  });
   it('rejects the same verified token on the next request, then accepts it after enable', async () => {
     const f = await setup();
     try {

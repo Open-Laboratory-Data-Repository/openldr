@@ -1,9 +1,11 @@
-import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
-import { probe } from '@openldr/core';
-import type { AuthPort, TokenClaims, DirectoryUser } from '@openldr/ports';
+import type { JWTVerifyGetKey } from 'jose';
+import { createTokenVerifier } from './token-verifier';
+import type { AuthPort, DirectoryUser } from '@openldr/ports';
 import { IdentityAdminNotConfiguredError } from '@openldr/ports';
 
 export interface AuthConfig {
+  mode?: 'keycloak' | 'oidc';
+  identityAdminAdapter?: 'keycloak' | 'none';
   issuerUrl: string;
   /** Expected token audience. When unset, the audience check is skipped. */
   audience?: string;
@@ -13,7 +15,7 @@ export interface AuthConfig {
    *  OIDC discovery on the public issuer. The issuer CLAIM is still validated against issuerUrl. */
   internalJwksUrl?: string;
   /** Internal (back-channel) realm base URL, e.g. http://keycloak:8080/auth/realms/openldr.
-   *  When set, the token endpoint, admin REST base, and (absent an explicit internalJwksUrl)
+   *  Keycloak mode only. The token endpoint, admin REST base, and (absent an explicit internalJwksUrl)
    *  the JWKS URL are derived from it instead of the public issuer. The issuer CLAIM is still
    *  validated against issuerUrl. */
   internalIssuerUrl?: string;
@@ -36,37 +38,26 @@ export interface AuthDeps {
 
 export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
   const fetchFn = deps.fetchFn ?? fetch;
-  const jwksFactory = deps.remoteJwksFactory ?? ((url: URL) => createRemoteJWKSet(url));
-  const discoveryUrl = `${cfg.issuerUrl}/.well-known/openid-configuration`;
-  // Server-side calls to Keycloak (token, admin REST, JWKS) must use the internal docker-network
-  // URL when configured — the public issuer resolves to the app container itself. Token CLAIM
-  // validation still uses the public issuerUrl (see verifyToken).
-  const backChannelIssuer = cfg.internalIssuerUrl ?? cfg.issuerUrl;
-  const effectiveJwksUrl = cfg.internalJwksUrl
-    ?? (cfg.internalIssuerUrl ? `${cfg.internalIssuerUrl}/protocol/openid-connect/certs` : undefined);
-  let keySetPromise: Promise<JWTVerifyGetKey> | undefined = deps.keySet
-    ? Promise.resolve(deps.keySet)
-    : undefined;
-
-  function getKeySet(): Promise<JWTVerifyGetKey> {
-    if (!keySetPromise) {
-      keySetPromise = (async () => {
-        if (effectiveJwksUrl) {
-          return jwksFactory(new URL(effectiveJwksUrl));
-        }
-        const res = await fetchFn(discoveryUrl);
-        if (!res.ok) throw new Error(`OIDC discovery returned ${res.status}`);
-        const doc = (await res.json()) as { jwks_uri?: string };
-        if (!doc.jwks_uri) throw new Error('OIDC discovery missing jwks_uri');
-        return jwksFactory(new URL(doc.jwks_uri));
-      })().catch((e) => {
-        keySetPromise = undefined; // allow retry on next call after a failed discovery
-        throw e;
-      });
-    }
-    return keySetPromise;
+  const mode = cfg.mode ?? 'keycloak';
+  const admin = cfg.identityAdminAdapter ?? (mode === 'keycloak' ? 'keycloak' : 'none');
+  if ((mode !== 'keycloak' && mode !== 'oidc') || (admin !== 'keycloak' && admin !== 'none') || (mode === 'oidc' && admin === 'keycloak')) {
+    throw new Error('Invalid authentication and identity administration selection');
   }
+  const verifier = createTokenVerifier(cfg, deps);
+  if (admin === 'none') {
+    const unavailable = async (): Promise<never> => { throw new IdentityAdminNotConfiguredError(); };
+    return {
+      ...verifier, resetPassword: unavailable, sendPasswordResetEmail: unavailable, forceLogout: unavailable,
+      directory: { list: unavailable, get: unavailable, create: unavailable, update: unavailable, setRoles: unavailable },
+      clients: { findUuidByClientId: unavailable, createConfidentialClient: unavailable, addSiteIdMapper: unavailable,
+        addAudienceMapper: unavailable, getClientSecret: unavailable, regenerateClientSecret: unavailable, deleteClient: unavailable },
+    };
+  }
+  return { ...verifier, ...createKeycloakAdmin(cfg, fetchFn) };
+}
 
+function createKeycloakAdmin(cfg: AuthConfig, fetchFn: typeof fetch): Omit<AuthPort, 'healthCheck' | 'verifyToken'> {
+  const backChannelIssuer = cfg.internalIssuerUrl ?? cfg.issuerUrl;
   const tokenEndpoint = `${backChannelIssuer}/protocol/openid-connect/token`;
   const adminBase = backChannelIssuer.replace('/realms/', '/admin/realms/');
   const adminConfigured = Boolean(cfg.adminClientId && cfg.adminClientSecret);
@@ -127,36 +118,6 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
   }
 
   return {
-    async healthCheck() {
-      return probe(async () => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 3000);
-        try {
-          // Probe the SAME endpoint token validation actually depends on: when an internal
-          // (back-channel) JWKS URL is configured, the public issuer is only reachable via the
-          // gateway — NOT from inside the app container (where its host resolves to itself). Use
-          // the internal JWKS URL so the probe reflects real auth readiness over the private network.
-          const probeUrl = effectiveJwksUrl ?? discoveryUrl;
-          const res = await fetchFn(probeUrl, { signal: controller.signal });
-          if (!res.ok) throw new Error(`OIDC ${effectiveJwksUrl ? 'JWKS' : 'discovery'} returned ${res.status}`);
-          return effectiveJwksUrl ? 'OIDC JWKS reachable (internal)' : 'OIDC issuer reachable';
-        } finally {
-          clearTimeout(timer);
-        }
-      });
-    },
-    async verifyToken(token: string): Promise<TokenClaims> {
-      const jwks = await getKeySet();
-      const { payload } = await jwtVerify(token, jwks, {
-        issuer: cfg.issuerUrl,
-        audience: cfg.audience,
-        algorithms: ['RS256', 'RS384', 'RS512', 'PS256', 'PS384', 'PS512', 'ES256', 'ES384', 'ES512'],
-      });
-      if (typeof payload.sub !== 'string' || payload.sub.length === 0) {
-        throw new Error('token missing sub claim');
-      }
-      return payload as TokenClaims;
-    },
     async resetPassword(userId: string, password: string, temporary: boolean): Promise<void> {
       await adminVoid(`/users/${encodeURIComponent(userId)}/reset-password`, { method: 'PUT', body: JSON.stringify({ type: 'password', value: password, temporary }) });
     },

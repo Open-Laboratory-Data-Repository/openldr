@@ -4,3 +4,4 @@ export * from './feature-flags';
 export * from './number-settings';
 export * from './lab-identity';
 export * from './sync';
+export * from './auth';
