@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "b60cb9af",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Distinguish unavailable marketplace permissions"
+        },
+        {
           "hash": "cc168ff0",
           "type": "fix",
           "scope": "marketplace",
