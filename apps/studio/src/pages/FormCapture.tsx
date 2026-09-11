@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { getForm, submitFormResponse, type FormDefinition } from '@/api';
+import { canSubmitForm } from '@openldr/forms/pure';
+import { SubmissionReadiness } from '@/forms-runtime/SubmissionReadiness';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema } from '@/forms-runtime/types';
 
@@ -52,9 +54,10 @@ export function FormCapture() {
   }, [id]);
 
   const isPublished = form?.status === 'published';
+  const captureEligible = schema ? canSubmitForm(schema) : false;
 
   const handleSubmit = async (cleaned: Record<string, unknown>) => {
-    if (!id || !isPublished) return;
+    if (!id || !isPublished || !captureEligible) return;
     setSubmitting(true);
     setSuccess(false);
     try {
@@ -89,7 +92,7 @@ export function FormCapture() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                disabled={submitting || !schema || !isPublished}
+                disabled={loading || submitting || !schema || !isPublished || !captureEligible}
                 onSelect={() => {
                   (document.getElementById('form-capture') as HTMLFormElement | null)?.requestSubmit();
                 }}
@@ -110,7 +113,9 @@ export function FormCapture() {
           {success ? <div className="mx-6 mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">Response captured.</div> : null}
           {form && !isPublished ? <div className="mx-6 mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">This form is not published. Submission is disabled until it is published.</div> : null}
 
-          {schema ? (
+          {!loading && schema ? <SubmissionReadiness schema={schema} /> : null}
+
+          {!loading && schema && captureEligible ? (
             <FormRuntime
               schema={schema}
               // Two distinct ids: `formId` is the DOM id the ⋯ menu's requestSubmit() targets,

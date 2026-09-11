@@ -41,7 +41,7 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 ![Form builder with field palette, preview, editor, and actions](form-builder.png)
 
 19. From the form list, choose **View/Run**.
-20. Fill required fields and submit the response.
+20. Check submission eligibility before entering answers. For an eligible form, fill required fields and submit.
 
 ![Published form capture screen](form-capture.png)
 
@@ -49,7 +49,7 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 
 ## Expected result
 
-The form is saved as a draft during design, published when ready, and available from **View/Run** for structured submissions.
+The form is saved as a draft during design, published when ready, and available from **View/Run**. Submission also requires a supported extraction configuration.
 
 ## Troubleshooting
 
@@ -119,3 +119,27 @@ current draft. It refuses without `--force`.
 
 - [Terminology](/docs/terminology)
 - [Marketplace](/docs/marketplace)
+
+## Submission eligibility
+
+Publishing makes a form available for sharing and embedded editors. It does not guarantee View/Run submissions. Capture currently supports ServiceRequest forms and enabled answer fields with Observation Extract and at least one code. A plain custom text form without extraction cannot submit. Patient and Facility templates can still serve their dedicated editors.
+
+The builder and capture page show eligibility before entry. For observations, open the field sheet, select a terminology code under Codes, and check Observation Extract under Mapping. Enable the field. Save and publish. Answer at least one extraction field during capture; an unanswered or hidden extraction field produces no Observation.
+
+Eligibility checks configuration only. Required answers, reference validation, and the enabled ingest workflow must still succeed.
+
+## Example: submit a lab request
+
+Use a test installation with an existing patient, loaded LOINC terminology, and an enabled ingest workflow. You need permission to edit and publish forms and submit responses.
+
+1. In Forms, open the page's ⋯ menu and choose New. Name the form Lab request example.
+2. Set FHIR version to R4, resource type to ServiceRequest, and target page to Forms. Open the builder.
+3. Add an enabled, required reference field labeled Patient. Under Mapping, expand Advanced and set Reference Target to Patient and FHIR Path to ServiceRequest.subject.
+4. Add an enabled, required reference field labeled Tests. Set Reference Target to the installed LOINC system URL, http://loinc.org. Set FHIR Path to ServiceRequest.code. Choose codes through the terminology picker; do not enter a made-up code.
+5. Save each field through its ⋯ menu. Confirm the submission configuration message. No Observation Extract flag is needed for this ServiceRequest form.
+6. Open the builder's ⋯ menu and choose Publish. Resolve any publish errors. Publishing also saves the current schema.
+7. Return to Forms and choose View/Run from the form's ⋯ menu. Select an existing patient and one loaded test from the lists.
+8. Choose Submit from Form actions. Wait for Response captured. The response and derived ServiceRequest enter the ingest workflow.
+9. Check the corresponding workflow run and stored request before repeating the submission. If the server reports partial persistence, inspect the run first; a retry can create duplicates.
+
+If a reference list is empty, check the configured source and loaded terminology. If the workflow is disabled, enable it before retrying. Required-field messages identify the field by its visible label.

@@ -208,7 +208,7 @@ describe('FormRuntime', () => {
 
     // Submit without filling required field
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
-    expect(await screen.findByText('field patientId is required')).toBeInTheDocument();
+    expect(await screen.findByText('Patient ID is required')).toBeInTheDocument();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -713,7 +713,7 @@ describe('seeded reference answers are resolved before validation sees them', ()
     render(<FormRuntime schema={refSchema} formDefinitionId="form-1" initialAnswers={{}} onSubmit={onSubmit} submitLabel="Save" />);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(screen.getByText('field level is required')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Level is required')).toBeInTheDocument());
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

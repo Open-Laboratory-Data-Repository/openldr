@@ -11,6 +11,7 @@ import type {
   Reference,
   ServiceRequest,
 } from 'fhir/r4'
+import type { FormField, FormSchema } from '../schema/form-schema'
 import { fromAnswer } from '../answer-value'
 import { EXT_CORLIX_FHIR_PATH, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
 
@@ -22,6 +23,7 @@ export interface ExtractionContext {
 
 /** Pluggable extraction of discrete FHIR resources from a filled form (PRD §3.2). */
 export interface ResourceExtractor {
+  canExtract(model: FormSchema): boolean
   extract(
     response: QuestionnaireResponse,
     questionnaire: Questionnaire,
@@ -56,6 +58,22 @@ function indexItems(questionnaire: Questionnaire): Map<string, ItemMeta> {
   }
   walk(questionnaire.item)
   return map
+}
+
+function hasObservationCode(meta: { observationExtract?: boolean; code?: Coding[] }): boolean {
+  return meta.observationExtract === true && Boolean(meta.code?.length)
+}
+
+function isEnabledField(field: FormField, fields: FormField[]): boolean {
+  const visited = new Set<string>()
+  let current: FormField | undefined = field
+  while (current) {
+    if (current.enabled === false || visited.has(current.id)) return false
+    visited.add(current.id)
+    if (!current.groupId) return true
+    current = fields.find((candidate) => candidate.id === current!.groupId)
+  }
+  return false
 }
 
 const LOINC = 'http://loinc.org'
@@ -96,12 +114,15 @@ function observationValue(answer: QuestionnaireResponseItemAnswer, unit?: string
  * each yield their own Observation.
  */
 export const ObservationExtractor: ResourceExtractor = {
+  canExtract(model) {
+    return model.fields.some((field) => isEnabledField(field, model.fields) && field.fieldType !== 'group' && hasObservationCode(field))
+  },
   extract(response, questionnaire, ctx) {
     const index = indexItems(questionnaire)
     const out: Observation[] = []
     walkResponse(response.item, (item) => {
       const meta = index.get(item.linkId)
-      if (!meta?.observationExtract || !meta.code?.length) return
+      if (!meta || !hasObservationCode(meta)) return
       for (const answer of item.answer ?? []) {
         const observation: Observation = { resourceType: 'Observation', status: 'final', code: { coding: meta.code } }
         if (ctx.subject) observation.subject = ctx.subject
@@ -121,6 +142,7 @@ export const ObservationExtractor: ResourceExtractor = {
  * field is bound to `ServiceRequest.*` (via the Corlix fhir-path) onto it.
  */
 export const ServiceRequestExtractor: ResourceExtractor = {
+  canExtract() { return true },
   extract(response, questionnaire, ctx) {
     const index = indexItems(questionnaire)
     const request: ServiceRequest = {

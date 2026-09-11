@@ -13,6 +13,7 @@ import { useBuilderKeyboard } from './useBuilderKeyboard';
 import { BuilderHeader } from './BuilderHeader';
 import { FieldListPane } from './FieldListPane';
 import { LanguageControl } from './LanguageControl';
+import { SubmissionReadiness } from '@/forms-runtime/SubmissionReadiness';
 import { PreviewPane } from './PreviewPane';
 import {
   lintFormSchema,
@@ -340,6 +341,8 @@ export function FormBuilderPage(): JSX.Element {
             {error}
           </div>
         ) : null}
+
+        {!loading ? <SubmissionReadiness schema={schema} /> : null}
 
         {/* Two-pane body (sheet overlays on field select). On phones the field list takes the
             full width and the preview pane is hidden — editing still happens through the

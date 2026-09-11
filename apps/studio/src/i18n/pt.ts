@@ -267,6 +267,8 @@ export const pt: EnShape = {
     noMatch: 'Nenhuma função corresponde.',
   },
   forms: {
+    captureEligible: "O envio está configurado. View/Run exige publicação e respostas válidas. Para extrair uma Observation, preencha pelo menos um campo de extração. O fluxo de ingestão também deve estar ativo.",
+    captureUnavailable: "Este formulário não está configurado para envio. No editor, ative um campo, selecione o código em Codes e marque Observation Extract em Mapping. Os formulários ServiceRequest também permitem envio. A publicação, a exportação e os editores integrados continuam disponíveis.",
     colName: 'Nome',
     colFhirType: 'Tipo FHIR',
     colFields: 'Campos',
