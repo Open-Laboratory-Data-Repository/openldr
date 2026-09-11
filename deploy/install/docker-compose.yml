@@ -4,6 +4,8 @@
 services:
   api:
     image: ghcr.io/open-laboratory-data-repository/openldr-api:${OPENLDR_VERSION:-latest}
+    # Let accepted requests and active workers finish before Docker forces a stop.
+    stop_grace_period: ${OPENLDR_STOP_GRACE_PERIOD:-5m}
     env_file: .env
     expose: ["3000"]
     volumes:

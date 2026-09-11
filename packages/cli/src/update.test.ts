@@ -14,12 +14,15 @@ const state = (over: Partial<UpdateState> = {}): UpdateState => ({
 });
 
 describe('renderUpdateCheck', () => {
-  it('names both versions and the two commands when an update exists', () => {
+  it('names both versions and directs the operator to a planned upgrade', () => {
     const { text, code } = renderUpdateCheck(state(), { json: false });
     expect(text).toMatch(/0\.1\.1/);
     expect(text).toMatch(/0\.2\.0/);
-    expect(text).toMatch(/docker compose pull/);
-    expect(text).toMatch(/docker compose up -d/);
+    expect(text).toMatch(/schedule downtime/i);
+    expect(text).toMatch(/pause senders/i);
+    expect(text).toMatch(/verify backups/i);
+    expect(text).toContain('https://github.com/Open-Laboratory-Data-Repository/openldr/blob/main/apps/web/src/docs/0.1.0/upgrading.md');
+    expect(text).not.toMatch(/docker compose (pull|up)/);
     expect(code).toBe(1);
   });
 
@@ -60,13 +63,16 @@ describe('renderUpdateCheck', () => {
   // The regression this guards: recordFailure (bootstrap/update-check.ts) leaves latestVersion
   // untouched, so a cache from last week's good check plus today's failed poll produces
   // update_available with a real error underneath it. Both must show.
-  it('shows the failure line alongside the upgrade commands when an update is available and the last check failed', () => {
+  it('shows the failure line alongside the planned upgrade guidance when an update is available and the last check failed', () => {
     const { text, code } = renderUpdateCheck(
       state({ lastError: 'update check timed out after 10000ms' }),
       { json: false },
     );
-    expect(text).toMatch(/docker compose pull/);
-    expect(text).toMatch(/docker compose up -d/);
+    expect(text).toMatch(/schedule downtime/i);
+    expect(text).toMatch(/pause senders/i);
+    expect(text).toMatch(/verify backups/i);
+    expect(text).toContain('https://github.com/Open-Laboratory-Data-Repository/openldr/blob/main/apps/web/src/docs/0.1.0/upgrading.md');
+    expect(text).not.toMatch(/docker compose (pull|up)/);
     expect(text).toMatch(/last check failed: update check timed out after 10000ms/);
     expect(code).toBe(1);
   });
