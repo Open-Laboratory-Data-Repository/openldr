@@ -34,6 +34,7 @@ type IdentityPatch = { firstName?: string | null; lastName?: string | null; emai
 type FormMeta = Pick<CreateUserPayload, 'formSchemaId' | 'formVersion'>;
 
 interface UserDialogProps {
+  identityAdmin?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: UserSummary | null;
@@ -85,7 +86,7 @@ function splitAnswers(schema: FormSchema, answers: RuntimeAnswers) {
   return { identity, extras };
 }
 
-export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProps) {
+export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = true }: UserDialogProps) {
   const { t } = useTranslation();
   const isEdit = user !== null;
 
@@ -141,6 +142,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
     setNoForm(false);
     setSavedIdentity(null);
 
+    if (!identityAdmin) { setSchemaLoading(false); setNoForm(true); return; }
     setSchemaLoading(true);
     listPublishedForms('users')
       .then(async (summaries) => {
@@ -170,7 +172,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       })
       .finally(() => setSchemaLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, user?.id]);
+  }, [open, user?.id, identityAdmin]);
 
   // Load the role catalog + (when editing) the user's current role assignment. A user always has
   // exactly one role; if the API ever returns several (legacy data), take the first and don't
@@ -189,7 +191,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       setRoles(allRoles);
       const defaultRoleId = allRoles.find((r) => r.slug === DEFAULT_ROLE_SLUG)?.id ?? allRoles[0]?.id ?? '';
       if (user) {
-        const current = await getUserRoles(user.id);
+        const current = await getUserRoles(user.subject ?? user.id);
         if (!cancelled) setSelectedRoleId(current[0]?.id ?? defaultRoleId);
       } else if (!cancelled) {
         setSelectedRoleId(defaultRoleId);
@@ -203,7 +205,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
         if (!cancelled) setRolesLoading(false);
       });
     return () => { cancelled = true; };
-  }, [open, user?.id]);
+  }, [open, user?.id, identityAdmin]);
 
   /** Shared create-only validation for the fixed username/password fields above the form. */
   const validateCore = (): boolean => {
@@ -231,6 +233,8 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       let saved: UserSummary;
       if (savedIdentity) {
         saved = savedIdentity;
+      } else if (!identityAdmin && user) {
+        saved = user;
       } else if (isEdit) {
         saved = await updateUser(user.id, {
           ...identity,
@@ -255,7 +259,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       try {
         // selectedRoleId is always populated once the role catalog has loaded (see the roles
         // effect above) — a user always has exactly one role, so this never sends [].
-        await setUserRoles(saved.id, selectedRoleId ? [selectedRoleId] : []);
+        await setUserRoles(saved.subject ?? saved.id, selectedRoleId ? [selectedRoleId] : []);
       } catch (roleErr) {
         // The identity write succeeded but the role change was rejected (e.g. the last-admin
         // guard). Do NOT signal success — surface the error inline and keep the dialog open so
@@ -312,7 +316,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b border-border px-6 py-4">
           <SheetTitle>{isEdit ? t('users.editUserTitle') : t('users.newUserTitle')}</SheetTitle>
-          <SheetDescription>{isEdit ? t('users.editUserDesc') : t('users.newUserDesc')}</SheetDescription>
+          <SheetDescription>{!identityAdmin ? t('users.identityAdminUnavailable') : isEdit ? t('users.editUserDesc') : t('users.newUserDesc')}</SheetDescription>
         </SheetHeader>
 
         <div className="flex items-center justify-end px-6 py-3">
@@ -418,7 +422,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
             />
           ) : (
             <>
-              {noForm && !schemaLoading ? (
+              {identityAdmin && noForm && !schemaLoading ? (
                 <div className="px-6 py-8 text-center text-sm text-muted-foreground">
                   {t('users.noUsersForm')}
                 </div>

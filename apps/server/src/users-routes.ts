@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { setAccountStatus, AccountNotFoundError, listUserDirectory, directoryPageInput, type AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
+import { resolveAuthCapabilities } from '@openldr/config';
 import { z } from 'zod';
 import { requireCapability } from './rbac';
 import { actorFromRequest, recordAudit } from './audit-helper';
@@ -86,6 +87,7 @@ function summary(
 // Fallback: map a local users-mirror row to UserSummary
 function localToSummary(u: {
   id: string;
+  subject?: string | null;
   username: string;
   email: string | null;
   roles: string[];
@@ -94,6 +96,7 @@ function localToSummary(u: {
 }): Record<string, unknown> {
   return {
     id: u.id,
+    subject: u.subject,
     username: u.username,
     email: u.email,
     firstName: null,
@@ -261,8 +264,14 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
 
     try {
-      const result = await setAccountStatus(ctx, { providerSubject: id }, enabled, actorFromRequest(req));
-      return summary(result.directory!, await ctx.userProfiles.get(id));
+      const providerAdmin = ctx.cfg ? resolveAuthCapabilities(ctx.cfg).identityAdmin : true;
+      const result = await setAccountStatus(ctx, providerAdmin ? { providerSubject: id } : { localId: id }, enabled, actorFromRequest(req));
+      if (!result.directory) {
+        const local = await ctx.users.get(result.localId);
+        if (!local) throw new AccountNotFoundError();
+        return localToSummary(local);
+      }
+      return summary(result.directory, await ctx.userProfiles.get(id));
     } catch (e) {
       if (e instanceof Error && e.name === 'AccountStatusConflictError') { reply.code(409); return { error: e.message }; }
       if (e instanceof AccountNotFoundError) { reply.code(404); return { error: 'not found' }; }

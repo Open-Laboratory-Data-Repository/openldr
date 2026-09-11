@@ -13,6 +13,13 @@ import {
 } from './registry';
 
 describe('docs registry', () => {
+  it.each(LOCALES)('authors and indexes authentication providers in %s', (locale) => {
+    const guide = resolve(locale, 'auth-providers');
+    expect(guide?.localeUsed).toBe(locale);
+    expect(guide?.content).toContain('IDENTITY_ADMIN_ADAPTER');
+    expect(guide?.content).toContain('openldr user assign-role SUBJECT lab_admin');
+    expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('auth-providers');
+  });
   it.each(LOCALES)('authors and indexes the data exposure guide in %s', (locale) => {
     const guide = resolve(locale, 'data-exposure');
     expect(guide?.localeUsed).toBe(locale);
@@ -51,6 +58,7 @@ describe('docs registry', () => {
       'sync',
       'connectors',
       'marketplace',
+      'auth-providers',
       'environment',
       'upgrading',
       'advanced-docs',
@@ -82,6 +90,7 @@ describe('docs registry', () => {
       sync: ['settings', 'users', 'environment'],
       connectors: ['report-pipeline', 'settings', 'workflows', 'marketplace', 'query'],
       marketplace: ['settings', 'connectors', 'forms'],
+      'auth-providers': ['environment', 'users', 'sync'],
       environment: ['settings', 'connectors'],
       upgrading: ['settings', 'environment', 'workflows'],
       'advanced-docs': ['start-here', 'settings'],

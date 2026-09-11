@@ -10,6 +10,7 @@ export const directoryPageInput = z.object({
   enabled: z.union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')]).optional(),
 });
 export interface DirectorySummary extends DirectoryUser {
+  subject?: string | null;
   extras: Record<string, string>;
   formSchemaId: string | null;
   formVersion: number | null;
@@ -36,7 +37,7 @@ export async function listUserDirectory(
     if (!(error instanceof Error) || error.name !== 'IdentityAdminNotConfiguredError') throw error;
     local = true;
     const rows = await ctx.users.list({ offset, limit: limit + 1, search, enabled });
-    users = rows.map((u) => ({ id: u.id, username: u.username, email: u.email, firstName: null, lastName: null, enabled: u.status !== 'disabled', roles: u.roles, createdAt: u.createdAt }));
+    users = rows.map((u) => ({ id: u.id, subject: u.subject, username: u.username, email: u.email, firstName: null, lastName: null, enabled: u.status !== 'disabled', roles: u.roles, createdAt: u.createdAt }));
   }
   const visible = users.slice(0, limit);
   const profiles = local ? new Map<string, UserProfile>() : await ctx.userProfiles.list(visible.map((u) => u.id));

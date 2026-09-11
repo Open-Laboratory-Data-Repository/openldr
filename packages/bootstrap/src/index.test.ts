@@ -12,6 +12,8 @@ const cfg: Config = Object.freeze({
   PORT: 3000,
   LOG_LEVEL: 'silent',
   AUTH_ADAPTER: 'keycloak',
+  // Shape-only context tests intentionally use unreachable services.
+  AUTH_DEV_BYPASS: true,
   BLOB_ADAPTER: 'minio',
   EVENTING_ADAPTER: 'pg',
   TARGET_STORE_ADAPTER: 'pg',

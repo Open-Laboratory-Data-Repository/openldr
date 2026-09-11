@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authFetch, getMe, getMyCapabilities, type ClientConfig, type CurrentUser } from '@/api';
+import { resolveAuthCapabilities } from './capabilities';
+import type { AuthCapabilities } from '@/api';
 import { getOidc, type OidcClient } from './oidc';
 // Aliased: `setAuthEnforced` is also this component's React state setter. The token-module copy is
 // what api.ts's authFetch reads, so both have to be kept in sync from the one /api/config response.
@@ -16,6 +18,7 @@ let redirecting = false;
 export function __resetAuthProviderState(): void { redirecting = false; }
 
 interface AuthState {
+  authCapabilities?: AuthCapabilities;
   user: CurrentUser | null;
   loading: boolean;
   /** Capability-based authorization check. */
@@ -26,6 +29,7 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState>({
+  authCapabilities: { identityAdmin: false, syncClientAdmin: false },
   user: null,
   loading: true,
   hasCapability: () => false,
@@ -38,6 +42,8 @@ export function useAuth(): AuthState {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [authCapabilities, setAuthCapabilities] = useState<AuthCapabilities>({ identityAdmin: false, syncClientAdmin: false });
+  const [localSignout, setLocalSignout] = useState(false);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Module state, not component state — set it regardless of `active` so a remount can't
         // leave authFetch on the fail-safe default while the server is actually in dev bypass.
         setAuthEnforcedForFetch(cfg.authEnforced);
-        if (active) setAuthEnforced(cfg.authEnforced);
+        if (active) { setAuthEnforced(cfg.authEnforced); setAuthCapabilities(resolveAuthCapabilities(cfg)); }
 
         if (!cfg.authEnforced || !cfg.oidc) {
           // Dev-bypass: server injects the dev actor; no interactive login. The server's dev actor
@@ -99,7 +105,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [location.pathname]);
 
   const hasCapability = (cap: string) => capabilities.includes(cap);
-  const signOut = () => { void oidcRef.current?.signoutRedirect(); };
+  const signOut = () => {
+    void oidcRef.current?.signoutRedirect().then((result) => {
+      if (result === 'local') { setUser(null); setCapabilities([]); setLocalSignout(true); }
+    }).catch(() => setConfigError(true));
+  };
+
+  if (localSignout) {
+    return <StripedEmpty className="h-dvh"><div className="flex max-w-sm flex-col gap-4 p-6 text-center">
+      <p>{t('common.localSignout')}</p>
+      <Button onClick={() => { void oidcRef.current?.signinRedirect(); }}>{t('common.signIn')}</Button>
+    </div></StripedEmpty>;
+  }
 
   if (configError) {
     return (
@@ -127,5 +144,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  return <AuthContext.Provider value={{ user, loading, hasCapability, signOut, authEnforced }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ authCapabilities, user, loading, hasCapability, signOut, authEnforced }}>{children}</AuthContext.Provider>;
 }

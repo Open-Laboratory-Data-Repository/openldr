@@ -5,6 +5,7 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
+import { runAuthRebindIssuer } from './auth';
 import { runFormsExtract, runFormsList, runFormsLint, runFormsVersions, runFormsRestore } from './forms';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
@@ -193,6 +194,20 @@ export function buildProgram(): Command {
         process.exitCode = await runDbReproject(opts);
       } catch (err) {
         process.stderr.write(`db reproject failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  const auth = program.command('auth').description('Authentication provider binding');
+  auth.command('rebind-issuer')
+    .description('Bind this database to the configured OIDC_ISSUER_URL after the same provider moved address (refuses without --force)')
+    .option('--json', 'emit JSON', false)
+    .option('--force', 'confirm the provider is the same and user IDs are unchanged', false)
+    .action(async (opts: { json: boolean; force: boolean }) => {
+      try {
+        process.exitCode = await runAuthRebindIssuer(opts);
+      } catch (err) {
+        process.stderr.write(`auth rebind-issuer failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
     });

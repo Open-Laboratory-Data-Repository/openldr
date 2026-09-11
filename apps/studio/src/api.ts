@@ -433,8 +433,9 @@ export async function saveColumnPolicy(payload: Record<string, string[]>): Promi
   if (!r.ok) throw new Error(`save column policy failed: ${r.status}`);
 }
 
-export interface OidcConfig { issuerUrl: string; clientId: string; audience: string | null }
-export interface ClientConfig { dashboardSqlEnabled: boolean; authEnforced: boolean; version: string; environment: string; oidc: OidcConfig | null }
+export interface AuthCapabilities { identityAdmin: boolean; syncClientAdmin: boolean }
+export interface OidcConfig { scopes?: string; resource?: string | null; mode?: 'keycloak' | 'oidc'; issuerUrl: string; clientId: string; audience: string | null }
+export interface ClientConfig { authCapabilities?: AuthCapabilities; dashboardSqlEnabled: boolean; authEnforced: boolean; version: string; environment: string; oidc: OidcConfig | null }
 export async function fetchClientConfig(): Promise<ClientConfig> {
   const r = await authFetch('/api/config');
   if (!r.ok) return { dashboardSqlEnabled: false, authEnforced: false, version: '', environment: '', oidc: null };
@@ -724,6 +725,7 @@ export const USER_ROLES = ['lab_admin', 'lab_manager', 'lab_technician', 'data_a
 /** SP6 composed model: Keycloak identity + local profile extras. */
 export interface UserSummary {
   id: string;
+  subject?: string;
   username: string;
   email: string | null;
   firstName: string | null;

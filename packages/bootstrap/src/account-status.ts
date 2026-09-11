@@ -1,10 +1,12 @@
 import type { AuthPort } from '@openldr/ports';
 import type { UserStore, User } from '@openldr/users';
+import { resolveAuthCapabilities, type Config } from '@openldr/config';
 import { recordAuditEvent, type AuditActor, type AuditDetails } from './record-audit';
 
 type Context = Parameters<typeof recordAuditEvent>[0] & {
   users: UserStore;
   auth: Pick<AuthPort, 'directory'>;
+  cfg?: Config;
 };
 
 export class AccountNotFoundError extends Error {
@@ -55,13 +57,25 @@ export async function setAccountStatus(
 async function applyAccountStatus(ctx: Context, local: User | undefined, subject: string | null, enabled: boolean, record: (event: AuditDetails) => Promise<void>) {
   const status = enabled ? 'active' : 'disabled';
   const entityId = subject ?? local!.id;
-  const backend = subject ? 'provider' : 'local';
+  const providerAdmin = ctx.cfg ? resolveAuthCapabilities(ctx.cfg).identityAdmin : true;
+  const backend = subject && providerAdmin ? 'provider' : 'local';
   const before = local ? { id: local.id, subject: local.subject, status: local.status } : null;
   let localStatus = local?.status ?? null;
   let providerUpdated = false;
   let subjectBlocked = false;
   try {
-    if (!subject) {
+    if (subject && !providerAdmin) {
+      if (!local) throw new AccountNotFoundError();
+      // Keep the block until the local status write succeeds, including enable failures.
+      await ctx.users.blockSubject(subject);
+      subjectBlocked = true;
+      await ctx.users.setStatus(local.id, status);
+      localStatus = status;
+      if (enabled) {
+        await ctx.users.unblockSubject(subject);
+        subjectBlocked = false;
+      }
+    } else if (!subject) {
       await ctx.users.setStatus(local!.id, status);
       localStatus = status;
     } else {
@@ -105,6 +119,9 @@ async function applyAccountStatus(ctx: Context, local: User | undefined, subject
     });
     if (error instanceof AccountNotFoundError) throw error;
     if (error instanceof Error && error.name === 'IdentityAdminNotConfiguredError') throw error;
+    if (!providerAdmin && subjectBlocked) {
+      throw new Error('Local account access remains blocked; the status update failed. Retry the status change.', { cause: error });
+    }
     if (!enabled && subjectBlocked) {
       throw new Error('local account is disabled; provider status could not be confirmed. Retry the status change.', { cause: error });
     }

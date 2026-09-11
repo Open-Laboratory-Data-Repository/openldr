@@ -15,6 +15,15 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('renders authentication provider guidance in three languages', () => {
+    renderDocs('/docs/auth-providers');
+    expect(screen.getByRole('heading', { level: 1, name: 'Authentication providers' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Authentication providers' })).toHaveAttribute('aria-current', 'page');
+    for (const name of ['English', 'Français', 'Português']) {
+      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
+    }
+    expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(3);
+  });
   it('renders data exposure scope and navigation in all three languages', () => {
     renderDocs('/docs/data-exposure');
     expect(screen.getByRole('heading', { level: 1, name: 'Data exposure' })).toBeInTheDocument();

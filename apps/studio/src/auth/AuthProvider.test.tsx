@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 import { AuthProvider, useAuth, __resetAuthProviderState } from './AuthProvider';
@@ -139,4 +139,19 @@ describe('AuthProvider', () => {
     expect(getMe).not.toHaveBeenCalled();
     expect(getMyCapabilities).not.toHaveBeenCalled();
   });
+});
+
+it('removes protected content and explains local-only signout', async () => {
+  okConfig({ authEnforced: true, oidc: { mode: 'oidc', issuerUrl: 'https://idp', clientId: 'c', audience: null } });
+  vi.mocked(getMe).mockResolvedValue({ id: 'local', username: 'bob' } as never);
+  vi.mocked(getMyCapabilities).mockResolvedValue([]);
+  vi.mocked(getOidc).mockReturnValue({ getStoredUser: vi.fn().mockResolvedValue({ access_token: 't' }), signoutRedirect: vi.fn().mockResolvedValue('local'), signinRedirect: vi.fn() } as never);
+  function Session() {
+    const auth = useAuth();
+    return <><span>Protected content</span><span>{String(auth.authCapabilities?.identityAdmin)}</span><button onClick={auth.signOut}>Leave</button></>;
+  }
+  render(<MemoryRouter><AuthProvider><Session /></AuthProvider></MemoryRouter>);
+  fireEvent.click(await screen.findByText('Leave'));
+  await screen.findByText(/Signed out of this browser/);
+  expect(screen.queryByText('Protected content')).toBeNull();
 });

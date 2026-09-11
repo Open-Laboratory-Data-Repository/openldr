@@ -483,3 +483,54 @@ describe('clients (sync client management)', () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe('generic OIDC', () => {
+  const issuerUrl = 'https://identity.example/tenant';
+  it('discovers signing keys without consuming stale Keycloak settings', async () => {
+    const { sign, keySet } = await localKeySet();
+    const fetchFn = vi.fn(async () => Response.json({ issuer: issuerUrl, jwks_uri: 'https://identity.example/keys' }));
+    const remoteJwksFactory = vi.fn(() => keySet);
+    const auth = createAuth({ mode: 'oidc', issuerUrl, internalIssuerUrl: 'http://old/realms/old', adminClientId: 'old', adminClientSecret: 'old' }, { fetchFn, remoteJwksFactory });
+    expect((await auth.verifyToken(await sign({}, { iss: issuerUrl }))).sub).toBe('user-123');
+    expect(fetchFn).toHaveBeenCalledWith(`${issuerUrl}/.well-known/openid-configuration`);
+    expect(remoteJwksFactory).toHaveBeenCalledWith(new URL('https://identity.example/keys'));
+    fetchFn.mockClear();
+    for (const operation of [() => auth.resetPassword('u', 'p', false), () => auth.forceLogout('u'), () => auth.sendPasswordResetEmail('u'), () => auth.directory.list(), () => auth.directory.get('u'), () => auth.directory.create({ username: 'u' }), () => auth.directory.update('u', {}), () => auth.directory.setRoles('u', []), () => auth.clients.findUuidByClientId('c'), () => auth.clients.createConfidentialClient('c'), () => auth.clients.addSiteIdMapper('c', 'site'), () => auth.clients.addAudienceMapper('c', 'api'), () => auth.clients.getClientSecret('c'), () => auth.clients.regenerateClientSecret('c'), () => auth.clients.deleteClient('c')]) {
+      await expect(operation()).rejects.toBeInstanceOf(IdentityAdminNotConfiguredError);
+    }
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+  it('rejects mismatched discovery issuer before fetching keys', async () => {
+    const fetchFn = vi.fn(async () => Response.json({ issuer: 'https://other.example', jwks_uri: 'https://other.example/keys' }));
+    const remoteJwksFactory = vi.fn();
+    await expect(createAuth({ mode: 'oidc', issuerUrl }, { fetchFn, remoteJwksFactory }).verifyToken('token')).rejects.toThrow(/issuer/);
+    expect(remoteJwksFactory).not.toHaveBeenCalled();
+  });
+  it('rejects generic auth with Keycloak administration', () => {
+    expect(() => createAuth({ mode: 'oidc', identityAdminAdapter: 'keycloak', issuerUrl })).toThrow();
+  });
+});
+
+it('generic discovery removes the issuer trailing slash from the discovery path only', async () => {
+  const issuerUrl = 'https://identity.example/tenant/';
+  const { sign, keySet } = await localKeySet();
+  const fetchFn = vi.fn(async () => Response.json({ issuer: issuerUrl, jwks_uri: 'https://identity.example/keys' }));
+  const auth = createAuth({ mode: 'oidc', issuerUrl }, { fetchFn, remoteJwksFactory: () => keySet });
+  await auth.verifyToken(await sign({}, { iss: issuerUrl }));
+  expect(fetchFn).toHaveBeenCalledWith('https://identity.example/tenant/.well-known/openid-configuration');
+});
+
+it('generic explicit JWKS skips discovery but validates issuer, audience, expiry and signature', async () => {
+  const issuerUrl = 'https://identity.example/tenant';
+  const { sign, keySet } = await localKeySet();
+  const other = await localKeySet();
+  const fetchFn = vi.fn();
+  const remoteJwksFactory = vi.fn(() => keySet);
+  const auth = createAuth({ mode: 'oidc', issuerUrl, audience: 'api', internalJwksUrl: 'http://keys.local/jwks', internalIssuerUrl: 'http://stale/realms/old' }, { fetchFn, remoteJwksFactory });
+  await expect(auth.verifyToken(await sign({}, { iss: issuerUrl, aud: 'api' }))).resolves.toMatchObject({ sub: 'user-123' });
+  for (const token of [await sign({}, { iss: 'https://other.example', aud: 'api' }), await sign({}, { iss: issuerUrl, aud: 'other' }), await sign({}, { iss: issuerUrl, aud: 'api', exp: '-1m' }), await other.sign({}, { iss: issuerUrl, aud: 'api' })]) {
+    await expect(auth.verifyToken(token)).rejects.toThrow();
+  }
+  expect(remoteJwksFactory).toHaveBeenCalledWith(new URL('http://keys.local/jwks'));
+  expect(fetchFn).not.toHaveBeenCalled();
+});

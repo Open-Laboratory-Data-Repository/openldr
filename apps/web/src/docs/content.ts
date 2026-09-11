@@ -66,6 +66,7 @@ export const TITLES: Record<string, string> = {
   upgrading: 'Planned upgrades',
   'windows-server': 'Windows Server',
   environment: 'Environment variables',
+  'auth-providers': 'Authentication providers',
   development: 'Development',
   cli: 'Command-line interface (CLI)',
 };
@@ -93,6 +94,7 @@ export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'requirements' },
   { slug: 'install', children: ['windows-server', 'upgrading'] },
   { slug: 'environment' },
+  { slug: 'auth-providers' },
   { slug: 'development' },
   { slug: 'cli' },
 ];

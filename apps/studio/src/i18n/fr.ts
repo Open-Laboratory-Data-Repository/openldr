@@ -34,6 +34,7 @@ export const fr: EnShape = {
   }
 },
   common: {
+    localSignout: "Vous êtes déconnecté de ce navigateur. La session du fournisseur d’identité peut rester active.",
     delete: 'Supprimer',
     save: 'Enregistrer',
     cancel: 'Annuler',
@@ -98,6 +99,8 @@ export const fr: EnShape = {
     },
   },
   users: {
+    editRole: "Modifier le rôle",
+    identityAdminUnavailable: "Contactez l’administrateur du fournisseur d’identité pour créer des utilisateurs, modifier les profils, réinitialiser les mots de passe ou fermer les sessions. Les rôles et l’accès OpenLDR restent disponibles.",
     directorySearch: "Rechercher un identifiant, nom ou e-mail",
     directoryAll: "Tous les statuts",
     directoryOrder: "Ordre du fournisseur. La recherche et le statut portent sur tout l'annuaire.",
@@ -206,6 +209,7 @@ export const fr: EnShape = {
     },
   },
   sites: {
+    adminUnavailable: "L’inscription des sites et la modification des identifiants nécessitent l’administration des clients Keycloak.",
     count_one: '{{count}} site',
     count_other: '{{count}} sites',
     title: 'Sites',

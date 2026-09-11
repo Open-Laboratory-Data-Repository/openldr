@@ -884,6 +884,7 @@ export interface ProjectionRetriesTable {
 }
 
 export interface InternalSchema {
+  auth_issuer_binding: { id: number; issuer: string };
   'fhir.projection_retries': ProjectionRetriesTable;
   'fhir.fhir_resources': FhirResourcesTable;
   'fhir.resource_history': ResourceHistoryTable;

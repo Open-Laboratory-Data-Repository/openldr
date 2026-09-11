@@ -32,7 +32,8 @@ export const ConfigSchema = z
     // after migration. Off by default; the prod demo turns it on so it comes up populated.
     SEED_ON_START: envBoolean(false),
 
-    AUTH_ADAPTER: z.enum(['keycloak']).default('keycloak'),
+    AUTH_ADAPTER: z.enum(['keycloak', 'oidc']).default('keycloak'),
+    IDENTITY_ADMIN_ADAPTER: z.enum(['keycloak', 'none']).optional(),
     BLOB_ADAPTER: z.enum(['minio']).default('minio'),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
     TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql', 'mysql']).default('pg'),
@@ -71,10 +72,15 @@ export const ConfigSchema = z
     // Working dir for terminology distribution download + extraction (needs disk headroom for SNOMED).
     TERMINOLOGY_WORK_DIR: z.string().optional(),
 
-    // OIDC issuer (Keycloak realm base URL).
+    // OIDC issuer URL. Keycloak mode uses the realm base URL.
     OIDC_ISSUER_URL: z.string().url(),
     OIDC_WEB_CLIENT_ID: z.string().min(1).default('openldr-web'),
     OIDC_AUDIENCE: z.string().min(1).optional(),
+    OIDC_RESOURCE: z.string().url().max(2048).optional(),
+    OIDC_SCOPES: z.string().min(1).max(1024)
+      .regex(/^[\x21\x23-\x5B\x5D-\x7E]+(?: [\x21\x23-\x5B\x5D-\x7E]+)*$/)
+      .refine((value) => value.split(' ').includes('openid'), 'OIDC_SCOPES must include openid')
+      .default('openid profile email'),
     // Internal (back-channel) JWKS URL. When set, the app fetches signing keys from this
     // docker-network URL instead of via discovery on the public issuer (which may sit behind
     // the gateway with a self-signed cert). Issuer CLAIM validation still uses OIDC_ISSUER_URL.
@@ -192,6 +198,9 @@ export const ConfigSchema = z
     SECRETS_ENCRYPTION_KEY: z.string().optional(),
   })
   .superRefine((cfg, ctx) => {
+    if (cfg.AUTH_ADAPTER === 'oidc' && cfg.IDENTITY_ADMIN_ADAPTER === 'keycloak') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['IDENTITY_ADMIN_ADAPTER'], message: 'Keycloak administration requires AUTH_ADAPTER=keycloak' });
+    }
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {
       for (const key of ['MSSQL_HOST', 'MSSQL_DATABASE', 'MSSQL_USER', 'MSSQL_PASSWORD'] as const) {
         if (!cfg[key]) {

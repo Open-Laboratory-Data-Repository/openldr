@@ -32,6 +32,7 @@ export const en = {
   }
 },
   common: {
+    localSignout: "Signed out of this browser. Your identity provider session may still be active.",
     delete: 'Delete',
     save: 'Save',
     cancel: 'Cancel',
@@ -96,6 +97,8 @@ export const en = {
     },
   },
   users: {
+    editRole: "Edit role",
+    identityAdminUnavailable: "Contact your identity provider administrator to create users, edit profiles, reset passwords, or end provider sessions. OpenLDR roles and account access remain available.",
     directorySearch: "Search username, name or email",
     directoryAll: "All statuses",
     directoryOrder: "Provider order. Search and status apply to the whole directory.",
@@ -208,6 +211,7 @@ export const en = {
     },
   },
   sites: {
+    adminUnavailable: "Site enrollment and credential changes require Keycloak client administration.",
     count_one: '{{count}} site',
     count_other: '{{count}} sites',
     title: 'Sites',

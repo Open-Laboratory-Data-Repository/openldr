@@ -5,6 +5,35 @@ import { accountFixture } from './account-status.test-support';
 const actor = { actorType: 'cli' as const, actorName: 'cli', actorId: null };
 
 describe('account status service', () => {
+  it.each(['setStatus', 'unblockSubject'] as const)('keeps generic access blocked when enabling fails at %s', async (method) => {
+    const f = await accountFixture();
+    f.ctx.cfg = { AUTH_ADAPTER: 'oidc' };
+    try {
+      const user = await f.users.syncFromClaims({ sub: f.provider.id, preferred_username: 'ada' });
+      await setAccountStatus(f.ctx, { localId: user.id }, false, actor);
+      vi.spyOn(f.users, method).mockRejectedValueOnce(new Error('storage failure'));
+      await expect(setAccountStatus(f.ctx, { localId: user.id }, true, actor)).rejects.toThrow(/access remains blocked/);
+      expect(await f.users.isSubjectBlocked(f.provider.id)).toBe(true);
+      expect(f.directory.get).not.toHaveBeenCalled();
+      expect(f.events.at(-1)).toMatchObject({ action: 'user.status.failed', metadata: { backend: 'local', subjectBlocked: true } });
+    } finally { await f.db.destroy(); }
+  });
+  it('disables and enables a linked local account without provider administration', async () => {
+    const f = await accountFixture();
+    f.ctx.cfg = { AUTH_ADAPTER: 'oidc', IDENTITY_ADMIN_ADAPTER: 'none' };
+    try {
+      const user = await f.users.syncFromClaims({ sub: f.provider.id, preferred_username: 'ada' });
+      await setAccountStatus(f.ctx, { localId: user.id }, false, actor);
+      expect(await f.users.isSubjectBlocked(f.provider.id)).toBe(true);
+      expect(await f.users.get(user.id)).toMatchObject({ status: 'disabled' });
+      await setAccountStatus(f.ctx, { localId: user.id }, true, actor);
+      expect(await f.users.isSubjectBlocked(f.provider.id)).toBe(false);
+      expect(await f.users.get(user.id)).toMatchObject({ status: 'active' });
+      expect(f.directory.get).not.toHaveBeenCalled();
+      expect(f.directory.update).not.toHaveBeenCalled();
+      expect(f.events.at(-1)).toMatchObject({ action: 'user.status', metadata: { backend: 'local' } });
+    } finally { await f.db.destroy(); }
+  });
   it('disables a provider subject before its first login and re-enables it', async () => {
     const f = await accountFixture();
     try {
