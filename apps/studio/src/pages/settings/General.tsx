@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -239,12 +240,13 @@ export function General() {
             <dd>Apache-2.0</dd>
           </dl>
 
-          {/* Nothing here upgrades anything — these are the two commands for the
-              operator to run themselves, shown only when there is something to upgrade to. */}
+          {/* Show upgrade guidance only when a newer release is available. */}
           {verdict?.kind === 'update_available' && (
             <div className="mt-3 rounded-md border border-border bg-muted/40 p-3">
               <p className="mb-2 text-xs text-muted-foreground">{t('settings.general.about.upgradeHow')}</p>
-              <pre className="overflow-x-auto font-mono text-xs">docker compose pull{'\n'}docker compose up -d</pre>
+              <Link to="/docs/upgrading" className="text-xs text-primary underline underline-offset-4">
+                {t('settings.general.about.upgradeProcedure')}
+              </Link>
             </div>
           )}
 

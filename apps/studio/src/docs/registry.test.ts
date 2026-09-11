@@ -52,6 +52,7 @@ describe('docs registry', () => {
       'connectors',
       'marketplace',
       'environment',
+      'upgrading',
       'advanced-docs',
     ]);
     expect(DOC_ORDER).toEqual(DOC_GUIDES.map((guide) => guide.slug));
@@ -82,6 +83,7 @@ describe('docs registry', () => {
       connectors: ['report-pipeline', 'settings', 'workflows', 'marketplace', 'query'],
       marketplace: ['settings', 'connectors', 'forms'],
       environment: ['settings', 'connectors'],
+      upgrading: ['settings', 'environment', 'workflows'],
       'advanced-docs': ['start-here', 'settings'],
     });
   });

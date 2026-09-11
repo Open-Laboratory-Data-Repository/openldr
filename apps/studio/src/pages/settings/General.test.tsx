@@ -1,7 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import '@/i18n';
+import i18n from '@/i18n';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 // Mutable so a test can drop the caller to a signed-in user with no settings capability.
@@ -50,6 +50,8 @@ beforeEach(() => {
   (api.fetchUpdateState as any).mockResolvedValue({ ...AVAILABLE, updateAvailable: false, latestVersion: '0.1.1', running: '0.1.1' });
 });
 
+afterEach(async () => { cleanup(); await i18n.changeLanguage('en'); });
+
 describe('General settings — About card update notice', () => {
   it('shows the available version next to the running one', async () => {
     (api.fetchUpdateState as any).mockResolvedValue(AVAILABLE);
@@ -57,14 +59,22 @@ describe('General settings — About card update notice', () => {
     expect(await screen.findByText(/0\.2\.0 available/i)).toBeInTheDocument();
   });
 
-  it('shows the two upgrade commands when an update exists', async () => {
+  it.each([
+    ['en', /planned upgrade/i, /downtime/i, /pause senders/i, /verify backups/i],
+    ['fr', /mise à jour planifiée/i, /interruption/i, /suspendez les envois/i, /vérifiez les sauvegardes/i],
+    ['pt', /atualização planeada/i, /paragem/i, /pause os envios/i, /verifique as cópias de segurança/i],
+  ])('links to the planned upgrade procedure in %s', async (language, label, downtime, senders, backups) => {
+    await i18n.changeLanguage(language as string);
     (api.fetchUpdateState as any).mockResolvedValue(AVAILABLE);
-    render(<MemoryRouter><General /></MemoryRouter>);
-    expect(await screen.findByText(/docker compose pull/)).toBeInTheDocument();
-    expect(screen.getByText(/docker compose up -d/)).toBeInTheDocument();
+    render(<MemoryRouter basename="/studio" initialEntries={['/studio/settings/general']}><General /></MemoryRouter>);
+    const link = await screen.findByRole('link', { name: label });
+    expect(link).toHaveAttribute('href', '/studio/docs/upgrading');
+    expect(screen.getByText(downtime)).toHaveTextContent(senders);
+    expect(screen.getByText(downtime)).toHaveTextContent(backups);
+    expect(screen.queryByText(/docker compose (pull|up)/)).toBeNull();
   });
 
-  it('does not show the commands when the install is current', async () => {
+  it('does not offer an upgrade when the install is current', async () => {
     (api.fetchClientConfig as any).mockResolvedValue({
       dashboardSqlEnabled: false, authEnforced: false, version: '0.2.0', environment: 'test', oidc: null,
     });
@@ -75,7 +85,7 @@ describe('General settings — About card update notice', () => {
     });
     render(<MemoryRouter><General /></MemoryRouter>);
     await screen.findByTestId('update-latest');
-    expect(screen.queryByText(/docker compose pull/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /planned upgrade/i })).toBeNull();
   });
 
   it('links to the release notes when the manifest carried a URL', async () => {
@@ -115,7 +125,7 @@ describe('General settings — About card update notice', () => {
     (api.fetchUpdateState as any).mockRejectedValue(new Error('404'));
     render(<MemoryRouter><General /></MemoryRouter>);
     expect(await screen.findByText('0.1.1')).toBeInTheDocument();
-    expect(screen.queryByText(/docker compose pull/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /planned upgrade/i })).toBeNull();
   });
 
   // A check that never succeeds is the dangerous case: lastCheckedAt still moves, so a silent card

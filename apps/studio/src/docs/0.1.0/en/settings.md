@@ -22,8 +22,7 @@ This manual documents supported settings areas only. If a settings page is not c
 
 **Settings → General** shows the version this install is running and, on the line below it, where
 that version stands. That line reads one of six ways: the version number and *up to date*; *no
-update found*; a newer version with its release date and notes, followed by the two commands to
-upgrade; *update check is off*; *cannot confirm*, when the last check failed or the running version
+update found*; a newer version with its release date and notes, followed by a link to the [planned upgrade procedure](/docs/upgrading); *update check is off*; *cannot confirm*, when the last check failed or the running version
 could not be read; or *not checked yet*.
 
 *No update found* means the last successful check saw an **older** release than the one you are
