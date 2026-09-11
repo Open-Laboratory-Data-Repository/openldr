@@ -4,6 +4,7 @@ import type { WorkflowStore } from './store';
 import type { WorkflowRunStore } from './run-store';
 import type { WorkflowScheduleStore } from './schedule-store';
 import type { WebhookRegistry } from './webhook-registry';
+import type { SharedWebhookResolver } from './shared-webhook-resolver';
 import type { runWorkflow as RunWorkflowFn } from './engine/run-workflow';
 import type { WorkflowServices } from './engine/services';
 import type { CodeLimits } from './engine/execution-context';
@@ -16,7 +17,7 @@ interface RunnerDeps {
   store: Pick<WorkflowStore, 'get'>;
   runs: WorkflowRunStore;
   schedules: Pick<WorkflowScheduleStore, 'get' | 'list' | 'setNextDue'>;
-  webhooks: Pick<WebhookRegistry, 'resolve'>;
+  webhooks: Pick<WebhookRegistry, 'resolve'> | SharedWebhookResolver;
   runWorkflow: typeof RunWorkflowFn;
   logger: { error(o: unknown, m?: string): void; warn(o: unknown, m?: string): void };
   codeLimits?: CodeLimits;

@@ -81,3 +81,20 @@ describe('workflow secret store', () => {
     await db.destroy();
   });
 });
+
+it('nullable resolution distinguishes unreadable credentials from database failure', async () => {
+  const db = await makeMigratedDb();
+  try {
+    const store = createWorkflowSecretStore(db);
+    const id = await store.put('wf1', 'current-token', key);
+    expect(await store.resolveIfAvailable(id, key)).toBe('current-token');
+    expect(await store.resolveIfAvailable('missing', key)).toBeNull();
+    expect(await store.resolveIfAvailable(id, undefined)).toBeNull();
+    expect(await store.resolveIfAvailable(id, 'invalid-key')).toBeNull();
+    expect(await store.resolveIfAvailable(id, randomBytes(32).toString('base64'))).toBeNull();
+    await db.updateTable('workflow_secrets').set({ sealed_value: 'invalid-ciphertext' }).where('id', '=', id).execute();
+    expect(await store.resolveIfAvailable(id, key)).toBeNull();
+    await db.schema.dropTable('workflow_secrets').execute();
+    await expect(store.resolveIfAvailable(id, key)).rejects.toThrow();
+  } finally { await db.destroy(); }
+});

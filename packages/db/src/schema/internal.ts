@@ -919,6 +919,7 @@ export interface InternalSchema {
   report_schedules: ReportSchedulesTable;
   report_schedule_runs: ReportScheduleRunsTable;
   workflows: WorkflowsTable;
+  workflow_webhook_paths: { workflow_id: string; path: string };
   workflow_runs: WorkflowRunsTable;
   workflow_schedules: WorkflowSchedulesTable;
   workflow_datasets: WorkflowDatasetsTable;

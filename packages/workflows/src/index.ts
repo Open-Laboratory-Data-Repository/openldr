@@ -42,3 +42,4 @@ export {
   type SecretValue,
   type SecretFieldRef,
 } from './secret-fields';
+export { createSharedWebhookResolver, WebhookPathConflictError, type SharedWebhookResolver } from './shared-webhook-resolver';

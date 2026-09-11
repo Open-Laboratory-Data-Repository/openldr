@@ -17,6 +17,8 @@ export interface WorkflowSecretStore {
   put(workflowId: string, plaintext: string, key: string | undefined): Promise<string>;
   /** Resolve a ref id back to plaintext. Throws on unknown id or wrong/absent key. */
   resolve(id: string, key: string | undefined): Promise<string>;
+  /** Missing or unreadable credentials return null. Database errors propagate. */
+  resolveIfAvailable(id: string, key: string | undefined): Promise<string | null>;
   /** Remove every secret belonging to a workflow (delete-cascade). */
   deleteForWorkflow(workflowId: string): Promise<void>;
   /** Orphan GC: drop a workflow's secrets except the ids still referenced. */
@@ -24,6 +26,9 @@ export interface WorkflowSecretStore {
 }
 
 export function createWorkflowSecretStore(db: Kysely<InternalSchema>): WorkflowSecretStore {
+  const read = (id: string) => db.selectFrom('workflow_secrets')
+    .select('sealed_value').where('id', '=', id).executeTakeFirst();
+  const decrypt = (sealed: string, key: string | undefined) => open(sealed, keyOf(key));
   return {
     async put(workflowId, plaintext, key) {
       const id = `wsec_${randomUUID()}`;
@@ -35,13 +40,15 @@ export function createWorkflowSecretStore(db: Kysely<InternalSchema>): WorkflowS
     },
 
     async resolve(id, key) {
-      const r = await db
-        .selectFrom('workflow_secrets')
-        .select('sealed_value')
-        .where('id', '=', id)
-        .executeTakeFirst();
+      const r = await read(id);
       if (!r) throw new OpenLdrError(`workflow secret not found: ${id}`);
-      return open(r.sealed_value, keyOf(key));
+      return decrypt(r.sealed_value, key);
+    },
+
+    async resolveIfAvailable(id, key) {
+      const r = await read(id);
+      if (!r) return null;
+      try { return decrypt(r.sealed_value, key); } catch { return null; }
     },
 
     async deleteForWorkflow(workflowId) {

@@ -59,3 +59,12 @@ Consultez le guide des [rapports planifiés](/docs/report-pipeline) pour prépar
 - [Connecteurs](/docs/connectors)
 - [Rapports](/docs/reports)
 - [Audit](/docs/audit)
+
+
+## Webhooks sur plusieurs instances API
+
+Enregistrez le nouveau chemin ou secret avant d'envoyer des requêtes avec cette valeur. Chaque instance API mise à jour lit le chemin et le secret actuels dans la base partagée. Aucun redémarrage n'est nécessaire après l'enregistrement. Les requêtes déjà authentifiées peuvent se terminer.
+
+Envoyez le secret uniquement dans l'en-tête `x-webhook-token`. L'ancien chemin renvoie 404 après un changement. Un secret ancien ou illisible renvoie 401. Un flux désactivé ou supprimé renvoie 404. Chaque déclencheur actif doit avoir un chemin unique, même dans un seul flux. Un conflit de chemins renvoie 503 sans exécuter le flux. Une erreur de lecture de la base renvoie aussi 503. Aucune instance ne réutilise des identifiants en cache.
+
+Arrêtez toutes les anciennes instances API et tous les anciens processus qui modifient les flux. Appliquez ensuite la migration 096 avec `openldr db migrate`, puis démarrez les instances mises à jour. Les anciens processus ne maintiennent pas le nouvel index des chemins. Ce déploiement exige une interruption ; ne mélangez pas les versions pendant les écritures. Les instances doivent partager la base et la clé de chiffrement. Cette modification ne rend pas l'exécution durable. Les émetteurs doivent toujours gérer les requêtes interrompues et les effets potentiellement répétés.

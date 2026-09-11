@@ -4,9 +4,36 @@ import Fastify from 'fastify';
 import { ConfigError } from '@openldr/core';
 import { createWorkflowSecretStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createWebhookRegistry } from '@openldr/workflows';
+import { createSharedWebhookResolver } from '@openldr/workflows';
 import { registerWorkflowRoutes } from './workflows-routes';
 import { registerErrorHandler } from './error-handler';
+
+describe('shared webhook lookup', () => {
+  it('awaits current credentials before authenticating the request', async () => {
+    const ctx = fakeCtx();
+    ctx.workflows.webhooks.resolve = (async () => ({ workflowId: 'current', secret: 'current-token' })) as any;
+    const app = Fastify();
+    registerWorkflowRoutes(app, ctx as any);
+    try {
+      const res = await app.inject({ method: 'POST', url: '/api/workflows/hooks/current', headers: { 'x-webhook-token': 'current-token' }, payload: {} });
+      expect(res.statusCode).toBe(200);
+      expect(ctx.__extras.runAndRecordCalls).toHaveLength(1);
+    } finally { await app.close(); }
+  });
+
+  it('refuses execution with a generic retryable response when lookup fails', async () => {
+    const ctx = fakeCtx();
+    ctx.workflows.webhooks.resolve = () => { throw new Error('database unavailable with private detail'); };
+    const app = Fastify();
+    registerWorkflowRoutes(app, ctx as any);
+    try {
+      const res = await app.inject({ method: 'POST', url: '/api/workflows/hooks/current', headers: { 'x-webhook-token': 'old-token' }, payload: {} });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ error: 'webhook configuration unavailable' });
+      expect(ctx.__extras.runAndRecordCalls).toHaveLength(0);
+    } finally { await app.close(); }
+  });
+});
 
 // Lightweight in-memory secret store for the legacy (non-secret) route tests. Mirrors
 // createWorkflowSecretStore semantics incl. the fail-closed ConfigError when no key is set.
@@ -929,10 +956,9 @@ describe('workflow routes', () => {
     const app = Fastify();
     app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
     const { ctx, db, key } = await realSecretCtx();
-    // Swap in a REAL webhook registry that resolves sealed refs via the real secret store —
-    // exactly the bootstrap wiring. syncWorkflowTriggers (run on save) must resolve the ref
-    // and register the plaintext in memory so the constant-time verify path matches.
-    ctx.workflows.webhooks = createWebhookRegistry({
+    // Resolve the saved definition and sealed reference at request time.
+    ctx.workflows.webhooks = createSharedWebhookResolver({
+      findByPath: async () => ctx.workflows.store.list(),
       resolveRef: (ref: string) => ctx.workflows.secretStore.resolve(ref, key).catch(() => null),
     });
     registerWorkflowRoutes(app, ctx);
@@ -948,10 +974,10 @@ describe('workflow routes', () => {
     });
     expect(save.statusCode).toBe(200);
 
-    // Persisted definition is a ref (no cleartext), but the registry resolved it in memory.
+    // The saved definition contains a reference. Lookup resolves it when requested.
     const stored = await ctx.workflows.store.get('wf-hook-e2e');
     expect(typeof stored.definition.nodes[0].data.secret.secretRef).toBe('string');
-    expect(ctx.workflows.webhooks.resolve('hooke2e')?.secret).toBe('live-token');
+    expect((await ctx.workflows.webhooks.resolve('hooke2e'))?.secret).toBe('live-token');
 
     // Wrong token → 401; correct token → 200 + a recorded run.
     const wrong = await app.inject({
@@ -976,8 +1002,8 @@ describe('workflow routes', () => {
     app.addHook('onRequest', async (req: any) => { req.user = MANAGER_USER; });
     const { ctx, db } = await realSecretCtx();
     // A resolver that always returns null simulates a deleted / mis-keyed / rotated secret.
-    // The registry then registers secret:null and the hook route fails closed (401).
-    ctx.workflows.webhooks = createWebhookRegistry({ resolveRef: async () => null });
+    // Lookup returns secret:null and the hook route refuses the request.
+    ctx.workflows.webhooks = createSharedWebhookResolver({ findByPath: async () => ctx.workflows.store.list(), resolveRef: async () => null });
     registerWorkflowRoutes(app, ctx);
 
     const save = await app.inject({
@@ -990,8 +1016,7 @@ describe('workflow routes', () => {
       },
     });
     expect(save.statusCode).toBe(200);
-    // Registry resolved the ref to null → fail-closed, indistinguishable from no-secret.
-    expect(ctx.workflows.webhooks.resolve('hookbrick')?.secret).toBeNull();
+    expect((await ctx.workflows.webhooks.resolve('hookbrick'))?.secret).toBeNull();
 
     // Even the (formerly-correct) token is rejected — the plaintext was never registered.
     const res = await app.inject({

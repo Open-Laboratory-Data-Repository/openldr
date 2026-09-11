@@ -22,7 +22,7 @@ import {
   createWorkflowStore, type WorkflowStore,
   createWorkflowRunStore, type WorkflowRunStore,
   createWorkflowScheduleStore, type WorkflowScheduleStore,
-  createWebhookRegistry, type WebhookRegistry,
+  createSharedWebhookResolver, type SharedWebhookResolver,
   createWorkflowTriggerRunner, type WorkflowTriggerRunner,
   createWorkflowDatasetStore, type WorkflowDatasetStore,
   runWorkflow, WorkflowDefinitionSchema, assertSubWorkflowAllowed, extractTerminalItems,
@@ -501,7 +501,7 @@ export interface AppContext {
     store: WorkflowStore;
     runs: WorkflowRunStore;
     schedules: WorkflowScheduleStore;
-    webhooks: WebhookRegistry;
+    webhooks: SharedWebhookResolver;
     runner: WorkflowTriggerRunner;
     services: WorkflowServices;
     datasets: WorkflowDatasetStore;
@@ -817,21 +817,11 @@ const reporting: ReportingApi = {
   const workflowStore = createWorkflowStore(internal.db);
   const workflowRuns = createWorkflowRunStore(internal.db);
   const workflowSchedules = createWorkflowScheduleStore(internal.db);
-  // SEC-06: the secret store is constructed BEFORE the webhook registry + workflow
-  // services so both can resolve sealed `{ secretRef }` values at use (the registry
-  // resolves the webhook secret on sync; the HTTP node resolves a ref-valued headers
-  // blob). Injected resolvers keep `@openldr/workflows` crypto-key-free.
+  // Resolve webhook paths and credentials from shared state on every request.
   const workflowSecrets = createWorkflowSecretStore(internal.db);
-  const workflowWebhooks = createWebhookRegistry({
-    // Open the sealed webhook-secret ref → plaintext (held in memory). A failure to
-    // resolve (unknown id / key unset / rotated key) registers a null secret rather
-    // than crashing reconcile — the route then fails closed (401 "no secret configured").
-    // Log a warning so a silently-bricked hook has an operator signal (SEC-06).
-    resolveRef: (ref) =>
-      workflowSecrets.resolve(ref, cfg.SECRETS_ENCRYPTION_KEY).catch((err) => {
-        logger.warn({ ref, err }, 'SEC-06: webhook secret ref failed to resolve — hook will 401');
-        return null;
-      }),
+  const workflowWebhooks = createSharedWebhookResolver({
+    findByPath: (path) => workflowStore.findByWebhookPath(path),
+    resolveRef: (ref) => workflowSecrets.resolveIfAvailable(ref, cfg.SECRETS_ENCRYPTION_KEY),
   });
   const workflowDatasets = createWorkflowDatasetStore(internal.db);
 
@@ -1158,11 +1148,8 @@ const reporting: ReportingApi = {
   });
   const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
 
-  // SEC-06: proactively seal any PLAINTEXT secrets left inline in existing workflow definitions
-  // (saved before SEC-06). Runs here — after the workflow store + secret store exist but BEFORE the
-  // webhook registry's initial reconcile (apps/server boot loop's `webhooks.sync`) — so the registry
-  // sees `{ secretRef }` values the injected resolver opens. Idempotent, key-guarded, and best-effort
-  // per-workflow; like migrateLegacySyncConfig it must never abort boot.
+  // Seal legacy plaintext definitions before serving requests. The shared webhook
+  // resolver reads the saved references. Migration stays best-effort per workflow.
   await migrateWorkflowSecrets({
     store: workflowStore,
     secretStore: workflowSecrets,
