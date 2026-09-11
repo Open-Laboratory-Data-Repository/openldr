@@ -112,3 +112,59 @@ No Designer de relatórios do Studio, guarde o modelo e aguarde a confirmação.
 Escolha **⋯ → Criar relatório a partir deste modelo**. Preencha Nome, Categoria, Modelo e Consulta principal; a Descrição é opcional. Verifique qualquer consulta pré-selecionada. No menu **⋯** do formulário, escolha **Criar relatório** e confirme a mensagem com o nome. Esta ação não publica uma revisão do modelo.
 
 Abra Relatórios, selecione o relatório na categoria, preencha os parâmetros obrigatórios e execute-o. A consulta principal fornece as linhas da folha de cálculo; o modelo define o documento. Publicar revisões posteriores não exige uma nova entrada na biblioteca. O guia do designer no Studio apresenta o procedimento completo.
+
+## First steps in Studio
+
+### English
+
+The numbered screenshots show the English interface with synthetic examples. They contain no patient data.
+On a phone, open the navigation menu first. In Studio, select an image to enlarge it.
+
+1. Open **Dashboard** to see dashboards shared with your account.
+2. Open **Reports** to browse the report library.
+3. Open **Docs** and use **Search documentation** to find a task.
+4. Return to **Reports**, select a report, open its **⋯** menu, and choose **Parameters**.
+5. Complete its required fields. Reports define their own parameters; the image shows an example text field.
+6. Select **Run** when the required values are complete.
+
+**Facilities** appears when your account has permission to view facilities. Other pages also depend on permissions.
+The capture stops before Run. The report's output depends on its definition and available data.
+Find the full **Start here** guide inside Studio's **Docs**.
+
+### Français
+
+Les images numérotées montrent l'interface anglaise avec des exemples fictifs, sans données de patients.
+Sur téléphone, ouvrez d'abord le menu de navigation. Dans Studio, sélectionnez une image pour l'agrandir.
+
+1. Ouvrez **Tableau de bord** pour consulter les tableaux partagés avec votre compte.
+2. Ouvrez **Rapports** pour parcourir la bibliothèque.
+3. Ouvrez **Documentation** et cherchez une tâche.
+4. Revenez aux **Rapports**, sélectionnez un rapport, ouvrez son menu **⋯**, puis **Paramètres**.
+5. Renseignez les champs obligatoires. Chaque rapport définit ses paramètres ; l'image montre un champ texte d'exemple.
+6. Sélectionnez **Exécuter** quand les valeurs obligatoires sont complètes.
+
+**Établissements** apparaît si votre compte peut les consulter. Les autres pages dépendent aussi des permissions.
+La capture s'arrête avant l'exécution. Le résultat dépend du rapport et des données disponibles.
+Le guide **Commencer ici** est disponible dans la documentation Studio.
+
+### Português
+
+As imagens numeradas mostram a interface inglesa com exemplos fictícios, sem dados de pacientes.
+No telefone, abra primeiro o menu de navegação. No Studio, selecione uma imagem para a ampliar.
+
+1. Abra **Painel** para consultar os painéis partilhados com a sua conta.
+2. Abra **Relatórios** para percorrer a biblioteca.
+3. Abra **Documentação** e procure uma tarefa.
+4. Volte a **Relatórios**, selecione um relatório, abra o menu **⋯** e escolha **Parâmetros**.
+5. Preencha os campos obrigatórios. Cada relatório define os parâmetros; a imagem mostra um campo de texto de exemplo.
+6. Selecione **Executar** quando os valores obrigatórios estiverem preenchidos.
+
+**Unidades** aparece quando a sua conta pode consultá-las. As outras páginas também dependem das permissões.
+A captura termina antes da execução. O resultado depende do relatório e dos dados disponíveis.
+O guia **Começar aqui** está disponível na documentação do Studio.
+
+![1 Dashboard / Tableau de bord / Painel. 2 Reports / Rapports / Relatórios. 3 Docs / Documentation / Documentação.](/docs-images/start-here-navigation.png)
+
+![4 Parameters / Paramètres / Parâmetros, in the report actions menu.](/docs-images/start-here-report-menu.png)
+
+![5 Example field / Champ d'exemple / Campo de exemplo. 6 Run / Exécuter / Executar.](/docs-images/start-here-parameters.png)

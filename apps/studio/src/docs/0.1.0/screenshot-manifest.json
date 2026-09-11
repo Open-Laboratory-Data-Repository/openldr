@@ -9,14 +9,83 @@
       "name": "start-here-navigation.png",
       "guide": "start-here",
       "route": "/studio",
-      "purpose": "Show main navigation and Docs entry",
-      "fixture": "base",
+      "purpose": "Show current navigation with numbered Dashboard, Reports, and Docs links",
+      "fixture": "start-here-synthetic",
       "theme": "dark",
       "ready": {
         "kind": "selector",
         "value": "nav"
       },
-      "steps": []
+      "steps": [],
+      "crop": "nav",
+      "callouts": [
+        {
+          "number": 1,
+          "selector": "nav a[href=\"/studio\"]",
+          "offsetX": -34,
+          "offsetY": 2
+        },
+        {
+          "number": 2,
+          "selector": "nav a[href=\"/studio/reports\"]",
+          "offsetX": -34,
+          "offsetY": 2
+        },
+        {
+          "number": 3,
+          "selector": "nav a[href=\"/studio/docs\"]",
+          "offsetX": -34,
+          "offsetY": 2
+        }
+      ]
+    },
+    {
+      "name": "start-here-parameters.png",
+      "guide": "start-here",
+      "route": "/studio/reports",
+      "purpose": "Show report parameters using the isolated Start Here capture",
+      "fixture": "start-here-synthetic",
+      "theme": "dark",
+      "ready": {
+        "kind": "selector",
+        "value": "input[placeholder=\"Example period\"]"
+      },
+      "steps": [],
+      "callouts": [
+        {
+          "number": 5,
+          "selector": "input[placeholder=\"Example period\"]",
+          "offsetX": -32,
+          "offsetY": 2
+        },
+        {
+          "number": 6,
+          "selector": "button:has-text(\"Run\")",
+          "offsetX": -90,
+          "offsetY": 0
+        }
+      ]
+    },
+    {
+      "name": "start-here-report-menu.png",
+      "guide": "start-here",
+      "route": "/studio/reports",
+      "purpose": "Show report parameters using the isolated Start Here capture",
+      "fixture": "start-here-synthetic",
+      "theme": "dark",
+      "ready": {
+        "kind": "selector",
+        "value": "[role=\"menuitem\"]:has-text(\"Parameters\")"
+      },
+      "steps": [],
+      "callouts": [
+        {
+          "number": 4,
+          "selector": "[role=\"menuitem\"]:has-text(\"Parameters\")",
+          "offsetX": -32,
+          "offsetY": 2
+        }
+      ]
     },
     {
       "name": "dashboard-overview.png",

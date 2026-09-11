@@ -72,7 +72,8 @@ test.beforeAll(async ({ request }) => {
   fixtureResult = await ensureDocsFixtures(request);
 });
 
-for (const shot of manifest.shots) {
+// Synthetic Start Here shots use start-here-capture.config.ts without backend fixtures.
+for (const shot of manifest.shots.filter((shot) => shot.fixture !== 'start-here-synthetic')) {
   test(`doc-shot ${shot.name}`, async ({ browser }) => {
     await capture(browser, shot);
   });

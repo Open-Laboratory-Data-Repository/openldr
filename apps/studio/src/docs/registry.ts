@@ -51,7 +51,7 @@ export const DOC_GUIDES: DocGuide[] = [
     estimatedMinutes: 8,
     difficulty: 'beginner',
     relatedSlugs: ['dashboard', 'reports', 'advanced-docs'],
-    screenshotNames: ['start-here-navigation.png'],
+    screenshotNames: ['start-here-navigation.png', 'start-here-report-menu.png', 'start-here-parameters.png'],
     status: 'published',
   },
   {
