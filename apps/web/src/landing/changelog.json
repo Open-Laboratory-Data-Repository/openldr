@@ -6,6 +6,96 @@
       "version": null,
       "entries": [
         {
+          "hash": "3b61f78c",
+          "type": "fix",
+          "scope": "",
+          "title": "Page the user directory beyond 100 accounts"
+        },
+        {
+          "hash": "45bd03a1",
+          "type": "fix",
+          "scope": "",
+          "title": "Enforce account disable across API and CLI"
+        },
+        {
+          "hash": "75beeda0",
+          "type": "fix",
+          "scope": "",
+          "title": "Await active workers during shutdown"
+        },
+        {
+          "hash": "d3cb2089",
+          "type": "fix",
+          "scope": "",
+          "title": "Renew queue leases and fence acknowledgements"
+        },
+        {
+          "hash": "36690b89",
+          "type": "fix",
+          "scope": "",
+          "title": "Serialize overlapping queue drains"
+        },
+        {
+          "hash": "04258512",
+          "type": "fix",
+          "scope": "",
+          "title": "Refuse incomplete report exports"
+        },
+        {
+          "hash": "d4fd9d52",
+          "type": "fix",
+          "scope": "",
+          "title": "Persist failed projections for retry"
+        },
+        {
+          "hash": "58e3bee4",
+          "type": "fix",
+          "scope": "",
+          "title": "Cancel overdue PostgreSQL and MySQL connector queries"
+        },
+        {
+          "hash": "c23138e0",
+          "type": "fix",
+          "scope": "",
+          "title": "Bound builder results before shaping aggregates"
+        },
+        {
+          "hash": "e23e6610",
+          "type": "fix",
+          "scope": "",
+          "title": "Prevent overlapping dashboard refreshes"
+        },
+        {
+          "hash": "b2e2db0c",
+          "type": "fix",
+          "scope": "",
+          "title": "Browse later SQL Server result pages"
+        },
+        {
+          "hash": "c8112bce",
+          "type": "fix",
+          "scope": "",
+          "title": "Explain form submission readiness and field labels"
+        },
+        {
+          "hash": "120d65d7",
+          "type": "fix",
+          "scope": "",
+          "title": "Read connector settings without exposing secrets"
+        },
+        {
+          "hash": "a631477c",
+          "type": "fix",
+          "scope": "",
+          "title": "Expose dashboard creation in the page menu"
+        },
+        {
+          "hash": "cbb61601",
+          "type": "fix",
+          "scope": "",
+          "title": "Preserve canonical facility codes on submission"
+        },
+        {
           "hash": "b60cb9af",
           "type": "fix",
           "scope": "studio",

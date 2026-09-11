@@ -1,8 +1,21 @@
 # Medium batch review
 
-Implementation covers 19 approved findings in 18 worktrees. The combined changes passed their focused tests and typechecks. The batch is ready for review, with the SQL Server execution-deadline limitation below still open.
+Implementation covers 19 approved findings in 18 worktrees. The batch was merged into main as `2ccd3be9` on 2026-09-11. The SQL Server execution-deadline limitation below remains open.
 
-Main remains at `2c7bc502`. No commits, merges, or pushes were made. The combined verification worktree contains copies of the source changes. It is not the running application.
+The merge preserves all 18 slice commits. Its tree exactly matches the reviewed combined tree, `0b771e1c2a572a037e4874f08d932395701e29f6`. All new commits use the operator's author identity with no contributor trailers. Nothing was pushed.
+
+## Post-merge verification
+
+These commands ran on main after the merge, with 95 tests passing in total:
+
+| Command | Result |
+| --- | --- |
+| `pnpm --filter @openldr/server exec vitest run src/account-status-auth.test.ts src/users-routes.test.ts src/auth-plugin.test.ts` | 49 passed |
+| `pnpm --filter @openldr/cli exec vitest run src/user.test.ts` | 9 passed |
+| `pnpm --filter @openldr/db exec vitest run src/internal-db-lock.test.ts src/migrations/migrations.test.ts src/migrations/internal/095_account_access_blocks.test.ts` | 7 passed |
+| `pnpm --filter @openldr/web exec vitest run src/landing/changelog-model.test.ts src/changelog/ChangelogPage.test.tsx` | 30 passed |
+
+`pnpm make:changelog` generated 2,703 entries across 70 days. All 15 fix commits from this batch appear in the generated file. These checks cover HTTP, CLI, database helper and changelog behavior. They do not add live-provider or physical-phone proof.
 
 ## Changes and evidence
 
@@ -89,6 +102,6 @@ Account review also found an older enable could remove a later disable block. St
 
 Large findings P05, P09, P14 and P15 remain outside this batch. P16 remains deferred pending measured contention. P19 remains refuted. Data Exposure enforcement was not expanded to arbitrary SQL. Forms did not gain generic response storage.
 
-Changelog generation belongs after an authorized merge to main. No gallery capture or usage reset was performed.
+The landing changelog was generated after the authorized merge to main. No gallery capture or usage reset was performed.
 
 Automatic approval review rejected cleanup of P13's temporary preview directories as "blocked by policy." The untracked `.playwright-cli/`, `apps/studio/.tmp-directory-preview/` and `output/` remain in its source worktree, excluded from the patch. Preview servers and browsers were stopped. Do not include those directories when committing the slice.
