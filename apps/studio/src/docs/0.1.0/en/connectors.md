@@ -92,7 +92,7 @@ Gmail will **reject your normal password** over SMTP once 2‑Step Verification 
 
 1. Turn on **2‑Step Verification** at `myaccount.google.com` → Security. (App Passwords require it.)
 2. Go to `myaccount.google.com/apppasswords`, name it (e.g. `OpenLDR`), and **Create**. Copy the 16‑character code (shown like `abcd efgh ijkl mnop`).
-3. **Settings → Connectors → New**, type **SMTP Email**:
+3. Open **Settings → Connectors**, then choose **Add connector** from the page menu. Set **Category** to **Host**, then select **SMTP Email** under **Database type**:
 
    | Field | Value |
    | --- | --- |
@@ -126,15 +126,18 @@ If the App Passwords page says it is unavailable, 2‑Step Verification is not f
 ## Steps (create any connector)
 
 1. Open **Settings → Connectors**.
-2. Choose the add action.
-3. Pick the connector **type** (Postgres, SMTP Email, …).
-4. Enter a clear **name** you will recognise in node dropdowns.
-5. Complete the type-specific fields; fill secret fields only with the intended values.
-6. Choose whether the connector starts enabled.
-7. **Save**.
-8. Open the workflow node that needs it and select the connector from its dropdown.
+2. Open the page's **⋯** menu and choose **Add connector**.
+3. Enter a clear **Name** you will recognise in workflow node dropdowns.
+4. Choose **Category**. The default is **Plugin**, which requires an installed output plugin. For a database, email server, or file server, choose **Host**.
+5. For **Host**, choose the service under **Database type**. Despite its label, this selector also includes email and file services. For **Plugin**, select the installed output plugin.
+6. Complete the connection fields for the selected service, then choose **Save**.
+7. Check the saved-name notification and the new row. New connectors start enabled. There is no Enabled choice during creation. To disable one, turn off its **Enabled** switch in the list, or open **Edit** from its row menu and save with Enabled off.
+8. Open the row's **⋯** menu and choose **Test** to check the connection from the OpenLDR server.
+9. Select the enabled connector in a compatible workflow node when you are ready to use it.
 
-![Connector form with type, name, configuration, enabled state, and save](connector-form.png)
+If Plugin shows no installed output plugins, choose Host for a built-in service. For a plugin destination, install the required output plugin through [Marketplace](/docs/marketplace) first.
+
+![Connector configuration form](connector-form.png)
 
 ## Expected result
 
