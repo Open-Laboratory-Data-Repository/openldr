@@ -630,7 +630,7 @@ export const pt: EnShape = {
     },
     dataExposure: {
       title: 'Exposição de dados',
-      description: 'Escolha quais colunas ficam ocultas para a análise — consultas, painéis e relatórios nunca veem colunas ocultas.',
+      description: 'Oculte colunas adicionais no construtor de painéis. As dimensões predefinidas, o SQL direto e os relatórios com conectores ficam fora desta política.',
       loading: 'A carregar política de colunas…',
       save: 'Guardar',
       discard: 'Descartar',
@@ -638,7 +638,7 @@ export const pt: EnShape = {
       hidden: 'Oculta',
       piiBadge: 'DPI',
       confirmTitle: 'Tornar {{name}} visível?',
-      confirmBody: '{{name}} contém informação de identificação pessoal. Torná-la visível exporá os seus valores a consultas analíticas, painéis e relatórios. Continuar?',
+      confirmBody: '{{name}} contém informação de identificação pessoal. Torná-la visível disponibiliza esta coluna adicional no construtor de painéis. Continuar?',
       confirmAction: 'Tornar visível',
       savedToast: 'Política de colunas guardada',
       errorToast: 'Falha na ação: {{error}}',

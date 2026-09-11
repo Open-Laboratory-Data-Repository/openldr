@@ -632,7 +632,7 @@ export const en = {
     },
     dataExposure: {
       title: 'Data Exposure',
-      description: 'Choose which columns are hidden from analytics — queries, dashboards, and reports never see hidden columns.',
+      description: 'Hide additional table columns in the dashboard builder. Built-in dimensions, raw SQL, and connector-backed reports are outside this policy.',
       loading: 'Loading column policy…',
       save: 'Save',
       discard: 'Discard',
@@ -640,7 +640,7 @@ export const en = {
       hidden: 'Hidden',
       piiBadge: 'PII',
       confirmTitle: 'Un-hide {{name}}?',
-      confirmBody: '{{name}} contains personally identifiable information. Un-hiding it will expose its values to analytics queries, dashboards, and reports. Continue?',
+      confirmBody: '{{name}} contains personally identifiable information. Showing it makes this additional table column available in the dashboard builder. Continue?',
       confirmAction: 'Un-hide',
       savedToast: 'Column policy saved',
       errorToast: 'Action failed: {{error}}',

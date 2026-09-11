@@ -630,7 +630,7 @@ export const fr: EnShape = {
     },
     dataExposure: {
       title: 'Exposition des données',
-      description: 'Choisissez les colonnes masquées pour l’analytique — les requêtes, tableaux de bord et rapports ne voient jamais les colonnes masquées.',
+      description: 'Masquez les colonnes supplémentaires du constructeur de tableaux de bord. Les dimensions prédéfinies, le SQL brut et les rapports sur connecteurs restent hors de cette politique.',
       loading: 'Chargement de la politique des colonnes…',
       save: 'Enregistrer',
       discard: 'Annuler les modifications',
@@ -638,7 +638,7 @@ export const fr: EnShape = {
       hidden: 'Masquée',
       piiBadge: 'DPI',
       confirmTitle: 'Rendre {{name}} visible ?',
-      confirmBody: '{{name}} contient des données à caractère personnel. La rendre visible exposera ses valeurs aux requêtes analytiques, tableaux de bord et rapports. Continuer ?',
+      confirmBody: '{{name}} contient des données à caractère personnel. La rendre visible rend cette colonne supplémentaire disponible dans le constructeur de tableaux de bord. Continuer ?',
       confirmAction: 'Rendre visible',
       savedToast: 'Politique des colonnes enregistrée',
       errorToast: 'Action échouée : {{error}}',

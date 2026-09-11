@@ -1,5 +1,7 @@
 # Settings
 
+Use [Data exposure](/docs/data-exposure) to control additional dashboard builder columns and understand the policy limits.
+
 Settings is an administrator-only routing area for supported configuration pages documented in this in-app manual.
 
 Use [Laboratory](/docs/laboratory) to set report letterhead details, choose the default facility register, and configure the laboratory time zone.
