@@ -174,3 +174,44 @@ Enroll a lab on the central server, then connect a lab to it:
 
 > Anything under `settings danger` is destructive (reset dashboards, clear audit,
 > factory reset). Those commands require `--force` and mirror the Studio danger zone.
+
+## Projection retries
+
+The projection worker saves failed resource writes and arrival-ledger writes for automatic retry.
+Retries survive a restart and reread the current canonical resource, including deletions.
+A cycle retries at most 100 queued resources, then handles new changes.
+Repeated failures wait 1, 2, 4 seconds and so on, up to five minutes.
+Retries continue until successful; a failing resource does not hold later valid changes.
+A new change to that resource can trigger an attempt before the delay expires.
+If saving a retry fails, the worker leaves its cursor unchanged.
+Successful projection clears the retry. Ancillary capture-hook errors are logged without scheduling retries.
+No operator action is required after a temporary outage clears.
+For a deliberate full rebuild, use `openldr db reproject --force`.
+
+## Nouvelles tentatives de projection
+
+Le service conserve les écritures échouées des ressources et du registre pour les réessayer automatiquement.
+Ces tentatives survivent au redémarrage et relisent la ressource canonique actuelle, suppressions comprises.
+Chaque cycle reprend au maximum 100 ressources en attente, puis traite les nouveaux changements.
+Les échecs répétés attendent 1, 2, 4 secondes, puis davantage, jusqu'à cinq minutes.
+Les tentatives continuent jusqu'au succès. Une ressource en échec ne bloque pas les changements valides suivants.
+Un nouveau changement de cette ressource peut déclencher une tentative avant la fin du délai.
+Si l'enregistrement d'une tentative échoue, le service conserve son curseur.
+Le succès supprime la tentative en attente. Les erreurs de capture auxiliaire sont journalisées sans nouvelle tentative.
+Après une panne temporaire, aucune intervention n'est nécessaire.
+Pour reconstruire toutes les tables de lecture, utilisez `openldr db reproject --force`.
+
+
+
+## Novas tentativas de projeção
+
+O serviço guarda escritas falhadas de recursos e do registo para tentar novamente de forma automática.
+As tentativas sobrevivem ao reinício e releem o recurso canónico atual, incluindo eliminações.
+Cada ciclo repete no máximo 100 recursos pendentes e depois trata as novas alterações.
+As falhas repetidas aguardam 1, 2, 4 segundos e assim por diante, até cinco minutos.
+As tentativas continuam até terem sucesso. Um recurso com falha não bloqueia as alterações válidas seguintes.
+Uma nova alteração desse recurso pode iniciar uma tentativa antes do fim da espera.
+Se não conseguir guardar uma tentativa, o serviço mantém o cursor.
+O sucesso remove a tentativa pendente. Os erros de captura auxiliar ficam nos registos, sem nova tentativa.
+Após uma falha temporária, não é necessária intervenção.
+Para reconstruir todas as tabelas de leitura, use `openldr db reproject --force`.

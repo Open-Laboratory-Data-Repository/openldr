@@ -32,3 +32,16 @@ You'll find all of these on the project website and in the source repository:
 
 - [Start Here](/docs/start-here)
 - [Settings](/docs/settings)
+
+## Projection retries
+
+The projection worker saves failed resource writes and arrival-ledger writes for automatic retry.
+Retries survive a restart and reread the current canonical resource, including deletions.
+A cycle retries at most 100 queued resources, then handles new changes.
+Repeated failures wait 1, 2, 4 seconds and so on, up to five minutes.
+Retries continue until successful; a failing resource does not hold later valid changes.
+A new change to that resource can trigger an attempt before the delay expires.
+If saving a retry fails, the worker leaves its cursor unchanged.
+Successful projection clears the retry. Ancillary capture-hook errors are logged without scheduling retries.
+No operator action is required after a temporary outage clears.
+For a deliberate full rebuild, use `openldr db reproject --force`.

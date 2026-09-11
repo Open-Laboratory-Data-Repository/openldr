@@ -856,7 +856,15 @@ export interface TerminologyIngestJobsTable {
   active_key: string | null;
 }
 
+export interface ProjectionRetriesTable {
+  resource_type: string;
+  resource_id: string;
+  attempts: number;
+  next_attempt_at: Date;
+}
+
 export interface InternalSchema {
+  'fhir.projection_retries': ProjectionRetriesTable;
   'fhir.fhir_resources': FhirResourcesTable;
   'fhir.resource_history': ResourceHistoryTable;
   'fhir.change_log': ChangeLogTable;
