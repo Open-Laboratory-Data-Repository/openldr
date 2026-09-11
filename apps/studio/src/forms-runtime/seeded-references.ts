@@ -11,7 +11,7 @@ import type { FormSchema, RuntimeAnswers } from './types';
 export interface ResolvableRow {
   /** The answer value to store when this row wins. */
   value: unknown;
-  /** What the operator sees. Matched first, because the column stores displays. */
+  /** What the operator sees. Matched first for existing display-valued rows. */
   display: string;
   /** The coded form. Matched second. `null` for an entity row. */
   code: string | null;
@@ -23,12 +23,9 @@ export interface ResolvableRow {
  * ⛔ Ambiguity NEVER resolves. Two rows differing only in case are not a reason to pick one — a wrong
  * coding is worse than an unresolved field, because the operator can see and fix the second.
  *
- * Order: exact display, then exact code, then case-insensitive display. Display leads because
- * `splitFacilityAnswers` flattens a picked answer to its display
- * (packages/db/src/facility-answers.ts:134-141) — that is what is actually in the column. Code is
- * second so a column holding a code (an operator who typed one, or an older row) still resolves. The
- * case-insensitive pass is last because casing genuinely bites here: value-set status is compared
- * case-sensitively elsewhere in this repo and silently produces empty expansions.
+ * Order: exact display, then exact code, then case-insensitive display.
+ * Facility level, status, and country store codes. Administrative fields and older rows
+ * can hold display text. Both resolve through this lookup.
  */
 export function pickSeededMatch(raw: string, rows: ResolvableRow[]): unknown | undefined {
   const only = (matches: ResolvableRow[]): unknown | undefined =>

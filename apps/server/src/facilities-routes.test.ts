@@ -11,7 +11,7 @@ import {
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
   VALIDATE_PHASE,
 } from '@openldr/db';
-import { projectRegistryRows, observedFieldSystem, addRegisterFacilityType } from '@openldr/bootstrap';
+import { projectRegistryRows, observedFieldSystem, addRegisterFacilityType, CONTROLLED_VALUE_SETS } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
 // The over-cap upload test registers the REAL central error handler, as production does, so its 413
 // carries the app-wide {error, code, correlationId} contract rather than a bespoke body.
@@ -1469,7 +1469,7 @@ function fakeControlledCtx(internalDb: any) {
   return ctx;
 }
 
-function controlledBody(answers: Record<string, string>) {
+function controlledBody(answers: Record<string, unknown>) {
   return {
     answers: { k1: 'CF01', k2: 'Controlled Fields Facility', ...answers },
     formSchemaId: 'form-controlled-fields',
@@ -1478,6 +1478,41 @@ function controlledBody(answers: Record<string, string>) {
 }
 
 describe('Task 6: server-enforced controlled vocabulary on manual create/edit', () => {
+  it.each([
+    ['level', 'k4'], ['status', 'k3'], ['country', 'k5'],
+  ] as const)('preserves picked %s codes through create and edit', async (field, answerId) => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeControlledCtx(internalDb);
+    const vs = await ctx.terminology.admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
+    const { codes } = await ctx.terminology.admin.valueSets.expand(vs!.id);
+    const coding = codes.find((item: { code: string; display: string | null }) => item.display && item.display !== item.code)!;
+    expect(coding).toBeDefined();
+    const app = await appWith(ctx);
+    const created = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ [answerId]: coding }),
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    expect(created.json()[field]).toBe(coding.code);
+    const id = created.json().id;
+    const edited = await app.inject({
+      method: 'PUT', url: `/api/facilities/${id}`,
+      payload: controlledBody({ [answerId]: created.json()[field], k2: 'Renamed facility' }),
+    });
+    expect(edited.statusCode, edited.body).toBe(200);
+    expect(edited.json()[field]).toBe(coding.code);
+    const repicked = await app.inject({
+      method: 'PUT', url: `/api/facilities/${id}`, payload: controlledBody({ [answerId]: coding }),
+    });
+    expect(repicked.statusCode, repicked.body).toBe(200);
+    const refused = await app.inject({
+      method: 'PUT', url: `/api/facilities/${id}`,
+      payload: controlledBody({ [answerId]: { ...coding, code: 'invalid-test-code', display: coding.code } }),
+    });
+    expect(refused.statusCode).toBe(400);
+    const stored = await internalDb.selectFrom('facility_registry').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+    expect(stored[field]).toBe(coding.code);
+  });
+
   it('⛔ refuses a manually created facility whose status is not in the canonical valueset', async () => {
     const internalDb = await makeMigratedDb();
     const app = await appWith(fakeControlledCtx(internalDb));

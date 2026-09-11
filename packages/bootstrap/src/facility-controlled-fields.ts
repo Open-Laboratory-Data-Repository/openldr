@@ -1,4 +1,5 @@
 import type { FacilityRecord, MapType, TerminologyAdminStore } from '@openldr/db';
+import { CONTROLLED_FACILITY_FIELDS } from '@openldr/db/facility-answers';
 
 // FAC-P1-05 (A2a): the CSV importer writes whatever string a national register contains straight
 // into `level`/`status`/`country` — columns the facility FORM already treats as coded against three
@@ -6,7 +7,7 @@ import type { FacilityRecord, MapType, TerminologyAdminStore } from '@openldr/db
 // source's raw strings and those existing canonical vocabularies. It resolves and rewrites; it does
 // NOT wire into `importFacilities` (a later task) and it seeds nothing.
 
-export const CONTROLLED_FIELDS = ['level', 'status', 'country'] as const;
+export const CONTROLLED_FIELDS = CONTROLLED_FACILITY_FIELDS;
 export type ControlledField = (typeof CONTROLLED_FIELDS)[number];
 
 /** The canonical value sets, already seeded — migration 072 for level/status, 073 for country.
