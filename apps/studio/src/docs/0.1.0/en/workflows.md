@@ -24,7 +24,7 @@ You can find a workflow, create one, add and connect nodes, configure them, save
 ## Steps
 
 1. Open **Workflows** and choose the action for a new workflow (or open an existing one).
-2. Name the workflow and open the builder.
+2. Name the workflow and open the builder. Use [Navigate the canvas](#navigate-the-canvas) below if nodes are outside the visible area.
 3. Add a **trigger** node that matches the job: manual, schedule, webhook, or ingest.
 4. Add nodes from the palette and **connect** them in execution order.
 5. Select each node and complete its configuration in the side panel.
@@ -36,6 +36,22 @@ You can find a workflow, create one, add and connect nodes, configure them, save
 8. Open **run history** to compare status, duration, and node-level results.
 
 ![Workflow run history with node results](workflow-run-history.png)
+
+## Navigate the canvas
+
+Use the controls at the bottom left of the canvas:
+
+- Select **+** to zoom in or **−** to zoom out.
+- Select **Fit View**, below the zoom buttons, to bring all nodes into view.
+
+Select the hand icon at the top left for **Pan** mode. Drag an empty area
+of the canvas to move the view. In **Select** mode, the pointer icon,
+left-drag selects nodes in a box. Use the middle or right mouse button
+to drag the view in that mode.
+
+The minimap at the bottom right also supports panning and zooming.
+If you lose sight of your nodes, use **Fit View** before moving any nodes.
+These controls change the view, not the saved node positions.
 
 ## Templating values
 

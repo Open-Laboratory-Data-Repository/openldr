@@ -43,6 +43,7 @@ export const DEFAULT_DOC_VERSION: string =
 /** Page titles (stable across versions). */
 export const TITLES: Record<string, string> = {
   'getting-started': 'Getting started',
+  'workflow-navigation': 'Workflow canvas navigation',
   'marketplace-permissions': 'Marketplace permission checks',
   'load-data': 'Load & push data',
   facilities: 'Facilities',
@@ -57,6 +58,7 @@ export const TITLES: Record<string, string> = {
 /** Sidebar structure; `children` render indented under their parent. */
 export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'getting-started' },
+  { slug: 'workflow-navigation' },
   { slug: 'load-data' },
   { slug: 'facilities' },
   { slug: 'requirements' },
