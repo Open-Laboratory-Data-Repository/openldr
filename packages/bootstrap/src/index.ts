@@ -1818,3 +1818,4 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   await ctx.roles.seedSystemRoles();
   ctx.featureFlags.invalidate();
 }
+export { inspectConnectorConfig, updateConnectorConfig, hostConnectorPatchSchema, type ConnectorConfigView } from './connector-config';

@@ -2797,6 +2797,9 @@ export interface ConnectorUpdateInput {
 
 export const listConnectors = (): Promise<Connector[]> =>
   apiGet<Connector[]>('/api/connectors', 'list connectors');
+export interface ConnectorConfigView { config: Record<string, string>; secretsSet: Record<string, boolean> }
+export const getConnectorConfig = (id: string): Promise<ConnectorConfigView> =>
+  apiGet<ConnectorConfigView>(`/api/connectors/${encodeURIComponent(id)}/config`, 'read connector configuration');
 export const listSinkPlugins = (): Promise<SinkPluginRef[]> =>
   apiGet<SinkPluginRef[]>('/api/connectors/sink-plugins', 'list sink plugins');
 export const createConnector = (input: ConnectorCreateInput): Promise<Connector> =>

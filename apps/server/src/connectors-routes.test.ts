@@ -68,6 +68,64 @@ function appWith(store: ConnectorStore, ctx: AppContext = fakeCtx(), roles: stri
 const newBody = { name: 'DHIS2 Demo', pluginId: 'dhis2-sink', config: { baseUrl: 'https://dhis2.example/dhis', username: 'admin', password: 'district' } };
 
 describe('connectors routes', () => {
+  it('does not copy arbitrary config keys into create audit metadata', async () => {
+    const audited: AuditRecord[] = [];
+    const response = await appWith(fakeStore(), fakeCtx({ audited })).inject({ method: 'POST', url: '/api/connectors', payload: {
+      name: 'PG', type: 'postgres', config: { host: 'db', password: 'hidden', 'unknown-private-key': 'hidden' },
+    } });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.stringify(audited)).not.toContain('unknown-private-key');
+  });
+
+  it('does not return decrypted parser errors during a host edit', async () => {
+    const store = fakeStore();
+    await store.create({ id: 'pg', name: 'PG', type: 'postgres', kind: 'database', config: { host: 'old' } }, 'key');
+    store.getDecryptedConfig = async () => { throw new Error('invalid JSON near credential-value'); };
+    const response = await appWith(store).inject({ method: 'PUT', url: '/api/connectors/pg', payload: { config: { host: 'new' } } });
+    expect(response.statusCode).toBe(400);
+    expect(response.body).not.toContain('credential-value');
+  });
+  it('rejects unauthenticated config inspection', async () => {
+    const app = Fastify();
+    registerConnectorsRoutes(app, fakeCtx(), { connectors: fakeStore() });
+    expect((await app.inject({ method: 'GET', url: '/api/connectors/pg/config' })).statusCode).toBe(401);
+  });
+
+  it('returns generic read errors and never audits host configuration values', async () => {
+    const store = fakeStore();
+    const audited: AuditRecord[] = [];
+    await store.create({ id: 'pg', name: 'PG', type: 'postgres', kind: 'database', config: { host: 'old', password: 'old-secret' } }, 'key');
+    const app = appWith(store, fakeCtx({ audited }));
+    const result = await app.inject({ method: 'PUT', url: '/api/connectors/pg', payload: { config: { host: 'new', password: 'new-secret' } } });
+    expect(result.statusCode).toBe(200);
+    expect(JSON.stringify(audited)).not.toContain('new-secret');
+    expect(JSON.stringify(result.json())).not.toContain('new-secret');
+    const unavailable = await appWith(store, fakeCtx({ key: undefined })).inject({ method: 'GET', url: '/api/connectors/pg/config' });
+    expect(unavailable.statusCode).toBe(400);
+    expect(unavailable.json()).toEqual({ error: 'connector configuration unavailable' });
+    expect((await app.inject({ method: 'GET', url: '/api/connectors/missing/config' })).statusCode).toBe(404);
+  });
+  it('reads only ordinary host fields and secret presence', async () => {
+    const store = fakeStore();
+    await store.create({ id: 'pg', name: 'PG', type: 'postgres', kind: 'database', config: {
+      host: 'db.local', port: '5432', database: 'lab', user: 'reader', password: 'stored-secret',
+      url: 'postgres://reader:embedded-secret@db.local/lab', unexpected: 'unknown-secret',
+    } }, 'key');
+    const response = await appWith(store).inject({ method: 'GET', url: '/api/connectors/pg/config' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ config: { host: 'db.local', port: '5432', database: 'lab', user: 'reader' }, secretsSet: { password: true } });
+    const denied = await appWith(store, fakeCtx(), ['viewer'], []).inject({ method: 'GET', url: '/api/connectors/pg/config' });
+    expect(denied.statusCode).toBe(403);
+  });
+
+  it('preserves stored credentials and other fields during partial host edits', async () => {
+    const store = fakeStore();
+    await store.create({ id: 'pg', name: 'PG', type: 'postgres', kind: 'database', config: { host: 'old', database: 'lab', password: 'stored-secret' } }, 'key');
+    const app = appWith(store);
+    const response = await app.inject({ method: 'PUT', url: '/api/connectors/pg', payload: { config: { host: 'new' } } });
+    expect(response.statusCode).toBe(200);
+    expect(await store.getDecryptedConfig('pg', 'key')).toEqual({ host: 'new', database: 'lab', password: 'stored-secret' });
+  });
   it('creates, lists (no secrets), and gets', async () => {
     const store = fakeStore();
     const app = appWith(store);

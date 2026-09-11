@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal, Plug } from 'lucide-react';
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose,
+  Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,7 @@ import {
 } from '@/components/data-table';
 import { SettingsHeader } from './SettingsHeader';
 import {
-  listConnectors, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
+  listConnectors, getConnectorConfig, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
   type Connector, type SinkPluginRef,
 } from '@/api';
 
@@ -122,6 +122,8 @@ interface DraftState {
   username: string;
   password: string; // blank on edit = keep existing
   dbConfig: Record<string, string>; // host fields
+  secretsSet?: Record<string, boolean>;
+  originalConfig?: Record<string, string>;
   enabled: boolean;
 }
 
@@ -167,8 +169,10 @@ export function Connectors() {
   useEffect(() => { void load(); }, [load]);
 
   const openCreate = () => setDraft(emptyDraft());
-  const openEdit = (c: Connector) =>
-    setDraft({
+  const openEdit = async (c: Connector) => {
+    try {
+      const stored = c.type ? await getConnectorConfig(c.id) : undefined;
+      setDraft({
       id: c.id,
       category: c.type ? 'database' : 'plugin',
       name: c.name,
@@ -177,9 +181,15 @@ export function Connectors() {
       baseUrl: '',
       username: '',
       password: '',
-      dbConfig: {},
+      dbConfig: stored?.config ?? {},
+      secretsSet: stored?.secretsSet,
+      originalConfig: stored?.config,
       enabled: c.enabled,
-    });
+      });
+    } catch (e) {
+      toast.error(t('settings.connectors.errorToast', { error: e instanceof Error ? e.message : String(e) }));
+    }
+  };
 
   const onSave = useCallback(async () => {
     if (!draft || busy) return;
@@ -199,13 +209,14 @@ export function Connectors() {
         if (requiredFilled) {
           for (const field of typeFields) {
             const val = draft.dbConfig[field.key];
-            if (val !== undefined && val !== '') config[field.key] = val;
+            if (val !== undefined && (val !== '' || (field.kind !== 'password' && draft.originalConfig?.[field.key] !== undefined))) config[field.key] = val;
           }
         }
         if (draft.id === null) {
           await createConnector({ name: draft.name, type: draft.type, config });
         } else {
-          await updateConnector(draft.id, { name: draft.name, enabled: draft.enabled, ...(requiredFilled ? { config } : {}) });
+          const changed = Object.keys(config).some((field) => config[field] !== draft.originalConfig?.[field]);
+          await updateConnector(draft.id, { name: draft.name, enabled: draft.enabled, ...(changed ? { config } : {}) });
         }
       } else {
         // Plugin path (existing behavior)
@@ -438,7 +449,21 @@ export function Connectors() {
       <Sheet open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
           <SheetHeader className="border-b border-border px-6 py-4">
-            <SheetTitle>{draft?.id === null ? t('settings.connectors.newTitle') : t('settings.connectors.editTitle')}</SheetTitle>
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <SheetTitle>{draft?.id === null ? t('settings.connectors.newTitle') : t('settings.connectors.editTitle')}</SheetTitle>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="connector-sheet-menu" aria-label={t('settings.connectors.colActions')}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem data-testid="connector-save" disabled={saveDisabled} onSelect={() => void onSave()}>
+                    {t('settings.connectors.save')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <SheetDescription>{t('settings.connectors.sheetDescription')}</SheetDescription>
           </SheetHeader>
           {draft ? (
@@ -515,7 +540,7 @@ export function Connectors() {
                               autoComplete={field.kind === 'password' ? 'new-password' : 'off'}
                               value={val}
                               onChange={(e) => setDraft({ ...draft, dbConfig: { ...draft.dbConfig, [field.key]: e.target.value } })}
-                              placeholder={field.kind === 'password' && isEdit ? t('settings.connectors.secretSet') : undefined}
+                              placeholder={field.kind === 'password' && isEdit && draft.secretsSet?.[field.key] ? t('settings.connectors.secretSet') : undefined}
                             />
                           </Fragment>
                         );
@@ -556,14 +581,6 @@ export function Connectors() {
                   ) : null}
                 </div>
               </div>
-              <SheetFooter className="border-t border-border px-6 py-4">
-                <SheetClose asChild>
-                  <Button variant="outline">{t('settings.connectors.cancel')}</Button>
-                </SheetClose>
-                <Button data-testid="connector-save" disabled={saveDisabled} onClick={() => void onSave()}>
-                  {t('settings.connectors.save')}
-                </Button>
-              </SheetFooter>
             </>
           ) : null}
         </SheetContent>

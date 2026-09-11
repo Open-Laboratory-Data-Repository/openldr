@@ -44,6 +44,18 @@ export function buildProgram(): Command {
   program.name('openldr').description('OpenLDR CE operator CLI');
   program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');
 
+  const connectors = program.command('connectors').description('Inspect and update host connector configuration');
+  connectors.command('inspect <id>').description('Print ordinary configuration and secret presence as JSON')
+    .action(async (id: string) => {
+      try { process.exitCode = await runConnectorInspect(id); }
+      catch { process.stderr.write('Connector configuration unavailable.\n'); process.exitCode = 1; }
+    });
+  connectors.command('update <id>').requiredOption('--file <path>', 'JSON patch; omitted or blank secrets remain stored')
+    .action(async (id: string, opts: { file: string }) => {
+      try { process.exitCode = await runConnectorUpdate(id, opts.file); }
+      catch { process.stderr.write('Connector update failed. Check the connector ID and JSON patch.\n'); process.exitCode = 1; }
+    });
+
   program
     .command('health')
     .description('Probe every adapter (auth, blob, eventing, target-store)')
@@ -953,3 +965,4 @@ export function buildProgram(): Command {
 
   return program;
 }
+import { runConnectorInspect, runConnectorUpdate } from './connectors';

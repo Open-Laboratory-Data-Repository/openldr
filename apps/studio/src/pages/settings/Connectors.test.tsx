@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
@@ -8,7 +8,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster:
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual,
-    listConnectors: vi.fn(), listSinkPlugins: vi.fn(), createConnector: vi.fn(),
+    listConnectors: vi.fn(), getConnectorConfig: vi.fn(), listSinkPlugins: vi.fn(), createConnector: vi.fn(),
     updateConnector: vi.fn(), deleteConnector: vi.fn(), testConnector: vi.fn() };
 });
 import * as api from '@/api';
@@ -37,6 +37,14 @@ async function openAddConnector() {
   fireEvent.click(await screen.findByTestId('add-connector'));
 }
 
+async function saveConnector() {
+  const trigger = screen.getByTestId('connector-sheet-menu');
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+  const save = await screen.findByTestId('connector-save');
+  await act(async () => { fireEvent.click(save); });
+}
+
 const conn = {
   id: 'c1', name: 'Prod DHIS2', pluginId: 'dhis2-sink', type: null,
   kind: 'sink', allowedHost: 'dhis2.example.org', enabled: true,
@@ -56,6 +64,50 @@ beforeEach(() => {
 });
 
 describe('Connectors page', () => {
+  it('sends an explicitly cleared ordinary field but omits blank secrets', async () => {
+    (api.listConnectors as any).mockResolvedValue([dbConn]);
+    (api as any).getConnectorConfig.mockResolvedValue({ config: { host: 'db.local', user: 'reader' }, secretsSet: { password: true } });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c2');
+    openRowActions('c2');
+    fireEvent.click(await screen.findByTestId('edit-c2'));
+    fireEvent.change(await screen.findByTestId('connector-db-user'), { target: { value: '' } });
+    await saveConnector();
+    await waitFor(() => expect(api.updateConnector).toHaveBeenCalledWith('c2', { name: 'Prod PG', enabled: true, config: { host: 'db.local', user: '' } }));
+  });
+  it('renames a host connector without resending unchanged configuration', async () => {
+    (api.listConnectors as any).mockResolvedValue([dbConn]);
+    (api as any).getConnectorConfig.mockResolvedValue({ config: { host: 'db.local' }, secretsSet: { password: false } });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c2');
+    openRowActions('c2');
+    fireEvent.click(await screen.findByTestId('edit-c2'));
+    fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Renamed' } });
+    expect(screen.getByTestId('connector-db-password').getAttribute('placeholder')).toBeNull();
+    await saveConnector();
+    await waitFor(() => expect(api.updateConnector).toHaveBeenCalledWith('c2', { name: 'Renamed', enabled: true }));
+  });
+  it('puts save inside the editing sheet menu', async () => {
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await openAddConnector();
+    expect(screen.queryByTestId('connector-save')).toBeNull();
+    expect(screen.getByTestId('connector-sheet-menu')).toBeTruthy();
+  });
+  it('loads ordinary host settings while keeping the stored password blank', async () => {
+    (api.listConnectors as any).mockResolvedValue([dbConn]);
+    (api as any).getConnectorConfig.mockResolvedValue({ config: { host: 'db.local', port: '5432', database: 'lab', user: 'reader' }, secretsSet: { password: true } });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c2');
+    openRowActions('c2');
+    fireEvent.click(await screen.findByTestId('edit-c2'));
+    await waitFor(() => expect((screen.getByTestId('connector-db-host') as HTMLInputElement).value).toBe('db.local'));
+    expect((screen.getByTestId('connector-db-database') as HTMLInputElement).value).toBe('lab');
+    expect((screen.getByTestId('connector-db-password') as HTMLInputElement).value).toBe('');
+    expect(screen.getByTestId('connector-db-password').getAttribute('placeholder')).toContain('set');
+    fireEvent.change(screen.getByTestId('connector-db-host'), { target: { value: 'new.local' } });
+    await saveConnector();
+    await waitFor(() => expect(api.updateConnector).toHaveBeenCalledWith('c2', { name: 'Prod PG', enabled: true, config: { host: 'new.local', port: '5432', database: 'lab', user: 'reader' } }));
+  });
   it('lists connectors', async () => {
     render(<MemoryRouter><Connectors /></MemoryRouter>);
     expect(await screen.findByText('Prod DHIS2')).toBeTruthy();
@@ -104,7 +156,7 @@ describe('Connectors page', () => {
     fireEvent.change(screen.getByTestId('connector-baseurl'), { target: { value: 'https://dhis2.example.org' } });
     fireEvent.change(screen.getByTestId('connector-username'), { target: { value: 'admin' } });
     fireEvent.change(screen.getByTestId('connector-password'), { target: { value: 'district' } });
-    fireEvent.click(screen.getByTestId('connector-save'));
+    await saveConnector();
     await waitFor(() => expect(api.createConnector).toHaveBeenCalledWith({
       name: 'New', pluginId: 'dhis2-sink',
       config: { baseUrl: 'https://dhis2.example.org', username: 'admin', password: 'district' },
@@ -142,7 +194,7 @@ describe('Connectors page', () => {
     fireEvent.change(screen.getByTestId('connector-db-user'), { target: { value: 'pguser' } });
     fireEvent.change(screen.getByTestId('connector-db-password'), { target: { value: 'pgpass' } });
 
-    fireEvent.click(screen.getByTestId('connector-save'));
+    await saveConnector();
 
     await waitFor(() => expect(api.createConnector).toHaveBeenCalledWith({
       name: 'Local PG',
@@ -189,7 +241,7 @@ describe('Connectors page', () => {
     openRowActions('c1');
     fireEvent.click(await screen.findByTestId('edit-c1'));
     fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Renamed' } });
-    fireEvent.click(screen.getByTestId('connector-save'));
+    await saveConnector();
     await waitFor(() => expect(api.updateConnector).toHaveBeenCalledWith('c1', { name: 'Renamed', enabled: true }));
   });
 
@@ -199,7 +251,7 @@ describe('Connectors page', () => {
     openRowActions('c1');
     fireEvent.click(await screen.findByTestId('edit-c1'));
     fireEvent.change(await screen.findByTestId('connector-baseurl'), { target: { value: 'https://new.example.org' } });
-    fireEvent.click(screen.getByTestId('connector-save'));
+    await saveConnector();
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(api.updateConnector).not.toHaveBeenCalled();
   });
@@ -320,7 +372,7 @@ describe('Connectors page', () => {
     fireEvent.change(screen.getByTestId('connector-db-user'), { target: { value: 'relay@example.org' } });
     fireEvent.change(screen.getByTestId('connector-db-password'), { target: { value: 'pass123' } });
 
-    fireEvent.click(screen.getByTestId('connector-save'));
+    await saveConnector();
 
     await waitFor(() => expect(api.createConnector).toHaveBeenCalledWith({
       name: 'Mail Relay',
@@ -368,7 +420,7 @@ describe('Connectors page', () => {
     fireEvent.change(screen.getByTestId('connector-db-password'), { target: { value: 'secret' } });
     fireEvent.change(screen.getByTestId('connector-db-db'), { target: { value: '0' } });
 
-    fireEvent.click(screen.getByTestId('connector-save'));
+    await saveConnector();
 
     await waitFor(() => expect(api.createConnector).toHaveBeenCalledWith({
       name: 'Cache',
