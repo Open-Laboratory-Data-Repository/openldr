@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "87dc9c23",
+          "type": "fix",
+          "scope": "",
+          "title": "Guide operators through planned upgrades safely"
+        },
+        {
           "hash": "010d288a",
           "type": "feat",
           "scope": "",

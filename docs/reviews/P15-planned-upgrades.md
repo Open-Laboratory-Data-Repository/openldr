@@ -81,3 +81,17 @@ P09 auth provider portability remains separate. P16 still needs measured content
 
 The main checkout remained clean at `93997b23` during final verification.
 The operator authorized merging these reviewed changes into main.
+
+## Local merge
+
+Source commit `87dc9c23` merged into main as `4cafa1de`.
+Post-merge checks passed on main:
+
+- `pnpm --filter @openldr/cli test src/update.test.ts`: 21 passed.
+- `pnpm --filter @openldr/studio test src/pages/settings/General.test.tsx src/docs/registry.test.ts src/docs/validation.test.ts src/docs/search.test.ts --maxWorkers=1 --minWorkers=1`: 63 passed.
+- `pnpm --filter @openldr/web test src/docs/DocsPage.test.tsx --maxWorkers=1 --minWorkers=1`: 16 passed.
+- `pnpm --filter @openldr/server test src/shutdown.test.ts`: one passed.
+- `pnpm make:changelog`: exit 0, 2707 entries across 70 days.
+
+The 101 tests verify the same focused layers described above. Existing renderer warnings remain.
+No push was performed. No contributor trailers were added.
