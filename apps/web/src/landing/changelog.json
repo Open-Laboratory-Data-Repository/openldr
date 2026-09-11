@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "d19fd88d",
+          "type": "fix",
+          "scope": "server",
+          "title": "Await webhook rejection replies before returning"
+        },
+        {
           "hash": "c9b25b71",
           "type": "feat",
           "scope": "",
