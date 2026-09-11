@@ -1,8 +1,38 @@
 # Unidades
 
-A página Unidades contém a sua lista mestre de unidades, cada local a que um resultado pode ser
-atribuído, e as ferramentas para importar uma a partir de um registo nacional cujo ficheiro ainda
-não corresponde aos nomes de coluna do OpenLDR.
+Use Registo para adicionar uma unidade ou importar uma lista. Use Observadas para rever os códigos
+recebidos nos resultados e a sua resolução. Adicionar uma linha ao registo e rever um código
+observado são tarefas distintas. As instruções de importação abaixo abrangem uma lista inteira.
+
+## Registar uma unidade manualmente
+
+1. Abra Unidades, escolha Registo e selecione Adicionar unidade no menu ⋯.
+2. Escolha o campo System entre as fontes registadas. A definição do laboratório pode preenchê-lo previamente.
+   Sistema identifica o registo. O nome apresentado seleciona o URI canónico desse registo.
+   Um registo desconhecido ou inativo é recusado. Se faltar o registo, registe uma fonte
+   no passo Origem do assistente de importação antes de continuar.
+3. Preencha Facility code e Name no formulário predefinido. O código identifica o local dentro desse registo.
+   Existe um único campo de código, sem campos separados para Código nacional e Código local.
+4. Preencha os campos obrigatórios do formulário de unidade publicado. Um administrador pode
+   alterar esse formulário. Os campos e os requisitos podem variar entre instalações.
+   Adicionar e Editar exigem permissão para gerir unidades e um formulário publicado.
+5. Nos campos de terminologia, como País, Nível e Estado, pesquise e selecione um resultado.
+   Escrever uma pesquisa não seleciona uma resposta. O nome selecionado representa um código guardado.
+   Sem um resultado adequado, peça ao administrador para verificar a terminologia configurada.
+6. Escolha Criar no menu ⋯ do painel. Ao editar, escolha Guardar. Após guardar, o painel fecha e a tabela
+   do registo é atualizada. Se a validação falhar, corrija os erros dos campos ou a mensagem
+   do painel e tente novamente. Reabra a linha para verificar os valores guardados.
+
+### Códigos e identidade
+
+Sistema e Código da unidade identificam o local em conjunto. Use o código exato do registo,
+incluindo zeros iniciais. A coluna Código da tabela apresenta esse mesmo código.
+A criação recusa um par já existente. Procure e edite a linha existente.
+
+Pode corrigir Sistema ou Código da unidade em Editar. Um novo Sistema deve identificar uma fonte
+registada ativa. O identificador interno permanece igual. Uma importação posterior encontra a linha pelo
+Sistema e Código atuais. A política de conflitos decide quais os valores a manter.
+Não elimine uma unidade apenas para corrigir o código.
 
 ## Resultado
 
@@ -230,60 +260,6 @@ comportam-se de forma muito diferente quando estão incompletos:
 
 Em resumo: um problema de coluna interrompe a importação antes de começar; um problema de valor
 fica registado e pode ser corrigido depois.
-
-## Registar uma unidade manualmente
-
-A maioria das unidades chega por importação. Também pode adicionar uma a partir da página
-Unidades, e uma unidade que exista na sua lista nacional deve ser registada como tal, e não como
-uma unidade puramente local.
-
-### Os dois códigos
-
-Uma linha de unidade tem espaço para dois códigos, e não são a mesma coisa:
-
-- **Código nacional.** O código que a sua lista nacional ou mestre de unidades usa. Opcional,
-  porque um local só de laboratório não tem nenhum.
-- **Código local.** A sua própria numeração, seja qual for o nome que o seu LIS dá ao local.
-  Também opcional.
-
-Pelo menos um dos dois tem de estar presente. A coluna CÓDIGO da tabela Unidades mostra o código
-local quando existe um, e recorre ao código nacional caso contrário, a mesma regra que o resto do
-sistema usa para dar a uma unidade o seu código público.
-
-### Porque é que o registo importa
-
-O identificador permanente de uma unidade é derivado do seu **registo de unidades mais o seu
-código nacional**. Forneça ambos e a unidade fica arquivada exatamente sob a identidade que uma
-importação CSV desse registo lhe daria, pelo que uma importação posterior da mesma lista atualiza
-a sua linha em vez de criar uma segunda.
-
-Deixe o código nacional vazio e a unidade mantém um identificador privado. Isso é correto para um
-local que genuinamente não está na lista nacional.
-
-O registo já tem de existir nesta instalação. Um registo desconhecido ou desativado é recusado,
-com uma mensagem a indicar qual. Os registos são a mesma lista que o assistente de importação
-oferece.
-
-### O que não pode alterar depois
-
-**O código nacional e o registo da unidade ficam fixos assim que a unidade é criada.** Fazem parte
-da sua identidade, não são campos comuns. Mudar qualquer um deixaria a linha arquivada sob um
-identificador que o seu próprio código já não produz, e a próxima importação desse registo não a
-encontraria.
-
-Assim, uma unidade criada sem código nacional não pode adquirir um mais tarde. Se precisar de
-adicionar um, elimine a unidade e registe-a de novo.
-
-### Campos obrigatórios
-
-Os marcadores de obrigatoriedade do formulário são impostos ao guardar, e o servidor também os
-impõe.
-
-Dois campos são deliberadamente **não** obrigatórios, porque nenhum registo nacional pode
-presumir-se que os fornece: o código local (uma importação nunca produz um) e a região (nem todos
-os países têm esse nível intermédio; a lista da Zâmbia não tem nada entre Province e District).
-Quando edita uma unidade existente, só os campos que efetivamente altera são reverificados, pelo
-que uma unidade importada com uma lacuna continua editável.
 
 ## Filtragem, ordenação e pesquisa
 

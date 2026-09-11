@@ -1,9 +1,110 @@
 # Facilities
 
-The Facilities register is OpenLDR's master facility list — every site a result can be
-attributed to. Most national registers do not already spell their columns and vocabulary the
-way OpenLDR expects, so importing one means mapping the file's own headers and values onto
-OpenLDR's import contract first.
+Use Registry to add one facility or import a facility list. Use Observed to review facility
+codes received in results and their resolution. Adding a registry row and reviewing an observed
+code are separate tasks. The import instructions below cover uploading a whole list.
+
+## English
+
+### Registering a facility by hand
+
+1. Open Facilities, select Registry, then choose Add facility from the ⋯ menu.
+2. Choose System from the registered sources. The laboratory setting may prefill it.
+   System identifies the register. Its displayed name selects the register's canonical URI.
+   An unknown or inactive register is refused. Register a source through the import
+   wizard's Source step first if the required register is missing.
+3. Enter Facility code and Name. Facility code is the site's code within that register.
+   There is one code field, not separate National code and Local code fields.
+4. Complete the required fields shown by your published facility form. An administrator
+   can change this form, so fields and required markers may differ between installations.
+   Add and Edit require permission to manage facilities and a published facility form.
+5. For terminology fields such as Country, Level and Status, search and select a result.
+   Typing a search does not select an answer. The selected label represents a stored code.
+   If no result fits, ask the administrator to check the configured terminology.
+6. Choose Create from the sheet's ⋯ menu. When editing, choose Save. A successful save closes the sheet and updates
+   the registry table. If validation fails, correct the field errors or the message in
+   the sheet, then save again. Reopen the row to check the recorded values.
+
+### Codes and identity
+
+System and Facility code identify the site together. Use the register's exact code,
+including leading zeros. The table's Code column shows this same facility code.
+A duplicate pair is refused when adding a facility. Find and edit the existing row instead.
+
+You can correct System or Facility code in Edit. A changed System must name an active
+registered source. The internal record id stays unchanged. A later import finds the row
+by its current System and Facility code; its conflict policy decides which values to keep.
+Do not delete and recreate a facility just to correct its code.
+
+## Français
+
+Utilisez Registre pour ajouter un établissement ou importer une liste. Utilisez Observés pour examiner
+les codes reçus dans les résultats et leur résolution.
+
+### Enregistrer un établissement à la main
+
+1. Ouvrez Établissements, choisissez Registre, puis Ajouter un établissement dans le menu ⋯.
+2. Choisissez le champ System parmi les sources enregistrées. Le paramètre du laboratoire peut le préremplir.
+   Système identifie le registre. Le nom affiché sélectionne son URI canonique.
+   Un registre inconnu ou inactif est refusé. Si le registre manque, enregistrez une source
+   dans l'étape Source de l'assistant d'importation avant de continuer.
+3. Renseignez Facility code et Name dans le formulaire par défaut. Ce code identifie le site dans ce registre.
+   Le formulaire contient un seul code, sans champs distincts Code national et Code local.
+4. Remplissez les champs obligatoires du formulaire d'établissement publié. Un administrateur
+   peut modifier ce formulaire. Les champs et leurs obligations peuvent donc varier.
+   Ajouter et Modifier nécessitent le droit de gérer les établissements et un formulaire publié.
+5. Pour les champs terminologiques comme Pays, Niveau et Statut, recherchez puis sélectionnez un résultat.
+   Saisir une recherche ne sélectionne aucune réponse. Le libellé sélectionné représente un code enregistré.
+   Sans résultat adapté, demandez à l'administrateur de vérifier la terminologie configurée.
+6. Choisissez Créer dans le menu ⋯ du panneau. Pour une modification, choisissez Enregistrer. Après succès, le panneau se ferme
+   et le tableau du registre est mis à jour. En cas d'échec, corrigez les erreurs
+   indiquées dans les champs ou le panneau, puis réessayez. Rouvrez la ligne pour vérifier les valeurs.
+
+### Codes et identité
+
+Système et Code de l'établissement identifient ensemble le site. Utilisez le code exact du registre,
+y compris les zéros initiaux. La colonne Code du tableau affiche ce même code.
+L'ajout refuse une paire déjà présente. Recherchez et modifiez plutôt la ligne existante.
+
+Vous pouvez corriger Système ou Code de l'établissement dans Modifier. Un nouveau Système doit désigner
+une source enregistrée active. L'identifiant interne reste inchangé. Un import ultérieur retrouve la ligne
+par son Système et son Code actuels. Sa politique de conflit décide quelles valeurs conserver.
+Ne supprimez pas un établissement pour corriger son code.
+
+## Português
+
+Use Registo para adicionar uma unidade ou importar uma lista. Use Observadas para rever os códigos
+recebidos nos resultados e a sua resolução.
+
+### Registar uma unidade manualmente
+
+1. Abra Unidades, escolha Registo e selecione Adicionar unidade no menu ⋯.
+2. Escolha o campo System entre as fontes registadas. A definição do laboratório pode preenchê-lo previamente.
+   Sistema identifica o registo. O nome apresentado seleciona o URI canónico desse registo.
+   Um registo desconhecido ou inativo é recusado. Se faltar o registo, registe uma fonte
+   no passo Origem do assistente de importação antes de continuar.
+3. Preencha Facility code e Name no formulário predefinido. O código identifica o local dentro desse registo.
+   Existe um único campo de código, sem campos separados para Código nacional e Código local.
+4. Preencha os campos obrigatórios do formulário de unidade publicado. Um administrador pode
+   alterar esse formulário. Os campos e os requisitos podem variar entre instalações.
+   Adicionar e Editar exigem permissão para gerir unidades e um formulário publicado.
+5. Nos campos de terminologia, como País, Nível e Estado, pesquise e selecione um resultado.
+   Escrever uma pesquisa não seleciona uma resposta. O nome selecionado representa um código guardado.
+   Sem um resultado adequado, peça ao administrador para verificar a terminologia configurada.
+6. Escolha Criar no menu ⋯ do painel. Ao editar, escolha Guardar. Após guardar, o painel fecha e a tabela
+   do registo é atualizada. Se a validação falhar, corrija os erros dos campos ou a mensagem
+   do painel e tente novamente. Reabra a linha para verificar os valores guardados.
+
+### Códigos e identidade
+
+Sistema e Código da unidade identificam o local em conjunto. Use o código exato do registo,
+incluindo zeros iniciais. A coluna Código da tabela apresenta esse mesmo código.
+A criação recusa um par já existente. Procure e edite a linha existente.
+
+Pode corrigir Sistema ou Código da unidade em Editar. Um novo Sistema deve identificar uma fonte
+registada ativa. O identificador interno permanece igual. Uma importação posterior encontra a linha pelo
+Sistema e Código atuais. A política de conflitos decide quais os valores a manter.
+Não elimine uma unidade apenas para corrigir o código.
 
 ## The import contract
 

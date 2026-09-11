@@ -1,8 +1,38 @@
 # Facilities
 
-The Facilities page holds your master facility list — every site a result can be attributed to —
-and the tools to import one from a national register whose file does not already match OpenLDR's
-own column names.
+Use Registry to add one facility or import a facility list. Use Observed to review facility
+codes received in results and their resolution. Adding a registry row and reviewing an observed
+code are separate tasks. The import instructions below cover uploading a whole list.
+
+## Registering a facility by hand
+
+1. Open Facilities, select Registry, then choose Add facility from the ⋯ menu.
+2. Choose System from the registered sources. The laboratory setting may prefill it.
+   System identifies the register. Its displayed name selects the register's canonical URI.
+   An unknown or inactive register is refused. Register a source through the import
+   wizard's Source step first if the required register is missing.
+3. Enter Facility code and Name. Facility code is the site's code within that register.
+   There is one code field, not separate National code and Local code fields.
+4. Complete the required fields shown by your published facility form. An administrator
+   can change this form, so fields and required markers may differ between installations.
+   Add and Edit require permission to manage facilities and a published facility form.
+5. For terminology fields such as Country, Level and Status, search and select a result.
+   Typing a search does not select an answer. The selected label represents a stored code.
+   If no result fits, ask the administrator to check the configured terminology.
+6. Choose Create from the sheet's ⋯ menu. When editing, choose Save. A successful save closes the sheet and updates
+   the registry table. If validation fails, correct the field errors or the message in
+   the sheet, then save again. Reopen the row to check the recorded values.
+
+### Codes and identity
+
+System and Facility code identify the site together. Use the register's exact code,
+including leading zeros. The table's Code column shows this same facility code.
+A duplicate pair is refused when adding a facility. Find and edit the existing row instead.
+
+You can correct System or Facility code in Edit. A changed System must name an active
+registered source. The internal record id stays unchanged. A later import finds the row
+by its current System and Facility code; its conflict policy decides which values to keep.
+Do not delete and recreate a facility just to correct its code.
 
 ## Outcome
 
@@ -214,54 +244,6 @@ incomplete:
 
 In short: a column problem stops the import before it starts; a value problem is recorded and can be
 cleaned up afterward.
-
-## Registering a facility by hand
-
-Most facilities arrive by import. You can also add one from the Facilities page, and a facility that
-exists in your national list should be registered as such rather than as a purely local one.
-
-### The two codes
-
-A facility row has room for two codes, and they are not the same thing:
-
-- **National code** — the code your national or master facility list carries. Optional, because a
-  lab-only site has none.
-- **Local code** — your own numbering, whatever your LIS calls the site. Also optional.
-
-At least one of the two must be present. The Facilities table's CODE column shows the local code when
-there is one and falls back to the national code otherwise, which is the same rule the rest of the
-system uses to give a facility its public code.
-
-### Why the register matters
-
-A facility's permanent id is derived from its **facility register plus its national code**. Supply
-both and the facility is filed under exactly the identity a CSV import of that register would give
-it, so a later import of the same list updates your row instead of creating a second one.
-
-Leave the national code empty and the facility keeps a private id. That is correct for a site that
-genuinely is not in the national list.
-
-The register must already exist on this install. An unknown or deactivated one is refused, with a
-message naming which. Registers are the same list the import wizard offers.
-
-### What you cannot change afterward
-
-**The national code and the facility register are fixed once the facility is created.** They are part
-of its identity, not ordinary fields — moving either one would leave the row filed under an id its
-own code no longer produces, and the next import of that register would not find it.
-
-So a facility created without a national code cannot acquire one later. If you need to add one,
-delete the facility and register it again.
-
-### Required fields
-
-The form's required markers are enforced when you save, and the server enforces them too.
-
-Two fields are deliberately **not** required, because no national register can be assumed to supply
-them: the local code (an import never produces one) and the region (not every country has a tier
-there — Zambia's list has nothing between Province and District). When you edit an existing facility,
-only the fields you actually change are re-checked, so an imported facility with a gap in it stays
-editable.
 
 ## Filtering, sorting, and search
 

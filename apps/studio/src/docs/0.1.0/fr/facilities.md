@@ -1,8 +1,38 @@
 # Établissements
 
-La page Établissements contient votre liste maîtresse des établissements, chaque site auquel un
-résultat peut être attribué, ainsi que les outils pour en importer une depuis un registre national
-dont le fichier ne correspond pas déjà aux noms de colonnes d'OpenLDR.
+Utilisez Registre pour ajouter un établissement ou importer une liste. Utilisez Observés pour examiner
+les codes reçus dans les résultats et leur résolution. Ajouter une ligne au registre et examiner
+un code observé sont deux tâches distinctes. Les instructions d'import ci-dessous concernent une liste entière.
+
+## Enregistrer un établissement à la main
+
+1. Ouvrez Établissements, choisissez Registre, puis Ajouter un établissement dans le menu ⋯.
+2. Choisissez le champ System parmi les sources enregistrées. Le paramètre du laboratoire peut le préremplir.
+   Système identifie le registre. Le nom affiché sélectionne son URI canonique.
+   Un registre inconnu ou inactif est refusé. Si le registre manque, enregistrez une source
+   dans l'étape Source de l'assistant d'importation avant de continuer.
+3. Renseignez Facility code et Name dans le formulaire par défaut. Ce code identifie le site dans ce registre.
+   Le formulaire contient un seul code, sans champs distincts Code national et Code local.
+4. Remplissez les champs obligatoires du formulaire d'établissement publié. Un administrateur
+   peut modifier ce formulaire. Les champs et leurs obligations peuvent donc varier.
+   Ajouter et Modifier nécessitent le droit de gérer les établissements et un formulaire publié.
+5. Pour les champs terminologiques comme Pays, Niveau et Statut, recherchez puis sélectionnez un résultat.
+   Saisir une recherche ne sélectionne aucune réponse. Le libellé sélectionné représente un code enregistré.
+   Sans résultat adapté, demandez à l'administrateur de vérifier la terminologie configurée.
+6. Choisissez Créer dans le menu ⋯ du panneau. Pour une modification, choisissez Enregistrer. Après succès, le panneau se ferme
+   et le tableau du registre est mis à jour. En cas d'échec, corrigez les erreurs
+   indiquées dans les champs ou le panneau, puis réessayez. Rouvrez la ligne pour vérifier les valeurs.
+
+### Codes et identité
+
+Système et Code de l'établissement identifient ensemble le site. Utilisez le code exact du registre,
+y compris les zéros initiaux. La colonne Code du tableau affiche ce même code.
+L'ajout refuse une paire déjà présente. Recherchez et modifiez plutôt la ligne existante.
+
+Vous pouvez corriger Système ou Code de l'établissement dans Modifier. Un nouveau Système doit désigner
+une source enregistrée active. L'identifiant interne reste inchangé. Un import ultérieur retrouve la ligne
+par son Système et son Code actuels. Sa politique de conflit décide quelles valeurs conserver.
+Ne supprimez pas un établissement pour corriger son code.
 
 ## Résultat
 
@@ -241,60 +271,6 @@ deux se comportent très différemment quand elles sont incomplètes :
 
 En résumé : un problème de colonne arrête l'import avant qu'il ne commence ; un problème de valeur
 est enregistré et peut être corrigé après coup.
-
-## Enregistrer un établissement à la main
-
-La plupart des établissements arrivent par import. Vous pouvez aussi en ajouter un depuis la page
-Établissements, et un établissement qui existe dans votre liste nationale devrait être enregistré
-comme tel plutôt que comme un établissement purement local.
-
-### Les deux codes
-
-Une ligne d'établissement a de la place pour deux codes, et ce ne sont pas la même chose :
-
-- **Code national.** Le code que porte votre liste nationale ou maîtresse des établissements.
-  Facultatif, car un site qui n'est qu'un laboratoire n'en a pas.
-- **Code local.** Votre propre numérotation, quel que soit le nom que votre LIS donne au site.
-  Également facultatif.
-
-Au moins l'un des deux doit être présent. La colonne CODE du tableau Établissements affiche le
-code local s'il existe, et revient au code national sinon, la même règle que le reste du système
-utilise pour donner à un établissement son code public.
-
-### Pourquoi le registre compte
-
-L'identifiant permanent d'un établissement est dérivé de son **registre d'établissements plus son
-code national**. Fournissez les deux et l'établissement est classé sous exactement l'identité qu'un
-import CSV de ce registre lui donnerait, donc un import ultérieur de la même liste met à jour votre
-ligne au lieu d'en créer une seconde.
-
-Laissez le code national vide et l'établissement garde un identifiant privé. C'est correct pour un
-site qui n'est vraiment pas dans la liste nationale.
-
-Le registre doit déjà exister sur cette installation. Un registre inconnu ou désactivé est refusé,
-avec un message nommant lequel. Les registres sont la même liste que propose l'assistant
-d'importation.
-
-### Ce que vous ne pouvez pas changer après coup
-
-**Le code national et le registre de l'établissement sont fixés une fois l'établissement créé.**
-Ils font partie de son identité, pas des champs ordinaires. Modifier l'un ou l'autre laisserait la
-ligne classée sous un identifiant que son propre code ne produit plus, et le prochain import de ce
-registre ne la retrouverait pas.
-
-Un établissement créé sans code national ne peut donc pas en acquérir un plus tard. Si vous devez
-en ajouter un, supprimez l'établissement et enregistrez-le à nouveau.
-
-### Champs obligatoires
-
-Les marqueurs d'obligation du formulaire sont vérifiés à l'enregistrement, et le serveur les
-vérifie aussi.
-
-Deux champs sont délibérément **non** obligatoires, car aucun registre national ne peut être
-supposé les fournir : le code local (un import n'en produit jamais) et la région (tous les pays
-n'ont pas ce niveau intermédiaire ; la liste zambienne n'a rien entre Province et District). Quand
-vous modifiez un établissement existant, seuls les champs que vous changez réellement sont
-revérifiés, donc un établissement importé avec une lacune reste modifiable.
 
 ## Filtrage, tri et recherche
 
