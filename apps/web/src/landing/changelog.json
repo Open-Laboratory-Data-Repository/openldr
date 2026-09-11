@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-10",
+  "generatedAt": "2026-09-11",
   "days": [
     {
       "date": "2026-09-10",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "255662d9",
@@ -117,7 +117,7 @@
     },
     {
       "date": "2026-09-09",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "58517bf6",
@@ -327,7 +327,7 @@
     },
     {
       "date": "2026-09-08",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "aecba41e",
@@ -555,7 +555,7 @@
     },
     {
       "date": "2026-09-07",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "c1f3306e",
@@ -771,7 +771,7 @@
     },
     {
       "date": "2026-09-06",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "05a87dc3",
@@ -915,7 +915,7 @@
     },
     {
       "date": "2026-09-02",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "6725c79b",
@@ -933,7 +933,7 @@
     },
     {
       "date": "2026-09-01",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "41f64f8c",
@@ -1173,7 +1173,7 @@
     },
     {
       "date": "2026-08-25",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "edc518d0",
@@ -1197,7 +1197,7 @@
     },
     {
       "date": "2026-08-24",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "3493adf0",
@@ -1245,7 +1245,7 @@
     },
     {
       "date": "2026-08-22",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "d30fb125",
@@ -1299,7 +1299,7 @@
     },
     {
       "date": "2026-08-21",
-      "version": null,
+      "version": "v0.1.8",
       "entries": [
         {
           "hash": "24b302cb",
