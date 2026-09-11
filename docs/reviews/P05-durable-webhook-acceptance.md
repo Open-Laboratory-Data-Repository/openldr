@@ -71,3 +71,16 @@ The task-owned PostgreSQL container was stopped after verification. `git diff --
 ## Handoff
 
 Local merge authorized. Commit source/docs without contributor trailers, merge, verify the merged tree, run `pnpm make:changelog` on main and commit the generated changelog. Do not push unless asked. Exclude `.playwright-cli/` and `apps/studio/output/` from source commits.
+
+
+## Local merge verification
+
+Merged as `b3db694a`, source commit `010d288a`, onto main `6dbb577b`. No conflicts. Comparing every P05 path between source and merge with `git diff --exit-code` returned 0. The newer release-cleanup changes remained intact.
+
+Fresh pre-merge workflow receipt/runner tests passed 17 tests. Post-merge checks on main:
+
+- `pnpm --filter @openldr/server exec vitest run src/workflows-routes.test.ts src/workflows-receipts-routes.test.ts src/webhook-receipt-wait.test.ts --maxWorkers=1 --minWorkers=1 --testTimeout=15000`: 77 passed.
+- `pnpm --filter @openldr/studio exec vitest run src/workflows/components/panels/receipt-history.test.tsx src/api.workflow-receipts.test.ts --maxWorkers=1 --minWorkers=1`: 7 passed.
+- `pnpm make:changelog`: 2,706 entries across 70 days. Diff adds the P05 entry.
+
+The real PostgreSQL crash suite was not repeated during merge. Its earlier evidence and limitations remain above. No live migration or push was performed. Source and merge commits use the operator's identity without contributor trailers. The worktree is retained with untracked browser logs and screenshots, excluded from the commits.
