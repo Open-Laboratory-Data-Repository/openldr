@@ -126,3 +126,12 @@ The workflow saves, a manual run completes or reports a clear failure, and run h
 - [Connectors](/docs/connectors)
 - [Reports](/docs/reports)
 - [Audit](/docs/audit)
+
+
+## Webhooks across API instances
+
+Save a webhook path or secret change before sending requests with the new value. Every upgraded API instance reads the current path and secret from the shared database. No restart is needed after a workflow save. Requests authenticated before the save may finish.
+
+Send the secret only in the `x-webhook-token` header. The old path returns 404 after a path change. An old or unreadable secret returns 401. Disabled or deleted workflows return 404. Each enabled trigger needs a unique path, including triggers within the same workflow. Conflicting paths return 503 and execute nothing. Database lookup failures also return 503; instances never use cached credentials as a fallback.
+
+Stop every old API instance and any old workflow writers before running migration 096 with `openldr db migrate`. Then start the upgraded instances. Old writers cannot maintain the new path index. This deployment requires downtime; do not mix versions while accepting writes. All instances must use the same database and encryption key. This change does not make workflow execution durable; senders must still handle interrupted requests and possible duplicate side effects.

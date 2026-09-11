@@ -10,11 +10,9 @@ import { requireCapability } from './rbac';
 import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
 import { isProtectedWorkflowId, rebuildSystemWorkflow } from './system-workflows';
 
-/** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
+/** Sync schedule rows after a workflow save. Webhook paths are stored with the definition. */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
   const def = WorkflowDefinitionSchema.parse(workflow.definition);
-  // webhooks (in-memory) — async: resolves any sealed `{ secretRef }` webhook secret (SEC-06).
-  await ctx.workflows.webhooks.sync(workflow.id, def.nodes);
   // schedules (derived table) — replace this workflow's rows with current schedule nodes
   await ctx.workflows.schedules.removeForWorkflow(workflow.id);
   for (const n of def.nodes as Array<{ id: string; type?: string; data?: Record<string, unknown> }>) {
@@ -235,7 +233,6 @@ export function registerWorkflowRoutes(
     await ctx.workflows.store.remove(id);
     // SEC-06: cascade-delete this workflow's sealed secrets.
     await ctx.workflows.secretStore.deleteForWorkflow(id);
-    ctx.workflows.webhooks.clear(id);
     await ctx.workflows.schedules.removeForWorkflow(id);
     ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
     ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
@@ -473,7 +470,14 @@ export function registerWorkflowRoutes(
   // time; and strip auth headers before forwarding request headers into input.
   app.post('/api/workflows/hooks/*', async (req, reply) => {
     const wildcard = (req.params as Record<string, string>)['*'] ?? '';
-    const entry = ctx.workflows.webhooks.resolve(wildcard);
+    let entry;
+    try {
+      entry = await ctx.workflows.webhooks.resolve(wildcard);
+    } catch {
+      req.log.warn('webhook configuration lookup failed');
+      reply.code(503);
+      return { error: 'webhook configuration unavailable' };
+    }
     if (!entry) { reply.code(404); return { error: 'unknown webhook' }; }
     if (!entry.secret) { reply.code(401); return { error: 'webhook has no secret configured' }; }
     const token = (req.headers['x-webhook-token'] as string | undefined) ?? '';
