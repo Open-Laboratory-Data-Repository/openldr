@@ -1,6 +1,38 @@
 import type { EnShape } from './en';
 
 export const pt: EnShape = {
+  workflowReceipts: {
+  "title": "Recibos webhook",
+  "runs": "Execuções",
+  "detail": "Detalhes do recibo",
+  "acceptedHint": "As solicitações aceites podem estar na fila ou em execução.",
+  "actions": "Ações do recibo",
+  "rowActions": "Ações do recibo {{id}}",
+  "refresh": "Atualizar",
+  "back": "Voltar aos recibos",
+  "view": "Ver detalhes",
+  "requestId": "ID da solicitação",
+  "status": "Estado",
+  "created": "Aceite",
+  "started": "Início",
+  "finished": "Fim",
+  "runId": "ID da execução",
+  "reason": "Motivo",
+  "error": "Erro",
+  "notRecorded": "Não registado",
+  "empty": "Ainda não há recibos webhook.",
+  "loadError": "Não foi possível carregar os recibos webhook. Atualize para tentar novamente.",
+  "interruptedHint": "O resultado é incerto. Podem já existir alterações externas. Verifique se o processo original parou e confira essas alterações antes de enviar uma nova identidade de solicitação.",
+  "failedHint": "Uma execução falhada pode ter efetuado alterações externas. Verifique os resultados registados antes de enviar novamente.",
+  "statuses": {
+    "queued": "Na fila",
+    "running": "Em execução",
+    "completed": "Concluída",
+    "failed": "Falhada",
+    "interrupted": "Interrompida",
+    "cancelled": "Cancelada"
+  }
+},
   common: {
     delete: 'Eliminar',
     save: 'Guardar',

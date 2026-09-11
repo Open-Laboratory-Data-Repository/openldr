@@ -58,6 +58,13 @@ live('webhook authentication across two HTTP instances on PostgreSQL', () => {
       const ctx = {
         workflows: {
           store, secretStore,
+          // P14 tests configuration lookup; P05 tests durable dispatch separately.
+          receipts: {
+            accept: async ({workflowId}: {workflowId:string}) => {
+              const outcome = await runAndRecord();
+              return {created:true,receipt:{id:'receipt',workflowId,status:'completed',runId:outcome.runId,outcome}};
+            },
+          },
           webhooks: createSharedWebhookResolver({
             findByPath: (path) => store.findByWebhookPath(path),
             resolveRef: (ref) => secretStore.resolveIfAvailable(ref, key),

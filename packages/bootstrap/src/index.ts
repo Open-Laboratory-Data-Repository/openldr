@@ -24,11 +24,13 @@ import {
   createWorkflowScheduleStore, type WorkflowScheduleStore,
   createSharedWebhookResolver, type SharedWebhookResolver,
   createWorkflowTriggerRunner, type WorkflowTriggerRunner,
+  executeWorkflowRun, type WorkflowReceiptService,
   createWorkflowDatasetStore, type WorkflowDatasetStore,
   runWorkflow, WorkflowDefinitionSchema, assertSubWorkflowAllowed, extractTerminalItems,
   guardedFetch, type WorkflowServices,
 } from '@openldr/workflows';
 import { renderReportPdf } from '@openldr/report-pdf';
+import { createWebhookReceiptService } from './workflow-receipts';
 import { createDbContext } from './db-context';
 import { seedDatabase } from './seed';
 import { wipeInternalDatabase, clearAuditAndRunHistory } from './danger';
@@ -500,6 +502,7 @@ export interface AppContext {
   workflows: {
     store: WorkflowStore;
     runs: WorkflowRunStore;
+    receipts: WorkflowReceiptService;
     schedules: WorkflowScheduleStore;
     webhooks: SharedWebhookResolver;
     runner: WorkflowTriggerRunner;
@@ -1130,6 +1133,16 @@ const reporting: ReportingApi = {
     loopMaxItems: cfg.WORKFLOW_LOOP_MAX_ITEMS,
     services: workflowServices,
   });
+  const workflowReceipts = createWebhookReceiptService({
+    db: internal.db,
+    readBinary: key => blob.get(key),
+    execute: (definition, runId, workflowId, input, files) => executeWorkflowRun({
+      runWorkflow, services: workflowServices,
+      codeLimits: { timeoutMs: cfg.WORKFLOW_CODE_TIMEOUT_MS, memoryMb: cfg.WORKFLOW_CODE_MEMORY_MB, enabled: cfg.WORKFLOW_CODE_ENABLED },
+      loopMaxItems: cfg.WORKFLOW_LOOP_MAX_ITEMS,
+    }, definition, { id: runId, workflowId, source: 'webhook', input, files }),
+  });
+  await workflowReceipts.register(eventing);
   const workflowListeners = createWorkflowListenerManager({
     store: { list: () => workflowStore.list() },
     runAndRecord: (id, source, input, files) => workflowRunner.runAndRecord(id, source, input, files),
@@ -1146,7 +1159,7 @@ const reporting: ReportingApi = {
       }),
     },
   });
-  const workflows = { store: workflowStore, runs: workflowRuns, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
+  const workflows = { store: workflowStore, runs: workflowRuns, receipts: workflowReceipts, schedules: workflowSchedules, webhooks: workflowWebhooks, runner: workflowRunner, services: workflowServices, datasets: workflowDatasets, listeners: workflowListeners, secretStore: workflowSecrets };
 
   // Seal legacy plaintext definitions before serving requests. The shared webhook
   // resolver reads the saved references. Migration stays best-effort per workflow.
@@ -1829,3 +1842,6 @@ export { setAccountStatus, AccountNotFoundError } from './account-status';
 
 export { listUserDirectory, directoryPageInput } from './user-directory';
 export type { DirectoryPage, DirectorySummary } from './user-directory';
+
+export { createWebhookReceiptService } from './workflow-receipts';
+export type { WorkflowReceipt, WorkflowReceiptService } from '@openldr/workflows';

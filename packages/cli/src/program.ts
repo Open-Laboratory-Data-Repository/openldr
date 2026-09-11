@@ -12,6 +12,7 @@ import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQue
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
+import { runWorkflowReceiptsList, runWorkflowReceiptShow } from './workflows';
 import { runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
@@ -43,6 +44,23 @@ export function buildProgram(): Command {
   const program = new Command();
   program.name('openldr').description('OpenLDR CE operator CLI');
   program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');
+
+  const receipts = program.command('workflows').description('Inspect workflows')
+    .command('receipts').description('Inspect durable webhook requests');
+  receipts.command('list <workflowId>').description('List webhook receipts for a workflow')
+    .option('--limit <n>', 'page size, 1 to 100', '25')
+    .option('--offset <n>', 'zero-based offset', '0')
+    .option('--json', 'emit JSON', false)
+    .action(async (workflowId: string, opts: { limit: string; offset: string; json: boolean }) => {
+      try { process.exitCode = await runWorkflowReceiptsList(workflowId, opts); }
+      catch { process.stderr.write('Workflow receipts unavailable.\n'); process.exitCode = 1; }
+    });
+  receipts.command('show <requestId>').description('Show receipt status and outcome')
+    .option('--json', 'emit JSON', false)
+    .action(async (requestId: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runWorkflowReceiptShow(requestId, opts); }
+      catch { process.stderr.write('Workflow receipt unavailable.\n'); process.exitCode = 1; }
+    });
 
   const connectors = program.command('connectors').description('Inspect and update host connector configuration');
   connectors.command('inspect <id>').description('Print ordinary configuration and secret presence as JSON')

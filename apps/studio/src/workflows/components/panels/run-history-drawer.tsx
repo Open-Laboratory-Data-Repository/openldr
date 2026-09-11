@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, XCircle, Download, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, XCircle, Download, RefreshCw, MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ReceiptHistory } from './receipt-history';
 import {
   fetchWorkflowRuns,
   fetchWorkflowRun,
@@ -42,6 +46,8 @@ function asExecuteResponse(result: unknown): ExecuteResponse | null {
 }
 
 export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
+  const { t } = useTranslation();
+  const [historyTab, setHistoryTab] = useState('runs');
   const [pageSize, setPageSize] = useState(25);
   const [page, setPage] = useState(0);
   const [runs, setRuns] = useState<WorkflowRunSummary[]>([]);
@@ -58,6 +64,7 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     setPage(0);
+    setHistoryTab('runs');
     setSelected(null);
     setDetailError(undefined);
   }, [open, workflowId]);
@@ -98,37 +105,44 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <SheetContent className="flex w-[600px] flex-col gap-0 p-0">
+      <SheetContent className="flex h-dvh w-[600px] flex-col gap-0 overflow-hidden p-0">
         <SheetHeader className="relative border-b border-border px-4 py-3">
-          <Button
+          {historyTab === 'runs' && <DropdownMenu><DropdownMenuTrigger asChild><Button
             type="button"
             variant="ghost"
             size="icon"
-            onClick={refresh}
-            disabled={loading || detailLoading}
-            aria-label="Refresh"
-            title="Refresh"
+            aria-label={t('common.actions')}
             className="absolute right-11 top-2.5 h-7 w-7 text-muted-foreground hover:text-foreground"
           >
-            <RefreshCw className={cn('h-4 w-4', (loading || detailLoading) && 'animate-spin')} />
-          </Button>
+            <MoreHorizontal className="h-4 w-4" />
+          </Button></DropdownMenuTrigger><DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={loading || detailLoading} onSelect={refresh}><RefreshCw className="mr-2 h-4 w-4" />{t('workflowReceipts.refresh')}</DropdownMenuItem>
+          </DropdownMenuContent></DropdownMenu>}
           <SheetTitle>
-            {selected ? (
-              <button
+            {selected && historyTab === 'runs' ? (
+              <Button variant="ghost"
                 type="button"
                 onClick={() => setSelected(null)}
                 className="flex items-center gap-1.5 text-left text-sm hover:text-foreground"
               >
                 <ArrowLeft className="h-4 w-4" />
                 Run history
-              </button>
+              </Button>
             ) : (
               'Run history'
             )}
           </SheetTitle>
-          <SheetDescription>{selected ? selected.id : workflowId}</SheetDescription>
+          <SheetDescription className="break-all pr-8">{selected && historyTab === 'runs' ? selected.id : workflowId}</SheetDescription>
         </SheetHeader>
-
+        <Tabs value={historyTab} onValueChange={setHistoryTab} className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="shrink-0 px-4">
+            <TabsTrigger value="runs">{t('workflowReceipts.runs')}</TabsTrigger>
+            <TabsTrigger value="receipts">{t('workflowReceipts.title')}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="receipts" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+            <ReceiptHistory key={workflowId} workflowId={workflowId} />
+          </TabsContent>
+          <TabsContent value="runs" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
         {selected ? (
           <RunDetail run={selected} loading={detailLoading} error={detailError} />
         ) : (
@@ -194,6 +208,8 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
             )}
           </div>
         )}
+          </TabsContent>
+        </Tabs>
       </SheetContent>
     </Sheet>
   );

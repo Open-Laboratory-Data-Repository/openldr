@@ -3,6 +3,8 @@ import type { HealthResult } from './health';
 export interface EventEnvelope {
   type: string;
   payload: unknown;
+  /** Assigned by the durable worker, never taken from the published payload. */
+  delivery?: { id: string; claimToken: string };
 }
 
 export type EventHandler = (event: EventEnvelope) => Promise<void>;
