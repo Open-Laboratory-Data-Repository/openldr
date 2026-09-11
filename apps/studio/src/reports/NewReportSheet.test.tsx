@@ -60,7 +60,7 @@ describe('NewReportSheet', () => {
     await waitFor(() => expect(createReportDef).toHaveBeenCalledWith(expect.objectContaining({
       name: 'AMR Resistance', designId: 'd1', primaryQueryId: 'q1', category: 'amr', status: 'published',
     })));
-    expect(onCreated).toHaveBeenCalled();
+    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ name: 'AMR Resistance' }));
   });
 
   it('disables the Create item in the ⋯ menu while name is empty', async () => {

@@ -5,7 +5,7 @@ import { listReportDesigns } from '../api';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { queryApi } from '../query/api';
 import type { CustomQuery } from '../query/custom-query-types';
-import { createReportDef } from './reportDefsApi';
+import { createReportDef, type ReportDefRecord } from './reportDefsApi';
 import { listReportCategories, saveReportCategories, type ReportCategory } from './reportCategoriesApi';
 import { CategoryPicker } from './CategoryPicker';
 import { useAuth } from '@/auth/AuthProvider';
@@ -40,7 +40,7 @@ function firstBoundQueryId(design: ReportDesign | undefined): string {
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
-  onCreated: () => void;
+  onCreated: (report: ReportDefRecord) => void;
   /** Pre-select a template (e.g. "Publish as report" from the designer). */
   initialDesignId?: string;
 }
@@ -98,7 +98,7 @@ export function NewReportSheet({ open, onOpenChange, onCreated, initialDesignId 
     setSaving(true);
     setError(undefined);
     try {
-      await createReportDef({
+      const report = await createReportDef({
         id: newId(),
         name: name.trim(),
         description: description.trim(),
@@ -107,7 +107,7 @@ export function NewReportSheet({ open, onOpenChange, onCreated, initialDesignId 
         primaryQueryId,
         status: 'published',
       });
-      onCreated();
+      onCreated(report);
       onOpenChange(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

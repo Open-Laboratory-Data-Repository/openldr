@@ -656,7 +656,7 @@ export function ReportDesignerPage(): JSX.Element {
           open={publishOpen}
           onOpenChange={setPublishOpen}
           initialDesignId={template.id}
-          onCreated={() => toast.success(t('reportDesigner.reportCreatedToast', { name: template.name }))}
+          onCreated={(report) => toast.success(t('reportDesigner.reportCreatedToast', { name: report.name }))}
         />
       )}
     </AppShell>
