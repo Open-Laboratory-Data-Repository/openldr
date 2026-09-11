@@ -30,6 +30,8 @@ from inside the `openldr/` directory the installer created.
 
 ## Going further
 
+- [Report publishing](#report-publishing) distinguishes template revisions from library reports in English, French, and Portuguese.
+
 - [User role assignment](#user-role-assignment) explains Studio's single-role selector in English, French, and Portuguese.
 
 - [Connector setup](#connector-setup) explains category selection and the initial enabled state in English, French, and Portuguese.
@@ -84,3 +86,29 @@ La modification du compte nécessite la permission de gérer les utilisateurs. L
 No Studio, abra **Utilizadores**, procure a conta e escolha **Editar** no menu **⋯** da linha. Aguarde o carregamento de **Função** e selecione uma única função. Outra escolha substitui a seleção; não acrescenta uma segunda função. Guarde, confirme a notificação de sucesso e volte a abrir a conta para verificar a função guardada.
 
 Editar a conta exige permissão para gerir utilizadores. A atribuição também exige permissão para gerir funções. Se falhar, o editor permanece aberto com um erro que deve resolver. Se nenhuma função for adequada, configure uma em **Definições → Funções**. Alterar uma função partilhada afeta todos os seus membros. Os guias Utilizadores e Funções do Studio apresentam o procedimento.
+
+## Report publishing
+
+### English
+
+In Studio's Report Designer, save the template and wait for Saved. **⋯ → Publish revision** publishes a template version and confirms the template name. It does not create a Reports library entry.
+
+Choose **⋯ → Create report from this design** to add a library report. Set Name, Category, Template, and Primary query; Description is optional. Check any preselected query. From the sheet's **⋯** menu, choose **Create report** and check the confirmation naming the new report. This action does not publish a template revision.
+
+Open Reports, select the new report in its category, fill required parameters, and run it. The primary query supplies Spreadsheet rows; the template supplies the Document layout. Publishing later revisions of that template does not require creating another library entry. Studio's Report Designer guide includes the full sequence.
+
+### Français
+
+Dans le Concepteur de rapports de Studio, enregistrez le modèle et attendez la confirmation. **⋯ → Publier une révision** publie une version du modèle et confirme son nom. Cette action ne crée pas d'entrée dans Rapports.
+
+Choisissez **⋯ → Créer un rapport à partir de ce modèle**. Renseignez Nom, Catégorie, Modèle et Requête principale ; la Description est facultative. Vérifiez toute requête présélectionnée. Dans le menu **⋯** du formulaire, choisissez **Créer le rapport** et vérifiez la confirmation contenant son nom. Cette action ne publie pas de révision du modèle.
+
+Ouvrez Rapports, sélectionnez le rapport dans sa catégorie, renseignez les paramètres requis et lancez-le. La requête principale fournit les lignes du tableur ; le modèle définit le document. Publier une révision ultérieure ne nécessite pas une nouvelle entrée dans la bibliothèque. Le guide du concepteur dans Studio détaille la procédure.
+
+### Português
+
+No Designer de relatórios do Studio, guarde o modelo e aguarde a confirmação. **⋯ → Publicar revisão** publica uma versão do modelo e confirma o seu nome. Esta ação não cria uma entrada em Relatórios.
+
+Escolha **⋯ → Criar relatório a partir deste modelo**. Preencha Nome, Categoria, Modelo e Consulta principal; a Descrição é opcional. Verifique qualquer consulta pré-selecionada. No menu **⋯** do formulário, escolha **Criar relatório** e confirme a mensagem com o nome. Esta ação não publica uma revisão do modelo.
+
+Abra Relatórios, selecione o relatório na categoria, preencha os parâmetros obrigatórios e execute-o. A consulta principal fornece as linhas da folha de cálculo; o modelo define o documento. Publicar revisões posteriores não exige uma nova entrada na biblioteca. O guia do designer no Studio apresenta o procedimento completo.

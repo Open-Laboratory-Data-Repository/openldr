@@ -27,15 +27,37 @@ You can create a template, place and arrange Text, Table, Key/value panel, Image
 9. Choose **Preview** to render the template to PDF using live data.
 10. Select **Save**. The save status next to the template name shows Saved, Saving, or Unsaved changes; the designer also autosaves as you work.
 11. Use **⋯ → Export → PDF** or **Excel** to download the current template's output directly.
-12. When the template is ready, choose **⋯ → Publish**. Give the report a **Name**, **Category** (add, rename, or reorder categories from the same picker), an optional **Description**, and confirm the **Template** and **Primary query** — the primary query's rows feed the published report's Spreadsheet tab and summary. Select **Create report**.
+12. Follow the publishing steps below to publish a revision and create a report in the library.
+
+## Publish a revision and create a report
+
+These are separate actions in the designer's **⋯** menu.
+
+| Action | Result |
+| --- | --- |
+| **Publish revision** | Publishes a version of the saved template. It does not create a Reports library entry. |
+| **Create report from this design** | Opens a sheet to create a library report linked to a template and primary query. It does not publish a template revision. |
+
+1. Save the template and wait for **Saved**. Both actions require the template to have been saved at least once.
+2. Choose **⋯ → Publish revision**. Check the confirmation naming the template and its published status. Open **⋯ → Versions** to inspect the published revision.
+3. Choose **⋯ → Create report from this design**.
+4. Enter the report's **Name** and choose its **Category**. Add an optional **Description**. Confirm the **Template** and **Primary query**. The query may be preselected from the first bound table; check it before creating the report.
+5. Open the sheet's **⋯** menu and choose **Create report**. Name, Category, Template, and Primary query must all be set. The confirmation names the new report, which may differ from the template name.
+6. Open [Reports](/docs/reports) and select the new report under its category. Open **⋯ → Parameters**, complete required filters, and choose **Run**. Check Document and Spreadsheet.
+
+For example, start with a saved query that returns two columns. Bind a table to that query, save the template, and publish its revision. Create a report with a distinct name and that query as Primary query. Verify that the report appears under the chosen category and runs with the expected columns.
+
+Publishing a later template revision does not require creating another library report for the same design. Use Create report from this design when you intend to add a new library entry.
 
 ## Expected result
 
-The template saves and appears in the left explorer. Preview renders a PDF using the template's live data. Publishing adds a new entry to the [Reports](/docs/reports) library under the chosen category, with filters that match the template's parameters.
+The saved template appears in the left explorer. Publish revision records a template version. Create report from this design adds the named entry to the [Reports](/docs/reports) library. Its primary query supplies the Spreadsheet rows; the template provides the Document layout.
 
 ## Troubleshooting
 
-- **Publish is unavailable or prompts you to save first:** a template must be saved at least once before it can be published.
+- **A publishing action asks you to save first:** save the template and wait for Saved before retrying.
+- **The template is published but absent from Reports:** publishing a revision does not create a library entry. Use Create report from this design.
+- **Create report is disabled:** fill Name, Category, Template, and Primary query, then use the sheet's menu.
 - **No columns to choose from:** pick a query in **Bind query**, then select **Load columns**.
 - **Preview fails to render:** check that the bound query and its parameters are valid, then try again.
 - **Nothing to export:** the template has no table elements yet.
