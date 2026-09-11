@@ -61,8 +61,8 @@ export function Marketplace() {
     }
   }, [consent, busy, t, load]);
 
-  const onRefresh = useCallback(async () => {
-    try { await refreshRegistry(); await load(); toast.success(t('settings.marketplace.refresh')); }
+  const onRefresh = useCallback(async (notify = true) => {
+    try { await refreshRegistry(); await load(); if (notify) toast.success(t('settings.marketplace.refresh')); }
     catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [t, load]);
 
@@ -125,7 +125,8 @@ export function Marketplace() {
         onPublish={onPublish}
         source={source}
         host={host}
-        onRefresh={onRefresh}
+        onRefresh={() => onRefresh()}
+        onRegistrySaved={() => onRefresh(false)}
         loadError={loadError}
       />
 

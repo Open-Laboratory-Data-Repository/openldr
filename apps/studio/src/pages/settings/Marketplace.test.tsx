@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
@@ -15,6 +15,7 @@ vi.mock('@/api', async (orig) => {
     listRegistries: vi.fn(), createRegistry: vi.fn(), updateRegistry: vi.fn(), deleteRegistry: vi.fn() };
 });
 import * as api from '@/api';
+import { toast } from 'sonner';
 import { Marketplace } from './Marketplace';
 
 beforeEach(() => {
@@ -241,7 +242,9 @@ describe('Marketplace', () => {
   // ⛔ The item must actually reach RegistriesTab's dialog. The opener is handed up through
   // `onReady`, so a broken wire would leave a menu item that silently does nothing — exactly the
   // failure a class-level assertion cannot see.
-  it("the Registries item opens that tab's create dialog", async () => {
+  it('confirms the saved registry name without a Refresh notification', async () => {
+    let finishRefresh!: () => void;
+    vi.mocked(api.refreshRegistry).mockImplementationOnce(() => new Promise<void>((resolve) => { finishRefresh = resolve; }));
     (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);
     (api.listRegistries as any).mockResolvedValue([]);
@@ -250,6 +253,14 @@ describe('Marketplace', () => {
     await openTabActions();
     fireEvent.click(await screen.findByTestId('add-registry'));
     expect(await screen.findByTestId('registry-name'), 'the create dialog is open').toBeTruthy();
+    vi.mocked(api.createRegistry).mockResolvedValue({ id: 'r-new', name: 'Review registry', kind: 'http', location: 'https://example.org', enabled: true, createdAt: '', updatedAt: '' });
+    fireEvent.change(screen.getByTestId('registry-name'), { target: { value: 'Review registry' } });
+    fireEvent.change(screen.getByTestId('registry-location'), { target: { value: 'https://example.org' } });
+    fireEvent.click(screen.getByTestId('registry-save'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Review registry')));
+    await waitFor(() => expect(api.refreshRegistry).toHaveBeenCalled());
+    await act(async () => { finishRefresh(); });
+    expect(toast.success).not.toHaveBeenCalledWith('Refresh');
   });
 
   // The source label moved onto the tab strip with the ⋯, and belongs to Browse only — it names

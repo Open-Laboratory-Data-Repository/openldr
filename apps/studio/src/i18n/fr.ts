@@ -624,6 +624,7 @@ export const fr: EnShape = {
       registryEditBtn: 'Modifier',
       registryRemoveBtn: 'Supprimer',
       registryErrorToast: 'Erreur de registre : {{error}}',
+      registrySavedToast: 'Registre {{name}} enregistré',
     },
     dataExposure: {
       title: 'Exposition des données',
