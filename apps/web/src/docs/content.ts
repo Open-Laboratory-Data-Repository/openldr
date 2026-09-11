@@ -43,6 +43,7 @@ export const DEFAULT_DOC_VERSION: string =
 /** Page titles (stable across versions). */
 export const TITLES: Record<string, string> = {
   'getting-started': 'Getting started',
+  'marketplace-permissions': 'Marketplace permission checks',
   'load-data': 'Load & push data',
   facilities: 'Facilities',
   requirements: 'Requirements',

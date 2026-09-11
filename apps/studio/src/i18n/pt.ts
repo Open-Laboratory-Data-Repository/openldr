@@ -582,6 +582,8 @@ export const pt: EnShape = {
       license: 'Licença',
       noDescription: 'Nenhuma descrição fornecida.',
       noneCapabilities: 'Nenhuma permissão especial solicitada.',
+      permissionsLoading: 'A carregar permissões…',
+      permissionsUnavailable: 'Permissões indisponíveis.',
       docs: 'Docs',
       noDocs: 'Este plugin não tem documentação.',
       installComingSoon: 'Instalar (em breve)',

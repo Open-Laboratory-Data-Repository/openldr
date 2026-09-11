@@ -36,6 +36,8 @@ You can use the Browse, Installed, and Registries views; inspect artifact detail
 
 ## Expected result
 
+While registry package details load, Permissions shows **Loading permissions** and Install stays disabled. If retrieval fails, it shows **Permissions unavailable**. Neither state means the package requests no permissions. **No special permissions requested** appears only when the loaded details confirm an empty list. Selecting another version starts this check again. The installation approval uses the permissions for that selected version. Installed packages without a registry reference can use their stored permission list.
+
 The selected artifact is installed or updated, and registries control which available artifacts appear for administrators.
 
 ## Troubleshooting

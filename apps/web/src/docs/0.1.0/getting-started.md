@@ -30,6 +30,7 @@ from inside the `openldr/` directory the installer created.
 
 ## Going further
 
+- [Marketplace permission checks](/docs/marketplace-permissions) explain loading, unavailable, and confirmed permission lists in English, French, and Portuguese.
 - [Development](/docs/development) — run OpenLDR from source with hot reload.
 - [Command-line interface (CLI)](/docs/cli) — the `openldr` operator command line.
 - [Environment variables](/docs/environment) — configure a deployment.

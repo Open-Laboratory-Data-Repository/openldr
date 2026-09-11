@@ -15,6 +15,15 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('renders the marketplace permission guide in all three languages', () => {
+    renderDocs('/docs/marketplace-permissions');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Marketplace permission checks' })).toBeInTheDocument();
+    for (const name of ['English', 'Français', 'Português']) {
+      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
+    }
+  });
+
   it('renders a professional docs shell for a public doc page', () => {
     renderDocs('/docs/install');
 

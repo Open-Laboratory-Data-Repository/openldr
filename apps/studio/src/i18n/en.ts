@@ -584,6 +584,8 @@ export const en = {
       license: 'License',
       noDescription: 'No description provided.',
       noneCapabilities: 'No special permissions requested.',
+      permissionsLoading: 'Loading permissions…',
+      permissionsUnavailable: 'Permissions unavailable.',
       docs: 'Docs',
       noDocs: 'This plugin has no documentation.',
       installComingSoon: 'Install (coming soon)',

@@ -42,6 +42,47 @@ async function openDetailMenu(): Promise<void> {
 }
 
 describe('PackageDetail', () => {
+  it.each(['loading', 'failed'] as const)('does not claim empty permissions when detail is %s', async (state) => {
+    if (state === 'loading') vi.mocked(api.getAvailableArtifact).mockImplementation(() => new Promise(() => {}));
+    else vi.mocked(api.getAvailableArtifact).mockRejectedValue(new Error('Registry unreachable'));
+    const onInstall = vi.fn();
+    render(<PackageDetail entry={{ ...entry, capabilities: [] }} onBack={vi.fn()} onInstall={onInstall} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} />);
+    expect(await screen.findByText(state === 'loading' ? 'Loading permissions…' : 'Permissions unavailable.')).toBeTruthy();
+    expect(screen.queryByText('No special permissions requested.')).toBeNull();
+    await openDetailMenu();
+    const install = await screen.findByTestId('detail-install');
+    expect(install).toHaveAttribute('data-disabled');
+    fireEvent.click(install);
+    expect(onInstall).not.toHaveBeenCalled();
+  });
+
+  it('shows no permissions only after detail confirms an empty list', async () => {
+    mockDetail({ capabilities: [] });
+    const onInstall = vi.fn();
+    render(<PackageDetail entry={{ ...entry, capabilities: [] }} onBack={vi.fn()} onInstall={onInstall} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} />);
+    expect(await screen.findByText('No special permissions requested.')).toBeTruthy();
+    await openDetailMenu();
+    const install = await screen.findByTestId('detail-install');
+    expect(install).not.toHaveAttribute('data-disabled');
+    fireEvent.click(install);
+    expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: entry.ref }), []);
+  });
+
+  it('hides previous permissions and blocks install while another version loads', async () => {
+    mockDetail();
+    const versioned = { ...entry, capabilities: [], versions: [{ ref: 'whonet-narrow', version: '1.1.0' }, { ref: 'whonet-old', version: '1.0.0' }] };
+    render(<PackageDetail entry={versioned} onBack={vi.fn()} onInstall={vi.fn()} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} />);
+    expect(await screen.findByText(/emit-fhir/)).toBeTruthy();
+    vi.mocked(api.getAvailableArtifact).mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(screen.getByTestId('version-select'));
+    fireEvent.click(await screen.findByRole('option', { name: '1.0.0' }));
+    expect(await screen.findByText('Loading permissions…')).toBeTruthy();
+    expect(screen.queryByText(/emit-fhir/)).toBeNull();
+    expect(screen.queryByText('No special permissions requested.')).toBeNull();
+    await openDetailMenu();
+    expect(await screen.findByTestId('detail-install')).toHaveAttribute('data-disabled');
+  });
+
   it('fetches and renders description, permissions and requirements', async () => {
     mockDetail();
     render(<PackageDetail entry={entry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);

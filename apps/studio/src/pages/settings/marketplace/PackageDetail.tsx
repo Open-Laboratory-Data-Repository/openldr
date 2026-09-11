@@ -4,6 +4,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { getAvailableArtifact, getInstalledArtifact, type AvailableArtifactDetail, type InstalledArtifactDetail } from '@/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Spinner } from '@/components/ui/spinner';
 import { Divider } from '@/components/ui/bleed';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -32,43 +33,45 @@ interface PackageDetailProps {
 
 export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRollback, onRemove, onDetach, onOpenForm, canPublish, onPublish }: PackageDetailProps) {
   const { t } = useTranslation();
-  const [detail, setDetail] = useState<AvailableArtifactDetail | InstalledArtifactDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ key: string; detail?: AvailableArtifactDetail | InstalledArtifactDetail; error?: string } | null>(null);
   const [selectedRef, setSelectedRef] = useState(entry.ref);
+  const requestKey = JSON.stringify([entry.id, entry.ref, selectedRef]);
+  const detail = result?.key === requestKey ? result.detail ?? null : null;
+  const error = result?.key === requestKey ? result.error ?? null : null;
 
   // Reset the selection when navigating to a different package.
   useEffect(() => { setSelectedRef(entry.ref); }, [entry.ref]);
 
   useEffect(() => {
     let active = true;
-    setDetail(null);
-    setError(null);
+    setResult(null);
     if (selectedRef) {
       // Browse (registry) item: fetch the signed bundle detail.
       void getAvailableArtifact(selectedRef)
-        .then((d) => { if (active) setDetail(d); })
-        .catch((e) => { if (active) setError(e instanceof Error ? e.message : String(e)); });
+        .then((d) => { if (active) setResult({ key: requestKey, detail: d }); })
+        .catch((e) => { if (active) setResult({ key: requestKey, error: e instanceof Error ? e.message : String(e) }); });
     } else if (entry.installed && entry.type === 'plugin') {
       // Installed plugin with no registry ref: read the rich detail from its stored
       // manifest on demand. Failure degrades silently to the entry-level fields.
       void getInstalledArtifact(entry.id)
-        .then((d) => { if (active) setDetail(d); })
+        .then((d) => { if (active) setResult({ key: requestKey, detail: d }); })
         .catch(() => { /* keep entry-level fallback */ });
     }
     return () => { active = false; };
-  }, [selectedRef, entry.id, entry.installed, entry.type]);
+  }, [requestKey, selectedRef, entry.id, entry.installed, entry.type]);
 
   // The registry LIST endpoint does not carry capabilities (they live only in the signed
   // per-bundle DETAIL). So for a Browse (ref-bearing) item, entry.capabilities is always []
   // and only detail.capabilities is authoritative. We must therefore gate install on detail
   // having loaded — otherwise onInstall would capture the empty list, the consent dialog would
   // read "no permissions", and the server (which requires acknowledged == requested) rejects.
-  const capabilities = (detail?.capabilities ?? entry.capabilities) as unknown[];
+  const permissionsKnown = !entry.ref || Array.isArray(detail?.capabilities);
+  const capabilities = (entry.ref ? detail?.capabilities ?? [] : detail?.capabilities ?? entry.capabilities) as unknown[];
   const publisher = detail?.publisher ?? entry.publisher;
   const installableType = entry.type === 'plugin' || entry.type === 'form-template';
   // For registry items, detail must be loaded so the acknowledged capabilities are the real,
   // signed set. Installed/local items (no ref) carry their capabilities on the entry already.
-  const detailReadyForInstall = entry.ref ? detail !== null : true;
+  const detailReadyForInstall = entry.ref ? detail !== null && permissionsKnown : true;
   const canInstall =
     Boolean(entry.ref) && !entry.installed && installableType && detailReadyForInstall && (detail ? detail.valid : entry.valid !== false);
 
@@ -221,7 +224,16 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
 
             <section>
               <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.permissions')}</p>
-              {capabilities.length === 0 ? (
+              {!permissionsKnown ? (
+                error || detail ? (
+                  <p role="status" className="text-[13px] text-muted-foreground">{t('settings.marketplace.permissionsUnavailable')}</p>
+                ) : (
+                  <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+                    <Spinner />
+                    <span>{t('settings.marketplace.permissionsLoading')}</span>
+                  </div>
+                )
+              ) : capabilities.length === 0 ? (
                 <p className="text-[13px] text-muted-foreground">{t('settings.marketplace.noneCapabilities')}</p>
               ) : (
                 <ul className="list-disc space-y-1 pl-5 text-[13px] text-foreground/85">
