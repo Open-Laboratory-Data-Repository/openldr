@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "30763844",
+          "type": "fix",
+          "scope": "release",
+          "title": "A finished release removes its verification stack"
+        },
+        {
           "hash": "32c1d6d9",
           "type": "fix",
           "scope": "",
