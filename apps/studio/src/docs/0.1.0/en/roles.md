@@ -17,7 +17,7 @@ You can see the built-in system roles, inspect the capabilities each one grants,
 
 A **capability** is a single, narrow permission such as *Run reports*, *Edit workflows*, or *Manage users*. Capabilities are grouped by area (Dashboards, Reports, Forms, Workflows, Query, Users, Roles, Terminology, Marketplace, Connectors, Sync, Settings, Observability, Audit) and are the only thing the server checks before it lets a request through — every page and every action is gated behind one or more capabilities.
 
-A **role** is simply a named, reusable bundle of capabilities. A **user** can hold one or more roles; their effective permissions are the union of every capability granted by every role assigned to them.
+A **role** is a named, reusable bundle of capabilities. Studio's user editor assigns one role per user. Choose a role containing the capabilities needed for that person's work.
 
 ## Built-in system roles
 
@@ -48,12 +48,16 @@ Role assignment happens on the user's own record, not on the role:
 
 1. Open **Users**.
 2. Open the **Actions** menu for the account and choose **Edit**.
-3. In the **Roles** section of the edit dialog, tick every role the user should hold (a user can hold more than one).
-4. Save. The user's effective capabilities become the union of all ticked roles' capabilities, and take effect the next time their session refreshes (or immediately on next sign-in).
+3. Wait for the role list to load, then open **Role** and select one role. This is a single-choice selector. Selecting another role replaces the selection; it does not add a second role.
+4. Save and check for the success notification. Reopen the user's record to verify the saved Role selection.
+
+Editing the user requires **Manage users**. Saving the role assignment also requires **Manage roles**. If role assignment fails, the editor stays open and shows an error. Resolve it before treating the update as complete.
+
+If no available role has the required capabilities, create or adjust a role in **Settings → Roles**, then return to Users to assign it. Changing a shared role's capabilities affects everyone assigned that role.
 
 ## Expected result
 
-The Roles list shows each role's name, description, and member count. A user's visible pages, menu items, and allowed actions match the union of capabilities granted by their assigned roles.
+The Roles list shows each role's name, description, and member count. Reopening a user in Studio shows the selected role. That role defines the capabilities assigned through this editor.
 
 ## Troubleshooting
 
@@ -64,7 +68,7 @@ The Roles list shows each role's name, description, and member count. A user's v
 
 ## Advanced web usage
 
-Prefer several narrow custom roles over one broad role reused everywhere — it keeps the audit trail (`role.create`, `role.update`, `role.delete`, `user.assign_role`) meaningful and makes it obvious what a future capability change actually affects. The `openldr roles` CLI commands mirror everything in this page for scripted or headless administration.
+Create roles for distinct jobs and assign the appropriate one to each user. The audit log records role changes and user assignments. The `openldr roles` CLI commands support scripted or headless administration.
 
 ## How capabilities reach an existing install
 

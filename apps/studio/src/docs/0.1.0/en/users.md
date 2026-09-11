@@ -11,7 +11,7 @@ You can search the user list, create a user, edit profile fields, assign roles, 
 ## Before you begin
 
 - You need the Lab Admin role.
-- Know the minimum role set the user needs for their work.
+- Know which role provides the capabilities the user needs for their work.
 - Confirm whether identity details are managed locally or by an external identity provider.
 
 ## Steps
@@ -21,16 +21,16 @@ You can search the user list, create a user, edit profile fields, assign roles, 
 3. Select the create action to add a new user when needed.
 4. Enter profile fields such as username, display name, and email.
 5. On the row for the account you want to change, open its **Actions** menu (the **⋯** button, labelled *Actions for &lt;username&gt;*) and choose **Edit**.
-6. Assign only the roles required for the user’s tasks — see [Roles](/docs/roles) for what each built-in role grants and how to build a custom one.
+6. Wait for **Role** to load, then select one role. Studio offers a single-choice selector, not role checkboxes. Choosing another role replaces the selection. See [Roles](/docs/roles) for role definitions and assignment permissions.
 7. Enable or disable the account state.
 8. Use reset actions only when the UI shows they are available for the account type.
-9. Save the changes.
+9. Save and check for the success notification. Reopen the account to verify its Role selection. If the editor reports a role-assignment error, resolve it before treating the update as complete.
 
-![User edit dialog with profile, roles, status, and save](user-edit-roles.png)
+![User editor with profile and role selection](user-edit-roles.png)
 
 ## Expected result
 
-The user record reflects the updated profile, roles, and status. Navigation and feature visibility update according to the assigned roles.
+The user record reflects the updated profile, selected role, and status. The selected role defines the capabilities assigned through Studio's user editor.
 
 ## Troubleshooting
 
@@ -41,7 +41,7 @@ The user record reflects the updated profile, roles, and status. Navigation and 
 
 ## Advanced web usage
 
-Use least privilege: grant the smallest role set that lets the user complete their work. Local profile fields can usually be edited in the app, while identity-provider-controlled actions may appear as read-only or unavailable depending on the account source.
+Choose the role with the fewest capabilities that still lets the user complete their work. Local profile fields can usually be edited in the app. Identity-provider-controlled actions may be unavailable depending on the account source.
 
 ## Related guides
 
