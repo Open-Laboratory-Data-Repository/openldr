@@ -675,6 +675,25 @@ export interface WorkflowsTable {
   updated_at: Generated<Date>;
 }
 
+export interface WorkflowWebhookReceiptsTable {
+  id: string;
+  workflow_id: string;
+  event_id: string;
+  run_id: string;
+  idempotency_key: string | null;
+  input_digest: string;
+  definition_digest: string;
+  input: JSONColumnType<object | null>;
+  files: JSONColumnType<Record<string, unknown>>;
+  status: Generated<string>;
+  claim_token: string | null;
+  created_at: Generated<Date>;
+  started_at: Date | null;
+  finished_at: Date | null;
+  reason: string | null;
+  outcome: JSONColumnType<Record<string, unknown>> | null;
+}
+
 export interface WorkflowRunsTable {
   id: string;
   workflow_id: string;
@@ -921,6 +940,7 @@ export interface InternalSchema {
   workflows: WorkflowsTable;
   workflow_webhook_paths: { workflow_id: string; path: string };
   workflow_runs: WorkflowRunsTable;
+  workflow_webhook_receipts: WorkflowWebhookReceiptsTable;
   workflow_schedules: WorkflowSchedulesTable;
   workflow_datasets: WorkflowDatasetsTable;
   custom_queries: CustomQueriesTable;

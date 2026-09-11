@@ -1,5 +1,5 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import { sealDefinitionSecrets, type AppContext } from '@openldr/bootstrap';
 import { WorkflowSchema, WorkflowDefinitionSchema, runWorkflow, type RunEvent, createWorkflowNodeRegistry, HOST_NODE_DESCRIPTORS, mapSecretFields, isSecretRef } from '@openldr/workflows';
@@ -7,6 +7,7 @@ import { ConfigError, appError } from '@openldr/core';
 import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
+import { waitForWebhookReceipt } from './webhook-receipt-wait';
 import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
 import { isProtectedWorkflowId, rebuildSystemWorkflow } from './system-workflows';
 
@@ -464,52 +465,119 @@ export function registerWorkflowRoutes(
     }
   });
 
-  // Secret-gated webhook trigger. NOT MANAGE-gated — auth is the per-path secret.
-  // SEC-07: fail closed when no secret is configured; accept the token from the
-  // `x-webhook-token` header ONLY (no query-string token); compare in constant
-  // time; and strip auth headers before forwarding request headers into input.
-  app.post('/api/workflows/hooks/*', async (req, reply) => {
-    const wildcard = (req.params as Record<string, string>)['*'] ?? '';
-    let entry;
-    try {
-      entry = await ctx.workflows.webhooks.resolve(wildcard);
-    } catch {
-      req.log.warn('webhook configuration lookup failed');
-      reply.code(503);
-      return { error: 'webhook configuration unavailable' };
+  app.get('/api/workflows/:id/receipts', VIEW, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const q = req.query as { limit?: string; offset?: string };
+    const limit = q.limit === undefined ? 25 : Number(q.limit);
+    const offset = q.offset === undefined ? 0 : Number(q.offset);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 101 || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000) {
+      return reply.code(400).send({ error: 'invalid receipt pagination' });
     }
-    if (!entry) { reply.code(404); return { error: 'unknown webhook' }; }
-    if (!entry.secret) { reply.code(401); return { error: 'webhook has no secret configured' }; }
-    const token = (req.headers['x-webhook-token'] as string | undefined) ?? '';
-    if (!secretEquals(token, entry.secret)) { reply.code(401); return { error: 'invalid webhook token' }; }
+    try { return await ctx.workflows.receipts.list(id, { limit, offset }); }
+    catch { return reply.code(503).send({ error: 'receipt status unavailable' }); }
+  });
+  app.get('/api/workflows/:id/receipts/:requestId', VIEW, async (req, reply) => {
+    const { id, requestId } = req.params as { id: string; requestId: string };
+    try {
+      const receipt = await ctx.workflows.receipts.get(requestId);
+      if (!receipt || receipt.workflowId !== id) return reply.code(404).send({ error: 'unknown receipt' });
+      return receipt;
+    } catch { return reply.code(503).send({ error: 'receipt status unavailable' }); }
+  });
+
+  async function authenticateWebhook(req: FastifyRequest, reply: FastifyReply) {
+    const path = (req.params as Record<string, string>)['*'] ?? '';
+    let entry;
+    try { entry = await ctx.workflows.webhooks.resolve(path); }
+    catch {
+      req.log.warn('webhook configuration lookup failed');
+      reply.code(503).send({ error: 'webhook configuration unavailable' });
+      return;
+    }
+    if (!entry) { reply.code(404).send({ error: 'unknown webhook' }); return; }
+    if (!entry.secret) { reply.code(401).send({ error: 'webhook has no secret configured' }); return; }
+    const token = req.headers['x-webhook-token'];
+    if (typeof token !== 'string' || !secretEquals(token, entry.secret)) {
+      reply.code(401).send({ error: 'invalid webhook token' }); return;
+    }
+    return entry;
+  }
+
+  // Sender polling uses the current webhook secret, never a receipt ID alone.
+  app.get('/api/workflows/hooks/*', async (req, reply) => {
+    const entry = await authenticateWebhook(req, reply);
+    if (!entry) return;
+    const { requestId } = req.query as { requestId?: string };
+    if (typeof requestId !== 'string' || !requestId || requestId.length > 200) return reply.code(400).send({ error: 'requestId is required' });
+    try {
+      const receipt = await ctx.workflows.receipts.get(requestId);
+      if (!receipt || receipt.workflowId !== entry.workflowId) return reply.code(404).send({ error: 'unknown receipt' });
+      reply.header('cache-control', 'no-store');
+      return { requestId: receipt.id, status: receipt.status, runId: receipt.runId };
+    } catch { return reply.code(503).send({ error: 'receipt status unavailable' }); }
+  });
+
+  app.post('/api/workflows/hooks/*', async (req, reply) => {
+    const entry = await authenticateWebhook(req, reply);
+    if (!entry) return;
+    const idempotencyKey = req.headers['idempotency-key'];
+    if (idempotencyKey !== undefined && (typeof idempotencyKey !== 'string' || !/^[\x21-\x7e]{1,200}$/.test(idempotencyKey))) {
+      return reply.code(400).send({ error: 'Idempotency-Key must contain 1 to 200 printable non-space ASCII characters' });
+    }
     let files: Record<string, import('@openldr/workflows').BinaryRef> | undefined;
     let webhookBody: unknown = req.body;
     const ct = String(req.headers['content-type'] ?? '');
     if (!ct.includes('application/json') && req.body && (Buffer.isBuffer(req.body) || typeof (req.body as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function')) {
-      // As above: propagate to the central error handler rather than hand-rolling a reply.
       const buf = await readBinaryBody(req.body, ctx.cfg.WORKFLOW_FILE_MAX_BYTES);
       const objectKey = `workflow-uploads/${randomUUID()}/webhook`;
-      await ctx.blob.put(objectKey, new Uint8Array(buf), 'application/octet-stream');
+      try { await ctx.blob.put(objectKey, new Uint8Array(buf), 'application/octet-stream'); }
+      catch { return reply.code(503).send({ error: 'webhook payload storage unavailable' }); }
       files = { file: { objectKey, contentType: 'application/octet-stream', fileName: 'webhook', byteSize: buf.length } };
       webhookBody = undefined;
     }
-    const outcome = await ctx.workflows.runner.runAndRecord(entry.workflowId, 'webhook', {
-      method: req.method, body: webhookBody,
-      headers: stripAuthHeaders(req.headers as Record<string, unknown>), query: req.query,
-    }, files);
-    // Report the RUN's outcome, not merely that we accepted the request. Answering
-    // 200 {ok:true} regardless meant a sender (e.g. the CDR toolchain) counted a lab as
-    // "posted" while the run had failed and stored nothing — silent data loss.
-    if (!outcome) {
-      // runAndRecord returns null when the workflow is missing or disabled: nothing ran.
-      reply.code(409);
-      return { ok: false, error: 'workflow is not enabled; nothing was processed' };
+    let accepted;
+    try {
+      accepted = await ctx.workflows.receipts.accept({
+        workflowId: entry.workflowId, idempotencyKey,
+        input: { method: req.method, body: webhookBody, headers: stripAuthHeaders(req.headers as Record<string, unknown>), query: req.query }, files,
+      });
+    } catch (err) {
+      // A connection failure can leave commit outcome uncertain. Keep uploaded bytes.
+      if (err instanceof Error && err.name === 'WebhookIdempotencyConflictError') {
+        if (files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
+        return reply.code(409).send({ error: 'Idempotency-Key was already used with different input' });
+      }
+      if (err instanceof Error && err.name === 'WebhookAcceptanceError') {
+        if (files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
+        return reply.code(409).send({ ok: false, error: 'workflow is not enabled; nothing was processed' });
+      }
+      return reply.code(503).send({ error: 'webhook acceptance unavailable; retry with the same Idempotency-Key' });
     }
-    if (outcome.status !== 'completed') {
-      reply.code(500);
-      return { ok: false, runId: outcome.runId, correlationId: outcome.correlationId, status: outcome.status, error: outcome.error };
+    if (!accepted.created && files) await Promise.all(Object.values(files).map(f => ctx.blob.delete(f.objectKey).catch(() => undefined)));
+    let receipt = accepted.receipt;
+    const path = (req.params as Record<string, string>)['*'] ?? '';
+    const statusUrl = `/api/workflows/hooks/${path.split('/').map(encodeURIComponent).join('/')}?requestId=${encodeURIComponent(receipt.id)}`;
+    reply.header('location', statusUrl).header('cache-control', 'no-store');
+    const asyncRequested = String(req.headers.prefer ?? '').split(',').some(v => v.trim().toLowerCase() === 'respond-async');
+    if (!asyncRequested) {
+      const controller = new AbortController();
+      const onClose = () => controller.abort();
+      if (req.raw.aborted || reply.raw.destroyed) controller.abort();
+      reply.raw.once('close', onClose);
+      try { receipt = await waitForWebhookReceipt(receipt, id => ctx.workflows.receipts.get(id), controller.signal); }
+      finally { reply.raw.off('close', onClose); }
+      if (controller.signal.aborted) return;
     }
-    return { ok: true, runId: outcome.runId, correlationId: outcome.correlationId };
+    if (receipt.status === 'completed' && receipt.outcome) {
+      return { ok: true, runId: receipt.outcome.runId, correlationId: receipt.outcome.correlationId };
+    }
+    if (receipt.status === 'failed') {
+      return reply.code(500).send({ ok: false, requestId: receipt.id, runId: receipt.runId, correlationId: receipt.outcome?.correlationId ?? null, status: 'failed', error: 'workflow execution failed; inspect the recorded run before resubmitting' });
+    }
+    if (receipt.status === 'interrupted' || receipt.status === 'cancelled') {
+      return reply.code(409).send({ ok: false, requestId: receipt.id, status: receipt.status, error: receipt.status === 'interrupted' ? 'execution outcome is uncertain; operator review required before resubmitting' : 'workflow was cancelled before execution; nothing was processed' });
+    }
+    return reply.code(202).header('retry-after', '2').send({ accepted: true, requestId: receipt.id, status: receipt.status, statusUrl });
   });
 }
 

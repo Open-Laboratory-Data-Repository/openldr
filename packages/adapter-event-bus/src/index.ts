@@ -179,7 +179,7 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
           continue;
         }
         try {
-          await handler({ type: row.type, payload: row.payload });
+          await handler({ type: row.type, payload: row.payload, delivery: { id: row.id, claimToken: row.claim_token } });
           const result = await pool.query(`update outbox_events set status='done', claim_token=null, updated_at=now() where id=$1 and status='processing' and claim_token=$2`, [row.id, row.claim_token]);
           processed += result.rowCount ?? 0;
         } catch (err) {

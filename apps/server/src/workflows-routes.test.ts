@@ -141,6 +141,16 @@ function fakeCtx() {
       schedules: extras.schedules,
       webhooks: extras.webhooks,
       runner: extras.runner,
+      // Receipt service double completes immediately; worker durability has separate tests.
+      receipts: {
+        accept: async ({workflowId,input,files}: any) => {
+          const outcome = await extras.runner.runAndRecord(workflowId, 'webhook', input, files);
+          if (!outcome) throw Object.assign(new Error('disabled'), {name:'WebhookAcceptanceError'});
+          return {created:true,receipt:{id:'request-1',workflowId,status:outcome.status,runId:outcome.runId,outcome}};
+        },
+        get: async () => undefined,
+        list: async () => [],
+      },
       services: undefined,
       datasets: extras.datasets,
       listeners: extras.listeners,
@@ -279,6 +289,16 @@ describe('workflow routes', () => {
         schedules: extras.schedules,
         webhooks: extras.webhooks,
         runner: extras.runner,
+      // Receipt service double completes immediately; worker durability has separate tests.
+      receipts: {
+        accept: async ({workflowId,input,files}: any) => {
+          const outcome = await extras.runner.runAndRecord(workflowId, 'webhook', input, files);
+          if (!outcome) throw Object.assign(new Error('disabled'), {name:'WebhookAcceptanceError'});
+          return {created:true,receipt:{id:'request-1',workflowId,status:outcome.status,runId:outcome.runId,outcome}};
+        },
+        get: async () => undefined,
+        list: async () => [],
+      },
         services: undefined,
         datasets: extras.datasets,
       },
@@ -421,7 +441,7 @@ describe('workflow routes', () => {
       headers: { 'x-webhook-token': 's3cret' }, payload: { name: 'a' },
     });
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toMatchObject({ ok: false, runId: 'run-x', status: 'failed', error: 'Switch rule "fhir" failed' });
+    expect(res.json()).toMatchObject({ ok: false, runId: 'run-x', status: 'failed', error: 'workflow execution failed; inspect the recorded run before resubmitting' });
   });
 
   it('POST /api/workflows/hooks/:path reports a disabled/absent workflow as 409, not 200', async () => {

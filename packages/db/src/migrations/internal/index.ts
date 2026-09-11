@@ -95,6 +95,7 @@ import * as m093 from './093_projection_retries';
 import * as m094 from './094_outbox_claim_token';
 import * as m095 from './095_account_access_blocks';
 import * as m096 from './096_workflow_webhook_paths';
+import * as m097 from './097_workflow_webhook_receipts';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -194,4 +195,5 @@ export const internalMigrations: Record<string, Migration> = {
   '094_outbox_claim_token': { up: m094.up, down: m094.down },
   '095_account_access_blocks': { up: m095.up, down: m095.down },
   '096_workflow_webhook_paths': { up: m096.up, down: m096.down },
+  '097_workflow_webhook_receipts': { up: m097.up, down: m097.down },
 };

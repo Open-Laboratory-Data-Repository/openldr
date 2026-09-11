@@ -2734,6 +2734,39 @@ export async function executeWorkflowStream(
 
 // ── Workflow run history ───────────────────────────────────────────────────────
 
+export interface WorkflowReceipt {
+  id: string;
+  workflowId: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'interrupted' | 'cancelled';
+  runId: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  reason: string | null;
+  outcome: {
+    runId: string;
+    correlationId: string | null;
+    status: 'completed' | 'failed';
+    error: string | null;
+    nodeMeta: Record<string, unknown>;
+  } | null;
+}
+
+export async function fetchWorkflowReceipts(
+  id: string, opts: { limit: number; offset: number },
+): Promise<WorkflowReceipt[]> {
+  const qs = new URLSearchParams({ limit: String(opts.limit), offset: String(opts.offset) });
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/receipts?${qs}`);
+  if (!res.ok) throw new Error(`workflow receipts failed: ${res.status}`);
+  return res.json() as Promise<WorkflowReceipt[]>;
+}
+
+export async function fetchWorkflowReceipt(id: string, requestId: string): Promise<WorkflowReceipt> {
+  const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}/receipts/${encodeURIComponent(requestId)}`);
+  if (!res.ok) throw new Error(`workflow receipt failed: ${res.status}`);
+  return res.json() as Promise<WorkflowReceipt>;
+}
+
 export interface WorkflowRunSummary {
   id: string;
   workflowId: string;

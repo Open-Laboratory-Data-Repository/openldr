@@ -54,6 +54,46 @@ export interface WorkflowTriggerRunner {
   runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<RunOutcome | null>;
 }
 
+export async function executeWorkflowRun(
+  deps: Pick<RunnerDeps, 'runWorkflow' | 'codeLimits' | 'loopMaxItems' | 'services'>,
+  def: ReturnType<typeof WorkflowDefinitionSchema.parse>,
+  identity: { id: string; workflowId: string; source: TriggerSource; input: unknown; files?: Record<string, BinaryRef> },
+): Promise<WorkflowRun> {
+  let result: Awaited<ReturnType<typeof deps.runWorkflow>>;
+  let error: string | null = null;
+  try {
+    result = await deps.runWorkflow(def.nodes, def.edges, {
+      input: identity.input,
+      files: identity.files,
+      codeLimits: deps.codeLimits,
+      loopMaxItems: deps.loopMaxItems,
+      services: deps.services,
+      workflowId: identity.workflowId,
+    });
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+    result = {
+      status: 'failed' as const,
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      results: [],
+    };
+  }
+  const correlationId = extractCorrelationId(identity.input, result);
+  const run: WorkflowRun = {
+    id: identity.id,
+    workflowId: identity.workflowId,
+    triggerSource: identity.source,
+    status: result.status,
+    startedAt: result.startedAt,
+    finishedAt: result.finishedAt,
+    result,
+    error,
+    correlationId,
+  };
+  return run;
+}
+
 export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRunner {
   let ingestIds = new Set<string>();
   let eventIds = new Set<string>();
@@ -62,38 +102,7 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     const wf = await deps.store.get(workflowId);
     if (!wf || !wf.enabled) return null;
     const def = WorkflowDefinitionSchema.parse(wf.definition);
-    let result: Awaited<ReturnType<typeof deps.runWorkflow>>;
-    let error: string | null = null;
-    try {
-      result = await deps.runWorkflow(def.nodes, def.edges, {
-        input,
-        files,
-        codeLimits: deps.codeLimits,
-        loopMaxItems: deps.loopMaxItems,
-        services: deps.services,
-        workflowId,
-      });
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-      result = {
-        status: 'failed' as const,
-        startedAt: new Date().toISOString(),
-        finishedAt: new Date().toISOString(),
-        results: [],
-      };
-    }
-    const correlationId = extractCorrelationId(input, result);
-    const run: WorkflowRun = {
-      id: randomUUID(),
-      workflowId,
-      triggerSource: source,
-      status: result.status,
-      startedAt: result.startedAt,
-      finishedAt: result.finishedAt,
-      result,
-      error,
-      correlationId,
-    };
+    const run = await executeWorkflowRun(deps, def, { id: randomUUID(), workflowId, source, input, files });
     await deps.runs.record(run);
     // Surface the outcome, not just the id: the webhook route must be able to tell a failed
     // run from a successful one. Returning only {runId} is why POST /hooks/* answered
@@ -103,10 +112,10 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     // downstream. Without it the caller can only say "failed", and a clerk told that a
     // submission failed resubmits — writing a second copy of the same clinical event.
     const nodeMeta: Record<string, unknown> = {};
-    for (const r of result.results) {
+    for (const r of (run.result as Awaited<ReturnType<typeof deps.runWorkflow>>).results) {
       if (r.meta !== undefined) nodeMeta[r.nodeId] = r.meta;
     }
-    return { runId: run.id, correlationId, status: run.status, error, nodeMeta };
+    return { runId: run.id, correlationId: run.correlationId ?? null, status: run.status, error: run.error, nodeMeta };
   }
 
   /**

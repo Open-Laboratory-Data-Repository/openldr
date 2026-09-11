@@ -362,3 +362,9 @@ describe('runAndRecord — nodeMeta', () => {
     expect(outcome!.nodeMeta).toEqual({});
   });
 });
+
+it('builds a run using the reserved identity without recording it', async () => {
+  const { executeWorkflowRun } = await import('./trigger-runner');
+  const run = await executeWorkflowRun({ runWorkflow }, { nodes: [{ id: 't', type: 'trigger', data: {} }], edges: [] }, { id: 'reserved', workflowId: 'w', source: 'webhook', input: { test: true } });
+  expect(run).toMatchObject({ id: 'reserved', workflowId: 'w', triggerSource: 'webhook', status: 'completed' });
+});

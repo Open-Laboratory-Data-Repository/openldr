@@ -134,4 +134,41 @@ Save a webhook path or secret change before sending requests with the new value.
 
 Send the secret only in the `x-webhook-token` header. The old path returns 404 after a path change. An old or unreadable secret returns 401. Disabled or deleted workflows return 404. Each enabled trigger needs a unique path, including triggers within the same workflow. Conflicting paths return 503 and execute nothing. Database lookup failures also return 503; instances never use cached credentials as a fallback.
 
-Stop every old API instance and any old workflow writers before running migration 096 with `openldr db migrate`. Then start the upgraded instances. Old writers cannot maintain the new path index. This deployment requires downtime; do not mix versions while accepting writes. All instances must use the same database and encryption key. This change does not make workflow execution durable; senders must still handle interrupted requests and possible duplicate side effects.
+Stop every old API instance and any old workflow writers before running migration 096 with `openldr db migrate`. Then start the upgraded instances. Old writers cannot maintain the new path index. This deployment requires downtime; do not mix versions while accepting writes. All instances must use the same database and encryption key.
+
+## Durable webhook requests
+
+OpenLDR stores a receipt and dispatch event in one database transaction before accepting a webhook. If acceptance cannot reach the database, the request fails without an accepted receipt. An error or lost connection does not prove nothing ran. Retry with the same idempotency key and input.
+
+Send an optional `Idempotency-Key` header for each logical request. Within one workflow, the same key and execution input reuse the original receipt. Different input with the same key returns 409. Input includes body, query, forwarded headers and binary content. Authentication and transport headers do not define identity. Without a key, each POST creates a new request and retries can duplicate effects.
+
+OpenLDR waits up to 10 seconds after acceptance. Completed work preserves existing 200 response fields. A duplicate completed request returns 200 even with `Prefer: respond-async`. Recorded execution failure returns generic 500 with `requestId`, without raw error details. Interrupted and cancelled receipts return 409. Queued or running work returns 202 with `accepted: true`, `requestId`, `status` and `statusUrl`. `Location` and `Retry-After` supply the polling address and interval. A 202 means accepted, not completed. `Prefer: respond-async` skips waiting. Disconnecting does not cancel accepted work.
+
+### Sender example
+
+A completed 200 response can be `{"ok":true,"runId":"run-id","correlationId":"correlation-id"}`. Keys must contain 1 to 200 printable ASCII characters without spaces.
+
+Send `POST /api/workflows/hooks/example` with headers `x-webhook-token: CURRENT_SECRET`, `Idempotency-Key: sender-request-123` and `Prefer: respond-async`. Send the same key and input if retrying that request.
+
+An example pending 202 body is:
+
+```json
+{"accepted":true,"requestId":"request-id","status":"queued","statusUrl":"/api/workflows/hooks/example?requestId=request-id"}
+```
+
+Poll the returned URL using `GET /api/workflows/hooks/example?requestId=request-id` and the current `x-webhook-token`. Respect `Retry-After`. Polling returns only `requestId`, `status` and `runId`. Polling omits payloads and raw errors. The request ID alone grants no access. Rotated tokens stop authorizing old secrets. Renamed or deleted paths may remove sender access; operators can still inspect receipts by workflow and request ID.
+
+### Operator inspection and recovery
+
+The Webhook receipts tab in workflow history shows queued, running, completed, failed, interrupted and cancelled requests. Operator routes are `GET /api/workflows/:id/receipts?limit=25&offset=0` and `GET /api/workflows/:id/receipts/:requestId`.
+
+```sh
+openldr workflows receipts list WORKFLOW_ID --limit 25 --offset 0 --json
+openldr workflows receipts show REQUEST_ID --json
+```
+
+Limits range from 1 to 100; offsets start at zero. CLI and API use the same receipt service. Neither offers replay.
+
+Queued work can resume after restart. A workflow disabled, deleted or changed before execution cancels queued work. An `interrupted` receipt means the outcome is uncertain. OpenLDR never automatically replays started work. Confirm the original worker stopped and reconcile external effects before submitting a new identity. External effects have no automatic rollback. Receipt and idempotency records survive workflow deletion. No automatic expiry or retention cleanup exists, so storage grows.
+
+Migration 097 adds receipt storage. Deployment still follows P14: stop old API instances and workflow writers, run `openldr db migrate`, then start upgraded instances. Do not mix writers across versions. Actual CDR client compatibility remains unproven because its source was not verified.

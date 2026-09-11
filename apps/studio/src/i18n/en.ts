@@ -1,4 +1,36 @@
 export const en = {
+  workflowReceipts: {
+  "title": "Webhook receipts",
+  "runs": "Runs",
+  "detail": "Receipt details",
+  "acceptedHint": "Accepted requests may still be queued or running.",
+  "actions": "Receipt actions",
+  "rowActions": "Receipt actions for {{id}}",
+  "refresh": "Refresh",
+  "back": "Back to receipts",
+  "view": "View details",
+  "requestId": "Request ID",
+  "status": "Status",
+  "created": "Accepted",
+  "started": "Started",
+  "finished": "Finished",
+  "runId": "Run ID",
+  "reason": "Reason",
+  "error": "Error",
+  "notRecorded": "Not recorded",
+  "empty": "No webhook receipts yet.",
+  "loadError": "Could not load webhook receipts. Use Refresh to try again.",
+  "interruptedHint": "The outcome is uncertain. External changes may already exist. Verify the original worker has stopped and reconcile those changes before submitting a new request identity.",
+  "failedHint": "A failed run may have made external changes. Check its recorded results before submitting again.",
+  "statuses": {
+    "queued": "Queued",
+    "running": "Running",
+    "completed": "Completed",
+    "failed": "Failed",
+    "interrupted": "Interrupted",
+    "cancelled": "Cancelled"
+  }
+},
   common: {
     delete: 'Delete',
     save: 'Save',

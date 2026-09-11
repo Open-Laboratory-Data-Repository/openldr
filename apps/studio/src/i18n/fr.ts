@@ -1,6 +1,38 @@
 import type { EnShape } from './en';
 
 export const fr: EnShape = {
+  workflowReceipts: {
+  "title": "Reçus webhook",
+  "runs": "Exécutions",
+  "detail": "Détails du reçu",
+  "acceptedHint": "Les demandes acceptées peuvent être en attente ou en cours.",
+  "actions": "Actions du reçu",
+  "rowActions": "Actions du reçu {{id}}",
+  "refresh": "Actualiser",
+  "back": "Retour aux reçus",
+  "view": "Voir les détails",
+  "requestId": "ID de demande",
+  "status": "Statut",
+  "created": "Acceptée",
+  "started": "Début",
+  "finished": "Fin",
+  "runId": "ID d'exécution",
+  "reason": "Motif",
+  "error": "Erreur",
+  "notRecorded": "Non enregistré",
+  "empty": "Aucun reçu webhook.",
+  "loadError": "Impossible de charger les reçus webhook. Actualisez pour réessayer.",
+  "interruptedHint": "Le résultat est incertain. Des modifications externes peuvent déjà exister. Vérifiez que le processus initial est arrêté et examinez ces modifications avant de soumettre une nouvelle identité de demande.",
+  "failedHint": "Une exécution échouée peut avoir effectué des modifications externes. Vérifiez ses résultats enregistrés avant une nouvelle soumission.",
+  "statuses": {
+    "queued": "En attente",
+    "running": "En cours",
+    "completed": "Terminée",
+    "failed": "Échouée",
+    "interrupted": "Interrompue",
+    "cancelled": "Annulée"
+  }
+},
   common: {
     delete: 'Supprimer',
     save: 'Enregistrer',
