@@ -596,13 +596,19 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             'conflict',
           );
         }
-        // ⛔ REFUSE A HALF-REMOVED VOCABULARY. Deleting this row does not delete the concepts keyed
-        // on its url, nor the value sets that name it, so the vocabulary keeps resolving while the
-        // system itself disappears from terminology. Worse, `addRegisterFacilityType`
-        // (packages/bootstrap) creates a register's system only when that register's value set is
-        // ABSENT, so a surviving set makes the system unrecreatable through the normal path. A live
-        // incident left exactly that: 12 concepts and a working value set behind a system nobody
-        // could see or restore. Refusing costs one extra step; the state it prevents had no exit.
+        // ⛔ REFUSE A HALF-REMOVED VOCABULARY. THE SURVIVING VALUE SET IS THE HAZARD, not the
+        // concepts. The cascade below deletes every concept keyed on this url, and `cascade: true` is
+        // the only mode the route ever passes (apps/server/src/terminology-admin-routes.ts), so the
+        // concepts do go. `value_sets` is never touched, and a set that outlives the system is what
+        // poisons the next write: `addRegisterFacilityType` (packages/bootstrap) creates a register's
+        // system only when that register's value set is ABSENT, so a surviving set makes it skip
+        // `upsertByUrl` and call `terms.create` anyway. Nothing refuses that, because
+        // `terminology_concepts.system` is bare text with no foreign key to `coding_systems.url`.
+        // A live incident ran exactly that course: the audit trail for 2026-09-10 04:37:44Z shows the
+        // delete, then twelve `facility.type-added` events over the next 80 seconds, leaving 12
+        // concepts and a working value set under a system row nobody could see or restore. Every code
+        // it minted was a bare slug with no `-2` suffix, which is the proof the list really was empty
+        // when they were written. Refusing costs one extra step; that state had no exit.
         if (row.url) {
           const named = await valueSetsIncluding(row.url);
           if (named.length > 0) {
