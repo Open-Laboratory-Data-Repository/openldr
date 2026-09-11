@@ -1339,6 +1339,9 @@ export const en = {
   },
   widgetEditor: {
     insertToken: 'Insert',
+    variableChip: 'Variable',
+    missingFilter: 'Missing filter ({{id}})',
+    missingFilterHelp: 'This variable is bound to a dashboard filter that no longer exists, so it never receives a value. Pick another filter, or Local only.',
     variableProblem: 'This variable will not resolve. Open Variables.',
     bareRangeToken: 'A date-range variable resolves only to its _from and _to tokens. The bare token in this SQL always becomes NULL, so the condition is dropped.',
     typeMismatch: 'Type mismatch. This variable is {{varType}} and the filter is {{filterType}}. Their values never line up, so the widget ignores this filter.',

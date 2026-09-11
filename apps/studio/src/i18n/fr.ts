@@ -1229,6 +1229,9 @@ export const fr: EnShape = {
   },
   widgetEditor: {
     insertToken: 'Insérer',
+    variableChip: 'Variable',
+    missingFilter: 'Filtre introuvable ({{id}})',
+    missingFilterHelp: 'Cette variable est liée à un filtre de tableau de bord qui n’existe plus, elle ne reçoit donc jamais de valeur. Choisissez un autre filtre, ou Local uniquement.',
     variableProblem: 'Cette variable ne sera pas résolue. Ouvrez Variables.',
     bareRangeToken: 'Une variable de type plage de dates ne produit que ses jetons _from et _to. Le jeton simple présent dans ce SQL devient toujours NULL, et la condition est supprimée.',
     typeMismatch: 'Types incompatibles. Cette variable est {{varType}} et le filtre est {{filterType}}. Leurs valeurs ne correspondent jamais, donc le widget ignore ce filtre.',

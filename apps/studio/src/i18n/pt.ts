@@ -1229,6 +1229,9 @@ export const pt: EnShape = {
   },
   widgetEditor: {
     insertToken: 'Inserir',
+    variableChip: 'Variável',
+    missingFilter: 'Filtro em falta ({{id}})',
+    missingFilterHelp: 'Esta variável está ligada a um filtro do painel que já não existe, por isso nunca recebe um valor. Escolha outro filtro, ou Apenas local.',
     variableProblem: 'Esta variável não vai resolver. Abra Variáveis.',
     bareRangeToken: 'Uma variável de intervalo de datas produz apenas os tokens _from e _to. O token simples neste SQL torna-se sempre NULL, e a condição é removida.',
     typeMismatch: 'Tipos incompatíveis. Esta variável é {{varType}} e o filtro é {{filterType}}. Os valores nunca correspondem, por isso o widget ignora este filtro.',

@@ -515,18 +515,28 @@ export function WidgetEditorDialog({
                     const configured = !!def;
                     // A variable that cannot resolve is marked here, not only inside the sheet:
                     // this row is what the author sees while writing the SQL.
-                    const boundType = dashboardFilters.find((f) => f.id === bindings[v])?.type;
+                    const boundId = bindings[v];
+                    const boundType = dashboardFilters.find((f) => f.id === boundId)?.type;
+                    // A binding whose filter was deleted never receives a value, so it belongs
+                    // in the same "will not resolve" bucket as a type mismatch.
+                    const boundToMissing = boundId != null && boundType == null;
                     const broken =
                       hasBareDateRangeToken(sqlText, v, def?.type ?? 'text') ||
+                      boundToMissing ||
                       (boundType != null && def != null && boundType !== def.type);
                     return (
                       <button
                         key={v}
                         onClick={() => setShowVariables(true)}
+                        aria-label={`${t('widgetEditor.variableChip')} ${v}`}
                         title={broken ? t('widgetEditor.variableProblem') : undefined}
                         className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px] transition-colors ${broken ? 'border-destructive/40 bg-destructive/10 text-destructive' : configured ? 'border-primary/30 bg-primary/10 text-primary' : 'border-border bg-muted text-muted-foreground'}`}
                       >
-                        <span>{`{{${v}}}`}</span>
+                        {/* The tokens this variable really resolves to. A range has no single
+                            `{{v}}` token, so printing one would name the guess that fails. */}
+                        {filterTokens({ id: v, type: def?.type ?? 'text' }).map((tok) => (
+                          <span key={tok}>{`{{${tok}}}`}</span>
+                        ))}
                         <span className={`text-[9px] uppercase ${broken ? 'text-destructive/70' : configured ? 'text-primary/70' : 'text-muted-foreground/60'}`}>{def?.type ?? '?'}</span>
                       </button>
                     );
@@ -736,6 +746,10 @@ export function WidgetEditorDialog({
                   const pickableFilters = compatibleFilters(def.type, dashboardFilters, boundFilterId);
                   const boundFilter = dashboardFilters.find((f) => f.id === boundFilterId);
                   const typeMismatch = boundFilter != null && boundFilter.type !== def.type;
+                  // The filter this binding names was deleted from the dashboard. Radix renders
+                  // a blank trigger for a value with no matching item, which hid the problem
+                  // completely, so the missing id gets an item of its own and says so.
+                  const missingFilterId = boundFilterId != null && boundFilter == null ? boundFilterId : null;
                   const bareRangeToken = hasBareDateRangeToken(sqlText, v, def.type);
                   return (
                     <div key={v}>
@@ -821,6 +835,11 @@ export function WidgetEditorDialog({
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="__local__">Local only</SelectItem>
+                              {missingFilterId && (
+                                <SelectItem value={missingFilterId}>
+                                  {t('widgetEditor.missingFilter', { id: missingFilterId })}
+                                </SelectItem>
+                              )}
                               {pickableFilters.map((f) => (
                                 <SelectItem key={f.id} value={f.id}>
                                   {f.label} ({f.id})
@@ -829,6 +848,11 @@ export function WidgetEditorDialog({
                             </SelectContent>
                           </Select>
                         </VarRow>
+                        {missingFilterId && (
+                          <p className="col-span-2 text-xs text-destructive">
+                            {t('widgetEditor.missingFilterHelp')}
+                          </p>
+                        )}
                         {typeMismatch && (
                           <p className="col-span-2 text-xs text-destructive">
                             {t('widgetEditor.typeMismatch', { varType: def.type, filterType: boundFilter?.type })}

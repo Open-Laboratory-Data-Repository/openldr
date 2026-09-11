@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, waitFor, fireEvent, screen } from '@testing-library/react';
+import { render, waitFor, fireEvent, screen, within } from '@testing-library/react';
 import { WidgetEditorDialog } from './WidgetEditorDialog';
 import type { WidgetConfig } from '../../api';
 
@@ -92,7 +92,7 @@ describe('WidgetEditorDialog', () => {
     // Opening the sheet mounts a Radix portal. Wait for a control that only exists inside it,
     // so no assertion races the mount. One gate run failed here while single runs passed.
     const openVariables = async () => {
-      fireEvent.click(screen.getByText('{{period}}'));
+      fireEvent.click(screen.getByLabelText('Variable period'));
       await screen.findByLabelText('Dashboard filter');
     };
 
@@ -115,8 +115,10 @@ describe('WidgetEditorDialog', () => {
     it('heads a date-range variable with both real tokens', async () => {
       renderWith(RANGE_SQL, periodRange);
       await openVariables();
-      expect(screen.getByText('{{period_from}}')).toBeInTheDocument();
-      expect(screen.getByText('{{period_to}}')).toBeInTheDocument();
+      // Scoped to the sheet: the toolbar chip carries the same two tokens now.
+      const sheet = screen.getAllByRole('dialog').pop() as HTMLElement;
+      expect(within(sheet).getByText('{{period_from}}')).toBeInTheDocument();
+      expect(within(sheet).getByText('{{period_to}}')).toBeInTheDocument();
     });
 
     it('warns when the bound filter is a different type', async () => {
@@ -141,6 +143,56 @@ describe('WidgetEditorDialog', () => {
       renderWith('select 42 as value where d >= {{period}}', periodRange);
       await openVariables();
       expect(screen.getByText(/only to its .*_from.* and .*_to/i)).toBeInTheDocument();
+    });
+
+    // `{{period}}` is not a string that appears in anyone's SQL. The chip used to print it
+    // anyway, which is the one guess that silently resolves to NULL.
+    it('labels a date-range chip with both real tokens', () => {
+      renderWith(RANGE_SQL, periodRange);
+      const chip = screen.getByLabelText('Variable period');
+      expect(chip).toHaveTextContent('{{period_from}}');
+      expect(chip).toHaveTextContent('{{period_to}}');
+      expect(chip.textContent).not.toContain('{{period}}');
+    });
+
+    it('leaves a scalar chip as the single token it really is', () => {
+      renderWith('select 42 as value where panel = {{test}}', { test: { type: 'text', label: 'Test' } });
+      const chip = screen.getByLabelText('Variable test');
+      expect(chip).toHaveTextContent('{{test}}');
+    });
+
+    // A dashboard filter can be deleted while a widget is still bound to it. The picker then
+    // held a value with no matching item and rendered blank, hiding the breakage entirely.
+    describe('a binding whose filter was deleted', () => {
+      const dangling = {
+        bindings: { period: 'gone' },
+        filters: [{ id: 'test', label: 'Test', type: 'text' as const }],
+      };
+
+      it('names the missing filter in the picker instead of going blank', async () => {
+        renderWith(RANGE_SQL, periodRange, dangling);
+        await openVariables();
+        expect(screen.getByLabelText('Dashboard filter')).toHaveTextContent(/missing filter \(gone\)/i);
+      });
+
+      it('says what is wrong', async () => {
+        renderWith(RANGE_SQL, periodRange, dangling);
+        await openVariables();
+        expect(screen.getByText(/no longer exists/i)).toBeInTheDocument();
+      });
+
+      it('marks the variable in the toolbar chip row', () => {
+        renderWith(RANGE_SQL, periodRange, dangling);
+        expect(screen.getByTitle(/will not resolve/i)).toBeInTheDocument();
+      });
+
+      it('leaves a healthy binding unmarked', () => {
+        renderWith(RANGE_SQL, periodRange, {
+          bindings: { period: 'period' },
+          filters: [{ id: 'period', label: 'Period', type: 'date-range' as const }],
+        });
+        expect(screen.queryByTitle(/will not resolve/i)).not.toBeInTheDocument();
+      });
     });
 
     // The toolbar chip row is visible without opening the sheet, so a variable that cannot
