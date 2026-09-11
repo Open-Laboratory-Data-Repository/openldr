@@ -41,8 +41,9 @@ const SEARCH_FIELDS = [
  * @param onReady Hands this tab's create-dialog opener up to MarketplaceTabs, which owns the page's
  *   single ⋯ on the tab strip. Optional so the component still stands alone in its own tests.
  */
-export function RegistriesTab({ onChanged, onReady }: {
+export function RegistriesTab({ onChanged, onSaved, onReady }: {
   onChanged: () => void;
+  onSaved?: () => void;
   onReady?: (api: { openCreate: () => void }) => void;
 }) {
   const { t } = useTranslation();
@@ -72,17 +73,16 @@ export function RegistriesTab({ onChanged, onReady }: {
     if (!draft || busy) return;
     setBusy(true);
     try {
-      if (draft.id === null) {
-        await createRegistry({ name: draft.name, kind: draft.kind, location: draft.location });
-      } else {
-        await updateRegistry(draft.id, { name: draft.name, kind: draft.kind, location: draft.location, enabled: draft.enabled });
-      }
+      const saved = draft.id === null
+        ? await createRegistry({ name: draft.name, kind: draft.kind, location: draft.location })
+        : await updateRegistry(draft.id, { name: draft.name, kind: draft.kind, location: draft.location, enabled: draft.enabled });
+      toast.success(t('settings.marketplace.registrySavedToast', { name: saved.name }));
       setDraft(null);
       await load();
-      onChanged();
+      (onSaved ?? onChanged)();
     } catch (e) { err(e); }
     finally { setBusy(false); }
-  }, [draft, busy, load, onChanged, err]);
+  }, [draft, busy, load, onChanged, onSaved, err, t]);
 
   const onToggle = useCallback(async (r: MarketplaceRegistry, enabled: boolean) => {
     try { await updateRegistry(r.id, { enabled }); await load(); onChanged(); }

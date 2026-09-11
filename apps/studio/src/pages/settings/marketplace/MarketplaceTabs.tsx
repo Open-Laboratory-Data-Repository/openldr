@@ -30,6 +30,7 @@ interface MarketplaceTabsProps {
   source: 'local' | 'http' | null;
   host: string | null;
   onRefresh: () => void;
+  onRegistrySaved: () => void;
   loadError?: string | null;
 }
 
@@ -260,7 +261,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
           utility here ties the UA `[hidden]{display:none}` rule on specificity, and without that guard
           the inactive panel would stay laid out and steal the space back. */}
       <TabsContent value="registries" className="flex min-h-0 flex-1 flex-col">
-        <RegistriesTab onChanged={props.onRefresh} onReady={bindRegistries} />
+        <RegistriesTab onChanged={props.onRefresh} onSaved={props.onRegistrySaved} onReady={bindRegistries} />
       </TabsContent>
     </Tabs>
   );

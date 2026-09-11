@@ -626,6 +626,7 @@ export const en = {
       registryEditBtn: 'Edit',
       registryRemoveBtn: 'Remove',
       registryErrorToast: 'Registry error: {{error}}',
+      registrySavedToast: 'Saved registry {{name}}',
     },
     dataExposure: {
       title: 'Data Exposure',
