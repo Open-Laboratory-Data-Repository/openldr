@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "19fe48d4",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Name the created report in its confirmation"
+        },
+        {
           "hash": "b9869a45",
           "type": "fix",
           "scope": "dashboard",
