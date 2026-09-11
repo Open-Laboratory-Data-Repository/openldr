@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "c9b25b71",
+          "type": "feat",
+          "scope": "",
+          "title": "Support generic OIDC providers without Keycloak administration"
+        },
+        {
           "hash": "87dc9c23",
           "type": "fix",
           "scope": "",

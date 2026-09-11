@@ -2,7 +2,7 @@
 
 Worktree `.worktrees/p09-auth-portability`, branch `codex/p09-auth-portability`, base `1384454d`.
 The operator approved the confirmed scope and delegated the remaining design choice.
-No commit, merge or push is authorized yet.
+Committed as `c9b25b71` and merged into local `main` as `6edfa806` on 2026-09-11, at the operator's request. Not pushed.
 
 ## Verdict and decision
 
@@ -100,5 +100,15 @@ First adoption cannot infer whether an operator already changed the issuer incor
 Keep the original issuer during the upgrade and follow the planned-upgrade procedure.
 Run migration 098 before starting authenticated application services or application-context CLI commands.
 
-No live deployment was changed. Changelog generation belongs after an authorized merge.
-The worktree must remain available until the operator requests merge.
+No live deployment was changed. `pnpm make:changelog` ran after the merge and generated 2,708 entries.
+
+Pre-merge gate on the branch tree, which the merge tree matches exactly:
+
+| Command | Result |
+| --- | --- |
+| `pnpm turbo run typecheck --force --continue --concurrency=4` | 36 of 36 tasks passed, 0 cached. |
+| `pnpm turbo run test --force --continue --concurrency=4` | 33 of 35 tasks passed. Forms timed out and passed alone, 17 of 17. Server failed `run-stored-query.test.ts`, which fails identically on base `1384454d`. |
+| Real PostgreSQL 16 rehearsal, disposable container | First start bound the old issuer. The new issuer refused startup. The CLI refused without `--force`, then rebound with it. The new issuer started, the old one refused. One `auth.issuer.rebind` audit row with actor type `cli`. |
+
+Open on `main`, outside P09: `run-stored-query.test.ts` still expects a 1,000-row cap after P06, and `apps/server` lint reports four unreturned `reply.send` calls in `workflows-routes.ts:494-501`.
+HONEST NON-PROOF: no phone check. The preview tool cannot serve a worktree, and the changed screens appear only in generic mode.
