@@ -24,3 +24,16 @@ describe('QueryTab', () => {
     expect(await screen.findByText('1 rows · 3ms')).toBeInTheDocument();
   });
 });
+
+it('uses continuation for a query with no known total', async () => {
+  vi.mocked(queryApi.run).mockResolvedValueOnce({ columns: [], rows: [], rowCount: 50, ms: 1, hasMore: true })
+    .mockResolvedValueOnce({ columns: [], rows: [], rowCount: 0, ms: 1, hasMore: false });
+  render(<QueryTab tab={tab} />);
+  fireEvent.click(screen.getByRole('button', { name: /^Run$/ }));
+  expect(await screen.findByText('1–50 (total unknown)')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+  expect(await screen.findByText('0–0 (total unknown)')).toBeInTheDocument();
+  expect(queryApi.run).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 50, offset: 50 }));
+  expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Previous page' })).toBeEnabled();
+});

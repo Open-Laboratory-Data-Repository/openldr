@@ -326,3 +326,53 @@ describe('datasets', () => {
     expect(res.json().rows).toEqual([{ org: 'E. coli' }]);
   });
 });
+
+describe('SQL Server continuation pages', () => {
+  it.each([0, 1, 2, 3])('returns at most two rows and detects continuation among %s rows', async (length) => {
+    const deps = makeDeps();
+    deps.connectors.get = async (id) => ({ id, name: 'MS', type: 'microsoft-sql', enabled: true });
+    const source = Array.from({ length }, (_, n) => ({ id: n + 1 }));
+    const runner = vi.fn(async ({ offset = 0, rowCap = 1000 }: { offset?: number; rowCap?: number }) =>
+      ({ columns: [{ key: 'id', label: 'id' }], rows: source.slice(offset, offset + rowCap) }));
+    deps.runConnectorSql = runner;
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/run',
+      payload: { connectorId: 'c1', sql: 'select id from sample order by id', limit: 2, offset: 0 } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ rows: source.slice(0, 2), rowCount: Math.min(length, 2), hasMore: length > 2 });
+    expect(res.json()).not.toHaveProperty('total');
+    expect(runner).toHaveBeenCalledTimes(1);
+    expect(runner).toHaveBeenCalledWith(expect.objectContaining({ rowCap: 3, offset: 0 }));
+    await app.close();
+  });
+
+  it('keeps the lookahead row for the next page and ends an exact multiple', async () => {
+    const deps = makeDeps();
+    deps.connectors.get = async (id) => ({ id, name: 'MS', type: 'microsoft-sql', enabled: true });
+    const source = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
+    deps.runConnectorSql = async ({ offset = 0, rowCap = 1000 }) =>
+      ({ columns: [], rows: source.slice(offset, offset + rowCap) });
+    const app = await build(deps);
+    const first = await app.inject({ method: 'POST', url: '/api/query/run', payload:
+      { connectorId: 'c1', sql: 'select id from sample order by id', limit: 2, offset: 0 } });
+    const second = await app.inject({ method: 'POST', url: '/api/query/run', payload:
+      { connectorId: 'c1', sql: 'select id from sample order by id', limit: 2, offset: 2 } });
+    expect(first.json()).toMatchObject({ rows: [{ id: 1 }, { id: 2 }], hasMore: true });
+    expect(second.json()).toMatchObject({ rows: [{ id: 3 }, { id: 4 }], hasMore: false });
+    await app.close();
+  });
+
+  it('uses one lookahead beyond the public cap without exposing it', async () => {
+    const deps = makeDeps();
+    deps.connectors.get = async (id) => ({ id, name: 'MS', type: 'microsoft-sql', enabled: true });
+    const runner = vi.fn(async () => ({ columns: [], rows: Array.from({ length: 1001 }, (_, id) => ({ id })) }));
+    deps.runConnectorSql = runner;
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/run', payload:
+      { connectorId: 'c1', sql: 'select id from sample order by id', limit: 1000 } });
+    expect(res.json()).toMatchObject({ rowCount: 1000, hasMore: true });
+    expect(res.json().rows).toHaveLength(1000);
+    expect(runner).toHaveBeenCalledWith(expect.objectContaining({ rowCap: 1001 }));
+    await app.close();
+  });
+});

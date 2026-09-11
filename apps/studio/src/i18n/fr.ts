@@ -23,6 +23,7 @@ export const fr: EnShape = {
     close: 'Fermer',
   },
   table: {
+    unknownTotalRange: "{{from}}–{{to}} (total inconnu)",
     filter: 'Filtrer',
     sort: 'Trier',
     columns: 'Colonnes',

@@ -13,7 +13,7 @@ You can browse connectors, schemas, and tables in the Explorer, write and run a 
 ## Before you begin
 
 - You need the Lab Admin, Lab Manager, or Data Analyst role.
-- A Postgres connector must already exist — see [Connectors](/docs/connectors). The Query workbench works with Postgres connectors only.
+- A PostgreSQL, MySQL/MariaDB, or SQL Server connector must already exist. See [Connectors](/docs/connectors).
 - Basic SQL knowledge helps, but browsing tables does not require writing SQL yourself.
 
 ## Steps
@@ -37,7 +37,7 @@ The query runs against the chosen connector and returns rows in the results grid
 - **"unbound parameter" error:** every `{{ param.x }}` token in the SQL needs a matching declared parameter.
 - **"required parameter" error at run time:** fill in a value for every parameter marked Required.
 - **The query is rejected:** only `SELECT` statements are allowed — statements that modify data or schema are not permitted.
-- **No connectors listed in the Explorer:** create or enable a Postgres connector — see [Connectors](/docs/connectors).
+- **No connectors listed in the Explorer:** create or enable a supported database connector — see [Connectors](/docs/connectors).
 - **You need a different query name:** new tabs receive a generated name such as `Query #1`. The workbench has no name field, rename action, or duplicate action. Creating another query does not let you choose its name. Keep saved queries that reports reference; deleting one is not a naming workaround.
 
 ## Advanced web usage
@@ -51,3 +51,17 @@ The query runs against the chosen connector and returns rows in the results grid
 - [Reports](/docs/reports)
 - [Report Designer](/docs/report-designer)
 - [Connectors](/docs/connectors)
+
+## SQL Server paging
+
+Table browsing and query results support PostgreSQL, MySQL/MariaDB, and SQL Server connectors.
+SQL Server pages show a row range and "total unknown". This means the workbench did not count the full result.
+Next is available only when the server found one more row beyond the current page. Previous returns to the preceding page.
+An exactly full final page still disables Next. Changing Rows per page returns to the first page.
+PostgreSQL and MySQL/MariaDB continue to show their counted totals.
+
+For repeatable paging, open SQL in a table tab and add an ORDER BY that ends with a unique key.
+For example, if id is unique in your table, ORDER BY created_at, id breaks timestamp ties.
+Write the corresponding order in a query tab before Run. The workbench cannot infer a unique key for arbitrary SQL.
+A plain table browse has no guaranteed order. Rows may repeat or be missed without a unique order, or if data changes between requests.
+SQL Server reads through the requested offset, so later pages can take longer. Paging does not create a database snapshot.

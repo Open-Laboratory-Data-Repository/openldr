@@ -21,6 +21,7 @@ export const en = {
     close: 'Close',
   },
   table: {
+    unknownTotalRange: "{{from}}–{{to}} (total unknown)",
     filter: 'Filter',
     sort: 'Sort',
     columns: 'Columns',
