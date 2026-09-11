@@ -491,14 +491,15 @@ export function registerWorkflowRoutes(
     try { entry = await ctx.workflows.webhooks.resolve(path); }
     catch {
       req.log.warn('webhook configuration lookup failed');
-      reply.code(503).send({ error: 'webhook configuration unavailable' });
+      await reply.code(503).send({ error: 'webhook configuration unavailable' });
       return;
     }
-    if (!entry) { reply.code(404).send({ error: 'unknown webhook' }); return; }
-    if (!entry.secret) { reply.code(401).send({ error: 'webhook has no secret configured' }); return; }
+    // Await, not return: callers treat any truthy result as an authenticated entry.
+    if (!entry) { await reply.code(404).send({ error: 'unknown webhook' }); return; }
+    if (!entry.secret) { await reply.code(401).send({ error: 'webhook has no secret configured' }); return; }
     const token = req.headers['x-webhook-token'];
     if (typeof token !== 'string' || !secretEquals(token, entry.secret)) {
-      reply.code(401).send({ error: 'invalid webhook token' }); return;
+      await reply.code(401).send({ error: 'invalid webhook token' }); return;
     }
     return entry;
   }
