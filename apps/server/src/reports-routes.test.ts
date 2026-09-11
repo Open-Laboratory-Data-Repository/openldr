@@ -430,3 +430,28 @@ describe('report schedule-run routes', () => {
     await app.close();
   });
 });
+
+it.each(['', '.csv', '.pdf'])('refuses oversized stored query output on /api/reports/r%s', async (suffix) => {
+  const { runStoredQuery } = await import('@openldr/dashboards');
+  const { buildReportingForTest } = await import('@openldr/bootstrap');
+  const { resolveDesignTables } = await import('@openldr/report-designer');
+  const render = vi.fn(async () => Buffer.from('%PDF'));
+  const reporting = buildReportingForTest({
+    reportDefs: { get: async () => ({ id: 'r', designId: 'd', primaryQueryId: 'q' }) as any, list: async () => [] },
+    reportDesigns: { get: async () => ({ id: 'd', parameters: [], pages: [{ elements: [{ id: 't', dataSource: { queryId: 'q' } }] }] }) as any },
+    runStoredQuery: (id, values) => runStoredQuery({
+      customQueries: { get: async () => ({ connectorId: 'c', sql: 'select a from rows', params: [] }) as any },
+      runConnectorSql: async ({ rowCap }) => ({ columns: [], rows: Array.from({ length: rowCap! }, (_, a) => ({ a })) }),
+    }, id, values),
+    resolveDesignTables, renderReportDesignPdf: render,
+  });
+  const app = appWith(reporting);
+  const res = await app.inject({ method: 'GET', url: `/api/reports/r${suffix}` });
+  expect(res.statusCode).toBe(422);
+  expect(res.headers['content-type']).toContain('application/json');
+  expect(res.headers['content-disposition']).toBeUndefined();
+  expect(res.json().error).toContain('1000');
+  expect(res.json()).not.toHaveProperty('rows');
+  expect(render).not.toHaveBeenCalled();
+  await app.close();
+});

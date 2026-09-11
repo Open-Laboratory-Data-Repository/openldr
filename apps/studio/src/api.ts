@@ -218,7 +218,7 @@ export async function fetchReportRuns(
 export async function downloadReportCsv(id: string, params: Record<string, string> = {}): Promise<void> {
   const qs = new URLSearchParams(params).toString();
   const res = await authFetch(`/api/reports/${encodeURIComponent(id)}.csv${qs ? `?${qs}` : ''}`);
-  if (!res.ok) throw new Error(`report csv ${id} failed: ${res.status}`);
+  if (!res.ok) throw new Error(formatApiError(`report csv ${id}`, await errorDetail(res)));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

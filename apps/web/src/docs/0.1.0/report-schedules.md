@@ -35,6 +35,10 @@ A disabled schedule can still show **Next**. That stored timestamp does not mean
 
 A failed run has no downloadable output. On desktop, hover over its failed status to read the error. Check the schedule's saved filters, correct them, and try **Run now** again. The schedule output does not replace the report page's current Document or Spreadsheet view.
 
+### Report result limit
+
+Each stored report query can return up to 1,000 rows. Exactly 1,000 rows are accepted. If any query used by a PDF exceeds this limit, the whole PDF is refused. CSV and XLSX exports also refuse oversized results. Narrow the date range or other filters, then run again. A LIMIT written in the saved SQL remains intentional and is respected. Scheduled runs record a failure without saving an output file. The CLI reports the error before writing the export. Previously saved outputs are not regenerated.
+
 ## Français
 
 ### Planifier un rapport
@@ -70,6 +74,10 @@ Une planification désactivée peut encore afficher Prochaine. Cette date conser
 
 Une exécution échouée ne fournit pas de fichier. Sur ordinateur, survolez son statut pour lire l'erreur. Corrigez les filtres enregistrés et réessayez. Le fichier produit ne remplace pas le Document ou le Tableur actuellement affiché sur la page du rapport.
 
+### Limite des résultats
+
+Chaque requête enregistrée peut renvoyer jusqu'à 1 000 lignes. Un résultat de 1 000 lignes est accepté. Si une requête utilisée par un PDF dépasse cette limite, le PDF entier est refusé. Les exports CSV et XLSX refusent aussi les résultats trop volumineux. Réduisez la période ou les autres filtres, puis relancez le rapport. Une clause LIMIT écrite dans le SQL enregistré reste volontaire et est respectée. Les exécutions planifiées enregistrent un échec sans créer de fichier. La CLI signale l'erreur avant d'écrire le fichier. Les fichiers déjà enregistrés ne sont pas régénérés.
+
 ## Português
 
 ### Agendar um relatório
@@ -104,3 +112,7 @@ Um agendamento desativado ainda pode mostrar Próxima. Essa data armazenada não
 5. Se o resultado não aparecer, saia e reabra **Execuções agendadas**. A lista não atualiza automaticamente.
 
 Uma execução que falhou não fornece arquivo. No computador, passe o cursor sobre o status para ler o erro. Corrija os filtros salvos e tente novamente. O arquivo produzido não substitui o Documento ou a Planilha atualmente exibido na página do relatório.
+
+### Limite dos resultados
+
+Cada consulta guardada pode devolver até 1 000 linhas. Um resultado com exatamente 1 000 linhas é aceite. Se uma consulta usada num PDF exceder este limite, todo o PDF é recusado. As exportações CSV e XLSX também recusam resultados demasiado grandes. Reduza o intervalo de datas ou os outros filtros e execute novamente. Uma cláusula LIMIT escrita no SQL guardado continua a ser intencional e é respeitada. As execuções agendadas registam uma falha sem guardar um ficheiro. A CLI comunica o erro antes de escrever o ficheiro. Os ficheiros já guardados não são gerados novamente.

@@ -132,3 +132,20 @@ describe('reconcile', () => {
     );
   });
 });
+
+it.each(['csv', 'xlsx', 'pdf'])('stores no %s artifact when a stored report query exceeds the bound', async (format) => {
+  const { runStoredQuery } = await import('@openldr/dashboards');
+  const d = deps();
+  const schedule = await d.schedules.get();
+  schedule.outputFormat = format;
+  d.reporting.run.mockImplementation(async () => {
+    await runStoredQuery({
+      customQueries: { get: async () => ({ connectorId: 'c', sql: 'select a from rows', params: [] }) as any },
+      runConnectorSql: async ({ rowCap }) => ({ columns: [], rows: Array.from({ length: rowCap! }, (_, a) => ({ a })) }),
+    }, 'q', {});
+    return { columns: [], rows: [], chart: { type: 'bar' }, meta: { generatedAt: '', rowCount: 0 } };
+  });
+  await d.scheduler.runDue('s1');
+  expect(d.put).not.toHaveBeenCalled();
+  expect(d.recorded[0]).toMatchObject({ status: 'failed', objectKey: null, errorMessage: expect.stringContaining('1000') });
+});

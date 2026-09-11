@@ -43,6 +43,14 @@ export function substituteParams(
 
 const ROW_CAP = 1000;
 
+export class StoredQueryRowLimitError extends Error {
+  readonly statusCode = 422;
+  constructor(readonly queryId: string) {
+    super(`Stored query exceeds the ${ROW_CAP} row limit. Narrow the report filters or date range. No export was generated.`);
+    this.name = 'StoredQueryRowLimitError';
+  }
+}
+
 export interface RunStoredQueryDeps {
   customQueries: Pick<CustomQueryStore, 'get'>;
   runConnectorSql(input: { connectorId: string; sql: string; rowCap?: number; offset?: number }): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
@@ -62,5 +70,8 @@ export async function runStoredQuery(
   const rec = await deps.customQueries.get(queryId);
   if (!rec) throw new Error(`custom query not found: ${queryId}`);
   const inner = prepareSelect(rec.sql, rec.params, values).replace(/;\s*$/, '');
-  return deps.runConnectorSql({ connectorId: rec.connectorId, sql: inner, rowCap: ROW_CAP });
+  // Read one extra row to distinguish a complete boundary result from truncation.
+  const result = await deps.runConnectorSql({ connectorId: rec.connectorId, sql: inner, rowCap: ROW_CAP + 1 });
+  if (result.rows.length > ROW_CAP) throw new StoredQueryRowLimitError(queryId);
+  return result;
 }

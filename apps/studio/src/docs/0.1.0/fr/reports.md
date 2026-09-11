@@ -38,3 +38,8 @@ Une planification désactivée peut encore afficher Prochaine. Cette date conser
 Une exécution échouée ne fournit pas de fichier. Sur ordinateur, survolez son statut pour lire l'erreur. Corrigez les filtres enregistrés et réessayez. Le fichier produit ne remplace pas le Document ou le Tableur actuellement affiché sur la page du rapport.
 
 ![Historique des rapports](reports-history-schedules.png)
+
+
+## Limite des résultats
+
+Chaque requête enregistrée peut renvoyer jusqu'à 1 000 lignes. Un résultat de 1 000 lignes est accepté. Si une requête utilisée par un PDF dépasse cette limite, le PDF entier est refusé. Les exports CSV et XLSX refusent aussi les résultats trop volumineux. Réduisez la période ou les autres filtres, puis relancez le rapport. Une clause LIMIT écrite dans le SQL enregistré reste volontaire et est respectée. Les exécutions planifiées enregistrent un échec sans créer de fichier. La CLI signale l'erreur avant d'écrire le fichier. Les fichiers déjà enregistrés ne sont pas régénérés.

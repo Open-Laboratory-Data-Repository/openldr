@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -22,7 +22,8 @@ vi.mock('@openldr/bootstrap', () => ({
   createAppContext: mocks.createAppContext,
 }));
 
-import { runReportGlassExport } from './report';
+import { runReportGlassExport, runReportRun } from './report';
+import { StoredQueryRowLimitError } from '@openldr/dashboards';
 
 // This is the CLI's half of the GLASS submission wire contract — the twin of the route test in
 // apps/server/src/reports-routes.test.ts. `openldr report glass-export` is the path that actually
@@ -135,5 +136,28 @@ describe('runReportRun — print language', () => {
     const { runReportRun } = await import('./report');
     await runReportRun('r1', { json: false, csv: false, format: 'pdf', out: join(dir, 'r.pdf'), lang: 'fr', param: ['lang=sw-code'] });
     expect(mocks.appCtx.reporting.renderPdf).toHaveBeenCalledWith('r1', { lang: 'sw-code' });
+  });
+});
+
+
+describe('report export row limit refusal', () => {
+  it.each(['csv', 'pdf'])('leaves an existing %s output untouched on refusal', async (format) => {
+    const dir = await mkdtemp(join(tmpdir(), 'report-limit-'));
+    const out = join(dir, `report.${format}`);
+    await writeFile(out, 'previous complete export');
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+    const error = new StoredQueryRowLimitError('q');
+    mocks.appCtx.reporting.run.mockRejectedValue(error);
+    mocks.appCtx.reporting.renderPdf.mockRejectedValue(error);
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    try {
+      await expect(runReportRun('r', { json: false, csv: format === 'csv', format, out })).rejects.toBe(error);
+      expect(await readFile(out, 'utf8')).toBe('previous complete export');
+      expect(stdout).not.toHaveBeenCalled();
+      expect(mocks.appCtx.close).toHaveBeenCalled();
+    } finally {
+      stdout.mockRestore();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
