@@ -15,6 +15,16 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('renders report schedules from its navigation entry in all three languages', () => {
+    renderDocs('/docs/report-schedules');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Report schedules' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Report schedules' })).toHaveAttribute('aria-current', 'page');
+    for (const name of ['English', 'Français', 'Português']) {
+      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
+    }
+  });
+
   it('renders the marketplace permission guide in all three languages', () => {
     renderDocs('/docs/marketplace-permissions');
 

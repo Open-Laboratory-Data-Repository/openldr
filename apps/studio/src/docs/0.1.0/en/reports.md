@@ -25,11 +25,44 @@ You can browse the report library by category, select a report, fill in filters 
 6. Read the **Document** tab for the formatted, printable PDF.
 7. Switch to **Spreadsheet** to inspect, sort, filter, and export rows as CSV or XLSX.
 8. Review the summary strip above the result, if the report defines one, for at-a-glance totals.
-9. Open the report's **⋯ Actions** menu and choose **Run History** to review previous runs, status, duration, and output format.
+9. Open the report's **⋯ Actions** menu and choose **Run History**. **Activity** lists interactive runs. **Scheduled Runs** lists completed schedule attempts, their status, and saved output.
 10. From the same **⋯ Actions** menu, open **Schedules** if your role allows recurring runs.
 11. If you manage reports, use the report's **⋯** menu for **Edit template** (jumps to the template in Report Designer), **Unpublish** (removes it from the library without deleting the template), or **Delete** (with confirmation).
 
 ![Report history and schedules drawer](reports-history-schedules.png)
+
+## Schedule a report
+
+1. Select a report, then open its **⋯ → Schedules** menu. Your role needs permission to manage reports.
+2. Choose **New schedule**. Select Daily, Weekly, Monthly, or Quarterly. Weekly requires a weekday; Monthly offers days 1 through 28.
+3. Choose CSV, XLSX, or PDF. Check the saved filters, including any required facility or time zone. A new schedule starts with the report page's current filters, except its date range.
+4. Choose **Save** and check the saved confirmation. The schedule appears with an enabled switch, **Next**, and **Last**.
+5. Use the pencil icon to edit its frequency, output format, or filters. Save the changes. Use the switch to disable it, or the delete icon and confirmation to remove it.
+
+### Timing and date window
+
+Every frequency uses 06:00 UTC. The schedule cannot select another hour or time zone. **Next** and **Last** display in your browser's local time zone. A report's Time zone filter controls its data calculation, not the scheduler's clock.
+
+| Frequency | Next date when saved | Automatic report window |
+| --- | --- | --- |
+| Daily | Tomorrow | Previous UTC day |
+| Weekly | Next selected weekday, never today | Previous seven UTC days, ending yesterday |
+| Monthly | Selected day in the next month | Previous calendar month in UTC |
+| Quarterly | First day of the next calendar quarter | Previous calendar quarter in UTC |
+
+The scheduler calculates the window when execution starts, including **Run now**. Reports with a Date range parameter receive that window automatically. The schedule does not retain the date range selected on the report page. Other saved filters remain in use.
+
+A disabled schedule can still show **Next**. That stored timestamp does not mean it will execute. Check the enabled switch. **Last** can refer to a failed attempt; inspect its status in history.
+
+### Run now and download the output
+
+1. Enable the schedule before selecting its play icon, **Run now**.
+2. A notification confirms the request was queued. This does not confirm successful generation. A disabled schedule can show the same notification but produces no run.
+3. Open the report's **⋯ → Run History → Scheduled Runs**. Automatic runs and **Run now** results appear here after completion. **Activity** contains interactive report runs.
+4. Check the status and use **Download** beside a successful output to retrieve its saved CSV, XLSX, or PDF. Downloading requires report-export permission.
+5. If the result is absent, leave and reopen **Scheduled Runs** to reload the list. The list does not refresh automatically.
+
+A failed run has no downloadable output. On desktop, hover over its failed status to read the error. Check the schedule's saved filters, correct them, and try **Run now** again. The schedule output does not replace the report page's current Document or Spreadsheet view.
 
 ## Expected result
 
