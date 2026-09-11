@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   },
   createAppContext: vi.fn(),
   recordAuditEvent: vi.fn(),
+  listUserDirectory: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({
@@ -22,9 +23,10 @@ vi.mock('@openldr/config', () => ({
 vi.mock('@openldr/bootstrap', () => ({
   createAppContext: mocks.createAppContext,
   recordAuditEvent: mocks.recordAuditEvent,
+  listUserDirectory: mocks.listUserDirectory,
 }));
 
-import { runUserCreate, runUserSetRole, runUserSetStatus } from './user';
+import { runUserDirectoryList, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 
 describe('user CLI audit', () => {
   beforeEach(() => {
@@ -131,4 +133,16 @@ describe('user CLI audit', () => {
     expect(mocks.appCtx.users.setStatus).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
+});
+
+it('directory-list forwards bounded provider options and closes context', async () => {
+  const output = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+  const page = { rows: [], offset: 100, limit: 25, total: null, hasMore: false };
+  mocks.listUserDirectory.mockResolvedValue(page);
+  expect(await runUserDirectoryList({ offset: '100', limit: '25', search: 'Ada', enabled: 'false', json: true })).toBe(0);
+  expect(mocks.listUserDirectory).toHaveBeenCalledWith(mocks.appCtx, { offset: '100', limit: '25', search: 'Ada', enabled: 'false' });
+  expect(output).toHaveBeenCalledWith(JSON.stringify(page, null, 2) + '\n');
+  expect(mocks.appCtx.close).toHaveBeenCalled();
+  output.mockRestore();
 });

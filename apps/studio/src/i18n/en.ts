@@ -21,6 +21,7 @@ export const en = {
     close: 'Close',
   },
   table: {
+    unknownTotalRange: "{{from}}–{{to}} (total unknown)",
     filter: 'Filter',
     sort: 'Sort',
     columns: 'Columns',
@@ -63,6 +64,9 @@ export const en = {
     },
   },
   users: {
+    directorySearch: "Search username, name or email",
+    directoryAll: "All statuses",
+    directoryOrder: "Provider order. Search and status apply to the whole directory.",
     searchPlaceholder: 'Search username or full name',
     username: 'Username',
     fullName: 'Full name',

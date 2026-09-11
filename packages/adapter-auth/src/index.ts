@@ -168,8 +168,9 @@ export function createAuth(cfg: AuthConfig, deps: AuthDeps = {}): AuthPort {
     },
     directory: {
       async list(opts = {}) {
-        const params = new URLSearchParams({ first: '0', max: String(opts.max ?? 100), briefRepresentation: 'false' });
+        const params = new URLSearchParams({ first: String(opts.first ?? 0), max: String(opts.max ?? 100), briefRepresentation: 'false' });
         if (opts.search) params.set('search', opts.search);
+        if (opts.enabled !== undefined) params.set('enabled', String(opts.enabled));
         const users = await adminJson<KcUser[]>(`/users?${params.toString()}`);
         return Promise.all(users.map(async (u) => toDirectoryUser(u, await userRoleNames(u.id))));
       },

@@ -24,3 +24,19 @@ Si aucun rôle ne convient, créez ou ajustez un rôle dans **Paramètres → R�
 - [Rôles](/docs/roles)
 - [Audit](/docs/audit)
 - [Paramètres](/docs/settings)
+
+## Pages de l'annuaire
+
+La page Utilisateurs affiche les comptes actifs au départ. La recherche porte sur les identifiants, noms et adresses e-mail de tout l'annuaire du fournisseur. Choisissez Tous les statuts pour inclure les comptes désactivés. Changer la recherche, le statut ou la taille de page revient à la première page.
+
+Utilisez Suivant pour atteindre les comptes au-delà des 100 premiers. Chaque requête retourne au plus 100 comptes. Le pied de page indique la plage visible sans annoncer de total. Les colonnes restent configurables. Les filtres de colonnes et le tri libre sont indisponibles car le fournisseur ne les prend pas en charge. Le fournisseur contrôle l'ordre. Ajouter ou supprimer un compte entre deux requêtes peut décaler les pages.
+
+Depuis la ligne de commande :
+
+```sh
+openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+```
+
+Le JSON contient `rows`, `offset`, `limit`, `total: null` et `hasMore`. Ajoutez `limit` à `offset` tant que `hasMore` vaut true. Omettez `--enabled` pour inclure les deux statuts. `openldr user list` conserve la liste des comptes locaux.
+
+Si l'administration du fournisseur n'est pas configurée, la liste utilise les comptes locaux. La recherche locale trouve les fragments dans l'identifiant, le nom et l'e-mail. Les résultats locaux suivent l'ordre identifiant puis ID. La recherche du fournisseur suit ses propres règles.

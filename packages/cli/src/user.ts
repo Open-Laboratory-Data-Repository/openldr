@@ -1,4 +1,4 @@
-import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
+import { createAppContext, recordAuditEvent, listUserDirectory } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
@@ -101,4 +101,15 @@ export async function runUserSetStatus(id: string, status: 'active' | 'disabled'
   } finally {
     await ctx.close();
   }
+}
+
+export async function runUserDirectoryList(opts: JsonOpt & { offset?: string; limit?: string; search?: string; enabled?: string }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const page = await listUserDirectory(ctx, { offset: opts.offset, limit: opts.limit, search: opts.search, enabled: opts.enabled });
+    const lines = page.rows.map((u) => `${u.id}\t${u.username}\t${u.email ?? ''}\t${u.enabled ? 'active' : 'disabled'}`);
+    lines.push(`offset=${page.offset} limit=${page.limit} hasMore=${page.hasMore}`);
+    emit(opts.json, page, lines.join('\n'));
+    return 0;
+  } finally { await ctx.close(); }
 }

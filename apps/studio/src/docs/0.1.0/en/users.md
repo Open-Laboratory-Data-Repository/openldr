@@ -48,3 +48,19 @@ Choose the role with the fewest capabilities that still lets the user complete t
 - [Roles](/docs/roles)
 - [Audit](/docs/audit)
 - [Settings](/docs/settings)
+
+## Directory pages
+
+Users starts with active accounts. Search matches provider usernames, names, and email addresses across the directory. Select All statuses to include disabled accounts. Changing search, status, or page size returns to the first page.
+
+Use Next to reach accounts beyond the first 100. Each request returns at most 100 accounts. The footer shows the visible range without claiming a total. Columns remain configurable. Arbitrary column filters and sorting are unavailable because the provider does not support them. The provider controls order. Accounts added or removed between requests can shift pages.
+
+For headless access, run:
+
+```sh
+openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+```
+
+The JSON contains `rows`, `offset`, `limit`, `total: null`, and `hasMore`. Add `limit` to `offset` while `hasMore` is true. Omit `--enabled` to include both statuses. `openldr user list` still lists local accounts.
+
+When provider administration is unconfigured, directory listing uses local accounts. Local search matches username, display name, and email as substrings. Local results use username and ID order. Provider search follows the identity provider's search rules.

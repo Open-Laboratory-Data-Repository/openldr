@@ -749,6 +749,14 @@ export type CreateUserPayload = {
 };
 
 export const listUsers = (): Promise<UserSummary[]> => apiGet('/api/users', 'list users');
+export interface UserDirectoryPage { rows: UserSummary[]; offset: number; limit: number; total: null; hasMore: boolean }
+export const listUserDirectory = (options: { offset?: number; limit?: number; search?: string; enabled?: boolean } = {}): Promise<UserDirectoryPage> => {
+  const query = new URLSearchParams({ offset: String(options.offset ?? 0), limit: String(options.limit ?? 25) });
+  if (options.search) query.set('search', options.search);
+  if (options.enabled !== undefined) query.set('enabled', String(options.enabled));
+  return apiGet(`/api/users?${query}`, 'list user directory');
+};
+
 export const createUser = (i: CreateUserPayload): Promise<UserSummary> =>
   authFetch('/api/users', jbody(i, 'POST')).then((r) => okJson<UserSummary>(r, 'create user'));
 export const updateUser = (id: string, i: Partial<CreateUserPayload>): Promise<UserSummary> =>

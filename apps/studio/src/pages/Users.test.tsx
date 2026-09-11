@@ -7,7 +7,7 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return {
     ...actual,
-    listUsers: vi.fn(),
+    listUserDirectory: vi.fn(),
     setUserStatus: vi.fn(),
     createUser: vi.fn(),
     updateUser: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasCapability: () => true }),
 }));
 
-import { listUsers, setUserStatus, createUser, updateUser, sendUserResetEmail, listPublishedForms, getForm, listRoles, getUserRoles, type UserSummary } from '@/api';
+import { listUserDirectory, setUserStatus, createUser, updateUser, sendUserResetEmail, listPublishedForms, getForm, listRoles, getUserRoles, type UserSummary } from '@/api';
 import { Users } from './Users';
 
 // Minimal published form + schema for UserDialog tests
@@ -59,7 +59,7 @@ const rows: UserSummary[] = [
 
 beforeEach(() => {
   vi.clearAllMocks();
-  (listUsers as ReturnType<typeof vi.fn>).mockResolvedValue(rows);
+  (listUserDirectory as ReturnType<typeof vi.fn>).mockImplementation(async ({ enabled }) => ({ rows: rows.filter((u) => enabled === undefined || u.enabled === enabled), total: null, hasMore: false }));
   (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([
     { id: 'form-1', name: 'Users Form', versionLabel: null, status: 'published', active: true, fhirResourceType: null, fieldCount: 2, updatedAt: '2026-01-01T00:00:00Z' },
   ]);
@@ -208,4 +208,38 @@ describe('Users page', () => {
       })),
     );
   });
+});
+
+it('requests later provider pages and resets paging when search changes', async () => {
+  vi.mocked(listUserDirectory).mockImplementation(async ({ offset = 0 } = {}) => ({ rows: [{ ...rows[0], id: String(offset), username: `user${offset}` }], offset, limit: 25, total: null, hasMore: true }));
+  render(<MemoryRouter><Users /></MemoryRouter>);
+  await screen.findByText('user0');
+  for (let i = 1; i <= 4; i++) {
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await screen.findByText(`user${i * 25}`);
+  }
+  expect(listUserDirectory).toHaveBeenLastCalledWith({ offset: 100, limit: 25, search: '', enabled: true });
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Ada' } });
+  await waitFor(() => expect(listUserDirectory).toHaveBeenLastCalledWith({ offset: 0, limit: 25, search: 'Ada', enabled: true }));
+});
+
+it('applies status globally and returns to the first page', async () => {
+  render(<MemoryRouter><Users /></MemoryRouter>);
+  await screen.findByText('bob');
+  const status = screen.getByRole('combobox', { name: 'Status' });
+  fireEvent.keyDown(status, { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('option', { name: 'All statuses' }));
+  await waitFor(() => expect(listUserDirectory).toHaveBeenLastCalledWith({ offset: 0, limit: 25, search: '', enabled: undefined }));
+  await screen.findByText('old');
+});
+it('ignores stale search responses', async () => {
+  let resolveOld!: (value: any) => void;
+  vi.mocked(listUserDirectory).mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
+  vi.mocked(listUserDirectory).mockResolvedValue({ rows: [{ ...rows[0], username: 'new-result' }], offset: 0, limit: 25, total: null, hasMore: false });
+  render(<MemoryRouter><Users /></MemoryRouter>);
+  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'new' } });
+  await screen.findByText('new-result');
+  resolveOld({ rows: [{ ...rows[0], username: 'old-result' }], hasMore: true });
+  await waitFor(() => expect(screen.queryByText('old-result')).toBeNull());
+  expect(screen.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true);
 });

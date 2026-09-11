@@ -174,3 +174,53 @@ Enroll a lab on the central server, then connect a lab to it:
 
 > Anything under `settings danger` is destructive (reset dashboards, clear audit,
 > factory reset). Those commands require `--force` and mirror the Studio danger zone.
+
+## User directory paging
+
+### English
+
+Users starts with active accounts. Search matches provider usernames, names, and email addresses across the directory. Select All statuses to include disabled accounts. Changing search, status, or page size returns to the first page.
+
+Use Next to reach accounts beyond the first 100. Each request returns at most 100 accounts. The footer shows the visible range without claiming a total. Columns remain configurable. Arbitrary column filters and sorting are unavailable because the provider does not support them. The provider controls order. Accounts added or removed between requests can shift pages.
+
+For headless access, run:
+
+```sh
+openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+```
+
+The JSON contains `rows`, `offset`, `limit`, `total: null`, and `hasMore`. Add `limit` to `offset` while `hasMore` is true. Omit `--enabled` to include both statuses. `openldr user list` still lists local accounts.
+
+When provider administration is unconfigured, directory listing uses local accounts. Local search matches username, display name, and email as substrings. Local results use username and ID order. Provider search follows the identity provider's search rules.
+
+### Français
+
+La page Utilisateurs affiche les comptes actifs au départ. La recherche porte sur les identifiants, noms et adresses e-mail de tout l'annuaire du fournisseur. Choisissez Tous les statuts pour inclure les comptes désactivés. Changer la recherche, le statut ou la taille de page revient à la première page.
+
+Utilisez Suivant pour atteindre les comptes au-delà des 100 premiers. Chaque requête retourne au plus 100 comptes. Le pied de page indique la plage visible sans annoncer de total. Les colonnes restent configurables. Les filtres de colonnes et le tri libre sont indisponibles car le fournisseur ne les prend pas en charge. Le fournisseur contrôle l'ordre. Ajouter ou supprimer un compte entre deux requêtes peut décaler les pages.
+
+Depuis la ligne de commande :
+
+```sh
+openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+```
+
+Le JSON contient `rows`, `offset`, `limit`, `total: null` et `hasMore`. Ajoutez `limit` à `offset` tant que `hasMore` vaut true. Omettez `--enabled` pour inclure les deux statuts. `openldr user list` conserve la liste des comptes locaux.
+
+Si l'administration du fournisseur n'est pas configurée, la liste utilise les comptes locaux. La recherche locale trouve les fragments dans l'identifiant, le nom et l'e-mail. Les résultats locaux suivent l'ordre identifiant puis ID. La recherche du fournisseur suit ses propres règles.
+
+### Português
+
+A página Utilizadores começa com as contas ativas. A pesquisa abrange os nomes de utilizador, nomes e e-mails de todo o diretório do fornecedor. Selecione Todos os estados para incluir contas desativadas. Alterar a pesquisa, o estado ou o tamanho da página volta à primeira página.
+
+Use Seguinte para alcançar contas após as primeiras 100. Cada pedido devolve até 100 contas. O rodapé mostra o intervalo visível sem indicar um total. As colunas continuam configuráveis. Os filtros de colunas e a ordenação livre estão indisponíveis porque o fornecedor não os suporta. O fornecedor controla a ordem. Adicionar ou remover contas entre pedidos pode deslocar as páginas.
+
+Na linha de comandos:
+
+```sh
+openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+```
+
+O JSON contém `rows`, `offset`, `limit`, `total: null` e `hasMore`. Some `limit` a `offset` enquanto `hasMore` for true. Omita `--enabled` para incluir ambos os estados. `openldr user list` mantém a lista de contas locais.
+
+Sem administração do fornecedor configurada, a listagem usa contas locais. A pesquisa local procura fragmentos no nome de utilizador, nome e e-mail. Os resultados locais seguem a ordem nome de utilizador e ID. A pesquisa do fornecedor segue as regras desse fornecedor.

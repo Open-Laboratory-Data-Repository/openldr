@@ -23,6 +23,7 @@ export const fr: EnShape = {
     close: 'Fermer',
   },
   table: {
+    unknownTotalRange: "{{from}}–{{to}} (total inconnu)",
     filter: 'Filtrer',
     sort: 'Trier',
     columns: 'Colonnes',
@@ -65,6 +66,9 @@ export const fr: EnShape = {
     },
   },
   users: {
+    directorySearch: "Rechercher un identifiant, nom ou e-mail",
+    directoryAll: "Tous les statuts",
+    directoryOrder: "Ordre du fournisseur. La recherche et le statut portent sur tout l'annuaire.",
     searchPlaceholder: "Rechercher un nom d'utilisateur ou un nom complet",
     username: "Nom d'utilisateur",
     fullName: 'Nom complet',

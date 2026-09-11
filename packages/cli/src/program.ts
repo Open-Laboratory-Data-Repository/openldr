@@ -12,7 +12,7 @@ import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQue
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
-import { runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
+import { runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runTerminologyReproject, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
@@ -829,6 +829,15 @@ export function buildProgram(): Command {
   user.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
     try { process.exitCode = await runUserList(opts); } catch (err) { process.stderr.write(`user list failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
+  user.command('directory-list').description('List one identity directory page, with local fallback')
+    .option('--offset <n>', 'zero-based offset', '0')
+    .option('--limit <n>', 'page size, 1 to 100', '25')
+    .option('--search <text>', 'provider username, name or email search')
+    .option('--enabled <boolean>', 'true or false')
+    .option('--json', 'emit page JSON', false)
+    .action(async (opts: { offset: string; limit: string; search?: string; enabled?: string; json: boolean }) => {
+      try { process.exitCode = await runUserDirectoryList(opts); } catch (err) { process.stderr.write(`user directory-list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
   user.command('show <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
     try { process.exitCode = await runUserShow(id, opts); } catch (err) { process.stderr.write(`user show failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });

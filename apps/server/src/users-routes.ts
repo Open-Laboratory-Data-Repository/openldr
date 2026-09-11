@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { AppContext } from '@openldr/bootstrap';
+import { listUserDirectory, directoryPageInput, type AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
 import { requireCapability } from './rbac';
@@ -114,7 +114,13 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // GET /api/users — composes directory + profiles; falls back to local
   // ------------------------------------------------------------------
-  app.get('/api/users', { preHandler: requireCapability('users.view') }, async () => {
+  app.get('/api/users', { preHandler: requireCapability('users.view') }, async (req, reply) => {
+    const query = req.query as Record<string, unknown>;
+    if (Object.keys(query).length > 0) {
+      const parsed = directoryPageInput.strict().safeParse(query);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid directory query' });
+      return listUserDirectory(ctx, parsed.data);
+    }
     try {
       const users = await ctx.auth.directory.list();
       const profiles = await ctx.userProfiles.list(users.map((u) => u.id));

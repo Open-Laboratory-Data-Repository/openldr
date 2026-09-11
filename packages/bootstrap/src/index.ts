@@ -1818,3 +1818,6 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   await ctx.roles.seedSystemRoles();
   ctx.featureFlags.invalidate();
 }
+
+export { listUserDirectory, directoryPageInput } from './user-directory';
+export type { DirectoryPage, DirectorySummary } from './user-directory';

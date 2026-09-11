@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerUsersRoutes } from './users-routes';
@@ -596,5 +596,22 @@ describe('users routes — SP4 admin actions (reset-password / send-reset-email 
     const actions = events.map((e) => e.action);
     expect(actions).toEqual(['user.create', 'user.update', 'user.status']);
     expect(events.every((e) => e.actorId === 'admin1' && e.entityType === 'user')).toBe(true);
+  });
+});
+
+describe('directory paging wire contract', () => {
+  it('returns rows and paging metadata for explicit paging', async () => {
+    const ctx = fakeCtx();
+    const rows = Array.from({ length: 26 }, (_, i) => ({ id: String(100 + i), username: `user${100+i}`, enabled: true, roles: [], email: null, firstName: null, lastName: null, createdAt: null }));
+    const list = vi.spyOn(ctx.auth.directory, 'list').mockResolvedValue(rows);
+    const response = await adminApp(ctx).inject('/api/users?offset=100&limit=25&search=Ada&enabled=false');
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ offset: 100, limit: 25, total: null, hasMore: true });
+    expect(response.json().rows).toHaveLength(25);
+    expect(list).toHaveBeenCalledWith({ first: 100, max: 26, search: 'Ada', enabled: false });
+  });
+  it.each(['limit=101', 'offset=-1', 'enabled=no', 'offset=1.2'])('rejects invalid query %s', async (query) => {
+    const response = await adminApp(fakeCtx()).inject(`/api/users?${query}`);
+    expect(response.statusCode).toBe(400);
   });
 });

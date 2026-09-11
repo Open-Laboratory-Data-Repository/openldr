@@ -34,7 +34,7 @@ export interface UserStore {
   get(id: string): Promise<User | undefined>;
   getBySubject(subject: string): Promise<User | undefined>;
   getByUsername(username: string): Promise<User | undefined>;
-  list(): Promise<User[]>;
+  list(opts?: { offset: number; limit: number; search?: string; enabled?: boolean }): Promise<User[]>;
   update(id: string, input: UpdateUserInput): Promise<void>;
   setRoles(id: string, roles: string[]): Promise<void>;
   setStatus(id: string, status: 'active' | 'disabled'): Promise<void>;
@@ -112,8 +112,17 @@ export function createUserStore(db: Kysely<InternalSchema>): UserStore {
     get,
     getBySubject,
     getByUsername,
-    async list() {
-      const rows = await db.selectFrom('users').select(COLS).orderBy('username').execute();
+    async list(opts) {
+      let query = db.selectFrom('users').select(COLS).orderBy('username').orderBy('id');
+      if (opts) {
+        if (opts.enabled !== undefined) query = query.where('status', '=', opts.enabled ? 'active' : 'disabled');
+        if (opts.search) {
+          const pattern = `%${opts.search.replace(/[\\%_]/g, '\\$&')}%`;
+          query = query.where((eb) => eb.or([eb('username', 'ilike', pattern), eb('email', 'ilike', pattern), eb('display_name', 'ilike', pattern)]));
+        }
+        query = query.offset(opts.offset).limit(opts.limit);
+      }
+      const rows = await query.execute();
       return rows.map((r) => toUser(r as unknown as Row));
     },
     async update(id, input) {
