@@ -2,6 +2,18 @@
   "generatedAt": "2026-09-11",
   "days": [
     {
+      "date": "2026-09-11",
+      "version": null,
+      "entries": [
+        {
+          "hash": "2ccae972",
+          "type": "fix",
+          "scope": "dashboard",
+          "title": "A variable chip prints real tokens, and a deleted filter says so"
+        }
+      ]
+    },
+    {
       "date": "2026-09-10",
       "version": "v0.1.8",
       "entries": [
