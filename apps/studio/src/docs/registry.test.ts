@@ -107,10 +107,10 @@ describe('docs registry', () => {
   });
 
   it('falls back to English markdown after metadata lookup', () => {
-    const fr = resolve('fr', 'dashboard');
-    const en = resolve('en', 'dashboard');
+    const fr = resolve('fr', 'start-here');
+    const en = resolve('en', 'start-here');
     expect(fr).toMatchObject({
-      slug: 'dashboard',
+      slug: 'start-here',
       localeUsed: 'en',
     });
     expect(fr!.content).toBe(en!.content);

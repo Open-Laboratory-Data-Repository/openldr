@@ -54,3 +54,17 @@ The dashboard reloads with the saved widget in place. Other users who can view t
 
 - [Reports](/docs/reports)
 - [Workflows](/docs/workflows)
+
+## Create another dashboard
+
+Open the dots menu beside the dashboard selector and choose **New dashboard**.
+This action is available in view and edit modes. Wait for unsaved edits to finish saving first.
+The action is disabled while creation is pending, so repeated clicks cannot create duplicates.
+
+The new blank dashboard opens in edit mode. A confirmation names the created dashboard.
+Open the dots menu and select **Add widget** to start adding content.
+If creation fails, the current dashboard remains selected. Read the error and retry from the menu.
+
+If you edit while creation is pending, those edits stay open. Save them, then select the new dashboard.
+
+Widget and filter editing is unavailable while creation is pending.
