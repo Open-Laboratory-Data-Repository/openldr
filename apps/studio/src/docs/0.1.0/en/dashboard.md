@@ -54,3 +54,11 @@ The dashboard reloads with the saved widget in place. Other users who can view t
 
 - [Reports](/docs/reports)
 - [Workflows](/docs/workflows)
+
+## Builder query limits
+
+Builder widgets use the dashboard SQL timeout and row cap settings. Defaults are 5,000 milliseconds and 10,000 groups. Administrators can change these existing settings.
+
+The cap counts database groups before date bucketing, breakdown totals, and top-N selection. If the query exceeds it, the widget returns an error instead of partial totals. Narrow the filters or reduce grouping. A small top-N does not bypass this cap.
+
+PostgreSQL cancels statements at the configured timeout. MySQL and MariaDB use their statement timeout controls. On SQL Server, this setting limits lock waits only. It does not enforce an execution deadline.

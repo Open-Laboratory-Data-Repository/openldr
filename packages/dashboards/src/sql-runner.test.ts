@@ -45,7 +45,7 @@ function makeFakeDb(
       return { rows };
     },
   };
-  const trx = { getExecutor: () => executor };
+  const trx = { getExecutor: () => executor, executeQuery: executor.executeQuery };
   const db = { transaction: () => ({ execute: (cb: (trx: unknown) => unknown) => cb(trx) }) };
   return { db, executed };
 }

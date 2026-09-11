@@ -766,7 +766,10 @@ const reporting: ReportingApi = {
     if (q.mode === 'builder') {
       const model = getModel(q.model);
       if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
-      data = await runBuilderQuery(reportingDb, model, q, policyCache);
+      data = await runBuilderQuery(reportingDb, model, q, policyCache, {
+        timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
+        rowCap: await numberSettings.get('dashboard.sql_row_cap'),
+      }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres');
     } else {
       // `q.sql` is the STORED template verbatim (the client sends resolved filter `values`
       // separately and the server applies the substitution). Vet the untouched template against

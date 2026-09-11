@@ -3,9 +3,16 @@ import { newDb } from 'pg-mem';
 import { runBuilderQuery } from './compile';
 import { getModel } from './models/registry';
 
+// pg-mem cannot parse transaction controls. PostgreSQL cancellation has its own integration suite.
+function builderDb() {
+  const mem = newDb();
+  mem.public.interceptQueries((query) => /^set (transaction read only|local statement_timeout = \d+)$/i.test(query) ? [] : null);
+  return mem;
+}
+
 describe('runBuilderQuery limit (top-N)', () => {
   function memReq() {
-    const mem = newDb();
+    const mem = builderDb();
     mem.public.none('create table lab_requests (status text, panel_desc text, priority text, authored_at text, patient_id text)');
     return mem;
   }
@@ -35,7 +42,7 @@ describe('runBuilderQuery limit (top-N)', () => {
 
 describe('runBuilderQuery breakdown', () => {
   it('shapes long [label, series, value] rows', async () => {
-    const mem = newDb();
+    const mem = builderDb();
     mem.public.none('create table lab_requests (status text, panel_desc text, priority text, authored_at text, patient_id text)');
     mem.public.none("insert into lab_requests (status, panel_desc) values ('active','A'),('active','B'),('done','A')");
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
@@ -50,7 +57,7 @@ describe('runBuilderQuery breakdown', () => {
   });
 
   it('keeps multi-word series names intact with a date dimension + grain', async () => {
-    const mem = newDb();
+    const mem = builderDb();
     mem.public.none('create table lab_requests (status text, panel_desc text, priority text, authored_at text, patient_id text)');
     mem.public.none("insert into lab_requests (authored_at, panel_desc) values ('2024-01-05','Emergency Room'),('2024-01-12','Emergency Room'),('2024-02-03','Emergency Room')");
     const db = mem.adapters.createKysely() as unknown as import('kysely').Kysely<any>;
@@ -67,7 +74,7 @@ describe('runBuilderQuery breakdown', () => {
 
 describe('runBuilderQuery wide mode (Slice A)', () => {
   function memObs() {
-    const mem = newDb();
+    const mem = builderDb();
     mem.public.none('create table lab_results (observation_desc text, abnormal_flag text, numeric_units text, numeric_value float, result_timestamp text, patient_id text)');
     return mem;
   }
@@ -138,7 +145,7 @@ describe('runBuilderQuery wide mode (Slice A)', () => {
 
 describe('runBuilderQuery derived ratio (Slice B)', () => {
   function memObs() {
-    const mem = newDb();
+    const mem = builderDb();
     mem.public.none('create table lab_results (observation_desc text, abnormal_flag text, numeric_units text, numeric_value float, result_timestamp text, patient_id text)');
     return mem;
   }
