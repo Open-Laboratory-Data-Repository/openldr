@@ -31,7 +31,15 @@ An empty list is not proof that no data was received. Clear search and filters, 
 
 If lifecycle details remain on Loading, close them, refresh the list, and reopen the row. The page may not distinguish a failed detail request from a pending one. This page has no retry-processing action; use the workflow's documented recovery procedure.
 
+## Waiting for queued events
+
+Each event bus instance processes one event handler at a time. A slow handler can delay later events. Repeated queue notifications do not start additional handlers while its current batch runs. Pending events remain queued for a later batch. Separate server processes can still handle events concurrently.
+
 ## Related guides
 
 - [Workflows](/docs/workflows)
 - [Audit](/docs/audit)
+
+## Queue ownership
+
+The worker renews leases for running events and events waiting in its claimed batch. A replacement worker gets a new claim token. An older worker cannot overwrite that claim with completion, failure, or retry updates. After a crash, an expired claim still counts as a failed attempt and can be retried. Handlers must tolerate repeated delivery: a database outage or paused process can still allow another worker to run the event. Stop old workers before upgrading; workers without claim-token checks cannot provide this protection.

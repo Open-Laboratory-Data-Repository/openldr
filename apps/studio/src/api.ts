@@ -218,7 +218,7 @@ export async function fetchReportRuns(
 export async function downloadReportCsv(id: string, params: Record<string, string> = {}): Promise<void> {
   const qs = new URLSearchParams(params).toString();
   const res = await authFetch(`/api/reports/${encodeURIComponent(id)}.csv${qs ? `?${qs}` : ''}`);
-  if (!res.ok) throw new Error(`report csv ${id} failed: ${res.status}`);
+  if (!res.ok) throw new Error(formatApiError(`report csv ${id}`, await errorDetail(res)));
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -394,8 +394,8 @@ export async function listModels(): Promise<QueryModel[]> {
 export async function fetchJoinableTables(): Promise<ClientJoinableTable[]> {
   return authFetch('/api/dashboards/joinable-tables').then((r) => okJson<ClientJoinableTable[]>(r, 'load joinable tables'));
 }
-export async function runWidgetQuery(q: WidgetQuery): Promise<ReportResult> {
-  return authFetch('/api/dashboards/query', json(q)).then((r) => okJson<ReportResult>(r, 'run query'));
+export async function runWidgetQuery(q: WidgetQuery, signal?: AbortSignal): Promise<ReportResult> {
+  return authFetch('/api/dashboards/query', { ...json(q), signal }).then((r) => okJson<ReportResult>(r, 'run query'));
 }
 /** Builder→SQL eject: compile a builder-mode query to its SQL text (display-only; never executed as returned). */
 export async function compileBuilderToSql(q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string> {
@@ -749,6 +749,14 @@ export type CreateUserPayload = {
 };
 
 export const listUsers = (): Promise<UserSummary[]> => apiGet('/api/users', 'list users');
+export interface UserDirectoryPage { rows: UserSummary[]; offset: number; limit: number; total: null; hasMore: boolean }
+export const listUserDirectory = (options: { offset?: number; limit?: number; search?: string; enabled?: boolean } = {}): Promise<UserDirectoryPage> => {
+  const query = new URLSearchParams({ offset: String(options.offset ?? 0), limit: String(options.limit ?? 25) });
+  if (options.search) query.set('search', options.search);
+  if (options.enabled !== undefined) query.set('enabled', String(options.enabled));
+  return apiGet(`/api/users?${query}`, 'list user directory');
+};
+
 export const createUser = (i: CreateUserPayload): Promise<UserSummary> =>
   authFetch('/api/users', jbody(i, 'POST')).then((r) => okJson<UserSummary>(r, 'create user'));
 export const updateUser = (id: string, i: Partial<CreateUserPayload>): Promise<UserSummary> =>
@@ -2797,6 +2805,9 @@ export interface ConnectorUpdateInput {
 
 export const listConnectors = (): Promise<Connector[]> =>
   apiGet<Connector[]>('/api/connectors', 'list connectors');
+export interface ConnectorConfigView { config: Record<string, string>; secretsSet: Record<string, boolean> }
+export const getConnectorConfig = (id: string): Promise<ConnectorConfigView> =>
+  apiGet<ConnectorConfigView>(`/api/connectors/${encodeURIComponent(id)}/config`, 'read connector configuration');
 export const listSinkPlugins = (): Promise<SinkPluginRef[]> =>
   apiGet<SinkPluginRef[]>('/api/connectors/sink-plugins', 'list sink plugins');
 export const createConnector = (input: ConnectorCreateInput): Promise<Connector> =>

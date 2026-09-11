@@ -16,34 +16,38 @@ export interface ProjectionWorker {
 export function createProjectionWorker(deps: ProjectionWorkerDeps): ProjectionWorker {
   const intervalMs = deps.intervalMs ?? 2000;
   let stopped = false;
-  let running = false;
+  let activeCycle: Promise<void> | undefined;
+  let stopPromise: Promise<void> | undefined;
 
-  async function tickOnce(): Promise<void> {
-    if (running) return; // never overlap cycles
-    running = true;
-    try {
-      await deps.runCycle();
-    } catch (err) {
-      deps.logger.error({ err }, 'projection cycle failed');
-    } finally {
-      running = false;
-    }
+  function tickOnce(): Promise<void> {
+    if (stopped) return Promise.resolve();
+    if (activeCycle) return activeCycle;
+    activeCycle = Promise.resolve().then(() => deps.runCycle()).then(() => undefined)
+      .catch((err) => { deps.logger.error({ err }, 'projection cycle failed'); })
+      .finally(() => { activeCycle = undefined; });
+    return activeCycle;
   }
 
   const timer = setInterval(() => { if (!stopped) void tickOnce(); }, intervalMs);
-  if (deps.listenClient) {
-    deps.listenClient.query('listen fhir_changes').catch(() => undefined);
-    deps.listenClient.on('notification', () => { if (!stopped) void tickOnce(); });
-  }
+  const onNotification = () => { if (!stopped) void tickOnce(); };
+  const ready = deps.listenClient?.query('listen fhir_changes').catch(() => undefined);
+  deps.listenClient?.on('notification', onNotification);
 
   return {
     tickOnce,
-    async stop() {
+    stop() {
+      if (stopPromise) return stopPromise;
       stopped = true;
       clearInterval(timer);
-      if (deps.listenClient) {
-        try { await deps.listenClient.query('unlisten fhir_changes'); } catch { /* ignore */ }
-      }
+      deps.listenClient?.removeListener('notification', onNotification);
+      stopPromise = (async () => {
+        await ready;
+        if (deps.listenClient) {
+          try { await deps.listenClient.query('unlisten fhir_changes'); } catch { /* ignore */ }
+        }
+        await activeCycle;
+      })();
+      return stopPromise;
     },
   };
 }

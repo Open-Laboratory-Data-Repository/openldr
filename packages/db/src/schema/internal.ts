@@ -103,6 +103,7 @@ export interface SyncSiteCursorsTable {
 }
 
 export interface OutboxEventsTable {
+  claim_token: string | null;
   id: string;
   type: string;
   payload: JSONColumnType<Record<string, unknown>>;
@@ -856,7 +857,15 @@ export interface TerminologyIngestJobsTable {
   active_key: string | null;
 }
 
+export interface ProjectionRetriesTable {
+  resource_type: string;
+  resource_id: string;
+  attempts: number;
+  next_attempt_at: Date;
+}
+
 export interface InternalSchema {
+  'fhir.projection_retries': ProjectionRetriesTable;
   'fhir.fhir_resources': FhirResourcesTable;
   'fhir.resource_history': ResourceHistoryTable;
   'fhir.change_log': ChangeLogTable;
@@ -874,6 +883,7 @@ export interface InternalSchema {
   notification_reads: NotificationReadsTable;
   notification_prefs: NotificationPrefsTable;
   users: UsersTable;
+  account_access_blocks: { subject: string };
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;
   concept_map_elements: ConceptMapElementsTable;

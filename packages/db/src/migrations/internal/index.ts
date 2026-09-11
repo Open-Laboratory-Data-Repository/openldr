@@ -91,6 +91,9 @@ import * as m089 from './089_facility_form_canonical_paths';
 import * as m090 from './090_report_design_i18n';
 import * as m091 from './091_facility_import_edits';
 import * as m092 from './092_drop_facility_import_edits';
+import * as m093 from './093_projection_retries';
+import * as m094 from './094_outbox_claim_token';
+import * as m095 from './095_account_access_blocks';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -185,4 +188,8 @@ export const internalMigrations: Record<string, Migration> = {
   '090_report_design_i18n': { up: m090.up, down: m090.down },
   '091_facility_import_edits': { up: m091.up, down: m091.down },
   '092_drop_facility_import_edits': { up: m092.up, down: m092.down },
+  '093_projection_retries': { up: m093.up, down: m093.down },
+
+  '094_outbox_claim_token': { up: m094.up, down: m094.down },
+  '095_account_access_blocks': { up: m095.up, down: m095.down },
 };

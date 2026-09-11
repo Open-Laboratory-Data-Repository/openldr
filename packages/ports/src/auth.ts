@@ -32,7 +32,7 @@ export interface DirectoryUpdateInput {
   enabled?: boolean;
 }
 export interface DirectoryPort {
-  list(opts?: { search?: string; max?: number }): Promise<DirectoryUser[]>;
+  list(opts?: { search?: string; max?: number; first?: number; enabled?: boolean }): Promise<DirectoryUser[]>;
   get(id: string): Promise<DirectoryUser | null>;
   create(input: DirectoryCreateInput): Promise<DirectoryUser>;
   update(id: string, patch: DirectoryUpdateInput): Promise<void>;

@@ -24,7 +24,15 @@ Une liste vide ne prouve pas l'absence de données reçues. Effacez recherche et
 
 Si les détails restent en chargement, fermez-les, actualisez et rouvrez la ligne. La page peut afficher le chargement après un échec de requête. Activité ne propose pas de relance du traitement ; suivez la procédure de récupération du workflow.
 
+## Attente des événements en file
+
+Chaque instance du bus d'événements exécute un seul gestionnaire à la fois. Un gestionnaire lent peut retarder les événements suivants. Les notifications répétées ne lancent pas d'autres gestionnaires pendant le lot en cours. Les événements en attente restent en file pour un lot ultérieur. Des processus serveur distincts peuvent toujours traiter des événements simultanément.
+
 ## Guides associés
 
 - [Workflows](/docs/workflows)
 - [Audit](/docs/audit)
+
+## Propriété des événements en file
+
+Le worker renouvelle les baux des événements en cours et de ceux qui attendent dans son lot. Un worker de remplacement reçoit un nouveau jeton. Un ancien worker ne peut plus modifier cet événement pour le terminer, le déclarer en échec ou le relancer. Après un arrêt brutal, un bail expiré compte toujours comme une tentative échouée et permet une reprise. Les traitements doivent accepter les livraisons répétées. Une panne de base ou un processus suspendu peut permettre une autre exécution. Arrêtez les anciens workers avant la mise à niveau. Les workers sans contrôle du jeton ne garantissent pas cette protection.

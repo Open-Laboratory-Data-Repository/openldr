@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createUser, listUsers, setUserStatus, updateUser } from './api';
+import { createUser, listUserDirectory, listUsers, setUserStatus, updateUser } from './api';
 
 describe('users api client', () => {
   beforeEach(() => {
@@ -17,4 +17,10 @@ describe('users api client', () => {
     expect(fetch).toHaveBeenNthCalledWith(3, '/api/users/u1', expect.objectContaining({ method: 'PUT' }));
     expect(fetch).toHaveBeenNthCalledWith(4, '/api/users/u1/status', expect.objectContaining({ method: 'POST' }));
   });
+});
+
+it('encodes directory paging, search and disabled status', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ rows: [], total: null, hasMore: false }))));
+  await listUserDirectory({ offset: 100, limit: 25, search: 'Ada & Bob', enabled: false });
+  expect(fetch).toHaveBeenCalledWith('/api/users?offset=100&limit=25&search=Ada+%26+Bob&enabled=false');
 });

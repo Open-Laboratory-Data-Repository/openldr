@@ -91,6 +91,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
 
   const internalMigrator = createMigrator(internal.db, internalMigrations);
   const externalMigrator = createMigrator(externalDb, externalMigrations(engine));
+  let closePromise: Promise<void> | undefined;
 
   return {
     accept: (input) => acceptPayload({ blob, eventing, batches, logger }, input),
@@ -107,8 +108,12 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
       await internalMigrator.migrateToLatest();
       await externalMigrator.migrateToLatest();
     },
-    async close() {
-      await Promise.allSettled([internal.close(), externalStore.close(), eventing.close()]);
+    close() {
+      closePromise ??= (async () => {
+        await eventing.close();
+        await Promise.allSettled([internal.close(), externalStore.close()]);
+      })();
+      return closePromise;
     },
   };
 }

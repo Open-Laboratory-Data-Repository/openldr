@@ -44,12 +44,27 @@ export function DashboardWidget({ config, filterValues }: { config: WidgetConfig
   const [result, setResult] = useState<ReportResult>();
   const [error, setError] = useState<string>();
   useEffect(() => {
-    let alive = true;
-    const run = () => runWidgetQuery(bindQuery(config.query, filterValues)).then((r) => alive && setResult(r)).catch((e) => alive && setError(String(e.message ?? e)));
-    run();
+    const controller = new AbortController();
     const ms = config.refreshIntervalSec * 1000;
-    const t = ms > 0 ? setInterval(run, ms) : undefined;
-    return () => { alive = false; if (t) clearInterval(t); };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const run = async () => {
+      try {
+        const next = await runWidgetQuery(bindQuery(config.query, filterValues), controller.signal);
+        if (controller.signal.aborted) return;
+        setResult(next);
+        setError(undefined);
+      } catch (e) {
+        if (controller.signal.aborted) return;
+        setError(String(e instanceof Error ? e.message : e));
+      } finally {
+        if (!controller.signal.aborted && ms > 0) timer = setTimeout(run, ms);
+      }
+    };
+    void run();
+    return () => {
+      controller.abort();
+      if (timer !== undefined) clearTimeout(timer);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(config.query), JSON.stringify(filterValues), config.refreshIntervalSec]);
   if (error) return <div className="p-3 text-sm text-destructive">{error}</div>;

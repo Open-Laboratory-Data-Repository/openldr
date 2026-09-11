@@ -15,6 +15,16 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('renders data exposure scope and navigation in all three languages', () => {
+    renderDocs('/docs/data-exposure');
+    expect(screen.getByRole('heading', { level: 1, name: 'Data exposure' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Data exposure' })).toHaveAttribute('aria-current', 'page');
+    for (const name of ['English', 'Français', 'Português']) {
+      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
+    }
+    expect(screen.getAllByRole('link', { name: 'Environment variables' }).every((link) => link.getAttribute('href') === '/docs/environment')).toBe(true);
+  });
+
   it('renders report schedules from its navigation entry in all three languages', () => {
     renderDocs('/docs/report-schedules');
 

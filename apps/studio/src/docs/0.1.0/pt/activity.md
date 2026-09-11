@@ -24,7 +24,15 @@ Uma lista vazia não prova que não foram recebidos dados. Limpe a pesquisa e os
 
 Se os detalhes continuarem a carregar, feche-os, atualize e abra novamente a linha. A página pode mostrar carregamento depois de uma falha no pedido. A Atividade não permite repetir o processamento; siga o procedimento de recuperação do workflow.
 
+## Espera dos eventos em fila
+
+Cada instância do barramento de eventos executa um único processador de eventos de cada vez. Um processador lento pode atrasar os eventos seguintes. As notificações repetidas não iniciam outros processadores durante o lote atual. Os eventos pendentes ficam em fila para um lote posterior. Processos de servidor separados podem continuar a tratar eventos em simultâneo.
+
 ## Guias relacionados
 
 - [Workflows](/docs/workflows)
 - [Auditoria](/docs/audit)
+
+## Propriedade dos eventos na fila
+
+O worker renova os prazos dos eventos em execução e dos que aguardam no seu lote. Um worker substituto recebe um novo token. Um worker anterior não pode alterar essa atribuição para concluir, falhar ou repetir o evento. Após uma interrupção, um prazo expirado continua a contar como tentativa falhada e permite nova tentativa. Os processos devem aceitar entregas repetidas. Uma falha da base de dados ou um processo suspenso pode permitir outra execução. Pare os workers antigos antes da atualização. Workers sem verificação do token não garantem esta proteção.

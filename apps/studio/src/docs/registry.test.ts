@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildIndex, searchDocs } from './search';
 import {
   DOC_GROUPS,
   DOC_GUIDES,
@@ -12,6 +13,12 @@ import {
 } from './registry';
 
 describe('docs registry', () => {
+  it.each(LOCALES)('authors and indexes the data exposure guide in %s', (locale) => {
+    const guide = resolve(locale, 'data-exposure');
+    expect(guide?.localeUsed).toBe(locale);
+    expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('data-exposure');
+  });
+
   it('defines the approved guide groups in navigation order', () => {
     expect(DOC_GROUPS.map((group) => group.id)).toEqual([
       'start',
@@ -40,6 +47,7 @@ describe('docs registry', () => {
       'activity',
       'settings',
       'laboratory',
+      'data-exposure',
       'sync',
       'connectors',
       'marketplace',
@@ -69,6 +77,7 @@ describe('docs registry', () => {
       activity: ['workflows', 'audit'],
       settings: ['roles', 'connectors', 'marketplace', 'environment', 'sync'],
       laboratory: ['settings', 'facilities', 'reports'],
+      'data-exposure': ['settings', 'dashboard', 'query', 'connectors', 'reports'],
       sync: ['settings', 'users', 'environment'],
       connectors: ['report-pipeline', 'settings', 'workflows', 'marketplace', 'query'],
       marketplace: ['settings', 'connectors', 'forms'],
@@ -107,10 +116,10 @@ describe('docs registry', () => {
   });
 
   it('falls back to English markdown after metadata lookup', () => {
-    const fr = resolve('fr', 'dashboard');
-    const en = resolve('en', 'dashboard');
+    const fr = resolve('fr', 'report-pipeline');
+    const en = resolve('en', 'report-pipeline');
     expect(fr).toMatchObject({
-      slug: 'dashboard',
+      slug: 'report-pipeline',
       localeUsed: 'en',
     });
     expect(fr!.content).toBe(en!.content);

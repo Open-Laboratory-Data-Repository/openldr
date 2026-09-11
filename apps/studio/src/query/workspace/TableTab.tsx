@@ -95,7 +95,9 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
         <TablePagination
           page={page}
           pageSize={pageSize}
-          total={result?.total ?? result?.rowCount ?? 0}
+          total={result?.total ?? null}
+          rowCount={result?.rowCount ?? 0}
+          hasMore={result?.hasMore}
           onPageChange={setPage}
           onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
         />

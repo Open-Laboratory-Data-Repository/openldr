@@ -103,3 +103,8 @@ The report run completes, the result appears in both the Document and Spreadshee
 - [Custom Queries](/docs/query)
 - [Dashboard](/docs/dashboard)
 - [Audit](/docs/audit)
+
+
+## Report result limit
+
+Each stored report query can return up to 1,000 rows. Exactly 1,000 rows are accepted. If any query used by a PDF exceeds this limit, the whole PDF is refused. CSV and XLSX exports also refuse oversized results. Narrow the date range or other filters, then run again. A LIMIT written in the saved SQL remains intentional and is respected. Scheduled runs record a failure without saving an output file. The CLI reports the error before writing the export. Previously saved outputs are not regenerated.

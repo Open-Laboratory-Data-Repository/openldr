@@ -11,6 +11,9 @@ vi.mock('mysql2', () => ({
 import { createConnectorDb, buildPgUrl } from './connector-db';
 
 describe('createConnectorDb', () => {
+  it.each([0, -1, 30_001, Infinity, 1.5])('rejects a disabled or excessive query deadline: %s', (queryTimeoutMs) => {
+    expect(() => createConnectorDb('postgres', {}, { queryTimeoutMs })).toThrow(/timeout/);
+  });
   it('builds a postgres connection object with query + close', () => {
     const conn = createConnectorDb('postgres', { host: 'h', port: '5432', database: 'd', user: 'u', password: 'p' });
     expect(typeof conn.query).toBe('function');

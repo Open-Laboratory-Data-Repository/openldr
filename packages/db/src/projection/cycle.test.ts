@@ -156,6 +156,7 @@ describe('runProjectionCycle', () => {
 
     expect(n).toBe(1);
     expect(errors).toHaveLength(1);
+    expect(await internalDb.selectFrom('fhir.projection_retries').selectAll().execute()).toHaveLength(0);
     expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
     expect(await readCursor(internalDb as never, 'projection')).toBe(1);
     await internalDb.destroy();

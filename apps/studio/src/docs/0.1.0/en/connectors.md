@@ -130,7 +130,7 @@ If the App Passwords page says it is unavailable, 2‑Step Verification is not f
 3. Enter a clear **Name** you will recognise in workflow node dropdowns.
 4. Choose **Category**. The default is **Plugin**, which requires an installed output plugin. For a database, email server, or file server, choose **Host**.
 5. For **Host**, choose the service under **Database type**. Despite its label, this selector also includes email and file services. For **Plugin**, select the installed output plugin.
-6. Complete the connection fields for the selected service, then choose **Save**.
+6. Complete the connection fields for the selected service, then choose **Save** from the sheet's **⋯** menu.
 7. Check the saved-name notification and the new row. New connectors start enabled. There is no Enabled choice during creation. To disable one, turn off its **Enabled** switch in the list, or open **Edit** from its row menu and save with Enabled off.
 8. Open the row's **⋯** menu and choose **Test** to check the connection from the OpenLDR server.
 9. Select the enabled connector in a compatible workflow node when you are ready to use it.
@@ -162,3 +162,28 @@ Rotate credentials by editing the connector, replacing secret values, saving, an
 - [Scheduled reports with workflows](/docs/report-pipeline)
 - [Settings](/docs/settings)
 - [Marketplace](/docs/marketplace)
+
+## Edit stored host settings
+
+Choose **Edit** from the connector row's **⋯** menu. Host connectors show stored ordinary fields, including host, port, database, and user where applicable. A secret marked as set stays blank. Leave it blank to keep its stored value, including when changing the host. Enter a replacement secret only when needed. Choose **Save** from the sheet's **⋯** menu, then use the row's **Test** action.
+
+URLs, unknown configuration fields, and plugin configuration are not shown. Plugin editing keeps its existing requirement to enter base URL, username, and password together.
+
+For headless inspection, run `openldr connectors inspect <id>`. The JSON contains ordinary `config` and boolean `secretsSet` fields. To update a host connector, run `openldr connectors update <id> --file patch.json`. Example file: `{"config":{"host":"db.internal","port":"5432"}}`. Omitted fields remain stored. Blank secret fields keep existing secrets. A rename-only patch is `{"name":"Lab database"}`. Output and audit records exclude credential values. Protect files containing replacement secrets.
+
+## Database query deadlines
+
+PostgreSQL and MySQL connector queries have a 30-second execution limit. A slow query fails instead of keeping the workflow or report waiting indefinitely. PostgreSQL cancels the statement on the server. MySQL uses a second connection with the same credentials to terminate the query connection. Cancellation may take one additional second. Connection setup has a separate 30-second limit.
+
+If a query exceeds this limit, narrow its date range or filters and check its database execution plan. Retry after correcting the query. There is no timeout field in the connector form.
+
+If the error says `server cancellation failed`, OpenLDR closed its local connection but could not confirm server cancellation. Ask the database operator to check active queries. The MySQL account must be able to open another connection and terminate its own sessions.
+
+## Server shutdown
+
+On SIGTERM or SIGINT, the API stops accepting requests and stops queue polling.
+It waits for active requests, the claimed queue batch, and the active projection cycle before closing their databases.
+Repeated signals do not start another shutdown.
+A handler that never returns can keep shutdown waiting indefinitely.
+Allow enough time for active imports before the service manager forces termination.
+Worker stop still permits later manual drains. Closing the context ends that access.

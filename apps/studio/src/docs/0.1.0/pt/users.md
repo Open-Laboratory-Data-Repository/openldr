@@ -24,3 +24,29 @@ Se nenhuma função for adequada, crie ou ajuste uma em **Definições → Funç
 - [Funções](/docs/roles)
 - [Auditoria](/docs/audit)
 - [Definições](/docs/settings)
+
+## Desativar ou reativar uma conta
+
+Abra o menu **Ações** da linha da conta para a desativar ou reativar. A desativação bloqueia primeiro o acesso local e depois atualiza o fornecedor de identidade. O pedido autenticado seguinte à API recebe `403 account disabled`, mesmo com um token já emitido. Uma página já carregada pode continuar visível.
+
+O bloqueio também abrange contas que nunca iniciaram sessão. A reativação atualiza primeiro o fornecedor e depois remove o bloqueio local. Se uma escrita falhar, a ação apresenta um erro. O fornecedor pode permitir o acesso enquanto o OpenLDR mantém o bloqueio. Restabeleça a ligação que falhou e repita a mesma ação. A auditoria regista `user.status.failed` em caso de falha e `user.status` em caso de sucesso.
+
+Na CLI, use `openldr user deactivate <local-id>` ou `openldr user activate <local-id>`. Consulte o identificador local com `openldr users list`. As contas ligadas atualizam ambos os sistemas através do identificador do fornecedor. As contas apenas locais mudam só no OpenLDR. A auditoria destas alterações na CLI identifica o ator como `cli`.
+
+Se outra alteração do estado desta conta estiver em curso, a API devolve `409`. Aguarde o fim dessa ação e tente novamente. Isto também se aplica a alterações simultâneas no Studio e na CLI.
+
+## Páginas do diretório
+
+A página Utilizadores começa com as contas ativas. A pesquisa abrange os nomes de utilizador, nomes e e-mails de todo o diretório do fornecedor. Selecione Todos os estados para incluir contas desativadas. Alterar a pesquisa, o estado ou o tamanho da página volta à primeira página.
+
+Use Seguinte para alcançar contas após as primeiras 100. Cada pedido devolve até 100 contas. O rodapé mostra o intervalo visível sem indicar um total. As colunas continuam configuráveis. Os filtros de colunas e a ordenação livre estão indisponíveis porque o fornecedor não os suporta. O fornecedor controla a ordem. Adicionar ou remover contas entre pedidos pode deslocar as páginas.
+
+Na linha de comandos:
+
+```sh
+openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+```
+
+O JSON contém `rows`, `offset`, `limit`, `total: null` e `hasMore`. Some `limit` a `offset` enquanto `hasMore` for true. Omita `--enabled` para incluir ambos os estados. `openldr user list` mantém a lista de contas locais.
+
+Sem administração do fornecedor configurada, a listagem usa contas locais. A pesquisa local procura fragmentos no nome de utilizador, nome e e-mail. Os resultados locais seguem a ordem nome de utilizador e ID. A pesquisa do fornecedor segue as regras desse fornecedor.

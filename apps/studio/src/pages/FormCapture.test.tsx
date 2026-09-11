@@ -10,7 +10,7 @@ const form: api.FormDefinition = {
   id: 'form-1',
   name: 'Specimen intake',
   versionLabel: 'v1',
-  fhirResourceType: 'Questionnaire',
+  fhirResourceType: 'ServiceRequest',
   status: 'draft',
   active: true,
   targetPages: ['forms'],
@@ -21,7 +21,7 @@ const form: api.FormDefinition = {
     name: 'Specimen intake',
     versionLabel: null,
     fhirVersion: null,
-    fhirResourceType: 'Questionnaire',
+    fhirResourceType: 'ServiceRequest',
     fhirProfileUrl: null,
     facilityId: null,
     fields: [
@@ -85,7 +85,7 @@ const referenceForm: api.FormDefinition = {
     name: 'Specimen intake',
     versionLabel: null,
     fhirVersion: null,
-    fhirResourceType: 'Questionnaire',
+    fhirResourceType: 'ServiceRequest',
     fhirProfileUrl: null,
     facilityId: null,
     sections: [],
@@ -183,7 +183,7 @@ describe('FormCapture page', () => {
     // Submit without filling required field
     clickActionsMenuItem('Submit');
 
-    expect(await screen.findByText('field patientId is required')).toBeInTheDocument();
+    expect(await screen.findByText('Patient ID is required')).toBeInTheDocument();
     expect(api.submitFormResponse).not.toHaveBeenCalled();
   });
 
@@ -236,4 +236,17 @@ describe('FormCapture page', () => {
 
     await waitFor(() => expect(search).toHaveBeenCalledWith('form-1', 'subject', { q: 'doe' }));
   });
+});
+
+it('explains unsupported capture before entry and refuses submission', async () => {
+  vi.spyOn(api, 'getForm').mockResolvedValue({ ...publishedForm,
+    schema: { ...(publishedForm.schema as object), fhirResourceType: null } });
+  const submit = vi.spyOn(api, 'submitFormResponse');
+  render(<MemoryRouter initialEntries={['/forms/form-1']}>
+    <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
+  </MemoryRouter>);
+  expect(await screen.findByText(/not configured for submission/i)).toBeInTheDocument();
+  expect(screen.queryByLabelText('Patient ID')).not.toBeInTheDocument();
+  clickActionsMenuItem('Submit');
+  expect(submit).not.toHaveBeenCalled();
 });

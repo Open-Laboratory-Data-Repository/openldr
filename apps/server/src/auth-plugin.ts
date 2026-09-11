@@ -116,6 +116,11 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
     }
 
     try {
+      if (await ctx.users.isSubjectBlocked(claims.sub)) {
+        recordAuthFailed(req, 'account-disabled', claims.sub);
+        reply.code(403);
+        return reply.send({ error: 'account disabled' });
+      }
       const u = await ctx.users.syncFromClaims(claims);
       if (u.status === 'disabled') {
         recordAuthFailed(req, 'account-disabled', (claims as { sub?: string }).sub ?? null);

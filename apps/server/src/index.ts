@@ -3,6 +3,7 @@ import { createAppContext, createIngestContext, createDbContext, seedDatabase, s
 import { createLogger, makeCrashHandler } from '@openldr/core';
 import { buildApp } from './app';
 import { createUpdateFetch } from './update-fetch';
+import { createShutdown } from './shutdown';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
@@ -162,13 +163,21 @@ async function main(): Promise<void> {
 
   const worker = ingest.startWorker();
 
-  const close = async () => {
-    stopUpdateCheck();
-    await worker.stop();
-    await app.close();
-    await ingest.close();
-    await ctx.close();
-    process.exit(0);
+  const shutdown = createShutdown({
+    stopUpdateCheck,
+    closeApp: () => app.close(),
+    stopWorker: () => worker.stop(),
+    closeIngest: () => ingest.close(),
+    closeContext: () => ctx.close(),
+  });
+  let signalReceived = false;
+  const close = () => {
+    if (signalReceived) return;
+    signalReceived = true;
+    void shutdown().then(() => { process.exitCode = 0; }).catch((err) => {
+      logger.error({ err }, 'server shutdown failed');
+      process.exitCode = 1;
+    });
   };
   process.on('SIGTERM', close);
   process.on('SIGINT', close);

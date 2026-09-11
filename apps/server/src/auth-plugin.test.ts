@@ -38,6 +38,7 @@ function ctx(opts: {
       backfillUserFromRoleNames: opts.roles?.backfillUserFromRoleNames ?? (async () => {}),
     },
     users: {
+      isSubjectBlocked: async () => false,
       syncFromClaims: async () => u,
       getByUsername: async () => undefined,
       create: async () => ({ id: 'dev1', username: 'dev-admin', displayName: 'Dev Admin', roles: ['lab_admin'], status: 'active' }),
@@ -202,6 +203,7 @@ describe('registerAuth', () => {
       audit: { record: vi.fn(async (e: unknown) => ({ ...(e as object), id: 'x', occurredAt: 't' })) },
       roles: { resolveCapabilities, backfillUserFromRoleNames },
       users: {
+        isSubjectBlocked: async () => false,
         syncFromClaims: async () => ({ id: 'u1', username: 'ada', displayName: 'Ada', roles: [], status: 'active', subject: 's1', rbacInitialized }),
         getByUsername: async () => undefined,
         create: async () => ({ id: 'dev1', username: 'dev-admin', displayName: 'Dev Admin', roles: ['lab_admin'], status: 'active' }),

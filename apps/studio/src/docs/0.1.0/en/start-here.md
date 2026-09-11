@@ -1,58 +1,61 @@
-# Start Here
-
-Use this manual when you are working inside the OpenLDR web interface. It explains the pages users can actually see after signing in: dashboards, reports, report designer, custom queries, workflows, forms, terminology, users, audit, activity, settings, connectors, and marketplace. Some pages appear only for certain roles.
+# Start here
 
 ## Outcome
 
-After this guide, you can find the right page, follow numbered screenshots, search the manual, and move between related guides without needing installation, command-line, API, or deployment knowledge.
-
-![Main navigation and documentation entry points](start-here-navigation.png)
+Find Dashboard, Reports, and Docs. Open a report's parameters and find Run.
+The numbered images show the English interface with synthetic examples, without patient data.
 
 ## Before you begin
 
-- Sign in to the web app.
-- Use a desktop or tablet-sized browser window when possible; the screenshots use the full web layout.
-- Remember that navigation changes by role. If you do not see a page, your account may not have the required role.
+Sign in to Studio. Navigation depends on your account's permissions.
+On a phone, open the navigation menu first. Select an image to enlarge it.
 
 ## Steps
 
-1. Open **Dashboard** from the main navigation.
-2. Use the dashboard page to confirm you can see the shared operational view.
-3. Open **Reports** from the navigation.
-4. Select a report, review its parameters, and notice where the **Run** action appears.
-5. Open **Docs**.
-6. Use **Search documentation** for a task such as `create workflow` or `permission denied`.
-7. Open a guide and use its metadata strip to check audience, role requirements, estimated time, and difficulty.
-8. Select a screenshot to open the lightbox when you need a larger view.
-9. Use **Related guides**, **Previous**, and **Next** links to continue the workflow.
+![Navigation: 1 Dashboard, 2 Reports, 3 Docs. Facilities is also visible.](start-here-navigation.png)
+
+1. Open **Dashboard** to view the dashboards shared with your account.
+2. Open **Reports** to see the report library.
+3. Open **Docs** and search for a task with **Search documentation**. Return here after exploring a guide.
+
+The navigation also includes **Facilities** when your account can view facilities.
+Missing pages may require different permissions. Ask your administrator.
+
+![Report actions menu: 4 Parameters](start-here-report-menu.png)
+
+4. Return to **Reports**, select a report, and open its **⋯** actions menu. Choose **Parameters**.
+
+![Parameters sheet: 5 example field, 6 Run](start-here-parameters.png)
+
+5. Complete the required parameter fields. Each report defines its own fields. This example uses a text field.
+6. Select **Run** when the required values are complete. It runs the selected report with those values.
+
+The capture stops before Run. Your report's output depends on its definition and available data.
+Open **Docs** again for the [Reports guide](/docs/reports).
+Use **Related guides**, **Previous**, and **Next** to continue reading.
 
 ## Expected result
 
-You know where the web manual lives, how to search it by task, and how to follow a guide from overview to procedure to troubleshooting.
+You can find these pages, search the manual, and locate a report's parameters and Run action.
 
 ## Troubleshooting
 
-- **A page is missing from the navigation:** ask an administrator to check your roles in **Users and Roles**.
-- **A screenshot looks too small:** select it to open the lightbox, then close the lightbox to return to the guide.
-- **Search returns too many results:** search for the outcome, role, or error text, such as `lab_admin`, `permission denied`, or `create workflow`.
+- A page is missing. Ask an administrator to check your permissions.
+- Run is disabled. Complete every required parameter.
+- An image is too small. Select it to enlarge it. The numbered text also explains every action.
+- Search has too many results. Search for the task or the exact error text.
 
 ## Filtering any table
 
-Most list pages — Users, Roles, Forms, Activity, Terminology value sets, Connectors, Sites, and the sync activity log — share one toolbar above the table. It works the same way everywhere:
-
-- **Search** matches as you type, across the columns that page names in its placeholder.
-- **Filter** opens a rule builder. Add a rule, pick a column, an operator, and a value, then select **Apply**. Rules combine with AND or OR.
-- **Sort** adds one or more sort rules, each ascending or descending.
-- **Columns** shows or hides columns, and **Reset to defaults** restores the original set.
-- **Reset** appears once a filter or sort is active and clears everything at once.
-
-Applied filters appear as chips beneath the toolbar. Select a chip's **×** to remove that one rule, or **Clear all** to remove them all. Search and filters combine: rows must match the search text *and* every filter rule.
+List toolbars offer search, filters, sorting, and column choices where supported.
+Search matches as you type. **Filter** lets you choose a column, operator, and value, then **Apply**.
+**Sort** changes the order. **Columns** controls visible columns.
+Remove a filter chip to clear one rule, or use **Clear all**.
 
 ## Advanced web usage
 
-This manual is intentionally web-first. It does not document installation, deployment, command-line tools, direct database administration, API automation, or plugin development. Those topics belong in a future advanced documentation web app because users who cannot install or operate the app will not see those features from inside the app.
-
-For the placeholder, see [Advanced Docs](/docs/advanced-docs).
+Installation, deployment, CLI commands, and API administration are outside this guide.
+See [Advanced Docs](/docs/advanced-docs).
 
 ## Related guides
 

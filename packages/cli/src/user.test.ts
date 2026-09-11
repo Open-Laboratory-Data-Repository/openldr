@@ -13,18 +13,25 @@ const mocks = vi.hoisted(() => ({
   },
   createAppContext: vi.fn(),
   recordAuditEvent: vi.fn(),
+  listUserDirectory: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({
   loadConfig: vi.fn(() => ({ config: true })),
 }));
 
-vi.mock('@openldr/bootstrap', () => ({
+vi.mock('../../bootstrap/src/record-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+
+vi.mock('@openldr/bootstrap', async () => ({
+  ...await import('../../bootstrap/src/account-status'),
   createAppContext: mocks.createAppContext,
   recordAuditEvent: mocks.recordAuditEvent,
+  listUserDirectory: mocks.listUserDirectory,
 }));
 
-import { runUserCreate, runUserSetRole, runUserSetStatus } from './user';
+import { accountFixture } from '../../bootstrap/src/account-status.test-support';
+
+import { runUserDirectoryList, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 
 describe('user CLI audit', () => {
   beforeEach(() => {
@@ -131,4 +138,44 @@ describe('user CLI audit', () => {
     expect(mocks.appCtx.users.setStatus).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
+});
+
+describe('user CLI provider status', () => {
+  afterEach(() => vi.restoreAllMocks());
+  it('disables the linked provider account using a local id', async () => {
+    const f = await accountFixture();
+    try {
+      vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      const local = await f.users.syncFromClaims({ sub: f.provider.id, preferred_username: 'ada' });
+      mocks.createAppContext.mockResolvedValue({ ...f.ctx, close: async () => {} });
+      expect(await runUserSetStatus(local.id, 'disabled', { json: true })).toBe(0);
+      expect(f.provider.enabled).toBe(false);
+      expect(await f.users.get(local.id)).toMatchObject({ status: 'disabled' });
+      expect(mocks.recordAuditEvent).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ actorName: 'cli' }), expect.objectContaining({ action: 'user.status', entityId: f.provider.id }));
+    } finally { await f.db.destroy(); }
+  });
+  it('throws on provider failure without emitting success and preserves the local block', async () => {
+    const f = await accountFixture();
+    try {
+      const output = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      const local = await f.users.syncFromClaims({ sub: f.provider.id, preferred_username: 'ada' });
+      f.directory.update.mockRejectedValueOnce(new Error('provider unavailable'));
+      mocks.createAppContext.mockResolvedValue({ ...f.ctx, close: async () => {} });
+      await expect(runUserSetStatus(local.id, 'disabled', { json: true })).rejects.toThrow(/local account is disabled/);
+      expect(await f.users.get(local.id)).toMatchObject({ status: 'disabled' });
+      expect(output).not.toHaveBeenCalled();
+    } finally { await f.db.destroy(); }
+  });
+});
+
+it('directory-list forwards bounded provider options and closes context', async () => {
+  const output = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+  mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+  const page = { rows: [], offset: 100, limit: 25, total: null, hasMore: false };
+  mocks.listUserDirectory.mockResolvedValue(page);
+  expect(await runUserDirectoryList({ offset: '100', limit: '25', search: 'Ada', enabled: 'false', json: true })).toBe(0);
+  expect(mocks.listUserDirectory).toHaveBeenCalledWith(mocks.appCtx, { offset: '100', limit: '25', search: 'Ada', enabled: 'false' });
+  expect(output).toHaveBeenCalledWith(JSON.stringify(page, null, 2) + '\n');
+  expect(mocks.appCtx.close).toHaveBeenCalled();
+  output.mockRestore();
 });

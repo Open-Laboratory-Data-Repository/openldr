@@ -9,6 +9,7 @@ const REGISTRY_PATH = fileURLToPath(
 );
 const FIXTURES = [
   'base',
+  'start-here-synthetic',
   'amr',
   'workflow',
   'workflow-run',
@@ -31,8 +32,8 @@ describe('docs screenshot manifest', () => {
     const slugs = await registrySlugs();
     const names = manifest.shots.map((shot) => shot.name);
 
-    assert.equal(manifest.shots.length, 29);
-    assert.equal(new Set(names).size, 29);
+    assert.equal(manifest.shots.length, 31);
+    assert.equal(new Set(names).size, 31);
 
     for (const shot of manifest.shots) {
       assert.match(shot.name, /^[^/\\]+\.png$/);

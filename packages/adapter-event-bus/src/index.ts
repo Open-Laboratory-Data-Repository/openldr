@@ -26,6 +26,7 @@ export interface DrainResult {
 }
 
 export interface EventBus extends EventingPort {
+  /** Overlapping calls share the active batch and its result. Its first caller sets the limit. */
   drain(opts?: { limit?: number }): Promise<DrainResult>;
   startWorker(opts?: { intervalMs?: number }): { stop(): Promise<void> };
   stats(): Promise<Record<string, number>>;
@@ -38,12 +39,21 @@ interface ClaimedRow {
   payload: unknown;
   attempts: number;
   max_attempts: number;
+  claim_token: string;
 }
 
 export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): EventBus {
+  const leaseMs = cfg.leaseMs ?? DEFAULT_LEASE_MS;
+  // Node timers overflow above a signed 32-bit delay. Renewal uses leaseMs / 3.
+  if (!Number.isFinite(leaseMs) || leaseMs <= 0 || leaseMs > 3 * 2_147_483_647) {
+    throw new RangeError('leaseMs must be positive, finite, and at most 6442450941');
+  }
   const pool = deps.pool ?? new pg.Pool({ connectionString: cfg.url });
   const handlers = new Map<string, EventHandler>();
-  const leaseMs = cfg.leaseMs ?? DEFAULT_LEASE_MS;
+  let activeDrain: Promise<DrainResult> | undefined;
+  let closing = false;
+  let closePromise: Promise<void> | undefined;
+  const workers = new Set<{ stop(): Promise<void> }>();
 
   async function publish(event: EventEnvelope, opts: PublishOptions = {}): Promise<void> {
     const id = randomUUID();
@@ -67,19 +77,17 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
   }
 
   async function claim(limit: number): Promise<ClaimedRow[]> {
+    const token = randomUUID();
     const client = await pool.connect();
     try {
       await client.query('begin');
-      // Claim fresh pending rows AND reap orphaned 'processing' rows whose lease
-      // has expired: a worker that crashed after claim() committed but before the
-      // terminal update leaves a row stuck in 'processing' forever. SKIP LOCKED
-      // means an in-flight row held by a live worker's open transaction is never
-      // reaped — only rows with no holding lock and a stale updated_at qualify.
+      // Row locks protect claim changes until commit. Renewals protect the lease
+      // after commit; the token prevents an older owner from changing a new claim.
       const res = await client.query(
         `select id, type, payload, attempts, max_attempts, status from outbox_events
          where (status='pending' and available_at <= now())
             or (status='processing' and updated_at < now() - ($2 || ' milliseconds')::interval)
-         order by available_at limit $1 for update skip locked`,
+         order by available_at, id limit $1 for update skip locked`,
         [limit, String(leaseMs)],
       );
       const rows = res.rows as Array<ClaimedRow & { status: string }>;
@@ -94,6 +102,7 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
             payload: row.payload,
             attempts: row.attempts,
             max_attempts: row.max_attempts,
+            claim_token: token,
           });
           continue;
         }
@@ -101,20 +110,20 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
         const attempts = row.attempts + 1;
         if (attempts < row.max_attempts) {
           await client.query(
-            `update outbox_events set status='processing', attempts=$2, updated_at=now() where id=$1`,
-            [row.id, attempts],
+            `update outbox_events set status='processing', attempts=$2, claim_token=$3, updated_at=now() where id=$1`,
+            [row.id, attempts, token],
           );
-          claimed.push({ id: row.id, type: row.type, payload: row.payload, attempts, max_attempts: row.max_attempts });
+          claimed.push({ id: row.id, type: row.type, payload: row.payload, attempts, max_attempts: row.max_attempts, claim_token: token });
         } else {
           await client.query(
-            `update outbox_events set status='failed', attempts=$2, last_error=$3, updated_at=now() where id=$1`,
+            `update outbox_events set status='failed', attempts=$2, last_error=$3, claim_token=null, updated_at=now() where id=$1`,
             [row.id, attempts, 'lease expired: worker presumed crashed while processing'],
           );
         }
       }
       if (freshIds.length > 0) {
-        await client.query(`update outbox_events set status='processing', updated_at=now() where id = any($1::text[])`, [
-          freshIds,
+        await client.query(`update outbox_events set status='processing', claim_token=$2, updated_at=now() where id = any($1::text[])`, [
+          freshIds, token,
         ]);
       }
       await client.query('commit');
@@ -127,52 +136,85 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
     }
   }
 
-  async function drain(opts: { limit?: number } = {}): Promise<DrainResult> {
+  function drain(opts: { limit?: number } = {}): Promise<DrainResult> {
+    if (closing) return Promise.reject(new Error('event bus is closing'));
+    if (activeDrain) return activeDrain;
+    activeDrain = drainBatch(opts).finally(() => {
+      activeDrain = undefined;
+    });
+    return activeDrain;
+  }
+
+  async function drainBatch(opts: { limit?: number } = {}): Promise<DrainResult> {
     const rows = await claim(opts.limit ?? 20);
     let processed = 0;
     let failed = 0;
-    for (const row of rows) {
-      const handler = handlers.get(row.type);
-      if (!handler) {
-        // No subscriber yet — requeue, but defer availability so a stray/misrouted
-        // type can't busy-loop (re-claimed every drain + every notify) consuming a slot.
-        await pool.query(
-          `update outbox_events set status='pending', available_at = now() + interval '60 seconds', updated_at=now() where id=$1`,
-          [row.id],
+    // Renew the whole batch, including rows waiting behind a slow handler.
+    // A failed renewal leaves reclamation possible, but cannot grant ownership back.
+    let renewing: Promise<unknown> | undefined;
+    const timer = rows.length === 0 ? undefined : setInterval(() => {
+      if (renewing) return;
+      renewing = pool.query(
+        `update outbox_events set updated_at=now()
+         where id = any($1::text[]) and status='processing' and claim_token=$2`,
+        [rows.map((row) => row.id), rows[0].claim_token],
+      ).catch(() => undefined).finally(() => { renewing = undefined; });
+    }, Math.max(1, Math.floor(leaseMs / 3)));
+    timer?.unref();
+    try {
+      for (const row of rows) {
+        const ownership = await pool.query(
+          `update outbox_events set updated_at=now() where id=$1 and status='processing' and claim_token=$2`,
+          [row.id, row.claim_token],
         );
-        continue;
-      }
-      try {
-        await handler({ type: row.type, payload: row.payload });
-        await pool.query(`update outbox_events set status='done', updated_at=now() where id=$1`, [row.id]);
-        processed++;
-      } catch (err) {
-        const attempts = row.attempts + 1;
-        const msg = redact(errorMessage(err));
-        if (attempts < row.max_attempts) {
+        if (ownership.rowCount !== 1) continue;
+        const handler = handlers.get(row.type);
+        if (!handler) {
+          // No subscriber yet: requeue, but defer availability so a stray/misrouted
+          // type can't busy-loop (re-claimed every drain + every notify) consuming a slot.
           await pool.query(
-            `update outbox_events set status='pending', attempts=$2,
-             available_at = now() + ($3 || ' milliseconds')::interval, last_error=$4, updated_at=now() where id=$1`,
-            [row.id, attempts, String(backoff(attempts)), msg],
+            `update outbox_events set status='pending', claim_token=null, available_at = now() + interval '60 seconds', updated_at=now() where id=$1 and status='processing' and claim_token=$2`,
+            [row.id, row.claim_token],
           );
-        } else {
-          await pool.query(
-            `update outbox_events set status='failed', attempts=$2, last_error=$3, updated_at=now() where id=$1`,
-            [row.id, attempts, msg],
-          );
-          failed++;
+          continue;
+        }
+        try {
+          await handler({ type: row.type, payload: row.payload });
+          const result = await pool.query(`update outbox_events set status='done', claim_token=null, updated_at=now() where id=$1 and status='processing' and claim_token=$2`, [row.id, row.claim_token]);
+          processed += result.rowCount ?? 0;
+        } catch (err) {
+          const attempts = row.attempts + 1;
+          const msg = redact(errorMessage(err));
+          if (attempts < row.max_attempts) {
+            await pool.query(
+              `update outbox_events set status='pending', claim_token=null, attempts=$2,
+               available_at = now() + ($3 || ' milliseconds')::interval, last_error=$4, updated_at=now() where id=$1 and status='processing' and claim_token=$5`,
+              [row.id, attempts, String(backoff(attempts)), msg, row.claim_token],
+            );
+          } else {
+            const result = await pool.query(
+              `update outbox_events set status='failed', claim_token=null, attempts=$2, last_error=$3, updated_at=now() where id=$1 and status='processing' and claim_token=$4`,
+              [row.id, attempts, msg, row.claim_token],
+            );
+            failed += result.rowCount ?? 0;
+          }
         }
       }
+    } finally {
+      if (timer) clearInterval(timer);
+      await renewing;
     }
     return { processed, failed };
   }
 
   function startWorker(opts: { intervalMs?: number } = {}): { stop(): Promise<void> } {
+    if (closing) throw new Error('event bus is closing');
     const intervalMs = opts.intervalMs ?? 2000;
     let stopped = false;
+    let stopPromise: Promise<void> | undefined;
     let listenClient: pg.PoolClient | undefined;
     const tick = () => {
-      if (stopped) return;
+      if (stopped || closing) return;
       void drain().catch(() => undefined);
     };
     // Acquire the LISTEN client asynchronously. `.catch` prevents an unhandled
@@ -186,24 +228,35 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
       }
       listenClient = client;
       await listenClient.query('listen openldr_events');
-      listenClient.on('notification', () => tick());
+      if (!stopped) listenClient.on('notification', tick);
     })().catch(() => undefined);
     const timer = setInterval(tick, intervalMs);
-    return {
-      async stop() {
+    const worker = {
+      stop(): Promise<void> {
+        if (stopPromise) return stopPromise;
         stopped = true;
         clearInterval(timer);
-        await ready;
-        if (listenClient) {
-          try {
-            await listenClient.query('unlisten openldr_events');
-          } finally {
-            listenClient.release();
+        const draining = activeDrain;
+        stopPromise = (async () => {
+          await ready;
+          if (listenClient) {
+            listenClient.removeListener('notification', tick);
+            try {
+              await listenClient.query('unlisten openldr_events');
+              listenClient.release();
+            } catch {
+              listenClient.release(true);
+            }
             listenClient = undefined;
           }
-        }
+          await draining?.catch(() => undefined);
+          workers.delete(worker);
+        })();
+        return stopPromise;
       },
     };
+    workers.add(worker);
+    return worker;
   }
 
   async function stats(): Promise<Record<string, number>> {
@@ -225,8 +278,15 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
         return 'pg_notify reachable';
       });
     },
-    async close() {
-      await pool.end();
+    close() {
+      if (closePromise) return closePromise;
+      closing = true;
+      closePromise = (async () => {
+        await Promise.all([...workers].map((worker) => worker.stop()));
+        await activeDrain?.catch(() => undefined);
+        await pool.end();
+      })();
+      return closePromise;
     },
   };
 }

@@ -4,6 +4,7 @@ import type { FhirStore } from '../fhir-store';
 import type { RelationalWriter } from '../relational-writer';
 import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
+import { dueRetries, deferRetry, clearRetry } from './retry';
 import type { SafeFetchResult } from './fetch';
 import { provenanceFromRow, type Provenance } from '../provenance';
 import { LEDGER_RESOURCE_TYPES, isLedgerResourceType, readArrivals, toArrivalEvent } from './ledger';
@@ -80,27 +81,15 @@ async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Prom
   // `readArrivals` filters `op = 'upsert'`, so a genuinely deleted resource yields exactly its real
   // arrivals and never a tombstone.
   //
-  // The two paths still are not identical by construction — they read the same table through
-  // different queries and a failed ledger write here is logged and skipped. They agree on the cases
-  // above; a rebuild remains the repair.
-  //
-  // Guarded like the existing onProjected hook: a ledger failure must never abort a cycle or be
-  // mistaken for a failed clinical write, which has already landed by this point.
+  // Ledger failure must reach the runner so the resource remains queued for retry.
   if (isLedgerResourceType(task.resourceType)) {
-    try {
-      await deps.relationalWriter.writeIngestEvents(
-        await readArrivals(deps.internalDb, task.resourceType, task.id),
-      );
-    } catch (err) {
-      deps.logger.error({ err, task }, 'arrival ledger write failed; skipping (reprojectAll can heal)');
-    }
+    await deps.relationalWriter.writeIngestEvents(
+      await readArrivals(deps.internalDb, task.resourceType, task.id),
+    );
   }
 }
 
-/** A stateful projection runner. `pendingGaps` (seq→x0) is carried across ticks in-memory so the
- *  safe-frontier can confirm rolled-back gaps once the xmin boundary advances. Each cycle: fetch safe
- *  rows + snapshot bounds, plan, apply each (current-state, idempotent), advance the cursor. A failing
- *  apply is logged and skipped (reprojectAll can heal). Returns the number of resources projected. */
+/** Carries safe-frontier gaps across ticks. Failed tasks are persisted before cursor advancement. */
 export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
   let pendingGaps: Gap[] = [];
   return {
@@ -108,20 +97,26 @@ export function createProjectionRunner(deps: ProjectionDeps): ProjectionRunner {
       const cursor = await readCursor(deps.internalDb, 'projection');
       const { rows, boundary, xmax } = await deps.fetch(deps.internalDb, cursor, deps.batchSize ?? 500);
       const plan = planProjection({ rows, boundary, xmax, cursor, pendingGaps });
-      pendingGaps = plan.pendingGaps;
-      for (const task of plan.tasks) {
+      const tasks = new Map<string, ProjectionTask>();
+      for (const task of [...await dueRetries(deps.internalDb), ...plan.tasks]) {
+        tasks.set(JSON.stringify([task.resourceType, task.id]), task);
+      }
+      for (const task of tasks.values()) {
         try {
           await applyProjection(task, deps);
+          await clearRetry(deps.internalDb, task);
         } catch (err) {
-          deps.logger.error({ err, task }, 'projection apply failed; skipping (reprojectAll can heal)');
+          // If persistence fails, reject this cycle before advancing the cursor.
+          await deferRetry(deps.internalDb, task);
+          deps.logger.error({ err, task }, 'projection failed; durable retry scheduled');
         }
       }
       if (plan.newCursor > cursor) await advanceCursor(deps.internalDb, 'projection', plan.newCursor);
-      return plan.tasks.length;
+      pendingGaps = plan.pendingGaps;
+      return tasks.size;
     },
   };
 }
-
 /** What one rebuild wrote. Two DIFFERENT units, deliberately kept apart:
  *  `projected` counts canonical RESOURCES rewritten into the read model, `arrivals` counts ledger
  *  ROWS (one per version of a clinical resource). Reporting one number as the other is exactly the

@@ -16,7 +16,7 @@ import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
-import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
+import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
   createWorkflowStore, type WorkflowStore,
@@ -303,14 +303,23 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     // render empty. Any "Name (CODE)" substitution for the scope panel happens strictly AFTER
     // this call returns, on a SEPARATE copy — see `withDisplayLabels` — and that copy must never
     // be fed back into resolveDesignTables.
-    const resolved = await deps.resolveDesignTables(design, values, deps.runStoredQuery);
+    // Preview keeps per-element errors. Published exports must refuse overflow entirely.
+    let overflow: StoredQueryRowLimitError | undefined;
+    const resolved = await deps.resolveDesignTables(design, values, async (queryId, queryValues) => {
+      try {
+        return await deps.runStoredQuery(queryId, queryValues);
+      } catch (err) {
+        if (err instanceof StoredQueryRowLimitError) overflow = err;
+        throw err;
+      }
+    });
+    if (overflow) throw overflow;
     // ⛔ Refuse rather than render. DESIGNS_REQUIRING_DATA names the bound element whose row IS this
     // report's subject, so zero rows means the subject does not exist — for the clinical report,
     // no such request. `keyValuePairs` renders zero rows as labels with EMPTY values
     // (packages/report-designer/src/render/draw.ts:340), which is the page the 2026-08-07 audit
     // photographed and read as ready for sign-off.
-    // A query ERROR deliberately does NOT refuse: the renderer already draws a visible red
-    // placeholder for it, which is loud rather than misleading.
+    // Other query errors retain the existing visible error placeholder.
     const requiredElement = DESIGNS_REQUIRING_DATA[design.id];
     if (requiredElement) {
       const subject = resolved.get(requiredElement);
@@ -600,7 +609,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const reportRuns = createReportRunStore(internal.db);
   const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
-  const users = createUserStore(internal.db);
+  const users = createUserStore(internal.db, { withSubjectLock: internal.withAccountStatusLock });
   const roles = createRoleStore(internal.db);
   // RBAC Task 4: seed the 5 system roles (lab_admin/lab_manager/data_analyst/system_auditor/
   // lab_technician) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
@@ -766,7 +775,10 @@ const reporting: ReportingApi = {
     if (q.mode === 'builder') {
       const model = getModel(q.model);
       if (!model) throw new DashboardQueryError(`unknown model: ${q.model}`);
-      data = await runBuilderQuery(reportingDb, model, q, policyCache);
+      data = await runBuilderQuery(reportingDb, model, q, policyCache, {
+        timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
+        rowCap: await numberSettings.get('dashboard.sql_row_cap'),
+      }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres');
     } else {
       // `q.sql` is the STORED template verbatim (the client sends resolved filter `values`
       // separately and the server applies the substitution). Vet the untouched template against
@@ -1595,6 +1607,7 @@ const reporting: ReportingApi = {
     }),
   });
 
+  let closePromise: Promise<void> | undefined;
   return {
     logger,
     auth,
@@ -1644,18 +1657,22 @@ const reporting: ReportingApi = {
     syncRuntime,
     terminologyJobs,
     cfg,
-    async close() {
-      await workflowListeners.stopAll();
-      // The runtime stops both workers and ends the push LISTEN client it owns.
-      await syncRuntime.stop();
-      await projectionWorker.stop();
-      await terminologyIngestWorker.stop();
-      await facilityJobWorker.stop();
-      // `null` in any process that did not opt in to draining the import queue — see
-      // `AppContextOptions.runFacilityImportWorker`.
-      await facilityImportWorker?.stop();
-      if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
-      await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
+    close() {
+      closePromise ??= (async () => {
+        await workflowListeners.stopAll();
+        // The runtime stops both workers and ends the push LISTEN client it owns.
+        await syncRuntime.stop();
+        await projectionWorker.stop();
+        await terminologyIngestWorker.stop();
+        await facilityJobWorker.stop();
+        // Only processes that opted in own an import worker. See
+        // `AppContextOptions.runFacilityImportWorker`.
+        await facilityImportWorker?.stop();
+        if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
+        await eventing.close();
+        await Promise.allSettled([store.close(), internal.close()]);
+      })();
+      return closePromise;
     },
   };
 }
@@ -1818,3 +1835,10 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   await ctx.roles.seedSystemRoles();
   ctx.featureFlags.invalidate();
 }
+export { inspectConnectorConfig, updateConnectorConfig, hostConnectorPatchSchema, type ConnectorConfigView } from './connector-config';
+
+export { setAccountStatus, AccountNotFoundError } from './account-status';
+
+
+export { listUserDirectory, directoryPageInput } from './user-directory';
+export type { DirectoryPage, DirectorySummary } from './user-directory';

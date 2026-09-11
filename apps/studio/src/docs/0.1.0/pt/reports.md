@@ -38,3 +38,8 @@ Um agendamento desativado ainda pode mostrar Próxima. Essa data armazenada não
 Uma execução que falhou não fornece arquivo. No computador, passe o cursor sobre o status para ler o erro. Corrija os filtros salvos e tente novamente. O arquivo produzido não substitui o Documento ou a Planilha atualmente exibido na página do relatório.
 
 ![Histórico dos relatórios](reports-history-schedules.png)
+
+
+## Limite dos resultados
+
+Cada consulta guardada pode devolver até 1 000 linhas. Um resultado com exatamente 1 000 linhas é aceite. Se uma consulta usada num PDF exceder este limite, todo o PDF é recusado. As exportações CSV e XLSX também recusam resultados demasiado grandes. Reduza o intervalo de datas ou os outros filtros e execute novamente. Uma cláusula LIMIT escrita no SQL guardado continua a ser intencional e é respeitada. As execuções agendadas registam uma falha sem guardar um ficheiro. A CLI comunica o erro antes de escrever o ficheiro. Os ficheiros já guardados não são gerados novamente.

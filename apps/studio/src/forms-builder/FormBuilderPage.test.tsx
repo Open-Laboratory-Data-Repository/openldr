@@ -562,3 +562,14 @@ describe('FormBuilderPage (three-pane shell)', () => {
     });
   });
 });
+
+it('shows capture configuration guidance without blocking publishing', async () => {
+  vi.spyOn(api, 'getForm').mockResolvedValue(makeFormDef());
+  vi.spyOn(api, 'listFormVersions').mockResolvedValue([]);
+  render(<MemoryRouter initialEntries={['/forms/form-1/edit']}>
+    <Routes><Route path="/forms/:id/edit" element={<FormBuilderPage />} /></Routes>
+  </MemoryRouter>);
+  expect(await screen.findByText(/not configured for submission/i)).toBeInTheDocument();
+  openBuilderMenu();
+  expect(screen.getByRole('menuitem', { name: /^Publish$/ })).not.toHaveAttribute('data-disabled');
+});

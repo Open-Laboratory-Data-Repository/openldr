@@ -1,4 +1,4 @@
-import { type Kysely, sql } from 'kysely';
+import { type Kysely, CompiledQuery, sql } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import type { ReportResultData, ReportColumn } from '@openldr/reporting';
 
@@ -87,41 +87,37 @@ async function isMariaDb(db: object, trx: Kysely<ExternalSchema>): Promise<boole
 export async function runSqlQuery(
   db: Kysely<ExternalSchema>, rawSql: string, opts: SqlRunOpts, engine: SqlDialect = 'postgres',
 ): Promise<ReportResultData> {
+  validateSelectSql(rawSql);
+  const rows = await runReadQuery(db, CompiledQuery.raw(rawSql.replace(/;\s*$/, '')), opts, engine);
+  const keys = rows.length ? Object.keys(rows[0]) : [];
+  const columns: ReportColumn[] = keys.map((k) => ({
+    key: k, label: k,
+    kind: typeof rows[0]?.[k] === 'number' ? 'number' : 'string',
+  }));
+  return { columns, rows, chart: { type: 'bar', x: keys[0] ?? 'label', y: keys[1] ?? 'value' } };
+}
+
+/** Execute a trusted, parameterized SELECT with the same bounds as SQL widgets. */
+export async function runReadQuery(
+  db: Kysely<ExternalSchema>, query: CompiledQuery<unknown>, opts: SqlRunOpts, engine: SqlDialect = 'postgres',
+): Promise<Record<string, unknown>[]> {
   if (!Number.isFinite(opts.timeoutMs) || opts.timeoutMs < 1) throw new Error('timeoutMs must be a finite positive number');
   if (!Number.isFinite(opts.rowCap) || opts.rowCap < 1) throw new Error('rowCap must be a finite positive number');
-  validateSelectSql(rawSql);
-  const inner = rawSql.replace(/;\s*$/, '');
   const cap = Math.floor(opts.rowCap);
   const ms = Math.floor(opts.timeoutMs);
   return db.transaction().execute(async (trx) => {
-    const plan = planPagination(inner, engine, { limit: cap });
-    let execSql = plan.sql;
+    let statement = planPagination(query.sql, engine, { limit: cap }).sql;
     if (engine === 'mssql') {
-      // SQL Server has no `set transaction read only`; SELECT-only validation enforces read-only-ness.
-      // SET LOCK_TIMEOUT bounds lock waits (T-SQL has no per-statement time cap).
+      // LOCK_TIMEOUT bounds lock waits only. The driver owns execution cancellation.
       await sql`set lock_timeout ${sql.lit(ms)}`.execute(trx);
     } else if (engine === 'mysql') {
-      // MySQL/MariaDB reject changing txn characteristics inside an already-open txn (kysely has
-      // sent BEGIN), so there is no read-only pragma here — the shared SELECT-only validation is the
-      // read-only guard (same rationale as mssql). The statement timeout is applied PER-STATEMENT so
-      // no session var is mutated (nothing leaks onto the pooled connection): MySQL 8 via the
-      // MAX_EXECUTION_TIME(<ms>) optimizer hint on the wrapping SELECT; MariaDB via
-      // `SET STATEMENT max_statement_time=<sec> FOR <stmt>` (seconds). MySQL has no
-      // `SET STATEMENT … FOR` and MariaDB ignores the hint, so the variant is detected (cached) once.
-      execSql = (await isMariaDb(db, trx))
-        ? `set statement max_statement_time=${ms / 1000} for ${plan.sql}`
-        : plan.sql.replace(/^\s*select\b/i, `select /*+ MAX_EXECUTION_TIME(${ms}) */`);
+      statement = (await isMariaDb(db, trx))
+        ? `set statement max_statement_time=${ms / 1000} for ${statement}`
+        : statement.replace(/^select/i, `select /*+ MAX_EXECUTION_TIME(${ms}) */`);
     } else {
       await sql`set transaction read only`.execute(trx);
       await sql`set local statement_timeout = ${sql.lit(ms)}`.execute(trx);
     }
-    const result = await sql.raw<Record<string, unknown>>(execSql).execute(trx);
-    const rows = plan.sliceOffset ? result.rows.slice(plan.sliceOffset) : result.rows;
-    const keys = rows.length ? Object.keys(rows[0]) : [];
-    const columns: ReportColumn[] = keys.map((k) => ({
-      key: k, label: k,
-      kind: typeof rows[0]?.[k] === 'number' ? 'number' : 'string',
-    }));
-    return { columns, rows, chart: { type: 'bar', x: keys[0] ?? 'label', y: keys[1] ?? 'value' } };
+    return (await trx.executeQuery<Record<string, unknown>>({ ...query, sql: statement })).rows;
   });
 }

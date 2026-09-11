@@ -55,7 +55,7 @@ export function validate(
     const values = (raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]).filter((v) => !isEmpty(v));
 
     if (field.required && values.length === 0) {
-      errors[field.id] = `field ${field.id} is required`;
+      errors[field.id] = `${fieldLabel(field)} is required`;
       continue;
     }
 
@@ -75,29 +75,29 @@ export function validate(
     if (field.fieldType === 'number' && values.length > 0) {
       const n = Number(values[0]);
       if (!Number.isFinite(n)) {
-        errors[field.id] = `field ${field.id} must be a number`;
+        errors[field.id] = `${fieldLabel(field)} must be a number`;
         continue;
       }
       if (field.constraints?.min !== undefined && n < field.constraints.min)
-        errors[field.id] = `field ${field.id} must be ≥ ${field.constraints.min}`;
+        errors[field.id] = `${fieldLabel(field)} must be ≥ ${field.constraints.min}`;
       if (field.constraints?.max !== undefined && n > field.constraints.max)
-        errors[field.id] = `field ${field.id} must be ≤ ${field.constraints.max}`;
+        errors[field.id] = `${fieldLabel(field)} must be ≤ ${field.constraints.max}`;
     }
 
     // Cardinality (min/max items)
     const cardMin = field.cardinality?.min;
     const cardMax = field.cardinality?.max;
     if (cardMin !== undefined && values.length < cardMin)
-      errors[field.id] = `field ${field.id} requires at least ${cardMin} value(s)`;
+      errors[field.id] = `${fieldLabel(field)} requires at least ${cardMin} value(s)`;
     if (cardMax !== undefined && cardMax !== '*' && values.length > Number(cardMax))
-      errors[field.id] = `field ${field.id} allows at most ${cardMax} value(s)`;
+      errors[field.id] = `${fieldLabel(field)} allows at most ${cardMax} value(s)`;
 
     // select: value must be in valueSetOptions
     if ((field.fieldType === 'select' || field.fieldType === 'multiselect') && field.valueSetOptions && values.length > 0) {
       const codes = new Set(field.valueSetOptions.map((o) => o.code));
       for (const v of values) {
         if (!codes.has(String(v))) {
-          errors[field.id] = `field ${field.id} value '${String(v)}' not in options`;
+          errors[field.id] = `${fieldLabel(field)} value '${String(v)}' not in options`;
           break;
         }
       }

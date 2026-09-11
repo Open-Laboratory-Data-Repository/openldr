@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchReportOptions, fetchReportPdf, csvUrl } from './api';
+import { fetchReportOptions, fetchReportPdf, csvUrl, downloadReportCsv } from './api';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -33,4 +33,14 @@ describe('report api helpers', () => {
     expect(blob.size).toBe(4);
     expect(await blob.text()).toBe('%PDF');
   });
+});
+
+
+it('preserves the CSV refusal reason without starting a download', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+    error: 'Stored query exceeds the 1000 row limit. Narrow the report filters.', code: 'SY0400',
+  }), { status: 422 })));
+  const createElement = vi.spyOn(document, 'createElement');
+  await expect(downloadReportCsv('r')).rejects.toThrow('1000 row limit');
+  expect(createElement).not.toHaveBeenCalled();
 });

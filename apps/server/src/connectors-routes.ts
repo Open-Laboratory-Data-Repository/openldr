@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { createPluginTarget, testConnector } from '@openldr/bootstrap';
+import { createPluginTarget, testConnector, inspectConnectorConfig, updateConnectorConfig } from '@openldr/bootstrap';
 import type { ConnectorStore } from '@openldr/db';
 import { redact } from '@openldr/core';
 import { requireCapability } from './rbac';
@@ -77,6 +77,19 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
 
   app.get('/api/connectors', { preHandler: requireCapability('connectors.manage') }, async () => connectors.list());
 
+  app.get('/api/connectors/:id/config', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    reply.header('Cache-Control', 'no-store');
+    try {
+      const view = await inspectConnectorConfig(connectors, id, key());
+      if (!view) { reply.code(404); return { error: 'connector not found' }; }
+      return view;
+    } catch {
+      reply.code(400);
+      return { error: 'connector configuration unavailable' };
+    }
+  });
+
   app.get('/api/connectors/:id', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const c = await connectors.get(id);
@@ -99,7 +112,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       }
       await recordAudit(ctx, req, {
         action: 'connector.create', entityType: 'connector', entityId: id,
-        metadata: { name, type, configKeys: Object.keys(config) },
+        metadata: { name, type },
       });
       return connectors.get(id);
     }
@@ -119,7 +132,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     // never the config values (secrets).
     await recordAudit(ctx, req, {
       action: 'connector.create', entityType: 'connector', entityId: id,
-      metadata: { name, pluginId: pluginId!, allowedHost: pinnedHost, configKeys: Object.keys(config) },
+      metadata: { name, pluginId: pluginId!, allowedHost: pinnedHost },
     });
     return connectors.get(id);
   });
@@ -137,10 +150,10 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     // Re-derive the pinned host when the config (baseUrl) changes, unless explicitly given.
     const allowedHost = patch.config !== undefined ? hostFor(patch.config, patch.allowedHost) : patch.allowedHost;
     try {
-      await connectors.update(id, { name: patch.name, config: patch.config, enabled: patch.enabled, allowedHost }, key());
-    } catch (e) {
+      await updateConnectorConfig(connectors, id, { name: patch.name, config: patch.config, enabled: patch.enabled, allowedHost }, key());
+    } catch {
       reply.code(400);
-      return { error: redact(e instanceof Error ? e.message : String(e)) };
+      return { error: 'connector update failed' };
     }
     // Audit: record which fields changed (and whether secrets were rotated) — never the values.
     await recordAudit(ctx, req, {

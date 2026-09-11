@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Download } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ReportResult, ReportColumn } from '../api';
 import { downloadReportCsv } from '../api';
 import { exportXlsx } from './lib/report-export';
@@ -62,9 +63,13 @@ export function ReportSpreadsheetTab({ reportId, result, params, onExport }: Pro
         variant="outline"
         size="sm"
         className="h-8 text-xs"
-        onClick={() => {
-          void downloadReportCsv(reportId, params);
-          onExport?.('csv', result.rows.length);
+        onClick={async () => {
+          try {
+            await downloadReportCsv(reportId, params);
+            onExport?.('csv', result.rows.length);
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : String(error));
+          }
         }}
       >
         {t('reports.exportCsv')}

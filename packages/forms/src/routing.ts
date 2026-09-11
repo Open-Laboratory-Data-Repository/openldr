@@ -46,3 +46,8 @@ export function extractorsForForm(model: FormSchema): ResourceExtractor[] {
   }
   return extractors
 }
+
+/** Schema eligibility only. Actual answers and the ingest pipeline still need validation. */
+export function canSubmitForm(model: FormSchema): boolean {
+  return extractorsForForm(model).some((extractor) => extractor.canExtract(model))
+}

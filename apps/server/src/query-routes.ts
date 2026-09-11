@@ -103,10 +103,13 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     // runConnectorSql, which wraps the inner SQL with a dialect-appropriate limit/offset clause.
     inner = inner.replace(/;\s*$/, '');
     const cap = Math.min(parsed.data.limit ?? ROW_CAP, ROW_CAP);
+    // Read one extra row when a SQL Server page cannot carry a derived-table count.
+    // The extra row is only a continuation probe, never part of the returned page.
+    const probeNext = parsed.data.limit !== undefined && c.type === 'microsoft-sql';
     try {
       const started = Date.now();
-      const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: inner, rowCap: cap, offset: parsed.data.offset ?? 0 });
-      const capped = rows.slice(0, ROW_CAP);
+      const { columns, rows } = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: inner, rowCap: cap + (probeNext ? 1 : 0), offset: parsed.data.offset ?? 0 });
+      const capped = rows.slice(0, cap);
       // Total row count for the pagination control — only when the caller paginates (passes a
       // limit), since it costs a second aggregate query over the same statement. Skipped for
       // SQL Server: the count wraps the user SQL in a derived table (`… from (inner) as _q`), which
@@ -116,7 +119,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
         const cnt = await deps.runConnectorSql({ connectorId: parsed.data.connectorId, sql: `select count(*) as _n from (${inner}) as _q` });
         total = Number(Object.values(cnt.rows[0] ?? {})[0] ?? capped.length);
       }
-      return { columns, rows: capped, rowCount: capped.length, ms: Date.now() - started, ...(total !== undefined ? { total } : {}) };
+      return { columns, rows: capped, rowCount: capped.length, ms: Date.now() - started, ...(total !== undefined ? { total } : {}), ...(probeNext ? { hasMore: rows.length > cap } : {}) };
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }
   });
 

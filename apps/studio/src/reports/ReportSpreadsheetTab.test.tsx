@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
+import { toast } from 'sonner';
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 const { downloadReportCsv } = vi.hoisted(() => ({ downloadReportCsv: vi.fn(async () => {}) }));
 vi.mock('../api', async (importOriginal) => {
@@ -36,4 +38,14 @@ describe('ReportSpreadsheetTab', () => {
     await Promise.resolve();
     expect(onExport).toHaveBeenCalledWith('csv', 2);
   });
+});
+
+
+it('shows a refused CSV export and records no successful export', async () => {
+  const onExport = vi.fn();
+  downloadReportCsv.mockRejectedValueOnce(new Error('Stored query exceeds the 1000 row limit.'));
+  render(<ReportSpreadsheetTab reportId="r" result={result} params={{}} onExport={onExport} />);
+  fireEvent.click(screen.getByRole('button', { name: /csv/i }));
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Stored query exceeds the 1000 row limit.'));
+  expect(onExport).not.toHaveBeenCalled();
 });

@@ -17,7 +17,7 @@ function fakePool(selectRows: unknown[]) {
   const route = async (sql: string, params?: unknown[]) => {
     calls.push({ sql, params });
     if (/^\s*select id, type, payload/i.test(sql)) return { rows: selectRows };
-    return { rows: [] };
+    return { rows: [], rowCount: 1 };
   };
   const client = {
     query: vi.fn((sql: string, params?: unknown[]) => route(sql, params)),

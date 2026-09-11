@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,7 +13,10 @@ import {
 export interface TablePaginationProps {
   page: number;
   pageSize: number;
-  total: number;
+  /** null means no total was computed. Supply the returned row count and continuation flag. */
+  total: number | null;
+  rowCount?: number;
+  hasMore?: boolean;
   onPageChange: (p: number) => void;
   onPageSizeChange: (n: number) => void;
   leftSlot?: React.ReactNode;
@@ -22,17 +26,22 @@ export function TablePagination({
   page,
   pageSize,
   total,
+  rowCount = 0,
+  hasMore = false,
   onPageChange,
   onPageSizeChange,
   leftSlot,
 }: TablePaginationProps) {
-  const from = total === 0 ? 0 : page * pageSize + 1;
-  const to = Math.min((page + 1) * pageSize, total);
+  const { t } = useTranslation();
+  const from = (total ?? rowCount) === 0 ? 0 : page * pageSize + 1;
+  const to = total === null
+    ? (rowCount === 0 ? 0 : page * pageSize + rowCount)
+    : Math.min((page + 1) * pageSize, total);
 
   return (
-    <div className="flex items-center justify-between border-t border-border px-3 py-2 text-xs">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border px-3 py-2 text-xs">
       <div>{leftSlot}</div>
-      <div className="flex items-center gap-3">
+      <div className="flex max-w-full flex-wrap items-center gap-3">
         <Select
           value={String(pageSize)}
           onValueChange={(v) => onPageSizeChange(Number(v))}
@@ -48,8 +57,8 @@ export function TablePagination({
             ))}
           </SelectContent>
         </Select>
-        <span className="text-muted-foreground whitespace-nowrap">
-          {from}–{to} of {total}
+        <span className="min-w-0 max-w-full break-words text-muted-foreground">
+          {total === null ? t('table.unknownTotalRange', { from, to }) : <>{from}–{to} of {total}</>}
         </span>
         <div className="flex items-center gap-1">
           <Button
@@ -65,7 +74,7 @@ export function TablePagination({
             variant="outline"
             size="sm"
             onClick={() => onPageChange(page + 1)}
-            disabled={(page + 1) * pageSize >= total}
+            disabled={total === null ? !hasMore : (page + 1) * pageSize >= total}
             aria-label="Next page"
           >
             <ChevronRight className="h-3.5 w-3.5" />

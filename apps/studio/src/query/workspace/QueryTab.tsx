@@ -95,7 +95,9 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
           <TablePagination
             page={page}
             pageSize={pageSize}
-            total={result.total ?? result.rowCount}
+            total={result.total ?? null}
+            rowCount={result.rowCount}
+            hasMore={result.hasMore}
             onPageChange={(p) => void execute(lastValues, p)}
             onPageSizeChange={(n) => { setPageSize(n); void execute(lastValues, 0, n); }}
             leftSlot={<span className="text-muted-foreground">{result.rowCount} rows · {result.ms}ms</span>}

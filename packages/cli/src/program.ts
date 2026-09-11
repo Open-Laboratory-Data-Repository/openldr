@@ -12,7 +12,7 @@ import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQue
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
-import { runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
+import { runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runTerminologyReproject, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
@@ -43,6 +43,18 @@ export function buildProgram(): Command {
   const program = new Command();
   program.name('openldr').description('OpenLDR CE operator CLI');
   program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');
+
+  const connectors = program.command('connectors').description('Inspect and update host connector configuration');
+  connectors.command('inspect <id>').description('Print ordinary configuration and secret presence as JSON')
+    .action(async (id: string) => {
+      try { process.exitCode = await runConnectorInspect(id); }
+      catch { process.stderr.write('Connector configuration unavailable.\n'); process.exitCode = 1; }
+    });
+  connectors.command('update <id>').requiredOption('--file <path>', 'JSON patch; omitted or blank secrets remain stored')
+    .action(async (id: string, opts: { file: string }) => {
+      try { process.exitCode = await runConnectorUpdate(id, opts.file); }
+      catch { process.stderr.write('Connector update failed. Check the connector ID and JSON patch.\n'); process.exitCode = 1; }
+    });
 
   program
     .command('health')
@@ -829,6 +841,15 @@ export function buildProgram(): Command {
   user.command('list').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
     try { process.exitCode = await runUserList(opts); } catch (err) { process.stderr.write(`user list failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
+  user.command('directory-list').description('List one identity directory page, with local fallback')
+    .option('--offset <n>', 'zero-based offset', '0')
+    .option('--limit <n>', 'page size, 1 to 100', '25')
+    .option('--search <text>', 'provider username, name or email search')
+    .option('--enabled <boolean>', 'true or false')
+    .option('--json', 'emit page JSON', false)
+    .action(async (opts: { offset: string; limit: string; search?: string; enabled?: string; json: boolean }) => {
+      try { process.exitCode = await runUserDirectoryList(opts); } catch (err) { process.stderr.write(`user directory-list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
   user.command('show <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
     try { process.exitCode = await runUserShow(id, opts); } catch (err) { process.stderr.write(`user show failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
@@ -953,3 +974,4 @@ export function buildProgram(): Command {
 
   return program;
 }
+import { runConnectorInspect, runConnectorUpdate } from './connectors';

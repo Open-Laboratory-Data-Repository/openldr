@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import type { AppContext } from '@openldr/bootstrap';
+import { setAccountStatus, AccountNotFoundError, listUserDirectory, directoryPageInput, type AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import { z } from 'zod';
 import { requireCapability } from './rbac';
-import { recordAudit } from './audit-helper';
+import { actorFromRequest, recordAudit } from './audit-helper';
 
 const resetPasswordInput = z.object({ password: z.string().min(1), temporary: z.boolean().optional() });
 
@@ -114,7 +114,13 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
   // ------------------------------------------------------------------
   // GET /api/users — composes directory + profiles; falls back to local
   // ------------------------------------------------------------------
-  app.get('/api/users', { preHandler: requireCapability('users.view') }, async () => {
+  app.get('/api/users', { preHandler: requireCapability('users.view') }, async (req, reply) => {
+    const query = req.query as Record<string, unknown>;
+    if (Object.keys(query).length > 0) {
+      const parsed = directoryPageInput.strict().safeParse(query);
+      if (!parsed.success) return reply.code(400).send({ error: 'invalid directory query' });
+      return listUserDirectory(ctx, parsed.data);
+    }
     try {
       const users = await ctx.auth.directory.list();
       const profiles = await ctx.userProfiles.list(users.map((u) => u.id));
@@ -255,27 +261,11 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
 
     try {
-      const beforeDir = await ctx.auth.directory.get(id);
-      if (!beforeDir) {
-        reply.code(404);
-        return { error: 'not found' };
-      }
-      const beforeProfile = await ctx.userProfiles.get(id);
-      const before = summary(beforeDir, beforeProfile);
-      await ctx.auth.directory.update(id, { enabled });
-      const afterDir = await ctx.auth.directory.get(id);
-      if (!afterDir) { reply.code(404); return { error: 'not found' }; }
-      const after = summary(afterDir, await ctx.userProfiles.get(id));
-      await recordAudit(ctx, req, {
-        action: 'user.status',
-        entityType: 'user',
-        entityId: id,
-        before,
-        after,
-        metadata: { enabled },
-      });
-      return after;
+      const result = await setAccountStatus(ctx, { providerSubject: id }, enabled, actorFromRequest(req));
+      return summary(result.directory!, await ctx.userProfiles.get(id));
     } catch (e) {
+      if (e instanceof Error && e.name === 'AccountStatusConflictError') { reply.code(409); return { error: e.message }; }
+      if (e instanceof AccountNotFoundError) { reply.code(404); return { error: 'not found' }; }
       if (isNotConfigured(e)) {
         reply.code(503);
         return { error: 'identity provider admin client is not configured' };

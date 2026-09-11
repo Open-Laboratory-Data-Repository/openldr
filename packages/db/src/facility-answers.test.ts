@@ -6,6 +6,14 @@ import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS } from 
 const f = (id: string, apiProperty?: string | null) => ({ id, apiProperty });
 
 describe('splitFacilityAnswers', () => {
+  it.each(['zone', 'region', 'district', 'council', 'ward', 'village'])('keeps administrative %s display text', (key) => {
+    const fields = [f('area', key)];
+    expect(splitFacilityAnswers(fields, {
+      area: { system: 'urn:test:area', code: 'area-1', display: ' Area One ' },
+    }).record).toEqual({ [key]: 'Area One' });
+    expect(splitFacilityAnswers(fields, { area: ' Area One ' }).record).toEqual({ [key]: 'Area One' });
+  });
+
   it('routes a known apiProperty to its column', () => {
     const { record, extras } = splitFacilityAnswers(
       [f('a', 'localCode'), f('b', 'name'), f('c', 'region')],
@@ -72,12 +80,12 @@ describe('splitFacilityAnswers', () => {
 });
 
 describe('splitFacilityAnswers — coding answers on core keys (ValueSet-bound level/status)', () => {
-  it('flattens a coding answer to its display on a core key', () => {
+  it.each(['level', 'status', 'country'])('stores the picked code for %s', (key) => {
     const { record } = splitFacilityAnswers(
-      [f('a', 'level')],
+      [f('a', key)],
       { a: { system: 'https://terminology.example/facility-level', code: 'IA2', display: 'Level IA2 (Dispensary Laboratory)' } },
     );
-    expect(record.level).toBe('Level IA2 (Dispensary Laboratory)');
+    expect((record as Record<string, unknown>)[key]).toBe('IA2');
   });
 
   it('falls back to code when display is null', () => {

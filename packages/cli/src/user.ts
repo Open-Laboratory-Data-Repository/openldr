@@ -1,4 +1,4 @@
-import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
+import { createAppContext, recordAuditEvent, setAccountStatus, AccountNotFoundError, listUserDirectory } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
@@ -85,20 +85,27 @@ export async function runUserSetRole(id: string, roles: string[], opts: JsonOpt)
 export async function runUserSetStatus(id: string, status: 'active' | 'disabled', opts: JsonOpt): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
-    if (!(await ctx.users.get(id))) {
+    try {
+      await setAccountStatus(ctx, { localId: id }, status === 'active', { ...cliActor(), actorName: 'cli' });
+    } catch (error) {
+      if (!(error instanceof AccountNotFoundError)) throw error;
       emit(opts.json, { error: 'user not found' }, `user ${id} not found`);
       return 1;
     }
-    await ctx.users.setStatus(id, status);
-    await recordAuditEvent(ctx, cliActor(), {
-      action: 'user.status',
-      entityType: 'user',
-      entityId: id,
-      metadata: { enabled: status === 'active', backend: 'local' },
-    });
     emit(opts.json, { id, status }, `${id} is now ${status}`);
     return 0;
   } finally {
     await ctx.close();
   }
+}
+
+export async function runUserDirectoryList(opts: JsonOpt & { offset?: string; limit?: string; search?: string; enabled?: string }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const page = await listUserDirectory(ctx, { offset: opts.offset, limit: opts.limit, search: opts.search, enabled: opts.enabled });
+    const lines = page.rows.map((u) => `${u.id}\t${u.username}\t${u.email ?? ''}\t${u.enabled ? 'active' : 'disabled'}`);
+    lines.push(`offset=${page.offset} limit=${page.limit} hasMore=${page.hasMore}`);
+    emit(opts.json, page, lines.join('\n'));
+    return 0;
+  } finally { await ctx.close(); }
 }

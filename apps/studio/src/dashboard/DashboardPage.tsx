@@ -45,6 +45,10 @@ export function DashboardPage() {
   const [filterEditorOpen, setFilterEditorOpen] = useState(false);
   const [sqlEnabled, setSqlEnabled] = useState(false);
   const [error, setError] = useState<string>();
+  const [creating, setCreating] = useState(false);
+  const creatingRef = useRef(false);
+  const [createError, setCreateError] = useState<string>();
+  const [createdName, setCreatedName] = useState<string>();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   // Bumping this remounts the widget grid, which re-runs every widget's query — a refresh.
   const [refreshKey, setRefreshKey] = useState(0);
@@ -82,7 +86,12 @@ export function DashboardPage() {
   };
 
   const handleNewDashboard = async () => {
-    const name = uniqueName('New dashboard', all.map((d) => d.name));
+    if (creatingRef.current || editorOpen || filterEditorOpen || useDashboardStore.getState().dirty) return;
+    creatingRef.current = true;
+    setCreating(true);
+    setCreateError(undefined);
+    setCreatedName(undefined);
+    const name = uniqueName(t('dashboard.newDashboard'), all.map((d) => d.name));
     const blank: Dashboard = {
       id: crypto.randomUUID(),
       ownerId: null,
@@ -96,11 +105,17 @@ export function DashboardPage() {
     try {
       const created = await createDashboard(blank);
       setAll((prev) => [...prev, created]);
-      setCurrent(created);
-      setEditing(true);
+      if (!useDashboardStore.getState().dirty) {
+        setCurrent(created);
+        setEditing(true);
+      }
       setError(undefined);
+      setCreatedName(created.name);
     } catch (e) {
-      setError(String((e as Error).message ?? e));
+      setCreateError(t('dashboard.createFailed', { error: String((e as Error).message ?? e) }));
+    } finally {
+      creatingRef.current = false;
+      setCreating(false);
     }
   };
 
@@ -181,6 +196,7 @@ export function DashboardPage() {
     return (
       <AppShell title="Dashboard" fullBleed>
         <div className="ui-scope flex min-h-0 flex-1 flex-col">
+          {createError && <div role="alert" className="px-4 pt-3 text-sm text-destructive">{createError}</div>}
           {isEmpty ? (
             <StripedEmpty>
               <div className="flex flex-col items-center gap-3 text-center">
@@ -188,7 +204,7 @@ export function DashboardPage() {
                 <p className="text-sm font-medium">{t('dashboard.emptyTitle')}</p>
                 <p className="max-w-sm text-xs text-muted-foreground">{t('dashboard.emptyBody')}</p>
                 <div className="flex items-center gap-2 pt-1">
-                  <Button onClick={() => void handleNewDashboard()}>{t('dashboard.newDashboard')}</Button>
+                  <Button disabled={creating} onClick={() => void handleNewDashboard()}>{t('dashboard.newDashboard')}</Button>
                   <Button variant="secondary" className="bg-secondary text-secondary-foreground hover:bg-secondary/80" onClick={() => fileInput.current?.click()}>
                     {t('dashboard.importDashboard')}
                   </Button>
@@ -207,6 +223,8 @@ export function DashboardPage() {
   return (
     <AppShell title="Dashboard" fullBleed>
       <div className="ui-scope flex min-h-full flex-col overflow-y-auto">
+        {createError && <div role="alert" className="px-4 pt-3 text-sm text-destructive">{createError}</div>}
+        {createdName && <div role="status" className="px-4 pt-3 text-sm">{t('dashboard.created', { name: createdName })}</div>}
         {error && <div className="px-4 pt-3 text-sm text-destructive">{error}</div>}
         <div className="flex items-center justify-between px-4 py-3">
           <Select value={current.id} onValueChange={(id) => setCurrent(all.find((d) => d.id === id)!)}>
@@ -239,10 +257,18 @@ export function DashboardPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={creating || dirty || editorOpen || filterEditorOpen} onSelect={() => void handleNewDashboard()}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t(creating ? 'dashboard.creating' : 'dashboard.newDashboard')}
+              </DropdownMenuItem>
+              {dirty && <p className="max-w-56 px-2 py-1 text-xs text-muted-foreground">{t('dashboard.waitForSave')}</p>}
+              <DropdownMenuSeparator />
               {editing ? (
                 <>
                   <DropdownMenuItem
+                    disabled={creating}
                     onSelect={() => {
+                      if (creatingRef.current) return;
                       setEditingWidget(undefined);
                       setEditorOpen(true);
                     }}
@@ -250,7 +276,7 @@ export function DashboardPage() {
                     <Plus className="mr-2 h-4 w-4" />
                     Add widget
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setFilterEditorOpen(true)}>
+                  <DropdownMenuItem disabled={creating} onSelect={() => { if (!creatingRef.current) setFilterEditorOpen(true); }}>
                     <SlidersHorizontal className="mr-2 h-4 w-4" />
                     Edit filters
                   </DropdownMenuItem>
@@ -310,6 +336,7 @@ export function DashboardPage() {
             key={refreshKey}
             filterValues={values}
             onEdit={(id) => {
+              if (creatingRef.current) return;
               setEditingWidget(current.widgets.find((w) => w.id === id));
               setEditorOpen(true);
             }}

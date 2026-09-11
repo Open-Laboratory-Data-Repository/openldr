@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerUsersRoutes } from './users-routes';
@@ -57,6 +57,9 @@ function fakeCtx() {
 
   return {
     users: {
+      async withSubjectLock(_subject: string, work: (users: any) => Promise<any>) { return work(this); },
+      blockSubject: async () => {},
+      unblockSubject: async () => {},
       create: async (input: Parameters<AppContext['users']['create']>[0]) => {
         if (localUsers.some((u) => u.username === input.username)) throw new Error('duplicate username');
         const user: LocalUser = {
@@ -91,6 +94,15 @@ function fakeCtx() {
       setStatus: async (id: string, status: 'active' | 'disabled') => {
         const u = localUsers.find((x) => x.id === id);
         if (u) u.status = status;
+      },
+      setSubjectStatus: async (input: { subject: string; username: string }, status: 'active' | 'disabled') => {
+        let u = localUsers.find(x => x.subject === input.subject);
+        if (!u) {
+          u = { id: `lu${++localSeq}`, subject: input.subject, username: input.username, displayName: null, email: null, roles: [], status, lastLoginAt: null, createdAt: null, rbacInitialized: false };
+          localUsers.push(u);
+        }
+        u.status = status;
+        return u;
       },
       syncFromClaims: async () => { throw new Error('not used'); },
     },
@@ -492,6 +504,8 @@ describe('users routes — fallback when directory unconfigured', () => {
     const app = adminApp(ctx);
     const res = await app.inject({ method: 'POST', url: '/api/users/x/status', payload: { enabled: true } });
     expect(res.statusCode).toBe(503);
+    const disabled = await app.inject({ method: 'POST', url: '/api/users/x/status', payload: { enabled: false } });
+    expect(disabled.statusCode).toBe(503);
   });
 });
 
@@ -596,5 +610,22 @@ describe('users routes — SP4 admin actions (reset-password / send-reset-email 
     const actions = events.map((e) => e.action);
     expect(actions).toEqual(['user.create', 'user.update', 'user.status']);
     expect(events.every((e) => e.actorId === 'admin1' && e.entityType === 'user')).toBe(true);
+  });
+});
+
+describe('directory paging wire contract', () => {
+  it('returns rows and paging metadata for explicit paging', async () => {
+    const ctx = fakeCtx();
+    const rows = Array.from({ length: 26 }, (_, i) => ({ id: String(100 + i), username: `user${100+i}`, enabled: true, roles: [], email: null, firstName: null, lastName: null, createdAt: null }));
+    const list = vi.spyOn(ctx.auth.directory, 'list').mockResolvedValue(rows);
+    const response = await adminApp(ctx).inject('/api/users?offset=100&limit=25&search=Ada&enabled=false');
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ offset: 100, limit: 25, total: null, hasMore: true });
+    expect(response.json().rows).toHaveLength(25);
+    expect(list).toHaveBeenCalledWith({ first: 100, max: 26, search: 'Ada', enabled: false });
+  });
+  it.each(['limit=101', 'offset=-1', 'enabled=no', 'offset=1.2'])('rejects invalid query %s', async (query) => {
+    const response = await adminApp(fakeCtx()).inject(`/api/users?${query}`);
+    expect(response.statusCode).toBe(400);
   });
 });

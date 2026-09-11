@@ -7,6 +7,7 @@ import type { WidgetQuery, Metric, QueryFilter, DateGrain, ConditionNode, Condit
 import { customColumnKind } from './types';
 import type { ReportResultData, ReportColumn, ChartHint } from '@openldr/reporting';
 import { ageBandArms } from './age-band';
+import { runReadQuery, type SqlRunOpts, type SqlDialect } from './sql-runner';
 
 type BuilderQuery = Extract<WidgetQuery, { mode: 'builder' }>;
 type AnyQB = SelectQueryBuilder<ExternalSchema, keyof ExternalSchema, unknown>;
@@ -393,15 +394,32 @@ function applyTopN(
   return [...rows].sort((a, b) => Number(b[valueKey] ?? 0) - Number(a[valueKey] ?? 0)).slice(0, limit);
 }
 
+/** Fetch one extra group beyond the cap. Never shape a partial aggregate result. */
+async function fetchBuilderGroups(
+  db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy: ColumnPolicy | undefined,
+  opts: SqlRunOpts, engine: SqlDialect,
+): Promise<Record<string, unknown>[]> {
+  if (!Number.isSafeInteger(opts.rowCap) || opts.rowCap < 1 || opts.rowCap >= Number.MAX_SAFE_INTEGER) {
+    throw new Error('rowCap must be a positive safe integer');
+  }
+  const query = compileBuilderQuery(db, model, q, policy);
+  const rows = await runReadQuery(db, query.compile(), { ...opts, rowCap: opts.rowCap + 1 }, engine);
+  if (rows.length > opts.rowCap) {
+    throw new Error(`Builder query exceeds the group limit of ${opts.rowCap}. Narrow the filters or reduce grouping.`);
+  }
+  return rows;
+}
+
 /** Shape a multi-metric (wide) query into a table: label + one column per metric (aggregate or derived). */
 async function runWideQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
+  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres',
 ): Promise<ReportResultData> {
   model = effectiveModel(model, q, policy);
   const metrics = q.metrics!;
   const aggKeys = metrics.filter((m) => !m.derived).map((m) => m.key);
   const derivedMetrics = metrics.filter((m) => m.derived);
-  const rows = (await compileBuilderQuery(db, model, q, policy).execute()) as Record<string, unknown>[];
+  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine)) as Record<string, unknown>[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
   let shaped: Record<string, unknown>[];
@@ -447,11 +465,12 @@ async function runWideQuery(
 /** Execute and shape into ReportResultData, applying date-grain bucketing in JS. */
 export async function runBuilderQuery(
   db: Kysely<ExternalSchema>, model: QueryModel, q: BuilderQuery, policy?: ColumnPolicy,
+  opts: SqlRunOpts = { timeoutMs: 5000, rowCap: 10_000 }, engine: SqlDialect = 'postgres',
 ): Promise<ReportResultData> {
   model = effectiveModel(model, q, policy);
   if (!hasMeasure(q)) return { columns: [], rows: [], chart: { type: 'stat', value: '', label: 'No measure' } };
-  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q, policy);
-  const rows = (await compileBuilderQuery(db, model, q, policy).execute()) as { value: number; label?: unknown; series?: unknown }[];
+  if (q.metrics && q.metrics.length > 0) return runWideQuery(db, model, q, policy, opts, engine);
+  const rows = (await fetchBuilderGroups(db, model, q, policy, opts, engine)) as { value: number; label?: unknown; series?: unknown }[];
   const d = q.dimension ? dim(model, q.dimension.key) : undefined;
 
   if (q.breakdown) {

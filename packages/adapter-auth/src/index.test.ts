@@ -302,6 +302,16 @@ function dirMock() {
 const dcfg = { issuerUrl: 'https://kc/realms/openldr', adminClientId: 'svc', adminClientSecret: 'sek' };
 
 describe('directory', () => {
+  it('passes offset, search and disabled status to Keycloak', async () => {
+    const { fetchFn, calls } = dirMock();
+    await createAuth(dcfg, { fetchFn }).directory.list({ first: 100, max: 26, search: 'Ada', enabled: false });
+    const request = calls.find((c) => c.url.includes('/users?'))!;
+    const params = new URL(request.url).searchParams;
+    expect(params.get('first')).toBe('100');
+    expect(params.get('max')).toBe('26');
+    expect(params.get('search')).toBe('Ada');
+    expect(params.get('enabled')).toBe('false');
+  });
   it('list maps users + filters provider-default roles', async () => {
     const { fetchFn } = dirMock();
     const auth = createAuth(dcfg, { fetchFn });

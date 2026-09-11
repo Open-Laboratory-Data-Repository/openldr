@@ -20,7 +20,7 @@ describe('reference validation', () => {
   });
 
   it('still reports a missing required reference', () => {
-    expect(validate(schema(), {})).toEqual({ patient: 'field patient is required' });
+    expect(validate(schema(), {})).toEqual({ patient: 'Patient is required' });
   });
 
   // FormRuntime renders a TEXT INPUT for a reference-family field with no source, so the
@@ -80,6 +80,6 @@ describe('validate — the seeded-value exemption', () => {
 
   it('still reports a required EMPTY field even when that field is exempt', () => {
     // Exemption covers the coding-shape check only; presence is a separate rule.
-    expect(validate(refSchema(), {}, new Set(['level']))).toEqual({ level: 'field level is required' });
+    expect(validate(refSchema(), {}, new Set(['level']))).toEqual({ level: 'Level is required' });
   });
 });

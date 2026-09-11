@@ -30,17 +30,23 @@ export interface UpdateUserInput {
 }
 
 export interface UserStore {
+  withSubjectLock<T>(subject: string, work: (users: UserStore) => Promise<T>): Promise<T>;
   create(input: CreateUserInput): Promise<User>;
   get(id: string): Promise<User | undefined>;
   getBySubject(subject: string): Promise<User | undefined>;
   getByUsername(username: string): Promise<User | undefined>;
-  list(): Promise<User[]>;
+  list(opts?: { offset: number; limit: number; search?: string; enabled?: boolean }): Promise<User[]>;
   update(id: string, input: UpdateUserInput): Promise<void>;
   setRoles(id: string, roles: string[]): Promise<void>;
   setStatus(id: string, status: 'active' | 'disabled'): Promise<void>;
+  blockSubject(subject: string): Promise<void>;
+  unblockSubject(subject: string): Promise<void>;
+  isSubjectBlocked(subject: string): Promise<boolean>;
+  /** Persist the subject and status together, including accounts that have never signed in. */
+  setSubjectStatus(input: { subject: string; username: string }, status: 'active' | 'disabled'): Promise<User>;
   /**
    * Just-in-time provision/link from verified token claims: resolve by subject,
-   * else link the subject onto a username match, else create. Does NOT change
+   * else link an unclaimed username, else create. Reject an already-linked username. Does NOT change
    * `status` — a disabled user stays disabled. The caller (auth layer) MUST
    * reject the returned user when `status === 'disabled'`; this never reactivates.
    */
@@ -79,7 +85,9 @@ function toUser(r: Row): User {
 
 const COLS = ['id', 'subject', 'username', 'display_name', 'email', 'roles', 'status', 'last_login_at', 'created_at', 'rbac_initialized'] as const;
 
-export function createUserStore(db: Kysely<InternalSchema>): UserStore {
+export function createUserStore(db: Kysely<InternalSchema>, deps: {
+  withSubjectLock?: <T>(subject: string, work: (db: Kysely<InternalSchema>) => Promise<T>) => Promise<T>;
+} = {}): UserStore {
   async function get(id: string): Promise<User | undefined> {
     const r = await db.selectFrom('users').select(COLS).where('id', '=', id).executeTakeFirst();
     return r ? toUser(r as unknown as Row) : undefined;
@@ -108,12 +116,25 @@ export function createUserStore(db: Kysely<InternalSchema>): UserStore {
   }
 
   return {
+    async withSubjectLock(subject, work) {
+      if (!deps.withSubjectLock) throw new Error('account status lock is not configured');
+      return deps.withSubjectLock(subject, pinned => work(createUserStore(pinned, deps)));
+    },
     create,
     get,
     getBySubject,
     getByUsername,
-    async list() {
-      const rows = await db.selectFrom('users').select(COLS).orderBy('username').execute();
+    async list(opts) {
+      let query = db.selectFrom('users').select(COLS).orderBy('username').orderBy('id');
+      if (opts) {
+        if (opts.enabled !== undefined) query = query.where('status', '=', opts.enabled ? 'active' : 'disabled');
+        if (opts.search) {
+          const pattern = `%${opts.search.replace(/[\\%_]/g, '\\$&')}%`;
+          query = query.where((eb) => eb.or([eb('username', 'ilike', pattern), eb('email', 'ilike', pattern), eb('display_name', 'ilike', pattern)]));
+        }
+        query = query.offset(opts.offset).limit(opts.limit);
+      }
+      const rows = await query.execute();
       return rows.map((r) => toUser(r as unknown as Row));
     },
     async update(id, input) {
@@ -127,6 +148,35 @@ export function createUserStore(db: Kysely<InternalSchema>): UserStore {
     },
     async setStatus(id, status) {
       await db.updateTable('users').set({ status, updated_at: new Date() }).where('id', '=', id).execute();
+    },
+    async blockSubject(subject) {
+      if (!subject) throw new Error('missing provider subject');
+      await db.insertInto('account_access_blocks').values({ subject })
+        .onConflict(oc => oc.column('subject').doNothing()).execute();
+    },
+    async unblockSubject(subject) {
+      await db.deleteFrom('account_access_blocks').where('subject', '=', subject).execute();
+    },
+    async isSubjectBlocked(subject) {
+      return !!await db.selectFrom('account_access_blocks').select('subject').where('subject', '=', subject).executeTakeFirst();
+    },
+    async setSubjectStatus(input, status) {
+      if (!input.subject) throw new Error('missing provider subject');
+      const existing = await getBySubject(input.subject);
+      const byName = existing ? undefined : await getByUsername(input.username);
+      if (byName && byName.subject === null) {
+        const linked = await db.updateTable('users').set({ subject: input.subject, status, updated_at: new Date() })
+          .where('id', '=', byName.id).where('subject', 'is', null).returning(COLS).executeTakeFirst();
+        if (!linked) throw new Error('username subject changed during status update');
+        return toUser(linked as unknown as Row);
+      }
+      // A provider username must never replace another identity's subject.
+      const username = existing?.username ?? (byName ? `provider:${randomUUID()}` : input.username);
+      const row = await db.insertInto('users').values({
+        id: randomUUID(), subject: input.subject, username, status, roles: JSON.stringify([]) as never,
+      }).onConflict(oc => oc.column('subject').doUpdateSet({ status, updated_at: new Date() }))
+        .returning(COLS).executeTakeFirstOrThrow();
+      return toUser(row as unknown as Row);
     },
     async markRbacInitialized(id) {
       await db.updateTable('users').set({ rbac_initialized: true, updated_at: new Date() }).where('id', '=', id).execute();
@@ -142,21 +192,26 @@ export function createUserStore(db: Kysely<InternalSchema>): UserStore {
 
       const existing = await getBySubject(sub);
       if (existing) {
-        await db.updateTable('users').set({ last_login_at: now, updated_at: now }).where('id', '=', existing.id).execute();
-        return { ...existing, lastLoginAt: now.toISOString() };
+        const row = await db.updateTable('users').set({ last_login_at: now, updated_at: now })
+          .where('id', '=', existing.id).returning(COLS).executeTakeFirstOrThrow();
+        return toUser(row as unknown as Row);
       }
       const byName = await getByUsername(username);
       if (byName) {
-        await db.updateTable('users').set({ subject: sub, last_login_at: now, updated_at: now }).where('id', '=', byName.id).execute();
-        return { ...byName, subject: sub, lastLoginAt: now.toISOString() };
+        if (byName.subject !== null) throw new Error('username already belongs to another subject');
+        const row = await db.updateTable('users').set({ subject: sub, last_login_at: now, updated_at: now })
+          .where('id', '=', byName.id).where('subject', 'is', null).returning(COLS).executeTakeFirst();
+        if (!row) throw new Error('username subject changed during sign-in');
+        return toUser(row as unknown as Row);
       }
-      const u = await create({
-        username,
-        displayName: typeof claims.name === 'string' ? claims.name : undefined,
-        email: typeof claims.email === 'string' ? claims.email : undefined,
-      });
-      await db.updateTable('users').set({ subject: sub, last_login_at: now, updated_at: now }).where('id', '=', u.id).execute();
-      return { ...u, subject: sub, lastLoginAt: now.toISOString() };
+      const row = await db.insertInto('users').values({
+        id: randomUUID(), subject: sub, username, roles: JSON.stringify([]) as never,
+        display_name: typeof claims.name === 'string' ? claims.name : null,
+        email: typeof claims.email === 'string' ? claims.email : null,
+        last_login_at: now,
+      }).onConflict(oc => oc.column('subject').doUpdateSet({ last_login_at: now, updated_at: now }))
+        .returning(COLS).executeTakeFirstOrThrow();
+      return toUser(row as unknown as Row);
     },
   };
 }

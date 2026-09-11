@@ -2,7 +2,7 @@
 import { authFetch } from '@/api';
 import type { CustomQuery, CustomQueryInput, CustomQueryParam } from './custom-query-types';
 
-export interface RunResult { columns: { key: string; label: string }[]; rows: Record<string, unknown>[]; rowCount: number; ms: number; total?: number }
+export interface RunResult { columns: { key: string; label: string }[]; rows: Record<string, unknown>[]; rowCount: number; ms: number; total?: number; hasMore?: boolean }
 export interface ConnectorRef { id: string; name: string; type: string | null }
 export interface DatasetRef { id: string; name: string; rowCount: number }
 
