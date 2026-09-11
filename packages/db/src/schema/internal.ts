@@ -874,6 +874,7 @@ export interface InternalSchema {
   notification_reads: NotificationReadsTable;
   notification_prefs: NotificationPrefsTable;
   users: UsersTable;
+  account_access_blocks: { subject: string };
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;
   concept_map_elements: ConceptMapElementsTable;

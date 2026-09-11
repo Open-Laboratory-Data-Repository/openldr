@@ -600,7 +600,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   const reportRuns = createReportRunStore(internal.db);
   const reportSchedules = createReportScheduleStore(internal.db);
   const plugins = createPluginRegistry({ blob, internalDb: internal.db, logger, audit, devAllowUnsigned: cfg.MARKETPLACE_DEV_ALLOW_UNSIGNED });
-  const users = createUserStore(internal.db);
+  const users = createUserStore(internal.db, { withSubjectLock: internal.withAccountStatusLock });
   const roles = createRoleStore(internal.db);
   // RBAC Task 4: seed the 5 system roles (lab_admin/lab_manager/data_analyst/system_auditor/
   // lab_technician) on every boot. Deliberately UNCONDITIONAL — NOT routed through seedDatabase()/
@@ -1818,3 +1818,5 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   await ctx.roles.seedSystemRoles();
   ctx.featureFlags.invalidate();
 }
+
+export { setAccountStatus, AccountNotFoundError } from './account-status';

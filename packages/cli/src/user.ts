@@ -1,4 +1,4 @@
-import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
+import { createAppContext, recordAuditEvent, setAccountStatus, AccountNotFoundError } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
@@ -85,17 +85,13 @@ export async function runUserSetRole(id: string, roles: string[], opts: JsonOpt)
 export async function runUserSetStatus(id: string, status: 'active' | 'disabled', opts: JsonOpt): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
-    if (!(await ctx.users.get(id))) {
+    try {
+      await setAccountStatus(ctx, { localId: id }, status === 'active', { ...cliActor(), actorName: 'cli' });
+    } catch (error) {
+      if (!(error instanceof AccountNotFoundError)) throw error;
       emit(opts.json, { error: 'user not found' }, `user ${id} not found`);
       return 1;
     }
-    await ctx.users.setStatus(id, status);
-    await recordAuditEvent(ctx, cliActor(), {
-      action: 'user.status',
-      entityType: 'user',
-      entityId: id,
-      metadata: { enabled: status === 'active', backend: 'local' },
-    });
     emit(opts.json, { id, status }, `${id} is now ${status}`);
     return 0;
   } finally {

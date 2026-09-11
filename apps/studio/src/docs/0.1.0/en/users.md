@@ -37,7 +37,7 @@ The user record reflects the updated profile, selected role, and status. The sel
 - **Permission denied:** check whether the user has the role required by the page or action.
 - **A page is hidden:** feature visibility follows assigned roles and enabled application areas.
 - **Reset actions are missing:** the account may be controlled by an identity provider.
-- **A disabled user can still see an old screen:** ask them to sign out and sign back in after the status change.
+- **A disabled user can still see an old screen:** already-loaded content can remain visible. The next authenticated API request is blocked.
 
 ## Advanced web usage
 
@@ -48,3 +48,13 @@ Choose the role with the fewest capabilities that still lets the user complete t
 - [Roles](/docs/roles)
 - [Audit](/docs/audit)
 - [Settings](/docs/settings)
+
+## Disable or enable access
+
+Open the account row's **Actions** menu to disable or enable it. Disabling writes the local access block before updating the identity provider. The next authenticated API request returns `403 account disabled`, including requests with an already-issued token. A screen already loaded in the browser may remain visible.
+
+Accounts that have never signed in also receive a local block. Enabling updates the provider first, then lifts that block. If either write fails, the action reports an error. A failed disable can leave the provider enabled while OpenLDR blocks access. A failed enable can leave the provider enabled while the local block remains. Restore the failing connection and retry the same action. Audit records use `user.status.failed` for failures and `user.status` for success.
+
+For the CLI, use `openldr user deactivate <local-id>` or `openldr user activate <local-id>`. Find the local ID with `openldr users list`. Linked accounts update both systems using their provider subject. Accounts created only in the local store change locally. CLI status audit records identify the actor as `cli`.
+
+If another status change is in progress for this account, the API returns `409`. Wait for that action to finish, then retry. This also applies when Studio and the CLI change the same account.

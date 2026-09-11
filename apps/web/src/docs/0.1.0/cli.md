@@ -68,7 +68,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `plugin` | Manage WASM ingest plugins: `install`, `list`, `test`, `run`, `remove`. |
 | `report` | `list` and `run` analytics reports; `glass-export`. |
 | `audit` | Read the append-only audit log. |
-| `user` | Manage local users: `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. (`export` is a top-level command — a full dataset export — not a `user` subcommand.) |
+| `user` | Manage users: `list`, `show`, `create`, `set-role`, `activate`, `deactivate`. Status changes also update linked provider accounts. `export` is a top-level dataset command. |
 | `market` | Marketplace artifacts: `verify`, `install`, `update`, `list`, `rollback`, `enable`, `disable`, `remove`. |
 | `artifact` | Author artifacts: `keygen`, `new`, `build`, `pack`, `sign`, `test`, `publish`. |
 | `sync` | Distributed (lab⇄central) sync: `status`, `now`, and central-side `enroll`, `list`, `rotate`, `revoke`. |
@@ -174,3 +174,33 @@ Enroll a lab on the central server, then connect a lab to it:
 
 > Anything under `settings danger` is destructive (reset dashboards, clear audit,
 > factory reset). Those commands require `--force` and mirror the Studio danger zone.
+
+## Disable or enable access
+
+Open the account row's **Actions** menu to disable or enable it. Disabling writes the local access block before updating the identity provider. The next authenticated API request returns `403 account disabled`, including requests with an already-issued token. A screen already loaded in the browser may remain visible.
+
+Accounts that have never signed in also receive a local block. Enabling updates the provider first, then lifts that block. If either write fails, the action reports an error. A failed disable can leave the provider enabled while OpenLDR blocks access. A failed enable can leave the provider enabled while the local block remains. Restore the failing connection and retry the same action. Audit records use `user.status.failed` for failures and `user.status` for success.
+
+For the CLI, use `openldr user deactivate <local-id>` or `openldr user activate <local-id>`. Find the local ID with `openldr users list`. Linked accounts update both systems using their provider subject. Accounts created only in the local store change locally. CLI status audit records identify the actor as `cli`.
+
+If another status change is in progress for this account, the API returns `409`. Wait for that action to finish, then retry. This also applies when Studio and the CLI change the same account.
+
+## Désactiver ou réactiver un compte
+
+Ouvrez le menu **Actions** de la ligne du compte pour le désactiver ou le réactiver. La désactivation bloque d'abord l'accès local, puis met à jour le fournisseur d'identité. La prochaine requête API authentifiée reçoit `403 account disabled`, même avec un jeton déjà émis. Une page déjà chargée peut rester visible.
+
+Le blocage couvre aussi les comptes qui ne se sont jamais connectés. La réactivation met d'abord à jour le fournisseur, puis lève le blocage local. Si une écriture échoue, l'action affiche une erreur. Le fournisseur peut alors autoriser le compte tandis qu'OpenLDR maintient le blocage. Rétablissez la connexion défaillante et répétez la même action. L'audit enregistre `user.status.failed` en cas d'échec et `user.status` en cas de réussite.
+
+Dans la CLI, utilisez `openldr user deactivate <local-id>` ou `openldr user activate <local-id>`. Trouvez l'identifiant local avec `openldr users list`. Les comptes liés modifient les deux systèmes à partir de leur identifiant fournisseur. Les comptes uniquement locaux changent seulement dans OpenLDR. L'audit des changements CLI indique l'acteur `cli`.
+
+Si une autre modification du statut de ce compte est en cours, l'API renvoie `409`. Attendez la fin de cette action, puis réessayez. Cela s'applique aussi aux modifications simultanées depuis Studio et la CLI.
+
+## Desativar ou reativar uma conta
+
+Abra o menu **Ações** da linha da conta para a desativar ou reativar. A desativação bloqueia primeiro o acesso local e depois atualiza o fornecedor de identidade. O pedido autenticado seguinte à API recebe `403 account disabled`, mesmo com um token já emitido. Uma página já carregada pode continuar visível.
+
+O bloqueio também abrange contas que nunca iniciaram sessão. A reativação atualiza primeiro o fornecedor e depois remove o bloqueio local. Se uma escrita falhar, a ação apresenta um erro. O fornecedor pode permitir o acesso enquanto o OpenLDR mantém o bloqueio. Restabeleça a ligação que falhou e repita a mesma ação. A auditoria regista `user.status.failed` em caso de falha e `user.status` em caso de sucesso.
+
+Na CLI, use `openldr user deactivate <local-id>` ou `openldr user activate <local-id>`. Consulte o identificador local com `openldr users list`. As contas ligadas atualizam ambos os sistemas através do identificador do fornecedor. As contas apenas locais mudam só no OpenLDR. A auditoria destas alterações na CLI identifica o ator como `cli`.
+
+Se outra alteração do estado desta conta estiver em curso, a API devolve `409`. Aguarde o fim dessa ação e tente novamente. Isto também se aplica a alterações simultâneas no Studio e na CLI.

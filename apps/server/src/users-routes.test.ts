@@ -57,6 +57,9 @@ function fakeCtx() {
 
   return {
     users: {
+      async withSubjectLock(_subject: string, work: (users: any) => Promise<any>) { return work(this); },
+      blockSubject: async () => {},
+      unblockSubject: async () => {},
       create: async (input: Parameters<AppContext['users']['create']>[0]) => {
         if (localUsers.some((u) => u.username === input.username)) throw new Error('duplicate username');
         const user: LocalUser = {
@@ -91,6 +94,15 @@ function fakeCtx() {
       setStatus: async (id: string, status: 'active' | 'disabled') => {
         const u = localUsers.find((x) => x.id === id);
         if (u) u.status = status;
+      },
+      setSubjectStatus: async (input: { subject: string; username: string }, status: 'active' | 'disabled') => {
+        let u = localUsers.find(x => x.subject === input.subject);
+        if (!u) {
+          u = { id: `lu${++localSeq}`, subject: input.subject, username: input.username, displayName: null, email: null, roles: [], status, lastLoginAt: null, createdAt: null, rbacInitialized: false };
+          localUsers.push(u);
+        }
+        u.status = status;
+        return u;
       },
       syncFromClaims: async () => { throw new Error('not used'); },
     },
@@ -492,6 +504,8 @@ describe('users routes — fallback when directory unconfigured', () => {
     const app = adminApp(ctx);
     const res = await app.inject({ method: 'POST', url: '/api/users/x/status', payload: { enabled: true } });
     expect(res.statusCode).toBe(503);
+    const disabled = await app.inject({ method: 'POST', url: '/api/users/x/status', payload: { enabled: false } });
+    expect(disabled.statusCode).toBe(503);
   });
 });
 
