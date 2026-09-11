@@ -103,6 +103,7 @@ export interface SyncSiteCursorsTable {
 }
 
 export interface OutboxEventsTable {
+  claim_token: string | null;
   id: string;
   type: string;
   payload: JSONColumnType<Record<string, unknown>>;

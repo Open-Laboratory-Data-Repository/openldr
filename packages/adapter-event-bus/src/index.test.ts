@@ -6,6 +6,9 @@ function fakePool(impl: () => Promise<unknown>) {
 }
 
 describe('createEventBus', () => {
+  it.each([0, -1, NaN, Infinity, -Infinity, 3 * 2_147_483_647 + 1])('rejects unsafe lease duration %s', (leaseMs) => {
+    expect(() => createEventBus({ url: 'postgres://x/y', leaseMs })).toThrow(/leaseMs/);
+  });
   it('reports up when pg_notify succeeds', async () => {
     const pool = fakePool(async () => ({ rows: [] }));
     const bus = createEventBus({ url: 'postgres://x/y' }, { pool: pool as never });

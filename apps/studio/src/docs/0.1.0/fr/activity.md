@@ -28,3 +28,7 @@ Si les détails restent en chargement, fermez-les, actualisez et rouvrez la lign
 
 - [Workflows](/docs/workflows)
 - [Audit](/docs/audit)
+
+## Propriété des événements en file
+
+Le worker renouvelle les baux des événements en cours et de ceux qui attendent dans son lot. Un worker de remplacement reçoit un nouveau jeton. Un ancien worker ne peut plus modifier cet événement pour le terminer, le déclarer en échec ou le relancer. Après un arrêt brutal, un bail expiré compte toujours comme une tentative échouée et permet une reprise. Les traitements doivent accepter les livraisons répétées. Une panne de base ou un processus suspendu peut permettre une autre exécution. Arrêtez les anciens workers avant la mise à niveau. Les workers sans contrôle du jeton ne garantissent pas cette protection.

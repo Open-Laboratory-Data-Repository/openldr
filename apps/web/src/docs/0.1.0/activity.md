@@ -23,3 +23,15 @@ A página Atividade do Studio agrupa o histórico de workflows pelo identificado
 A página carrega os 200 grupos mais recentes. Pesquisa e paginação abrangem apenas essas linhas. Um resultado vazio não prova que não chegaram dados. Limpe os filtros, atualize e consulte os workflows. Dados sem histórico de workflow associado podem não aparecer.
 
 O estado completo exige um evento de persistência sem execuções associadas falhadas. Não garante o envio para todos os destinos. Uma falha indica uma execução falhada. O estado bloqueado significa que os eventos não estabelecem nenhum desses estados. Consulte as execuções antes de diagnosticar uma paragem. A Atividade não permite repetir o processamento; o guia do Studio explica as etapas e os limites de carregamento.
+
+## Queue ownership
+
+The worker renews leases for running events and events waiting in its claimed batch. A replacement worker gets a new claim token. An older worker cannot overwrite that claim with completion, failure, or retry updates. After a crash, an expired claim still counts as a failed attempt and can be retried. Handlers must tolerate repeated delivery: a database outage or paused process can still allow another worker to run the event. Stop old workers before upgrading; workers without claim-token checks cannot provide this protection.
+
+## Propriété des événements en file
+
+Le worker renouvelle les baux des événements en cours et de ceux qui attendent dans son lot. Un worker de remplacement reçoit un nouveau jeton. Un ancien worker ne peut plus modifier cet événement pour le terminer, le déclarer en échec ou le relancer. Après un arrêt brutal, un bail expiré compte toujours comme une tentative échouée et permet une reprise. Les traitements doivent accepter les livraisons répétées. Une panne de base ou un processus suspendu peut permettre une autre exécution. Arrêtez les anciens workers avant la mise à niveau. Les workers sans contrôle du jeton ne garantissent pas cette protection.
+
+## Propriedade dos eventos na fila
+
+O worker renova os prazos dos eventos em execução e dos que aguardam no seu lote. Um worker substituto recebe um novo token. Um worker anterior não pode alterar essa atribuição para concluir, falhar ou repetir o evento. Após uma interrupção, um prazo expirado continua a contar como tentativa falhada e permite nova tentativa. Os processos devem aceitar entregas repetidas. Uma falha da base de dados ou um processo suspenso pode permitir outra execução. Pare os workers antigos antes da atualização. Workers sem verificação do token não garantem esta proteção.

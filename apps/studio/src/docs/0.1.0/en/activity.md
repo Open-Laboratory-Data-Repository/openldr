@@ -35,3 +35,7 @@ If lifecycle details remain on Loading, close them, refresh the list, and reopen
 
 - [Workflows](/docs/workflows)
 - [Audit](/docs/audit)
+
+## Queue ownership
+
+The worker renews leases for running events and events waiting in its claimed batch. A replacement worker gets a new claim token. An older worker cannot overwrite that claim with completion, failure, or retry updates. After a crash, an expired claim still counts as a failed attempt and can be retried. Handlers must tolerate repeated delivery: a database outage or paused process can still allow another worker to run the event. Stop old workers before upgrading; workers without claim-token checks cannot provide this protection.
