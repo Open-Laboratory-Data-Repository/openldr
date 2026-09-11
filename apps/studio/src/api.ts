@@ -394,8 +394,8 @@ export async function listModels(): Promise<QueryModel[]> {
 export async function fetchJoinableTables(): Promise<ClientJoinableTable[]> {
   return authFetch('/api/dashboards/joinable-tables').then((r) => okJson<ClientJoinableTable[]>(r, 'load joinable tables'));
 }
-export async function runWidgetQuery(q: WidgetQuery): Promise<ReportResult> {
-  return authFetch('/api/dashboards/query', json(q)).then((r) => okJson<ReportResult>(r, 'run query'));
+export async function runWidgetQuery(q: WidgetQuery, signal?: AbortSignal): Promise<ReportResult> {
+  return authFetch('/api/dashboards/query', { ...json(q), signal }).then((r) => okJson<ReportResult>(r, 'run query'));
 }
 /** Builder→SQL eject: compile a builder-mode query to its SQL text (display-only; never executed as returned). */
 export async function compileBuilderToSql(q: Extract<WidgetQuery, { mode: 'builder' }>): Promise<string> {

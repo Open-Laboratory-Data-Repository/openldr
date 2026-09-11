@@ -33,6 +33,14 @@ You can open a dashboard, read existing widgets, enter edit mode, add a widget, 
 
 The dashboard reloads with the saved widget in place. Other users who can view the dashboard see the updated layout and widget output.
 
+## Automatic refresh
+
+Each widget loads immediately. With automatic refresh enabled, the interval starts after its request finishes. A slow request delays the next refresh instead of starting another request for that widget. An interval of zero disables automatic refresh.
+
+Changing the query or dashboard filters cancels the obsolete browser request. Leaving the dashboard also cancels its pending requests. Late results and errors cannot replace newer results. A successful refresh clears the previous error.
+
+Cancelling a browser request does not guarantee that the database query stops.
+
 ## Troubleshooting
 
 - **No dashboard appears:** you may not have access to a shared dashboard yet, or no dashboard has been created.
