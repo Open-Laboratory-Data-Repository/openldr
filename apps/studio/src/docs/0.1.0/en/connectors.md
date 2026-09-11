@@ -162,3 +162,12 @@ Rotate credentials by editing the connector, replacing secret values, saving, an
 - [Scheduled reports with workflows](/docs/report-pipeline)
 - [Settings](/docs/settings)
 - [Marketplace](/docs/marketplace)
+
+## Server shutdown
+
+On SIGTERM or SIGINT, the API stops accepting requests and stops queue polling.
+It waits for active requests, the claimed queue batch, and the active projection cycle before closing their databases.
+Repeated signals do not start another shutdown.
+A handler that never returns can keep shutdown waiting indefinitely.
+Allow enough time for active imports before the service manager forces termination.
+Worker stop still permits later manual drains. Closing the context ends that access.

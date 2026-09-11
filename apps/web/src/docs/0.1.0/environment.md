@@ -168,3 +168,28 @@ deployed stack the [installer](/docs/install) provisions this from its `--mysql-
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `MARKETPLACE_REGISTRY_URL` | bundled registry | Remote registry seeded on first boot when no registries exist. |
+
+## Server shutdown
+
+On SIGTERM or SIGINT, the API stops accepting requests and stops queue polling.
+It waits for active requests, the claimed queue batch, and the active projection cycle before closing their databases.
+Repeated signals do not start another shutdown.
+A handler that never returns can keep shutdown waiting indefinitely.
+Allow enough time for active imports before the service manager forces termination.
+Worker stop still permits later manual drains. Closing the context ends that access.
+## Arrêt du serveur
+
+Avec SIGTERM ou SIGINT, l'API cesse d'accepter les requêtes et arrête la lecture de la file.
+Elle attend les requêtes actives, le lot déjà réservé et le cycle de projection actif avant de fermer leurs bases de données.
+Les signaux répétés ne déclenchent pas un nouvel arrêt.
+Un traitement qui ne se termine jamais peut bloquer l'arrêt indéfiniment.
+Prévoyez assez de temps pour les imports actifs avant que le gestionnaire de services force l'arrêt.
+Après l'arrêt du worker, les traitements manuels restent possibles. La fermeture du contexte termine cet accès.
+## Encerramento do servidor
+
+Com SIGTERM ou SIGINT, a API deixa de aceitar pedidos e para de consultar a fila.
+Aguarda os pedidos ativos, o lote já reservado e o ciclo de projeção ativo antes de fechar as respetivas bases de dados.
+Sinais repetidos não iniciam outro encerramento.
+Um processamento que nunca termina pode bloquear o encerramento indefinidamente.
+Reserve tempo suficiente para as importações ativas antes de o gestor de serviços forçar o encerramento.
+Após parar o worker, o processamento manual continua disponível. Fechar o contexto termina esse acesso.

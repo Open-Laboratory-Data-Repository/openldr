@@ -33,3 +33,12 @@ A gravação confirma que a configuração foi guardada. Use Testar para verific
 - [Relatórios agendados](/docs/report-pipeline)
 - [Definições](/docs/settings)
 - [Marketplace](/docs/marketplace)
+
+## Encerramento do servidor
+
+Com SIGTERM ou SIGINT, a API deixa de aceitar pedidos e para de consultar a fila.
+Aguarda os pedidos ativos, o lote já reservado e o ciclo de projeção ativo antes de fechar as respetivas bases de dados.
+Sinais repetidos não iniciam outro encerramento.
+Um processamento que nunca termina pode bloquear o encerramento indefinidamente.
+Reserve tempo suficiente para as importações ativas antes de o gestor de serviços forçar o encerramento.
+Após parar o worker, o processamento manual continua disponível. Fechar o contexto termina esse acesso.

@@ -44,6 +44,10 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
   const pool = deps.pool ?? new pg.Pool({ connectionString: cfg.url });
   const handlers = new Map<string, EventHandler>();
   const leaseMs = cfg.leaseMs ?? DEFAULT_LEASE_MS;
+  let activeDrain: Promise<DrainResult> | undefined;
+  let closing = false;
+  let closePromise: Promise<void> | undefined;
+  const workers = new Set<{ stop(): Promise<void> }>();
 
   async function publish(event: EventEnvelope, opts: PublishOptions = {}): Promise<void> {
     const id = randomUUID();
@@ -127,7 +131,16 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
     }
   }
 
-  async function drain(opts: { limit?: number } = {}): Promise<DrainResult> {
+  function drain(opts: { limit?: number } = {}): Promise<DrainResult> {
+    if (closing) return Promise.reject(new Error('event bus is closing'));
+    if (activeDrain) return activeDrain;
+    activeDrain = drainBatch(opts).finally(() => {
+      activeDrain = undefined;
+    });
+    return activeDrain;
+  }
+
+  async function drainBatch(opts: { limit?: number } = {}): Promise<DrainResult> {
     const rows = await claim(opts.limit ?? 20);
     let processed = 0;
     let failed = 0;
@@ -168,11 +181,13 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
   }
 
   function startWorker(opts: { intervalMs?: number } = {}): { stop(): Promise<void> } {
+    if (closing) throw new Error('event bus is closing');
     const intervalMs = opts.intervalMs ?? 2000;
     let stopped = false;
+    let stopPromise: Promise<void> | undefined;
     let listenClient: pg.PoolClient | undefined;
     const tick = () => {
-      if (stopped) return;
+      if (stopped || closing) return;
       void drain().catch(() => undefined);
     };
     // Acquire the LISTEN client asynchronously. `.catch` prevents an unhandled
@@ -186,24 +201,35 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
       }
       listenClient = client;
       await listenClient.query('listen openldr_events');
-      listenClient.on('notification', () => tick());
+      if (!stopped) listenClient.on('notification', tick);
     })().catch(() => undefined);
     const timer = setInterval(tick, intervalMs);
-    return {
-      async stop() {
+    const worker = {
+      stop(): Promise<void> {
+        if (stopPromise) return stopPromise;
         stopped = true;
         clearInterval(timer);
-        await ready;
-        if (listenClient) {
-          try {
-            await listenClient.query('unlisten openldr_events');
-          } finally {
-            listenClient.release();
+        const draining = activeDrain;
+        stopPromise = (async () => {
+          await ready;
+          if (listenClient) {
+            listenClient.removeListener('notification', tick);
+            try {
+              await listenClient.query('unlisten openldr_events');
+              listenClient.release();
+            } catch {
+              listenClient.release(true);
+            }
             listenClient = undefined;
           }
-        }
+          await draining?.catch(() => undefined);
+          workers.delete(worker);
+        })();
+        return stopPromise;
       },
     };
+    workers.add(worker);
+    return worker;
   }
 
   async function stats(): Promise<Record<string, number>> {
@@ -225,8 +251,15 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
         return 'pg_notify reachable';
       });
     },
-    async close() {
-      await pool.end();
+    close() {
+      if (closePromise) return closePromise;
+      closing = true;
+      closePromise = (async () => {
+        await Promise.all([...workers].map((worker) => worker.stop()));
+        await activeDrain?.catch(() => undefined);
+        await pool.end();
+      })();
+      return closePromise;
     },
   };
 }

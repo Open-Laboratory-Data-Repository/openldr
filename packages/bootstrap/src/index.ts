@@ -1595,6 +1595,7 @@ const reporting: ReportingApi = {
     }),
   });
 
+  let closePromise: Promise<void> | undefined;
   return {
     logger,
     auth,
@@ -1644,18 +1645,22 @@ const reporting: ReportingApi = {
     syncRuntime,
     terminologyJobs,
     cfg,
-    async close() {
-      await workflowListeners.stopAll();
-      // The runtime stops both workers and ends the push LISTEN client it owns.
-      await syncRuntime.stop();
-      await projectionWorker.stop();
-      await terminologyIngestWorker.stop();
-      await facilityJobWorker.stop();
-      // `null` in any process that did not opt in to draining the import queue — see
-      // `AppContextOptions.runFacilityImportWorker`.
-      await facilityImportWorker?.stop();
-      if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
-      await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
+    close() {
+      closePromise ??= (async () => {
+        await workflowListeners.stopAll();
+        // The runtime stops both workers and ends the push LISTEN client it owns.
+        await syncRuntime.stop();
+        await projectionWorker.stop();
+        await terminologyIngestWorker.stop();
+        await facilityJobWorker.stop();
+        // Only processes that opted in own an import worker. See
+        // `AppContextOptions.runFacilityImportWorker`.
+        await facilityImportWorker?.stop();
+        if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
+        await eventing.close();
+        await Promise.allSettled([store.close(), internal.close()]);
+      })();
+      return closePromise;
     },
   };
 }

@@ -33,3 +33,12 @@ Un enregistrement réussi confirme la sauvegarde de la configuration. Utilisez T
 - [Rapports planifiés](/docs/report-pipeline)
 - [Paramètres](/docs/settings)
 - [Marketplace](/docs/marketplace)
+
+## Arrêt du serveur
+
+Avec SIGTERM ou SIGINT, l'API cesse d'accepter les requêtes et arrête la lecture de la file.
+Elle attend les requêtes actives, le lot déjà réservé et le cycle de projection actif avant de fermer leurs bases de données.
+Les signaux répétés ne déclenchent pas un nouvel arrêt.
+Un traitement qui ne se termine jamais peut bloquer l'arrêt indéfiniment.
+Prévoyez assez de temps pour les imports actifs avant que le gestionnaire de services force l'arrêt.
+Après l'arrêt du worker, les traitements manuels restent possibles. La fermeture du contexte termine cet accès.
