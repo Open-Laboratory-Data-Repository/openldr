@@ -25,7 +25,7 @@ You can browse connectors, schemas, and tables in the Explorer, write and run a 
 5. Select the parameters icon to declare parameters: a **Variable ID**, **Label**, **Type** (Text, Select, or Date range), and whether it's **Required**. A Select parameter also takes an **Options SQL** whose first column populates the dropdown.
 6. Reference a declared parameter in your SQL as `{{ param.<id> }}` — a Date range parameter provides `{{ param.from }}` and `{{ param.to }}`.
 7. Select **Run**. If the query has parameters, a sheet asks you to fill in run values first; otherwise it runs immediately. Results appear in the grid below, with paging.
-8. Select **Save** to persist the query as a Custom Query. It appears under **Custom Queries** in the Explorer and can be reopened and re-run later; selecting Save again updates the same saved query.
+8. Select **Save** to persist the query as a Custom Query under its tab title, such as `Query #1`. Save does not ask for a name. It appears under **Custom Queries** in the Explorer and can be reopened and re-run later; selecting Save again updates the same saved query.
 
 ## Expected result
 
@@ -38,7 +38,7 @@ The query runs against the chosen connector and returns rows in the results grid
 - **"required parameter" error at run time:** fill in a value for every parameter marked Required.
 - **The query is rejected:** only `SELECT` statements are allowed — statements that modify data or schema are not permitted.
 - **No connectors listed in the Explorer:** create or enable a Postgres connector — see [Connectors](/docs/connectors).
-- **You need to rename a saved query:** renaming and duplicating saved queries aren't available yet — save a new query with the name you want, then delete the old one from the Explorer (hover it and select the trash icon).
+- **You need a different query name:** new tabs receive a generated name such as `Query #1`. The workbench has no name field, rename action, or duplicate action. Creating another query does not let you choose its name. Keep saved queries that reports reference; deleting one is not a naming workaround.
 
 ## Advanced web usage
 

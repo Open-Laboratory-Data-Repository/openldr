@@ -43,6 +43,7 @@ export const DEFAULT_DOC_VERSION: string =
 /** Page titles (stable across versions). */
 export const TITLES: Record<string, string> = {
   'getting-started': 'Getting started',
+  'query-naming': 'Query names',
   'marketplace-permissions': 'Marketplace permission checks',
   'load-data': 'Load & push data',
   facilities: 'Facilities',
@@ -57,6 +58,7 @@ export const TITLES: Record<string, string> = {
 /** Sidebar structure; `children` render indented under their parent. */
 export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'getting-started' },
+  { slug: 'query-naming' },
   { slug: 'load-data' },
   { slug: 'facilities' },
   { slug: 'requirements' },
