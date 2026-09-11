@@ -2,6 +2,8 @@
 
 Settings is an administrator-only routing area for supported configuration pages documented in this in-app manual.
 
+Use [Laboratory](/docs/laboratory) to set report letterhead details, choose the default facility register, and configure the laboratory time zone.
+
 Use [Roles](/docs/roles) to build capability-based roles and see the built-in system roles.
 
 Use [Distributed Sync](/docs/sync) to link a lab to a central server — configure the connection and direction on its **Settings** tab, and watch live status and the recent-activity log on its **Activity** tab.
