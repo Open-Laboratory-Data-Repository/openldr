@@ -33,3 +33,11 @@ Un enregistrement réussi confirme la sauvegarde de la configuration. Utilisez T
 - [Rapports planifiés](/docs/report-pipeline)
 - [Paramètres](/docs/settings)
 - [Marketplace](/docs/marketplace)
+
+## Délai des requêtes de base de données
+
+Les requêtes des connecteurs PostgreSQL et MySQL ont une limite d'exécution de 30 secondes. Une requête lente échoue au lieu de bloquer indéfiniment le workflow ou le rapport. PostgreSQL annule la requête sur le serveur. MySQL utilise une seconde connexion avec les mêmes identifiants pour terminer la connexion de la requête. Cette annulation peut prendre une seconde supplémentaire. La connexion initiale a une limite distincte de 30 secondes.
+
+Si une requête dépasse cette limite, réduisez la période ou affinez les filtres, puis vérifiez son plan d'exécution. Réessayez après correction. Le formulaire du connecteur ne propose aucun champ de délai.
+
+Si l'erreur indique `server cancellation failed`, OpenLDR a fermé sa connexion locale sans pouvoir confirmer l'annulation sur le serveur. Demandez à l'administrateur de vérifier les requêtes actives. Le compte MySQL doit pouvoir ouvrir une autre connexion et terminer ses propres sessions.

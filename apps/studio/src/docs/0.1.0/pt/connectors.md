@@ -33,3 +33,11 @@ A gravação confirma que a configuração foi guardada. Use Testar para verific
 - [Relatórios agendados](/docs/report-pipeline)
 - [Definições](/docs/settings)
 - [Marketplace](/docs/marketplace)
+
+## Limite de tempo das consultas
+
+As consultas dos conectores PostgreSQL e MySQL têm um limite de execução de 30 segundos. Uma consulta lenta falha em vez de bloquear o workflow ou o relatório indefinidamente. O PostgreSQL cancela a consulta no servidor. O MySQL usa uma segunda ligação com as mesmas credenciais para terminar a ligação da consulta. O cancelamento pode demorar mais um segundo. A ligação inicial tem um limite separado de 30 segundos.
+
+Se uma consulta ultrapassar este limite, reduza o intervalo de datas ou ajuste os filtros e verifique o plano de execução. Tente novamente depois de corrigir a consulta. O formulário do conector não tem um campo para alterar este limite.
+
+Se o erro indicar `server cancellation failed`, o OpenLDR fechou a ligação local sem confirmar o cancelamento no servidor. Peça ao administrador para verificar as consultas ativas. A conta MySQL deve poder abrir outra ligação e terminar as suas próprias sessões.

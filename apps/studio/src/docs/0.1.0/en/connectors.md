@@ -162,3 +162,11 @@ Rotate credentials by editing the connector, replacing secret values, saving, an
 - [Scheduled reports with workflows](/docs/report-pipeline)
 - [Settings](/docs/settings)
 - [Marketplace](/docs/marketplace)
+
+## Database query deadlines
+
+PostgreSQL and MySQL connector queries have a 30-second execution limit. A slow query fails instead of keeping the workflow or report waiting indefinitely. PostgreSQL cancels the statement on the server. MySQL uses a second connection with the same credentials to terminate the query connection. Cancellation may take one additional second. Connection setup has a separate 30-second limit.
+
+If a query exceeds this limit, narrow its date range or filters and check its database execution plan. Retry after correcting the query. There is no timeout field in the connector form.
+
+If the error says `server cancellation failed`, OpenLDR closed its local connection but could not confirm server cancellation. Ask the database operator to check active queries. The MySQL account must be able to open another connection and terminate its own sessions.

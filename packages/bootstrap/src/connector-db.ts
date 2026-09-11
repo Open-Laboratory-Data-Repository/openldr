@@ -1,8 +1,8 @@
-import { sql, MysqlDialect, Kysely, type MysqlPool } from 'kysely';
+import { sql, Kysely } from 'kysely';
 import type { TargetSchema } from '@openldr/ports';
-import { createDbStore } from '@openldr/adapter-db-store';
+import pg from 'pg';
 import { createMssqlStore } from '@openldr/adapter-mssql-store';
-import { createPool } from 'mysql2';
+import { createPool, createConnection, type ConnectionOptions } from 'mysql2';
 
 /** A connector-backed DB connection: run one raw query, then close. */
 export interface ConnectorDb {
@@ -40,9 +40,31 @@ function wrap(store: { db: Kysely<TargetSchema>; close(): Promise<void> }): Conn
 
 /** Build an ephemeral DB connection for a host connector by type + decrypted config.
  *  Caller MUST call close() (use try/finally). */
-export function createConnectorDb(type: string, config: Record<string, string>): ConnectorDb {
+export function createConnectorDb(
+  type: string,
+  config: Record<string, string>,
+  { queryTimeoutMs = 30_000 }: { queryTimeoutMs?: number } = {},
+): ConnectorDb {
+  if (!Number.isSafeInteger(queryTimeoutMs) || queryTimeoutMs < 1 || queryTimeoutMs > 30_000) {
+    throw new Error('connector query timeout must be an integer between 1 and 30000 ms');
+  }
   if (type === 'postgres') {
-    return wrap(createDbStore({ url: buildPgUrl(config) }));
+    const pool = new pg.Pool({
+      connectionString: buildPgUrl(config),
+      connectionTimeoutMillis: queryTimeoutMs,
+      statement_timeout: queryTimeoutMs,
+      // Allow the server cancellation to arrive first. The client bound also covers a stalled socket.
+      query_timeout: queryTimeoutMs + 1000,
+    });
+    let closed = false;
+    return {
+      async query(rawSql) {
+        // Pool.query discards the client on error, including a client-side timeout.
+        const result = await pool.query(rawSql);
+        return { rows: result.rows };
+      },
+      async close() { if (!closed) { closed = true; await pool.end(); } },
+    };
   }
   if (type === 'microsoft-sql') {
     return wrap(createMssqlStore({
@@ -61,10 +83,12 @@ export function createConnectorDb(type: string, config: Record<string, string>):
     if (!/^[A-Za-z0-9.\-]+$/.test(host) && !/^\[?[0-9A-Fa-f:]+\]?$/.test(host)) {
       throw new Error(`invalid connector host: ${host}`);
     }
-    const pool = createPool({
+    const connectionOptions: ConnectionOptions = {
+      connectTimeout: queryTimeoutMs,
       host, port, user: config.user ?? '', password: config.password ?? '', database: config.database ?? '',
       ...(config.ssl === 'true' ? { ssl: { rejectUnauthorized: config.sslRejectUnauthorized === 'true' } } : {}),
-    });
+    };
+    const pool = createPool({ ...connectionOptions, waitForConnections: false });
     // ⛔ Adopt the DATABASE's own collation on every connection, or nothing that compares a column
     // to a literal can run. mysql2 defaults the connection to utf8mb4_unicode_ci while a MySQL 8
     // table defaults to utf8mb4_0900_ai_ci, so `left(authored_at, 7) = 'yyyy-mm'` mixes an IMPLICIT
@@ -90,9 +114,62 @@ export function createConnectorDb(type: string, config: Record<string, string>):
         if (err) console.warn('[connector-db] could not adopt the database collation:', err);
       });
     });
-    // mysql2 callback Pool is runtime-correct for kysely (getConnection(callback)); cast bridges the structural type gap.
-    const db = new Kysely<TargetSchema>({ dialect: new MysqlDialect({ pool: pool as unknown as MysqlPool }) });
-    return wrap({ db, close: () => db.destroy() });
+    let closed = false;
+    return {
+      query(rawSql) {
+        return new Promise((resolve, reject) => {
+          pool.getConnection((acquireError, connection) => {
+            if (acquireError) { reject(acquireError); return; }
+            let cancelling = false;
+            const timer = setTimeout(async () => {
+              cancelling = true;
+              // Keep the original session open until KILL is sent, preventing thread-id reuse.
+              let cancellationError: unknown;
+              try {
+                cancellationError = await killMysqlConnection(connectionOptions, connection.threadId);
+              } catch (error) {
+                cancellationError = error;
+              } finally {
+                connection.destroy();
+                reject(new Error(cancellationError
+                  ? 'connector query deadline exceeded; server cancellation failed'
+                  : 'connector query deadline exceeded', cancellationError ? { cause: cancellationError } : undefined));
+              }
+            }, queryTimeoutMs);
+            connection.query(rawSql, (error, rows) => {
+              if (cancelling) return;
+              clearTimeout(timer);
+              connection.release();
+              if (error) reject(error);
+              else resolve({ rows: rows as Record<string, unknown>[] });
+            });
+          });
+        });
+      },
+      async close() {
+        if (closed) return;
+        closed = true;
+        await new Promise<void>((resolve, reject) => pool.end((error) => error ? reject(error) : resolve()));
+      },
+    };
   }
   throw new Error(`unsupported connector type: ${type}`);
+}
+
+/** Kill only this connector's own session. A separate connection cannot queue behind the slow SQL. */
+function killMysqlConnection(options: ConnectionOptions, threadId: number): Promise<Error | null> {
+  return new Promise((resolve) => {
+    const control = createConnection({ ...options, connectTimeout: 1000 });
+    let settled = false;
+    const finish = (error: Error | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      control.destroy();
+      resolve(error);
+    };
+    const timer = setTimeout(() => finish(new Error('server cancellation timed out')), 1000);
+    control.on('error', finish);
+    control.query(`KILL CONNECTION ${threadId}`, (error) => finish(error));
+  });
 }
