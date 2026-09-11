@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "cc168ff0",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Confirm registry saves by name"
+        },
+        {
           "hash": "19fe48d4",
           "type": "fix",
           "scope": "reports",
