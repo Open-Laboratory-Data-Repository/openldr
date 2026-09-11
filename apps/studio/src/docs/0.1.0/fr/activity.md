@@ -24,6 +24,10 @@ Une liste vide ne prouve pas l'absence de données reçues. Effacez recherche et
 
 Si les détails restent en chargement, fermez-les, actualisez et rouvrez la ligne. La page peut afficher le chargement après un échec de requête. Activité ne propose pas de relance du traitement ; suivez la procédure de récupération du workflow.
 
+## Attente des événements en file
+
+Chaque instance du bus d'événements exécute un seul gestionnaire à la fois. Un gestionnaire lent peut retarder les événements suivants. Les notifications répétées ne lancent pas d'autres gestionnaires pendant le lot en cours. Les événements en attente restent en file pour un lot ultérieur. Des processus serveur distincts peuvent toujours traiter des événements simultanément.
+
 ## Guides associés
 
 - [Workflows](/docs/workflows)

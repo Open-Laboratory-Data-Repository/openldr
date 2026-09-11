@@ -26,6 +26,7 @@ export interface DrainResult {
 }
 
 export interface EventBus extends EventingPort {
+  /** Overlapping calls share the active batch and its result. Its first caller sets the limit. */
   drain(opts?: { limit?: number }): Promise<DrainResult>;
   startWorker(opts?: { intervalMs?: number }): { stop(): Promise<void> };
   stats(): Promise<Record<string, number>>;
@@ -44,6 +45,7 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
   const pool = deps.pool ?? new pg.Pool({ connectionString: cfg.url });
   const handlers = new Map<string, EventHandler>();
   const leaseMs = cfg.leaseMs ?? DEFAULT_LEASE_MS;
+  let activeDrain: Promise<DrainResult> | undefined;
 
   async function publish(event: EventEnvelope, opts: PublishOptions = {}): Promise<void> {
     const id = randomUUID();
@@ -127,7 +129,15 @@ export function createEventBus(cfg: EventBusConfig, deps: EventBusDeps = {}): Ev
     }
   }
 
-  async function drain(opts: { limit?: number } = {}): Promise<DrainResult> {
+  function drain(opts: { limit?: number } = {}): Promise<DrainResult> {
+    if (activeDrain) return activeDrain;
+    activeDrain = drainBatch(opts).finally(() => {
+      activeDrain = undefined;
+    });
+    return activeDrain;
+  }
+
+  async function drainBatch(opts: { limit?: number } = {}): Promise<DrainResult> {
     const rows = await claim(opts.limit ?? 20);
     let processed = 0;
     let failed = 0;

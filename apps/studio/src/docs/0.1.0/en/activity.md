@@ -31,6 +31,10 @@ An empty list is not proof that no data was received. Clear search and filters, 
 
 If lifecycle details remain on Loading, close them, refresh the list, and reopen the row. The page may not distinguish a failed detail request from a pending one. This page has no retry-processing action; use the workflow's documented recovery procedure.
 
+## Waiting for queued events
+
+Each event bus instance processes one event handler at a time. A slow handler can delay later events. Repeated queue notifications do not start additional handlers while its current batch runs. Pending events remain queued for a later batch. Separate server processes can still handle events concurrently.
+
 ## Related guides
 
 - [Workflows](/docs/workflows)
