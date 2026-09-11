@@ -16,12 +16,13 @@
 // tests" — keep that list honest when editing here.
 
 import { execFileSync, spawn } from 'node:child_process';
-import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { resolveGitBash } from '../packages/release/src/git-bash';
+import { cleanupPlan, teardownCommand, type CleanupPlan } from '../packages/release/src/cleanup';
 import { buildReleaseManifest, parseReleaseManifest } from '../packages/release/src/manifest';
 import { evaluatePreconditions, type ReleaseFacts } from '../packages/release/src/preconditions';
 import {
@@ -225,22 +226,42 @@ async function verifyPublishedManifest(version: string): Promise<void> {
   process.exit(1);
 }
 
-/** Make the verification stack poll again, now that the release exists.
+/** Carry out a cleanup plan for the step-9 scratch directory. `cleanupPlan` decides; this acts.
  *
- *  It polled at step 9, BEFORE step 10 published, so its cached answer predates the version it is
- *  running. That ordering is structural, so this happens on every release.
+ *  ⛔ Best-effort, and it must stay that way. On the success path the tag and the GitHub release
+ *  are already public and irreversible. A teardown that exited non-zero would report a published
+ *  release as failed, which is the opposite of the truth. So every step warns and carries on.
  *
- *  ⚠ This may change nothing, and must not be described as if it fixes anything. Installs poll the
- *  `latest` alias, which lagged over ten minutes after v0.1.3, so the stack can come back with the
- *  same stale answer. It then reads "no update found", which is honest. Never fail a release over
- *  a cosmetic repoll. */
-function repollVerificationStack(probeDir: string): void {
-  try {
-    execFileSync('docker', ['compose', 'restart', 'api'], { cwd: probeDir, stdio: 'inherit' });
-    console.log('verification stack repolled');
-  } catch (err) {
-    console.warn(`could not repoll the verification stack, harmless: ${err instanceof Error ? err.message : String(err)}`);
+ *  This replaced `repollVerificationStack`, which restarted the verification API so its update
+ *  check would re-read the new release. Its own comment called it cosmetic, useful only to someone
+ *  inspecting the stack afterwards. With the stack torn down straight after, it was a restart that
+ *  was immediately undone. */
+function cleanUp(probeDir: string, plan: CleanupPlan): void {
+  if (plan.teardownStack) {
+    try {
+      execFileSync('docker', ['compose', 'down', '-v'], { cwd: probeDir, stdio: 'inherit' });
+      console.log('verification stack removed');
+    } catch (err) {
+      console.warn(`could not remove the verification stack, harmless to the release: ${err instanceof Error ? err.message : String(err)}`);
+      console.warn(`  remove it by hand with: ${teardownCommand(probeDir)}`);
+      // Keep the directory: it holds the compose file the operator needs to run that command.
+      return;
+    }
   }
+  if (plan.removeDir) {
+    try {
+      rmSync(probeDir, { recursive: true, force: true });
+      console.log(`removed ${probeDir}`);
+    } catch (err) {
+      console.warn(`could not remove ${probeDir}, harmless to the release: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+}
+
+/** Tell the operator how to clean up a verification stack kept after a failure. */
+function reportKeptStack(probeDir: string): void {
+  console.error(`the verification stack is still running in ${probeDir} — its logs are the evidence.`);
+  console.error(`when you are done with it: ${teardownCommand(probeDir)}`);
 }
 
 async function main(): Promise<void> {
@@ -328,10 +349,16 @@ async function main(): Promise<void> {
   // this step read the exit code of a script that cannot fail, and an API that crash-loops on a
   // bad migration would have been tagged and published behind a wall of warnings.
   //
-  // The stack it starts is left RUNNING on ports 80/443 (see RELEASE.md); nothing here tears it
-  // down, because its logs are the evidence when the verification fails.
+  // The stack it starts runs on ports 80/443. A failed release KEEPS it, because its logs are the
+  // evidence when verification fails (see RELEASE.md). A finished release or a dry run removes it
+  // at the end: `cleanupPlan` decides which, `cleanUp` acts.
   const probe = mkdtempSync(join(tmpdir(), 'openldr-release-'));
-  run(BASH, ['install/install.sh', '--dir', toBashPath(probe), '--version', version, '--require-ready']);
+  try {
+    run(BASH, ['install/install.sh', '--dir', toBashPath(probe), '--version', version, '--require-ready']);
+  } catch (err) {
+    reportKeptStack(probe);
+    throw err;
+  }
   console.log(`verification install completed in ${probe}`);
 
   // 10. Only now is the release real: tag, push, publish.
@@ -417,15 +444,16 @@ async function main(): Promise<void> {
     console.error(`the five images at :${version} were already pushed, so a re-run refuses on the registry check.`);
     console.error('bump the version, or — only if this tag was never announced — re-push by hand with');
     console.error('  bash scripts/build-and-push.sh --allow-overwrite');
+    reportKeptStack(probe);
     process.exit(1);
   }
 
-  // Both are skipped under --dry-run: nothing was published, so there is no asset to read and no
-  // stack to repoll.
-  if (!DRY_RUN) {
-    await verifyPublishedManifest(version);
-    repollVerificationStack(probe);
-  }
+  // Skipped under --dry-run: nothing was published, so there is no asset to read.
+  if (!DRY_RUN) await verifyPublishedManifest(version);
+
+  // Last, after the upload: `latest.json` lives in `probe` and `gh release create` reads it from
+  // there. A dry run started no stack, so this only removes the empty directory it left.
+  cleanUp(probe, cleanupPlan({ dryRun: DRY_RUN, outcome: 'released' }));
 
   console.log(`\nreleased ${version}`);
 }

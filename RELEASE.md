@@ -60,10 +60,26 @@ by tests".
 
 ### The verification install leaves a stack running
 
-Step 9 installs the published tag into a fresh temporary directory and starts it, on **ports 80
-and 443**. Nothing tears it down — its logs are the evidence when a release fails verification.
-Free the ports before releasing, and stop the stack afterwards with
-`docker compose down` in the directory the script prints.
+Step 9 installs the published tag into a fresh `openldr-release-*` temporary directory and starts
+it, on **ports 80 and 443**. What happens to it depends on how the run ends:
+
+| Run ended | Stack | Directory |
+|---|---|---|
+| Released | removed with `docker compose down -v` | deleted |
+| Dry run | never started | deleted (it was empty) |
+| Failed | **kept running** | kept |
+
+A failed run keeps everything on purpose: the stack's logs are the evidence when a release fails
+verification, and a live stack lets you inspect it. The script prints the exact command to remove
+it once you are done, `cd "<dir>" && docker compose down -v`.
+
+Before this, nothing tore the stack down. Each release left a full second OpenLDR stack running
+and holding 80 and 443, so the next release's verification install collided with it, and every
+dry run left an empty directory behind.
+
+Cleanup is best-effort. By the time it runs on the success path the tag and release are public
+and irreversible, so a teardown that fails only warns, prints the command, and never reports the
+release as failed. Free ports 80 and 443 before releasing either way.
 
 It is run with `--require-ready`, which makes install.sh's readiness timeout **fatal**. Without
 that flag install.sh warns and exits 0 on a timeout — deliberate, because a real lab install must
@@ -139,9 +155,14 @@ tests exercise `parseFailedTasks` against captured output, not a live failing su
 
 The post-publish manifest check is the same: it fetches the direct release asset URL, retries
 three times, and exits non-zero without rolling back the tag if the file is still unreadable or
-names the wrong version. No test exercises that path. The best-effort repoll of the verification
-stack that runs after it is real-release-only too, and by design never fails the release either
-way.
+names the wrong version. No test exercises that path.
+
+The cleanup that follows is split the same way. `cleanupPlan`, which decides what to remove for
+each outcome, is unit-tested in `packages/release/src/cleanup.test.ts`. The code that acts on it,
+`docker compose down -v` and deleting the directory, is real-release-only, and so is its
+guarantee of never failing the release. A dry run cannot exercise it either: once `v<version>`
+is tagged, preconditions 2 and 3 both refuse, and they run before step 9 ever creates the
+directory. The first release after this change is its first real run.
 
 What *is* unit-tested, with injected inputs: semver comparison, each precondition's refusal,
 the manifest shape, the registry probes (`tagExistsInRegistry`, `imagesWithTag`,
