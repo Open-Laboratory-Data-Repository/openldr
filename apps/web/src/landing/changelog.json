@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "b9869a45",
+          "type": "fix",
+          "scope": "dashboard",
+          "title": "The seeded sample layout stops leaving holes in the grid"
+        },
+        {
           "hash": "2ccae972",
           "type": "fix",
           "scope": "dashboard",
