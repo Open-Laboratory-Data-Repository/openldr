@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "32c1d6d9",
+          "type": "fix",
+          "scope": "",
+          "title": "Resolve workflow webhooks from shared database state"
+        },
+        {
           "hash": "3b61f78c",
           "type": "fix",
           "scope": "",

@@ -57,3 +57,16 @@ P05 durable acceptance, P09 auth portability and P15 uninterrupted upgrades rema
 ## Handoff
 
 Local merge authorized on 2026-09-11. Fresh pre-merge checks passed: workflow store/resolver 6 tests, database secret-store/migration map 11 tests. Generate the changelog after merging and record post-merge verification. Do not push unless asked.
+
+## Local merge verification
+
+Merged into main as `feb156ea` on 2026-09-11. Source commit `32c1d6d9`. The merge tree matches the source branch exactly, verified by `git diff feb156ea codex/webhook-replica-consistency --exit-code`, exit 0.
+
+Post-merge commands on main:
+
+- `pnpm --filter @openldr/server exec vitest run src/workflows-routes.test.ts`: 65 passed.
+- `pnpm --filter @openldr/workflows exec vitest run src/store.test.ts src/shared-webhook-resolver.test.ts`: 6 passed.
+- `pnpm make:changelog`: 2,704 entries across 70 days. The diff adds the P14 fix entry.
+- `git diff --check`: exit 0 with a line-ending warning.
+
+The real PostgreSQL HTTP tests were not rerun during merge. Their earlier proof and limitations remain above. No migration was applied to the running application. No push was requested or performed. Source and merge commits use the operator's identity without contributor trailers.
