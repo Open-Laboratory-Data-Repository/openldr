@@ -17,7 +17,7 @@ OpenLDR CE ingests heterogeneous laboratory data from any source, normalizes it 
 
 Still pre-1.0, and honest about it:
 
-- Version is `0.1.7`, released under the **Apache License 2.0** (see [License](#license)).
+- Released under the **Apache License 2.0** (see [License](#license)). The current version is on the [Releases](https://github.com/Open-Laboratory-Data-Repository/openldr/releases) page.
 - APIs, migrations, and configuration keys can still change between commits.
 - Sustained high-volume warehouse load tuning is ongoing; DHIS2's admin UI is mid-migration into a removable webview plugin.
 
