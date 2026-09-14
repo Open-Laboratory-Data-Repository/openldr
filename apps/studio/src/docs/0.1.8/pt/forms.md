@@ -26,6 +26,15 @@ Esta verificação cobre a configuração. As respostas obrigatórias, as refer�
 - **Campos bloqueados.** Um campo bloqueado não pode ser desativado nem eliminado a partir da lista. Pode ainda mudar o rótulo, a ordem e a tradução.
 - **Formulários de inquérito.** Quando o Resource Type do formulário é `Questionnaire`, o editor esconde FHIR Path, API Property e o discriminador. Observation Extract e as outras definições mantêm-se.
 
+## O painel Library
+
+- O painel à direita lista os elementos FHIR do Resource Type do formulário que nenhum campo usa ainda. Clique num elemento para o acrescentar como campo; o editor dele abre.
+- Um campo acrescentado assim recebe o nome e o tipo do elemento. Um elemento codificado passa a ser um select, com opções quando o elemento lista os seus códigos. As datas chegam como campos de texto; mude o tipo no editor.
+- Um elemento que pertence a um grupo já presente no formulário entra nesse grupo.
+- A pesquisa filtra por nome e por caminho. A lista desce dois níveis, por exemplo `Location.address.city`.
+- Um formulário de inquérito não tem **Library**.
+- Quando o editor tem menos de 980 pixels de largura, **Form** e **Library** passam a ser separadores. Acrescentar a partir de **Library** volta a **Form**. Recolher a barra lateral pode mostrar de novo os dois painéis.
+
 ## Exemplo: enviar um pedido de laboratório
 
 Use uma instalação de teste com um paciente existente, terminologia LOINC carregada e o fluxo de ingestão ativo. Precisa de permissão para editar e publicar formulários e enviar respostas.

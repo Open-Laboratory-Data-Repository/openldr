@@ -2,6 +2,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// jsdom measures every element as 0 wide, and 0 counts as wide, so the tests keep the side-by-side
+// layout unless one sets a width here.
+const width = vi.hoisted(() => ({ value: 0 }));
+vi.mock('./useElementWidth', () => ({
+  NARROW_WORKSPACE_PX: 980,
+  useElementWidth: () => [() => {}, width.value],
+}));
 import { toast } from 'sonner';
 import { FormBuilderPage } from './FormBuilderPage';
 import * as api from '../api';
@@ -58,9 +65,24 @@ function openFieldMenu(): void {
   }
 }
 
+/** Load the builder on a stored form of the given resource type, with no fields. */
+function renderBuilderAs(fhirResourceType: string) {
+  const base = makeFormDef();
+  vi.spyOn(api, 'getForm').mockResolvedValue(
+    makeFormDef({ fhirResourceType, schema: { ...base.schema, fhirResourceType } }) as never,
+  );
+  vi.spyOn(api, 'listFormVersions').mockResolvedValue([]);
+  return render(
+    <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+      <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+    </MemoryRouter>,
+  );
+}
+
 describe('FormBuilderPage (three-pane shell)', () => {
   beforeEach(() => {
     vi.spyOn(api, 'createForm').mockResolvedValue(makeFormDef());
+    width.value = 0;
     vi.mocked(toast.success).mockReset();
     vi.mocked(toast.error).mockReset();
   });
@@ -74,14 +96,55 @@ describe('FormBuilderPage (three-pane shell)', () => {
     expect(screen.getByLabelText('Form name')).toBeInTheDocument();
   });
 
-  it('renders the Preview pane alongside the field list', () => {
+  it('opens Preview from the ⋯ menu as a sheet', async () => {
     render(
       <MemoryRouter initialEntries={['/forms/new']}>
         <Routes><Route path="/forms/new" element={<FormBuilderPage />} /></Routes>
       </MemoryRouter>,
     );
-    // PreviewPane renders a "Preview" heading
-    expect(screen.getByText('Preview')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Preview' })).toBeNull();
+    openBuilderMenu();
+    fireEvent.click(await screen.findByText('Preview'));
+    expect(await screen.findByRole('dialog', { name: 'Preview' })).toBeInTheDocument();
+  });
+
+  it('shows the Library beside the list and adds a clicked element as a field', async () => {
+    renderBuilderAs('Location');
+    expect(await screen.findByText('All Location elements')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Location\.alias/ }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Alias');
+  });
+
+  it('shows no Library on a survey form', async () => {
+    renderBuilderAs('Questionnaire');
+    await screen.findByLabelText('Form name');
+    expect(screen.queryByText(/^All .* elements$/)).toBeNull();
+  });
+
+  it('shows both panes side by side on a wide workspace', async () => {
+    width.value = 1400;
+    renderBuilderAs('Location');
+    expect(await screen.findByText('All Location elements')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Library/ })).toBeNull();
+  });
+
+  it('becomes Form and Library tabs below 980px, opening on Form', async () => {
+    width.value = 700;
+    renderBuilderAs('Location');
+    const formTab = await screen.findByRole('tab', { name: /Form/ });
+    expect(formTab.getAttribute('data-state')).toBe('active');
+    expect(screen.queryByText('All Location elements')).toBeNull();
+  });
+
+  it('switches back to Form after adding from the Library tab', async () => {
+    width.value = 700;
+    renderBuilderAs('Location');
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Library/ }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('button', { name: /Location\.alias/ }));
+    // The new field's editor opens as a modal sheet, which hides the page from the accessibility
+    // tree, so the tab is looked up with `hidden`.
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Alias');
+    expect(screen.getByRole('tab', { name: /Form/, hidden: true }).getAttribute('data-state')).toBe('active');
   });
 
   it('adds a field via the header ⋯ menu → Add field', async () => {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { FormField } from '@openldr/forms/pure';
 import type { RepeatNode } from './fieldTree';
-import { buildGroupPart, buildNamedSlot, insertFieldAfter, lastPartIdOf } from './newFormFields';
+import { lookupFhirPath } from '@openldr/fhir/paths';
+import { buildFieldFromElement, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf } from './newFormFields';
 
 const f = (o: Partial<FormField> & Pick<FormField, 'id' | 'order'>): FormField => ({
   displayLabel: o.id, fieldType: 'text', required: false, enabled: true, fhirPath: null,
@@ -58,5 +59,42 @@ describe('insertFieldAfter and lastPartIdOf', () => {
     const fields = [f({ id: 'g', order: 0, fieldType: 'group' }), f({ id: 'p1', order: 1, groupId: 'g' }), f({ id: 'p2', order: 2, groupId: 'g' })];
     expect(lastPartIdOf(fields, 'g')).toBe('p2');
     expect(lastPartIdOf([fields[0]], 'g')).toBe('g');
+  });
+});
+
+describe('buildFieldFromElement', () => {
+  const info = (p: string) => lookupFhirPath(p)!;
+
+  it('builds a field named from the path, typed from the leaf, not required', () => {
+    expect(buildFieldFromElement(info('Location.name'), 'name')).toMatchObject({
+      id: 'name', fhirPath: 'Location.name', displayLabel: 'Name', fieldType: 'text', required: false,
+      cardinality: { min: 0, max: '1' },
+    });
+  });
+
+  it('marks an element that repeats as repeatable', () => {
+    const field = buildFieldFromElement(info('Location.alias'), 'alias');
+    expect(field.repeatable).toBe(true);
+    expect(field.cardinality).toEqual({ min: 0, max: '*' });
+  });
+
+  it('makes a BackboneElement a group, never repeatable', () => {
+    const field = buildFieldFromElement(info('Location.hoursOfOperation'), 'hours');
+    expect(field.fieldType).toBe('group');
+    expect(field.repeatable).toBeUndefined();
+  });
+
+  it('fills a coded element options from its label', () => {
+    expect(buildFieldFromElement(info('Location.status'), 'status').valueSetOptions?.map((o) => o.code))
+      .toEqual(['active', 'suspended', 'inactive']);
+  });
+});
+
+describe('groupIdForPath', () => {
+  it('finds the group bound to the immediate parent path, and nothing further up', () => {
+    const fields = [f({ id: 'addr', order: 0, fieldType: 'group', fhirPath: 'Location.address' })];
+    expect(groupIdForPath(fields, 'Location.address.city')).toBe('addr');
+    expect(groupIdForPath(fields, 'Location.address.city.text')).toBeUndefined();
+    expect(groupIdForPath(fields, 'Location.name')).toBeUndefined();
   });
 });
