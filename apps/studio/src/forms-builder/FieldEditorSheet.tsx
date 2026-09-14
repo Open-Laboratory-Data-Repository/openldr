@@ -45,6 +45,8 @@ export interface FieldEditorSheetProps {
   languages?: string[];
   /** The form's FHIR resource type, forwarded to MappingEditor to scope its path picker. */
   fhirResourceType: string | null;
+  /** The saved form's id, so suggested codes leave this form out. Null for a form never saved. */
+  formId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (field: FormField) => void;
@@ -61,6 +63,7 @@ export function FieldEditorSheet({
   sections,
   languages = [],
   fhirResourceType,
+  formId = null,
   open,
   onOpenChange,
   onSave,
@@ -394,7 +397,7 @@ export function FieldEditorSheet({
         </div>
         <div className="border-t border-border" />
         <div className="px-6 py-2">
-          <CodesEditor field={activeDraft} onUpdate={patchDraft} />
+          <CodesEditor field={activeDraft} onUpdate={patchDraft} fhirResourceType={fhirResourceType} formId={formId} />
         </div>
 
         {/* ── Translations section ─────────────────────────────────── */}

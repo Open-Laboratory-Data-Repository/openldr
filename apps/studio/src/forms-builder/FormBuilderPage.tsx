@@ -664,6 +664,7 @@ export function FormBuilderPage(): JSX.Element {
         sections={schema.sections}
         languages={schema.languages ?? []}
         fhirResourceType={schema.fhirResourceType ?? null}
+        formId={formId}
         open={editingId !== null}
         onOpenChange={(o) => { if (!o) handleSheetCancel(); }}
         onSave={handleSheetSave}

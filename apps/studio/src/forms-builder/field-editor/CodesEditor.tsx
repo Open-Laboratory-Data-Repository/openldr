@@ -6,10 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import { CodeSuggestionPanel } from './CodeSuggestionPanel';
 
 export interface CodesEditorProps {
   field: FormField;
   onUpdate: (patch: Partial<FormField>) => void;
+  /** The form's resource type. Resolves a bare path for the suggestions. */
+  fhirResourceType?: string | null;
+  /** The saved form's id, left out of "Your forms". Null for a form never saved. */
+  formId?: string | null;
 }
 
 /**
@@ -20,12 +25,26 @@ export interface CodesEditorProps {
  *
  * TermPicker requires a `systemId` (the terminology system URL). The user
  * picks a system from a small text input before searching.
+ *
+ * Above the term search, `CodeSuggestionPanel` offers codes from the field's ValueSet and from
+ * other forms on the same path (spec S7).
  */
-export function CodesEditor({ field, onUpdate }: CodesEditorProps): JSX.Element {
+export function CodesEditor({ field, onUpdate, fhirResourceType = null, formId = null }: CodesEditorProps): JSX.Element {
   const codes: FormFieldCoding[] = field.code ?? [];
   const [systemId, setSystemId] = React.useState('http://loinc.org');
   // null = search mode, value = just picked (reset back to null so picker stays open)
   const [pickerValue, setPickerValue] = React.useState<PickedTerm | null>(null);
+
+  // A suggestion can land after an await, by which time the author may have added another code.
+  // Read the latest list, not the one this render closed over.
+  const codesRef = React.useRef(codes);
+  codesRef.current = codes;
+
+  function addSuggested(coding: FormFieldCoding): void {
+    const current = codesRef.current;
+    if (current.some((c) => c.system === coding.system && c.code === coding.code)) return;
+    onUpdate({ code: [...current, coding] });
+  }
 
   function removeCode(index: number): void {
     onUpdate({ code: codes.filter((_, i) => i !== index) });
@@ -83,6 +102,8 @@ export function CodesEditor({ field, onUpdate }: CodesEditorProps): JSX.Element 
           ))}
         </div>
       )}
+
+      <CodeSuggestionPanel field={field} fhirResourceType={fhirResourceType} formId={formId} onAdd={addSuggested} />
 
       {/* Add a new coding */}
       <div className="py-3 space-y-2">
