@@ -128,6 +128,9 @@ export function FormBuilderPage(): JSX.Element {
   };
 
   const deleteField = (fieldId: string) => {
+    // Locked marks a field the form cannot work without, so the `d` shortcut skips it too.
+    // Corlix `FormBuilderPage.tsx:606`.
+    if (schema.fields.find((f) => f.id === fieldId)?.locked) return;
     history.pushHistory();
     setSchema((prev) => ({ ...prev, fields: prev.fields.filter((f) => f.id !== fieldId) }));
     if (selectedId === fieldId) setSelectedId(null);
