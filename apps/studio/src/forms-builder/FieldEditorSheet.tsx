@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
-import { FieldType } from '@openldr/forms/pure';
+import { FieldType, eligibleParents, groupRepeats } from '@openldr/forms/pure';
 import { OptionsEditor } from './field-editor/OptionsEditor';
 import { CodesEditor } from './field-editor/CodesEditor';
 import { TranslationsEditor } from './field-editor/TranslationsEditor';
@@ -87,9 +87,8 @@ export function FieldEditorSheet({
   };
 
   const activeDraft = draft ?? field;
-  const groupFields = allFields.filter(
-    (f) => f.fieldType === 'group' && f.id !== activeDraft.id,
-  );
+  // Every group except this field and its own descendants, so the picker cannot build a loop.
+  const groupFields = eligibleParents(allFields, activeDraft.id);
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -181,37 +180,38 @@ export function FieldEditorSheet({
               </SelectContent>
             </Select>
 
-            {/* Group (hidden when the field itself is a group) */}
-            {activeDraft.fieldType !== 'group' && (
-              <>
-                <Label htmlFor="field-group-trigger" className="whitespace-nowrap">
-                  Group
-                </Label>
-                <div className="flex flex-col gap-1">
-                  <Select
-                    value={activeDraft.groupId ?? '__none'}
-                    onValueChange={(v) =>
-                      patchDraft({ groupId: v === '__none' ? undefined : v })
-                    }
-                  >
-                    <SelectTrigger id="field-group-trigger" aria-label="Group">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">No group</SelectItem>
-                      {groupFields.map((g) => (
-                        <SelectItem key={g.id} value={g.id}>
-                          {g.displayLabel}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Nest this field under a Group field. Create one by setting a field&apos;s Type to Group.
-                  </p>
-                </div>
-              </>
-            )}
+            {/* Group. A group can sit inside another group, to any depth. */}
+            <Label htmlFor="field-group-trigger" className="whitespace-nowrap">
+              Group
+            </Label>
+            <div className="flex flex-col gap-1">
+              <Select
+                value={activeDraft.groupId ?? '__none'}
+                onValueChange={(v) =>
+                  patchDraft({ groupId: v === '__none' ? undefined : v })
+                }
+              >
+                <SelectTrigger id="field-group-trigger" aria-label="Group">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">No group</SelectItem>
+                  {groupFields.map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.displayLabel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Nest this field under a Group field. Create one by setting a field&apos;s Type to Group.
+              </p>
+              {activeDraft.fieldType === 'group' && !groupRepeats(activeDraft, fhirResourceType) && (
+                <p className="text-xs text-muted-foreground">
+                  This group holds a single instance, so data entry shows no add control.
+                </p>
+              )}
+            </div>
 
             {/* Placeholder */}
             <Label htmlFor="field-placeholder" className="whitespace-nowrap">
