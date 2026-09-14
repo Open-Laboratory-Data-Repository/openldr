@@ -166,6 +166,19 @@ export interface TerminologyAdminStore {
     update(system: string, code: string, input: TermInput): Promise<Term>;
     delete(system: string, code: string): Promise<void>;
     importRows(rows: { system: string; code: string; display: string | null; status: string; properties: Record<string, unknown> | null }[]): Promise<{ imported: number }>;
+    /** The pairs from `pairs` that CE holds as terms. For the builder's suggested codes. */
+    existing(pairs: { system: string; code: string }[]): Promise<{ system: string; code: string }[]>;
+    /**
+     * Insert a term only when `(system, code)` is absent, and return null when it was already
+     * there, without touching that row. `create` is an upsert and would overwrite a curated
+     * display, status and properties; the builder's suggested-code import must not.
+     */
+    createIfAbsent(input: TermInput): Promise<Term | null>;
+    /**
+     * Delete a term only when its metadata says `addedBy === tag`, and return whether it did. The
+     * builder's Undo uses it, so Undo can never remove a term someone else curated.
+     */
+    deleteIfAddedBy(system: string, code: string, tag: string): Promise<boolean>;
   };
   termMappings: {
     listOutgoing(system: string, code: string): Promise<TermMapping[]>;
@@ -212,6 +225,11 @@ export interface TerminologyAdminStore {
     list(publisherId?: string): Promise<ValueSetSummary[]>;
     get(id: string): Promise<ValueSet>;
     getByUrl(url: string): Promise<ValueSetSummary | null>;
+    /**
+     * A set's stored active codes, ordered by code then system, which is unique within a set.
+     * Reads `valueset_expansions` as they are. `expand` recomputes and overwrites them; this never does.
+     */
+    storedCodes(id: string): Promise<ExpandedConcept[]>;
     save(input: ValueSetInput): Promise<ValueSet>;
     duplicate(id: string): Promise<ValueSet>;
     delete(id: string): Promise<void>;
@@ -790,6 +808,52 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         }
         return { imported: rows.length };
       },
+      async existing(pairs) {
+        const bySystem = new Map<string, string[]>();
+        for (const p of pairs) {
+          const codes = bySystem.get(p.system) ?? [];
+          codes.push(p.code);
+          bySystem.set(p.system, codes);
+        }
+        const found: { system: string; code: string }[] = [];
+        for (const [system, codes] of bySystem) {
+          // Batched: a bound set can hold thousands of codes, past a statement's parameter limit.
+          for (let i = 0; i < codes.length; i += 1000) {
+            const rows = await db.selectFrom('terminology_concepts').select(['system', 'code'])
+              .where('system', '=', system).where('code', 'in', codes.slice(i, i + 1000)).execute();
+            found.push(...rows);
+          }
+        }
+        return found;
+      },
+      async createIfAbsent(input) {
+        // Look first. pg-mem answers a losing `DO NOTHING ... RETURNING` with the existing row,
+        // where Postgres answers with none, so `inserted` alone cannot tell the two apart in tests.
+        // On Postgres a racing insert still lands in the conflict clause and returns no row.
+        const held = await db.selectFrom('terminology_concepts').select(['code'])
+          .where('system', '=', input.system).where('code', '=', input.code).executeTakeFirst();
+        if (held) return null;
+        const props = packProps(input);
+        const inserted = await db.insertInto('terminology_concepts').values({
+          system: input.system, code: input.code, display: input.display, status: input.status,
+          properties: props === null ? null : (JSON.stringify(props) as never),
+        }).onConflict((oc) => oc.columns(['system', 'code']).doNothing()).returningAll().executeTakeFirst();
+        if (!inserted) return null;
+        // Sync S3: one terminology_system signal per concept edit, as `create` does.
+        await markTerminologyChanged(db, input.system);
+        return termRow(inserted, await mappingCountFor(input.system, input.code));
+      },
+      async deleteIfAddedBy(system, code, tag) {
+        const row = await db.selectFrom('terminology_concepts').select(['properties'])
+          .where('system', '=', system).where('code', '=', code).executeTakeFirst();
+        if (!row) return false;
+        const raw = row.properties as unknown;
+        const props = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { meta?: { addedBy?: unknown } } | null;
+        if (props?.meta?.addedBy !== tag) return false;
+        await db.deleteFrom('terminology_concepts').where('system', '=', system).where('code', '=', code).execute();
+        await markTerminologyChanged(db, system);
+        return true;
+      },
     },
     termMappings: {
       async listOutgoing(system, code) {
@@ -992,6 +1056,12 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         const vs = vsRow(r);
         const c = await db.selectFrom('valueset_expansions').select((eb) => eb.fn.countAll<number>().as('n')).where('value_set_id', '=', vs.id).executeTakeFirst();
         return summarizeValueSet(vs, Number(c?.n ?? 0));
+      },
+      async storedCodes(id) {
+        const rows = await db.selectFrom('valueset_expansions').select(['system_url', 'code', 'display'])
+          .where('value_set_id', '=', id).where('inactive', '=', false)
+          .orderBy('code').orderBy('system_url').execute();
+        return rows.map((r) => ({ system: r.system_url, code: r.code, display: r.display }));
       },
       save: saveValueSet,
       async duplicate(id) {
