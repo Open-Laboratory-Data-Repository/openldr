@@ -21,6 +21,7 @@ export * from './discriminator';
 export * from './group-tree';
 export * from './group-repeats';
 export * from './survey-mode';
+export * from './code-suggestions';
 export * from './diff';
 export * from './lifecycle';
 export * from './normalize';
