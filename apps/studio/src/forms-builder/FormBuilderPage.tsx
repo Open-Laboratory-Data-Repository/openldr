@@ -20,6 +20,8 @@ import { PreviewSheet } from './PreviewSheet';
 import { LibraryPane } from './LibraryPane';
 import { libraryElements } from './libraryEntries';
 import { elementDisplayName } from './fhirTypeMap';
+import { NARROW_WORKSPACE_PX, useElementWidth } from './useElementWidth';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { FhirPathInfo } from '@openldr/fhir/paths';
 import {
   isSurveyForm,
@@ -42,6 +44,10 @@ export function FormBuilderPage(): JSX.Element {
   const [compareOpen, setCompareOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [pane, setPane] = useState<'form' | 'library'>('form');
+  const [workspaceRef, workspaceWidth] = useElementWidth<HTMLDivElement>();
+  // 0 means not measured yet, which counts as wide. The same test as corlix `FormBuilderPage.tsx:242`.
+  const narrow = workspaceWidth > 0 && workspaceWidth < NARROW_WORKSPACE_PX;
   const [status, setStatus] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
@@ -235,6 +241,8 @@ export function FormBuilderPage(): JSX.Element {
     });
     setPendingNewFieldId(null);
     setSelectedId(field.id);
+    // On a narrow workspace the new field would otherwise sit behind the Library tab.
+    setPane('form');
   };
 
   const applyHistory = (next: FormSchema | null) => { if (next) setSchema(next); };
@@ -366,6 +374,35 @@ export function FormBuilderPage(): JSX.Element {
   };
 
   // ── Render ───────────────────────────────────────────────────────────────────
+
+  /** The field list, sections managed through the Sections popover inside it. Placed in both layouts. */
+  const listPane = (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <FieldListPane
+        fields={schema.fields}
+        fhirResourceType={schema.fhirResourceType ?? null}
+        onAddSlot={addNamedSlot}
+        sections={schema.sections}
+        selectedFieldId={selectedId}
+        issues={issues}
+        onSelect={(f) => setSelectedId(f.id)}
+        onToggleEnabled={toggleEnabled}
+        onToggleRequired={toggleRequired}
+        onDuplicate={duplicateField}
+        onDelete={deleteField}
+        onReorder={reorderFields}
+        onSectionsChange={(sections) => updateSchema({ sections })}
+        onFieldsClearSection={(sid) =>
+          updateSchema({
+            fields: schema.fields.map((f) =>
+              f.section === sid ? { ...f, section: undefined } : f,
+            ),
+          })
+        }
+      />
+    </div>
+  );
+
   return (
     <AppShell title="Form Builder" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -412,40 +449,51 @@ export function FormBuilderPage(): JSX.Element {
 
         {!loading ? <SubmissionReadiness schema={schema} /> : null}
 
-        {/* Body. The field editor and the preview are sheets over it, so a phone gets both. */}
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          {/* Left: FieldListPane (sections managed via the Sections popover inside it) */}
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <FieldListPane
-              fields={schema.fields}
-              fhirResourceType={schema.fhirResourceType ?? null}
-              onAddSlot={addNamedSlot}
-              sections={schema.sections}
-              selectedFieldId={selectedId}
-              issues={issues}
-              onSelect={(f) => setSelectedId(f.id)}
-              onToggleEnabled={toggleEnabled}
-              onToggleRequired={toggleRequired}
-              onDuplicate={duplicateField}
-              onDelete={deleteField}
-              onReorder={reorderFields}
-              onSectionsChange={(sections) => updateSchema({ sections })}
-              onFieldsClearSection={(sid) =>
-                updateSchema({
-                  fields: schema.fields.map((f) =>
-                    f.section === sid ? { ...f, section: undefined } : f,
-                  ),
-                })
-              }
-            />
-          </div>
-
-          {!survey && (
-            <LibraryPane
-              resourceType={schema.fhirResourceType ?? null}
-              elements={elements}
-              onAddElement={addFromLibrary}
-            />
+        {/* Body. The field editor and the preview are sheets over it, so a phone gets both. This
+            div is the one measured, so it stays mounted when the layout switches to tabs. */}
+        <div ref={workspaceRef} className="flex min-h-0 flex-1 overflow-hidden">
+          {narrow && !survey ? (
+            <Tabs
+              value={pane}
+              onValueChange={(v) => setPane(v as 'form' | 'library')}
+              className="flex min-h-0 min-w-0 flex-1 flex-col"
+            >
+              <TabsList className="shrink-0 px-4">
+                <TabsTrigger value="form" className="gap-1.5">
+                  Form
+                  <span className="font-mono text-[10px] text-muted-foreground">{schema.fields.length}</span>
+                </TabsTrigger>
+                <TabsTrigger value="library" className="gap-1.5">
+                  Library
+                  <span className="font-mono text-[10px] text-muted-foreground">{elements.length}</span>
+                </TabsTrigger>
+              </TabsList>
+              {/* forceMount keeps the list's scroll, drag state and search text across a tab
+                  switch. Corlix hides the list rather than unmounting it. */}
+              <TabsContent value="form" forceMount className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+                {listPane}
+              </TabsContent>
+              <TabsContent value="library" className="flex min-h-0 flex-1 flex-col data-[state=inactive]:hidden">
+                <LibraryPane
+                  resourceType={schema.fhirResourceType ?? null}
+                  elements={elements}
+                  showHeader={false}
+                  fullWidth
+                  onAddElement={addFromLibrary}
+                />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <>
+              {listPane}
+              {!survey && (
+                <LibraryPane
+                  resourceType={schema.fhirResourceType ?? null}
+                  elements={elements}
+                  onAddElement={addFromLibrary}
+                />
+              )}
+            </>
           )}
         </div>
       </div>
