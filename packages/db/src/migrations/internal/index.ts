@@ -97,6 +97,7 @@ import * as m095 from './095_account_access_blocks';
 import * as m096 from './096_workflow_webhook_paths';
 import * as m097 from './097_workflow_webhook_receipts';
 import * as m098 from './098_auth_issuer_binding';
+import * as m099 from './099_starter_packs';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -198,4 +199,5 @@ export const internalMigrations: Record<string, Migration> = {
   '096_workflow_webhook_paths': { up: m096.up, down: m096.down },
   '097_workflow_webhook_receipts': { up: m097.up, down: m097.down },
   '098_auth_issuer_binding': { up: m098.up, down: m098.down },
+  '099_starter_packs': { up: m099.up, down: m099.down },
 };
