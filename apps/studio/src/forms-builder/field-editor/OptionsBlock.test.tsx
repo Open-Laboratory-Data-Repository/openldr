@@ -101,10 +101,17 @@ describe('OptionsBlock', () => {
     const { onUpdate } = renderBlock({ displayLabel: 'Ward', valueSetOptions: [{ code: 'opd', display: 'OPD' }] });
     clickMenu('Save as a new ValueSet');
     const trigger = await screen.findByRole('button', { name: 'Save actions' });
+    // After the save the list holds the new set, so the block must read it again, not say "not held".
+    vi.mocked(api.listValueSets).mockResolvedValueOnce([
+      mocks.gender,
+      { ...mocks.gender, id: 'vs-new', url: 'urn:openldr:valueset:ward', name: 'ward', title: 'Ward', publisherId: 'pub-system', codeCount: 1 },
+    ]);
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!screen.queryByRole('menuitem', { name: 'Save' })) fireEvent.keyDown(trigger, { key: 'Enter' });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Save' }));
     await waitFor(() => expect(api.saveValueSet).toHaveBeenCalledWith(expect.objectContaining({ url: 'urn:openldr:valueset:ward', title: 'Ward' })));
     await waitFor(() => expect(onUpdate).toHaveBeenCalledWith({ valueSetUrl: 'urn:openldr:valueset:ward', bindingStrength: 'extensible' }));
+    expect(await screen.findByText('1 codes from Ward')).toBeTruthy();
+    expect(screen.queryByText(/Not held on this install/)).toBeNull();
   });
 });

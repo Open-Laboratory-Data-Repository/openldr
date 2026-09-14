@@ -34,13 +34,17 @@ export function OptionsBlock({
   const [error, setError] = useState<string | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
 
+  // Bumped after "Save as a new ValueSet", so the new set is found and the block names it instead
+  // of calling it not held.
+  const [setsVersion, setSetsVersion] = useState(0);
+
   useEffect(() => {
     let alive = true;
     void listValueSets()
       .then((rows) => { if (alive) setSets(rows); })
       .catch(() => { /* the title and the standard set are niceties; binding still works through the picker */ });
     return () => { alive = false; };
-  }, []);
+  }, [setsVersion]);
 
   const bound = useMemo(() => sets.find((s) => s.url === field.valueSetUrl) ?? null, [sets, field.valueSetUrl]);
   // A survey question points at no resource, so it has no standard binding (spec S6, as corlix P15.1).
@@ -153,6 +157,7 @@ export function OptionsBlock({
         onSaved={(url) => {
           const s = field.bindingStrength ?? 'extensible';
           onUpdate(strengthLocksCustomValue(s) ? { valueSetUrl: url, bindingStrength: s, allowCustomValue: false } : { valueSetUrl: url, bindingStrength: s });
+          setSetsVersion((v) => v + 1);
         }}
       />
     </>
