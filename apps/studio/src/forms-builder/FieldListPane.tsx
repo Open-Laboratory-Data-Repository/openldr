@@ -22,8 +22,8 @@ import {
 import { groupRepeats, type FormField, type FormLintIssue, type FormSection } from '@openldr/forms/pure';
 import { SortableFieldRow } from './SortableFieldRow';
 import { SectionsManager } from './SectionsManager';
-import { buildFieldTree, type TreeNode } from './fieldTree';
-import { RepeatRow } from './RepeatRow';
+import { buildFieldTree, type RepeatNode, type TreeNode } from './fieldTree';
+import { AddNamedSlotRow, RepeatRow } from './RepeatRow';
 
 export interface FieldListPaneProps {
   fields: FormField[];
@@ -38,6 +38,8 @@ export interface FieldListPaneProps {
   onReorder: (activeId: string, overId: string) => void;
   onSectionsChange?: (sections: FormSection[]) => void;
   onFieldsClearSection?: (sectionId: string) => void;
+  /** Add another named slot under a repeating list. */
+  onAddSlot?: (node: RepeatNode) => void;
   /** The form's resource type. A group's "holds one or many" reads its bound path against it. */
   fhirResourceType?: string | null;
 }
@@ -55,6 +57,7 @@ export function FieldListPane({
   onReorder,
   onSectionsChange,
   onFieldsClearSection,
+  onAddSlot,
   fhirResourceType = null,
 }: FieldListPaneProps): JSX.Element {
   const [searchText, setSearchText] = useState('');
@@ -197,6 +200,7 @@ export function FieldListPane({
         <RepeatRow node={node} />
         <div data-nested="true" className="ml-3 space-y-1.5 border-l-2 border-border pl-3">
           {node.slots.map((slot) => renderField(slot))}
+          {onAddSlot && <AddNamedSlotRow onAdd={() => onAddSlot(node)} />}
         </div>
       </div>
     );
