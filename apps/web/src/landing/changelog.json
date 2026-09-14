@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "25324908",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Draw the Form and Library tab counts as pills, as corlix does"
+        },
+        {
+          "hash": "41d54cf7",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Give the preview sheet corlix's width, full width on a phone"
+        },
+        {
+          "hash": "d1f44af1",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Form and Library become tabs on a narrow workspace"
+        },
+        {
+          "hash": "5676ddf7",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A Library pane that lists what the form does not have yet"
+        },
+        {
+          "hash": "4afc58e7",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Open the form preview as a sheet from the page menu"
+        },
+        {
+          "hash": "a415e52f",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Decide what the Library offers and how an element becomes a field"
+        },
+        {
+          "hash": "ace9a0f3",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Say when a form maps onto one FHIR resource"
+        },
+        {
           "hash": "14bd4d09",
           "type": "feat",
           "scope": "studio",
