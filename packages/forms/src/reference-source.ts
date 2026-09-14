@@ -10,6 +10,15 @@ export type ReferenceSourceResult =
   | { ok: true; source: ReferenceSource }
   | { ok: false; reason: 'no-source' };
 
+/**
+ * The entity types a reference field can search, for the builder's target dropdown.
+ *
+ * Mirrors `ENTITY_TARGETS` in `@openldr/db` (`reference-search.ts`), which the server resolves.
+ * This package's browser entry cannot import `@openldr/db`, so a test pins the two lists equal.
+ * Every other target is a code-system URL, offered from the terminology service.
+ */
+export const REFERENCE_ENTITY_TARGETS: readonly string[] = ['Patient'];
+
 /** A resolved coding answer (ValueSet / CodeSystem picker). */
 export interface CodingAnswer { system: string; code: string; display: string | null }
 /** A resolved entity answer (Patient and friends). */
