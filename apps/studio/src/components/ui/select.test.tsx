@@ -19,6 +19,13 @@ describe('Select', () => {
     render(<Harness onChange={() => {}} />);
     expect(screen.getByLabelText('Language')).toHaveTextContent('EN');
   });
+  // A button centers its text by default. A trigger that stretches its value span (the form
+  // builder's FHIR Version and Resource Type) drew the value in the middle, not at the start.
+  // jsdom has no browser default styles, so this pins the class, not the rendered position.
+  it('left-aligns the value, whatever width its span takes', () => {
+    render(<Harness onChange={() => {}} />);
+    expect(screen.getByLabelText('Language')).toHaveClass('text-left');
+  });
   it('opens and selects an option', () => {
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);

@@ -270,9 +270,7 @@ export function BuilderHeader({
             value={schema.fhirVersion ?? '__none'}
             onValueChange={(v) => onChange({ fhirVersion: v === '__none' ? null : v })}
           >
-            {/* flex-1 stretches the value span so a long label clips. A button centers its text by
-                default, so text-left keeps the value at the start like the Target pages trigger. */}
-            <SelectTrigger className="w-44 text-left text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label="FHIR Version">
+            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label="FHIR Version">
               <SelectValue placeholder="None">
                 <TruncatedText text={fhirVersionLabel} className="min-w-0" />
               </SelectValue>
@@ -330,7 +328,7 @@ export function BuilderHeader({
             value={schema.fhirResourceType ?? '__none'}
             onValueChange={(v) => onChange({ fhirResourceType: v === '__none' ? null : v })}
           >
-            <SelectTrigger className="w-44 text-left text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label="Resource Type">
+            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label="Resource Type">
               <SelectValue placeholder="None">
                 <TruncatedText text={resourceTypeLabel} className="min-w-0" />
               </SelectValue>
