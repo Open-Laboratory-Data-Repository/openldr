@@ -65,6 +65,15 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 - **Locked fields.** A locked field cannot be switched off or deleted from the field list. You can still relabel, reorder, and translate it.
 - **Survey forms.** When the form's Resource Type is `Questionnaire`, the editor hides FHIR Path, API Property, and the discriminator. Observation Extract and the other settings stay.
 
+## Options and ValueSets
+
+- A select or multiselect field can take its options from a ValueSet. In the Options block, search for a set and pick it. Its codes are copied into the options, and the field keeps a link to the set with a strength. A required strength stops data entry accepting other values.
+- **Unbind**, in the Options ⋯ menu, drops the link and keeps the options. **Save as a new ValueSet** turns typed options into a set you can reuse; it shows only if you may manage terminology.
+- Under the FHIR path, **bound:** names the ValueSet FHIR itself binds that element to, and how strongly. **Load from terminology**, in the Options ⋯ menu, fills the options from that set.
+- Picking a path FHIR binds as required or extensible, on a field with no ValueSet, binds it for you and makes it a select. Preferred and example bindings are left to you, and so is a field that already names a reference source.
+- A reference field picks its ValueSet in the Reference Configuration block. It searches the set live, so nothing is copied.
+- Every install holds FHIR's 672 standard ValueSets. Survey forms have no bound elements, so they show no **bound:** line.
+
 ## Starter packs
 
 - A starter pack is a ready list of fields for one resource type, taken from the forms OpenLDR ships: Location (Facility), Practitioner (Users), Patient, and ServiceRequest (Lab order).

@@ -26,6 +26,15 @@ Esta verificação cobre a configuração. As respostas obrigatórias, as refer�
 - **Campos bloqueados.** Um campo bloqueado não pode ser desativado nem eliminado a partir da lista. Pode ainda mudar o rótulo, a ordem e a tradução.
 - **Formulários de inquérito.** Quando o Resource Type do formulário é `Questionnaire`, o editor esconde FHIR Path, API Property e o discriminador. Observation Extract e as outras definições mantêm-se.
 
+## Opções e ValueSets
+
+- Um campo select ou multiselect pode tirar as opções de um ValueSet. No bloco Options, pesquise um ValueSet e escolha-o. Os códigos dele são copiados para as opções, e o campo guarda uma ligação ao ValueSet com uma força. Uma força required impede que a introdução de dados aceite outros valores.
+- **Unbind**, no menu ⋯ do bloco Options, retira a ligação e mantém as opções. **Save as a new ValueSet** transforma opções escritas num ValueSet reutilizável; só aparece se puder gerir a terminologia.
+- Por baixo do FHIR Path, **bound:** indica o ValueSet a que o próprio FHIR liga esse elemento, e com que força. **Load from terminology**, no menu ⋯ do bloco Options, preenche as opções a partir desse ValueSet.
+- Escolher um caminho que o FHIR liga como required ou extensible, num campo sem ValueSet, faz a ligação por si e torna-o um select. As ligações preferred e example ficam à sua escolha, tal como um campo que já indica uma fonte de referência.
+- Um campo de referência escolhe o ValueSet no bloco Reference Configuration. Pesquisa o ValueSet em direto, por isso nada é copiado.
+- Todas as instalações têm os 672 ValueSets padrão do FHIR. Os formulários de inquérito não têm elementos ligados, por isso não mostram a linha **bound:**.
+
 ## Pacotes iniciais
 
 - Um pacote inicial é uma lista de campos pronta para um Resource Type, tirada dos formulários que o OpenLDR traz: Location (Facility), Practitioner (Users), Patient e ServiceRequest (Lab order).
