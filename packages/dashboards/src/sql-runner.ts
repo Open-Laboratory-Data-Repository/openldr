@@ -57,7 +57,12 @@ export function planPagination(inner: string, dialect: SqlDialect, opts: { limit
   return { sql: `select * from (${inner}) as _q limit ${limit} offset ${offset}`, sliceOffset: 0 };
 }
 
-export interface SqlRunOpts { timeoutMs: number; rowCap: number }
+export interface SqlRunOpts {
+  timeoutMs: number;
+  rowCap: number;
+  /** Optional driver-level deadline. SQL Server uses this to cancel the active Tedious request. */
+  withDeadline?: <T>(timeoutMs: number, operation: () => Promise<T>) => Promise<T>;
+}
 
 /** MariaDB's `version()` string contains "MariaDB"; MySQL's does not. The engine variant is a
  *  server property (identical across every connection in the pool), so it is detected once via a
@@ -105,7 +110,7 @@ export async function runReadQuery(
   if (!Number.isFinite(opts.rowCap) || opts.rowCap < 1) throw new Error('rowCap must be a finite positive number');
   const cap = Math.floor(opts.rowCap);
   const ms = Math.floor(opts.timeoutMs);
-  return db.transaction().execute(async (trx) => {
+  const execute = () => db.transaction().execute(async (trx) => {
     let statement = planPagination(query.sql, engine, { limit: cap }).sql;
     if (engine === 'mssql') {
       // LOCK_TIMEOUT bounds lock waits only. The driver owns execution cancellation.
@@ -120,4 +125,5 @@ export async function runReadQuery(
     }
     return (await trx.executeQuery<Record<string, unknown>>({ ...query, sql: statement })).rows;
   });
+  return opts.withDeadline ? opts.withDeadline(ms, execute) : execute();
 }

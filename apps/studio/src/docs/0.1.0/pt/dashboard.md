@@ -36,4 +36,4 @@ Os widgets Builder usam o tempo máximo SQL e o limite de linhas do painel. Os v
 
 O limite conta os grupos da base antes do agrupamento por período, dos totais por série e da seleção dos primeiros resultados. Se a consulta exceder o limite, o widget apresenta um erro em vez de totais parciais. Restrinja os filtros ou reduza o agrupamento. Pedir menos primeiros resultados não evita este limite.
 
-O PostgreSQL cancela as instruções no tempo configurado. O MySQL e o MariaDB usam os respetivos limites por instrução. No SQL Server, esta definição limita apenas a espera por bloqueios. Não limita a duração da execução.
+O PostgreSQL, o MySQL, o MariaDB e o SQL Server cancelam o trabalho da base no tempo configurado. O SQL Server também repõe as ligações partilhadas após cada consulta. Assim, os limites de linhas e bloqueios não afetam o pedido seguinte.

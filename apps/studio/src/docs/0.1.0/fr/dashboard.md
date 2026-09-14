@@ -36,4 +36,4 @@ Les widgets Builder utilisent le délai maximal SQL et la limite de lignes du ta
 
 La limite compte les groupes de la base avant le regroupement par période, les totaux par série et la sélection des premiers résultats. En cas de dépassement, le widget affiche une erreur au lieu de totaux partiels. Précisez les filtres ou réduisez le regroupement. Demander moins de premiers résultats ne contourne pas cette limite.
 
-PostgreSQL annule les instructions au délai configuré. MySQL et MariaDB utilisent leurs délais par instruction. Sur SQL Server, ce paramètre limite uniquement l'attente des verrous. Il ne limite pas la durée d'exécution.
+PostgreSQL, MySQL, MariaDB et SQL Server annulent le travail de la base au délai configuré. SQL Server réinitialise aussi les connexions partagées après chaque requête. Les limites de lignes et de verrous ne touchent donc pas la requête suivante.

@@ -83,4 +83,4 @@ Builder widgets use the dashboard SQL timeout and row cap settings. Defaults are
 
 The cap counts database groups before date bucketing, breakdown totals, and top-N selection. If the query exceeds it, the widget returns an error instead of partial totals. Narrow the filters or reduce grouping. A small top-N does not bypass this cap.
 
-PostgreSQL cancels statements at the configured timeout. MySQL and MariaDB use their statement timeout controls. On SQL Server, this setting limits lock waits only. It does not enforce an execution deadline.
+PostgreSQL, MySQL, MariaDB, and SQL Server cancel database work at the configured timeout. SQL Server also resets pooled connections after each query so row and lock limits cannot affect the next request.

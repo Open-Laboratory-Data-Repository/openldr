@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { validateSelectSql, runSqlQuery, planPagination } from './sql-runner';
 
 // --- Fake Kysely db/executor for driving runSqlQuery's `sql`/`sql.raw` calls through the
@@ -119,6 +119,24 @@ describe('runSqlQuery dialect-aware session setup + capped query', () => {
     expect(executed.some((s) => /statement_timeout/i.test(s))).toBe(false);
     expect(executed).toContain('set rowcount 100; select 1 as a; set rowcount 0');
     expect(result.rows).toEqual([{ a: 1 }]);
+  });
+
+  it('mssql: runs the transaction inside the supplied driver deadline', async () => {
+    const { db } = makeFakeDb([{ a: 1 }]);
+    const deadline = {
+      async run<T>(_timeoutMs: number, operation: () => Promise<T>): Promise<T> {
+        return operation();
+      },
+    };
+    const deadlineSpy = vi.spyOn(deadline, 'run');
+
+    await runSqlQuery(db, 'select 1 as a', {
+      timeoutMs: 475,
+      rowCap: 100,
+      withDeadline: deadline.run.bind(deadline),
+    }, 'mssql');
+
+    expect(deadlineSpy).toHaveBeenCalledWith(475, expect.any(Function));
   });
 
   it('mysql (MySQL 8): per-statement MAX_EXECUTION_TIME hint on the capped query — no session SET, no read-only txn', async () => {

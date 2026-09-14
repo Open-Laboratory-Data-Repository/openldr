@@ -3,6 +3,7 @@ import * as tarn from 'tarn';
 import * as tedious from 'tedious';
 import { probe } from '@openldr/core';
 import type { TargetSchema, TargetStorePort } from '@openldr/ports';
+import { createRequestTimeoutScope } from './request-timeout';
 
 export interface MssqlStoreConfig {
   host: string;
@@ -20,14 +21,22 @@ export interface MssqlStoreDeps {
 }
 
 export interface MssqlStore extends TargetStorePort {
+  withRequestTimeout<T>(timeoutMs: number, operation: () => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
 
-export function createMssqlStore(cfg: MssqlStoreConfig, deps: MssqlStoreDeps = {}): MssqlStore {
-  const dialect = new MssqlDialect({
+export function buildMssqlDialectConfig(
+  cfg: MssqlStoreConfig,
+  Request: typeof tedious.Request,
+): ConstructorParameters<typeof MssqlDialect>[0] {
+  return {
+    // SET LOCK_TIMEOUT and SET ROWCOUNT are session-scoped in SQL Server. Reset them before
+    // another caller receives the pooled connection, including after a cancelled request.
+    resetConnectionsOnRelease: true,
     tarn: { ...tarn, options: { min: 0, max: 10 } },
     tedious: {
       ...tedious,
+      Request,
       connectionFactory: () =>
         new tedious.Connection({
           server: cfg.host,
@@ -40,7 +49,12 @@ export function createMssqlStore(cfg: MssqlStoreConfig, deps: MssqlStoreDeps = {
           },
         }),
     },
-  });
+  };
+}
+
+export function createMssqlStore(cfg: MssqlStoreConfig, deps: MssqlStoreDeps = {}): MssqlStore {
+  const requestTimeout = createRequestTimeoutScope(tedious.Request);
+  const dialect = new MssqlDialect(buildMssqlDialectConfig(cfg, requestTimeout.Request));
   const db = new Kysely<TargetSchema>({ dialect });
   const ping = deps.ping ?? (async () => { await sql`select 1`.execute(db); });
 
@@ -51,6 +65,9 @@ export function createMssqlStore(cfg: MssqlStoreConfig, deps: MssqlStoreDeps = {
     },
     async healthCheck() {
       return probe(ping);
+    },
+    withRequestTimeout(timeoutMs, operation) {
+      return requestTimeout.run(timeoutMs, operation);
     },
     async close() {
       await db.destroy();

@@ -45,6 +45,7 @@ describe('selectTargetStore', () => {
     } as any);
     expect(sel.engine).toBe('mssql');
     expect(typeof sel.store.healthCheck).toBe('function');
+    await expect(sel.withQueryTimeout(250, async () => 'bounded')).resolves.toBe('bounded');
     await sel.store.close();
   });
 

@@ -3,9 +3,22 @@ import { describe, it, expect, vi } from 'vitest';
 // Captures what the mysql arm does to its pool. mysql2 is mocked at the module boundary because the
 // thing under test happens at POOL CONSTRUCTION, before any connection exists, and there is no
 // server here to open one against.
-const { poolOn, poolQuery } = vi.hoisted(() => ({ poolOn: vi.fn(), poolQuery: vi.fn() }));
+const { poolOn, poolQuery, mssqlWithRequestTimeout } = vi.hoisted(() => ({
+  poolOn: vi.fn(),
+  poolQuery: vi.fn(),
+  mssqlWithRequestTimeout: vi.fn(async (timeoutMs: number) => {
+    throw new Error(`bounded at ${timeoutMs}`);
+  }),
+}));
 vi.mock('mysql2', () => ({
   createPool: () => ({ on: poolOn, query: poolQuery, getConnection: vi.fn(), end: vi.fn() }),
+}));
+vi.mock('@openldr/adapter-mssql-store', () => ({
+  createMssqlStore: () => ({
+    db: {},
+    withRequestTimeout: mssqlWithRequestTimeout,
+    close: vi.fn(),
+  }),
 }));
 
 import { createConnectorDb, buildPgUrl } from './connector-db';
@@ -22,6 +35,17 @@ describe('createConnectorDb', () => {
   it('builds a microsoft-sql connection object', () => {
     const conn = createConnectorDb('microsoft-sql', { host: 'h', port: '1433', database: 'd', user: 'u', password: 'p' });
     expect(typeof conn.query).toBe('function');
+  });
+  it('runs microsoft-sql queries inside the configured request deadline', async () => {
+    mssqlWithRequestTimeout.mockClear();
+    const conn = createConnectorDb(
+      'microsoft-sql',
+      { host: 'h', port: '1433', database: 'd', user: 'u', password: 'p' },
+      { queryTimeoutMs: 432 },
+    );
+
+    await expect(conn.query('select 1')).rejects.toThrow('bounded at 432');
+    expect(mssqlWithRequestTimeout).toHaveBeenCalledWith(432, expect.any(Function));
   });
   it('throws on an unsupported type', () => {
     expect(() => createConnectorDb('mongodb', {})).toThrow(/unsupported connector type/);

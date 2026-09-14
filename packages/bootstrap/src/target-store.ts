@@ -9,6 +9,7 @@ import type { TargetStorePort } from '@openldr/ports';
 export interface SelectedTargetStore {
   store: TargetStorePort & { close(): Promise<void> };
   engine: TargetEngine;
+  withQueryTimeout<T>(timeoutMs: number, operation: () => Promise<T>): Promise<T>;
 }
 
 // The composition-root seam (DP-1): the only place that chooses a concrete target-store adapter.
@@ -27,17 +28,19 @@ export function selectTargetStore(cfg: Config, engineOverride?: TargetEngine): S
     if (missing.length > 0) {
       throw new ConfigError(`mssql target store requires ${missing.join(', ')} (set TARGET_STORE_ADAPTER=mssql + the MSSQL_* vars)`);
     }
+    const store = createMssqlStore({
+      host: cfg.MSSQL_HOST!,
+      port: cfg.MSSQL_PORT,
+      database: cfg.MSSQL_DATABASE!,
+      user: cfg.MSSQL_USER!,
+      password: cfg.MSSQL_PASSWORD!,
+      encrypt: cfg.MSSQL_ENCRYPT,
+      trustServerCertificate: cfg.MSSQL_TRUST_SERVER_CERT,
+    });
     return {
       engine,
-      store: createMssqlStore({
-        host: cfg.MSSQL_HOST!,
-        port: cfg.MSSQL_PORT,
-        database: cfg.MSSQL_DATABASE!,
-        user: cfg.MSSQL_USER!,
-        password: cfg.MSSQL_PASSWORD!,
-        encrypt: cfg.MSSQL_ENCRYPT,
-        trustServerCertificate: cfg.MSSQL_TRUST_SERVER_CERT,
-      }),
+      store,
+      withQueryTimeout: (timeoutMs, operation) => store.withRequestTimeout(timeoutMs, operation),
     };
   }
   if (engine === 'mysql') {
@@ -58,10 +61,15 @@ export function selectTargetStore(cfg: Config, engineOverride?: TargetEngine): S
         ssl: cfg.MYSQL_SSL,
         rejectUnauthorized: cfg.MYSQL_SSL_REJECT_UNAUTHORIZED,
       }),
+      withQueryTimeout: (_timeoutMs, operation) => operation(),
     };
   }
   if (!cfg.TARGET_DATABASE_URL) {
     throw new ConfigError('postgres target store requires TARGET_DATABASE_URL');
   }
-  return { engine, store: createDbStore({ url: cfg.TARGET_DATABASE_URL }) };
+  return {
+    engine,
+    store: createDbStore({ url: cfg.TARGET_DATABASE_URL }),
+    withQueryTimeout: (_timeoutMs, operation) => operation(),
+  };
 }

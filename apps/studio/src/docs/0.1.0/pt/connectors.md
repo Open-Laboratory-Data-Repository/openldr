@@ -44,7 +44,7 @@ Na linha de comandos, use `openldr connectors inspect <id>`. O JSON contém os c
 
 ## Limite de tempo das consultas
 
-As consultas dos conectores PostgreSQL e MySQL têm um limite de execução de 30 segundos. Uma consulta lenta falha em vez de bloquear o workflow ou o relatório indefinidamente. O PostgreSQL cancela a consulta no servidor. O MySQL usa uma segunda ligação com as mesmas credenciais para terminar a ligação da consulta. O cancelamento pode demorar mais um segundo. A ligação inicial tem um limite separado de 30 segundos.
+As consultas dos conectores PostgreSQL, MySQL e Microsoft SQL têm um limite de execução de 30 segundos. Uma consulta lenta falha em vez de bloquear o workflow ou o relatório indefinidamente. O PostgreSQL e o Microsoft SQL cancelam o pedido ativo. O MySQL usa uma segunda ligação com as mesmas credenciais para terminar a ligação da consulta. O cancelamento do MySQL pode demorar mais um segundo. A ligação inicial tem um limite separado de 30 segundos.
 
 Se uma consulta ultrapassar este limite, reduza o intervalo de datas ou ajuste os filtros e verifique o plano de execução. Tente novamente depois de corrigir a consulta. O formulário do conector não tem um campo para alterar este limite.
 

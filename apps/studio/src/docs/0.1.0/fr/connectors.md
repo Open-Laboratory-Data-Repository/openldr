@@ -44,7 +44,7 @@ En ligne de commande, utilisez `openldr connectors inspect <id>`. Le JSON contie
 
 ## Délai des requêtes de base de données
 
-Les requêtes des connecteurs PostgreSQL et MySQL ont une limite d'exécution de 30 secondes. Une requête lente échoue au lieu de bloquer indéfiniment le workflow ou le rapport. PostgreSQL annule la requête sur le serveur. MySQL utilise une seconde connexion avec les mêmes identifiants pour terminer la connexion de la requête. Cette annulation peut prendre une seconde supplémentaire. La connexion initiale a une limite distincte de 30 secondes.
+Les requêtes des connecteurs PostgreSQL, MySQL et Microsoft SQL ont une limite d'exécution de 30 secondes. Une requête lente échoue au lieu de bloquer indéfiniment le workflow ou le rapport. PostgreSQL et Microsoft SQL annulent la requête active. MySQL utilise une seconde connexion avec les mêmes identifiants pour terminer la connexion de la requête. L'annulation MySQL peut prendre une seconde supplémentaire. La connexion initiale a une limite distincte de 30 secondes.
 
 Si une requête dépasse cette limite, réduisez la période ou affinez les filtres, puis vérifiez son plan d'exécution. Réessayez après correction. Le formulaire du connecteur ne propose aucun champ de délai.
 

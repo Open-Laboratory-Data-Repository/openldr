@@ -31,9 +31,21 @@ export function buildPgUrl(config: Record<string, string>): string {
   return `postgresql://${user}:${pass}@${hostPart}:${port}/${dbName}${ssl}`;
 }
 
-function wrap(store: { db: Kysely<TargetSchema>; close(): Promise<void> }): ConnectorDb {
+function wrap(store: {
+  db: Kysely<TargetSchema>;
+  withRequestTimeout?<T>(timeoutMs: number, operation: () => Promise<T>): Promise<T>;
+  close(): Promise<void>;
+}, queryTimeoutMs?: number): ConnectorDb {
   return {
-    async query(rawSql) { const r = await sql.raw(rawSql).execute(store.db); return { rows: r.rows as Record<string, unknown>[] }; },
+    async query(rawSql) {
+      const execute = async () => {
+        const r = await sql.raw(rawSql).execute(store.db);
+        return { rows: r.rows as Record<string, unknown>[] };
+      };
+      return queryTimeoutMs === undefined || !store.withRequestTimeout
+        ? execute()
+        : store.withRequestTimeout(queryTimeoutMs, execute);
+    },
     close: () => store.close(),
   };
 }
@@ -75,7 +87,7 @@ export function createConnectorDb(
       password: config.password ?? '',
       encrypt: config.encrypt !== 'false',
       trustServerCertificate: config.trustServerCertificate === 'true',
-    }));
+    }), queryTimeoutMs);
   }
   if (type === 'mysql') {
     const port = validatePort(config.port, 3306);

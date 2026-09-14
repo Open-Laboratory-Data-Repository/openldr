@@ -615,7 +615,8 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   }
   const blob = createS3Bucket(toS3BucketConfig(cfg));
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
-  const { store, engine } = selectTargetStore(cfg);
+  const selectedTarget = selectTargetStore(cfg);
+  const { store, engine } = selectedTarget;
   const externalDb = store.db as unknown as Kysely<ExternalSchema>;
   const audit = createAuditStore(internal.db);
   const reportRuns = createReportRunStore(internal.db);
@@ -790,6 +791,7 @@ const reporting: ReportingApi = {
       data = await runBuilderQuery(reportingDb, model, q, policyCache, {
         timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
         rowCap: await numberSettings.get('dashboard.sql_row_cap'),
+        withDeadline: selectedTarget.withQueryTimeout,
       }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres');
     } else {
       // `q.sql` is the STORED template verbatim (the client sends resolved filter `values`
@@ -805,6 +807,7 @@ const reporting: ReportingApi = {
       data = await runSqlQuery(reportingDb, finalSql, {
         timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
         rowCap: await numberSettings.get('dashboard.sql_row_cap'),
+        withDeadline: selectedTarget.withQueryTimeout,
       }, cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres');
     }
     return { ...data, meta: { generatedAt: new Date().toISOString(), rowCount: data.rows.length } };

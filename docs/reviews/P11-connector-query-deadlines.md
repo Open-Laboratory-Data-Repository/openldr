@@ -48,8 +48,36 @@ HONEST NON-PROOF: No real-phone or browser layout test was run. This change adds
 
 MySQL cancellation uses the same credentials. The account must be allowed to open another connection and terminate its own sessions. Cancellation on the server follows the database's interrupt rules; a blocked server may not stop immediately.
 
+## SQL Server follow-up
+
+1 finding: 1 confirmed, 0 refuted, 0 convention-conflict, 0 deferred.
+
+| ID | Finding | Verdict | Proof | Cost |
+|----|---------|---------|-------|------|
+| P19-MSSQL | SQL Server's lock timeout does not bound total dashboard or connector execution. | CONFIRMED | `packages/dashboards/src/sql-runner.ts` only set `LOCK_TIMEOUT`. `packages/adapter-mssql-store/src/index.ts` created Tedious requests without a request timeout. | One adapter boundary, bootstrap wiring, tests, and operator docs. |
+
+The falsifying fact would have been an existing Tedious request deadline. The adapter supplied none. `LOCK_TIMEOUT` only limits time spent waiting for a lock.
+
+The adapter now applies the configured deadline to each Tedious request. Dashboard builder queries, raw dashboard SQL, and Microsoft SQL connectors use that boundary. Pool release resets SQL Server session state before another caller receives the connection.
+
+Focused verification after implementation:
+
+```powershell
+pnpm --filter @openldr/adapter-mssql-store test
+pnpm --filter @openldr/dashboards test src/sql-runner.test.ts src/compile.run.test.ts
+pnpm --filter @openldr/bootstrap test src/connector-db.test.ts src/target-store.test.ts
+pnpm --filter @openldr/studio test src/docs/docs-registry.test.ts src/docs/docs-validation.test.ts
+pnpm --filter @openldr/web test src/docs/DocsPage.test.tsx
+pnpm --filter @openldr/adapter-mssql-store --filter @openldr/dashboards --filter @openldr/bootstrap typecheck
+git diff --check
+```
+
+Results: 123 focused tests passed. The two live SQL Server tests then passed against SQL Server 2022 Developer in 169 milliseconds. They verified request cancellation, healthy reuse after cancellation, and pooled-session reset. All three typechecks exited 0. `git diff --check` exited 0 with line-ending warnings. Existing jsdom and React Router warnings remain in the web documentation tests.
+
+The disposable SQL Server container used no volume and was removed after the tests. The existing OpenLDR containers were unchanged.
+
 Driver references: [node-postgres client configuration](https://node-postgres.com/apis/client), [MySQL KILL](https://dev.mysql.com/doc/refman/8.4/en/kill.html).
 
-No commits, merges, or pushes. No live application databases or secret environment files were accessed. No temporary files remain. Run `pnpm make:changelog` after integration commits reach main, as required by AGENTS.md.
+No live application databases or secret environment files were accessed. No temporary files remain. Run `pnpm make:changelog` after integration commits reach main, as required by AGENTS.md.
 
 This work does not edit bootstrap index exports or connector config readback. Merge P10 and SP2-11 separately without replacing their changes. Public docs navigation may need an additive merge with other documentation slices.

@@ -173,7 +173,7 @@ For headless inspection, run `openldr connectors inspect <id>`. The JSON contain
 
 ## Database query deadlines
 
-PostgreSQL and MySQL connector queries have a 30-second execution limit. A slow query fails instead of keeping the workflow or report waiting indefinitely. PostgreSQL cancels the statement on the server. MySQL uses a second connection with the same credentials to terminate the query connection. Cancellation may take one additional second. Connection setup has a separate 30-second limit.
+PostgreSQL, MySQL, and Microsoft SQL connector queries have a 30-second execution limit. A slow query fails instead of keeping the workflow or report waiting indefinitely. PostgreSQL and Microsoft SQL cancel the active request. MySQL uses a second connection with the same credentials to terminate the query connection. MySQL cancellation may take one additional second. Connection setup has a separate 30-second limit.
 
 If a query exceeds this limit, narrow its date range or filters and check its database execution plan. Retry after correcting the query. There is no timeout field in the connector form.
 
