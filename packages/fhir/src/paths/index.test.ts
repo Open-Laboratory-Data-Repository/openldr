@@ -17,8 +17,15 @@ describe('lookupFhirPath', () => {
       resourceType: 'Location',
       leafType: 'string',
       isArray: false,
+      ownArray: false,
       label: 'District name (aka county)',
     });
+  });
+
+  it('tells an element that repeats apart from one reached through a repeating parent', () => {
+    expect(lookupFhirPath('Location.telecom')).toMatchObject({ isArray: true, ownArray: true });
+    expect(lookupFhirPath('Location.address')).toMatchObject({ isArray: false, ownArray: false });
+    expect(lookupFhirPath('Patient.contact.address')).toMatchObject({ isArray: true, ownArray: false });
   });
 
   it('reports a path reached through an array as isArray, even when the leaf is a scalar', () => {

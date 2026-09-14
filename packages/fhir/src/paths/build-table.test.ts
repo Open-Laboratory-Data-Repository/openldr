@@ -59,6 +59,7 @@ describe('buildPathTable', () => {
       path: 'Widget.name',
       leafType: 'string',
       isArray: false,
+      ownArray: false,
       label: 'Name of the widget',
     });
   });
@@ -67,6 +68,12 @@ describe('buildPathTable', () => {
     // Widget.identifier is Identifier[], so the string leaf below it is still array-reached.
     expect(at(build(), 'Widget.identifier.value')).toMatchObject({ leafType: 'string', isArray: true });
     expect(at(build(), 'Widget.period.start')).toMatchObject({ leafType: 'string', isArray: false });
+  });
+
+  it('marks ownArray only when the last segment itself is an array', () => {
+    expect(at(build(), 'Widget.identifier')).toMatchObject({ isArray: true, ownArray: true });
+    expect(at(build(), 'Widget.identifier.value')).toMatchObject({ isArray: true, ownArray: false });
+    expect(at(build(), 'Widget.period')).toMatchObject({ isArray: false, ownArray: false });
   });
 
   it('skips the _x primitive-extension siblings', () => {

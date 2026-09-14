@@ -15,6 +15,11 @@ export interface FhirPathInfo {
    * because `Location.identifier` is `Identifier[]`, even though `value` itself is a scalar.
    */
   isArray: boolean;
+  /**
+   * True when the last segment itself repeats. `Patient.contact.address` has `isArray` true,
+   * because `contact` repeats, and `ownArray` false, because each contact has one address.
+   */
+  ownArray: boolean;
   /** The element's short label, straight from the R4 definition. */
   label: string;
 }
@@ -25,8 +30,15 @@ export const FHIR_PATH_RESOURCE_TYPES: readonly string[] = R4_PATH_RESOURCE_TYPE
 const RESOURCE_TYPE_SET = new Set(R4_PATH_RESOURCE_TYPES);
 
 function decode(tuple: R4PathTuple): FhirPathInfo {
-  const [path, leafType, isArray, label] = tuple;
-  return { path, resourceType: path.slice(0, path.indexOf('.')), leafType, isArray: isArray === 1, label };
+  const [path, leafType, isArray, ownArray, label] = tuple;
+  return {
+    path,
+    resourceType: path.slice(0, path.indexOf('.')),
+    leafType,
+    isArray: isArray === 1,
+    ownArray: ownArray === 1,
+    label,
+  };
 }
 
 // Built once on first use rather than at module load, so importing this module for
