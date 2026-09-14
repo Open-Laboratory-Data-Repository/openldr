@@ -9,6 +9,7 @@ import { FieldEditorSheet } from './FieldEditorSheet';
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
   listCodingSystems: vi.fn(async () => []),
+  listValueSets: vi.fn(async () => []),
 }));
 
 const BASE_FIELD: FormField = {

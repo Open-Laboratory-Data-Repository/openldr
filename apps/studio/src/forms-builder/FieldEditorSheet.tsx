@@ -4,7 +4,7 @@ import { MoreHorizontal } from 'lucide-react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { FieldType, childrenOf, eligibleParents, groupRepeats, isSurveyForm } from '@openldr/forms/pure';
 import { ReferenceEditor } from './field-editor/ReferenceEditor';
-import { OptionsEditor } from './field-editor/OptionsEditor';
+import { OptionsBlock } from './field-editor/OptionsBlock';
 import { CodesEditor } from './field-editor/CodesEditor';
 import { TranslationsEditor } from './field-editor/TranslationsEditor';
 import { MappingEditor } from './field-editor/MappingEditor';
@@ -294,18 +294,8 @@ export function FieldEditorSheet({
           </>
         )}
 
-        {/* ── Options / Value-set section ──────────────────────────── */}
         {(activeDraft.fieldType === 'select' || activeDraft.fieldType === 'multiselect') && (
-          <>
-            <div className="border-t border-border" />
-            <div className="px-6 py-3">
-              <h3 className="text-sm font-medium text-foreground">Options</h3>
-            </div>
-            <div className="border-t border-border" />
-            <div className="px-6 py-2">
-              <OptionsEditor field={activeDraft} onUpdate={patchDraft} />
-            </div>
-          </>
+          <OptionsBlock field={activeDraft} surveyMode={isSurveyForm(fhirResourceType)} onUpdate={patchDraft} />
         )}
 
         {/* ── Mapping / FHIR section. Above Codes, as in corlix: mapping is what authors get wrong. ── */}
