@@ -1,6 +1,11 @@
 import type { EnShape } from './en';
 
 export const fr: EnShape = {
+  accessDenied: {
+    title: 'Accès refusé',
+    heading: "Vous n'avez pas accès à cette page",
+    description: "Demandez à un administrateur de vérifier vos autorisations. Vous pouvez utiliser la navigation disponible, ouvrir la documentation ou vous déconnecter depuis votre menu utilisateur.",
+  },
   workflowReceipts: {
   "title": "Reçus webhook",
   "runs": "Exécutions",
@@ -415,7 +420,7 @@ export const fr: EnShape = {
         saveFailed: "Impossible d'enregistrer : {{error}}",
         dashboardRawSql: {
           label: 'SQL brut pour les tableaux de bord',
-          description: "Autoriser la création et l'exécution de requêtes SQL arbitraires en lecture seule dans les widgets de tableau de bord (entrepôt Postgres uniquement). Désactivé par défaut.",
+          description: "Autoriser la création et l'exécution de requêtes SQL en lecture seule dans les widgets, sur l'entrepôt PostgreSQL, MySQL ou SQL Server configuré. Désactivé par défaut. Les requêtes enregistrées approuvées peuvent encore s'exécuter lorsque cette option est désactivée.",
         },
         workflowListeners: {
           label: "Déclencheurs d'écoute de workflow",
@@ -433,11 +438,11 @@ export const fr: EnShape = {
         saveFailed: "Impossible d'enregistrer : {{error}}",
         dashboardSqlTimeoutMs: {
           label: 'Délai SQL des tableaux de bord (ms)',
-          description: "Durée maximale d'exécution d'une requête SQL brute de tableau de bord avant annulation.",
+          description: "Durée maximale des requêtes du constructeur et des requêtes SQL brutes des tableaux de bord avant annulation.",
         },
         dashboardSqlRowCap: {
           label: 'Plafond de lignes SQL des tableaux de bord',
-          description: 'Nombre maximal de lignes qu\'une requête SQL brute de tableau de bord peut renvoyer.',
+          description: "Le SQL brut renvoie au maximum ce nombre de lignes. Le constructeur compte les groupes de la base avant les agrégations suivantes et renvoie une erreur si ce nombre dépasse la limite.",
         },
         marketplaceMaxPayloadBytes: {
           label: 'Charge utile maximale de la marketplace (octets)',

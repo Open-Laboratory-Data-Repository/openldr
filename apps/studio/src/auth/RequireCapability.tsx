@@ -22,6 +22,7 @@ export function RequireCapability({
   if (loading) return null;
   const allowed = [...(cap ? [cap] : []), ...(caps ?? [])];
   const ok = allowed.length === 0 || allowed.some((c) => hasCapability(c));
-  if (!user || !ok) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to="/" replace />;
+  if (!ok) return <Navigate to="/access-denied" replace />;
   return <>{children}</>;
 }

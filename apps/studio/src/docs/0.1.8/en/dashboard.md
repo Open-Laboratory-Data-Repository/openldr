@@ -1,5 +1,13 @@
 # Dashboard
 
+## Access and query limits
+
+Opening Dashboard requires the View dashboards permission. If your account lacks access, Studio shows an access-denied page without loading dashboard data. Ask an administrator to review your permissions. Available navigation, Docs and sign-out remain accessible.
+
+In Settings, General, the dashboard SQL timeout applies to builder and raw SQL queries. Raw SQL returns up to the row cap. Builder queries count database groups before further aggregation. Exceeding that group cap returns an error instead of partial totals.
+
+The raw SQL switch applies to the configured PostgreSQL, MySQL or SQL Server warehouse. Approved stored queries can still run when the switch is off.
+
 Dashboards turn warehouse data into shared operational views. Use them to monitor key metrics, compare trends, and publish workflow-created datasets to users who do not need to build queries themselves.
 
 ## Outcome

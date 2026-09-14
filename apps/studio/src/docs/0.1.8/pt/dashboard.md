@@ -1,5 +1,13 @@
 # Painel
 
+## Acesso e limites das consultas
+
+Abrir o painel exige a permissão de consultar painéis. Sem essa permissão, o Studio apresenta uma página de acesso negado sem carregar os dados do painel. Peça a um administrador para rever as suas permissões. A navegação disponível, a documentação e a opção de terminar a sessão continuam acessíveis.
+
+Em Definições, Geral, o tempo limite de SQL dos painéis aplica-se às consultas do construtor e de SQL bruto. O SQL bruto devolve no máximo o número de linhas permitido. O construtor conta os grupos da base antes das agregações seguintes. Ultrapassar esse limite de grupos devolve um erro em vez de totais parciais.
+
+A opção de SQL bruto aplica-se ao armazém PostgreSQL, MySQL ou SQL Server configurado. As consultas guardadas e aprovadas podem continuar a executar quando esta opção está desativada.
+
 ## Criar outro painel
 
 Abra o menu de três pontos junto ao seletor e escolha **Novo painel**.

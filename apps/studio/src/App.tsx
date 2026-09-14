@@ -29,12 +29,14 @@ import { Roles } from './pages/Roles';
 import { DataExposure } from '@/pages/settings/DataExposure';
 import { Laboratory } from '@/pages/settings/Laboratory';
 import { CallbackPage } from './auth/CallbackPage';
+import { AccessDeniedPage } from './auth/AccessDeniedPage';
 
 export function App() {
   return (
     <Routes>
       <Route path="/auth/callback" element={<CallbackPage />} />
-      <Route path="/" element={<DashboardPage />} />
+      <Route path="/access-denied" element={<RequireCapability><AccessDeniedPage /></RequireCapability>} />
+      <Route path="/" element={<RequireCapability cap="dashboards.view"><DashboardPage /></RequireCapability>} />
       <Route path="/reports" element={<Reports />} />
       <Route path="/workflows" element={<RequireCapability cap="workflows.view"><WorkflowList /></RequireCapability>} />
       <Route path="/workflows/new" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />

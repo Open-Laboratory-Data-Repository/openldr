@@ -1,6 +1,11 @@
 import type { EnShape } from './en';
 
 export const pt: EnShape = {
+  accessDenied: {
+    title: 'Acesso negado',
+    heading: 'Não tem acesso a esta página',
+    description: 'Peça a um administrador para rever as suas permissões. Pode usar a navegação disponível, abrir a documentação ou terminar a sessão no menu do utilizador.',
+  },
   workflowReceipts: {
   "title": "Recibos webhook",
   "runs": "Execuções",
@@ -415,7 +420,7 @@ export const pt: EnShape = {
         saveFailed: 'Não foi possível guardar: {{error}}',
         dashboardRawSql: {
           label: 'SQL bruto no painel',
-          description: 'Permitir a criação e execução de SQL arbitrário de leitura apenas em widgets de painel (apenas armazém Postgres). Desativado por predefinição.',
+          description: 'Permitir a criação e execução de SQL só de leitura nos widgets, no armazém PostgreSQL, MySQL ou SQL Server configurado. Desativado por predefinição. As consultas guardadas e aprovadas podem continuar a executar quando esta opção está desativada.',
         },
         workflowListeners: {
           label: 'Gatilhos de escuta de fluxo de trabalho',
@@ -433,11 +438,11 @@ export const pt: EnShape = {
         saveFailed: 'Não foi possível guardar: {{error}}',
         dashboardSqlTimeoutMs: {
           label: 'Tempo limite de SQL do painel (ms)',
-          description: 'Tempo máximo de execução de uma consulta SQL bruta do painel antes de ser cancelada.',
+          description: 'Tempo máximo de execução das consultas do construtor e de SQL bruto dos painéis antes do cancelamento.',
         },
         dashboardSqlRowCap: {
           label: 'Limite de linhas de SQL do painel',
-          description: 'Número máximo de linhas que uma consulta SQL bruta do painel pode devolver.',
+          description: 'O SQL bruto devolve no máximo este número de linhas. O construtor conta os grupos da base antes das agregações seguintes e devolve um erro se esse número ultrapassar o limite.',
         },
         marketplaceMaxPayloadBytes: {
           label: 'Carga máxima do marketplace (bytes)',

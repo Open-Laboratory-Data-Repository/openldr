@@ -1,4 +1,9 @@
 export const en = {
+  accessDenied: {
+    title: 'Access denied',
+    heading: "You don't have access to this page",
+    description: 'Ask an administrator to review your permissions. You can use the available navigation, open Docs, or sign out from your user menu.',
+  },
   workflowReceipts: {
   "title": "Webhook receipts",
   "runs": "Runs",
@@ -417,7 +422,7 @@ export const en = {
         saveFailed: 'Could not save: {{error}}',
         dashboardRawSql: {
           label: 'Dashboard raw SQL',
-          description: 'Allow authoring and running arbitrary read-only SQL in dashboard widgets (Postgres warehouse only). Off by default.',
+          description: 'Allow authoring and running read-only SQL in dashboard widgets against the configured PostgreSQL, MySQL or SQL Server warehouse. Off by default. Approved stored queries can still run when this is off.',
         },
         workflowListeners: {
           label: 'Workflow listener triggers',
@@ -435,11 +440,11 @@ export const en = {
         saveFailed: 'Could not save: {{error}}',
         dashboardSqlTimeoutMs: {
           label: 'Dashboard SQL timeout (ms)',
-          description: 'Maximum time a dashboard raw-SQL query may run before it is cancelled.',
+          description: 'Maximum execution time for dashboard builder and raw SQL queries before cancellation.',
         },
         dashboardSqlRowCap: {
           label: 'Dashboard SQL row cap',
-          description: 'Maximum number of rows a dashboard raw-SQL query may return.',
+          description: 'Raw SQL returns up to this many rows. Builder queries count database groups before further aggregation and return an error if that count exceeds this limit.',
         },
         marketplaceMaxPayloadBytes: {
           label: 'Marketplace max payload (bytes)',

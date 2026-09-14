@@ -189,10 +189,11 @@ describe('docs registry', () => {
   it('resolves an explicit version and falls back to the latest for an unknown one', () => {
     const pinned = resolve('en', 'dashboard', '0.1.0');
     const fallback = resolve('en', 'dashboard', '99.0.0');
+    const latest = resolve('en', 'dashboard', DEFAULT_DOC_VERSION);
     expect(pinned).not.toBeNull();
     // An unknown version falls back to the newest authored content, not null.
     expect(fallback).not.toBeNull();
-    expect(fallback!.content).toBe(pinned!.content);
-    expect(list('en', '99.0.0').map((s) => s.slug)).toEqual(list('en', '0.1.0').map((s) => s.slug));
+    expect(fallback!.content).toBe(latest!.content);
+    expect(list('en', '99.0.0').map((s) => s.slug)).toEqual(list('en', DEFAULT_DOC_VERSION).map((s) => s.slug));
   });
 });

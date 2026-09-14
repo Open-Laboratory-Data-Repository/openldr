@@ -18,6 +18,7 @@ function renderAt(caps: string[] | null, loading = false) {
     <MemoryRouter initialEntries={['/users']}>
       <Routes>
         <Route path="/" element={<div>home</div>} />
+        <Route path="/access-denied" element={<div>access denied</div>} />
         <Route path="/users" element={<RequireCapability cap="users.view"><div>admin-page</div></RequireCapability>} />
       </Routes>
     </MemoryRouter>,
@@ -29,9 +30,10 @@ describe('RequireCapability', () => {
     renderAt(['users.view']);
     expect(screen.getByText('admin-page')).toBeTruthy();
   });
-  it('redirects a user without the capability to home', () => {
+  it('sends a signed-in user without the capability to access denied, not home', () => {
     renderAt(['forms.view']);
-    expect(screen.getByText('home')).toBeTruthy();
+    expect(screen.getByText('access denied')).toBeTruthy();
+    expect(screen.queryByText('home')).toBeNull();
   });
   it('redirects an unauthenticated user to home', () => {
     renderAt(null);

@@ -34,6 +34,7 @@ function renderAppLikeSettingsTree(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/" element={<div>home</div>} />
+        <Route path="/access-denied" element={<div>access denied</div>} />
         <Route
           path="/settings"
           element={
@@ -108,7 +109,8 @@ describe('SettingsShell', () => {
   it('denies a user with none of the settings sub-caps at the parent gate', () => {
     hasCapability.mockReturnValue(false);
     renderAppLikeSettingsTree('/settings');
-    expect(screen.getByText('home')).toBeInTheDocument();
+    expect(screen.getByText('access denied')).toBeInTheDocument();
+    expect(screen.queryByText('home')).not.toBeInTheDocument();
   });
 
   // REGRESSION: the shell's content wrapper used `overflow-y-auto`, but every settings page

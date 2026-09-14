@@ -2,6 +2,8 @@
 
 ## English
 
+Opening Dashboard requires the View dashboards permission. Without it, Studio shows an access-denied page without loading dashboard data. Ask an administrator to review your permissions. Available navigation, Docs and sign-out remain accessible. Direct links to other protected pages show the same denial when the required permission is missing.
+
 In Studio, open Dashboard. Open the dots menu beside the selector and choose **New dashboard**.
 The action is available in view and edit modes. Wait for unsaved edits to finish saving first.
 Creation stays disabled while a request is pending. The new blank dashboard opens in edit mode.
@@ -14,6 +16,8 @@ Widget and filter editing is unavailable while creation is pending.
 
 ## Français
 
+Ouvrir le tableau de bord nécessite l'autorisation de consulter les tableaux de bord. Sans cette autorisation, Studio affiche une page d'accès refusé sans charger les données. Demandez à un administrateur de vérifier vos autorisations. La navigation disponible, la documentation et la déconnexion restent accessibles. Les liens directs vers les autres pages protégées affichent le même refus lorsque l'autorisation requise manque.
+
 Dans Studio, ouvrez Dashboard. Ouvrez le menu à trois points à côté du sélecteur, puis choisissez **Nouveau tableau de bord**.
 L'action est disponible en consultation et en modification. Attendez la fin de l'enregistrement des modifications.
 Elle reste désactivée pendant la création. Le tableau de bord vide s'ouvre en mode modification.
@@ -25,6 +29,8 @@ Si vous modifiez pendant la création, enregistrez ces modifications, puis séle
 La modification des widgets et des filtres est désactivée pendant la création.
 
 ## Português
+
+Abrir o painel exige a permissão de consultar painéis. Sem essa permissão, o Studio apresenta uma página de acesso negado sem carregar os dados. Peça a um administrador para rever as suas permissões. A navegação disponível, a documentação e a opção de terminar a sessão continuam acessíveis. As ligações diretas para outras páginas protegidas apresentam a mesma recusa quando falta a permissão necessária.
 
 No Studio, abra Dashboard. Abra o menu de três pontos junto ao seletor e escolha **Novo painel**.
 A ação está disponível nos modos de visualização e edição. Aguarde até guardar as alterações pendentes.

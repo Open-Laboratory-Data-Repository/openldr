@@ -1,5 +1,13 @@
 # Tableau de bord
 
+## Accès et limites des requêtes
+
+Ouvrir le tableau de bord nécessite l'autorisation de consulter les tableaux de bord. Sans cette autorisation, Studio affiche une page d'accès refusé sans charger les données du tableau de bord. Demandez à un administrateur de vérifier vos autorisations. La navigation disponible, la documentation et la déconnexion restent accessibles.
+
+Dans Paramètres, Général, le délai SQL des tableaux de bord concerne les requêtes du constructeur et les requêtes SQL brutes. Le SQL brut renvoie au maximum le nombre de lignes autorisé. Le constructeur compte les groupes de la base avant les agrégations suivantes. Un dépassement de ce plafond de groupes renvoie une erreur au lieu de totaux partiels.
+
+L'option SQL brut concerne l'entrepôt PostgreSQL, MySQL ou SQL Server configuré. Les requêtes enregistrées approuvées peuvent encore s'exécuter lorsque cette option est désactivée.
+
 ## Créer un autre tableau de bord
 
 Ouvrez le menu à trois points à côté du sélecteur, puis choisissez **Nouveau tableau de bord**.
