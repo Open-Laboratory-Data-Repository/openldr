@@ -180,7 +180,9 @@ export function FieldListPane({
           onDelete={onDelete}
         />
         {children.length > 0 && (
-          <div data-nested="true" className="ml-3 space-y-1.5 border-l-2 border-dashed border-border pl-3">
+          // border-0 first: here a border is hidden by its style, not its width, so border-dashed
+          // alone would draw all four sides at the default width instead of the left guide.
+          <div data-nested="true" className="ml-3 space-y-1.5 border-0 border-l-2 border-dashed border-border pl-3">
             {children.map((child) => renderField(child))}
           </div>
         )}
