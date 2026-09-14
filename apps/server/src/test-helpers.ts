@@ -172,6 +172,25 @@ function buildFakeAdmin(): FakeAdmin {
         }
         return { imported: rows.length };
       },
+      async existing(pairs) {
+        return pairs.filter((p) => terms.some((t) => t.system === p.system && t.code === p.code));
+      },
+      async createIfAbsent(input) {
+        if (terms.some((t) => t.system === input.system && t.code === input.code)) return null;
+        const t: TermRow = {
+          system: input.system, code: input.code, display: input.display ?? null, status: input.status,
+          shortName: input.shortName ?? null, class: input.class ?? null, unit: input.unit ?? null,
+          replacedBy: input.replacedBy ?? null, metadata: input.metadata ?? null, mappingCount: 0,
+        };
+        terms.push(t);
+        return t;
+      },
+      async deleteIfAddedBy(system, code, tag) {
+        const idx = terms.findIndex((x) => x.system === system && x.code === code);
+        if (idx === -1 || terms[idx].metadata?.addedBy !== tag) return false;
+        terms.splice(idx, 1);
+        return true;
+      },
     },
     termMappings: {
       async listOutgoing(system, code) {
@@ -258,6 +277,14 @@ function buildFakeAdmin(): FakeAdmin {
           codeCount: v.compose.include?.flatMap((i) => i.concept ?? []).length ?? 0,
           primarySystem: v.compose.include?.find((i) => i.system)?.system ?? null,
         } as never;
+      },
+      // No expansion table here: a set's stored codes are its enumerated concepts, as in `expand`.
+      async storedCodes(id) {
+        const v = valueSets.find((x) => x.id === id);
+        if (!v) return [];
+        return (v.compose.include ?? [])
+          .flatMap((i) => (i.concept ?? []).map((c) => ({ system: i.system ?? 's1', code: c.code, display: c.display ?? null })))
+          .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : a.system < b.system ? -1 : a.system > b.system ? 1 : 0));
       },
       async save(input) {
         const existing = valueSets.find((x) => x.url === input.url);

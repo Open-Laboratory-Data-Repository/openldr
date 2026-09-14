@@ -19,6 +19,7 @@ import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerRolesRoutes } from './roles-routes';
 import { registerFormsRoutes } from './forms-routes';
+import { registerCodeSuggestionRoutes } from './code-suggestion-routes';
 import { registerReferenceSearchRoutes } from './reference-search-routes';
 import { registerReportDesignRoutes } from './report-designs-routes';
 import { registerReportDefRoutes } from './report-defs-routes';
@@ -154,6 +155,7 @@ export async function buildApp(ctx: AppContext) {
   registerUsersRoutes(app, ctx);
   registerRolesRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
+  registerCodeSuggestionRoutes(app, ctx);
   registerReferenceSearchRoutes(app, ctx, {
     Patient: createPatientResolver(ctx.store.db as never, ctx.targetEngine),
   });
