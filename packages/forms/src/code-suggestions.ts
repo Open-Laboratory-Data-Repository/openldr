@@ -77,9 +77,10 @@ function compare(a: string, b: string): number {
 }
 
 /**
- * One list, binding codes first, then by count, highest first, then by code, then by system. A
- * code in both sources is listed once, as Binding, with its count. `known` holds `codingKey`s of
- * the codes CE holds as terms.
+ * One list, by count, highest first, then by code, then by system. So every code other forms use
+ * comes before every binding code no form uses (operator ruling, 2026-09-14). A code in both
+ * sources is listed once, as Binding, with its count, and ranks by that count. `known` holds
+ * `codingKey`s of the codes CE holds as terms.
  */
 export function rankCodeSuggestions(input: {
   binding: readonly { system: string; code: string; display: string | null }[];
@@ -106,19 +107,17 @@ export function rankCodeSuggestions(input: {
     if (out.has(key)) continue;
     out.set(key, { system: t.system, code: t.code, display: t.display, source: 'your-forms', count: t.count, inTerminology: input.known.has(key) });
   }
-  const rank = (s: CodeSuggestionSource) => (s === 'binding' ? 0 : 1);
   return [...out.values()].sort((a, b) =>
-    rank(a.source) - rank(b.source)
-    || (b.count ?? 0) - (a.count ?? 0)
+    (b.count ?? 0) - (a.count ?? 0)
     || compare(a.code, b.code)
     || compare(a.system, b.system));
 }
 
 /**
  * What the panel draws: the ranked rows minus the codes already on the field, with binding codes
- * no form uses capped at `limit`. A bound set can hold thousands of codes, and binding ranks
- * first, so without the cap they would bury every code your forms use. A row with a count is never
- * hidden. `hidden` is how many were left out.
+ * no form uses capped at `limit`. A bound set can hold thousands of codes, and without the cap
+ * the panel would draw them all. A row with a count is never hidden. `hidden` is how many were
+ * left out.
  */
 export function offerSuggestions(
   rows: readonly CodeSuggestion[],

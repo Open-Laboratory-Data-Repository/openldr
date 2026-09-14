@@ -72,14 +72,14 @@ function appFor(ctx: unknown, capabilities: string[]) {
 }
 
 describe('GET /api/forms/code-suggestions', () => {
-  it('ranks the binding first, then other forms by count, and marks the codes CE lacks', async () => {
+  it('ranks the codes other forms use first, by count, then the binding, and marks the codes CE lacks', async () => {
     const { ctx } = fakeCtx([{ system: LOINC, code: '718-7' }]);
     const res = await appFor(ctx, AUTHOR).inject({ method: 'GET', url: '/api/forms/code-suggestions?fhirPath=Observation.code&valueSetUrl=urn:test:vs' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([
-      { system: LOINC, code: '2345-7', display: 'Glucose', source: 'binding', inTerminology: false },
       { system: LOINC, code: '718-7', display: 'Hemoglobin', source: 'your-forms', count: 2, inTerminology: true },
       { system: LOINC, code: '6690-2', display: 'WBC', source: 'your-forms', count: 1, inTerminology: false },
+      { system: LOINC, code: '2345-7', display: 'Glucose', source: 'binding', inTerminology: false },
     ]);
   });
 
