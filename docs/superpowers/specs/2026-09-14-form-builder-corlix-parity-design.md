@@ -526,7 +526,8 @@ Each slice is done only when all of these hold:
 
 1. The studio UI works and follows AGENTS.md §5.
 2. `apps/studio/src/docs/0.1.8/{en,fr,pt}/forms.md` and `apps/web/src/docs/0.1.8/forms.md`
-   are updated. The web docs have no fr or pt folders today, so the web edit is English only.
+   are updated. The web doc holds all three languages in one file, under `## English`,
+   `## Français` and `## Português`, so each gets its own section.
 3. It is checked at 375x812. Anything anchored to the bottom edge is marked "only a real
    phone can confirm". Full-height surfaces use `h-dvh`.
 4. The full gate is green: `pnpm turbo run test --force` and
