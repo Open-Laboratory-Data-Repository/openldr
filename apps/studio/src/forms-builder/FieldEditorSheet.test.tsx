@@ -1,15 +1,29 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { FieldType } from '@openldr/forms/pure';
+import * as api from '../api';
 import { FieldEditorSheet } from './FieldEditorSheet';
 
-// Keep the real module and override one function: other editor parts import other api calls,
-// and a factory that returned only this one would break them.
+const vsMocks = vi.hoisted(() => ({
+  gender: {
+    id: 'vs-g', url: 'http://hl7.org/fhir/ValueSet/administrative-gender', name: 'AdministrativeGender',
+    title: 'AdministrativeGender', version: null, status: 'active', immutable: true, publisherId: 'pub-hl7-fhir',
+    category: null, codeCount: 2, primarySystem: null,
+  },
+}));
+
+// Keep the real module and override what the editor parts fetch: other editor parts import other
+// api calls, and a factory that returned only these would break them.
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
   listCodingSystems: vi.fn(async () => []),
-  listValueSets: vi.fn(async () => []),
+  listValueSets: vi.fn(async () => [vsMocks.gender]),
+  findValueSetByUrl: vi.fn(async (url: string) => (url === vsMocks.gender.url ? vsMocks.gender : null)),
+  storedValueSetCodes: vi.fn(async () => [
+    { system: 'http://hl7.org/fhir/administrative-gender', code: 'male', display: 'Male' },
+    { system: 'http://hl7.org/fhir/administrative-gender', code: 'female', display: 'Female' },
+  ]),
 }));
 
 const BASE_FIELD: FormField = {
@@ -415,5 +429,40 @@ describe('FieldEditorSheet', () => {
     fireEvent.click(screen.getByRole('combobox', { name: /controlling field/i }));
     expect(screen.queryAllByRole('option', { name: 'Patient name' })).toHaveLength(0);
     expect(screen.getAllByRole('option', { name: 'Demographics' }).length).toBeGreaterThan(0);
+  });
+
+  describe('auto-bind', () => {
+    beforeEach(() => vi.mocked(api.findValueSetByUrl).mockClear());
+
+    function saveDraft() {
+      const trigger = screen.getByRole('button', { name: 'Field actions' });
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Save')) fireEvent.keyDown(trigger, { key: 'Enter' });
+      fireEvent.click(screen.getByText('Save'));
+    }
+
+    it('picking a required-bound path makes the field a select over the held set', async () => {
+      const { onSave } = renderSheet({ fhirResourceType: 'Patient' });
+      fireEvent.change(screen.getByLabelText('FHIR Path'), { target: { value: 'Patient.gender' } });
+      expect(await screen.findByDisplayValue('male')).toBeTruthy();
+      saveDraft();
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+        fieldType: 'select', valueSetUrl: vsMocks.gender.url, bindingStrength: 'required', allowCustomValue: false,
+      }));
+    });
+
+    it('leaves an example-bound path to the author', async () => {
+      renderSheet({ fhirResourceType: 'ServiceRequest' });
+      fireEvent.change(screen.getByLabelText('FHIR Path'), { target: { value: 'ServiceRequest.code' } });
+      await waitFor(() => expect(screen.getByLabelText('FHIR Path')).toHaveValue('ServiceRequest.code'));
+      expect(api.findValueSetByUrl).not.toHaveBeenCalled();
+    });
+
+    it('leaves a field that names a reference source alone', async () => {
+      renderSheet({ fhirResourceType: 'Patient', field: { ...BASE_FIELD, fieldType: 'reference', referenceTarget: 'http://loinc.org' } });
+      fireEvent.change(screen.getByLabelText('FHIR Path'), { target: { value: 'Patient.gender' } });
+      await waitFor(() => expect(screen.getByLabelText('FHIR Path')).toHaveValue('Patient.gender'));
+      expect(api.findValueSetByUrl).not.toHaveBeenCalled();
+    });
   });
 });
