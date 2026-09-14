@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "5200054c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Left-align the FHIR Version and Resource Type values"
+        },
+        {
           "hash": "1ed021ce",
           "type": "feat",
           "scope": "forms",
