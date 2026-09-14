@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "fe106b82",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Left-align the value in every Select trigger"
+        },
+        {
           "hash": "5200054c",
           "type": "fix",
           "scope": "studio",
