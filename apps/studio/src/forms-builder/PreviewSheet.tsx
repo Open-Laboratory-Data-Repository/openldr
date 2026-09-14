@@ -18,7 +18,9 @@ export function PreviewSheet({ schema, open, onOpenChange }: { schema: FormSchem
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex flex-col gap-0 p-0 sm:max-w-xl">
+      {/* Wider than the field editor's 24rem, as in corlix: a whole form needs more room than one
+          field. Full width on a phone. */}
+      <SheetContent className="flex w-full max-w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="flex-row items-center justify-between space-y-0 border-b border-border px-6 py-3 pr-12">
           <div>
             <SheetTitle>Preview</SheetTitle>
