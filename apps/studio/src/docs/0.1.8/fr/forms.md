@@ -35,6 +35,22 @@ Ce contrôle porte sur la configuration. Les réponses obligatoires, les référ
 - Un formulaire d'enquête n'a pas de **Library**.
 - Si l'éditeur fait moins de 980 pixels de large, **Form** et **Library** deviennent des onglets. Un ajout depuis **Library** ramène à **Form**. Replier la barre latérale peut réafficher les deux volets.
 
+## Travailler sur plusieurs champs
+
+- Cliquez sur un champ pour ouvrir son éditeur. Maj-clic sélectionne tous les champs entre le dernier cliqué et celui-ci. Ctrl-clic (Cmd-clic sur Mac) ajoute ou retire un champ. Aucun des deux n'ouvre l'éditeur.
+- Ctrl+A (Cmd+A) sélectionne tous les champs affichés par la liste. Échap vide la sélection.
+- Avec deux champs ou plus sélectionnés, l'en-tête de la liste en indique le nombre, et son menu ⋯ les déplace vers une section, les active ou les désactive, ou les supprime. La suppression demande confirmation. Chaque action s'annule en une seule fois.
+- **Toggle enabled** les désactive tous si au moins la moitié sont actifs, et les active tous sinon. Il ignore les champs verrouillés, tout comme **Delete**.
+- Quand aucune zone de saisie ni aucun menu n'a le focus : j et k (ou les flèches) descendent et remontent dans la liste, Entrée ouvre le champ, Espace l'active ou le désactive, d le supprime et Ctrl+D le duplique. Avec deux champs ou plus sélectionnés, Espace et d agissent sur tous. Ctrl+F place le curseur dans la recherche de champs.
+- Un téléphone n'a pas de touche Maj ni Ctrl : sur téléphone, on sélectionne un champ à la fois.
+
+## Sections
+
+- Faites glisser un champ par sa poignée. Pendant le glissement, un panneau en haut de la liste affiche **(no section)** et chaque section, avec son nombre de champs. Déposez le champ sur l'une d'elles pour l'y déplacer. Le panneau n'apparaît que si le formulaire a des sections.
+- Dans la liste Sections, le menu ⋯ de chaque section propose **Edit visibility**, **Move up**, **Move down** et **Delete**.
+- **Edit visibility** ouvre le même éditeur de règle que pour un champ. Seuls les champs actifs peuvent servir dans une condition. La saisie masque la section tant que sa règle n'est pas remplie.
+- Un champ ou une section qui a une règle de visibilité affiche une icône de branche.
+
 ## Exemple : soumettre une demande de laboratoire
 
 Utilisez une installation de test avec un patient existant, la terminologie LOINC chargée et le workflow d'ingestion actif. Il faut pouvoir modifier et publier les formulaires et soumettre des réponses.

@@ -14,10 +14,17 @@ export interface BuilderKeyboardHandlers {
   clear: () => void;
 }
 
-function isTypingTarget(target: EventTarget | null): boolean {
-  const element = target as HTMLElement | null;
-  if (!element) return false;
-  return ['INPUT', 'TEXTAREA', 'SELECT'].includes(element.tagName) || element.isContentEditable;
+/**
+ * The list keys act only when the page itself has focus, or a row's label does. Before S4 they did
+ * nothing, so no control relied on reaching them. Now they do things, so a key pressed in a text box,
+ * an open menu, a select, a sheet or on any other control belongs to that control. Otherwise
+ * ArrowDown in a select would move the list's anchor, and Escape that closes a sheet would clear the
+ * selection.
+ */
+function isListFocus(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return true;
+  if (target === document.body) return true;
+  return target.hasAttribute('data-row-label');
 }
 
 export function useBuilderKeyboard(handlers: BuilderKeyboardHandlers): void {
@@ -27,7 +34,7 @@ export function useBuilderKeyboard(handlers: BuilderKeyboardHandlers): void {
       if (mod && event.key.toLowerCase() === 'f') { event.preventDefault(); handlers.focusSearch(); return; }
       if (mod && event.key.toLowerCase() === 'z' && event.shiftKey) { event.preventDefault(); handlers.redo(); return; }
       if (mod && event.key.toLowerCase() === 'z') { event.preventDefault(); handlers.undo(); return; }
-      if (isTypingTarget(event.target)) return;
+      if (!isListFocus(event.target)) return;
       if (event.key === 'j' || event.key === 'ArrowDown') handlers.next();
       else if (event.key === 'k' || event.key === 'ArrowUp') handlers.previous();
       else if (event.key === 'Enter') handlers.open();

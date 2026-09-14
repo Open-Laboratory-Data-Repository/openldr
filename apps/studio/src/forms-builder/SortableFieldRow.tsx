@@ -15,10 +15,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { discriminatorLabel, type FormField, type FormLintIssue } from '@openldr/forms/pure';
+import { VisibilityMarker } from './VisibilityMarker';
 
 export interface SortableFieldRowProps {
   field: FormField;
   selected: boolean;
+  /** The row Shift-click ranges from and j and k move. */
+  anchor?: boolean;
   lintIssue?: FormLintIssue;
   /** True when this group holds many instances. The list derives it with `groupRepeats`. */
   repeats?: boolean;
@@ -32,6 +35,7 @@ export interface SortableFieldRowProps {
 export function SortableFieldRow({
   field,
   selected,
+  anchor = false,
   lintIssue,
   repeats = false,
   onSelect,
@@ -68,7 +72,7 @@ export function SortableFieldRow({
         selected
           ? 'border-primary bg-primary/5'
           : 'border-border hover:border-muted-foreground/30'
-      }`}
+      } ${anchor ? 'border-l-2 border-l-primary' : ''}`}
     >
       {/* Drag handle */}
       <button
@@ -96,6 +100,7 @@ export function SortableFieldRow({
           interactive element that would nest the drag/checkbox/⋯ controls inside it. */}
       <button
         type="button"
+        data-row-label
         onClick={(e) => onSelect(field, e)}
         aria-pressed={selected}
         aria-label={`Edit field ${field.displayLabel}`}
@@ -132,6 +137,8 @@ export function SortableFieldRow({
           {lintIssue.severity === 'error' ? '!' : '?'}
         </span>
       )}
+
+      <VisibilityMarker rule={field.visibility} />
 
       {/* Claims the field holds many. A group bound to a one-instance element holds one, so it
           must not carry the marker. Radix tooltips do not open on touch, hence the aria-label. */}

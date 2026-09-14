@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
-import { ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { MoreHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { FormSection } from '@openldr/forms/pure';
+import { VisibilityMarker } from './VisibilityMarker';
 
 export interface SectionsManagerProps {
   sections: FormSection[];
   onChange: (sections: FormSection[]) => void;
   onFieldsClearSection: (sectionId: string) => void;
+  onEditVisibility?: (sectionId: string) => void;
 }
 
 function generateId(label: string, existing: FormSection[]): string {
@@ -29,6 +38,7 @@ export function SectionsManager({
   sections,
   onChange,
   onFieldsClearSection,
+  onEditVisibility,
 }: SectionsManagerProps): JSX.Element {
   const [newLabel, setNewLabel] = useState('');
 
@@ -92,40 +102,40 @@ export function SectionsManager({
               className="h-7 flex-1 text-sm border-0 shadow-none focus-visible:ring-0 px-1"
             />
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0"
-              aria-label="Move up"
-              disabled={index === 0}
-              onClick={() => handleMove(index, 'up')}
-            >
-              <ChevronUp className="h-3.5 w-3.5" />
-            </Button>
+            <VisibilityMarker rule={section.visibility} />
 
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0"
-              aria-label="Move down"
-              disabled={index === sorted.length - 1}
-              onClick={() => handleMove(index, 'down')}
-            >
-              <ChevronDown className="h-3.5 w-3.5" />
-            </Button>
-
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 shrink-0 text-destructive hover:text-destructive"
-              aria-label={`Delete section ${section.label}`}
-              onClick={() => handleDelete(section.id)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            {/* Every row action in one ⋯, per AGENTS.md §5. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 shrink-0"
+                  aria-label={`Actions for section ${section.label}`}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {onEditVisibility && (
+                  <DropdownMenuItem onSelect={() => onEditVisibility(section.id)}>Edit visibility</DropdownMenuItem>
+                )}
+                <DropdownMenuItem disabled={index === 0} onSelect={() => handleMove(index, 'up')}>
+                  Move up
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled={index === sorted.length - 1} onSelect={() => handleMove(index, 'down')}>
+                  Move down
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => handleDelete(section.id)}
+                >
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ))}
       </div>

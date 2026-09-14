@@ -35,6 +35,22 @@ Esta verificação cobre a configuração. As respostas obrigatórias, as refer�
 - Um formulário de inquérito não tem **Library**.
 - Quando o editor tem menos de 980 pixels de largura, **Form** e **Library** passam a ser separadores. Acrescentar a partir de **Library** volta a **Form**. Recolher a barra lateral pode mostrar de novo os dois painéis.
 
+## Trabalhar com vários campos
+
+- Clique num campo para abrir o editor dele. Shift-clique seleciona todos os campos entre o último clicado e este. Ctrl-clique (Cmd-clique num Mac) acrescenta ou retira um campo. Nenhum dos dois abre o editor.
+- Ctrl+A (Cmd+A) seleciona todos os campos que a lista mostra. Escape limpa a seleção.
+- Com dois ou mais selecionados, o cabeçalho da lista mostra quantos são, e o menu ⋯ dele move-os para uma secção, ativa-os ou desativa-os, ou elimina-os. A eliminação pede confirmação. Cada ação desfaz-se de uma só vez.
+- **Toggle enabled** desativa todos quando pelo menos metade está ativa, e ativa todos no caso contrário. Ignora os campos bloqueados, tal como **Delete**.
+- Quando nenhuma caixa ou menu tem o foco: j e k (ou as setas) descem e sobem na lista, Enter abre o campo, Espaço ativa-o ou desativa-o, d elimina-o e Ctrl+D duplica-o. Com dois ou mais selecionados, Espaço e d atuam sobre todos. Ctrl+F leva o cursor para a pesquisa de campos.
+- Um telemóvel não tem teclas Shift nem Ctrl, por isso num telemóvel seleciona um campo de cada vez.
+
+## Secções
+
+- Arraste um campo pela pega. Enquanto arrasta, um painel no topo da lista mostra **(no section)** e cada secção, com o número de campos. Largue o campo numa delas para o mover para lá. O painel só aparece quando o formulário tem secções.
+- Na lista Sections, o menu ⋯ de cada secção tem **Edit visibility**, **Move up**, **Move down** e **Delete**.
+- **Edit visibility** abre o mesmo editor de regras de um campo. Só os campos ativos podem ser usados numa condição. A introdução de dados esconde a secção enquanto a regra não se cumpre.
+- Um campo ou secção com uma regra de visibilidade mostra um ícone de ramificação.
+
 ## Exemplo: enviar um pedido de laboratório
 
 Use uma instalação de teste com um paciente existente, terminologia LOINC carregada e o fluxo de ingestão ativo. Precisa de permissão para editar e publicar formulários e enviar respostas.

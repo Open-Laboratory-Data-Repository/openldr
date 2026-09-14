@@ -24,11 +24,22 @@ import { SortableFieldRow } from './SortableFieldRow';
 import { SectionsManager } from './SectionsManager';
 import { buildFieldTree, type RepeatNode, type TreeNode } from './fieldTree';
 import { AddNamedSlotRow, RepeatRow } from './RepeatRow';
+import { buildFieldListModel } from './listOrder';
+import { SectionVisibilitySheet } from './SectionVisibilitySheet';
+import { BulkSelectionMenu } from './BulkSelectionMenu';
+import { SectionDropPanel, dropAction } from './SectionDropPanel';
 
 export interface FieldListPaneProps {
   fields: FormField[];
   sections?: FormSection[];
-  selectedFieldId: string | null;
+  /** The selected rows. Two or more turn the header into the selection menu. */
+  selectedIds: ReadonlySet<string>;
+  /** The row Shift-click ranges from and j and k move. */
+  anchorId?: string | null;
+  onBulkMove?: (sectionId: string | undefined) => void;
+  onBulkToggleEnabled?: () => void;
+  onBulkDelete?: () => void;
+  onClearSelection?: () => void;
   issues: FormLintIssue[];
   onSelect: (f: FormField, e: React.MouseEvent) => void;
   onToggleEnabled: (id: string) => void;
@@ -36,18 +47,28 @@ export interface FieldListPaneProps {
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onReorder: (activeId: string, overId: string) => void;
+  /** Drop a dragged field on a section, or on "(no section)" with undefined. */
+  onMoveToSection?: (fieldId: string, sectionId: string | undefined) => void;
   onSectionsChange?: (sections: FormSection[]) => void;
   onFieldsClearSection?: (sectionId: string) => void;
   /** Add another named slot under a repeating list. */
   onAddSlot?: (node: RepeatNode) => void;
   /** The form's resource type. A group's "holds one or many" reads its bound path against it. */
   fhirResourceType?: string | null;
+  /** The list search, when the page drives it. The list keeps its own when these are absent. */
+  searchText?: string;
+  onSearchTextChange?: (text: string) => void;
 }
 
 export function FieldListPane({
   fields,
   sections = [],
-  selectedFieldId,
+  selectedIds,
+  anchorId = null,
+  onBulkMove,
+  onBulkToggleEnabled,
+  onBulkDelete,
+  onClearSelection,
   issues,
   onSelect,
   onToggleEnabled,
@@ -55,108 +76,44 @@ export function FieldListPane({
   onDuplicate,
   onDelete,
   onReorder,
+  onMoveToSection,
   onSectionsChange,
   onFieldsClearSection,
   onAddSlot,
   fhirResourceType = null,
+  searchText,
+  onSearchTextChange,
 }: FieldListPaneProps): JSX.Element {
-  const [searchText, setSearchText] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
+  const search = searchText ?? localSearch;
+  const setSearch = onSearchTextChange ?? setLocalSearch;
+  const [sectionsOpen, setSectionsOpen] = useState(false);
+  const [visibilitySectionId, setVisibilitySectionId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor));
-
-  // Section label lookup: prefer the sections prop, fall back to the id itself
-  const sectionLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of sections) {
-      map.set(s.id, s.label);
-    }
-    return map;
-  }, [sections]);
 
   const enabledCount = useMemo(
     () => fields.filter((f) => f.enabled).length,
     [fields],
   );
 
-  // Filter + sort — exclude group children from the top-level list here;
-  // they will be rendered inline under their parent group field.
-  const visibleFields = useMemo(() => {
-    const q = searchText.trim().toLowerCase();
-    return fields
-      .filter((f) => {
-        if (q) {
-          const labelMatch = f.displayLabel.toLowerCase().includes(q);
-          const pathMatch = f.fhirPath?.toLowerCase().includes(q) ?? false;
-          return labelMatch || pathMatch;
-        }
-        return true;
-      })
-      .slice()
-      .sort((a, b) => a.order - b.order);
-  }, [fields, searchText]);
+  const model = useMemo(() => buildFieldListModel(fields, sections, search), [fields, sections, search]);
+  const sortedSections = useMemo(() => [...sections].sort((a, b) => a.order - b.order), [sections]);
 
-  // Top-level visible fields (not children of a group)
-  const topLevelVisible = useMemo(
-    () => visibleFields.filter((f) => !f.groupId),
-    [visibleFields],
-  );
-
-  // Children grouped by groupId
-  const childrenByGroup = useMemo(() => {
-    const map = new Map<string, FormField[]>();
-    for (const f of visibleFields) {
-      if (f.groupId) {
-        const arr = map.get(f.groupId) ?? [];
-        arr.push(f);
-        map.set(f.groupId, arr);
-      }
-    }
-    return map;
-  }, [visibleFields]);
-
-  // Group top-level fields by section for rendering with headers.
-  // Order of sections: use sections prop order, then any remaining section ids from fields.
-  const sectionGroups = useMemo(() => {
-    // Build ordered list of section identifiers
-    const orderedSectionIds: Array<string | null> = sections
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((s) => s.id);
-
-    // Add any field sections not in the sections prop
-    for (const f of topLevelVisible) {
-      if (f.section && !orderedSectionIds.includes(f.section)) {
-        orderedSectionIds.push(f.section);
-      }
-    }
-
-    // null = "No section" bucket
-    const hasUnsectioned = topLevelVisible.some((f) => !f.section);
-    if (hasUnsectioned) {
-      orderedSectionIds.push(null);
-    }
-
-    // Build groups — only include sections that have at least one field
-    const groups: Array<{ sectionId: string | null; label: string; fieldList: FormField[] }> = [];
-    for (const sectionId of orderedSectionIds) {
-      const fieldList = topLevelVisible.filter((f) =>
-        sectionId === null ? !f.section : f.section === sectionId,
-      );
-      if (fieldList.length === 0) continue;
-      const label =
-        sectionId === null
-          ? 'No section'
-          : (sectionLabelMap.get(sectionId) ?? sectionId);
-      groups.push({ sectionId, label, fieldList });
-    }
-    return groups;
-  }, [topLevelVisible, sections, sectionLabelMap]);
+  const [dragging, setDragging] = useState(false);
+  const fieldCountBySection = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const f of fields) if (f.section) out[f.section] = (out[f.section] ?? 0) + 1;
+    return out;
+  }, [fields]);
+  const unsectionedCount = fields.filter((f) => !f.section).length;
 
   function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      onReorder(String(active.id), String(over.id));
-    }
+    setDragging(false);
+    const action = dropAction(String(event.active.id), event.over ? String(event.over.id) : null);
+    if (!action) return;
+    if (action.kind === 'section') onMoveToSection?.(action.fieldId, action.sectionId);
+    else onReorder(action.activeId, action.overId);
   }
 
   function issueForField(fieldId: string): FormLintIssue | undefined {
@@ -168,12 +125,13 @@ export function FieldListPane({
    * a repeat's slots (below) hang off a solid one, so the two kinds of nesting do not read alike.
    */
   function renderField(field: FormField): React.ReactNode {
-    const children = field.fieldType === 'group' ? childrenByGroup.get(field.id) ?? [] : [];
+    const children = field.fieldType === 'group' ? model.childrenByGroup.get(field.id) ?? [] : [];
     return (
       <React.Fragment key={field.id}>
         <SortableFieldRow
           field={field}
-          selected={field.id === selectedFieldId}
+          selected={selectedIds.has(field.id)}
+          anchor={field.id === anchorId}
           lintIssue={issueForField(field.id)}
           repeats={groupRepeats(field, fhirResourceType)}
           onSelect={onSelect}
@@ -206,40 +164,43 @@ export function FieldListPane({
     );
   }
 
-  // Show section grouping only when there are sections defined or fields span multiple sections
-  const distinctSections = useMemo(() => {
-    const seen = new Set<string>();
-    for (const f of fields) {
-      if (f.section) seen.add(f.section);
-    }
-    return Array.from(seen);
-  }, [fields]);
-
-  const showSectionHeaders = sections.length > 0 || distinctSections.length > 1;
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-3 py-2 border-b space-y-2">
-        {/* Counter */}
-        <p className="text-xs text-muted-foreground">
-          {fields.length} fields ({enabledCount} enabled)
-        </p>
+        {/* Counter, or the selection menu once two or more rows are selected */}
+        <div className="flex min-h-7 items-center">
+          {selectedIds.size >= 2 ? (
+            <BulkSelectionMenu
+              count={selectedIds.size}
+              sections={sortedSections}
+              onMove={(sectionId) => onBulkMove?.(sectionId)}
+              onToggleEnabled={() => onBulkToggleEnabled?.()}
+              onDelete={() => onBulkDelete?.()}
+              onClear={() => onClearSelection?.()}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {fields.length} fields ({enabledCount} enabled)
+            </p>
+          )}
+        </div>
 
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           <Input
+            id="builder-field-search"
             aria-label="Search fields"
             placeholder="Search fields…"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             className="pl-7 h-8 text-sm"
           />
         </div>
 
         {/* Sections popover — trigger shows count; content is SectionsManager */}
-        <Popover>
+        <Popover open={sectionsOpen} onOpenChange={setSectionsOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="w-full justify-between text-xs h-8">
               {`Sections (${sections.length})`}
@@ -251,6 +212,8 @@ export function FieldListPane({
               sections={sections}
               onChange={(s) => onSectionsChange?.(s)}
               onFieldsClearSection={(sid) => onFieldsClearSection?.(sid)}
+              // The popover closes first. The sheet lives outside it, or it would unmount with it.
+              onEditVisibility={(id) => { setSectionsOpen(false); setVisibilitySectionId(id); }}
             />
           </PopoverContent>
         </Popover>
@@ -261,15 +224,25 @@ export function FieldListPane({
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={() => setDragging(true)}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => setDragging(false)}
         >
+          {sections.length > 0 && (
+            <SectionDropPanel
+              visible={dragging}
+              sections={sortedSections}
+              fieldCountBySection={fieldCountBySection}
+              unsectionedCount={unsectionedCount}
+            />
+          )}
           {/* SortableContext items stay flat over all visible ids so reorder still works */}
           <SortableContext
-            items={visibleFields.map((f) => f.id)}
+            items={model.visible.map((f) => f.id)}
             strategy={verticalListSortingStrategy}
           >
-            {showSectionHeaders ? (
-              sectionGroups.map(({ sectionId, label, fieldList }) => (
+            {model.showSectionHeaders ? (
+              model.buckets.map(({ sectionId, label, fields: fieldList }) => (
                 <div key={sectionId ?? '__no_section__'}>
                   {/* Section header */}
                   <div className="px-1 py-1 mt-1 first:mt-0">
@@ -286,11 +259,20 @@ export function FieldListPane({
               ))
             ) : (
               // No sections: top-level nodes; children render under their group.
-              <div className="space-y-1.5">{buildFieldTree(topLevelVisible).map(renderNode)}</div>
+              <div className="space-y-1.5">{buildFieldTree(model.buckets[0]?.fields ?? []).map(renderNode)}</div>
             )}
           </SortableContext>
         </DndContext>
       </div>
+
+      <SectionVisibilitySheet
+        section={sections.find((s) => s.id === visibilitySectionId) ?? null}
+        fields={fields}
+        onChange={(id, rule) =>
+          onSectionsChange?.(sections.map((s) => (s.id === id ? { ...s, visibility: rule } : s)))
+        }
+        onOpenChange={(open) => { if (!open) setVisibilitySectionId(null); }}
+      />
     </div>
   );
 }

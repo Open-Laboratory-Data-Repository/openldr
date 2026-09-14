@@ -399,9 +399,9 @@ export function FieldEditorSheet({
         <div className="border-t border-border" />
         <div className="px-6 py-2">
           <VisibilityRuleEditor
-            field={activeDraft}
-            allFields={allFields}
-            onUpdate={patchDraft}
+            rule={activeDraft.visibility}
+            candidateFields={allFields.filter((f) => f.id !== activeDraft.id)}
+            onChange={(visibility) => patchDraft({ visibility })}
           />
         </div>
 

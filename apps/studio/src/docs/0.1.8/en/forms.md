@@ -74,6 +74,22 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 - A survey form has no Library.
 - When the builder is narrower than 980 pixels, Form and Library become tabs. Adding from the Library switches back to Form. Collapsing the sidebar can bring both panes back.
 
+## Working with many fields
+
+- Click a field to open its editor. Shift-click selects every field from the last one you clicked to this one. Ctrl-click (Cmd-click on a Mac) adds or removes one field. Neither opens the editor.
+- Ctrl+A (Cmd+A) selects every field the list shows. Escape clears the selection.
+- With two or more selected, the list header shows how many, and its ⋯ menu moves them to a section, switches them on or off, or deletes them. Delete asks first. Each is one undo step.
+- **Toggle enabled** switches them all off when at least half are on, and all on otherwise. It skips locked fields, and so does **Delete**.
+- When no box or menu has focus: j and k (or the arrow keys) move down and up the list, Enter opens the field, Space switches it on or off, d deletes it, and Ctrl+D duplicates it. With two or more selected, Space and d act on all of them. Ctrl+F jumps to the field search.
+- A phone has no Shift or Ctrl key, so on a phone you select one field at a time.
+
+## Sections
+
+- Drag a field by its handle. While you drag, a panel at the top of the list shows **(no section)** and each section, with how many fields it has. Drop the field on one to move it there. The panel only appears when the form has sections.
+- In the Sections list, each section's ⋯ menu has **Edit visibility**, **Move up**, **Move down** and **Delete**.
+- **Edit visibility** opens the same rule editor a field has. Only enabled fields can be used in a condition. Data entry hides the section while its rule is not met.
+- A field or section with a visibility rule shows a branch icon.
+
 ## Expected result
 
 The form is saved as a draft during design, published when ready, and available from **View/Run**. Submission also requires a supported extraction configuration.

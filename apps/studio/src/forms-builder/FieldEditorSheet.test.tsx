@@ -407,4 +407,12 @@ describe('FieldEditorSheet', () => {
       expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
     });
   });
+
+  it('never offers the field itself as a visibility condition', () => {
+    renderSheet();
+    fireEvent.click(screen.getByRole('button', { name: /add condition/i }));
+    fireEvent.click(screen.getByRole('combobox', { name: /controlling field/i }));
+    expect(screen.queryAllByRole('option', { name: 'Patient name' })).toHaveLength(0);
+    expect(screen.getAllByRole('option', { name: 'Demographics' }).length).toBeGreaterThan(0);
+  });
 });

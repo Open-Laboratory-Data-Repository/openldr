@@ -3,178 +3,70 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { FormField, VisibilityRule } from '@openldr/forms/pure';
 import { VisibilityRuleEditor } from './VisibilityRuleEditor';
 
-const BASE_FIELD: FormField = {
-  id: 'f-1',
-  displayLabel: 'Patient name',
-  fieldType: 'text',
-  required: false,
-  enabled: true,
-  fhirPath: null,
-  order: 0,
-  cardinality: { min: 0, max: '1' },
-  description: null,
-};
+const field = (id: string, displayLabel: string): FormField => ({
+  id, displayLabel, fieldType: 'text', required: false, enabled: true, fhirPath: null,
+  order: 0, cardinality: { min: 0, max: '1' }, description: null,
+});
+const SEX = field('sex', 'Sex');
+const DOB = field('dob', 'Date of Birth');
 
-const SEX_FIELD: FormField = {
-  id: 'sex',
-  displayLabel: 'Sex',
-  fieldType: 'select',
-  required: false,
-  enabled: true,
-  fhirPath: null,
-  order: 1,
-  cardinality: { min: 0, max: '1' },
-  description: null,
-};
-
-const ALL_FIELDS = [BASE_FIELD, SEX_FIELD];
-
-function renderEditor(
-  overrides: Partial<Parameters<typeof VisibilityRuleEditor>[0]> = {},
-) {
-  const onUpdate = vi.fn();
-  const utils = render(
-    <VisibilityRuleEditor
-      field={BASE_FIELD}
-      allFields={ALL_FIELDS}
-      onUpdate={onUpdate}
-      {...overrides}
-    />,
-  );
-  return { ...utils, onUpdate };
+function renderEditor(rule?: VisibilityRule, candidateFields: FormField[] = [SEX, DOB]) {
+  const onChange = vi.fn();
+  render(<VisibilityRuleEditor rule={rule} candidateFields={candidateFields} onChange={onChange} />);
+  return { onChange };
 }
 
+const IS_SET: VisibilityRule = { combinator: 'all', conditions: [{ fieldId: 'sex', operator: 'isNotEmpty' }] };
+const EQUALS: VisibilityRule = { combinator: 'all', conditions: [{ fieldId: 'sex', operator: 'equals', value: '' }] };
+
 describe('VisibilityRuleEditor', () => {
-  describe('combinator select', () => {
-    it('renders a combinator combobox with all/any options', () => {
-      renderEditor();
-      const trigger = screen.getByRole('combobox', { name: /combinator/i });
-      expect(trigger).toBeTruthy();
-      fireEvent.click(trigger);
-      // 'all' appears in both the trigger value and the dropdown item
-      expect(screen.getAllByText('all').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('any').length).toBeGreaterThan(0);
-    });
+  it('offers all and any', () => {
+    renderEditor();
+    fireEvent.click(screen.getByRole('combobox', { name: /combinator/i }));
+    expect(screen.getAllByText('all').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('any').length).toBeGreaterThan(0);
   });
 
-  describe('Add condition', () => {
-    it('clicking "Add condition" calls onUpdate with one condition using first other field', () => {
-      const { onUpdate } = renderEditor();
-      const addBtn = screen.getByRole('button', { name: /add condition/i });
-      fireEvent.click(addBtn);
-      expect(onUpdate).toHaveBeenCalledOnce();
-      const call = onUpdate.mock.calls[0][0] as { visibility: VisibilityRule };
-      expect(call.visibility).toBeDefined();
-      expect(call.visibility.conditions).toHaveLength(1);
-      expect(call.visibility.conditions[0].fieldId).toBe('sex');
-    });
+  it('Add condition starts a rule on the first candidate', () => {
+    const { onChange } = renderEditor();
+    fireEvent.click(screen.getByRole('button', { name: /add condition/i }));
+    expect(onChange).toHaveBeenCalledWith({ combinator: 'all', conditions: [{ fieldId: 'sex', operator: 'isNotEmpty' }] });
   });
 
-  describe('with an existing condition', () => {
-    const EXISTING_RULE: VisibilityRule = {
-      combinator: 'all',
-      conditions: [{ fieldId: 'sex', operator: 'isNotEmpty' }],
-    };
+  it('offers only the candidate fields', () => {
+    renderEditor(IS_SET, [SEX]);
+    fireEvent.click(screen.getByRole('combobox', { name: /controlling field/i }));
+    expect(screen.queryAllByRole('option', { name: 'Date of Birth' })).toHaveLength(0);
+  });
 
-    function renderWithCondition() {
-      return renderEditor({
-        field: { ...BASE_FIELD, visibility: EXISTING_RULE },
-      });
-    }
+  it('changes the controlling field', () => {
+    const { onChange } = renderEditor(IS_SET);
+    fireEvent.click(screen.getByRole('combobox', { name: /controlling field/i }));
+    fireEvent.click(screen.getByText('Date of Birth'));
+    expect((onChange.mock.calls[0][0] as VisibilityRule).conditions[0].fieldId).toBe('dob');
+  });
 
-    it('renders a controlling field select excluding self, with other fields as options', () => {
-      renderWithCondition();
-      // The field select (first combobox for condition row, excludes f-1 / "Patient name")
-      const fieldTrigger = screen.getByRole('combobox', { name: /controlling field/i });
-      fireEvent.click(fieldTrigger);
-      // Only SEX_FIELD should appear (self excluded)
-      expect(screen.getAllByText('Sex').length).toBeGreaterThan(0);
-      // Self should NOT appear as an option
-      const patientOptions = screen.queryAllByRole('option', { name: /patient name/i });
-      expect(patientOptions).toHaveLength(0);
-    });
+  it('changes the operator', () => {
+    const { onChange } = renderEditor(IS_SET);
+    fireEvent.click(screen.getByRole('combobox', { name: /operator/i }));
+    fireEvent.click(screen.getByText('equals'));
+    expect((onChange.mock.calls[0][0] as VisibilityRule).conditions[0].operator).toBe('equals');
+  });
 
-    it('choosing a controlling field calls onUpdate updating conditions[0].fieldId', () => {
-      // Use field with no conditions so we can add one and test fieldId update
-      const { onUpdate } = renderEditor({
-        field: {
-          ...BASE_FIELD,
-          visibility: {
-            combinator: 'all',
-            conditions: [{ fieldId: 'sex', operator: 'isNotEmpty' }],
-          },
-        },
-        allFields: [
-          BASE_FIELD,
-          SEX_FIELD,
-          {
-            id: 'dob',
-            displayLabel: 'Date of Birth',
-            fieldType: 'date',
-            required: false,
-            enabled: true,
-            fhirPath: null,
-            order: 2,
-            cardinality: { min: 0, max: '1' },
-            description: null,
-          },
-        ],
-      });
-      const fieldTrigger = screen.getByRole('combobox', { name: /controlling field/i });
-      fireEvent.click(fieldTrigger);
-      fireEvent.click(screen.getByText('Date of Birth'));
-      const call = onUpdate.mock.calls[0][0] as { visibility: VisibilityRule };
-      expect(call.visibility.conditions[0].fieldId).toBe('dob');
-    });
+  it('hides the value box for isEmpty and isNotEmpty', () => {
+    renderEditor(IS_SET);
+    expect(screen.queryByRole('textbox', { name: /value/i })).toBeNull();
+  });
 
-    it('choosing the operator select calls onUpdate updating operator', () => {
-      const { onUpdate } = renderWithCondition();
-      const opTrigger = screen.getByRole('combobox', { name: /operator/i });
-      fireEvent.click(opTrigger);
-      fireEvent.click(screen.getByText('equals'));
-      const call = onUpdate.mock.calls[0][0] as { visibility: VisibilityRule };
-      expect(call.visibility.conditions[0].operator).toBe('equals');
-    });
+  it('changes the value', () => {
+    const { onChange } = renderEditor(EQUALS);
+    fireEvent.change(screen.getByRole('textbox', { name: /value/i }), { target: { value: 'male' } });
+    expect((onChange.mock.calls[0][0] as VisibilityRule).conditions[0].value).toBe('male');
+  });
 
-    it('value input is hidden for isEmpty/isNotEmpty operators', () => {
-      renderWithCondition(); // operator = isNotEmpty
-      expect(screen.queryByRole('textbox', { name: /value/i })).toBeNull();
-    });
-
-    it('value input is visible for operators other than isEmpty/isNotEmpty', () => {
-      renderEditor({
-        field: {
-          ...BASE_FIELD,
-          visibility: {
-            combinator: 'all',
-            conditions: [{ fieldId: 'sex', operator: 'equals', value: '' }],
-          },
-        },
-      });
-      expect(screen.getByRole('textbox', { name: /value/i })).toBeTruthy();
-    });
-
-    it('changing value input calls onUpdate updating conditions[0].value', () => {
-      const { onUpdate } = renderEditor({
-        field: {
-          ...BASE_FIELD,
-          visibility: {
-            combinator: 'all',
-            conditions: [{ fieldId: 'sex', operator: 'equals', value: '' }],
-          },
-        },
-      });
-      const input = screen.getByRole('textbox', { name: /value/i });
-      fireEvent.change(input, { target: { value: 'male' } });
-      const call = onUpdate.mock.calls[0][0] as { visibility: VisibilityRule };
-      expect(call.visibility.conditions[0].value).toBe('male');
-    });
-
-    it('removing the last condition calls onUpdate({ visibility: undefined })', () => {
-      const { onUpdate } = renderWithCondition();
-      const removeBtn = screen.getByRole('button', { name: /remove condition/i });
-      fireEvent.click(removeBtn);
-      expect(onUpdate).toHaveBeenCalledWith({ visibility: undefined });
-    });
+  it('removing the last condition clears the rule', () => {
+    const { onChange } = renderEditor(IS_SET);
+    fireEvent.click(screen.getByRole('button', { name: /remove condition/i }));
+    expect(onChange).toHaveBeenCalledWith(undefined);
   });
 });

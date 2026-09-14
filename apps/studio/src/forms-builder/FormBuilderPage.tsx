@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
@@ -21,6 +21,17 @@ import { LibraryPane } from './LibraryPane';
 import { libraryElements } from './libraryEntries';
 import { elementDisplayName } from './fhirTypeMap';
 import { NARROW_WORKSPACE_PX, useElementWidth } from './useElementWidth';
+import {
+  NO_SELECTION,
+  clickSelection,
+  moveAnchor,
+  selectAllRows,
+  selectOnly,
+  withoutRows,
+  type FieldSelection,
+} from './selection';
+import { deleteFields, moveFieldsToSection, toggleFieldsEnabled } from './bulkActions';
+import { buildFieldListModel, drawnOrder } from './listOrder';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { FhirPathInfo } from '@openldr/fhir/paths';
 import {
@@ -37,7 +48,11 @@ export function FormBuilderPage(): JSX.Element {
   const navigate = useNavigate();
   const [formId, setFormId] = useState<string | null>(id ?? null);
   const [schema, setSchema] = useState<FormSchema>(() => createDefaultFormSchema(''));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** The field open in the editor. A plain click sets it; a Shift or Ctrl-click does not. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<FieldSelection>(NO_SELECTION);
+  const [searchText, setSearchText] = useState('');
+  const [confirmBulkDeleteOpen, setConfirmBulkDeleteOpen] = useState(false);
   const [pendingNewFieldId, setPendingNewFieldId] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState<string | null>(null);
@@ -83,9 +98,21 @@ export function FormBuilderPage(): JSX.Element {
   const hasErrors = issues.some((i) => i.severity === 'error');
 
   const selectedField = useMemo<FormField | null>(
-    () => schema.fields.find((f) => f.id === selectedId) ?? null,
-    [schema.fields, selectedId],
+    () => schema.fields.find((f) => f.id === editingId) ?? null,
+    [schema.fields, editingId],
   );
+
+  /** Row ids in the order the list draws them. Shift-click ranges and j and k walk this. */
+  const listOrder = useMemo(
+    () => drawnOrder(buildFieldListModel(schema.fields, schema.sections, searchText)),
+    [schema.fields, schema.sections, searchText],
+  );
+
+  /** Select one field and open its editor. */
+  const openEditor = (id: string) => {
+    setSelection(selectOnly(id));
+    setEditingId(id);
+  };
 
   // ── Schema helpers ───────────────────────────────────────────────────────────
   const patchSchema = (patch: Partial<FormSchema>) => {
@@ -113,7 +140,7 @@ export function FormBuilderPage(): JSX.Element {
     field.order = nextOrder;
     field.id = makeUniqueFieldId(field.id, new Set(schema.fields.map((f) => f.id)));
     setSchema((prev) => ({ ...prev, fields: [...prev.fields, field] }));
-    setSelectedId(field.id);
+    openEditor(field.id);
     setPendingNewFieldId(field.id);
   };
 
@@ -125,19 +152,21 @@ export function FormBuilderPage(): JSX.Element {
       fields: prev.fields.map((f) => (f.id === updated.id ? updated : f)),
     }));
     setPendingNewFieldId(null);
-    setSelectedId(null);
+    setEditingId(null);
   };
 
   /** Cancel handler: if the open field was brand-new (never saved), remove it. */
   const handleSheetCancel = () => {
-    if (pendingNewFieldId && pendingNewFieldId === selectedId) {
+    if (pendingNewFieldId && pendingNewFieldId === editingId) {
       setSchema((prev) => ({
         ...prev,
         fields: prev.fields.filter((f) => f.id !== pendingNewFieldId),
       }));
+      const gone = pendingNewFieldId;
+      setSelection((s) => withoutRows(s, new Set([gone])));
     }
     setPendingNewFieldId(null);
-    setSelectedId(null);
+    setEditingId(null);
   };
 
   const deleteField = (fieldId: string) => {
@@ -146,7 +175,8 @@ export function FormBuilderPage(): JSX.Element {
     if (schema.fields.find((f) => f.id === fieldId)?.locked) return;
     history.pushHistory();
     setSchema((prev) => ({ ...prev, fields: prev.fields.filter((f) => f.id !== fieldId) }));
-    if (selectedId === fieldId) setSelectedId(null);
+    if (editingId === fieldId) setEditingId(null);
+    setSelection((s) => withoutRows(s, new Set([fieldId])));
   };
 
   const duplicateField = (fieldId: string) => {
@@ -155,7 +185,7 @@ export function FormBuilderPage(): JSX.Element {
     history.pushHistory();
     const copy = { ...src, id: `${src.id}-copy-${Date.now()}`, displayLabel: `${src.displayLabel} (copy)`, order: src.order + 0.5 };
     setSchema((prev) => ({ ...prev, fields: [...prev.fields, copy] }));
-    setSelectedId(copy.id);
+    openEditor(copy.id);
   };
 
   const toggleEnabled = (fieldId: string) => {
@@ -198,7 +228,7 @@ export function FormBuilderPage(): JSX.Element {
     const anchor = node.slots[node.slots.length - 1].id;
     setSchema((prev) => ({ ...prev, fields: insertFieldAfter(prev.fields, anchor, slot) }));
     setPendingNewFieldId(null);
-    setSelectedId(slot.id);
+    openEditor(slot.id);
   };
 
   /** Save the open field's edits, then open another. Corlix `FormBuilderPage.tsx:577-585`. */
@@ -206,7 +236,7 @@ export function FormBuilderPage(): JSX.Element {
     history.recordEdit();
     setSchema((prev) => ({ ...prev, fields: prev.fields.map((f) => (f.id === draft.id ? draft : f)) }));
     setPendingNewFieldId(null);
-    setSelectedId(id);
+    openEditor(id);
   };
 
   /** Save the group's edits, add a part after its last part, and open the part. One undo step. */
@@ -218,7 +248,7 @@ export function FormBuilderPage(): JSX.Element {
       return { ...prev, fields: insertFieldAfter(committed, lastPartIdOf(committed, draft.id), part) };
     });
     setPendingNewFieldId(null);
-    setSelectedId(part.id);
+    openEditor(part.id);
   };
 
   const survey = isSurveyForm(schema.fhirResourceType);
@@ -240,25 +270,75 @@ export function FormBuilderPage(): JSX.Element {
       return { ...prev, fields: [...prev.fields, { ...field, order: nextOrder }] };
     });
     setPendingNewFieldId(null);
-    setSelectedId(field.id);
+    openEditor(field.id);
     // On a narrow workspace the new field would otherwise sit behind the Library tab.
     setPane('form');
   };
 
-  const applyHistory = (next: FormSchema | null) => { if (next) setSchema(next); };
+  /**
+   * A click on a row. Only a plain click opens the editor. A Shift or Ctrl-click that opened it would
+   * put the editor's overlay over the list, and no second row could be clicked. Corlix has exactly
+   * that problem; its own e2e says so (`apps/desktop/e2e/screenshots.spec.ts:366`).
+   */
+  const handleRowClick = (field: FormField, e: MouseEvent) => {
+    const mods = { range: e.shiftKey, toggle: e.metaKey || e.ctrlKey };
+    setSelection((s) => clickSelection(s, field.id, listOrder, mods));
+    if (!mods.range && !mods.toggle) setEditingId(field.id);
+  };
+
+  /** Move the selection to a section, or out of every section. One undo step. */
+  const bulkMove = (sectionId: string | undefined) => {
+    if (selection.ids.size === 0) return;
+    history.pushHistory();
+    const ids = selection.ids;
+    setSchema((prev) => ({ ...prev, fields: moveFieldsToSection(prev.fields, ids, sectionId) }));
+  };
+
+  /** Switch a set of fields on or off together. One undo step. Locked fields keep their state. */
+  const bulkToggle = (ids: ReadonlySet<string>) => {
+    if (ids.size === 0) return;
+    history.pushHistory();
+    setSchema((prev) => ({ ...prev, fields: toggleFieldsEnabled(prev.fields, ids) }));
+  };
+
+  /** Delete the selection, after the confirm. One undo step. Locked fields stay. */
+  const bulkDelete = () => {
+    history.pushHistory();
+    const ids = selection.ids;
+    setSchema((prev) => ({ ...prev, fields: deleteFields(prev.fields, ids) }));
+    if (editingId && ids.has(editingId)) setEditingId(null);
+    setSelection(NO_SELECTION);
+  };
+
+  /** A field dropped on a section moves into it. One undo step. */
+  const moveDroppedField = (fieldId: string, sectionId: string | undefined) => {
+    history.pushHistory();
+    setSchema((prev) => ({ ...prev, fields: moveFieldsToSection(prev.fields, new Set([fieldId]), sectionId) }));
+  };
+
+  const applyHistory = (next: FormSchema | null) => {
+    if (!next) return;
+    setSchema(next);
+    setSelection(NO_SELECTION);
+  };
 
   useBuilderKeyboard({
     focusSearch: () => document.getElementById('builder-field-search')?.focus(),
-    next: () => undefined,
-    previous: () => undefined,
-    open: () => undefined,
-    toggle: () => undefined,
-    duplicate: () => undefined,
-    remove: () => { if (selectedId) deleteField(selectedId); },
-    selectAll: () => undefined,
+    next: () => setSelection((s) => moveAnchor(s, listOrder, 1)),
+    previous: () => setSelection((s) => moveAnchor(s, listOrder, -1)),
+    open: () => { if (selection.anchor) openEditor(selection.anchor); },
+    // Space and d act on the whole selection when it holds two or more, else on the anchor.
+    // Corlix `FormBuilderPage.tsx:988-1008`.
+    toggle: () => bulkToggle(selection.ids.size >= 2 ? selection.ids : new Set(selection.anchor ? [selection.anchor] : [])),
+    duplicate: () => { if (selection.anchor) duplicateField(selection.anchor); },
+    remove: () => {
+      if (selection.ids.size >= 2) setConfirmBulkDeleteOpen(true);
+      else if (selection.anchor) deleteField(selection.anchor);
+    },
+    selectAll: () => setSelection((s) => selectAllRows(s, listOrder)),
     undo: () => applyHistory(history.undo()),
     redo: () => applyHistory(history.redo()),
-    clear: () => setSelectedId(null),
+    clear: () => setSelection(NO_SELECTION),
   });
 
   // ── API actions ──────────────────────────────────────────────────────────────
@@ -383,14 +463,22 @@ export function FormBuilderPage(): JSX.Element {
         fhirResourceType={schema.fhirResourceType ?? null}
         onAddSlot={addNamedSlot}
         sections={schema.sections}
-        selectedFieldId={selectedId}
+        selectedIds={selection.ids}
+        anchorId={selection.anchor}
+        searchText={searchText}
+        onSearchTextChange={setSearchText}
+        onBulkMove={bulkMove}
+        onBulkToggleEnabled={() => bulkToggle(selection.ids)}
+        onBulkDelete={() => setConfirmBulkDeleteOpen(true)}
+        onClearSelection={() => setSelection(NO_SELECTION)}
         issues={issues}
-        onSelect={(f) => setSelectedId(f.id)}
+        onSelect={handleRowClick}
         onToggleEnabled={toggleEnabled}
         onToggleRequired={toggleRequired}
         onDuplicate={duplicateField}
         onDelete={deleteField}
         onReorder={reorderFields}
+        onMoveToSection={moveDroppedField}
         onSectionsChange={(sections) => updateSchema({ sections })}
         onFieldsClearSection={(sid) =>
           updateSchema({
@@ -504,7 +592,7 @@ export function FormBuilderPage(): JSX.Element {
         sections={schema.sections}
         languages={schema.languages ?? []}
         fhirResourceType={schema.fhirResourceType ?? null}
-        open={selectedId !== null}
+        open={editingId !== null}
         onOpenChange={(o) => { if (!o) handleSheetCancel(); }}
         onSave={handleSheetSave}
         onCancel={handleSheetCancel}
@@ -543,6 +631,17 @@ export function FormBuilderPage(): JSX.Element {
         confirmLabel="Delete"
         destructive
         onConfirm={() => { void handleDelete(); }}
+      />
+
+      {/* A confirm prompt, which AGENTS.md §5 allows as a Dialog. */}
+      <ConfirmDialog
+        open={confirmBulkDeleteOpen}
+        onOpenChange={setConfirmBulkDeleteOpen}
+        title={`Delete ${selection.ids.size} fields?`}
+        description="This removes them from the form. Locked fields stay. You can undo it with Ctrl+Z."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={bulkDelete}
       />
     </AppShell>
   );

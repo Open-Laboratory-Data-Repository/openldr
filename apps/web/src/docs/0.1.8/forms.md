@@ -53,6 +53,22 @@ If a reference list is empty, check the configured source and loaded terminology
 - A survey form has no Library.
 - When the builder is narrower than 980 pixels, Form and Library become tabs. Adding from the Library switches back to Form. Collapsing the sidebar can bring both panes back.
 
+### Working with many fields
+
+- Click a field to open its editor. Shift-click selects every field from the last one you clicked to this one. Ctrl-click (Cmd-click on a Mac) adds or removes one field. Neither opens the editor.
+- Ctrl+A (Cmd+A) selects every field the list shows. Escape clears the selection.
+- With two or more selected, the list header shows how many, and its ⋯ menu moves them to a section, switches them on or off, or deletes them. Delete asks first. Each is one undo step.
+- **Toggle enabled** switches them all off when at least half are on, and all on otherwise. It skips locked fields, and so does **Delete**.
+- When no box or menu has focus: j and k (or the arrow keys) move down and up the list, Enter opens the field, Space switches it on or off, d deletes it, and Ctrl+D duplicates it. With two or more selected, Space and d act on all of them. Ctrl+F jumps to the field search.
+- A phone has no Shift or Ctrl key, so on a phone you select one field at a time.
+
+### Sections
+
+- Drag a field by its handle. While you drag, a panel at the top of the list shows **(no section)** and each section, with how many fields it has. Drop the field on one to move it there. The panel only appears when the form has sections.
+- In the Sections list, each section's ⋯ menu has **Edit visibility**, **Move up**, **Move down** and **Delete**.
+- **Edit visibility** opens the same rule editor a field has. Only enabled fields can be used in a condition. Data entry hides the section while its rule is not met.
+- A field or section with a visibility rule shows a branch icon.
+
 
 ## Français
 
@@ -107,6 +123,22 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 - Un formulaire d'enquête n'a pas de **Library**.
 - Si l'éditeur fait moins de 980 pixels de large, **Form** et **Library** deviennent des onglets. Un ajout depuis **Library** ramène à **Form**. Replier la barre latérale peut réafficher les deux volets.
 
+### Travailler sur plusieurs champs
+
+- Cliquez sur un champ pour ouvrir son éditeur. Maj-clic sélectionne tous les champs entre le dernier cliqué et celui-ci. Ctrl-clic (Cmd-clic sur Mac) ajoute ou retire un champ. Aucun des deux n'ouvre l'éditeur.
+- Ctrl+A (Cmd+A) sélectionne tous les champs affichés par la liste. Échap vide la sélection.
+- Avec deux champs ou plus sélectionnés, l'en-tête de la liste en indique le nombre, et son menu ⋯ les déplace vers une section, les active ou les désactive, ou les supprime. La suppression demande confirmation. Chaque action s'annule en une seule fois.
+- **Toggle enabled** les désactive tous si au moins la moitié sont actifs, et les active tous sinon. Il ignore les champs verrouillés, tout comme **Delete**.
+- Quand aucune zone de saisie ni aucun menu n'a le focus : j et k (ou les flèches) descendent et remontent dans la liste, Entrée ouvre le champ, Espace l'active ou le désactive, d le supprime et Ctrl+D le duplique. Avec deux champs ou plus sélectionnés, Espace et d agissent sur tous. Ctrl+F place le curseur dans la recherche de champs.
+- Un téléphone n'a pas de touche Maj ni Ctrl : sur téléphone, on sélectionne un champ à la fois.
+
+### Sections
+
+- Faites glisser un champ par sa poignée. Pendant le glissement, un panneau en haut de la liste affiche **(no section)** et chaque section, avec son nombre de champs. Déposez le champ sur l'une d'elles pour l'y déplacer. Le panneau n'apparaît que si le formulaire a des sections.
+- Dans la liste Sections, le menu ⋯ de chaque section propose **Edit visibility**, **Move up**, **Move down** et **Delete**.
+- **Edit visibility** ouvre le même éditeur de règle que pour un champ. Seuls les champs actifs peuvent servir dans une condition. La saisie masque la section tant que sa règle n'est pas remplie.
+- Un champ ou une section qui a une règle de visibilité affiche une icône de branche.
+
 ## Português
 
 ### Condições de envio
@@ -159,3 +191,19 @@ Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative 
 - A pesquisa filtra por nome e por caminho. A lista desce dois níveis, por exemplo `Location.address.city`.
 - Um formulário de inquérito não tem **Library**.
 - Quando o editor tem menos de 980 pixels de largura, **Form** e **Library** passam a ser separadores. Acrescentar a partir de **Library** volta a **Form**. Recolher a barra lateral pode mostrar de novo os dois painéis.
+
+### Trabalhar com vários campos
+
+- Clique num campo para abrir o editor dele. Shift-clique seleciona todos os campos entre o último clicado e este. Ctrl-clique (Cmd-clique num Mac) acrescenta ou retira um campo. Nenhum dos dois abre o editor.
+- Ctrl+A (Cmd+A) seleciona todos os campos que a lista mostra. Escape limpa a seleção.
+- Com dois ou mais selecionados, o cabeçalho da lista mostra quantos são, e o menu ⋯ dele move-os para uma secção, ativa-os ou desativa-os, ou elimina-os. A eliminação pede confirmação. Cada ação desfaz-se de uma só vez.
+- **Toggle enabled** desativa todos quando pelo menos metade está ativa, e ativa todos no caso contrário. Ignora os campos bloqueados, tal como **Delete**.
+- Quando nenhuma caixa ou menu tem o foco: j e k (ou as setas) descem e sobem na lista, Enter abre o campo, Espaço ativa-o ou desativa-o, d elimina-o e Ctrl+D duplica-o. Com dois ou mais selecionados, Espaço e d atuam sobre todos. Ctrl+F leva o cursor para a pesquisa de campos.
+- Um telemóvel não tem teclas Shift nem Ctrl, por isso num telemóvel seleciona um campo de cada vez.
+
+### Secções
+
+- Arraste um campo pela pega. Enquanto arrasta, um painel no topo da lista mostra **(no section)** e cada secção, com o número de campos. Largue o campo numa delas para o mover para lá. O painel só aparece quando o formulário tem secções.
+- Na lista Sections, o menu ⋯ de cada secção tem **Edit visibility**, **Move up**, **Move down** e **Delete**.
+- **Edit visibility** abre o mesmo editor de regras de um campo. Só os campos ativos podem ser usados numa condição. A introdução de dados esconde a secção enquanto a regra não se cumpre.
+- Um campo ou secção com uma regra de visibilidade mostra um ícone de ramificação.

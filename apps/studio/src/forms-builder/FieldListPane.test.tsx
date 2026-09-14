@@ -49,6 +49,10 @@ const SECTIONS: FormSection[] = [
 
 const ISSUES: FormLintIssue[] = [];
 
+/** Text outside the folded section drop panel, which stays mounted and repeats each section label. */
+const shownText = (text: string | RegExp) =>
+  screen.queryAllByText(text).filter((el) => !el.closest('[aria-hidden="true"]'));
+
 function renderPane(overrides: Partial<Parameters<typeof FieldListPane>[0]> = {}) {
   const onSelect = vi.fn();
   const onToggleEnabled = vi.fn();
@@ -63,7 +67,7 @@ function renderPane(overrides: Partial<Parameters<typeof FieldListPane>[0]> = {}
     <FieldListPane
       fields={FIELDS}
       sections={SECTIONS}
-      selectedFieldId={null}
+      selectedIds={new Set<string>()}
       issues={ISSUES}
       onSelect={onSelect}
       onToggleEnabled={onToggleEnabled}
@@ -154,8 +158,11 @@ describe('FieldListPane', () => {
     const { onSectionsChange, onFieldsClearSection } = renderPane();
     // Open popover
     fireEvent.click(screen.getByText(/Sections/i));
-    // Delete the "Main Section" row
-    fireEvent.click(screen.getByRole('button', { name: /delete section main section/i }));
+    // Delete the "Main Section" row from its ⋯ menu
+    const trigger = screen.getByRole('button', { name: 'Actions for section Main Section' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     expect(onSectionsChange).toHaveBeenCalledOnce();
     expect(onFieldsClearSection).toHaveBeenCalledWith('main');
   });
@@ -178,7 +185,7 @@ describe('FieldListPane', () => {
   });
 
   it('applies selected styling when selectedFieldId matches', () => {
-    renderPane({ selectedFieldId: 'f-1' });
+    renderPane({ selectedIds: new Set(['f-1']) });
     // The card for 'Patient name' should have the selected class
     const card = screen.getByText('Patient name').closest('[data-sortable-card]');
     expect(card?.className).toContain('border-primary');
@@ -189,8 +196,8 @@ describe('FieldListPane', () => {
   it('renders a section header for "main" and "extra" using section labels', () => {
     renderPane();
     // SECTIONS provides label 'Main Section' for id 'main' and 'Extra Section' for 'extra'
-    expect(screen.getByText('Main Section')).toBeTruthy();
-    expect(screen.getByText('Extra Section')).toBeTruthy();
+    expect(shownText('Main Section')).toHaveLength(1);
+    expect(shownText('Extra Section')).toHaveLength(1);
   });
 
   it('renders a "No section" header for fields with no section when sections prop provided', () => {
@@ -207,7 +214,7 @@ describe('FieldListPane', () => {
       description: null,
     };
     renderPane({ fields: [...FIELDS, unsectionedField] });
-    expect(screen.getByText(/No section/i)).toBeTruthy();
+    expect(shownText(/No section/i)).toHaveLength(1);
     expect(screen.getByText('Unsectioned field')).toBeTruthy();
   });
 
@@ -357,5 +364,40 @@ describe('FieldListPane', () => {
     expect(screen.getAllByRole('img', { name: 'Repeating group' })).toHaveLength(1);
     const telCard = screen.getByText('Contacts').closest('[data-sortable-card]');
     expect(telCard?.querySelector('[aria-label="Repeating group"]')).toBeTruthy();
+  });
+
+  it('shows the count and a selection menu once two fields are selected', () => {
+    renderPane({ selectedIds: new Set(['f-1', 'f-2']) });
+    expect(screen.getByText('2 selected')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Selection actions' })).toBeTruthy();
+    expect(screen.queryByText('3 fields (2 enabled)')).toBeNull();
+  });
+
+  it('keeps the section drop panel folded until a drag starts', () => {
+    renderPane();
+    expect(screen.getByText('Drop on a section to reassign').closest('[aria-hidden]')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('has no drop panel on a form without sections', () => {
+    renderPane({ sections: [] });
+    expect(screen.queryByText('Drop on a section to reassign')).toBeNull();
+  });
+
+  it('keeps the field count with one field selected', () => {
+    renderPane({ selectedIds: new Set(['f-1']) });
+    expect(screen.getByText('3 fields (2 enabled)')).toBeTruthy();
+  });
+
+  it('Edit visibility on a section opens a sheet that writes the rule to the section', () => {
+    const { onSectionsChange } = renderPane();
+    fireEvent.click(screen.getByRole('button', { name: /Sections \(2\)/ }));
+    const trigger = screen.getByRole('button', { name: 'Actions for section Main Section' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit visibility' }));
+    expect(screen.getByRole('dialog', { name: 'Visibility' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /add condition/i }));
+    const [sections] = onSectionsChange.mock.calls[0] as [FormSection[]];
+    expect(sections.find((s) => s.id === 'main')!.visibility?.conditions[0].fieldId).toBe('f-1');
   });
 });
