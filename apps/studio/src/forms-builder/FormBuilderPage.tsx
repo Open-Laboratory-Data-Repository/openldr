@@ -461,11 +461,11 @@ export function FormBuilderPage(): JSX.Element {
               <TabsList className="shrink-0 px-4">
                 <TabsTrigger value="form" className="gap-1.5">
                   Form
-                  <span className="font-mono text-[10px] text-muted-foreground">{schema.fields.length}</span>
+                  <span className="rounded-full border border-border px-1.5 font-mono text-[10px] leading-4 text-muted-foreground">{schema.fields.length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="library" className="gap-1.5">
                   Library
-                  <span className="font-mono text-[10px] text-muted-foreground">{elements.length}</span>
+                  <span className="rounded-full border border-border px-1.5 font-mono text-[10px] leading-4 text-muted-foreground">{elements.length}</span>
                 </TabsTrigger>
               </TabsList>
               {/* forceMount keeps the list's scroll, drag state and search text across a tab
