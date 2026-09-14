@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "f2a15f81",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Suggest codes above the term search in the Codes block"
+        },
+        {
+          "hash": "08fa9632",
+          "type": "feat",
+          "scope": "studio",
+          "title": "List suggested codes, labelled by source, with an undoable import"
+        },
+        {
+          "hash": "a095dd00",
+          "type": "feat",
+          "scope": "server",
+          "title": "Suggest codes for a FHIR path, and add or undo one without touching curated terms"
+        },
+        {
+          "hash": "7ee0717b",
+          "type": "feat",
+          "scope": "db,forms",
+          "title": "Read forms and stored codes, and add or remove only a term the builder added"
+        },
+        {
+          "hash": "4f64f03f",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Count, rank and offer suggested codes for a FHIR path"
+        },
+        {
           "hash": "d3d658fc",
           "type": "fix",
           "scope": "studio",
