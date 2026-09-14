@@ -17,7 +17,7 @@ import type { FacilityAdminLevel } from '@openldr/db/facility-answers';
 // existing caller.
 import type { FacilityHealth as FacilityRowHealth } from '@openldr/db';
 import type { ParsedFilter, ParsedSort } from '@openldr/table-query';
-import type { StarterPack, StarterPackWithEntries } from '@openldr/forms/pure';
+import type { CodeSuggestion, StarterPack, StarterPackWithEntries } from '@openldr/forms/pure';
 
 /** Routes the server answers WITHOUT a bearer token. Mirrors the public-path checks at the top of
  *  the `onRequest` hook in `apps/server/src/auth-plugin.ts` — keep the two in step.
@@ -2273,6 +2273,38 @@ export const updateTerm = (systemId: string, code: string, i: TermInput) => auth
 export async function deleteTerm(systemId: string, code: string): Promise<void> {
   const r = await authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete term failed: ${r.status}`);
+}
+
+/**
+ * Suggested codes for a field's FHIR path (spec S7). `valueSetUrl` adds that set's stored codes;
+ * `formId` leaves that form out of "Your forms".
+ */
+export function codeSuggestions(p: { fhirPath: string; valueSetUrl?: string | null; formId?: string | null }): Promise<CodeSuggestion[]> {
+  const qs = new URLSearchParams({ fhirPath: p.fhirPath });
+  if (p.valueSetUrl) qs.set('valueSetUrl', p.valueSetUrl);
+  if (p.formId) qs.set('formId', p.formId);
+  return apiGet<CodeSuggestion[]>(`/api/forms/code-suggestions?${qs}`, 'load suggested codes');
+}
+
+export type SuggestedCodeImport = { ok: true } | { ok: false; reason: 'unknown-system' | 'already-present' };
+
+/**
+ * Add a suggested code to the terminology. The route inserts only when the code is absent, and
+ * tags the term so `undoSuggestedCode` can remove it and nothing else. Its two refusals come back
+ * as values, because the panel explains each; any other failure throws.
+ */
+export async function importSuggestedCode(c: { system: string; code: string; display?: string | null }): Promise<SuggestedCodeImport> {
+  const res = await authFetch('/api/forms/code-suggestions/import', jbody({ system: c.system, code: c.code, ...(c.display ? { display: c.display } : {}) }, 'POST'));
+  if (res.status === 422) return { ok: false, reason: 'unknown-system' };
+  if (res.status === 409) return { ok: false, reason: 'already-present' };
+  await okJson<Term>(res, 'add suggested code');
+  return { ok: true };
+}
+
+/** Take back a code `importSuggestedCode` added. The route refuses any other term. */
+export async function undoSuggestedCode(c: { system: string; code: string }): Promise<void> {
+  const res = await authFetch('/api/forms/code-suggestions/undo', jbody(c, 'POST'));
+  if (!res.ok && res.status !== 204) throw new Error(formatApiError('undo suggested code', await errorDetail(res)));
 }
 export const importTerms = (systemId: string, source: string | Blob) => {
   const init = source instanceof Blob

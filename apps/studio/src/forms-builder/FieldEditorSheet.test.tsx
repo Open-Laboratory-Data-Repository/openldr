@@ -18,6 +18,7 @@ const vsMocks = vi.hoisted(() => ({
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
   listCodingSystems: vi.fn(async () => []),
+  codeSuggestions: vi.fn(async () => []),
   listValueSets: vi.fn(async () => [vsMocks.gender]),
   findValueSetByUrl: vi.fn(async (url: string) => (url === vsMocks.gender.url ? vsMocks.gender : null)),
   storedValueSetCodes: vi.fn(async () => [
@@ -81,6 +82,13 @@ function renderSheet(
 }
 
 describe('FieldEditorSheet', () => {
+  it('asks for suggested codes with the resolved path and the form id', async () => {
+    renderSheet({ field: { ...BASE_FIELD, fhirPath: 'name' }, formId: 'form-1' });
+    await waitFor(() => expect(vi.mocked(api.codeSuggestions)).toHaveBeenCalledWith({
+      fhirPath: 'Location.name', valueSetUrl: null, formId: 'form-1',
+    }));
+  });
+
   describe('block order', () => {
     const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
 

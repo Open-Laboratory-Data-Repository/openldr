@@ -35,6 +35,17 @@ Ce contrôle porte sur la configuration. Les réponses obligatoires, les référ
 - Un champ de référence choisit son ValueSet dans le bloc Reference Configuration. Il y cherche en direct, donc rien n'est copié.
 - Chaque installation contient les 672 ValueSets standard de FHIR. Les formulaires d'enquête n'ont aucun élément lié, donc ils n'affichent pas de ligne **bound:**.
 
+## Codes suggérés
+
+- Pour un champ qui a un FHIR Path, le bloc Codes affiche **Suggested codes** au-dessus de la recherche de termes.
+- Un code **Binding** vient du ValueSet du champ, ou du ValueSet auquel FHIR lie l'élément. **Your forms · N** signifie que N autres formulaires mettent ce code sur le même chemin.
+- Cliquez sur une ligne pour mettre le code sur le champ.
+- **not in your terminology** marque un code que CE ne contient pas. L'ajouter l'ajoute aussi à votre terminologie, et le panneau le dit, avec **Undo**. Undo le retire de votre terminologie ; le code reste sur le champ.
+- Seul un utilisateur qui peut gérer la terminologie peut ajouter un tel code. Les autres auteurs le voient grisé.
+- Un code d'un système de codage que CE n'a pas est refusé. Ajoutez d'abord le système sur la page Terminology.
+- Une liste vide signifie que votre terminologie est incomplète, pas qu'aucun code n'existe. Cherchez plus bas, ou ajoutez des codes sur la page Terminology.
+- Quand un ValueSet contient beaucoup de codes, le panneau en affiche 50 qu'aucun formulaire n'utilise, et indique combien il en reste.
+
 ## Packs de départ
 
 - Un pack de départ est une liste de champs prête pour un Resource Type, tirée des formulaires fournis avec OpenLDR : Location (Facility), Practitioner (Users), Patient et ServiceRequest (Lab order).

@@ -415,6 +415,18 @@ describe('createFormStore', () => {
 
     await expect(store.restore(created.id, 7)).rejects.toThrow('version not found');
   });
+
+  it('lists every definition with its schema, for the builder suggested codes', async () => {
+    const db = await makeMigratedDb();
+    const store = createFormStore(db);
+    const input = (name: string) => ({ name, versionLabel: 'v1', fhirResourceType: 'Questionnaire', fhirVersion: 'R4', schema: schema(name), targetPages: ['forms'] });
+    const a = await store.create(input('Form A'));
+    const b = await store.create(input('Form B'));
+
+    const defs = await store.listDefinitions();
+    expect(defs.map((d) => d.id).sort()).toEqual([a.id, b.id].sort());
+    expect(defs.find((d) => d.id === a.id)?.schema).toEqual(schema('Form A'));
+  });
 });
 
 describe('createFormStore reference capture', () => {

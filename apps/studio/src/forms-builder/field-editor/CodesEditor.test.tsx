@@ -29,6 +29,15 @@ vi.mock('@/terminology/TermPicker', () => ({
   ),
 }));
 
+// The panel has its own tests. Here it stands in for a suggestion being taken.
+vi.mock('./CodeSuggestionPanel', () => ({
+  CodeSuggestionPanel: ({ onAdd }: { onAdd: (c: { system: string; code: string; display?: string }) => void }) => (
+    <button type="button" onClick={() => onAdd({ system: 'http://loinc.org', code: '6690-2', display: 'WBC' })}>
+      Take suggestion
+    </button>
+  ),
+}));
+
 const BASE_FIELD: FormField = {
   id: 'f-1',
   displayLabel: 'Haemoglobin',
@@ -101,5 +110,21 @@ describe('CodesEditor', () => {
       renderEditor({ code: undefined });
       expect(screen.queryByRole('button', { name: /remove code/i })).toBeNull();
     });
+  });
+
+  it('appends a suggested code to the field', () => {
+    const onUpdate = vi.fn();
+    render(<CodesEditor field={{ ...BASE_FIELD, code: [{ system: 'http://loinc.org', code: '718-7' }] }} onUpdate={onUpdate} />);
+    fireEvent.click(screen.getByText('Take suggestion'));
+    expect(onUpdate).toHaveBeenCalledWith({
+      code: [{ system: 'http://loinc.org', code: '718-7' }, { system: 'http://loinc.org', code: '6690-2', display: 'WBC' }],
+    });
+  });
+
+  it('never adds a suggested code twice', () => {
+    const onUpdate = vi.fn();
+    render(<CodesEditor field={{ ...BASE_FIELD, code: [{ system: 'http://loinc.org', code: '6690-2' }] }} onUpdate={onUpdate} />);
+    fireEvent.click(screen.getByText('Take suggestion'));
+    expect(onUpdate).not.toHaveBeenCalled();
   });
 });

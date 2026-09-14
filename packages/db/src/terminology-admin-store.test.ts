@@ -265,6 +265,48 @@ describe('terminology admin store', () => {
       expect(page.rows.map((r) => r.code)).toEqual(['DEP-1']);
       expect(page.total).toBe(1);
     });
+
+    describe('for the builder suggested codes', () => {
+      const base = { status: 'ACTIVE' as const, shortName: null, class: null, unit: null, replacedBy: null };
+      const TAG = { addedBy: 'code-suggestion' };
+
+      it('existing returns only the pairs CE holds', async () => {
+        const { s } = await store();
+        await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', ...base, metadata: null });
+        expect(await s.terms.existing([
+          { system: 'http://x', code: 'AMP' },
+          { system: 'http://x', code: 'GEN' },
+          { system: 'http://y', code: 'AMP' },
+        ])).toEqual([{ system: 'http://x', code: 'AMP' }]);
+        expect(await s.terms.existing([])).toEqual([]);
+      });
+
+      it('createIfAbsent adds a missing term with its tag', async () => {
+        const { s } = await store();
+        const t = await s.terms.createIfAbsent({ system: 'http://x', code: 'GEN', display: 'Gentamicin', ...base, metadata: TAG });
+        expect(t).toMatchObject({ system: 'http://x', code: 'GEN', display: 'Gentamicin', status: 'ACTIVE', metadata: TAG });
+      });
+
+      it('createIfAbsent never overwrites a curated term', async () => {
+        const { s } = await store();
+        await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', ...base, metadata: null });
+        expect(await s.terms.createIfAbsent({ system: 'http://x', code: 'AMP', display: 'AMP', ...base, metadata: TAG })).toBeNull();
+        const { rows } = await s.terms.search('http://x', { limit: 10, offset: 0 });
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ display: 'Ampicillin', metadata: null });
+      });
+
+      it('deleteIfAddedBy deletes only a term carrying the tag', async () => {
+        const { s } = await store();
+        await s.terms.create({ system: 'http://x', code: 'AMP', display: 'Ampicillin', ...base, metadata: null });
+        await s.terms.createIfAbsent({ system: 'http://x', code: 'GEN', display: 'Gentamicin', ...base, metadata: TAG });
+        expect(await s.terms.deleteIfAddedBy('http://x', 'AMP', 'code-suggestion')).toBe(false);
+        expect(await s.terms.deleteIfAddedBy('http://x', 'NOPE', 'code-suggestion')).toBe(false);
+        expect(await s.terms.deleteIfAddedBy('http://x', 'GEN', 'code-suggestion')).toBe(true);
+        const { rows } = await s.terms.search('http://x', { limit: 10, offset: 0 });
+        expect(rows.map((r) => r.code)).toEqual(['AMP']);
+      });
+    });
   });
 
   describe('termMappings', () => {
@@ -648,6 +690,27 @@ describe('terminology admin store', () => {
         valueSets: [{ url: 'http://hl7.org/fhir/ValueSet/administrative-gender', compose: { include: [] } }],
         codeSystems: [],
       })).resolves.toMatchObject({ imported: 0, skipped: 1 });
+    });
+
+    it('storedCodes reads the stored active codes in order, and never recomputes', async () => {
+      const { s: admin, db } = await store();
+      await db.insertInto('terminology_concepts').values([
+        { system: 's1', code: 'B', display: 'Beta', status: 'ACTIVE' },
+        { system: 's1', code: 'A', display: 'Alpha', status: 'ACTIVE' },
+      ] as never).execute();
+      const vs = await admin.valueSets.save({
+        url: 'urn:test:vs-stored', version: null, name: null, title: 'stored', status: 'active',
+        experimental: false, description: null, compose: { include: [{ system: 's1' }] },
+      });
+      await db.insertInto('valueset_expansions')
+        .values({ value_set_id: vs.id, system_url: 's1', code: 'C', display: 'Gone', inactive: true } as never).execute();
+      // A term removed after the expansion stays in the stored codes. A recompute would drop it.
+      await db.deleteFrom('terminology_concepts').where('system', '=', 's1').where('code', '=', 'B').execute();
+
+      expect(await admin.valueSets.storedCodes(vs.id)).toEqual([
+        { system: 's1', code: 'A', display: 'Alpha' },
+        { system: 's1', code: 'B', display: 'Beta' },
+      ]);
     });
   });
 

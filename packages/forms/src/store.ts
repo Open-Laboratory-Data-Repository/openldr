@@ -235,6 +235,15 @@ export function createFormStore(db: Kysely<InternalSchema>, capture?: ReferenceC
     return rows.map((r) => toSummary(r as FormRow));
   }
 
+  /**
+   * Every form definition with its schema. The builder's suggested codes scan them in JavaScript
+   * (spec S7). Ordered by id, so two calls return the same order.
+   */
+  async function listDefinitions(): Promise<FormDefinition[]> {
+    const rows = await db.selectFrom('form_definitions').selectAll().orderBy('id').execute();
+    return rows.map((r) => toDefinition(r as FormRow));
+  }
+
   async function listPublished(targetPage?: string): Promise<FormSummary[]> {
     const rows = await db
       .selectFrom('form_definitions')
@@ -448,7 +457,7 @@ export function createFormStore(db: Kysely<InternalSchema>, capture?: ReferenceC
     return row ? toVersion(row as FormVersionRow) : null;
   }
 
-  return { get, list, listPublished, create, update, setStatus, delete: deleteForm, publish, duplicate, restore, listVersions, getVersion };
+  return { get, list, listDefinitions, listPublished, create, update, setStatus, delete: deleteForm, publish, duplicate, restore, listVersions, getVersion };
 }
 
 export type FormStore = ReturnType<typeof createFormStore>;

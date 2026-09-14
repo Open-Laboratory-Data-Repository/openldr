@@ -113,6 +113,9 @@ Powers the `/query` workbench and the queries that back report definitions.
 | `GET` | `/api/forms` | List form definitions. |
 | `POST` | `/api/forms` | Create/import a form definition. |
 | `GET` | `/api/forms/published` | List published forms, optionally filtered by target page. |
+| `GET` | `/api/forms/code-suggestions` | Suggested codes for a FHIR path: a ValueSet's stored codes, then codes other forms use there. |
+| `POST` | `/api/forms/code-suggestions/import` | Add a suggested code to the terminology, only if absent. Needs `terminology.manage`. |
+| `POST` | `/api/forms/code-suggestions/undo` | Remove a code the builder added, and nothing else. Needs `terminology.manage`. |
 | `GET` | `/api/forms/:id` | Get a form. |
 | `PUT` | `/api/forms/:id` | Update a form. |
 | `DELETE` | `/api/forms/:id` | Delete a form. |
