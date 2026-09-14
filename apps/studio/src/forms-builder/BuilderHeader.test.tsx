@@ -224,6 +224,21 @@ describe('BuilderHeader', () => {
       expect(onPreview).toHaveBeenCalled();
     });
 
+    it('offers "Start from a pack" when there is a pack, and calls it', () => {
+      const onStartFromPack = vi.fn();
+      renderHeader({ onStartFromPack });
+      openMenuAndClick('Builder actions', 'Start from a pack');
+      expect(onStartFromPack).toHaveBeenCalled();
+    });
+
+    it('hides "Start from a pack" when there is none', () => {
+      renderHeader();
+      const trigger = screen.getByLabelText('Builder actions');
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Add field')) fireEvent.keyDown(trigger, { key: 'Enter' });
+      expect(screen.queryByText('Start from a pack')).toBeNull();
+    });
+
     it('calls onSave when "Save draft" is clicked', () => {
       const { onSave } = renderHeader();
       openMenuAndClick('Builder actions', 'Save draft');

@@ -1,11 +1,14 @@
-import { type MouseEvent, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
+import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, loadStarterPack, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, makeUniqueFieldId, newField, slugify } from './builderModel';
-import { buildFieldFromElement, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf } from './newFormFields';
+import {
+  buildFieldFromElement, buildFieldFromPackEntry, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
+} from './newFormFields';
+import { StarterPackChooser } from './StarterPackChooser';
 import type { RepeatNode } from './fieldTree';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
@@ -41,6 +44,8 @@ import {
   normalizeFormSchema,
   type FormField,
   type FormSchema,
+  type StarterPackEntry,
+  type StarterPackWithEntries,
 } from '@openldr/forms/pure';
 
 export function FormBuilderPage(): JSX.Element {
@@ -66,6 +71,9 @@ export function FormBuilderPage(): JSX.Element {
   const [status, setStatus] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
+  const [pack, setPack] = useState<StarterPackWithEntries | null>(null);
+  const [packLoading, setPackLoading] = useState(false);
+  const [packChooserOpen, setPackChooserOpen] = useState(false);
 
   const history = useTemplateHistory<FormSchema>(() => schema);
 
@@ -256,6 +264,48 @@ export function FormBuilderPage(): JSX.Element {
     () => (mapsToResource(schema.fhirResourceType) ? libraryElements(schema.fhirResourceType, schema.fields) : []),
     [schema.fhirResourceType, schema.fields],
   );
+
+  // The pack for the form's resource type. The chooser and the Library both read it. Empty is a real
+  // answer: a survey, a Bundle form and a type with no pack get none. A failed load must not break the
+  // builder, so it reads as no pack.
+  useEffect(() => {
+    const resourceType = schema.fhirResourceType;
+    if (!mapsToResource(resourceType) || !resourceType) {
+      setPack(null);
+      return;
+    }
+    let cancelled = false;
+    setPackLoading(true);
+    void loadStarterPack(resourceType)
+      .then((p) => { if (!cancelled) setPack(p); })
+      .catch(() => { if (!cancelled) setPack(null); })
+      .finally(() => { if (!cancelled) setPackLoading(false); });
+    return () => { cancelled = true; };
+  }, [schema.fhirResourceType]);
+
+  // An empty form whose type has a pack offers it. Keyed on the pack, not the fields, so adding the
+  // pack's fields does not reopen it. Corlix `FormBuilderPage.tsx:432-437`.
+  const fieldCountRef = useRef(schema.fields.length);
+  fieldCountRef.current = schema.fields.length;
+  useEffect(() => {
+    if (pack && fieldCountRef.current === 0) setPackChooserOpen(true);
+  }, [pack]);
+
+  /** Add the chosen pack entries after the last field, in pack order. One undo step. */
+  const addPackEntries = (entries: StarterPackEntry[]) => {
+    if (entries.length === 0) return;
+    history.pushHistory();
+    setSchema((prev) => {
+      const taken = new Set(prev.fields.map((f) => f.id));
+      let order = prev.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
+      const added = entries.map((e) => {
+        const id = makeUniqueFieldId(slugify(e.label), taken);
+        taken.add(id);
+        return { ...buildFieldFromPackEntry(e, id), order: order++ };
+      });
+      return { ...prev, fields: [...prev.fields, ...added] };
+    });
+  };
 
   /** A Library element becomes a field, inside its parent group when that group is on the form. One undo step. */
   const addFromLibrary = (info: FhirPathInfo) => {
@@ -509,6 +559,7 @@ export function FormBuilderPage(): JSX.Element {
           onVersions={() => setVersionsOpen(true)}
           onAddField={addField}
           onPreview={() => setPreviewOpen(true)}
+          onStartFromPack={pack ? () => setPackChooserOpen(true) : undefined}
           onArchive={() => { void archive(); }}
           onDisable={() => { void disable(); }}
           onDelete={() => setConfirmDeleteOpen(true)}
@@ -601,6 +652,16 @@ export function FormBuilderPage(): JSX.Element {
       />
 
       <PreviewSheet schema={schema} open={previewOpen} onOpenChange={setPreviewOpen} />
+
+      <StarterPackChooser
+        open={packChooserOpen}
+        onOpenChange={setPackChooserOpen}
+        pack={pack}
+        loading={packLoading}
+        fields={schema.fields}
+        resourceType={schema.fhirResourceType ?? null}
+        onAdd={addPackEntries}
+      />
 
       <CompareDialog
         formId={formId}

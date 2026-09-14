@@ -103,6 +103,8 @@ export interface BuilderHeaderProps {
   onAddField: () => void;
   /** Open the form preview sheet. */
   onPreview: () => void;
+  /** Open the starter pack chooser. Absent when the form's resource type has no pack. */
+  onStartFromPack?: () => void;
   onArchive: () => void;
   onDisable: () => void;
   onDelete: () => void;
@@ -142,6 +144,7 @@ export function BuilderHeader({
   onVersions,
   onAddField,
   onPreview,
+  onStartFromPack,
   onArchive,
   onDisable,
   onDelete,
@@ -368,6 +371,11 @@ export function BuilderHeader({
               <DropdownMenuItem onSelect={() => onPreview()}>
                 Preview
               </DropdownMenuItem>
+              {onStartFromPack ? (
+                <DropdownMenuItem onSelect={() => onStartFromPack()}>
+                  Start from a pack
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => onSave()}>
                 Save draft
