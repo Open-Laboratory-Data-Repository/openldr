@@ -1,6 +1,6 @@
 // apps/studio/src/query/workspace/QueryTab.tsx
 import { useEffect, useState } from 'react';
-import { Play, Save, SlidersHorizontal } from 'lucide-react';
+import { Play, MoreHorizontal, SlidersHorizontal } from 'lucide-react';
 import { queryApi, type ConnectorRef, type RunResult } from '../api';
 import { useQueryStore, type QueryTab as QueryTabModel } from '../store';
 import { SqlEditor } from './SqlEditor';
@@ -13,6 +13,9 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { StatusIcon, IconButton, Sep, type RunStatus } from './toolbar-bits';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { QueryNameSheet } from './QueryNameSheet';
 
 export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const { t } = useTranslation();
@@ -27,6 +30,8 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
   const [lastValues, setLastValues] = useState<Record<string, unknown>>({});
+  const [nameOpen, setNameOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => { queryApi.connectors().then(setConnectors); }, []);
 
@@ -42,14 +47,36 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
 
   const onRun = () => { if (tab.params.length > 0) setSheetOpen(true); else void execute({}, 0); };
 
-  const save = async () => {
-    const input = { name: tab.title, connectorId: tab.connectorId ?? '', sql: tab.sql, params: tab.params };
+  const persist = async (name: string) => {
+    const input = { name, connectorId: tab.connectorId ?? '', sql: tab.sql, params: tab.params };
+    setSaving(true);
     try {
       if (tab.customQueryId) await queryApi.update(tab.customQueryId, input);
       else { const { id } = await queryApi.create(input); patchQuery(tab.id, { customQueryId: id }); }
-      patchQuery(tab.id, { dirty: false });
-      toast.success(t('query.savedToast', { name: tab.title }));
-    } catch (e) { setStatus('error'); setError((e as Error).message); toast.error((e as Error).message); }
+      patchQuery(tab.id, { title: name, dirty: false });
+      useQueryStore.getState().refreshSavedQueries();
+      toast.success(t('query.savedToast', { name }));
+    } finally { setSaving(false); }
+  };
+
+  const save = () => {
+    if (saving) return;
+    if (!tab.customQueryId) { setNameOpen(true); return; }
+    void persist(tab.title).catch((cause: unknown) => {
+      const message = cause instanceof Error ? cause.message : String(cause);
+      setStatus('error'); setError(message); toast.error(message);
+    });
+  };
+
+  const saveName = async (name: string) => {
+    if (!tab.customQueryId) return persist(name);
+    setSaving(true);
+    try {
+      await queryApi.update(tab.customQueryId, { name });
+      patchQuery(tab.id, { title: name });
+      useQueryStore.getState().refreshSavedQueries();
+      toast.success(t('query.savedToast', { name }));
+    } finally { setSaving(false); }
   };
 
   const statusMessage = status === 'ok'
@@ -74,7 +101,17 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
             <div className="flex-1" />
             <IconButton icon={<SlidersHorizontal className="h-4 w-4" />} label="Parameters" onClick={() => setParamsOpen(true)} />
             <Sep />
-            <IconButton icon={<Save className="h-4 w-4" />} label="Save" onClick={save} />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={t('query.actions')}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={saving} onSelect={save}>{t('query.save')}</DropdownMenuItem>
+                <DropdownMenuItem disabled={saving} onSelect={() => setNameOpen(true)}>{t('query.rename')}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Sep />
             <IconButton icon={<Play className="h-4 w-4" />} label="Run" onClick={onRun} />
           </div>
@@ -104,6 +141,7 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
           />
         )}
       </div>
+      {nameOpen && <QueryNameSheet initialName={tab.title} onClose={() => setNameOpen(false)} onSave={saveName} />}
       <RunParamsSheet open={sheetOpen} onClose={() => setSheetOpen(false)} params={tab.params}
         connectorId={tab.connectorId ?? ''} onRun={(values) => { setSheetOpen(false); void execute(values, 0); }} />
       <ParametersEditor open={paramsOpen} parameters={tab.params} onClose={() => setParamsOpen(false)}

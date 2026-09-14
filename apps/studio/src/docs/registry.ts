@@ -362,8 +362,8 @@ export const DOC_GUIDES: DocGuide[] = [
 /** Navigation order; pages without authored markdown are omitted by list(). */
 export const DOC_ORDER = DOC_GUIDES.map((guide) => guide.slug);
 
-// Eagerly bundle every locale's markdown. Path shape: ./0.1.0/<locale>/<slug>.md
-const files = import.meta.glob('./0.1.0/*/*.md', {
+// Bundle authored versions and locales: ./<version>/<locale>/<slug>.md.
+const files = import.meta.glob('./*/*/*.md', {
   query: '?raw', eager: true, import: 'default',
 }) as Record<string, string>;
 

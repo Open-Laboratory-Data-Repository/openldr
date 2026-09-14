@@ -1329,6 +1329,10 @@ export const en = {
     },
   },
   query: {
+    actions: 'Query actions', nameActions: 'Name actions', rename: 'Rename', name: 'Name',
+    saveNameTitle: 'Save query',
+    nameDescription: 'Choose a unique name. Renaming keeps the same query and its report references.',
+    nameExists: 'A query already uses this name. Choose another name.',
     explorer: 'Explorer', connectors: 'Connectors', datasets: 'Datasets', customQueries: 'Custom Queries',
     newQuery: 'New query', run: 'Run', save: 'Save', parameters: 'Parameters',
     filterTables: 'Filter…', noConnectors: 'No database connectors', rows: 'rows',

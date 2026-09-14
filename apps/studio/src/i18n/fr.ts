@@ -1221,6 +1221,10 @@ export const fr: EnShape = {
     },
   },
   query: {
+    actions: 'Actions de la requête', nameActions: 'Actions du nom', rename: 'Renommer', name: 'Nom',
+    saveNameTitle: 'Enregistrer la requête',
+    nameDescription: 'Choisissez un nom unique. Renommer conserve la requête et ses références dans les rapports.',
+    nameExists: 'Une requête utilise déjà ce nom. Choisissez un autre nom.',
     explorer: 'Explorateur', connectors: 'Connecteurs', datasets: 'Jeux de données', customQueries: 'Requêtes personnalisées',
     newQuery: 'Nouvelle requête', run: 'Exécuter', save: 'Enregistrer', parameters: 'Paramètres',
     filterTables: 'Filtrer…', noConnectors: 'Aucun connecteur de base de données', rows: 'lignes',

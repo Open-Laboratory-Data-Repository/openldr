@@ -15,6 +15,14 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('opens the current documentation version and keeps the previous version selectable', () => {
+    renderDocs('/docs/query-naming');
+    expect(screen.getByLabelText('Documentation version')).toHaveTextContent('0.1.8');
+    fireEvent.keyDown(screen.getByLabelText('Documentation version'), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('option', { name: '0.1.0' }));
+    expect(screen.getByLabelText('Documentation version')).toHaveTextContent('0.1.0');
+    expect(screen.getByRole('heading', { level: 1, name: 'Query names' })).toBeInTheDocument();
+  });
   it('renders authentication provider guidance in three languages', () => {
     renderDocs('/docs/auth-providers');
     expect(screen.getByRole('heading', { level: 1, name: 'Authentication providers' })).toBeInTheDocument();

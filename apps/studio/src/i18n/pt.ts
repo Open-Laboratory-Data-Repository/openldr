@@ -1221,6 +1221,10 @@ export const pt: EnShape = {
     },
   },
   query: {
+    actions: 'Ações da consulta', nameActions: 'Ações do nome', rename: 'Renomear', name: 'Nome',
+    saveNameTitle: 'Guardar consulta',
+    nameDescription: 'Escolha um nome único. Renomear mantém a consulta e as referências nos relatórios.',
+    nameExists: 'Já existe uma consulta com este nome. Escolha outro nome.',
     explorer: 'Explorador', connectors: 'Conectores', datasets: 'Conjuntos de dados', customQueries: 'Consultas personalizadas',
     newQuery: 'Nova consulta', run: 'Executar', save: 'Guardar', parameters: 'Parâmetros',
     filterTables: 'Filtrar…', noConnectors: 'Nenhum conector de base de dados', rows: 'linhas',

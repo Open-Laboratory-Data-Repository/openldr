@@ -21,6 +21,8 @@ export type Tab = TableTab | DatasetTab | QueryTab;
 interface State {
   tabs: Tab[];
   activeId: string | null;
+  savedRevision: number;
+  refreshSavedQueries(): void;
   openTableTab(t: { connectorId: string; type: string; schema: string; table: string }): void;
   openDatasetTab(d: { name: string }): void;
   openQueryTab(q: { title?: string; customQueryId?: string; connectorId?: string; sql?: string; params?: CustomQueryParam[] }): void;
@@ -33,7 +35,8 @@ interface State {
 }
 
 export const useQueryStore = create<State>((set, get) => ({
-  tabs: [], activeId: null,
+  tabs: [], activeId: null, savedRevision: 0,
+  refreshSavedQueries() { set((state) => ({ savedRevision: state.savedRevision + 1 })); },
   openTableTab({ connectorId, type, schema, table }) {
     const existing = get().tabs.find((t) => t.kind === 'table' && t.connectorId === connectorId && t.schema === schema && t.table === table);
     if (existing) { set({ activeId: existing.id }); return; }

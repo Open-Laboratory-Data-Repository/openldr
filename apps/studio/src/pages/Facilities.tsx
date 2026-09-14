@@ -933,12 +933,6 @@ export function Facilities() {
     return () => { cancelled = true; };
   }, []);
 
-  const upsert = (f: Facility) => setRows((prev) => {
-    const i = prev.findIndex((r) => r.id === f.id);
-    if (i === -1) return [...prev, f];
-    const next = [...prev]; next[i] = f; return next;
-  });
-
   /** EXACTLY what the table is showing, minus paging and sorting — neither changes which rows
    *  match. Built here rather than passed around so the dialog, the preview and the delete cannot
    *  drift apart.
@@ -1316,10 +1310,8 @@ export function Facilities() {
             open
             facility={editing}
             onOpenChange={(o) => { if (!o) setEditing(undefined); }}
-            // Same reasoning as `doDelete` above: a create/edit enqueues a rebuild server-side, and
-            // this path merges the saved row in locally rather than going through `reload()`, so the
-            // chip has to be refreshed here or a save leaves it frozen.
-            onSaved={(f) => { upsert(f); setEditing(undefined); void reloadHealth(); }}
+            // Reload applies the current filters, order and page size, and refreshes health.
+            onSaved={() => { setEditing(undefined); void reload({ background: true }); }}
           />
         )}
 

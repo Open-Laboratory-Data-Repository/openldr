@@ -13,6 +13,13 @@ import {
 } from './registry';
 
 describe('docs registry', () => {
+  it.each(LOCALES)('opens the current manual by default and preserves old links in %s', (locale) => {
+    expect(DEFAULT_DOC_VERSION).toBe('0.1.8');
+    expect(DOC_VERSIONS).toEqual(['0.1.8', '0.1.0']);
+    expect(resolve(locale, 'query')?.localeUsed).toBe(locale);
+    expect(resolve(locale, 'query', '0.1.0')).not.toBeNull();
+    expect(resolve(locale, 'query', '0.1.8')).not.toBeNull();
+  });
   it.each(LOCALES)('authors and indexes authentication providers in %s', (locale) => {
     const guide = resolve(locale, 'auth-providers');
     expect(guide?.localeUsed).toBe(locale);

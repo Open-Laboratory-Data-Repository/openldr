@@ -14,6 +14,8 @@ coverage/
 openldr-export/
 tmp-export*/
 playwright-report/
+.playwright-cli/
+output/playwright/
 test-results/
 e2e/artifacts/
 .docs-marketplace/

@@ -28,6 +28,7 @@ export function ExplorerTree(): JSX.Element {
   const openQueryTab = useQueryStore((s) => s.openQueryTab);
   const tabs = useQueryStore((s) => s.tabs);
   const closeTab = useQueryStore((s) => s.closeTab);
+  const savedRevision = useQueryStore((s) => s.savedRevision);
 
   const [openBranch, setOpenBranch] = useState<Record<string, boolean>>({});
   const [connectors, setConnectors] = useState<ConnectorRef[]>([]);
@@ -44,7 +45,12 @@ export function ExplorerTree(): JSX.Element {
 
   useEffect(() => { if (openBranch.connectors && connectors.length === 0) queryApi.connectors().then(setConnectors).catch(onErr('connectors')); }, [openBranch.connectors]);
   useEffect(() => { if (openBranch.datasets && datasets.length === 0) queryApi.datasets().then(setDatasets).catch(onErr('datasets')); }, [openBranch.datasets]);
-  useEffect(() => { if (openBranch.queries && queries.length === 0) queryApi.list().then(setQueries).catch(onErr('custom queries')); }, [openBranch.queries]);
+  useEffect(() => {
+    if (!openBranch.queries) return;
+    let cancelled = false;
+    void queryApi.list().then((rows) => { if (!cancelled) setQueries(rows); }).catch(onErr('custom queries'));
+    return () => { cancelled = true; };
+  }, [openBranch.queries, savedRevision]);
 
   const loadSchemas = (id: string) => { toggle(`c:${id}`); if (!schemas[id]) queryApi.schemas(id).then((s) => setSchemas((m) => ({ ...m, [id]: s }))).catch(onErr('schemas')); };
   const loadTables = (id: string, schema: string) => {
@@ -52,7 +58,7 @@ export function ExplorerTree(): JSX.Element {
     if (!tables[key]) queryApi.tables(id, schema).then((tb) => setTables((m) => ({ ...m, [key]: tb }))).catch(onErr('tables'));
   };
 
-  // Delete a custom query (Rename/Duplicate deferred — a full context menu is out of scope for v1).
+  // Renaming lives in the query tab's actions menu.
   // Confirmed via the shared shadcn ConfirmDialog rather than window.confirm.
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const doDelete = async (id: string): Promise<void> => {

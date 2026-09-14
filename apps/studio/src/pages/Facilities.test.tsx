@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -68,6 +68,7 @@ vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 import { toast } from 'sonner';
 import { listFacilities, listPublishedForms, getForm, uploadFacilityImport, getFacilityImportRun, confirmFacilityImportRun, revalidateFacilityImportRun, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, previewBulkDeleteFacilities, bulkDeleteFacilities, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
+import { createFacility, updateFacility } from '@/api';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
 
@@ -177,6 +178,7 @@ function clickMenuItem(triggerName: string, itemName: string | RegExp) {
 }
 
 describe('Facilities page', () => {
+  afterEach(() => window.history.replaceState({}, '', '/facilities'));
   beforeEach(() => {
     vi.clearAllMocks();
     listFacilitiesMock.mockResolvedValue(makePage([]));
@@ -197,6 +199,35 @@ describe('Facilities page', () => {
       hasCapability: () => true,
     });
   });
+
+  it.each(['create', 'edit'] as const)('reloads the bounded filtered page after %s instead of appending the saved facility', async (operation) => {
+    const original = makeRows(50);
+    const saved = { ...sampleFacility, id: operation === 'edit' ? 'f0' : 'off-page', name: 'Outside current filter' };
+    const refreshed = operation === 'edit' ? original.slice(1) : original;
+    listFacilitiesMock.mockResolvedValueOnce(makePage(original, { total: 150, offset: 50 }))
+      .mockResolvedValue(makePage(refreshed, { total: operation === 'edit' ? 149 : 151, offset: 50 }));
+    vi.mocked(createFacility).mockResolvedValue(saved);
+    vi.mocked(updateFacility).mockResolvedValue(saved);
+    vi.mocked(listPublishedForms).mockResolvedValue([publishedFacilityForm]);
+    vi.mocked(getForm).mockResolvedValue({ ...publishedFacilityForm, schema: facilityFormSchema, createdAt: '2026-01-01T00:00:00Z' });
+    window.history.replaceState({}, '', '/facilities?q=Facility&offset=50');
+    show();
+    await screen.findByText('Facility 0');
+    if (operation === 'create') clickMenuItem('Facility actions', /add facility/i);
+    else clickMenuItem('Facility actions Facility 0', /^edit$/i);
+    const sheet = await screen.findByRole('dialog');
+    fireEvent.change(await within(sheet).findByLabelText('Name'), { target: { value: saved.name } });
+    const trigger = within(sheet).getByRole('button', { name: 'Facility actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: operation === 'create' ? 'Create' : 'Save' })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: operation === 'create' ? 'Create' : 'Save' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledTimes(2));
+    expect(listFacilitiesMock).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'Facility', offset: 50, limit: 50 }));
+    expect(screen.queryByText('Outside current filter')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(refreshed.length + 1);
+    expect(screen.getByText(operation === 'edit' ? '51–99 of 149' : '51–100 of 151')).toBeInTheDocument();
+  }, 30000);
 
   it('distinguishes "no published form" from "no facilities yet"', async () => {
     // Three gates can each independently leave this page empty (page target unavailable, form not
