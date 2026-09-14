@@ -28,10 +28,12 @@ const BASE_FIELD: FormField = {
 function Harness({
   field,
   fhirResourceType,
+  surveyMode,
   onUpdate,
 }: {
   field: FormField;
   fhirResourceType: string | null;
+  surveyMode?: boolean;
   onUpdate: (patch: Partial<FormField>) => void;
 }) {
   const [current, setCurrent] = useState(field);
@@ -39,6 +41,7 @@ function Harness({
     <MappingEditor
       field={current}
       fhirResourceType={fhirResourceType}
+      surveyMode={surveyMode}
       onUpdate={(patch) => {
         onUpdate(patch);
         setCurrent((f) => ({ ...f, ...patch }));
@@ -47,16 +50,98 @@ function Harness({
   );
 }
 
-function renderEditor(overrides: Partial<FormField> = {}, fhirResourceType: string | null = 'Location') {
+function renderEditor(overrides: Partial<FormField> = {}, fhirResourceType: string | null = 'Location', surveyMode = false) {
   const onUpdate = vi.fn();
   const field = { ...BASE_FIELD, ...overrides };
   const utils = render(
-    <Harness field={field} fhirResourceType={fhirResourceType} onUpdate={onUpdate} />,
+    <Harness field={field} fhirResourceType={fhirResourceType} surveyMode={surveyMode} onUpdate={onUpdate} />,
   );
   return { ...utils, onUpdate };
 }
 
 describe('MappingEditor', () => {
+  describe('discriminator editor', () => {
+    const slot = { fhirPath: 'Location.identifier.value', fhirValueField: 'value', fhirDiscriminator: { system: 'urn:x' } };
+
+    it('shows no criteria until the box is ticked', () => {
+      renderEditor();
+      expect(screen.queryByText('Match criteria')).toBeNull();
+    });
+
+    it('ticking the box writes an empty discriminator and the value field', () => {
+      const { onUpdate } = renderEditor();
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Array element (discriminator)' }));
+      expect(onUpdate).toHaveBeenCalledWith({ fhirDiscriminator: {}, fhirValueField: 'value' });
+    });
+
+    it('unticking clears both', () => {
+      const { onUpdate } = renderEditor(slot);
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Array element (discriminator)' }));
+      expect(onUpdate).toHaveBeenCalledWith({ fhirDiscriminator: undefined, fhirValueField: undefined });
+    });
+
+    it('shows a stored map as one condition row', () => {
+      renderEditor(slot);
+      expect((screen.getByRole('textbox', { name: 'Condition 1 element' }) as HTMLInputElement).value).toBe('system');
+      expect((screen.getByRole('textbox', { name: 'Condition 1 value' }) as HTMLInputElement).value).toBe('urn:x');
+    });
+
+    it('stores a plain equality edit as the old map', () => {
+      const { onUpdate } = renderEditor(slot);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Condition 1 value' }), { target: { value: 'urn:y' } });
+      expect(onUpdate).toHaveBeenLastCalledWith({ fhirDiscriminator: { system: 'urn:y' } });
+    });
+
+    it('hides All and Any at one condition and shows them at two', () => {
+      renderEditor(slot);
+      expect(screen.queryByRole('button', { name: 'Any' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: '+ Add condition' }));
+      expect(screen.getByRole('button', { name: 'Any' })).toBeTruthy();
+    });
+
+    it('choosing Any stores a rule', () => {
+      const { onUpdate } = renderEditor({ ...slot, fhirDiscriminator: { system: 'a', use: 'b' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Any' }));
+      expect(onUpdate).toHaveBeenLastCalledWith({
+        fhirDiscriminator: {
+          join: 'any',
+          conds: [{ el: 'system', op: 'equals', val: 'a' }, { el: 'use', op: 'equals', val: 'b' }],
+        },
+      });
+    });
+
+    it('choosing starts with stores a rule', () => {
+      const { onUpdate } = renderEditor(slot);
+      fireEvent.click(screen.getByRole('combobox', { name: 'Condition 1 operator' }));
+      fireEvent.click(screen.getByText('starts with'));
+      expect(onUpdate).toHaveBeenLastCalledWith({
+        fhirDiscriminator: { join: 'all', conds: [{ el: 'system', op: 'starts with', val: 'urn:x' }] },
+      });
+    });
+
+    it('removes a condition', () => {
+      const { onUpdate } = renderEditor({ ...slot, fhirDiscriminator: { system: 'a', use: 'b' } });
+      fireEvent.click(screen.getAllByRole('button', { name: 'Remove condition' })[1]);
+      expect(onUpdate).toHaveBeenLastCalledWith({ fhirDiscriminator: { system: 'a' } });
+    });
+
+    it('edits the value field', () => {
+      const { onUpdate } = renderEditor(slot);
+      fireEvent.change(screen.getByRole('textbox', { name: 'Value Field' }), { target: { value: 'code' } });
+      expect(onUpdate).toHaveBeenLastCalledWith({ fhirValueField: 'code' });
+    });
+  });
+
+  describe('survey mode', () => {
+    it('hides FHIR Path, API Property and the discriminator, and keeps Observation Extract', () => {
+      renderEditor({}, 'Questionnaire', true);
+      expect(screen.queryByText('FHIR Path')).toBeNull();
+      expect(screen.queryByRole('textbox', { name: /api property/i })).toBeNull();
+      expect(screen.queryByRole('checkbox', { name: 'Array element (discriminator)' })).toBeNull();
+      expect(screen.getByRole('checkbox', { name: 'Observation Extract' })).toBeTruthy();
+    });
+  });
+
   describe('FHIR path input', () => {
     // The control is now a SuggestCombobox (role="combobox"), not a plain textbox — that is
     // exactly what this task changes. The role in these assertions was updated to match; the
@@ -167,24 +252,6 @@ describe('MappingEditor', () => {
         expect(onUpdate).toHaveBeenCalledWith({
           constraints: { maxLength: undefined },
         });
-      });
-    });
-
-    describe('referenceTarget input', () => {
-      it('calls onUpdate with referenceTarget on change', () => {
-        const { onUpdate } = renderEditor();
-        openAdvanced();
-        const input = screen.getByRole('textbox', { name: /reference target/i });
-        fireEvent.change(input, { target: { value: 'Patient' } });
-        expect(onUpdate).toHaveBeenCalledWith({ referenceTarget: 'Patient' });
-      });
-
-      it('calls onUpdate with undefined when referenceTarget cleared', () => {
-        const { onUpdate } = renderEditor({ referenceTarget: 'Patient' });
-        openAdvanced();
-        const input = screen.getByRole('textbox', { name: /reference target/i });
-        fireEvent.change(input, { target: { value: '' } });
-        expect(onUpdate).toHaveBeenCalledWith({ referenceTarget: undefined });
       });
     });
 

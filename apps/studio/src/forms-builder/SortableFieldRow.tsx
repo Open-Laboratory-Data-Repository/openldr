@@ -87,6 +87,7 @@ export function SortableFieldRow({
         checked={field.enabled}
         onCheckedChange={() => onToggleEnabled(field.id)}
         onClick={(e) => e.stopPropagation()}
+        disabled={field.locked}
         aria-label={`Toggle enabled for ${field.displayLabel}`}
       />
 
@@ -183,13 +184,18 @@ export function SortableFieldRow({
           <DropdownMenuItem onSelect={() => onToggleRequired(field.id)}>
             Required
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            onSelect={() => onDelete(field.id)}
-          >
-            Delete
-          </DropdownMenuItem>
+          {/* A locked field is one the form cannot work without, so it offers no Delete. */}
+          {!field.locked && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => onDelete(field.id)}
+              >
+                Delete
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

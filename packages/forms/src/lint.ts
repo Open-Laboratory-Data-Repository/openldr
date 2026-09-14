@@ -1,4 +1,5 @@
 import type { FormSchema } from './schema/form-schema';
+import { discriminatorIdentity } from './discriminator';
 import { lintFhirPaths } from './lint-fhir-path';
 import { lintFacilityAdminOrder } from './lint-facility-admin';
 import { validateTemplateTargets } from './page-targets';
@@ -59,8 +60,9 @@ export function lintFormSchema(form: FormSchema): FormLintIssue[] {
   for (const [path, fields] of byPath) {
     if (fields.length < 2) continue;
     // A discriminator only disambiguates if the fields' discriminators actually DIFFER; two fields
-    // carrying the same `{system: X}` are just as ambiguous as two carrying none.
-    const keys = fields.map((f) => JSON.stringify(f.fhirDiscriminator ?? null));
+    // carrying the same `{system: X}` are just as ambiguous as two carrying none. Identity, not
+    // JSON: key order and the two stored shapes must not make one discriminator look like two.
+    const keys = fields.map((f) => discriminatorIdentity(f.fhirDiscriminator));
     if (new Set(keys).size === fields.length) continue;
     for (const field of fields) {
       issues.push({

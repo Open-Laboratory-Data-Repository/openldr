@@ -20,6 +20,7 @@ export * from './fhir-path';
 export * from './discriminator';
 export * from './group-tree';
 export * from './group-repeats';
+export * from './survey-mode';
 export * from './diff';
 export * from './lifecycle';
 export * from './normalize';

@@ -1,5 +1,6 @@
 import { Repeat } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import type { RepeatNode } from './fieldTree';
 
@@ -28,5 +29,22 @@ export function RepeatRow({ node }: { node: RepeatNode }): JSX.Element {
         {count === 1 ? '1 slot' : `${count} slots`}
       </Badge>
     </div>
+  );
+}
+
+/**
+ * The footer of a repeating list: one click makes another named slot. It belongs to one list, so
+ * it sits under that list's slots rather than in a page menu, as in corlix `RepeatRow.tsx`.
+ */
+export function AddNamedSlotRow({ onAdd }: { onAdd: () => void }): JSX.Element {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      onClick={onAdd}
+      className="h-auto w-full justify-start rounded-md border border-dashed border-border px-3 py-1.5 text-xs font-normal text-muted-foreground hover:border-primary hover:bg-transparent hover:text-primary"
+    >
+      + Add a named slot
+    </Button>
   );
 }

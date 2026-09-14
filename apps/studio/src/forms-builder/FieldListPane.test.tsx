@@ -331,6 +331,20 @@ describe('FieldListPane', () => {
     expect(outerWrapper?.contains(screen.getByText('Symptom'))).toBe(true);
   });
 
+  it('offers "+ Add a named slot" under a repeat and passes the node', () => {
+    const onAddSlot = vi.fn();
+    renderPane({
+      sections: [],
+      onAddSlot,
+      fields: [
+        base({ id: 'local', displayLabel: 'Local ID', order: 0, fhirPath: 'Location.identifier.value', fhirValueField: 'value', fhirDiscriminator: { system: 'a' } }),
+        base({ id: 'mfl', displayLabel: 'MFL ID', order: 1, fhirPath: 'Location.identifier.value', fhirValueField: 'value', fhirDiscriminator: { system: 'b' } }),
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: '+ Add a named slot' }));
+    expect(onAddSlot).toHaveBeenCalledWith(expect.objectContaining({ kind: 'repeat', path: 'Location.identifier' }));
+  });
+
   it('marks a group bound to a repeating element, and not one bound to a single element', () => {
     renderPane({
       sections: [],

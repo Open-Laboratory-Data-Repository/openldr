@@ -4,7 +4,9 @@ import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
-import { createDefaultFormSchema, makeUniqueFieldId, newField } from './builderModel';
+import { createDefaultFormSchema, makeUniqueFieldId, newField, slugify } from './builderModel';
+import { buildGroupPart, buildNamedSlot, insertFieldAfter, lastPartIdOf } from './newFormFields';
+import type { RepeatNode } from './fieldTree';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
 import { VersionHistorySheet } from './VersionHistorySheet';
@@ -126,6 +128,9 @@ export function FormBuilderPage(): JSX.Element {
   };
 
   const deleteField = (fieldId: string) => {
+    // Locked marks a field the form cannot work without, so the `d` shortcut skips it too.
+    // Corlix `FormBuilderPage.tsx:606`.
+    if (schema.fields.find((f) => f.id === fieldId)?.locked) return;
     history.pushHistory();
     setSchema((prev) => ({ ...prev, fields: prev.fields.filter((f) => f.id !== fieldId) }));
     if (selectedId === fieldId) setSelectedId(null);
@@ -168,6 +173,39 @@ export function FormBuilderPage(): JSX.Element {
       const reordered = fields.map((f, i) => ({ ...f, order: i }));
       return { ...prev, fields: reordered };
     });
+  };
+
+  /** A fresh id for a field made from the structure, unique on the form. */
+  const freshId = (label: string) => makeUniqueFieldId(slugify(label), new Set(schema.fields.map((f) => f.id)));
+
+  /** Another slot of a repeating list. One undo step; the new slot opens. It stays on Cancel, as in corlix. */
+  const addNamedSlot = (node: RepeatNode) => {
+    history.pushHistory();
+    const slot = buildNamedSlot(node, freshId('New slot'), 'New slot');
+    const anchor = node.slots[node.slots.length - 1].id;
+    setSchema((prev) => ({ ...prev, fields: insertFieldAfter(prev.fields, anchor, slot) }));
+    setPendingNewFieldId(null);
+    setSelectedId(slot.id);
+  };
+
+  /** Save the open field's edits, then open another. Corlix `FormBuilderPage.tsx:577-585`. */
+  const openField = (id: string, draft: FormField) => {
+    history.recordEdit();
+    setSchema((prev) => ({ ...prev, fields: prev.fields.map((f) => (f.id === draft.id ? draft : f)) }));
+    setPendingNewFieldId(null);
+    setSelectedId(id);
+  };
+
+  /** Save the group's edits, add a part after its last part, and open the part. One undo step. */
+  const addGroupPart = (draft: FormField) => {
+    history.pushHistory();
+    const part = buildGroupPart(draft, freshId('New part'), 'New part');
+    setSchema((prev) => {
+      const committed = prev.fields.map((f) => (f.id === draft.id ? draft : f));
+      return { ...prev, fields: insertFieldAfter(committed, lastPartIdOf(committed, draft.id), part) };
+    });
+    setPendingNewFieldId(null);
+    setSelectedId(part.id);
   };
 
   const applyHistory = (next: FormSchema | null) => { if (next) setSchema(next); };
@@ -353,6 +391,7 @@ export function FormBuilderPage(): JSX.Element {
             <FieldListPane
               fields={schema.fields}
               fhirResourceType={schema.fhirResourceType ?? null}
+              onAddSlot={addNamedSlot}
               sections={schema.sections}
               selectedFieldId={selectedId}
               issues={issues}
@@ -390,6 +429,8 @@ export function FormBuilderPage(): JSX.Element {
         onOpenChange={(o) => { if (!o) handleSheetCancel(); }}
         onSave={handleSheetSave}
         onCancel={handleSheetCancel}
+        onOpenField={openField}
+        onAddPart={addGroupPart}
       />
 
       <CompareDialog

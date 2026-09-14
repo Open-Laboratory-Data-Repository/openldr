@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { ENTITY_TARGETS } from '@openldr/db';
 import type { FormField } from './schema/form-schema';
-import { isCodingAnswer, isEntityAnswer, resolveReferenceSource } from './reference-source';
+import { REFERENCE_ENTITY_TARGETS, isCodingAnswer, isEntityAnswer, resolveReferenceSource } from './reference-source';
+
+describe('REFERENCE_ENTITY_TARGETS', () => {
+  it('lists exactly the entities the server can search, so the builder never offers one that fails', () => {
+    expect([...REFERENCE_ENTITY_TARGETS]).toEqual([...ENTITY_TARGETS]);
+  });
+});
 
 const field = (over: Partial<FormField>): FormField => ({
   id: 'f', fhirPath: null, displayLabel: 'F', description: null,

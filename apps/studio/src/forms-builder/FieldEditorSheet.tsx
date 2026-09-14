@@ -2,7 +2,8 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
-import { FieldType, eligibleParents, groupRepeats } from '@openldr/forms/pure';
+import { FieldType, childrenOf, eligibleParents, groupRepeats, isSurveyForm } from '@openldr/forms/pure';
+import { ReferenceEditor } from './field-editor/ReferenceEditor';
 import { OptionsEditor } from './field-editor/OptionsEditor';
 import { CodesEditor } from './field-editor/CodesEditor';
 import { TranslationsEditor } from './field-editor/TranslationsEditor';
@@ -45,6 +46,10 @@ export interface FieldEditorSheetProps {
   onOpenChange: (open: boolean) => void;
   onSave: (field: FormField) => void;
   onCancel: () => void;
+  /** Open another field. The page saves this sheet's draft first, as corlix does. */
+  onOpenField?: (id: string, draft: FormField) => void;
+  /** Add a part to this group. The page saves the draft first, then opens the new part. */
+  onAddPart?: (draft: FormField) => void;
 }
 
 export function FieldEditorSheet({
@@ -57,6 +62,8 @@ export function FieldEditorSheet({
   onOpenChange,
   onSave,
   onCancel,
+  onOpenField,
+  onAddPart,
 }: FieldEditorSheetProps) {
   const [draft, setDraft] = useState<FormField | null>(field);
 
@@ -273,6 +280,20 @@ export function FieldEditorSheet({
           </div>
         </section>
 
+        {/* ── Reference Configuration (reference fields only) ────── */}
+        {activeDraft.fieldType === 'reference' && (
+          <>
+            <div className="border-t border-border" />
+            <div className="px-6 py-3">
+              <h3 className="text-sm font-medium text-foreground">Reference Configuration</h3>
+            </div>
+            <div className="border-t border-border" />
+            <div className="px-6 py-2">
+              <ReferenceEditor field={activeDraft} allFields={allFields} onUpdate={patchDraft} />
+            </div>
+          </>
+        )}
+
         {/* ── Options / Value-set section ──────────────────────────── */}
         {(activeDraft.fieldType === 'select' || activeDraft.fieldType === 'multiselect') && (
           <>
@@ -283,6 +304,69 @@ export function FieldEditorSheet({
             <div className="border-t border-border" />
             <div className="px-6 py-2">
               <OptionsEditor field={activeDraft} onUpdate={patchDraft} />
+            </div>
+          </>
+        )}
+
+        {/* ── Mapping / FHIR section. Above Codes, as in corlix: mapping is what authors get wrong. ── */}
+        <div className="border-t border-border" />
+        <div className="px-6 py-3">
+          <h3 className="text-sm font-medium text-foreground">Mapping</h3>
+        </div>
+        <div className="border-t border-border" />
+        <div className="px-6 py-2">
+          <MappingEditor
+            field={activeDraft}
+            fhirResourceType={fhirResourceType}
+            surveyMode={isSurveyForm(fhirResourceType)}
+            onUpdate={patchDraft}
+          />
+        </div>
+
+        {/* ── Parts (groups only). After Mapping: both answer "what does this node hold". ── */}
+        {activeDraft.fieldType === 'group' && (
+          <>
+            <div className="border-t border-border" />
+            <div className="flex items-baseline gap-2 px-6 py-3">
+              <h3 className="text-sm font-medium text-foreground">Parts</h3>
+              <span className="text-[11px] text-muted-foreground">click one to edit it</span>
+            </div>
+            <div className="border-t border-border" />
+            <div className="space-y-1 px-6 py-4">
+              {childrenOf(allFields, activeDraft.id).length === 0 ? (
+                <p className="pb-1 text-xs text-muted-foreground">No parts yet.</p>
+              ) : (
+                childrenOf(allFields, activeDraft.id).map((part) => (
+                  <Button
+                    key={part.id}
+                    type="button"
+                    variant="outline"
+                    onClick={() => draft && onOpenField?.(part.id, draft)}
+                    className="flex h-auto w-full items-center justify-start gap-2 px-2 py-1.5 text-left font-normal hover:border-primary"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs text-foreground">
+                        {part.displayLabel}
+                        {part.required && <span className="text-destructive">*</span>}
+                      </span>
+                      <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                        {part.fhirPath ?? 'no FHIR path yet'}
+                      </span>
+                    </span>
+                    <span className="ml-auto shrink-0 rounded-full border border-border px-2 text-[10px] text-muted-foreground">
+                      {part.fieldType}
+                    </span>
+                  </Button>
+                ))
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => draft && onAddPart?.(draft)}
+                className="h-7 w-full border-dashed text-[11px] font-normal text-primary"
+              >
+                + Add a part
+              </Button>
             </div>
           </>
         )}
@@ -305,16 +389,6 @@ export function FieldEditorSheet({
         <div className="border-t border-border" />
         <div className="px-6 py-2">
           <TranslationsEditor field={activeDraft} languages={languages} onUpdate={patchDraft} />
-        </div>
-
-        {/* ── Mapping / FHIR section ──────────────────────────────── */}
-        <div className="border-t border-border" />
-        <div className="px-6 py-3">
-          <h3 className="text-sm font-medium text-foreground">Mapping</h3>
-        </div>
-        <div className="border-t border-border" />
-        <div className="px-6 py-2">
-          <MappingEditor field={activeDraft} fhirResourceType={fhirResourceType} onUpdate={patchDraft} />
         </div>
 
         {/* ── Visibility / conditions section ─────────────────────── */}

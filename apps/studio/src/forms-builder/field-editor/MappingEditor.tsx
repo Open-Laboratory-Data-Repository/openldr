@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { SuggestCombobox } from '@/components/ui/suggest-combobox';
 import { fhirPathOptionsFor, lookupFhirPath } from '@openldr/fhir/paths';
+import { DiscriminatorEditor } from './DiscriminatorEditor';
 
 export interface MappingEditorProps {
   field: FormField;
@@ -22,6 +23,12 @@ export interface MappingEditorProps {
    * than showing an empty list that looks broken.
    */
   fhirResourceType: string | null;
+  /**
+   * True on a Questionnaire form. A survey question points at no resource, so FHIR Path, the
+   * discriminator and API Property are hidden. Observation Extract and the rest stay: CE needs
+   * Observation Extract to submit a form at all.
+   */
+  surveyMode?: boolean;
   onUpdate: (patch: Partial<FormField>) => void;
 }
 
@@ -38,7 +45,7 @@ function parseNum(raw: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEditorProps): JSX.Element {
+export function MappingEditor({ field, fhirResourceType, surveyMode = false, onUpdate }: MappingEditorProps): JSX.Element {
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
 
   function patchConstraints(patch: Partial<FormFieldConstraints>): void {
@@ -69,6 +76,8 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
       <section className="mt-2">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 py-4">
 
+          {!surveyMode && (
+          <>
           {/* FHIR Path */}
           <Label htmlFor="mapping-fhir-path" className="whitespace-nowrap">
             FHIR Path
@@ -94,6 +103,9 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
             )}
           </div>
 
+          {/* Which entry of a repeating list: after the path it qualifies, as in corlix. */}
+          <DiscriminatorEditor field={field} onUpdate={onUpdate} />
+
           {/* API Property */}
           <Label htmlFor="mapping-api-property" className="whitespace-nowrap">
             API Property
@@ -108,6 +120,8 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
             placeholder="e.g. patientName"
             className="font-mono text-xs"
           />
+          </>
+          )}
 
           {/* Observation Extract */}
           <div className="col-span-2 flex items-center gap-2 pt-1">
@@ -228,73 +242,6 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
               onChange={(e) => patchConstraints({ decimalPlaces: parseNum(e.target.value) })}
               placeholder="—"
             />
-
-            {/* ── Reference config ─────────────────────────────── */}
-            <span className="col-span-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">
-              Reference
-            </span>
-
-            <Label htmlFor="adv-ref-target" className="whitespace-nowrap">Reference Target</Label>
-            <Input
-              id="adv-ref-target"
-              aria-label="Reference Target"
-              value={field.referenceTarget ?? ''}
-              onChange={(e) =>
-                onUpdate({ referenceTarget: e.target.value || undefined })
-              }
-              placeholder="e.g. Patient"
-            />
-
-            <Label htmlFor="adv-ref-display-field" className="whitespace-nowrap">
-              Display Field
-            </Label>
-            <Input
-              id="adv-ref-display-field"
-              aria-label="Reference Display Field"
-              value={field.referenceDisplayField ?? ''}
-              onChange={(e) =>
-                onUpdate({ referenceDisplayField: e.target.value || undefined })
-              }
-              placeholder="e.g. name"
-            />
-
-            <Label htmlFor="adv-ref-value-field" className="whitespace-nowrap">
-              Value Field
-            </Label>
-            <Input
-              id="adv-ref-value-field"
-              aria-label="Reference Value Field"
-              value={field.referenceValueField ?? ''}
-              onChange={(e) =>
-                onUpdate({ referenceValueField: e.target.value || undefined })
-              }
-              placeholder="e.g. id"
-            />
-
-            <div className="col-span-2 flex items-center gap-6 pt-1">
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="adv-ref-multiple"
-                  aria-label="Reference Multiple"
-                  checked={field.referenceMultiple ?? false}
-                  onCheckedChange={(checked) =>
-                    onUpdate({ referenceMultiple: !!checked })
-                  }
-                />
-                <Label htmlFor="adv-ref-multiple" className="text-xs">Multiple</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="adv-ref-searchable"
-                  aria-label="Reference Searchable"
-                  checked={field.referenceSearchable ?? false}
-                  onCheckedChange={(checked) =>
-                    onUpdate({ referenceSearchable: !!checked })
-                  }
-                />
-                <Label htmlFor="adv-ref-searchable" className="text-xs">Searchable</Label>
-              </div>
-            </div>
 
             {/* ── Repetition ───────────────────────────────────── */}
             <span className="col-span-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">

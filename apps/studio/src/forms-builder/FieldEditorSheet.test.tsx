@@ -4,6 +4,13 @@ import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { FieldType } from '@openldr/forms/pure';
 import { FieldEditorSheet } from './FieldEditorSheet';
 
+// Keep the real module and override one function: other editor parts import other api calls,
+// and a factory that returned only this one would break them.
+vi.mock('../api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  listCodingSystems: vi.fn(async () => []),
+}));
+
 const BASE_FIELD: FormField = {
   id: 'f-1',
   displayLabel: 'Patient name',
@@ -59,6 +66,61 @@ function renderSheet(
 }
 
 describe('FieldEditorSheet', () => {
+  describe('block order', () => {
+    const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+
+    it('puts Mapping above Codes', () => {
+      renderSheet();
+      expect(headings()).toEqual(['General', 'Mapping', 'Codes', 'Translations', 'Visibility']);
+    });
+
+    it('gives a reference field its own Reference Configuration block after General', () => {
+      renderSheet({ field: { ...BASE_FIELD, fieldType: 'reference' } });
+      expect(headings()).toEqual(['General', 'Reference Configuration', 'Mapping', 'Codes', 'Translations', 'Visibility']);
+    });
+  });
+
+  describe('Parts block', () => {
+    const PART: FormField = { ...BASE_FIELD, id: 'p-1', displayLabel: 'City', groupId: 'g-1', fhirPath: 'Location.address.city', order: 2 };
+
+    it('lists a group parts', () => {
+      renderSheet({ field: GROUP_FIELD, allFields: [GROUP_FIELD, PART] });
+      expect(screen.getByRole('button', { name: /City/ })).toBeTruthy();
+    });
+
+    it('says when a group has no parts', () => {
+      renderSheet({ field: GROUP_FIELD, allFields: [GROUP_FIELD] });
+      expect(screen.getByText('No parts yet.')).toBeTruthy();
+    });
+
+    it('opens a part and hands over the group draft, unsaved edits included', () => {
+      const onOpenField = vi.fn();
+      renderSheet({ field: GROUP_FIELD, allFields: [GROUP_FIELD, PART], onOpenField });
+      fireEvent.change(screen.getByRole('textbox', { name: 'Display Label' }), { target: { value: 'Address block' } });
+      fireEvent.click(screen.getByRole('button', { name: /City/ }));
+      expect(onOpenField).toHaveBeenCalledWith('p-1', expect.objectContaining({ id: 'g-1', displayLabel: 'Address block' }));
+    });
+
+    it('adds a part with the group draft', () => {
+      const onAddPart = vi.fn();
+      renderSheet({ field: GROUP_FIELD, allFields: [GROUP_FIELD], onAddPart });
+      fireEvent.click(screen.getByRole('button', { name: '+ Add a part' }));
+      expect(onAddPart).toHaveBeenCalledWith(expect.objectContaining({ id: 'g-1' }));
+    });
+
+    it('sits after Mapping', () => {
+      renderSheet({ field: GROUP_FIELD, allFields: [GROUP_FIELD] });
+      const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+      expect(headings.indexOf('Parts')).toBe(headings.indexOf('Mapping') + 1);
+    });
+  });
+
+  it('hides the mapping controls on a survey form', () => {
+    renderSheet({ fhirResourceType: 'Questionnaire' });
+    expect(screen.queryByText('FHIR Path')).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'Observation Extract' })).toBeTruthy();
+  });
+
   describe('header', () => {
     it('shows "Edit Field" as the sheet title', () => {
       renderSheet();

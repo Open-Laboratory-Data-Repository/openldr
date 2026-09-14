@@ -77,6 +77,20 @@ describe('SortableFieldRow', () => {
     expect(screen.queryByRole('img', { name: 'Repeating group' })).toBeNull();
   });
 
+  it('disables the Enabled box on a locked field', () => {
+    renderRow({ field: { ...FIELD, locked: true } });
+    expect((screen.getByLabelText(`Toggle enabled for ${FIELD.displayLabel}`) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('offers no Delete on a locked field', () => {
+    renderRow({ field: { ...FIELD, locked: true } });
+    const trigger = screen.getByLabelText(`Actions for ${FIELD.displayLabel}`);
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Duplicate')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(screen.getByText('Duplicate')).toBeTruthy();
+    expect(screen.queryByText('Delete')).toBeNull();
+  });
+
   it('marks a repeatable field', () => {
     renderRow({ field: { ...FIELD, repeatable: true } });
     expect(screen.getByRole('img', { name: 'Repeats' })).toBeTruthy();
