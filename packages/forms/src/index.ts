@@ -25,6 +25,8 @@ export * from './diff';
 export * from './lifecycle';
 export * from './normalize';
 export * from './samples/forms';
+export * from './starter-pack';
+export * from './samples/starter-packs';
 export * from './store';
 export * from './validate-answers';
 export * from './reference-source';
