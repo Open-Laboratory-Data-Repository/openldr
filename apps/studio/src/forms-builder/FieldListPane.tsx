@@ -11,7 +11,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Search } from 'lucide-react';
+import { ChevronDown, Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -166,57 +166,69 @@ export function FieldListPane({
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-3 py-2 border-b space-y-2">
-        {/* Counter, or the selection menu once two or more rows are selected */}
-        <div className="flex min-h-7 items-center">
-          {selectedIds.size >= 2 ? (
-            <BulkSelectionMenu
-              count={selectedIds.size}
-              sections={sortedSections}
-              onMove={(sectionId) => onBulkMove?.(sectionId)}
-              onToggleEnabled={() => onBulkToggleEnabled?.()}
-              onDelete={() => onBulkDelete?.()}
-              onClear={() => onClearSelection?.()}
-            />
-          ) : (
-            <p className="text-xs text-muted-foreground">
+      {/* Header: count, search and Sections on one row, as in corlix's FormBuilderPage. Two or
+          more selected rows give the whole row to the selection menu, as corlix does. It wraps
+          rather than scrolls on a phone, where the three do not fit side by side. */}
+      <div data-list-header className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+        {selectedIds.size >= 2 ? (
+          <BulkSelectionMenu
+            count={selectedIds.size}
+            sections={sortedSections}
+            onMove={(sectionId) => onBulkMove?.(sectionId)}
+            onToggleEnabled={() => onBulkToggleEnabled?.()}
+            onDelete={() => onBulkDelete?.()}
+            onClear={() => onClearSelection?.()}
+          />
+        ) : (
+          <>
+            {/* m-0: studio ships Tailwind without its reset (tokens.css), so a bare <p> keeps the
+                browser's 1em margin and makes this row 57px tall instead of 44px. */}
+            <p className="m-0 text-xs text-muted-foreground">
               {fields.length} fields ({enabledCount} enabled)
             </p>
-          )}
-        </div>
-
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            id="builder-field-search"
-            aria-label="Search fields"
-            placeholder="Search fields…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-7 h-8 text-sm"
-          />
-        </div>
-
-        {/* Sections popover — trigger shows count; content is SectionsManager */}
-        <Popover open={sectionsOpen} onOpenChange={setSectionsOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="w-full justify-between text-xs h-8">
-              {`Sections (${sections.length})`}
-              <span className="ml-1 text-muted-foreground">▾</span>
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-72 p-0">
-            <SectionsManager
-              sections={sections}
-              onChange={(s) => onSectionsChange?.(s)}
-              onFieldsClearSection={(sid) => onFieldsClearSection?.(sid)}
-              // The popover closes first. The sheet lives outside it, or it would unmount with it.
-              onEditVisibility={(id) => { setSectionsOpen(false); setVisibilitySectionId(id); }}
-            />
-          </PopoverContent>
-        </Popover>
+            <span aria-hidden="true" className="text-muted-foreground">·</span>
+            <div data-list-search className="relative w-48 min-w-0 max-w-full">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="builder-field-search"
+                aria-label="Search fields"
+                placeholder="Search fields…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-7 pl-7 pr-7 text-xs"
+              />
+              {search && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Clear search"
+                  onClick={() => setSearch('')}
+                  className="absolute right-1 top-1/2 h-5 w-5 -translate-y-1/2 hover:bg-transparent"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+            <Popover open={sectionsOpen} onOpenChange={setSectionsOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-xs">
+                  Sections <span className="text-muted-foreground">({sections.length})</span>
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-72 p-0">
+                <SectionsManager
+                  sections={sections}
+                  onChange={(s) => onSectionsChange?.(s)}
+                  onFieldsClearSection={(sid) => onFieldsClearSection?.(sid)}
+                  // The popover closes first. The sheet lives outside it, or it would unmount with it.
+                  onEditVisibility={(id) => { setSectionsOpen(false); setVisibilitySectionId(id); }}
+                />
+              </PopoverContent>
+            </Popover>
+          </>
+        )}
       </div>
 
       {/* Field list */}

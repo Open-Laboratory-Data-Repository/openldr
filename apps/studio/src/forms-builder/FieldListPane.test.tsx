@@ -121,9 +121,50 @@ describe('FieldListPane', () => {
 
   it('renders a Sections button trigger showing the sections count', () => {
     renderPane();
-    // Trigger text should include "Sections (2)" (2 sections in SECTIONS)
-    const trigger = screen.getByText(/Sections \(2\)/i);
-    expect(trigger).toBeTruthy();
+    // The count sits in its own muted span, so match the button's accessible name, not one text node.
+    expect(screen.getByRole('button', { name: /Sections \(2\)/ })).toBeTruthy();
+  });
+
+  // Corlix draws the count, the search and a small Sections button on one row. CE stacked the
+  // three, with a full-width Sections button. jsdom has no layout, so these pin the structure:
+  // all three are direct children of one flex row, in that order.
+  describe('the list header', () => {
+    it('puts the count, the search and the Sections button on one row, in that order', () => {
+      renderPane();
+      const count = screen.getByText('3 fields (2 enabled)');
+      const row = count.closest('[data-list-header]') as HTMLElement;
+      expect(row).toHaveClass('flex', 'items-center');
+      const searchBox = screen.getByLabelText('Search fields').closest('[data-list-search]');
+      const sections = screen.getByRole('button', { name: /Sections \(2\)/ });
+      expect(count.parentElement).toBe(row);
+      expect(searchBox?.parentElement).toBe(row);
+      expect(sections.parentElement).toBe(row);
+      expect(count.compareDocumentPosition(searchBox!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(searchBox!.compareDocumentPosition(sections) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('draws Sections as a small ghost button, not a full-width one', () => {
+      renderPane();
+      expect(screen.getByRole('button', { name: /Sections \(2\)/ })).not.toHaveClass('w-full');
+    });
+
+    it('offers a clear button inside the search box once it holds text', () => {
+      renderPane();
+      expect(screen.queryByRole('button', { name: 'Clear search' })).toBeNull();
+      const search = screen.getByLabelText('Search fields');
+      fireEvent.change(search, { target: { value: 'age' } });
+      expect(screen.queryByText('Patient name')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+      expect(search).toHaveValue('');
+      expect(screen.getByText('Patient name')).toBeTruthy();
+    });
+
+    it('gives the whole row to the selection menu once two fields are selected', () => {
+      renderPane({ selectedIds: new Set(['f-1', 'f-2']) });
+      expect(screen.getByText('2 selected')).toBeTruthy();
+      expect(screen.queryByLabelText('Search fields')).toBeNull();
+      expect(screen.queryByRole('button', { name: /Sections \(2\)/ })).toBeNull();
+    });
   });
 
   it('opening the Sections popover shows the SectionsManager with a "Section name…" input and Add button', () => {
