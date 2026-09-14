@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "4c9a3b8d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Draw a group's dashed guide on the left edge only"
+        },
+        {
+          "hash": "50368271",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Let a group sit inside another group"
+        },
+        {
+          "hash": "21c5b89c",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Draw repeat nodes and groups at any depth in the field list"
+        },
+        {
+          "hash": "fa543615",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Show the discriminator and repeat marker on a field row"
+        },
+        {
+          "hash": "8fc8bc60",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Export a one-instance group as not repeating"
+        },
+        {
+          "hash": "d77168fe",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Helpers for discriminator labels, the group tree and repetition"
+        },
+        {
+          "hash": "6ea30b3d",
+          "type": "feat",
+          "scope": "fhir",
+          "title": "Record whether a path's own element repeats"
+        },
+        {
           "hash": "d841622b",
           "type": "fix",
           "scope": "studio",
