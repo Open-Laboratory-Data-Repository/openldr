@@ -7,7 +7,7 @@
 1. Select a report, then open its **⋯ → Schedules** menu. Your role needs permission to manage reports.
 2. Choose **New schedule**. Select Daily, Weekly, Monthly, or Quarterly. Weekly requires a weekday; Monthly offers days 1 through 28.
 3. Choose CSV, XLSX, or PDF. Check the saved filters, including any required facility or time zone. A new schedule starts with the report page's current filters, except its date range.
-4. Choose **Save** and check the saved confirmation. The schedule appears with an enabled switch, **Next**, and **Last**.
+4. In the side sheet, choose **Save** from the **⋯** menu and check the saved confirmation. The schedule appears with an enabled switch, **Next**, and **Last**.
 5. Use the pencil icon to edit its frequency, output format, or filters. Save the changes. Use the switch to disable it, or the delete icon and confirmation to remove it.
 
 #### Timing and date window
@@ -46,7 +46,7 @@ Each stored report query can return up to 1,000 rows. Exactly 1,000 rows are acc
 1. Sélectionnez un rapport, puis **⋯ → Planifications**. Votre rôle doit autoriser la gestion des rapports.
 2. Choisissez **Nouvelle planification**, puis la fréquence. Une fréquence hebdomadaire demande un jour de la semaine. Une fréquence mensuelle propose les jours 1 à 28.
 3. Choisissez CSV, XLSX ou PDF. Vérifiez les filtres requis, dont l'établissement et le fuseau horaire. La nouvelle planification reprend les filtres courants du rapport, sauf les dates.
-4. Choisissez **Enregistrer** et vérifiez la confirmation. La planification affiche un interrupteur, **Prochaine** et **Dernière**.
+4. Dans le panneau latéral, choisissez **Enregistrer** dans le menu **⋯** et vérifiez la confirmation. La planification affiche un interrupteur, **Prochaine** et **Dernière**.
 5. Utilisez le crayon pour modifier la fréquence, le format ou les filtres, puis enregistrez. L'interrupteur désactive la planification. L'icône de suppression demande une confirmation.
 
 #### Horaire et période
@@ -85,7 +85,7 @@ Chaque requête enregistrée peut renvoyer jusqu'à 1 000 lignes. Un résultat d
 1. Selecione um relatório e abra **⋯ → Agendamentos**. Seu perfil precisa permitir a gestão de relatórios.
 2. Escolha **Novo agendamento** e a frequência. Semanal exige um dia da semana. Mensal oferece os dias 1 a 28.
 3. Escolha CSV, XLSX ou PDF. Confira os filtros obrigatórios, incluindo estabelecimento e fuso horário. O novo agendamento copia os filtros atuais do relatório, exceto as datas.
-4. Escolha **Salvar** e confira a confirmação. O agendamento mostra um interruptor, **Próxima** e **Última**.
+4. No painel lateral, escolha **Salvar** no menu **⋯** e confira a confirmação. O agendamento mostra um interruptor, **Próxima** e **Última**.
 5. Use o lápis para editar frequência, formato ou filtros e salve. Use o interruptor para desativar. O ícone de exclusão solicita confirmação.
 
 #### Horário e período

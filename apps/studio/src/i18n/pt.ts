@@ -513,7 +513,7 @@ export const pt: EnShape = {
     },
     connectors: {
       heading: 'Conectores',
-      description: 'Os segredos são criptografados em repouso e nunca mais exibidos.',
+      description: "Os segredos são criptografados em repouso e nunca mais exibidos. Host permitido do plugin indica o host de rede permitido para um conector de plugin, não o endereço de ligação guardado. Abra Editar para consultar o endereço de um conector host.",
       sheetDescription: 'Configure um conector de saída para um sistema externo. Os segredos são criptografados em repouso e nunca mais exibidos.',
       add: 'Adicionar conector',
       empty: 'Nenhum conector ainda.',
@@ -522,7 +522,7 @@ export const pt: EnShape = {
       count_other: '{{count}} conectores',
       colName: 'Nome',
       colPlugin: 'Plugin',
-      colHost: 'Host',
+      colHost: 'Host permitido do plugin',
       colEnabled: 'Ativado',
       colActions: 'Ações',
       searchPlaceholder: 'Pesquisar conectores',

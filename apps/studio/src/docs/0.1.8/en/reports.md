@@ -36,7 +36,7 @@ You can browse the report library by category, select a report, fill in filters 
 1. Select a report, then open its **⋯ → Schedules** menu. Your role needs permission to manage reports.
 2. Choose **New schedule**. Select Daily, Weekly, Monthly, or Quarterly. Weekly requires a weekday; Monthly offers days 1 through 28.
 3. Choose CSV, XLSX, or PDF. Check the saved filters, including any required facility or time zone. A new schedule starts with the report page's current filters, except its date range.
-4. Choose **Save** and check the saved confirmation. The schedule appears with an enabled switch, **Next**, and **Last**.
+4. In the side sheet, choose **Save** from the **⋯** menu and check the saved confirmation. The schedule appears with an enabled switch, **Next**, and **Last**.
 5. Use the pencil icon to edit its frequency, output format, or filters. Save the changes. Use the switch to disable it, or the delete icon and confirmation to remove it.
 
 ### Timing and date window

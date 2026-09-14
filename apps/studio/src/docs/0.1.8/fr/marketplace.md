@@ -1,5 +1,7 @@
 # Marketplace
 
+La création et la modification d'un registre ouvrent un panneau latéral. Les libellés sont placés à côté des champs. Choisissez Enregistrer dans le menu ⋯ du panneau. Fermez le panneau sans enregistrer pour abandonner les modifications.
+
 Le Marketplace permet aux administrateurs de consulter les paquets, leurs permissions et les registres.
 
 ## Avant de commencer

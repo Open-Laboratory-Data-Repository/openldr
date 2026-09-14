@@ -9,7 +9,7 @@ Ce guide explique comment planifier un rapport et récupérer son fichier.
 1. Sélectionnez un rapport, puis **⋯ → Planifications**. Votre rôle doit autoriser la gestion des rapports.
 2. Choisissez **Nouvelle planification**, puis la fréquence. Une fréquence hebdomadaire demande un jour de la semaine. Une fréquence mensuelle propose les jours 1 à 28.
 3. Choisissez CSV, XLSX ou PDF. Vérifiez les filtres requis, dont l'établissement et le fuseau horaire. La nouvelle planification reprend les filtres courants du rapport, sauf les dates.
-4. Choisissez **Enregistrer** et vérifiez la confirmation. La planification affiche un interrupteur, **Prochaine** et **Dernière**.
+4. Dans le panneau latéral, choisissez **Enregistrer** dans le menu **⋯** et vérifiez la confirmation. La planification affiche un interrupteur, **Prochaine** et **Dernière**.
 5. Utilisez le crayon pour modifier la fréquence, le format ou les filtres, puis enregistrez. L'interrupteur désactive la planification. L'icône de suppression demande une confirmation.
 
 ### Horaire et période

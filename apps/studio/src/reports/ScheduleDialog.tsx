@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { createSchedule, updateSchedule, type ReportSchedule, type ReportParamMeta, type ScheduleInput, type ReportParamOption } from '../api';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,17 +79,27 @@ export function ScheduleDialog({ open, reportId, parameters, options, initialPar
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="w-full max-w-md max-h-[85vh] flex flex-col p-0">
-        <div className="border-b border-border px-6 py-4">
-          <DialogTitle className="text-base font-semibold">{existing ? t('reports.scheduling.edit') : t('reports.scheduling.new')}</DialogTitle>
-          <DialogDescription className="sr-only">{t('reports.scheduling.dateWindowAuto')}</DialogDescription>
-        </div>
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-6 py-4">
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs uppercase text-muted-foreground">{t('reports.scheduling.frequency')}</Label>
+    <Sheet open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent className="flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <SheetHeader className="border-b border-border px-6 py-4">
+          <div className="flex items-center justify-between gap-2 pr-6">
+            <SheetTitle>{existing ? t('reports.scheduling.edit') : t('reports.scheduling.new')}</SheetTitle>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={t('common.actions')}><MoreHorizontal className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={saving} onSelect={() => void handleSave()}>{t('reports.scheduling.save')}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <SheetDescription className="sr-only">{t('reports.scheduling.dateWindowAuto')}</SheetDescription>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 [&>label]:max-w-28 [&>label]:break-words">
+            <Label htmlFor="schedule-frequency">{t('reports.scheduling.frequency')}</Label>
             <Select value={frequency} onValueChange={(v) => setFrequency(v as ScheduleInput['frequency'])}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="schedule-frequency" className="h-9 min-w-0"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="daily">{t('reports.scheduling.daily')}</SelectItem>
                 <SelectItem value="weekly">{t('reports.scheduling.weekly')}</SelectItem>
@@ -95,73 +107,66 @@ export function ScheduleDialog({ open, reportId, parameters, options, initialPar
                 <SelectItem value="quarterly">{t('reports.scheduling.quarterly')}</SelectItem>
               </SelectContent>
             </Select>
-          </div>
 
           {frequency === 'weekly' && (
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs uppercase text-muted-foreground">{t('reports.scheduling.dayOfWeek')}</Label>
+            <>
+              <Label htmlFor="schedule-weekday">{t('reports.scheduling.dayOfWeek')}</Label>
               <Select value={dayOfWeek} onValueChange={setDayOfWeek}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="schedule-weekday" className="h-9 min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {WEEKDAYS.map((d) => <SelectItem key={d.value} value={d.value}>{d.key}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
+            </>
           )}
 
           {frequency === 'monthly' && (
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs uppercase text-muted-foreground">{t('reports.scheduling.dayOfMonth')}</Label>
+            <>
+              <Label htmlFor="schedule-monthday">{t('reports.scheduling.dayOfMonth')}</Label>
               <Select value={dayOfMonth} onValueChange={setDayOfMonth}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="schedule-monthday" className="h-9 min-w-0"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Array.from({ length: 28 }, (_, i) => String(i + 1)).map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
+            </>
           )}
 
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs uppercase text-muted-foreground">{t('reports.scheduling.outputFormat')}</Label>
+            <Label htmlFor="schedule-format">{t('reports.scheduling.outputFormat')}</Label>
             <Select value={outputFormat} onValueChange={(v) => setOutputFormat(v as ScheduleInput['outputFormat'])}>
-              <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="schedule-format" className="h-9 min-w-0"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="csv">CSV</SelectItem>
                 <SelectItem value="xlsx">XLSX</SelectItem>
                 <SelectItem value="pdf">PDF</SelectItem>
               </SelectContent>
             </Select>
-          </div>
 
           {paramFields.map((p) => (
-            <div key={p.id} className="flex flex-col gap-1">
-              <Label className="text-xs uppercase text-muted-foreground">{p.label}</Label>
+            <Fragment key={p.id}>
+              <Label htmlFor={`schedule-param-${p.id}`}>{p.label}</Label>
               {p.type === 'select' ? (
                 <Select
                   value={params[p.id] ?? ALL}
                   onValueChange={(v) => setParam(p.id, v === ALL ? undefined : v)}
                 >
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={`schedule-param-${p.id}`} className="h-9 min-w-0"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ALL}>{t('reports.all')}</SelectItem>
                     {(p.optionsKey ? options[p.optionsKey] ?? [] : []).map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               ) : (
-                <Input className="h-9" value={params[p.id] ?? ''} onChange={(e) => setParam(p.id, e.target.value)} placeholder={p.label} />
+                <Input id={`schedule-param-${p.id}`} className="h-9 min-w-0" value={params[p.id] ?? ''} onChange={(e) => setParam(p.id, e.target.value)} placeholder={p.label} />
               )}
-            </div>
+            </Fragment>
           ))}
-
-          <p className="text-xs text-muted-foreground">{t('reports.scheduling.dateWindowAuto')}</p>
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">{t('reports.scheduling.dateWindowAuto')}</p>
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-border px-6 py-3">
-          <Button variant="ghost" onClick={onClose}>{t('reports.scheduling.cancel')}</Button>
-          <Button onClick={handleSave} disabled={saving}>{t('reports.scheduling.save')}</Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }

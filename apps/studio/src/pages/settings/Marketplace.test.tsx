@@ -256,7 +256,8 @@ describe('Marketplace', () => {
     vi.mocked(api.createRegistry).mockResolvedValue({ id: 'r-new', name: 'Review registry', kind: 'http', location: 'https://example.org', enabled: true, createdAt: '', updatedAt: '' });
     fireEvent.change(screen.getByTestId('registry-name'), { target: { value: 'Review registry' } });
     fireEvent.change(screen.getByTestId('registry-location'), { target: { value: 'https://example.org' } });
-    fireEvent.click(screen.getByTestId('registry-save'));
+    fireEvent.keyDown(screen.getByTestId('registry-sheet-menu'), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Review registry')));
     await waitFor(() => expect(api.refreshRegistry).toHaveBeenCalled());
     await act(async () => { finishRefresh(); });

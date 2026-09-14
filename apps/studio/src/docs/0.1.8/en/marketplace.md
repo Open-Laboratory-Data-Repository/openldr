@@ -1,5 +1,7 @@
 # Marketplace
 
+Registry creation and editing open in a side sheet. Labels sit beside the inputs. Choose Save from the sheet's ⋯ menu. Close the sheet without saving to discard edits.
+
 Marketplace is where administrators browse available artifacts, inspect details, install approved packages, and manage registries.
 
 ## Outcome

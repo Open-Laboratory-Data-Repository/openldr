@@ -1,5 +1,7 @@
 # Conectores
 
+A coluna Host permitido do plugin indica o host de rede permitido para um conector de plugin. Não é o endereço de ligação guardado. Os conectores host não usam esta restrição de plugin. Abra Editar no menu da linha para consultar o endereço e as configurações normais guardadas.
+
 Um conector guarda a configuração de uma ligação externa. Os nós de workflow selecionam o conector pelo nome. Os segredos são encriptados e deixam de ser apresentados após a gravação.
 
 ## Criar um conector

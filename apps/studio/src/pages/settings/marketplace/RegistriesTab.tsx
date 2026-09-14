@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal, Boxes } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -232,47 +233,51 @@ export function RegistriesTab({ onChanged, onSaved, onReady }: {
         onPageSizeChange={table.setPageSize}
       />
 
-      <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogTitle>{draft?.id === null ? t('settings.marketplace.addRegistry') : t('settings.marketplace.editRegistry')}</DialogTitle>
+      <Sheet open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
+        <SheetContent className="flex h-dvh w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-lg" aria-describedby={undefined}>
+          <SheetHeader className="border-b border-border px-6 py-4">
+            <div className="flex items-center justify-between gap-2 pr-6">
+              <SheetTitle>{draft?.id === null ? t('settings.marketplace.addRegistry') : t('settings.marketplace.editRegistry')}</SheetTitle>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="registry-sheet-menu" aria-label={t('common.actions')}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem data-testid="registry-save" disabled={busy || !draft?.name || !draft?.location} onSelect={() => void onSave()}>
+                    {t('settings.marketplace.registrySave')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </SheetHeader>
           {draft ? (
-            <div className="text-sm">
-              <div className="grid grid-cols-1 gap-x-4 gap-y-3">
-                <label className="grid gap-1">
-                  <span className="text-muted-foreground">{t('settings.marketplace.registryName')}</span>
-                  <Input data-testid="registry-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-                </label>
-                <label className="grid gap-1">
-                  <span className="text-muted-foreground">{t('settings.marketplace.registryKind')}</span>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 text-sm">
+              <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 [&>label]:max-w-28 [&>label]:break-words">
+                  <Label htmlFor="registry-name">{t('settings.marketplace.registryName')}</Label>
+                  <Input id="registry-name" className="min-w-0" data-testid="registry-name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+                  <Label htmlFor="registry-kind">{t('settings.marketplace.registryKind')}</Label>
                   <Select value={draft.kind} onValueChange={(v) => setDraft({ ...draft, kind: v as 'local' | 'http' })}>
-                    <SelectTrigger data-testid="registry-kind"><SelectValue placeholder={t('settings.marketplace.pickKind')} /></SelectTrigger>
+                    <SelectTrigger id="registry-kind" className="min-w-0" data-testid="registry-kind"><SelectValue placeholder={t('settings.marketplace.pickKind')} /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="local">{t('settings.marketplace.kindLocal')}</SelectItem>
                       <SelectItem value="http">{t('settings.marketplace.kindHttp')}</SelectItem>
                     </SelectContent>
                   </Select>
-                </label>
-                <label className="grid gap-1">
-                  <span className="text-muted-foreground">{t('settings.marketplace.registryLocation')}</span>
-                  <Input data-testid="registry-location" value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
-                </label>
+                  <Label htmlFor="registry-location">{t('settings.marketplace.registryLocation')}</Label>
+                  <Input id="registry-location" className="min-w-0" data-testid="registry-location" value={draft.location} onChange={(e) => setDraft({ ...draft, location: e.target.value })} />
                 {draft.id !== null ? (
-                  <label className="flex items-center gap-2">
-                    <Switch checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} aria-label={t('settings.marketplace.registryEnabled')} />
-                    <span className="text-muted-foreground">{t('settings.marketplace.registryEnabled')}</span>
-                  </label>
+                  <>
+                    <span>{t('settings.marketplace.registryEnabled')}</span>
+                    <Switch aria-label={t('settings.marketplace.registryEnabled')} checked={draft.enabled} onCheckedChange={(v) => setDraft({ ...draft, enabled: v })} />
+                  </>
                 ) : null}
-              </div>
-              <div className="mt-5 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setDraft(null)}>{t('settings.marketplace.registryCancel')}</Button>
-                <Button data-testid="registry-save" disabled={busy || !draft.name || !draft.location} onClick={() => void onSave()}>
-                  {t('settings.marketplace.registrySave')}
-                </Button>
               </div>
             </div>
           ) : null}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
 
       <ConfirmDialog
         open={pendingRemove !== null}

@@ -1,5 +1,7 @@
 # Connecteurs
 
+La colonne Hôte autorisé du plugin indique l'hôte réseau permis pour un connecteur de plugin. Ce n'est pas l'adresse de connexion enregistrée. Les connecteurs hôtes n'utilisent pas cette restriction de plugin. Ouvrez Modifier dans le menu de la ligne pour consulter leur adresse et leurs paramètres ordinaires enregistrés.
+
 Un connecteur conserve la configuration d'une connexion externe. Les nœuds de workflow le sélectionnent par son nom. Les secrets sont chiffrés et ne sont plus affichés après l'enregistrement.
 
 ## Créer un connecteur

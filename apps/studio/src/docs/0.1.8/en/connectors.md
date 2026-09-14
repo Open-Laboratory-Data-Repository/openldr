@@ -1,5 +1,7 @@
 # Connectors
 
+The Allowed plugin host column shows the network host permitted for a plugin connector. It is not the stored connection address. Host connectors do not use this plugin restriction. Open the row's Edit action to inspect their saved address and ordinary configuration.
+
 Connectors are saved, encrypted connections to external systems — databases, email servers, file servers, and plugin destinations — that workflow nodes use **by reference**. A workflow node never stores a password itself; it points at a connector by name, and the server supplies the credentials at run time.
 
 ## Outcome

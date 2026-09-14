@@ -40,7 +40,7 @@ describe('RegistriesTab', () => {
     expect(screen.getByText('https://reg.example.org')).toBeTruthy();
   });
 
-  it('creates a registry via the dialog', async () => {
+  it('creates a registry through the sheet action menu', async () => {
     (api.createRegistry as any).mockResolvedValue({ ...reg, id: 'r2', name: 'New' });
     // ⛔ "Add registry" no longer lives in this component. The page's single ⋯ moved onto the tab
     // strip in MarketplaceTabs, and this tab hands its opener up through `onReady`. Driving that
@@ -54,7 +54,9 @@ describe('RegistriesTab', () => {
     fireEvent.keyDown(screen.getByTestId('registry-kind'), { key: 'ArrowDown' });
     fireEvent.click(await screen.findByRole('option', { name: 'Remote (HTTP)' }));
     fireEvent.change(screen.getByTestId('registry-location'), { target: { value: 'https://reg.example.org' } });
-    fireEvent.click(screen.getByTestId('registry-save'));
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    openDropdown(screen.getByTestId('registry-sheet-menu'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
     await waitFor(() => expect(api.createRegistry).toHaveBeenCalledWith({
       name: 'New', kind: 'http', location: 'https://reg.example.org',
     }));
@@ -67,6 +69,30 @@ describe('RegistriesTab', () => {
     fireEvent.click(await screen.findByTestId('remove-r1'));
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(api.deleteRegistry).toHaveBeenCalledWith('r1'));
+  });
+
+  it('edits through the sheet menu while keeping the other registry fields', async () => {
+    vi.mocked(api.updateRegistry).mockResolvedValue({ ...reg, name: 'Renamed' });
+    render(<MemoryRouter><RegistriesTab onChanged={() => {}} /></MemoryRouter>);
+    await openRowMenu('Official');
+    fireEvent.click(await screen.findByTestId('edit-r1'));
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Name' }), { target: { value: 'Renamed' } });
+    openDropdown(screen.getByTestId('registry-sheet-menu'));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
+    await waitFor(() => expect(api.updateRegistry).toHaveBeenCalledWith('r1', {
+      name: 'Renamed', kind: 'http', location: 'https://reg.example.org', enabled: true,
+    }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('closes the registry draft without submitting changes', async () => {
+    render(<MemoryRouter><RegistriesTab onChanged={() => {}} /></MemoryRouter>);
+    await openRowMenu('Official');
+    fireEvent.click(await screen.findByTestId('edit-r1'));
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Name' }), { target: { value: 'Unsaved' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(api.updateRegistry).not.toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('toggles enabled', async () => {

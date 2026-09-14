@@ -515,7 +515,7 @@ export const en = {
     },
     connectors: {
       heading: 'Connectors',
-      description: 'Secrets are encrypted at rest and never shown again.',
+      description: "Secrets are encrypted at rest and never shown again. Allowed plugin host is the network host permitted for a plugin connector, not the saved connection address. Open Edit to inspect a host connector's address.",
       sheetDescription: 'Configure an outbound sink connector for an external system. Secrets are encrypted at rest and never shown again.',
       add: 'Add connector',
       empty: 'No connectors yet.',
@@ -524,7 +524,7 @@ export const en = {
       count_other: '{{count}} connectors',
       colName: 'Name',
       colPlugin: 'Plugin',
-      colHost: 'Host',
+      colHost: 'Allowed plugin host',
       colEnabled: 'Enabled',
       colActions: 'Actions',
       searchPlaceholder: 'Search connectors',

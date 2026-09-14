@@ -513,7 +513,7 @@ export const fr: EnShape = {
     },
     connectors: {
       heading: 'Connecteurs',
-      description: 'Les secrets sont chiffrés au repos et ne sont plus jamais affichés.',
+      description: "Les secrets sont chiffrés au repos et ne sont plus jamais affichés. Hôte autorisé du plugin désigne l'hôte réseau permis pour un connecteur de plugin, pas l'adresse de connexion enregistrée. Ouvrez Modifier pour consulter l'adresse d'un connecteur hôte.",
       sheetDescription: 'Configurez un connecteur de sortie vers un système externe. Les secrets sont chiffrés au repos et ne sont plus jamais affichés.',
       add: 'Ajouter un connecteur',
       empty: 'Aucun connecteur pour le moment.',
@@ -522,7 +522,7 @@ export const fr: EnShape = {
       count_other: '{{count}} connecteurs',
       colName: 'Nom',
       colPlugin: 'Extension',
-      colHost: 'Hôte',
+      colHost: 'Hôte autorisé du plugin',
       colEnabled: 'Activé',
       colActions: 'Actions',
       searchPlaceholder: 'Rechercher des connecteurs',

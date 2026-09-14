@@ -1,5 +1,7 @@
 # Marketplace
 
+A criação e a edição de registos abrem um painel lateral. As etiquetas ficam ao lado dos campos. Escolha Salvar no menu ⋯ do painel. Feche o painel sem salvar para descartar as alterações.
+
 O Marketplace permite aos administradores consultar pacotes, permissões e registos.
 
 ## Antes de começar

@@ -9,7 +9,7 @@ Este guia explica como agendar um relatório e recuperar seu arquivo.
 1. Selecione um relatório e abra **⋯ → Agendamentos**. Seu perfil precisa permitir a gestão de relatórios.
 2. Escolha **Novo agendamento** e a frequência. Semanal exige um dia da semana. Mensal oferece os dias 1 a 28.
 3. Escolha CSV, XLSX ou PDF. Confira os filtros obrigatórios, incluindo estabelecimento e fuso horário. O novo agendamento copia os filtros atuais do relatório, exceto as datas.
-4. Escolha **Salvar** e confira a confirmação. O agendamento mostra um interruptor, **Próxima** e **Última**.
+4. No painel lateral, escolha **Salvar** no menu **⋯** e confira a confirmação. O agendamento mostra um interruptor, **Próxima** e **Última**.
 5. Use o lápis para editar frequência, formato ou filtros e salve. Use o interruptor para desativar. O ícone de exclusão solicita confirmação.
 
 ### Horário e período

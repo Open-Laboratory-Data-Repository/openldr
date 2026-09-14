@@ -2,6 +2,8 @@
 
 ## English
 
+Registry creation and editing open in a side sheet. Labels sit beside the inputs. Choose Save from the sheet's ⋯ menu. Close the sheet without saving to discard edits.
+
 In Studio, open Settings, Marketplace, then a package's details.
 
 - **Loading permissions** means package details are still loading. Install remains disabled.
@@ -12,6 +14,8 @@ Selecting another version repeats the check. Review that version's permissions i
 
 ## Français
 
+La création et la modification d'un registre ouvrent un panneau latéral. Les libellés sont placés à côté des champs. Choisissez Enregistrer dans le menu ⋯ du panneau. Fermez le panneau sans enregistrer pour abandonner les modifications.
+
 Dans Studio, ouvrez Paramètres, Marketplace, puis les détails d'un paquet.
 
 - **Chargement des permissions** indique que les détails sont en cours de récupération. L'installation reste désactivée.
@@ -21,6 +25,8 @@ Dans Studio, ouvrez Paramètres, Marketplace, puis les détails d'un paquet.
 Un changement de version relance cette vérification. Vérifiez les permissions de cette version dans la demande d'approbation avant de confirmer. En cas d'échec du chargement, vérifiez la disponibilité du registre et rouvrez le paquet.
 
 ## Português
+
+A criação e a edição de registos abrem um painel lateral. As etiquetas ficam ao lado dos campos. Escolha Salvar no menu ⋯ do painel. Feche o painel sem salvar para descartar as alterações.
 
 No Studio, abra Definições, Marketplace e os detalhes de um pacote.
 
