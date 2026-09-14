@@ -74,6 +74,17 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 - A reference field picks its ValueSet in the Reference Configuration block. It searches the set live, so nothing is copied.
 - Every install holds FHIR's 672 standard ValueSets. Survey forms have no bound elements, so they show no **bound:** line.
 
+## Suggested codes
+
+- For a field with a FHIR path, the Codes block lists **Suggested codes** above the term search.
+- A **Binding** code comes from the field's ValueSet, or from the set FHIR binds the element to. **Your forms · N** means N other forms put that code on the same path.
+- Click a row to put the code on the field.
+- **not in your terminology** marks a code CE does not hold. Adding it also adds it to your terminology, and the panel says so, with **Undo**. Undo removes it from your terminology; the code stays on the field.
+- Only a user who can manage terminology can add such a code. Other authors see it greyed.
+- A code from a coding system CE does not have is refused. Add the system on the Terminology page first.
+- An empty list means your terminology is thin, not that no code exists. Search below, or add codes on the Terminology page.
+- When a set holds many codes, the panel shows 50 that no form uses, and says how many more there are.
+
 ## Starter packs
 
 - A starter pack is a ready list of fields for one resource type, taken from the forms OpenLDR ships: Location (Facility), Practitioner (Users), Patient, and ServiceRequest (Lab order).

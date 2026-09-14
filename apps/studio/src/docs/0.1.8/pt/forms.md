@@ -35,6 +35,17 @@ Esta verificação cobre a configuração. As respostas obrigatórias, as refer�
 - Um campo de referência escolhe o ValueSet no bloco Reference Configuration. Pesquisa o ValueSet em direto, por isso nada é copiado.
 - Todas as instalações têm os 672 ValueSets padrão do FHIR. Os formulários de inquérito não têm elementos ligados, por isso não mostram a linha **bound:**.
 
+## Códigos sugeridos
+
+- Num campo com FHIR Path, o bloco Codes mostra **Suggested codes** por cima da pesquisa de termos.
+- Um código **Binding** vem do ValueSet do campo, ou do ValueSet a que o FHIR liga o elemento. **Your forms · N** significa que N outros formulários põem esse código no mesmo caminho.
+- Clique numa linha para pôr o código no campo.
+- **not in your terminology** marca um código que o CE não tem. Adicioná-lo também o adiciona à sua terminologia, e o painel indica-o, com **Undo**. O Undo retira-o da sua terminologia; o código fica no campo.
+- Só um utilizador que possa gerir a terminologia pode adicionar esse código. Os outros autores veem-no a cinzento.
+- Um código de um sistema de codificação que o CE não tem é recusado. Adicione primeiro o sistema na página Terminology.
+- Uma lista vazia significa que a sua terminologia está incompleta, não que nenhum código exista. Pesquise abaixo, ou adicione códigos na página Terminology.
+- Quando um ValueSet tem muitos códigos, o painel mostra 50 que nenhum formulário usa, e indica quantos mais existem.
+
 ## Pacotes iniciais
 
 - Um pacote inicial é uma lista de campos pronta para um Resource Type, tirada dos formulários que o OpenLDR traz: Location (Facility), Practitioner (Users), Patient e ServiceRequest (Lab order).
