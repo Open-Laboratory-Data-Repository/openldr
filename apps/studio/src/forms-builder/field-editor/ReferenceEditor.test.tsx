@@ -9,6 +9,10 @@ vi.mock('../../api', () => ({
     { id: 'cs-2', systemCode: 'OLD', systemName: 'Old', url: 'urn:old', systemVersion: null, description: null, active: false, publisherId: null, seeded: true },
     { id: 'cs-3', systemCode: 'NOURL', systemName: 'No URL', url: null, systemVersion: null, description: null, active: true, publisherId: null, seeded: false },
   ]),
+  listValueSets: vi.fn(async () => [{
+    id: 'vs-country', url: 'urn:openldr:valueset:country', name: 'country', title: 'Country', version: null,
+    status: 'active', immutable: false, publisherId: 'pub-system', category: null, codeCount: 250, primarySystem: null,
+  }]),
 }));
 
 import { ReferenceEditor } from './ReferenceEditor';
@@ -80,5 +84,22 @@ describe('ReferenceEditor', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Value Field' }), { target: { value: 'id' } });
     expect(onUpdate).toHaveBeenCalledWith({ referenceDisplayField: 'name' });
     expect(onUpdate).toHaveBeenCalledWith({ referenceValueField: 'id' });
+  });
+
+  it('binds a ValueSet picked from the list, copying no codes', async () => {
+    const { onUpdate } = renderRef();
+    fireEvent.focus(screen.getByLabelText('Search a ValueSet…'));
+    fireEvent.click((await screen.findByText('Country')).closest('button')!);
+    expect(onUpdate).toHaveBeenCalledWith({ valueSetUrl: 'urn:openldr:valueset:country' });
+  });
+
+  it('shows the bound set and unbinds it from its row menu', async () => {
+    const { onUpdate } = renderRef({ valueSetUrl: 'urn:openldr:valueset:country' });
+    expect(await screen.findByText('Country')).toBeTruthy();
+    const trigger = screen.getByRole('button', { name: 'Value Set actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Unbind' }));
+    expect(onUpdate).toHaveBeenCalledWith({ valueSetUrl: undefined });
   });
 });

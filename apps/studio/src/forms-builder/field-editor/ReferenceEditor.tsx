@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import { REFERENCE_ENTITY_TARGETS, type FormField } from '@openldr/forms/pure';
-import { listCodingSystems, type CodingSystem } from '../../api';
+import { listCodingSystems, listValueSets, type CodingSystem, type ValueSetSummary } from '../../api';
+import { Button } from '@/components/ui/button';
+import { TruncatedText } from '@/components/ui/truncated-text';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ValueSetPicker } from '../../terminology/ValueSetPicker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,17 +36,27 @@ export interface ReferenceEditorProps {
  * blanks its target.
  *
  * Depends On and Searchable are stored and exported. CE's data entry does not read them yet.
+ *
+ * A reference field can search a ValueSet instead of a Target. It searches the set live
+ * (`reference-source.ts`), so binding copies no codes. When both are set, the ValueSet wins and the
+ * linter warns (`lint.ts:117`).
  */
 export function ReferenceEditor({ field, allFields, onUpdate }: ReferenceEditorProps): JSX.Element {
   const [systems, setSystems] = useState<CodingSystem[]>([]);
+  const [sets, setSets] = useState<ValueSetSummary[]>([]);
 
   useEffect(() => {
     let alive = true;
     void listCodingSystems()
       .then((rows) => { if (alive) setSystems(rows); })
       .catch(() => { /* the code-system half is a convenience; entity targets still work */ });
+    void listValueSets()
+      .then((rows) => { if (alive) setSets(rows); })
+      .catch(() => { /* the title is a nicety */ });
     return () => { alive = false; };
   }, []);
+
+  const boundSet = sets.find((s) => s.url === field.valueSetUrl) ?? null;
 
   const codeSystems = systems
     .filter((s) => s.active && s.url)
@@ -77,6 +92,25 @@ export function ReferenceEditor({ field, allFields, onUpdate }: ReferenceEditorP
           )}
         </SelectContent>
       </Select>
+
+      <Label className="whitespace-nowrap">Value Set</Label>
+      {field.valueSetUrl ? (
+        <div className="flex min-w-0 items-center gap-1">
+          <TruncatedText text={boundSet?.title ?? boundSet?.name ?? field.valueSetUrl} className="min-w-0 flex-1 text-sm" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Value Set actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => onUpdate({ valueSetUrl: undefined })}>Unbind</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ) : (
+        <ValueSetPicker onPick={(vs) => onUpdate({ valueSetUrl: vs.url })} placeholder="Search a ValueSet…" />
+      )}
 
       <Label htmlFor="ref-display-field" className="whitespace-nowrap">Display Field</Label>
       <Input
