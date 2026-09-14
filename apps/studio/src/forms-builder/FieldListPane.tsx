@@ -24,6 +24,7 @@ import { SortableFieldRow } from './SortableFieldRow';
 import { SectionsManager } from './SectionsManager';
 import { buildFieldTree, type RepeatNode, type TreeNode } from './fieldTree';
 import { AddNamedSlotRow, RepeatRow } from './RepeatRow';
+import { buildFieldListModel } from './listOrder';
 
 export interface FieldListPaneProps {
   fields: FormField[];
@@ -42,6 +43,9 @@ export interface FieldListPaneProps {
   onAddSlot?: (node: RepeatNode) => void;
   /** The form's resource type. A group's "holds one or many" reads its bound path against it. */
   fhirResourceType?: string | null;
+  /** The list search, when the page drives it. The list keeps its own when these are absent. */
+  searchText?: string;
+  onSearchTextChange?: (text: string) => void;
 }
 
 export function FieldListPane({
@@ -59,98 +63,21 @@ export function FieldListPane({
   onFieldsClearSection,
   onAddSlot,
   fhirResourceType = null,
+  searchText,
+  onSearchTextChange,
 }: FieldListPaneProps): JSX.Element {
-  const [searchText, setSearchText] = useState('');
+  const [localSearch, setLocalSearch] = useState('');
+  const search = searchText ?? localSearch;
+  const setSearch = onSearchTextChange ?? setLocalSearch;
 
   const sensors = useSensors(useSensor(PointerSensor));
-
-  // Section label lookup: prefer the sections prop, fall back to the id itself
-  const sectionLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of sections) {
-      map.set(s.id, s.label);
-    }
-    return map;
-  }, [sections]);
 
   const enabledCount = useMemo(
     () => fields.filter((f) => f.enabled).length,
     [fields],
   );
 
-  // Filter + sort — exclude group children from the top-level list here;
-  // they will be rendered inline under their parent group field.
-  const visibleFields = useMemo(() => {
-    const q = searchText.trim().toLowerCase();
-    return fields
-      .filter((f) => {
-        if (q) {
-          const labelMatch = f.displayLabel.toLowerCase().includes(q);
-          const pathMatch = f.fhirPath?.toLowerCase().includes(q) ?? false;
-          return labelMatch || pathMatch;
-        }
-        return true;
-      })
-      .slice()
-      .sort((a, b) => a.order - b.order);
-  }, [fields, searchText]);
-
-  // Top-level visible fields (not children of a group)
-  const topLevelVisible = useMemo(
-    () => visibleFields.filter((f) => !f.groupId),
-    [visibleFields],
-  );
-
-  // Children grouped by groupId
-  const childrenByGroup = useMemo(() => {
-    const map = new Map<string, FormField[]>();
-    for (const f of visibleFields) {
-      if (f.groupId) {
-        const arr = map.get(f.groupId) ?? [];
-        arr.push(f);
-        map.set(f.groupId, arr);
-      }
-    }
-    return map;
-  }, [visibleFields]);
-
-  // Group top-level fields by section for rendering with headers.
-  // Order of sections: use sections prop order, then any remaining section ids from fields.
-  const sectionGroups = useMemo(() => {
-    // Build ordered list of section identifiers
-    const orderedSectionIds: Array<string | null> = sections
-      .slice()
-      .sort((a, b) => a.order - b.order)
-      .map((s) => s.id);
-
-    // Add any field sections not in the sections prop
-    for (const f of topLevelVisible) {
-      if (f.section && !orderedSectionIds.includes(f.section)) {
-        orderedSectionIds.push(f.section);
-      }
-    }
-
-    // null = "No section" bucket
-    const hasUnsectioned = topLevelVisible.some((f) => !f.section);
-    if (hasUnsectioned) {
-      orderedSectionIds.push(null);
-    }
-
-    // Build groups — only include sections that have at least one field
-    const groups: Array<{ sectionId: string | null; label: string; fieldList: FormField[] }> = [];
-    for (const sectionId of orderedSectionIds) {
-      const fieldList = topLevelVisible.filter((f) =>
-        sectionId === null ? !f.section : f.section === sectionId,
-      );
-      if (fieldList.length === 0) continue;
-      const label =
-        sectionId === null
-          ? 'No section'
-          : (sectionLabelMap.get(sectionId) ?? sectionId);
-      groups.push({ sectionId, label, fieldList });
-    }
-    return groups;
-  }, [topLevelVisible, sections, sectionLabelMap]);
+  const model = useMemo(() => buildFieldListModel(fields, sections, search), [fields, sections, search]);
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -168,7 +95,7 @@ export function FieldListPane({
    * a repeat's slots (below) hang off a solid one, so the two kinds of nesting do not read alike.
    */
   function renderField(field: FormField): React.ReactNode {
-    const children = field.fieldType === 'group' ? childrenByGroup.get(field.id) ?? [] : [];
+    const children = field.fieldType === 'group' ? model.childrenByGroup.get(field.id) ?? [] : [];
     return (
       <React.Fragment key={field.id}>
         <SortableFieldRow
@@ -206,17 +133,6 @@ export function FieldListPane({
     );
   }
 
-  // Show section grouping only when there are sections defined or fields span multiple sections
-  const distinctSections = useMemo(() => {
-    const seen = new Set<string>();
-    for (const f of fields) {
-      if (f.section) seen.add(f.section);
-    }
-    return Array.from(seen);
-  }, [fields]);
-
-  const showSectionHeaders = sections.length > 0 || distinctSections.length > 1;
-
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -232,8 +148,8 @@ export function FieldListPane({
           <Input
             aria-label="Search fields"
             placeholder="Search fields…"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             className="pl-7 h-8 text-sm"
           />
         </div>
@@ -265,11 +181,11 @@ export function FieldListPane({
         >
           {/* SortableContext items stay flat over all visible ids so reorder still works */}
           <SortableContext
-            items={visibleFields.map((f) => f.id)}
+            items={model.visible.map((f) => f.id)}
             strategy={verticalListSortingStrategy}
           >
-            {showSectionHeaders ? (
-              sectionGroups.map(({ sectionId, label, fieldList }) => (
+            {model.showSectionHeaders ? (
+              model.buckets.map(({ sectionId, label, fields: fieldList }) => (
                 <div key={sectionId ?? '__no_section__'}>
                   {/* Section header */}
                   <div className="px-1 py-1 mt-1 first:mt-0">
@@ -286,7 +202,7 @@ export function FieldListPane({
               ))
             ) : (
               // No sections: top-level nodes; children render under their group.
-              <div className="space-y-1.5">{buildFieldTree(topLevelVisible).map(renderNode)}</div>
+              <div className="space-y-1.5">{buildFieldTree(model.buckets[0]?.fields ?? []).map(renderNode)}</div>
             )}
           </SortableContext>
         </DndContext>
