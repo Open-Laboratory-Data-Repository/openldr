@@ -277,4 +277,71 @@ describe('FieldListPane', () => {
       childCard?.parentElement?.className?.includes('pl-');
     expect(isNested).toBe(true);
   });
+
+  // ── Repeat nodes and deep nesting ────────────────────────────────────────────
+
+  const base = (overrides: Partial<FormField> & Pick<FormField, 'id' | 'displayLabel' | 'order'>): FormField => ({
+    fieldType: 'text',
+    required: false,
+    enabled: true,
+    fhirPath: null,
+    cardinality: { min: 0, max: '1' },
+    description: null,
+    ...overrides,
+  });
+
+  it('draws two slots of one list under a repeat header', () => {
+    renderPane({
+      sections: [],
+      fields: [
+        base({ id: 'local', displayLabel: 'Local ID', order: 0, fhirPath: 'Location.identifier.value', fhirValueField: 'value', fhirDiscriminator: { system: 'urn:local' } }),
+        base({ id: 'mfl', displayLabel: 'MFL ID', order: 1, fhirPath: 'Location.identifier.value', fhirValueField: 'value', fhirDiscriminator: { system: 'urn:mfl' } }),
+      ],
+    });
+    expect(screen.getByText('identifier')).toBeTruthy();
+    expect(screen.getByText('Location.identifier')).toBeTruthy();
+    expect(screen.getByText('2 slots')).toBeTruthy();
+    const slotCard = screen.getByText('MFL ID').closest('[data-sortable-card]');
+    expect(slotCard?.parentElement?.getAttribute('data-nested')).toBe('true');
+  });
+
+  it('draws no repeat header for a field with a discriminator but no value field', () => {
+    renderPane({
+      sections: [],
+      fields: [base({ id: 'code', displayLabel: 'Facility code', order: 0, fhirPath: 'Location.identifier.value', fhirDiscriminator: { system: 'urn:x' } })],
+    });
+    expect(screen.queryByText(/slots?$/)).toBeNull();
+    expect(screen.getByText('system = urn:x')).toBeTruthy();
+  });
+
+  it('nests a group inside a group inside a group', () => {
+    renderPane({
+      sections: [],
+      fields: [
+        base({ id: 'visit', displayLabel: 'Visit', fieldType: 'group', order: 0 }),
+        base({ id: 'symptom', displayLabel: 'Symptom', fieldType: 'group', order: 1, groupId: 'visit' }),
+        base({ id: 'duration', displayLabel: 'Duration', order: 2, groupId: 'symptom' }),
+      ],
+    });
+    const leaf = screen.getByText('Duration').closest('[data-sortable-card]');
+    const innerWrapper = leaf?.parentElement;
+    expect(innerWrapper?.getAttribute('data-nested')).toBe('true');
+    const outerWrapper = innerWrapper?.parentElement?.closest('[data-nested="true"]');
+    expect(outerWrapper).toBeTruthy();
+    expect(outerWrapper?.contains(screen.getByText('Symptom'))).toBe(true);
+  });
+
+  it('marks a group bound to a repeating element, and not one bound to a single element', () => {
+    renderPane({
+      sections: [],
+      fhirResourceType: 'Location',
+      fields: [
+        base({ id: 'tel', displayLabel: 'Contacts', fieldType: 'group', order: 0, fhirPath: 'Location.telecom' }),
+        base({ id: 'addr', displayLabel: 'Address', fieldType: 'group', order: 1, fhirPath: 'Location.address' }),
+      ],
+    });
+    expect(screen.getAllByRole('img', { name: 'Repeating group' })).toHaveLength(1);
+    const telCard = screen.getByText('Contacts').closest('[data-sortable-card]');
+    expect(telCard?.querySelector('[aria-label="Repeating group"]')).toBeTruthy();
+  });
 });

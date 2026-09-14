@@ -352,6 +352,7 @@ export function FormBuilderPage(): JSX.Element {
           <div className="flex w-full shrink-0 flex-col overflow-hidden border-r border-border md:w-[26rem]">
             <FieldListPane
               fields={schema.fields}
+              fhirResourceType={schema.fhirResourceType ?? null}
               sections={schema.sections}
               selectedFieldId={selectedId}
               issues={issues}
