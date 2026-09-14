@@ -4,6 +4,7 @@ import { fieldTypeNeedsHint, nativeItemType, toQStatus } from './scalar-types'
 import { toEnableWhen } from './visibility'
 import { isMultiValued } from './reference-source'
 import { hasKeys, translationElement } from './translations'
+import { groupRepeats } from './group-repeats'
 import {
   EXT_CORLIX_BINDING_STRENGTH,
   EXT_CORLIX_DESCRIPTION,
@@ -98,15 +99,20 @@ function commonFieldExtensions(field: FormField): Extension[] {
 }
 
 /** Serialize a FormField (scalar or group) to a Questionnaire item, recursing into group children. */
-function buildItem(field: FormField, childrenByGroup: Map<string, FormField[]>): QuestionnaireItem {
+function buildItem(
+  field: FormField,
+  childrenByGroup: Map<string, FormField[]>,
+  fhirResourceType: string | null | undefined,
+): QuestionnaireItem {
   if (field.fieldType === 'group') {
     const children = (childrenByGroup.get(field.id) ?? []).slice().sort((a, b) => a.order - b.order)
     const item: QuestionnaireItem = {
       linkId: field.id,
       text: field.displayLabel,
       type: 'group',
-      repeats: true, // groups always repeat in the merged model
-      item: children.map((child) => buildItem(child, childrenByGroup)),
+      // Derived: a group bound to a one-instance element, or capped at one, holds one.
+      repeats: groupRepeats(field, fhirResourceType),
+      item: children.map((child) => buildItem(child, childrenByGroup, fhirResourceType)),
     }
     if (field.required) item.required = true
     const groupExt = commonFieldExtensions(field)
@@ -167,7 +173,7 @@ function sectionToItem(section: FormSection, children: QuestionnaireItem[]): Que
  *
  * Builds the item tree from the flat field list: FormSections become marked
  * `group` items holding their top-level fields; `group` fields nest their
- * `groupId` children and always repeat; repeatable scalars set `repeats`.
+ * `groupId` children and repeat unless `groupRepeats` says they hold one; repeatable scalars set `repeats`.
  * Corlix-specific metadata with no native home rides in `urn:corlix:*`
  * extensions so the definition round-trips losslessly. Persistence/lifecycle
  * envelope fields (version, active, facilityId, timestamps) are not carried.
@@ -202,13 +208,14 @@ export function toQuestionnaire(model: FormSchema): Questionnaire {
 
   for (const section of [...model.sections].sort((a, b) => a.order - b.order)) {
     const sectionFields = topLevel.filter((f) => f.section === section.id).sort((a, b) => a.order - b.order)
-    items.push(sectionToItem(section, sectionFields.map((f) => buildItem(f, childrenByGroup))))
+    const sectionType = section.fhirResourceType ?? model.fhirResourceType
+    items.push(sectionToItem(section, sectionFields.map((f) => buildItem(f, childrenByGroup, sectionType))))
   }
 
   const unsectioned = topLevel
     .filter((f) => !f.section || !sectionIds.has(f.section))
     .sort((a, b) => a.order - b.order)
-  for (const field of unsectioned) items.push(buildItem(field, childrenByGroup))
+  for (const field of unsectioned) items.push(buildItem(field, childrenByGroup, model.fhirResourceType))
 
   if (items.length) questionnaire.item = items
   return questionnaire
