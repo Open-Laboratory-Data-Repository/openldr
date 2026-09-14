@@ -105,10 +105,13 @@ imports from the CLI as well as the app.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
-| `AUTH_ADAPTER` | `keycloak` | `keycloak` | Auth adapter. |
+| `AUTH_ADAPTER` | `keycloak\|oidc` | `keycloak` | Auth adapter. |
+| `IDENTITY_ADMIN_ADAPTER` | `keycloak\|none` | `keycloak` with Keycloak auth, `none` with generic OIDC | Who manages users from Studio. `keycloak` together with `AUTH_ADAPTER=oidc` fails config validation. |
 | `OIDC_ISSUER_URL` | URL | required | Keycloak realm issuer URL. |
 | `OIDC_WEB_CLIENT_ID` | string | `openldr-web` | Browser OIDC client id. |
 | `OIDC_AUDIENCE` | string | unset | Optional API audience. |
+| `OIDC_SCOPES` | space-separated scopes | `openid profile email` | Scopes the browser client requests. Must include `openid`. |
+| `OIDC_RESOURCE` | URL | unset | Resource URL sent with the token request, for providers that need one to issue the API access token. |
 | `KEYCLOAK_ADMIN_CLIENT_ID` | string | unset | Enables admin user actions against Keycloak when paired with the secret. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | string | unset | Secret for Keycloak admin client. |
 | `AUTH_DEV_BYPASS` | boolean string | `false` everywhere | Injects a dev admin when no bearer token is present, which means the API is unauthenticated. Off unless you set it explicitly: `NODE_ENV` never turns it on, so a development checkout still requires a real sign-in until you add it to `.env`. Production rejects `true` outright. |
@@ -219,6 +222,15 @@ Restart circuit-breaker: if `CRASH_LOOP_THRESHOLD` process crashes occur within 
 | `MARKETPLACE_PUBLISH_REPO` | `owner/repo` | unset | GitHub repository for marketplace publishing. |
 | `MARKETPLACE_PUBLISH_BRANCH` | string | `main` | Target branch for publish PRs. |
 | `MARKETPLACE_LOCAL_REGISTRY_ROOT` | path | empty | When non-empty, an admin-added **local** registry's directory must resolve inside this root (path-containment). Empty preserves current behaviour. |
+
+## Distributed Sync
+
+Both are read with `process.env` directly, not through the config schema.
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `OPENLDR_SITE_ID` | string | unset | Site ID stamped on FHIR resources this server writes. Read by `packages/db/src/fhir-store.ts` only when the `sync.site_id` app setting is empty, so the saved setting wins. |
+| `SYNC_ALLOW_INSECURE_TRANSPORT` | `true` or unset | unset | Allows an enabled sync config to use plain `http://` for `centralUrl` and `oidcIssuer`. Without it, only `https://` and loopback hosts pass. Sync posts the client secret and ships bearer-authenticated FHIR deltas, so use it only for trusted LAN bring-up. Read by `packages/config/src/sync.ts`. |
 
 ## PowerShell And Bash Setup
 
