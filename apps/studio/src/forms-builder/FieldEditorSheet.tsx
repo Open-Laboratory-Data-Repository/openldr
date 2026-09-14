@@ -1,10 +1,13 @@
 import * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { FieldType, childrenOf, eligibleParents, groupRepeats, isSurveyForm } from '@openldr/forms/pure';
 import { ReferenceEditor } from './field-editor/ReferenceEditor';
-import { OptionsEditor } from './field-editor/OptionsEditor';
+import { OptionsBlock } from './field-editor/OptionsBlock';
+import { lookupBinding } from '@openldr/fhir/paths';
+import { findValueSetByUrl, storedValueSetCodes } from '../api';
+import { autoBindApplies, bindingUpdates, codesToOptions } from './valueSetBinding';
 import { CodesEditor } from './field-editor/CodesEditor';
 import { TranslationsEditor } from './field-editor/TranslationsEditor';
 import { MappingEditor } from './field-editor/MappingEditor';
@@ -66,9 +69,13 @@ export function FieldEditorSheet({
   onAddPart,
 }: FieldEditorSheetProps) {
   const [draft, setDraft] = useState<FormField | null>(field);
+  // Bumped on every path pick and every field switch, so a slower auto-bind lookup never lands on
+  // a later path or on another field's draft.
+  const autoBindToken = useRef(0);
 
   // Reset draft whenever the selected field changes or the sheet opens
   useEffect(() => {
+    autoBindToken.current++;
     setDraft(field);
   }, [field?.id, open]);
 
@@ -96,6 +103,25 @@ export function FieldEditorSheet({
   const activeDraft = draft ?? field;
   // Every group except this field and its own descendants, so the picker cannot build a loop.
   const groupFields = eligibleParents(allFields, activeDraft.id);
+
+  // Auto-bind: picking a path whose element FHIR binds `required` or `extensible` to a set CE holds
+  // makes the field a select over that set's stored codes. Corlix `FieldEditor.tsx:562-573`, narrowed
+  // by the operator's ruling of 2026-09-14. A later path change wins over an earlier lookup.
+  const onMappingUpdate = (patch: Partial<FormField>) => {
+    patchDraft(patch);
+    if (!('fhirPath' in patch) || !patch.fhirPath || isSurveyForm(fhirResourceType)) return;
+    const binding = lookupBinding(patch.fhirPath);
+    if (!binding || !autoBindApplies(activeDraft, binding)) return;
+    const token = ++autoBindToken.current;
+    const fieldType = activeDraft.fieldType === 'multiselect' ? 'multiselect' : 'select';
+    void (async () => {
+      const held = await findValueSetByUrl(binding.valueSet);
+      if (!held || token !== autoBindToken.current) return;
+      const codes = await storedValueSetCodes(held.id);
+      if (token !== autoBindToken.current) return;
+      patchDraft({ ...bindingUpdates(held.url, binding.strength, codesToOptions(codes)), fieldType });
+    })().catch(() => { /* a failed lookup leaves the field as the author left it */ });
+  };
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -294,18 +320,8 @@ export function FieldEditorSheet({
           </>
         )}
 
-        {/* ── Options / Value-set section ──────────────────────────── */}
         {(activeDraft.fieldType === 'select' || activeDraft.fieldType === 'multiselect') && (
-          <>
-            <div className="border-t border-border" />
-            <div className="px-6 py-3">
-              <h3 className="text-sm font-medium text-foreground">Options</h3>
-            </div>
-            <div className="border-t border-border" />
-            <div className="px-6 py-2">
-              <OptionsEditor field={activeDraft} onUpdate={patchDraft} />
-            </div>
-          </>
+          <OptionsBlock field={activeDraft} surveyMode={isSurveyForm(fhirResourceType)} onUpdate={patchDraft} />
         )}
 
         {/* ── Mapping / FHIR section. Above Codes, as in corlix: mapping is what authors get wrong. ── */}
@@ -319,7 +335,7 @@ export function FieldEditorSheet({
             field={activeDraft}
             fhirResourceType={fhirResourceType}
             surveyMode={isSurveyForm(fhirResourceType)}
-            onUpdate={patchDraft}
+            onUpdate={onMappingUpdate}
           />
         </div>
 

@@ -284,16 +284,17 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
     expect(workflows).toHaveLength(2);
   });
 
-  it('seeds the default connector (with config) but no dashboard/terminology demo data', async () => {
-    const { app, connectors, dashboards, valueSets } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:p@h:5432/d' });
+  it('seeds the default connector and the FHIR catalog, but no dashboard and no UCUM', async () => {
+    const { app, connectors, dashboards, valueSets, concepts } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:p@h:5432/d' });
     const res = await seedEssentials(app);
-    // The connector is an essential — a fresh SEED_ON_START=false install must be able to query.
     expect(res.connectorsSeeded).toBe(1);
-    expect(connectors).toHaveLength(1);
     expect(connectors[0].name).toBe('Target Warehouse (Postgres)');
-    // Dashboards + terminology stay opt-in demo data, seeded only by the full SEED_ON_START seed.
+    // The FHIR catalog is an essential since S6: the builder's standard bindings need the sets.
+    expect(res.valueSetsImported).toBeGreaterThan(100);
+    expect(valueSets.every((v) => v.publisherId === 'pub-hl7-fhir')).toBe(true);
+    // Dashboards and UCUM stay opt-in, seeded only by the full SEED_ON_START seed.
     expect(dashboards).toHaveLength(0);
-    expect(valueSets).toHaveLength(0);
+    expect(concepts.size).toBe(0);
   });
 
   it('seeds the connector idempotently by name — re-running the essentials adds nothing', async () => {
@@ -593,6 +594,28 @@ describe('seedDatabase — bundled terminology', () => {
     expect(res.terminology).toEqual({ valueSetsImported: 0, ucumConceptsImported: 0 });
     expect(res.workflowsSeeded).toBe(2);
     expect(res.dashboardsSeeded).toBe(1);
+  });
+});
+
+describe('the FHIR catalog on every boot', () => {
+  it("imports the catalog even with migration 072's location-status set there", async () => {
+    const { app, valueSets } = fakeApp();
+    valueSets.push({ url: 'urn:openldr:valueset:location-status', publisherId: 'pub-hl7-fhir' });
+    expect((await seedEssentials(app)).valueSetsImported).toBeGreaterThan(100);
+  });
+
+  it('skips when a catalog set is already held', async () => {
+    const { app, valueSets } = fakeApp();
+    valueSets.push({ url: 'http://hl7.org/fhir/ValueSet/administrative-gender', publisherId: 'pub-hl7-fhir' });
+    const importCatalog = vi.spyOn(app.terminology.admin.valueSets, 'importFhirCatalog');
+    expect((await seedEssentials(app)).valueSetsImported).toBe(0);
+    expect(importCatalog).not.toHaveBeenCalled();
+  });
+
+  it('the full seed gets the same check', async () => {
+    const { app, valueSets } = fakeApp();
+    valueSets.push({ url: 'urn:openldr:valueset:location-status', publisherId: 'pub-hl7-fhir' });
+    expect((await seedDatabase(fakeDb, app)).terminology.valueSetsImported).toBeGreaterThan(100);
   });
 });
 

@@ -192,37 +192,21 @@ describe('MappingEditor', () => {
     });
   });
 
-  describe('valueSetUrl input', () => {
-    it('calls onUpdate with valueSetUrl on change', () => {
-      const { onUpdate } = renderEditor();
-      const input = screen.getByRole('textbox', { name: /value set url/i });
-      fireEvent.change(input, { target: { value: 'http://example.com/vs' } });
-      expect(onUpdate).toHaveBeenCalledWith({ valueSetUrl: 'http://example.com/vs' });
+  describe('standard binding', () => {
+    it('shows the set FHIR binds the path to, and how strongly', () => {
+      render(<Harness field={{ ...BASE_FIELD, fhirPath: 'Patient.gender' }} fhirResourceType="Patient" onUpdate={vi.fn()} />);
+      expect(screen.getByTestId('fhir-path-binding').textContent).toBe('bound: administrative-gender required');
     });
 
-    it('calls onUpdate with undefined when valueSetUrl cleared', () => {
-      const { onUpdate } = renderEditor({ valueSetUrl: 'http://example.com/vs' });
-      const input = screen.getByRole('textbox', { name: /value set url/i });
-      fireEvent.change(input, { target: { value: '' } });
-      expect(onUpdate).toHaveBeenCalledWith({ valueSetUrl: undefined });
-    });
-  });
-
-  describe('bindingStrength Select', () => {
-    it('calls onUpdate with bindingStrength: required when selected', () => {
-      const { onUpdate } = renderEditor();
-      const trigger = screen.getByRole('combobox', { name: /binding strength/i });
-      fireEvent.click(trigger);
-      fireEvent.click(screen.getByText('required'));
-      expect(onUpdate).toHaveBeenCalledWith({ bindingStrength: 'required' });
+    it('shows nothing for a path FHIR does not bind', () => {
+      render(<Harness field={{ ...BASE_FIELD, fhirPath: 'Patient.name' }} fhirResourceType="Patient" onUpdate={vi.fn()} />);
+      expect(screen.queryByTestId('fhir-path-binding')).toBeNull();
     });
 
-    it('calls onUpdate with bindingStrength: extensible when selected', () => {
-      const { onUpdate } = renderEditor();
-      const trigger = screen.getByRole('combobox', { name: /binding strength/i });
-      fireEvent.click(trigger);
-      fireEvent.click(screen.getByText('extensible'));
-      expect(onUpdate).toHaveBeenCalledWith({ bindingStrength: 'extensible' });
+    it('no longer has a free-text ValueSet box or a strength select', () => {
+      render(<Harness field={BASE_FIELD} fhirResourceType="Patient" onUpdate={vi.fn()} />);
+      expect(screen.queryByLabelText('Value Set URL')).toBeNull();
+      expect(screen.queryByLabelText('Binding Strength')).toBeNull();
     });
   });
 

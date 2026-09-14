@@ -4,15 +4,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { SuggestCombobox } from '@/components/ui/suggest-combobox';
-import { fhirPathOptionsFor, lookupFhirPath } from '@openldr/fhir/paths';
+import { fhirPathOptionsFor, lookupBinding, lookupFhirPath } from '@openldr/fhir/paths';
 import { DiscriminatorEditor } from './DiscriminatorEditor';
 
 export interface MappingEditorProps {
@@ -31,13 +24,6 @@ export interface MappingEditorProps {
   surveyMode?: boolean;
   onUpdate: (patch: Partial<FormField>) => void;
 }
-
-const BINDING_STRENGTHS: { value: string; label: string }[] = [
-  { value: 'required',   label: 'required' },
-  { value: 'extensible', label: 'extensible' },
-  { value: 'preferred',  label: 'preferred' },
-  { value: 'example',    label: 'example' },
-];
 
 function parseNum(raw: string): number | undefined {
   if (raw.trim() === '') return undefined;
@@ -69,6 +55,7 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
   }, [pathOptions]);
 
   const currentDefinition = field.fhirPath ? lookupFhirPath(field.fhirPath)?.label ?? null : null;
+  const binding = lookupBinding(field.fhirPath);
 
   return (
     <>
@@ -99,6 +86,12 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
             {currentDefinition && (
               <p data-testid="fhir-path-definition" className="mt-1 text-xs text-muted-foreground">
                 {currentDefinition}
+              </p>
+            )}
+            {/* FHIR's own binding for this element, named by its URL's last segment, as corlix does. */}
+            {binding && (
+              <p data-testid="fhir-path-binding" className="mt-1 text-xs text-muted-foreground">
+                {`bound: ${binding.valueSet.split('/').pop()} ${binding.strength}`}
               </p>
             )}
           </div>
@@ -138,45 +131,6 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
             </Label>
           </div>
 
-          {/* Value Set URL */}
-          <Label htmlFor="mapping-value-set-url" className="whitespace-nowrap">
-            Value Set URL
-          </Label>
-          <Input
-            id="mapping-value-set-url"
-            aria-label="Value Set URL"
-            value={field.valueSetUrl ?? ''}
-            onChange={(e) =>
-              onUpdate({ valueSetUrl: e.target.value || undefined })
-            }
-            placeholder="http://..."
-            className="font-mono text-xs"
-          />
-
-          {/* Binding Strength */}
-          <Label htmlFor="mapping-binding-strength-trigger" className="whitespace-nowrap">
-            Binding Strength
-          </Label>
-          <Select
-            value={field.bindingStrength ?? ''}
-            onValueChange={(v) =>
-              onUpdate({ bindingStrength: v as FormField['bindingStrength'] })
-            }
-          >
-            <SelectTrigger
-              id="mapping-binding-strength-trigger"
-              aria-label="Binding Strength"
-            >
-              <SelectValue placeholder="— none —" />
-            </SelectTrigger>
-            <SelectContent>
-              {BINDING_STRENGTHS.map((bs) => (
-                <SelectItem key={bs.value} value={bs.value}>
-                  {bs.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
       </section>
 

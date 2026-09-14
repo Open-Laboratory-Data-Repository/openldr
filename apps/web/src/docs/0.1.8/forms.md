@@ -44,6 +44,15 @@ If a reference list is empty, check the configured source and loaded terminology
 - **Locked fields.** A locked field cannot be switched off or deleted from the field list. You can still relabel, reorder, and translate it.
 - **Survey forms.** When the form's Resource Type is `Questionnaire`, the editor hides FHIR Path, API Property, and the discriminator. Observation Extract and the other settings stay.
 
+### Options and ValueSets
+
+- A select or multiselect field can take its options from a ValueSet. In the Options block, search for a set and pick it. Its codes are copied into the options, and the field keeps a link to the set with a strength. A required strength stops data entry accepting other values.
+- **Unbind**, in the Options ⋯ menu, drops the link and keeps the options. **Save as a new ValueSet** turns typed options into a set you can reuse; it shows only if you may manage terminology.
+- Under the FHIR path, **bound:** names the ValueSet FHIR itself binds that element to, and how strongly. **Load from terminology**, in the Options ⋯ menu, fills the options from that set.
+- Picking a path FHIR binds as required or extensible, on a field with no ValueSet, binds it for you and makes it a select. Preferred and example bindings are left to you, and so is a field that already names a reference source.
+- A reference field picks its ValueSet in the Reference Configuration block. It searches the set live, so nothing is copied.
+- Every install holds FHIR's 672 standard ValueSets. Survey forms have no bound elements, so they show no **bound:** line.
+
 ### Starter packs
 
 - A starter pack is a ready list of fields for one resource type, taken from the forms OpenLDR ships: Location (Facility), Practitioner (Users), Patient, and ServiceRequest (Lab order).
@@ -125,6 +134,15 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 - **Champs verrouillés.** Un champ verrouillé ne peut être ni désactivé ni supprimé depuis la liste. Vous pouvez encore le renommer, le déplacer et le traduire.
 - **Formulaires d'enquête.** Si le Resource Type du formulaire est `Questionnaire`, l'éditeur masque FHIR Path, API Property et le discriminateur. Observation Extract et les autres réglages restent.
 
+### Options et ValueSets
+
+- Un champ select ou multiselect peut prendre ses options dans un ValueSet. Dans le bloc Options, cherchez un ValueSet et choisissez-le. Ses codes sont copiés dans les options, et le champ garde un lien vers le ValueSet avec une force. Une force required empêche la saisie d'accepter d'autres valeurs.
+- **Unbind**, dans le menu ⋯ du bloc Options, retire le lien et garde les options. **Save as a new ValueSet** transforme des options saisies en un ValueSet réutilisable ; il n'apparaît que si vous pouvez gérer la terminologie.
+- Sous le FHIR Path, **bound:** nomme le ValueSet auquel FHIR lui-même lie cet élément, et avec quelle force. **Load from terminology**, dans le menu ⋯ du bloc Options, remplit les options depuis ce ValueSet.
+- Choisir un chemin que FHIR lie en required ou extensible, sur un champ sans ValueSet, le lie pour vous et en fait un select. Les liaisons preferred et example restent à votre choix, tout comme un champ qui nomme déjà une source de référence.
+- Un champ de référence choisit son ValueSet dans le bloc Reference Configuration. Il y cherche en direct, donc rien n'est copié.
+- Chaque installation contient les 672 ValueSets standard de FHIR. Les formulaires d'enquête n'ont aucun élément lié, donc ils n'affichent pas de ligne **bound:**.
+
 ### Packs de départ
 
 - Un pack de départ est une liste de champs prête pour un Resource Type, tirée des formulaires fournis avec OpenLDR : Location (Facility), Practitioner (Users), Patient et ServiceRequest (Lab order).
@@ -204,6 +222,15 @@ Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative 
 - **Campos reference.** Um campo reference tem um bloco **Reference Configuration** depois de General. **Target** é `Patient` ou um sistema de códigos ativo. **Depends On** e **Searchable** são guardados e exportados, mas a introdução de dados ainda não os usa.
 - **Campos bloqueados.** Um campo bloqueado não pode ser desativado nem eliminado a partir da lista. Pode ainda mudar o rótulo, a ordem e a tradução.
 - **Formulários de inquérito.** Quando o Resource Type do formulário é `Questionnaire`, o editor esconde FHIR Path, API Property e o discriminador. Observation Extract e as outras definições mantêm-se.
+
+### Opções e ValueSets
+
+- Um campo select ou multiselect pode tirar as opções de um ValueSet. No bloco Options, pesquise um ValueSet e escolha-o. Os códigos dele são copiados para as opções, e o campo guarda uma ligação ao ValueSet com uma força. Uma força required impede que a introdução de dados aceite outros valores.
+- **Unbind**, no menu ⋯ do bloco Options, retira a ligação e mantém as opções. **Save as a new ValueSet** transforma opções escritas num ValueSet reutilizável; só aparece se puder gerir a terminologia.
+- Por baixo do FHIR Path, **bound:** indica o ValueSet a que o próprio FHIR liga esse elemento, e com que força. **Load from terminology**, no menu ⋯ do bloco Options, preenche as opções a partir desse ValueSet.
+- Escolher um caminho que o FHIR liga como required ou extensible, num campo sem ValueSet, faz a ligação por si e torna-o um select. As ligações preferred e example ficam à sua escolha, tal como um campo que já indica uma fonte de referência.
+- Um campo de referência escolhe o ValueSet no bloco Reference Configuration. Pesquisa o ValueSet em direto, por isso nada é copiado.
+- Todas as instalações têm os 672 ValueSets padrão do FHIR. Os formulários de inquérito não têm elementos ligados, por isso não mostram a linha **bound:**.
 
 ### Pacotes iniciais
 

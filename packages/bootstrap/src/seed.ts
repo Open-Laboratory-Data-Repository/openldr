@@ -42,6 +42,8 @@ const UCUM_URL = 'http://unitsofmeasure.org';
 const UCUM_PRESENCE_MARKER = 'm';
 /** Publisher stamped on every FHIR R4 catalog value set — used as the catalog presence marker. */
 const FHIR_PUBLISHER_ID = 'pub-hl7-fhir';
+/** Catalog set URLs start with this. Migration 072's own `pub-hl7-fhir` set is `urn:openldr:...`. */
+const FHIR_CATALOG_URL_PREFIX = 'http://hl7.org/fhir/ValueSet/';
 
 /** Name used to dedup the default target-warehouse connector — idempotency key. */
 const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
@@ -105,6 +107,9 @@ export interface EssentialSeedTarget {
     MYSQL_SSL?: boolean;
     MYSQL_SSL_REJECT_UNAUTHORIZED?: boolean;
   };
+  // The FHIR R4 ValueSet catalog is an essential since S6: the form builder's standard bindings
+  // (`lookupBinding`) are only useful when the sets are held. AppContext satisfies it.
+  terminology: { admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog'> } };
 }
 
 // Full structural shape of the forms surface seedDatabase needs — the essentials above plus the
@@ -255,7 +260,7 @@ async function enableIngestWorkflow(app: EssentialSeedTarget, existing: Workflow
 // `roles.seedSystemRoles()` boot-time seed (see createAppContext): idempotent (forms deduped by
 // name, workflows by id, connector by name), so it's safe to run on every boot and re-run
 // alongside the full seed.
-export async function seedEssentials(app: EssentialSeedTarget): Promise<{ formsSeeded: number; workflowsSeeded: number; connectorsSeeded: number }> {
+export async function seedEssentials(app: EssentialSeedTarget): Promise<{ formsSeeded: number; workflowsSeeded: number; connectorsSeeded: number; valueSetsImported: number }> {
   const essentialForms = sampleForms.filter((f) => ESSENTIAL_FORM_NAMES.has(f.name));
   const { seeded: formsSeeded, orderFormId } = await upsertPublishedForms(app, essentialForms);
   const workflowsSeeded = await seedDefaultWorkflowsFor(app, orderFormId);
@@ -263,7 +268,8 @@ export async function seedEssentials(app: EssentialSeedTarget): Promise<{ formsS
   // install still has a connector to query against. Idempotent by name and self-guarded (skips when
   // TARGET_DATABASE_URL / SECRETS_ENCRYPTION_KEY are unset), so it's safe on every boot.
   const connectorsSeeded = await seedDefaultConnector(app);
-  return { formsSeeded, workflowsSeeded, connectorsSeeded };
+  const valueSetsImported = await seedFhirValueSetCatalog(app);
+  return { formsSeeded, workflowsSeeded, connectorsSeeded, valueSetsImported };
 }
 
 // Idempotent sample-data seed shared by the `openldr db seed` CLI and the server's
@@ -404,6 +410,37 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   return { resources, formsSeeded, workflowsSeeded, connectorsSeeded, dashboardsSeeded, reportDesignsSeeded, demoDesignsRemoved, dataDrivenReportsSeeded, settingsSeeded, terminology, reportCategoriesSeeded };
 }
 
+/**
+ * Import the bundled HL7 FHIR R4 ValueSet catalog when this install holds none of it. Runs on every
+ * boot since S6, from both `seedEssentials` and `seedDatabase`. Best-effort: a failure logs and
+ * returns 0, and never aborts the seed.
+ *
+ * The check looks for a catalog URL, not merely a `pub-hl7-fhir` set. Migration 072 inserts
+ * `urn:openldr:valueset:location-status` under that publisher on every install, so the old check
+ * ("any HL7 set?") skipped the catalog on every install migrated past 072. `importFhirCatalog` runs in
+ * one transaction, so a catalog URL present means an import completed. The case this misses is an
+ * operator importing one hl7.org set by hand before the first boot.
+ */
+export async function seedFhirValueSetCatalog(app: {
+  terminology: { admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog'> } };
+}): Promise<number> {
+  try {
+    const existing = await app.terminology.admin.valueSets.list(FHIR_PUBLISHER_ID);
+    if (existing.some((vs) => vs.url.startsWith(FHIR_CATALOG_URL_PREFIX))) return 0;
+    const catalog = await readBundledTerminology(BUNDLED_TERMINOLOGY.fhirR4Catalog);
+    if (!catalog) {
+      console.warn('[seed] FHIR R4 catalog fixture missing, so no value sets were imported');
+      return 0;
+    }
+    const r = await app.terminology.admin.valueSets.importFhirCatalog(catalog);
+    if (r.imported) console.log(`[seed] imported ${r.imported} FHIR R4 value set(s) (${r.skipped} already present)`);
+    return r.imported;
+  } catch (e) {
+    console.warn('[seed] FHIR R4 catalog import skipped:', e instanceof Error ? e.message : String(e));
+    return 0;
+  }
+}
+
 // Auto-import the two bundled, freely-redistributable terminology sets on first boot:
 //   1. HL7 FHIR R4 base ValueSet catalog → admin.valueSets.importFhirCatalog (itself idempotent).
 //   2. Full UCUM CodeSystem → the generic resource-import loader (upserts by system+code).
@@ -414,24 +451,8 @@ async function seedBundledTerminology(app: FormSeedTarget): Promise<SeedResult['
   let valueSetsImported = 0;
   let ucumConceptsImported = 0;
 
-  // (a) FHIR R4 base ValueSet catalog.
-  try {
-    const existing = await app.terminology.admin.valueSets.list(FHIR_PUBLISHER_ID);
-    if (existing.length > 0) {
-      // already imported — skip re-reading the ~1MB fixture
-    } else {
-      const catalog = await readBundledTerminology(BUNDLED_TERMINOLOGY.fhirR4Catalog);
-      if (!catalog) {
-        console.warn('[seed] FHIR R4 catalog fixture missing — skipping value-set import');
-      } else {
-        const r = await app.terminology.admin.valueSets.importFhirCatalog(catalog);
-        valueSetsImported = r.imported;
-        if (r.imported) console.log(`[seed] imported ${r.imported} FHIR R4 value set(s) (${r.skipped} already present)`);
-      }
-    }
-  } catch (e) {
-    console.warn('[seed] FHIR R4 catalog import skipped:', e instanceof Error ? e.message : String(e));
-  }
+  // (a) FHIR R4 base ValueSet catalog. Shared with seedEssentials, which runs it on every boot.
+  valueSetsImported = await seedFhirValueSetCatalog(app);
 
   // (b) Full UCUM code system.
   try {
