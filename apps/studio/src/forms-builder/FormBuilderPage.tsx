@@ -5,7 +5,7 @@ import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, makeUniqueFieldId, newField, slugify } from './builderModel';
-import { buildGroupPart, buildNamedSlot, insertFieldAfter, lastPartIdOf } from './newFormFields';
+import { buildFieldFromElement, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf } from './newFormFields';
 import type { RepeatNode } from './fieldTree';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
@@ -17,8 +17,14 @@ import { FieldListPane } from './FieldListPane';
 import { LanguageControl } from './LanguageControl';
 import { SubmissionReadiness } from '@/forms-runtime/SubmissionReadiness';
 import { PreviewSheet } from './PreviewSheet';
+import { LibraryPane } from './LibraryPane';
+import { libraryElements } from './libraryEntries';
+import { elementDisplayName } from './fhirTypeMap';
+import type { FhirPathInfo } from '@openldr/fhir/paths';
 import {
+  isSurveyForm,
   lintFormSchema,
+  mapsToResource,
   normalizeFormSchema,
   type FormField,
   type FormSchema,
@@ -207,6 +213,28 @@ export function FormBuilderPage(): JSX.Element {
     });
     setPendingNewFieldId(null);
     setSelectedId(part.id);
+  };
+
+  const survey = isSurveyForm(schema.fhirResourceType);
+  const elements = useMemo(
+    () => (mapsToResource(schema.fhirResourceType) ? libraryElements(schema.fhirResourceType, schema.fields) : []),
+    [schema.fhirResourceType, schema.fields],
+  );
+
+  /** A Library element becomes a field, inside its parent group when that group is on the form. One undo step. */
+  const addFromLibrary = (info: FhirPathInfo) => {
+    history.pushHistory();
+    const field = buildFieldFromElement(info, freshId(elementDisplayName(info.path)));
+    const groupId = groupIdForPath(schema.fields, info.path);
+    setSchema((prev) => {
+      if (groupId) {
+        return { ...prev, fields: insertFieldAfter(prev.fields, lastPartIdOf(prev.fields, groupId), { ...field, groupId }) };
+      }
+      const nextOrder = prev.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
+      return { ...prev, fields: [...prev.fields, { ...field, order: nextOrder }] };
+    });
+    setPendingNewFieldId(null);
+    setSelectedId(field.id);
   };
 
   const applyHistory = (next: FormSchema | null) => { if (next) setSchema(next); };
@@ -411,6 +439,14 @@ export function FormBuilderPage(): JSX.Element {
               }
             />
           </div>
+
+          {!survey && (
+            <LibraryPane
+              resourceType={schema.fhirResourceType ?? null}
+              elements={elements}
+              onAddElement={addFromLibrary}
+            />
+          )}
         </div>
       </div>
 

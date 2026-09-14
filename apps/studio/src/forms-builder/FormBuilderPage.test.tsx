@@ -58,6 +58,20 @@ function openFieldMenu(): void {
   }
 }
 
+/** Load the builder on a stored form of the given resource type, with no fields. */
+function renderBuilderAs(fhirResourceType: string) {
+  const base = makeFormDef();
+  vi.spyOn(api, 'getForm').mockResolvedValue(
+    makeFormDef({ fhirResourceType, schema: { ...base.schema, fhirResourceType } }) as never,
+  );
+  vi.spyOn(api, 'listFormVersions').mockResolvedValue([]);
+  return render(
+    <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+      <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+    </MemoryRouter>,
+  );
+}
+
 describe('FormBuilderPage (three-pane shell)', () => {
   beforeEach(() => {
     vi.spyOn(api, 'createForm').mockResolvedValue(makeFormDef());
@@ -84,6 +98,19 @@ describe('FormBuilderPage (three-pane shell)', () => {
     openBuilderMenu();
     fireEvent.click(await screen.findByText('Preview'));
     expect(await screen.findByRole('dialog', { name: 'Preview' })).toBeInTheDocument();
+  });
+
+  it('shows the Library beside the list and adds a clicked element as a field', async () => {
+    renderBuilderAs('Location');
+    expect(await screen.findByText('All Location elements')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Location\.alias/ }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Alias');
+  });
+
+  it('shows no Library on a survey form', async () => {
+    renderBuilderAs('Questionnaire');
+    await screen.findByLabelText('Form name');
+    expect(screen.queryByText(/^All .* elements$/)).toBeNull();
   });
 
   it('adds a field via the header ⋯ menu → Add field', async () => {
