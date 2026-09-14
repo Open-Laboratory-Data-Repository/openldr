@@ -58,6 +58,21 @@ describe('syncFromClaims resolution', () => {
 });
 
 describe('createUserStore', () => {
+  it('does not rewrite a recently refreshed existing user', async () => {
+    const db = await makeMigratedDb();
+    const store = createUserStore(db);
+    const user = await store.syncFromClaims({ sub: 'provider-ada', preferred_username: 'ada' });
+    const recent = new Date(Date.now() - 14 * 60_000);
+    await db.updateTable('users').set({ last_login_at: recent, updated_at: recent }).where('id', '=', user.id).execute();
+
+    await store.syncFromClaims({ sub: 'provider-ada', preferred_username: 'ada' });
+
+    const row = await db.selectFrom('users').select(['last_login_at', 'updated_at']).where('id', '=', user.id).executeTakeFirstOrThrow();
+    expect(new Date(row.last_login_at!).toISOString()).toBe(recent.toISOString());
+    expect(new Date(row.updated_at).toISOString()).toBe(recent.toISOString());
+    await db.destroy();
+  });
+
   it('updates display name and email without changing username or roles', async () => {
     const db = await makeMigratedDb();
     const store = createUserStore(db);

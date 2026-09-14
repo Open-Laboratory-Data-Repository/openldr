@@ -84,6 +84,7 @@ function toUser(r: Row): User {
 }
 
 const COLS = ['id', 'subject', 'username', 'display_name', 'email', 'roles', 'status', 'last_login_at', 'created_at', 'rbac_initialized'] as const;
+const LAST_LOGIN_REFRESH_INTERVAL_MS = 15 * 60 * 1000;
 
 export function createUserStore(db: Kysely<InternalSchema>, deps: {
   withSubjectLock?: <T>(subject: string, work: (db: Kysely<InternalSchema>) => Promise<T>) => Promise<T>;
@@ -189,12 +190,25 @@ export function createUserStore(db: Kysely<InternalSchema>, deps: {
         (typeof claims.email === 'string' && claims.email) ||
         sub;
       const now = new Date();
+      const refreshBefore = new Date(now.getTime() - LAST_LOGIN_REFRESH_INTERVAL_MS);
 
       const existing = await getBySubject(sub);
       if (existing) {
+        const lastLoginAt = existing.lastLoginAt ? Date.parse(existing.lastLoginAt) : Number.NaN;
+        if (Number.isFinite(lastLoginAt) && lastLoginAt >= refreshBefore.getTime()) return existing;
+
         const row = await db.updateTable('users').set({ last_login_at: now, updated_at: now })
-          .where('id', '=', existing.id).returning(COLS).executeTakeFirstOrThrow();
-        return toUser(row as unknown as Row);
+          .where('id', '=', existing.id)
+          .where(eb => eb.or([
+            eb('last_login_at', 'is', null),
+            eb('last_login_at', '<', refreshBefore),
+          ]))
+          .returning(COLS).executeTakeFirst();
+        if (row) return toUser(row as unknown as Row);
+
+        const refreshed = await get(existing.id);
+        if (!refreshed) throw new Error('user changed during sign-in');
+        return refreshed;
       }
       const byName = await getByUsername(username);
       if (byName) {
@@ -209,9 +223,18 @@ export function createUserStore(db: Kysely<InternalSchema>, deps: {
         display_name: typeof claims.name === 'string' ? claims.name : null,
         email: typeof claims.email === 'string' ? claims.email : null,
         last_login_at: now,
-      }).onConflict(oc => oc.column('subject').doUpdateSet({ last_login_at: now, updated_at: now }))
-        .returning(COLS).executeTakeFirstOrThrow();
-      return toUser(row as unknown as Row);
+      }).onConflict(oc => oc.column('subject')
+        .doUpdateSet({ last_login_at: now, updated_at: now })
+        .where(eb => eb.or([
+          eb('users.last_login_at', 'is', null),
+          eb('users.last_login_at', '<', refreshBefore),
+        ])))
+        .returning(COLS).executeTakeFirst();
+      if (row) return toUser(row as unknown as Row);
+
+      const concurrent = await getBySubject(sub);
+      if (!concurrent) throw new Error('user changed during sign-in');
+      return concurrent;
     },
   };
 }

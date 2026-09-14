@@ -17,7 +17,7 @@ describe('subject status persistence', () => {
     const { db, users } = await setup();
     try {
       await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'disabled');
-      expect(await users.syncFromClaims({ sub: 'provider-1', preferred_username: 'ada' })).toMatchObject({ status: 'disabled', subject: 'provider-1' });
+      expect(await users.syncFromClaims({ sub: 'provider-1', preferred_username: 'ada' })).toMatchObject({ status: 'disabled', subject: 'provider-1', lastLoginAt: expect.any(String) });
       await users.setSubjectStatus({ subject: 'provider-1', username: 'ada' }, 'active');
       expect(await users.syncFromClaims({ sub: 'provider-1' })).toMatchObject({ status: 'active' });
     } finally { await db.destroy(); }
