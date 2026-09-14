@@ -1,5 +1,7 @@
+import type { FhirPathInfo } from '@openldr/fhir/paths';
 import { normalizeDiscriminator, toStoredDiscriminator, type FormField } from '@openldr/forms/pure';
 import type { RepeatNode } from './fieldTree';
+import { codeOptionsFromLabel, elementDisplayName, fieldTypeForLeaf } from './fhirTypeMap';
 
 /**
  * Builders for a field made from the structure it belongs to. Pure. Ported from corlix
@@ -71,4 +73,44 @@ export function insertFieldAfter(fields: readonly FormField[], anchorId: string,
 export function lastPartIdOf(fields: readonly FormField[], groupId: string): string {
   const parts = fields.filter((f) => f.groupId === groupId).sort((a, b) => a.order - b.order);
   return parts.length > 0 ? parts[parts.length - 1].id : groupId;
+}
+
+/**
+ * A field bound to one FHIR element, for the Library. Everything comes from the path table: the
+ * path, the name, the type and whether the element repeats. No API property is guessed, and the
+ * field is not required, because CE's table has no minimum. Ported from corlix `newFormFields.ts:132`.
+ */
+export function buildFieldFromElement(info: FhirPathInfo, id: string): FormField {
+  const fieldType = fieldTypeForLeaf(info.leafType, info.resourceType);
+  const field: FormField = {
+    id,
+    fhirPath: info.path,
+    displayLabel: elementDisplayName(info.path),
+    description: null,
+    fieldType,
+    required: false,
+    enabled: true,
+    order: 0,
+    cardinality: { min: 0, max: info.ownArray ? '*' : '1' },
+  };
+  // A group's repetition comes from `groupRepeats`, so `repeatable` on one would be dead state.
+  if (info.ownArray && fieldType !== 'group') field.repeatable = true;
+  if (info.leafType === 'code') {
+    const options = codeOptionsFromLabel(info.label);
+    if (options) field.valueSetOptions = options;
+  }
+  return field;
+}
+
+/**
+ * The group a field at `path` belongs inside, when the form has one bound to the immediate parent
+ * path. Only the immediate parent: a group on `Location.address` adopts `Location.address.city` and
+ * not `Location.address.city.text`. Ported from corlix `newFormFields.ts:202`.
+ */
+export function groupIdForPath(fields: readonly FormField[], path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  const cut = path.lastIndexOf('.');
+  if (cut === -1) return undefined;
+  const parentPath = path.slice(0, cut);
+  return fields.find((f) => f.fieldType === 'group' && f.fhirPath === parentPath)?.id;
 }
