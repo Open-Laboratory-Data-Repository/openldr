@@ -44,9 +44,20 @@ If a reference list is empty, check the configured source and loaded terminology
 - **Locked fields.** A locked field cannot be switched off or deleted from the field list. You can still relabel, reorder, and translate it.
 - **Survey forms.** When the form's Resource Type is `Questionnaire`, the editor hides FHIR Path, API Property, and the discriminator. Observation Extract and the other settings stay.
 
+### Starter packs
+
+- A starter pack is a ready list of fields for one resource type, taken from the forms OpenLDR ships: Location (Facility), Practitioner (Users), Patient, and ServiceRequest (Lab order).
+- When you pick a resource type on an empty form, its pack opens by itself in a sheet. On a form that has fields, choose **Start from a pack** from the ⋯ menu.
+- Each entry says why it is there. Uncheck what you do not collect, then choose **Add N fields** from the sheet's ⋯ menu. Adding is one undo step.
+- A locked entry stays checked, because the page the form feeds cannot save a record without it.
+- Entries already on the form are left out of the sheet.
+- Coded entries take their options from FHIR's own list. The Lab order pack leaves out Ward / Department, because its codes are local; add it from the Library and give it options.
+- Survey forms and forms with no resource type have no pack.
+
 ### The Library
 
 - The pane on the right lists the FHIR elements of the form's resource type that no field uses yet. Click one to add it as a field; its editor opens.
+- Above the elements, **Left out of the pack** lists the pack entries the form does not have, in the pack's order. Click one to add it.
 - A field added this way is named from the element and typed from it. Coded elements become a select, with options when the element lists its codes. Dates arrive as text fields; change the type in the editor.
 - An element inside a group that is already on the form goes into that group.
 - Search filters by name and path. The list goes two levels deep, such as `Location.address.city`.
@@ -114,9 +125,20 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 - **Champs verrouillés.** Un champ verrouillé ne peut être ni désactivé ni supprimé depuis la liste. Vous pouvez encore le renommer, le déplacer et le traduire.
 - **Formulaires d'enquête.** Si le Resource Type du formulaire est `Questionnaire`, l'éditeur masque FHIR Path, API Property et le discriminateur. Observation Extract et les autres réglages restent.
 
+### Packs de départ
+
+- Un pack de départ est une liste de champs prête pour un Resource Type, tirée des formulaires fournis avec OpenLDR : Location (Facility), Practitioner (Users), Patient et ServiceRequest (Lab order).
+- Quand vous choisissez un Resource Type sur un formulaire vide, son pack s'ouvre tout seul dans un panneau latéral. Sur un formulaire qui a déjà des champs, choisissez **Start from a pack** dans le menu ⋯.
+- Chaque entrée dit pourquoi elle est là. Décochez ce que vous ne collectez pas, puis choisissez **Add N fields** dans le menu ⋯ du panneau. L'ajout s'annule en une seule fois.
+- Une entrée verrouillée reste cochée, car la page qu'alimente le formulaire ne peut pas enregistrer sans elle.
+- Les entrées déjà présentes sur le formulaire n'apparaissent pas dans le panneau.
+- Les entrées codées prennent leurs options dans la liste propre à FHIR. Le pack Lab order laisse de côté **Ward / Department**, car ses codes sont locaux ; ajoutez-le depuis **Library** et donnez-lui des options.
+- Les formulaires d'enquête et les formulaires sans Resource Type n'ont pas de pack.
+
 ### Le volet Library
 
 - Le volet de droite liste les éléments FHIR du Resource Type du formulaire qu'aucun champ n'utilise encore. Cliquez sur un élément pour l'ajouter comme champ ; son éditeur s'ouvre.
+- Au-dessus des éléments, **Left out of the pack** liste les entrées du pack absentes du formulaire, dans l'ordre du pack. Cliquez sur une entrée pour l'ajouter.
 - Un champ ajouté ainsi prend le nom et le type de l'élément. Un élément codé devient un select, avec des options quand l'élément liste ses codes. Les dates arrivent en champs texte ; changez le type dans l'éditeur.
 - Un élément qui appartient à un groupe déjà présent sur le formulaire va dans ce groupe.
 - La recherche filtre par nom et par chemin. La liste descend sur deux niveaux, par exemple `Location.address.city`.
@@ -183,9 +205,20 @@ Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative 
 - **Campos bloqueados.** Um campo bloqueado não pode ser desativado nem eliminado a partir da lista. Pode ainda mudar o rótulo, a ordem e a tradução.
 - **Formulários de inquérito.** Quando o Resource Type do formulário é `Questionnaire`, o editor esconde FHIR Path, API Property e o discriminador. Observation Extract e as outras definições mantêm-se.
 
+### Pacotes iniciais
+
+- Um pacote inicial é uma lista de campos pronta para um Resource Type, tirada dos formulários que o OpenLDR traz: Location (Facility), Practitioner (Users), Patient e ServiceRequest (Lab order).
+- Quando escolhe um Resource Type num formulário vazio, o pacote abre sozinho num painel lateral. Num formulário que já tem campos, escolha **Start from a pack** no menu ⋯.
+- Cada entrada diz porque está lá. Desmarque o que não recolhe e depois escolha **Add N fields** no menu ⋯ do painel. O acréscimo desfaz-se de uma só vez.
+- Uma entrada bloqueada fica marcada, porque a página que o formulário alimenta não consegue guardar um registo sem ela.
+- As entradas que já estão no formulário não aparecem no painel.
+- As entradas codificadas tiram as opções da lista do próprio FHIR. O pacote Lab order deixa de fora **Ward / Department**, porque os códigos dele são locais; acrescente-o a partir de **Library** e dê-lhe opções.
+- Os formulários de inquérito e os formulários sem Resource Type não têm pacote.
+
 ### O painel Library
 
 - O painel à direita lista os elementos FHIR do Resource Type do formulário que nenhum campo usa ainda. Clique num elemento para o acrescentar como campo; o editor dele abre.
+- Acima dos elementos, **Left out of the pack** lista as entradas do pacote que o formulário não tem, pela ordem do pacote. Clique numa para a acrescentar.
 - Um campo acrescentado assim recebe o nome e o tipo do elemento. Um elemento codificado passa a ser um select, com opções quando o elemento lista os seus códigos. As datas chegam como campos de texto; mude o tipo no editor.
 - Um elemento que pertence a um grupo já presente no formulário entra nesse grupo.
 - A pesquisa filtra por nome e por caminho. A lista desce dois níveis, por exemplo `Location.address.city`.
