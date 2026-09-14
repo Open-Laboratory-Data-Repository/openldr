@@ -48,4 +48,10 @@ A full-App Vitest experiment stalled during collection and was removed. Browser 
 
 Independent review found one incorrect row-cap claim. Source inspection confirmed that raw SQL truncates while builder overflow errors. All three translations and Studio documents were corrected. Recheck found no remaining blocker.
 
-No commit, push, or merge was performed. Run `pnpm make:changelog` after an approved merge, following repository rules.
+## Approved local merge
+
+Merged into main by fast-forward at `b48288cd` after operator approval.
+
+`pnpm test` passed before and after the merge. Both runs reported 35 successful tasks, with 33 cached tasks for unchanged packages. Studio ran 2,125 tests across 232 files. Web ran 103 tests across 15 files. The post-merge run exited 0 in 3 minutes 43.801 seconds.
+
+`pnpm make:changelog` ran after the merge and generated 2,713 entries across 71 days. The new entry names this change. Nothing was pushed.
