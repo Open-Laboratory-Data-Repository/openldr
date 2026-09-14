@@ -63,7 +63,7 @@ function renderPane(overrides: Partial<Parameters<typeof FieldListPane>[0]> = {}
     <FieldListPane
       fields={FIELDS}
       sections={SECTIONS}
-      selectedFieldId={null}
+      selectedIds={new Set<string>()}
       issues={ISSUES}
       onSelect={onSelect}
       onToggleEnabled={onToggleEnabled}
@@ -181,7 +181,7 @@ describe('FieldListPane', () => {
   });
 
   it('applies selected styling when selectedFieldId matches', () => {
-    renderPane({ selectedFieldId: 'f-1' });
+    renderPane({ selectedIds: new Set(['f-1']) });
     // The card for 'Patient name' should have the selected class
     const card = screen.getByText('Patient name').closest('[data-sortable-card]');
     expect(card?.className).toContain('border-primary');
@@ -360,6 +360,18 @@ describe('FieldListPane', () => {
     expect(screen.getAllByRole('img', { name: 'Repeating group' })).toHaveLength(1);
     const telCard = screen.getByText('Contacts').closest('[data-sortable-card]');
     expect(telCard?.querySelector('[aria-label="Repeating group"]')).toBeTruthy();
+  });
+
+  it('shows the count and a selection menu once two fields are selected', () => {
+    renderPane({ selectedIds: new Set(['f-1', 'f-2']) });
+    expect(screen.getByText('2 selected')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Selection actions' })).toBeTruthy();
+    expect(screen.queryByText('3 fields (2 enabled)')).toBeNull();
+  });
+
+  it('keeps the field count with one field selected', () => {
+    renderPane({ selectedIds: new Set(['f-1']) });
+    expect(screen.getByText('3 fields (2 enabled)')).toBeTruthy();
   });
 
   it('Edit visibility on a section opens a sheet that writes the rule to the section', () => {

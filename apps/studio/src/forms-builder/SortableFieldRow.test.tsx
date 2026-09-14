@@ -193,6 +193,11 @@ describe('SortableFieldRow', () => {
     expect(marker).toBeTruthy();
   });
 
+  it('marks the anchor row with a left rule', () => {
+    renderRow({ anchor: true });
+    expect(screen.getByText('Patient name').closest('[data-sortable-card]')?.className).toContain('border-l-primary');
+  });
+
   it('shows the Conditional marker on a field with a visibility rule', () => {
     renderRow({ field: { ...FIELD, visibility: { combinator: 'all', conditions: [{ fieldId: 'x', operator: 'isNotEmpty' }] } } });
     expect(screen.getByRole('img', { name: 'Conditional' })).toBeTruthy();

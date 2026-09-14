@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
@@ -12,6 +12,7 @@ vi.mock('./useElementWidth', () => ({
 import { toast } from 'sonner';
 import { FormBuilderPage } from './FormBuilderPage';
 import * as api from '../api';
+import type { FormField, FormSection } from '@openldr/forms/pure';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 
@@ -77,6 +78,41 @@ function renderBuilderAs(fhirResourceType: string) {
       <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
     </MemoryRouter>,
   );
+}
+
+const field = (id: string, displayLabel: string, order: number, extra: Partial<FormField> = {}): FormField => ({
+  id, displayLabel, fieldType: 'text', required: false, enabled: true, fhirPath: null,
+  order, cardinality: { min: 0, max: '1' }, description: null, ...extra,
+});
+const THREE = [field('a', 'Alpha', 0), field('b', 'Bravo', 1), field('c', 'Charlie', 2)];
+
+/** Load the builder on a stored form holding these fields and sections. */
+async function renderBuilderWith(fields: FormField[], sections: FormSection[] = []) {
+  const base = makeFormDef();
+  vi.spyOn(api, 'getForm').mockResolvedValue(
+    makeFormDef({ schema: { ...base.schema, fields, sections } }) as never,
+  );
+  vi.spyOn(api, 'listFormVersions').mockResolvedValue([]);
+  render(
+    <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+      <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+    </MemoryRouter>,
+  );
+  await screen.findByRole('button', { name: `Edit field ${fields[0].displayLabel}` });
+}
+
+const row = (label: string) => screen.getByRole('button', { name: `Edit field ${label}` });
+
+/** How many rows are switched on, read from their checkboxes. The header shows a count only with one or no row selected. */
+const enabledRows = () =>
+  screen
+    .getAllByRole('checkbox', { name: /^Toggle enabled for / })
+    .filter((c) => c.getAttribute('aria-checked') === 'true').length;
+
+function openSelectionMenu() {
+  const trigger = screen.getByRole('button', { name: 'Selection actions' });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
 }
 
 describe('FormBuilderPage (three-pane shell)', () => {
@@ -623,6 +659,63 @@ describe('FormBuilderPage (three-pane shell)', () => {
     await waitFor(() => {
       expect(screen.getByText(/Sections \(1\)/i)).toBeInTheDocument();
     });
+  });
+
+  it('a plain click opens the editor for that field', async () => {
+    await renderBuilderWith(THREE);
+    fireEvent.click(row('Bravo'));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Bravo');
+  });
+
+  it('Ctrl-click then Shift-click selects a range, and neither opens the editor', async () => {
+    await renderBuilderWith(THREE);
+    fireEvent.click(row('Alpha'), { ctrlKey: true });
+    fireEvent.click(row('Charlie'), { shiftKey: true });
+    expect(screen.getByText('3 selected')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('Ctrl-click adds a field and takes it out again', async () => {
+    await renderBuilderWith(THREE);
+    fireEvent.click(row('Alpha'), { ctrlKey: true });
+    fireEvent.click(row('Bravo'), { ctrlKey: true });
+    expect(screen.getByText('2 selected')).toBeInTheDocument();
+    fireEvent.click(row('Bravo'), { ctrlKey: true });
+    expect(screen.queryByText('2 selected')).toBeNull();
+  });
+
+  it('Toggle enabled switches the selection off together, as one undo step', async () => {
+    await renderBuilderWith(THREE);
+    fireEvent.click(row('Alpha'), { ctrlKey: true });
+    fireEvent.click(row('Charlie'), { shiftKey: true });
+    openSelectionMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Toggle enabled' }));
+    expect(enabledRows()).toBe(0);
+    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
+    expect(enabledRows()).toBe(3);
+  });
+
+  it('Move to a section moves the whole selection', async () => {
+    await renderBuilderWith(THREE, [{ id: 'vitals', label: 'Vitals', order: 0 }]);
+    fireEvent.click(row('Alpha'), { ctrlKey: true });
+    fireEvent.click(row('Charlie'), { shiftKey: true });
+    openSelectionMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move to Vitals' }));
+    expect(screen.queryByText('No section')).toBeNull();
+    expect(screen.getAllByText('vitals')).toHaveLength(3);
+  });
+
+  it('Delete asks first, then removes the selection and keeps a locked field', async () => {
+    await renderBuilderWith([field('a', 'Alpha', 0), field('b', 'Bravo', 1, { locked: true }), field('c', 'Charlie', 2)]);
+    fireEvent.click(row('Alpha'), { ctrlKey: true });
+    fireEvent.click(row('Charlie'), { shiftKey: true });
+    openSelectionMenu();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    const confirm = await screen.findByRole('alertdialog');
+    expect(confirm).toHaveTextContent('Delete 3 fields?');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }));
+    expect(await screen.findByText('1 fields (1 enabled)')).toBeInTheDocument();
+    expect(row('Bravo')).toBeInTheDocument();
   });
 });
 

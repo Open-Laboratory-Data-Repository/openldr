@@ -20,6 +20,8 @@ import { VisibilityMarker } from './VisibilityMarker';
 export interface SortableFieldRowProps {
   field: FormField;
   selected: boolean;
+  /** The row Shift-click ranges from and j and k move. */
+  anchor?: boolean;
   lintIssue?: FormLintIssue;
   /** True when this group holds many instances. The list derives it with `groupRepeats`. */
   repeats?: boolean;
@@ -33,6 +35,7 @@ export interface SortableFieldRowProps {
 export function SortableFieldRow({
   field,
   selected,
+  anchor = false,
   lintIssue,
   repeats = false,
   onSelect,
@@ -69,7 +72,7 @@ export function SortableFieldRow({
         selected
           ? 'border-primary bg-primary/5'
           : 'border-border hover:border-muted-foreground/30'
-      }`}
+      } ${anchor ? 'border-l-2 border-l-primary' : ''}`}
     >
       {/* Drag handle */}
       <button

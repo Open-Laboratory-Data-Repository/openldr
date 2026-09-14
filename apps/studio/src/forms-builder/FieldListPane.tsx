@@ -26,11 +26,19 @@ import { buildFieldTree, type RepeatNode, type TreeNode } from './fieldTree';
 import { AddNamedSlotRow, RepeatRow } from './RepeatRow';
 import { buildFieldListModel } from './listOrder';
 import { SectionVisibilitySheet } from './SectionVisibilitySheet';
+import { BulkSelectionMenu } from './BulkSelectionMenu';
 
 export interface FieldListPaneProps {
   fields: FormField[];
   sections?: FormSection[];
-  selectedFieldId: string | null;
+  /** The selected rows. Two or more turn the header into the selection menu. */
+  selectedIds: ReadonlySet<string>;
+  /** The row Shift-click ranges from and j and k move. */
+  anchorId?: string | null;
+  onBulkMove?: (sectionId: string | undefined) => void;
+  onBulkToggleEnabled?: () => void;
+  onBulkDelete?: () => void;
+  onClearSelection?: () => void;
   issues: FormLintIssue[];
   onSelect: (f: FormField, e: React.MouseEvent) => void;
   onToggleEnabled: (id: string) => void;
@@ -52,7 +60,12 @@ export interface FieldListPaneProps {
 export function FieldListPane({
   fields,
   sections = [],
-  selectedFieldId,
+  selectedIds,
+  anchorId = null,
+  onBulkMove,
+  onBulkToggleEnabled,
+  onBulkDelete,
+  onClearSelection,
   issues,
   onSelect,
   onToggleEnabled,
@@ -81,6 +94,7 @@ export function FieldListPane({
   );
 
   const model = useMemo(() => buildFieldListModel(fields, sections, search), [fields, sections, search]);
+  const sortedSections = useMemo(() => [...sections].sort((a, b) => a.order - b.order), [sections]);
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -103,7 +117,8 @@ export function FieldListPane({
       <React.Fragment key={field.id}>
         <SortableFieldRow
           field={field}
-          selected={field.id === selectedFieldId}
+          selected={selectedIds.has(field.id)}
+          anchor={field.id === anchorId}
           lintIssue={issueForField(field.id)}
           repeats={groupRepeats(field, fhirResourceType)}
           onSelect={onSelect}
@@ -140,10 +155,23 @@ export function FieldListPane({
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="px-3 py-2 border-b space-y-2">
-        {/* Counter */}
-        <p className="text-xs text-muted-foreground">
-          {fields.length} fields ({enabledCount} enabled)
-        </p>
+        {/* Counter, or the selection menu once two or more rows are selected */}
+        <div className="flex min-h-7 items-center">
+          {selectedIds.size >= 2 ? (
+            <BulkSelectionMenu
+              count={selectedIds.size}
+              sections={sortedSections}
+              onMove={(sectionId) => onBulkMove?.(sectionId)}
+              onToggleEnabled={() => onBulkToggleEnabled?.()}
+              onDelete={() => onBulkDelete?.()}
+              onClear={() => onClearSelection?.()}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {fields.length} fields ({enabledCount} enabled)
+            </p>
+          )}
+        </div>
 
         {/* Search */}
         <div className="relative">
