@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "d841622b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Use sheets for registry and schedule editors"
+        },
+        {
           "hash": "b48288cd",
           "type": "fix",
           "scope": "studio",

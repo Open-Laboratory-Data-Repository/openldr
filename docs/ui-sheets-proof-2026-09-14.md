@@ -55,4 +55,14 @@ HONEST NON-PROOF: Chromium viewport checks cannot verify retractable browser chr
 
 ## Review and handoff
 
-Independent read-only review reported zero actionable findings in the approved scope. No commit, push, or merge was performed. Changelog generation remains due after an approved merge, as required by AGENTS.md. Existing stale worktree directories and the operator's review reports were not changed.
+Independent read-only review reported zero actionable findings in the approved scope.
+
+## Approved merge
+
+The operator approved merging. Main fast-forwarded to `d841622b`.
+
+`pnpm test` passed before and after the merge. Each run reported 35 successful tasks, with 33 cached tasks for unchanged packages. Studio ran 2,130 tests across 232 files. Web ran 103 tests across 15 files. The post-merge command exited 0 in 3 minutes 59.617 seconds.
+
+`pnpm make:changelog` ran after merging and generated 2,714 entries across 71 days. Its new entry names this editor change. Nothing was pushed. The operator's review reports and older stale worktree directories were not changed.
+
+Screenshots were preserved in the main checkout under `output/playwright/ui-sheets/` before worktree cleanup.
