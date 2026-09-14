@@ -44,6 +44,15 @@ If a reference list is empty, check the configured source and loaded terminology
 - **Locked fields.** A locked field cannot be switched off or deleted from the field list. You can still relabel, reorder, and translate it.
 - **Survey forms.** When the form's Resource Type is `Questionnaire`, the editor hides FHIR Path, API Property, and the discriminator. Observation Extract and the other settings stay.
 
+### The Library
+
+- The pane on the right lists the FHIR elements of the form's resource type that no field uses yet. Click one to add it as a field; its editor opens.
+- A field added this way is named from the element and typed from it. Coded elements become a select, with options when the element lists its codes. Dates arrive as text fields; change the type in the editor.
+- An element inside a group that is already on the form goes into that group.
+- Search filters by name and path. The list goes two levels deep, such as `Location.address.city`.
+- A survey form has no Library.
+- When the builder is narrower than 980 pixels, Form and Library become tabs. Adding from the Library switches back to Form. Collapsing the sidebar can bring both panes back.
+
 
 ## Français
 
@@ -89,6 +98,15 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 - **Champs verrouillés.** Un champ verrouillé ne peut être ni désactivé ni supprimé depuis la liste. Vous pouvez encore le renommer, le déplacer et le traduire.
 - **Formulaires d'enquête.** Si le Resource Type du formulaire est `Questionnaire`, l'éditeur masque FHIR Path, API Property et le discriminateur. Observation Extract et les autres réglages restent.
 
+### Le volet Library
+
+- Le volet de droite liste les éléments FHIR du Resource Type du formulaire qu'aucun champ n'utilise encore. Cliquez sur un élément pour l'ajouter comme champ ; son éditeur s'ouvre.
+- Un champ ajouté ainsi prend le nom et le type de l'élément. Un élément codé devient un select, avec des options quand l'élément liste ses codes. Les dates arrivent en champs texte ; changez le type dans l'éditeur.
+- Un élément qui appartient à un groupe déjà présent sur le formulaire va dans ce groupe.
+- La recherche filtre par nom et par chemin. La liste descend sur deux niveaux, par exemple `Location.address.city`.
+- Un formulaire d'enquête n'a pas de **Library**.
+- Si l'éditeur fait moins de 980 pixels de large, **Form** et **Library** deviennent des onglets. Un ajout depuis **Library** ramène à **Form**. Replier la barre latérale peut réafficher les deux volets.
+
 ## Português
 
 ### Condições de envio
@@ -132,3 +150,12 @@ Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative 
 - **Campos reference.** Um campo reference tem um bloco **Reference Configuration** depois de General. **Target** é `Patient` ou um sistema de códigos ativo. **Depends On** e **Searchable** são guardados e exportados, mas a introdução de dados ainda não os usa.
 - **Campos bloqueados.** Um campo bloqueado não pode ser desativado nem eliminado a partir da lista. Pode ainda mudar o rótulo, a ordem e a tradução.
 - **Formulários de inquérito.** Quando o Resource Type do formulário é `Questionnaire`, o editor esconde FHIR Path, API Property e o discriminador. Observation Extract e as outras definições mantêm-se.
+
+### O painel Library
+
+- O painel à direita lista os elementos FHIR do Resource Type do formulário que nenhum campo usa ainda. Clique num elemento para o acrescentar como campo; o editor dele abre.
+- Um campo acrescentado assim recebe o nome e o tipo do elemento. Um elemento codificado passa a ser um select, com opções quando o elemento lista os seus códigos. As datas chegam como campos de texto; mude o tipo no editor.
+- Um elemento que pertence a um grupo já presente no formulário entra nesse grupo.
+- A pesquisa filtra por nome e por caminho. A lista desce dois níveis, por exemplo `Location.address.city`.
+- Um formulário de inquérito não tem **Library**.
+- Quando o editor tem menos de 980 pixels de largura, **Form** e **Library** passam a ser separadores. Acrescentar a partir de **Library** volta a **Form**. Recolher a barra lateral pode mostrar de novo os dois painéis.

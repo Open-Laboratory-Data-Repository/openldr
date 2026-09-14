@@ -28,7 +28,7 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 10. Reorder fields by dragging them in the canvas.
 11. Clear a field's checkbox in the field list to disable it. A disabled field is not shown to users, is not validated, and collects no answer. It stays in the form so you can switch it back on.
 12. Remove fields only after confirming no published workflow or report depends on them.
-13. Use **Preview** to test the form before publishing. Preview shows exactly what a user sees, so a disabled field does not appear there either.
+13. Open **Preview** from the ⋯ menu to test the form before publishing. It opens as a sheet over the builder, on a phone too. **Fill example** and **Reset** are in the sheet's ⋯ menu. Preview shows exactly what a user sees, so a disabled field does not appear there either.
 14. Select **Save draft** to store your work without releasing it.
 15. Select **Publish** when the form is ready for users. Publish saves the form on screen first, so you never have to remember to save before publishing.
 16. Use **Compare** to review changes between versions.
@@ -64,6 +64,15 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 - **Reference fields.** A reference field has a **Reference Configuration** block after General. **Target** is `Patient` or an active code system. **Depends On** and **Searchable** are saved and exported, but data entry does not use them yet.
 - **Locked fields.** A locked field cannot be switched off or deleted from the field list. You can still relabel, reorder, and translate it.
 - **Survey forms.** When the form's Resource Type is `Questionnaire`, the editor hides FHIR Path, API Property, and the discriminator. Observation Extract and the other settings stay.
+
+## The Library
+
+- The pane on the right lists the FHIR elements of the form's resource type that no field uses yet. Click one to add it as a field; its editor opens.
+- A field added this way is named from the element and typed from it. Coded elements become a select, with options when the element lists its codes. Dates arrive as text fields; change the type in the editor.
+- An element inside a group that is already on the form goes into that group.
+- Search filters by name and path. The list goes two levels deep, such as `Location.address.city`.
+- A survey form has no Library.
+- When the builder is narrower than 980 pixels, Form and Library become tabs. Adding from the Library switches back to Form. Collapsing the sidebar can bring both panes back.
 
 ## Expected result
 
