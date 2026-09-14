@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { discriminatorLabel, type FormField, type FormLintIssue } from '@openldr/forms/pure';
+import { VisibilityMarker } from './VisibilityMarker';
 
 export interface SortableFieldRowProps {
   field: FormField;
@@ -132,6 +133,8 @@ export function SortableFieldRow({
           {lintIssue.severity === 'error' ? '!' : '?'}
         </span>
       )}
+
+      <VisibilityMarker rule={field.visibility} />
 
       {/* Claims the field holds many. A group bound to a one-instance element holds one, so it
           must not carry the marker. Radix tooltips do not open on touch, hence the aria-label. */}

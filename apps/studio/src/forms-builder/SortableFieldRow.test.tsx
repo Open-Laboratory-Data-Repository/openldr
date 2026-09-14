@@ -192,4 +192,9 @@ describe('SortableFieldRow', () => {
       screen.queryByText('?');
     expect(marker).toBeTruthy();
   });
+
+  it('shows the Conditional marker on a field with a visibility rule', () => {
+    renderRow({ field: { ...FIELD, visibility: { combinator: 'all', conditions: [{ fieldId: 'x', operator: 'isNotEmpty' }] } } });
+    expect(screen.getByRole('img', { name: 'Conditional' })).toBeTruthy();
+  });
 });

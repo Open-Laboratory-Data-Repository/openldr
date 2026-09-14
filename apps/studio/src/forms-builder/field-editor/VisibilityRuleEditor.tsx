@@ -26,27 +26,23 @@ const OPERATORS: VisibilityOperator[] = [
 const NO_VALUE_OPERATORS = new Set<VisibilityOperator>(['isEmpty', 'isNotEmpty']);
 
 export interface VisibilityRuleEditorProps {
-  field: FormField;
-  allFields: FormField[];
-  onUpdate: (patch: Partial<FormField>) => void;
+  rule: VisibilityRule | undefined;
+  /** The fields a condition can read. The caller leaves out the field being edited. */
+  candidateFields: FormField[];
+  onChange: (rule: VisibilityRule | undefined) => void;
 }
 
+/** A visibility rule for a field or a section. Corlix's props, `components/VisibilityRuleEditor.tsx:40-48`. */
 export function VisibilityRuleEditor({
-  field,
-  allFields,
-  onUpdate,
+  rule,
+  candidateFields,
+  onChange,
 }: VisibilityRuleEditorProps): JSX.Element {
-  const candidateFields = allFields.filter((f) => f.id !== field.id);
-  const rule = field.visibility;
   const combinator = rule?.combinator ?? 'all';
   const conditions = rule?.conditions ?? [];
 
   const emit = (next: VisibilityCondition[], comb: 'all' | 'any' = combinator) => {
-    onUpdate(
-      next.length === 0
-        ? { visibility: undefined }
-        : { visibility: { combinator: comb, conditions: next } },
-    );
+    onChange(next.length === 0 ? undefined : { combinator: comb, conditions: next });
   };
 
   const addCondition = () => {
