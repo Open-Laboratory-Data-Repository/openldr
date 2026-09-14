@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "d3d658fc",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Name a ValueSet just saved from options instead of calling it not held"
+        },
+        {
+          "hash": "54498013",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Pick a ValueSet for a reference field"
+        },
+        {
+          "hash": "a541b356",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Show FHIR's binding for a path, and bind to it when FHIR requires one"
+        },
+        {
+          "hash": "2fc9fc13",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Bind a field's options to a ValueSet picked from a list"
+        },
+        {
+          "hash": "da9bbba4",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Decide what binding a field to a ValueSet does"
+        },
+        {
+          "hash": "ebf4ef7d",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Import FHIR's ValueSets on every boot, past migration 072's own HL7 set"
+        },
+        {
+          "hash": "8f55c2ae",
+          "type": "feat",
+          "scope": "fhir",
+          "title": "Generate FHIR R4's element bindings for the path table"
+        },
+        {
           "hash": "d2d68f10",
           "type": "feat",
           "scope": "studio",
