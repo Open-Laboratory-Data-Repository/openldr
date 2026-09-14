@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { FormField } from '@openldr/forms/pure';
+import { lintFormSchema, seededStarterPacks, type FormField, type FormSchema, type StarterPackEntry } from '@openldr/forms/pure';
 import type { RepeatNode } from './fieldTree';
 import { lookupFhirPath } from '@openldr/fhir/paths';
-import { buildFieldFromElement, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf } from './newFormFields';
+import {
+  buildFieldFromElement, buildFieldFromPackEntry, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
+} from './newFormFields';
 
 const f = (o: Partial<FormField> & Pick<FormField, 'id' | 'order'>): FormField => ({
   displayLabel: o.id, fieldType: 'text', required: false, enabled: true, fhirPath: null,
@@ -96,5 +98,59 @@ describe('groupIdForPath', () => {
     expect(groupIdForPath(fields, 'Location.address.city')).toBe('addr');
     expect(groupIdForPath(fields, 'Location.address.city.text')).toBeUndefined();
     expect(groupIdForPath(fields, 'Location.name')).toBeUndefined();
+  });
+});
+
+const packEntry = (over: Partial<StarterPackEntry>): StarterPackEntry => ({
+  ord: 0, fhirPath: 'Location.name', label: 'Name', apiProperty: null, fieldType: 'text', fhirValueField: null,
+  required: false, locked: false, defaultOn: true, boundValueSet: null, referenceTarget: null, referenceMultiple: false,
+  rationale: 'r', ...over,
+});
+
+describe('buildFieldFromPackEntry', () => {
+  it('copies what makes the field save', () => {
+    const field = buildFieldFromPackEntry(packEntry({
+      fhirPath: 'Location.identifier.value', label: 'Facility code', apiProperty: 'facilityCode', fieldType: 'identifier',
+      required: true, locked: true, discriminator: { system: 'urn:x' },
+    }), 'code');
+    expect(field).toMatchObject({
+      id: 'code', fhirPath: 'Location.identifier.value', displayLabel: 'Facility code', apiProperty: 'facilityCode',
+      fieldType: 'identifier', required: true, locked: true, fhirDiscriminator: { system: 'urn:x' },
+      cardinality: { min: 1, max: '1' },
+    });
+  });
+
+  it('keeps a reference source, and several answers', () => {
+    const field = buildFieldFromPackEntry(packEntry({ fieldType: 'reference', referenceTarget: 'http://loinc.org', referenceMultiple: true }), 'tests');
+    expect(field).toMatchObject({ referenceTarget: 'http://loinc.org', referenceMultiple: true, cardinality: { min: 0, max: '*' } });
+  });
+
+  it('binds a ValueSet', () => {
+    expect(buildFieldFromPackEntry(packEntry({ boundValueSet: 'urn:vs' }), 'x').valueSetUrl).toBe('urn:vs');
+  });
+
+  it("reads a coded select's options from the FHIR label, since a pack stores no codes", () => {
+    const field = buildFieldFromPackEntry(packEntry({ fhirPath: 'Patient.gender', fieldType: 'select' }), 'sex');
+    expect(field.valueSetOptions?.map((o) => o.code)).toEqual(['male', 'female', 'other', 'unknown']);
+  });
+
+  it('falls back to text when the entry names no type', () => {
+    expect(buildFieldFromPackEntry(packEntry({ fieldType: null }), 'x').fieldType).toBe('text');
+  });
+});
+
+describe('each seeded starter pack, taken whole', () => {
+  const PAGES: Record<string, string[]> = { 'pack-location': ['facilities'], 'pack-practitioner': ['users'] };
+
+  it.each(seededStarterPacks().map((p) => [p.id, p] as const))('%s makes a form with no lint error', (_id, pack) => {
+    const form: FormSchema = {
+      id: pack.id, name: pack.name, versionLabel: null, fhirVersion: 'R4', fhirResourceType: pack.resourceType,
+      fhirProfileUrl: null, facilityId: null,
+      fields: pack.entries.map((e, i) => ({ ...buildFieldFromPackEntry(e, `f${i}`), order: i })),
+      sections: [], targetPages: PAGES[pack.id] ?? [], version: 1, active: true, status: 'draft',
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const errors = lintFormSchema(form).filter((i) => i.severity === 'error');
+    expect(errors.map((e) => e.message)).toEqual([]);
   });
 });

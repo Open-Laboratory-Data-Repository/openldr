@@ -17,6 +17,7 @@ import type { FacilityAdminLevel } from '@openldr/db/facility-answers';
 // existing caller.
 import type { FacilityHealth as FacilityRowHealth } from '@openldr/db';
 import type { ParsedFilter, ParsedSort } from '@openldr/table-query';
+import type { StarterPack, StarterPackWithEntries } from '@openldr/forms/pure';
 
 /** Routes the server answers WITHOUT a bearer token. Mirrors the public-path checks at the top of
  *  the `onRequest` hook in `apps/server/src/auth-plugin.ts` — keep the two in step.
@@ -1940,6 +1941,15 @@ export const listFormVersions = (id: string): Promise<FormVersionSummary[]> =>
   apiGet(`/api/forms/${id}/versions`, 'list form versions');
 export const getFormVersion = (id: string, version: number): Promise<FormVersion> =>
   apiGet(`/api/forms/${id}/versions/${version}`, 'get form version');
+export const listStarterPacks = (resourceType: string): Promise<StarterPack[]> =>
+  apiGet(`/api/forms/starter-packs?resourceType=${encodeURIComponent(resourceType)}`, 'list starter packs');
+export const getStarterPack = (id: string): Promise<StarterPackWithEntries> =>
+  apiGet(`/api/forms/starter-packs/${encodeURIComponent(id)}`, 'get starter pack');
+/** The pack for a resource type, with its entries, or null when the type has none. Corlix takes the first. */
+export async function loadStarterPack(resourceType: string): Promise<StarterPackWithEntries | null> {
+  const packs = await listStarterPacks(resourceType);
+  return packs.length > 0 ? getStarterPack(packs[0].id) : null;
+}
 export const restoreFormVersion = (id: string, version: number): Promise<FormDefinition> =>
   authFetch(`/api/forms/${id}/restore/${version}`, jbody({}, 'POST')).then((r) => okJson<FormDefinition>(r, 'restore form version'));
 export const setFormStatus = (id: string, status: FormStatus): Promise<FormDefinition> =>

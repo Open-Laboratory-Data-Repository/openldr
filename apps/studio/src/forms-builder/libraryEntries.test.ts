@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { FormField } from '@openldr/forms/pure';
-import { libraryElements } from './libraryEntries';
+import type { FormField, StarterPackEntry } from '@openldr/forms/pure';
+import { libraryElements, packEntriesNotOnForm } from './libraryEntries';
 
 const field = (id: string, fhirPath: string | null): FormField => ({
   id, displayLabel: id, fieldType: 'text', required: false, enabled: true, fhirPath,
@@ -36,5 +36,37 @@ describe('libraryElements', () => {
   it('offers nothing with no type, or a type the table does not cover', () => {
     expect(paths(null)).toEqual([]);
     expect(paths('Questionnaire')).toEqual([]);
+  });
+});
+
+describe('packEntriesNotOnForm', () => {
+  const entry = (ord: number, fhirPath: string | null, extra: Partial<StarterPackEntry> = {}): StarterPackEntry => ({
+    ord, fhirPath, label: String(ord), apiProperty: null, fieldType: 'text', fhirValueField: null, required: false,
+    locked: false, defaultOn: true, boundValueSet: null, referenceTarget: null, referenceMultiple: false, rationale: 'r', ...extra,
+  });
+
+  it('tells two slots of one path apart by their discriminator', () => {
+    const entries = [
+      entry(0, 'Location.identifier.value', { discriminator: { system: 'a' } }),
+      entry(1, 'Location.identifier.value', { discriminator: { system: 'b' } }),
+    ];
+    const fields = [{ ...field('x', 'Location.identifier.value'), fhirDiscriminator: { system: 'a' } }];
+    expect(packEntriesNotOnForm(entries, fields, 'Location').map((e) => e.ord)).toEqual([1]);
+  });
+
+  it('resolves a bare path against the form resource type', () => {
+    expect(packEntriesNotOnForm([entry(0, 'Practitioner.name.given')], [field('x', 'name.given')], 'Practitioner')).toEqual([]);
+  });
+
+  it('matches an entry with no path by its API property', () => {
+    const zone = entry(0, null, { apiProperty: 'zone' });
+    expect(packEntriesNotOnForm([zone], [], 'Location')).toEqual([zone]);
+    expect(packEntriesNotOnForm([zone], [{ ...field('z', null), apiProperty: 'zone' }], 'Location')).toEqual([]);
+  });
+
+  it('keeps pack order, and a disabled field still counts as on the form', () => {
+    const entries = [entry(2, 'Location.alias'), entry(0, 'Location.name'), entry(1, 'Location.status')];
+    const fields = [{ ...field('s', 'Location.status'), enabled: false }];
+    expect(packEntriesNotOnForm(entries, fields, 'Location').map((e) => e.ord)).toEqual([0, 2]);
   });
 });

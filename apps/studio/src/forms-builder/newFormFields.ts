@@ -1,5 +1,5 @@
-import type { FhirPathInfo } from '@openldr/fhir/paths';
-import { normalizeDiscriminator, toStoredDiscriminator, type FormField } from '@openldr/forms/pure';
+import { lookupFhirPath, type FhirPathInfo } from '@openldr/fhir/paths';
+import { normalizeDiscriminator, toStoredDiscriminator, type FormField, type StarterPackEntry } from '@openldr/forms/pure';
 import type { RepeatNode } from './fieldTree';
 import { codeOptionsFromLabel, elementDisplayName, fieldTypeForLeaf } from './fhirTypeMap';
 
@@ -113,4 +113,40 @@ export function groupIdForPath(fields: readonly FormField[], path: string | null
   if (cut === -1) return undefined;
   const parentPath = path.slice(0, cut);
   return fields.find((f) => f.fieldType === 'group' && f.fhirPath === parentPath)?.id;
+}
+
+/**
+ * A field from one starter pack entry. Ported from corlix `lib/packToFields.ts`. It keeps the small
+ * parts that make a field save: the API property, the lock, the discriminator, the ValueSet and the
+ * reference source. A required entry makes `min: 1`, and a multiple reference makes `max: '*'`.
+ *
+ * A pack stores no codes (AGENTS.md §8). A coded select reads its options from the FHIR element's own
+ * list, as a Library element does.
+ */
+export function buildFieldFromPackEntry(entry: StarterPackEntry, id: string): FormField {
+  const field: FormField = {
+    id,
+    fhirPath: entry.fhirPath,
+    displayLabel: entry.label,
+    description: null,
+    fieldType: entry.fieldType ?? 'text',
+    required: entry.required,
+    enabled: true,
+    order: 0,
+    cardinality: { min: entry.required ? 1 : 0, max: entry.referenceMultiple ? '*' : '1' },
+  };
+  if (entry.apiProperty) field.apiProperty = entry.apiProperty;
+  if (entry.locked) field.locked = true;
+  if (entry.discriminator) field.fhirDiscriminator = entry.discriminator;
+  if (entry.fhirValueField) field.fhirValueField = entry.fhirValueField;
+  if (entry.boundValueSet) field.valueSetUrl = entry.boundValueSet;
+  if (entry.referenceTarget) field.referenceTarget = entry.referenceTarget;
+  if (entry.referenceMultiple) field.referenceMultiple = true;
+  const isChoice = field.fieldType === 'select' || field.fieldType === 'multiselect';
+  if (isChoice && !field.valueSetUrl && entry.fhirPath) {
+    const info = lookupFhirPath(entry.fhirPath);
+    const options = info && info.leafType === 'code' ? codeOptionsFromLabel(info.label) : null;
+    if (options) field.valueSetOptions = options;
+  }
+  return field;
 }
