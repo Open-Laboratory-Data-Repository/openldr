@@ -16,7 +16,7 @@ import { BuilderHeader } from './BuilderHeader';
 import { FieldListPane } from './FieldListPane';
 import { LanguageControl } from './LanguageControl';
 import { SubmissionReadiness } from '@/forms-runtime/SubmissionReadiness';
-import { PreviewPane } from './PreviewPane';
+import { PreviewSheet } from './PreviewSheet';
 import {
   lintFormSchema,
   normalizeFormSchema,
@@ -35,6 +35,7 @@ export function FormBuilderPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
@@ -354,6 +355,7 @@ export function FormBuilderPage(): JSX.Element {
           onCompare={() => setCompareOpen(true)}
           onVersions={() => setVersionsOpen(true)}
           onAddField={addField}
+          onPreview={() => setPreviewOpen(true)}
           onArchive={() => { void archive(); }}
           onDisable={() => { void disable(); }}
           onDelete={() => setConfirmDeleteOpen(true)}
@@ -382,12 +384,10 @@ export function FormBuilderPage(): JSX.Element {
 
         {!loading ? <SubmissionReadiness schema={schema} /> : null}
 
-        {/* Two-pane body (sheet overlays on field select). On phones the field list takes the
-            full width and the preview pane is hidden — editing still happens through the
-            field-editor sheet — so the 26rem list can't overflow a narrow screen. */}
+        {/* Body. The field editor and the preview are sheets over it, so a phone gets both. */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* Left: FieldListPane (sections managed via the Sections popover inside it) */}
-          <div className="flex w-full shrink-0 flex-col overflow-hidden border-r border-border md:w-[26rem]">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <FieldListPane
               fields={schema.fields}
               fhirResourceType={schema.fhirResourceType ?? null}
@@ -411,11 +411,6 @@ export function FormBuilderPage(): JSX.Element {
               }
             />
           </div>
-
-          {/* Right: PreviewPane (manages its own edge-to-edge scroll). Hidden on phones. */}
-          <div className="hidden min-w-0 flex-1 overflow-hidden md:block">
-            <PreviewPane schema={schema} />
-          </div>
         </div>
       </div>
 
@@ -432,6 +427,8 @@ export function FormBuilderPage(): JSX.Element {
         onOpenField={openField}
         onAddPart={addGroupPart}
       />
+
+      <PreviewSheet schema={schema} open={previewOpen} onOpenChange={setPreviewOpen} />
 
       <CompareDialog
         formId={formId}

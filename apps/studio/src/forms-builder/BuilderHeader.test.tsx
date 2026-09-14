@@ -31,6 +31,7 @@ function renderHeader(
   const onCompare = vi.fn();
   const onVersions = vi.fn();
   const onAddField = vi.fn();
+  const onPreview = vi.fn();
   const onArchive = vi.fn();
   const onDisable = vi.fn();
   const onDelete = vi.fn();
@@ -47,6 +48,7 @@ function renderHeader(
       onCompare={onCompare}
       onVersions={onVersions}
       onAddField={onAddField}
+      onPreview={onPreview}
       onArchive={onArchive}
       onDisable={onDisable}
       onDelete={onDelete}
@@ -54,7 +56,7 @@ function renderHeader(
       {...overrides}
     />,
   );
-  return { ...utils, onChange, onSave, onPublish, onCompare, onVersions, onAddField, onArchive, onDisable, onDelete, onExport };
+  return { ...utils, onChange, onSave, onPublish, onCompare, onVersions, onAddField, onPreview, onArchive, onDisable, onDelete, onExport };
 }
 
 // Helper: open a DropdownMenu trigger and find/click a menu item by text.
@@ -214,6 +216,12 @@ describe('BuilderHeader', () => {
       const { onAddField } = renderHeader();
       openMenuAndClick('Builder actions', 'Add field');
       expect(onAddField).toHaveBeenCalled();
+    });
+
+    it('calls onPreview when "Preview" is clicked', () => {
+      const { onPreview } = renderHeader();
+      openMenuAndClick('Builder actions', 'Preview');
+      expect(onPreview).toHaveBeenCalled();
     });
 
     it('calls onSave when "Save draft" is clicked', () => {

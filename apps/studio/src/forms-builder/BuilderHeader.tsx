@@ -101,6 +101,8 @@ export interface BuilderHeaderProps {
   onCompare: () => void;
   onVersions: () => void;
   onAddField: () => void;
+  /** Open the form preview sheet. */
+  onPreview: () => void;
   onArchive: () => void;
   onDisable: () => void;
   onDelete: () => void;
@@ -139,6 +141,7 @@ export function BuilderHeader({
   onCompare,
   onVersions,
   onAddField,
+  onPreview,
   onArchive,
   onDisable,
   onDelete,
@@ -361,6 +364,9 @@ export function BuilderHeader({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => onAddField()}>
                 Add field
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onPreview()}>
+                Preview
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => onSave()}>
