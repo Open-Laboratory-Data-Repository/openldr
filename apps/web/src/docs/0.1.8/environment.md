@@ -8,13 +8,13 @@ deployment they live in the `.env` file the installer generates next to
 docker compose up -d
 ```
 
-Most operators never edit these by hand — the installer writes sensible defaults and
+Most operators never edit these by hand. The installer writes sensible defaults and
 generates every secret for you. This page is a reference for the values that matter
 once you move beyond a single-host install: a public domain, an external database, or
 SQL Server as the analytics store.
 
 > Secrets (`*_PASSWORD`, `*_SECRET_*`, `SECRETS_ENCRYPTION_KEY`) are generated on first
-> install — never share or commit them. Rotating `SECRETS_ENCRYPTION_KEY` after
+> install. Never share or commit them. Rotating `SECRETS_ENCRYPTION_KEY` after
 > connectors exist makes their stored credentials unreadable, so treat it as permanent
 > once the stack is live.
 
@@ -26,12 +26,13 @@ SQL Server as the analytics store.
 | `PORT` | `3000` | Internal API port behind the gateway. |
 | `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`). |
 | `OPENLDR_VERSION` | `latest` | Image tag the stack pulls and runs. |
+| `TRUST_PROXY` | unset | How many proxies in front of the API to trust for the client IP. Set `1` behind the bundled gateway, so audit entries show the real client address. Only set it when a trusted proxy really fronts the API. Otherwise a client can fake its own IP. |
 
 ## Public address and TLS
 
 These decide the URL users reach and how the gateway terminates HTTPS. `SERVER_NAME` is
-the public hostname; `PUBLIC_ORIGIN` is the full origin used for links and OIDC
-redirects. The [installer](/docs/install) sets these from `--server-name` /
+the public hostname. `PUBLIC_ORIGIN` is the full origin used for links and OIDC
+redirects. The [installer](/docs/install) sets these from `--server-name` and
 `--letsencrypt`.
 
 | Variable | Default | Purpose |
@@ -41,25 +42,25 @@ redirects. The [installer](/docs/install) sets these from `--server-name` /
 | `GATEWAY_HTTP_PORT` | `80` | Host port the gateway serves HTTP on. |
 | `GATEWAY_HTTPS_PORT` | `443` | Host port the gateway serves HTTPS on. |
 | `TLS_MODE` | `self-signed` | `self-signed` or a trusted (Let's Encrypt) certificate. |
-| `LETSENCRYPT_EMAIL` | — | Contact email used when issuing a trusted certificate. |
+| `LETSENCRYPT_EMAIL` | unset | Contact email used when issuing a trusted certificate. |
 
 ## Database
 
 OpenLDR always uses an internal Postgres application database. The **target (analytics)
-warehouse** is engine-swappable — Postgres (default), SQL Server, or MySQL/MariaDB — via
+warehouse** can be Postgres (default), SQL Server, or MySQL/MariaDB, chosen with
 `TARGET_STORE_ADAPTER` (see [Adapters](#adapters)). `TARGET_DATABASE_URL` applies to the
-Postgres target; SQL Server and MySQL use their own `MSSQL_*` / `MYSQL_*` variables below.
+Postgres target. SQL Server and MySQL use their own `MSSQL_*` and `MYSQL_*` variables below.
 
 | Variable | Purpose |
 | --- | --- |
-| `INTERNAL_DATABASE_URL` | Application database (users, forms, workflows, audit) — always Postgres. |
-| `TARGET_DATABASE_URL` | Analytics warehouse the pipelines write to (when `TARGET_STORE_ADAPTER=pg`). |
+| `INTERNAL_DATABASE_URL` | Application database (users, forms, workflows, audit). Always Postgres. |
+| `TARGET_DATABASE_URL` | Analytics warehouse the pipelines write to, when `TARGET_STORE_ADAPTER=pg`. |
 | `POSTGRES_PASSWORD` | Password for the bundled Postgres container. |
 
 ## Adapters
 
 Adapters select the backing implementation for each subsystem. The defaults match the
-bundled containers; change them only when pointing at external infrastructure.
+bundled containers. Change them only when pointing at external infrastructure.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -88,34 +89,37 @@ Keycloak is the default. Generic OIDC uses discovery and JWT access tokens. See 
 
 | Variable | Purpose |
 | --- | --- |
-| `IDENTITY_ADMIN_ADAPTER` | `keycloak` or `none`; defaults to `keycloak` for Keycloak auth, `none` for generic OIDC. |
-| `OIDC_ISSUER_URL` | Public issuer URL. Keep the existing value on upgrade; later changes block startup. |
+| `IDENTITY_ADMIN_ADAPTER` | `keycloak` or `none`. Defaults to `keycloak` for Keycloak auth, `none` for generic OIDC. |
+| `OIDC_ISSUER_URL` | Public issuer URL. Keep the existing value on upgrade. Later changes block startup. |
 | `OIDC_INTERNAL_ISSUER_URL` | Keycloak-only internal realm base URL. Generic OIDC ignores this value. |
 | `OIDC_INTERNAL_JWKS_URL` | Explicit internal signing-key endpoint override. Does not change the expected issuer. |
 | `TLS_CERT_PATH` | Path to this server's public TLS certificate (PEM). When set, the Sites page can offer it for download so a remote lab can trust a self-signed central. The installer mounts the certificate and sets this automatically. |
 | `OIDC_AUDIENCE` | Expected token audience. |
 | `OIDC_WEB_CLIENT_ID` | Public client ID the studio app authenticates with. |
+| `OIDC_SCOPES` | Scopes the studio app requests. Defaults to `openid profile email`. Must include `openid`. |
+| `OIDC_RESOURCE` | Resource URL to request, for providers that need one to issue the API access token. |
 | `KC_HOSTNAME` | Public base URL Keycloak advertises. |
 | `KEYCLOAK_ADMIN` | Keycloak admin username. |
 | `KEYCLOAK_ADMIN_PASSWORD` | Keycloak admin password (generated). |
 | `KEYCLOAK_ADMIN_CLIENT_ID` | Client ID used for admin API calls. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | Client secret for admin API calls. |
 
-### Development-only auth bypass
+## Development-only settings
 
-`AUTH_DEV_BYPASS` turns **authentication off**: any API request without a bearer token is
-served as a dev admin. It exists so local development and end-to-end tests can run without
-a configured Keycloak. It is **off unless you explicitly set it**, and the server refuses
-to start with it enabled under `NODE_ENV=production`.
+These exist so local development and end-to-end tests can run without a configured
+Keycloak or signed bundles. Never set them in a deployment.
+
+`AUTH_DEV_BYPASS` turns **authentication off**. Any API request without a bearer token is
+served as a dev admin. It is **off unless you explicitly set it**, and the server refuses
+to start with it enabled under `NODE_ENV=production`. When it is on, Studio shows an
+"Authentication bypass active" banner and the server logs a warning at startup.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AUTH_DEV_BYPASS` | `false` | Serve unauthenticated API requests as a dev admin. Local development only. |
+| `AUTH_DEV_BYPASS` | `false` | Serve unauthenticated API requests as a dev admin. |
 | `AUTH_DEV_USERNAME` | `dev-admin` | Username of the injected dev actor. |
 | `AUTH_DEV_ROLES` | `lab_admin` | Roles granted to the injected dev actor. |
-
-Never set this in a deployment. When it is on, Studio shows an "Authentication bypass
-active" banner and the server logs a warning at startup.
+| `MARKETPLACE_DEV_ALLOW_UNSIGNED` | `false` | Install marketplace bundles that carry no signature. |
 
 ## Secrets
 
@@ -130,10 +134,16 @@ active" banner and the server logs a warning at startup.
 | `MIGRATE_ON_START` | `true` | Run database migrations when the API starts. |
 | `SEED_ON_START` | `true` | Seed default forms, workflows, and terminology on first boot. |
 
+## Terminology imports
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `TERMINOLOGY_WORK_DIR` | system temp folder | Folder where an uploaded terminology release is unzipped during import. A full SNOMED CT release needs room for the zip and the unzipped files at once. Point this at a larger disk when the container's temp folder is small. |
+
 ## SQL Server target store
 
 Set only when `TARGET_STORE_ADAPTER=mssql`. On a deployed stack the [installer](/docs/install)
-provisions this from its `--mssql-demo` / `--mssql-*` flags; the bare `--profile mssql`
+provisions this from its `--mssql-demo` and `--mssql-*` flags. The bare `--profile mssql`
 compose profile exists only in the development compose file.
 
 | Variable | Purpose |
@@ -143,13 +153,13 @@ compose profile exists only in the development compose file.
 | `MSSQL_DATABASE` | Target database name. |
 | `MSSQL_USER` | Login. |
 | `MSSQL_PASSWORD` | Password. |
-| `MSSQL_ENCRYPT` | `true`/`false` — encrypt the connection. |
-| `MSSQL_TRUST_SERVER_CERT` | `true`/`false` — trust a self-signed server certificate. |
+| `MSSQL_ENCRYPT` | `true`/`false`: encrypt the connection. |
+| `MSSQL_TRUST_SERVER_CERT` | `true`/`false`: trust a self-signed server certificate. |
 
 ## MySQL / MariaDB target store
 
-Set only when `TARGET_STORE_ADAPTER=mysql`. Serves both MySQL 8.4+ and MariaDB 11.4+. On a
-deployed stack the [installer](/docs/install) provisions this from its `--mysql-demo` /
+Set only when `TARGET_STORE_ADAPTER=mysql`. Works with MySQL 8.4+ and MariaDB 11.4+. On a
+deployed stack the [installer](/docs/install) provisions this from its `--mysql-demo` and
 `--mysql-*` flags.
 
 | Variable | Purpose |
@@ -159,14 +169,79 @@ deployed stack the [installer](/docs/install) provisions this from its `--mysql-
 | `MYSQL_DATABASE` | Target database name. |
 | `MYSQL_USER` | Login. |
 | `MYSQL_PASSWORD` | Password. |
-| `MYSQL_SSL` | `true`/`false` — connect over TLS. |
-| `MYSQL_SSL_REJECT_UNAUTHORIZED` | `true`/`false` — reject an untrusted server certificate. |
+| `MYSQL_SSL` | `true`/`false`: connect over TLS. |
+| `MYSQL_SSL_REJECT_UNAUTHORIZED` | `true`/`false`: reject a server certificate that is not trusted. |
+
+## Workflows
+
+> `WORKFLOW_CODE_ENABLED` lets workflow authors run JavaScript with the same access as the
+> server itself: its files, network, environment, and secrets. The code runner is not a
+> sandbox. Turn it on only when you trust everyone who can edit workflows.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `WORKFLOW_CODE_ENABLED` | `false` | Allow Code nodes to run. When off, Code nodes refuse to run. |
+| `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Time limit for one Code node run, in milliseconds. |
+| `WORKFLOW_CODE_MEMORY_MB` | `128` | Memory limit for one Code node run, in MB. |
+| `WORKFLOW_HTTP_ALLOWLIST` | empty | Comma-separated hostnames the HTTP Request node may call. Empty means every host is refused. |
+| `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 MB) | Largest file accepted by a workflow run upload or webhook body. |
+| `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Most items a single loop node may collect. |
+| `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Allow the Read/Write File node to touch files on the server. |
+| `WORKFLOW_FILE_ACCESS_ROOT` | empty | The one folder the Read/Write File node is confined to. The node fails while this is empty. |
+| `WORKFLOW_EMAIL_POLL_MIN_SECONDS` | `30` | Shortest poll interval an email trigger may use, in seconds. |
+| `WORKFLOW_EMAIL_MAX_PER_POLL` | `50` | Most unread messages an email trigger handles per poll. |
+
+## Facility register import
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | `67108864` (64 MB) | Largest facility register file you can upload. A larger upload is stopped mid-transfer. 64 MB is about 20 times a 13,000-row national register. Values above about 512 MB cannot work. |
+
+## Plugins
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PLUGIN_UI_ENABLED` | `true` | Show plugin screens. When `false`, no plugin menu items or screens appear. |
+| `PLUGIN_EGRESS_ENABLED` | `true` | Allow plugins to reach the network. When `false`, every plugin network call is refused, whatever the plugin was granted. |
+| `PLUGIN_DATA_MAX_DOC_BYTES` | `8388608` (8 MB) | Largest document a plugin may store or send in one call. |
+| `PLUGIN_CRASH_LOG_DIR` | `.openldr/crash` | Folder for plugin crash records. The next start copies them into the audit log. |
+
+## Crash-loop protection
+
+If the server crashes `CRASH_LOOP_THRESHOLD` times within `CRASH_LOOP_WINDOW_SEC`, the next
+start writes one `system.crash_loop` audit entry and waits before exiting. The wait grows
+on each restart, which slows a restart loop instead of letting it spin.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CRASH_LOOP_THRESHOLD` | `5` | Crashes within the window before the protection starts. |
+| `CRASH_LOOP_WINDOW_SEC` | `60` | Length of the window, in seconds. |
+| `CRASH_LOOP_BACKOFF_MS` | `2000` | First wait before exiting, in milliseconds. |
+| `CRASH_LOOP_BACKOFF_CAP_MS` | `60000` | Longest wait, in milliseconds. |
 
 ## Marketplace
+
+The two registry variables only seed the first registry, on a first boot that has none.
+After that, manage them in the **Registries** view of **Settings > Marketplace**.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `MARKETPLACE_REGISTRY_URL` | bundled registry | Remote registry seeded on first boot when no registries exist. |
+| `MARKETPLACE_REGISTRY_DIR` | unset | Local registry folder seeded on first boot when `MARKETPLACE_REGISTRY_URL` is unset. Publishing also stages bundles here. |
+| `MARKETPLACE_LOCAL_REGISTRY_ROOT` | empty | When set, a local registry added in Settings must be a folder inside this one. |
+| `MARKETPLACE_PUBLISH_TOKEN` | unset | GitHub token with write access to the publish repository. Keep it secret. |
+| `MARKETPLACE_PUBLISH_REPO` | unset | Repository that receives publish pull requests, as `owner/repo`. |
+| `MARKETPLACE_PUBLISH_BRANCH` | `main` | Branch the publish pull requests target. |
+
+Publishing is on only when `MARKETPLACE_PUBLISH_TOKEN`, `MARKETPLACE_PUBLISH_REPO`, and
+`MARKETPLACE_REGISTRY_DIR` are all set.
+
+## Distributed sync
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OPENLDR_SITE_ID` | unset | Site ID stamped on records this server writes, used when the Site ID on the sync **Settings** tab is empty. The saved setting wins. |
+| `SYNC_ALLOW_INSECURE_TRANSPORT` | `false` | Allow sync to a central over plain `http://`. Sync sends a client secret and patient-related data, so only use this on a trusted local network while setting up. `localhost` works without it. |
 
 ## Server shutdown
 
@@ -176,19 +251,3 @@ Repeated signals do not start another shutdown.
 A handler that never returns can keep shutdown waiting indefinitely.
 Allow enough time for active imports before the service manager forces termination.
 Worker stop still permits later manual drains. Closing the context ends that access.
-## Arrêt du serveur
-
-Avec SIGTERM ou SIGINT, l'API cesse d'accepter les requêtes et arrête la lecture de la file.
-Elle attend les requêtes actives, le lot déjà réservé et le cycle de projection actif avant de fermer leurs bases de données.
-Les signaux répétés ne déclenchent pas un nouvel arrêt.
-Un traitement qui ne se termine jamais peut bloquer l'arrêt indéfiniment.
-Prévoyez assez de temps pour les imports actifs avant que le gestionnaire de services force l'arrêt.
-Après l'arrêt du worker, les traitements manuels restent possibles. La fermeture du contexte termine cet accès.
-## Encerramento do servidor
-
-Com SIGTERM ou SIGINT, a API deixa de aceitar pedidos e para de consultar a fila.
-Aguarda os pedidos ativos, o lote já reservado e o ciclo de projeção ativo antes de fechar as respetivas bases de dados.
-Sinais repetidos não iniciam outro encerramento.
-Um processamento que nunca termina pode bloquear o encerramento indefinidamente.
-Reserve tempo suficiente para as importações ativas antes de o gestor de serviços forçar o encerramento.
-Após parar o worker, o processamento manual continua disponível. Fechar o contexto termina esse acesso.
