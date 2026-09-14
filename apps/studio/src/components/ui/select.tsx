@@ -17,7 +17,9 @@ export const SelectTrigger = React.forwardRef<
       // The value span truncates instead of wrapping: a long option name (a query called "AMR
       // cumulative antibiogram (fixed panel)") grew the trigger to two lines and broke the row
       // height everywhere the pane is narrow. min-w-0 is what lets a flex child shrink at all.
-      'flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate',
+      // text-left because a button centers its text by default: a caller that stretches the
+      // value span (the form builder's FHIR Version) drew the value in the middle of the trigger.
+      'flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-left text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50 [&>span]:min-w-0 [&>span]:truncate',
       className,
     )}
     {...props}
