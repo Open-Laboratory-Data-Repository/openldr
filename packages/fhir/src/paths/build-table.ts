@@ -15,6 +15,12 @@ export interface FhirPathRow {
    * The cardinality lint rule depends on this exact meaning.
    */
   isArray: boolean;
+  /**
+   * True when the LAST segment itself is an array. `Location.telecom` is true. `Location.address`
+   * is false, and so is `Patient.contact.address`, although `contact` repeats. Whether a group
+   * holds one instance or many depends on this, not on `isArray`.
+   */
+  ownArray: boolean;
   /** First line of the member's JSDoc, which in `@types/fhir` is the element's short label. */
   label: string;
 }
@@ -121,7 +127,7 @@ export function buildPathTable(sourceText: string, options: BuildTableOptions): 
 
       const path = `${prefix}.${key}`;
       const isArray = arraySeen || leaf.isArray;
-      rows.push({ path, leafType: leaf.type, isArray, label: firstDocLine(member) });
+      rows.push({ path, leafType: leaf.type, isArray, ownArray: leaf.isArray, label: firstDocLine(member) });
 
       if (leaf.isEnum) continue;
       if (stopTypes.has(leaf.type)) continue;

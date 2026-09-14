@@ -263,9 +263,31 @@ describe('FieldEditorSheet', () => {
       expect(onSave).not.toHaveBeenCalled();
     });
 
-    it('does not show Group Select when field is a group type', () => {
+    it('shows the Group picker on a group, so a group can go inside another', () => {
+      const other: FormField = { ...GROUP_FIELD, id: 'g-2', displayLabel: 'Visit', order: 2 };
+      renderSheet({ field: GROUP_FIELD, allFields: [BASE_FIELD, GROUP_FIELD, other] });
+      fireEvent.click(screen.getByRole('combobox', { name: /group/i }));
+      expect(screen.getByRole('option', { name: 'Visit' })).toBeTruthy();
+    });
+
+    it('never offers a group itself or anything inside it', () => {
+      const child: FormField = { ...GROUP_FIELD, id: 'g-child', displayLabel: 'Inner', order: 2, groupId: 'g-1' };
+      const other: FormField = { ...GROUP_FIELD, id: 'g-2', displayLabel: 'Visit', order: 3 };
+      renderSheet({ field: GROUP_FIELD, allFields: [GROUP_FIELD, child, other] });
+      fireEvent.click(screen.getByRole('combobox', { name: /group/i }));
+      expect(screen.queryByRole('option', { name: 'Inner' })).toBeNull();
+      expect(screen.queryByRole('option', { name: 'Demographics' })).toBeNull();
+      expect(screen.getByRole('option', { name: 'Visit' })).toBeTruthy();
+    });
+
+    it('notes a group that holds a single instance', () => {
+      renderSheet({ field: { ...GROUP_FIELD, maxItems: 1 } });
+      expect(screen.getByText('This group holds a single instance, so data entry shows no add control.')).toBeTruthy();
+    });
+
+    it('has no single-instance note on a group that holds many', () => {
       renderSheet({ field: GROUP_FIELD });
-      expect(screen.queryByRole('combobox', { name: /group/i })).toBeNull();
+      expect(screen.queryByText(/holds a single instance/)).toBeNull();
     });
   });
 

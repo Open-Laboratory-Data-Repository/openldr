@@ -47,6 +47,14 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 
 21. Use form actions to duplicate, archive, export, export a marketplace bundle, or delete when appropriate.
 
+## How the field list shows structure
+
+- **Which entry of a list a field fills.** A field bound to one entry of a FHIR list shows a second line under its path, such as `system = urn:x`. Two fields on `Location.identifier.value` differ only by this line.
+- **Slots of one list.** Fields that share a list and have both a discriminator and a value field sit under one header. The header shows the list name, its path, and how many slots it has. The list draws it from the fields, so it cannot be dragged or deleted.
+- **Groups inside groups.** Set a group's **Group** to put it inside another group, to any depth. The picker never offers the group itself or anything already inside it.
+- **The repeat icon.** A field that takes more than one answer, or a group that holds many entries, shows a repeat icon. A group holds one entry when it is bound to an element that holds one, such as `Location.address`, or when **Max Items** is 1. The Questionnaire export marks such a group as not repeating.
+- Data entry still shows every group once. Adding more entries to a group during data entry comes in a later release.
+
 ## Expected result
 
 The form is saved as a draft during design, published when ready, and available from **View/Run**. Submission also requires a supported extraction configuration.

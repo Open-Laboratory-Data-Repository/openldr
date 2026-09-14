@@ -55,7 +55,7 @@ function quote(value: string): string {
 export function renderTable(rows: FhirPathRow[]): string {
   const roots = [...new Set(rows.map((r) => r.path.slice(0, r.path.indexOf('.'))))].sort();
   const lines = rows.map(
-    (r) => `  [${quote(r.path)}, ${quote(r.leafType)}, ${r.isArray ? 1 : 0}, ${quote(r.label)}],`,
+    (r) => `  [${quote(r.path)}, ${quote(r.leafType)}, ${r.isArray ? 1 : 0}, ${r.ownArray ? 1 : 0}, ${quote(r.label)}],`,
   );
   return `// GENERATED FILE. Do not edit by hand.
 // Regenerate with: pnpm gen:fhir-paths
@@ -64,8 +64,8 @@ export function renderTable(rows: FhirPathRow[]): string {
 // Tuples rather than objects, and the JSDoc first line rather than the full comment, because
 // the object-with-full-docs encoding measures 487 KB against this one's 146 KB.
 
-/** [path, leafType, isArray, label]. isArray is 1 when ANY segment on the path is an array. */
-export type R4PathTuple = readonly [path: string, leafType: string, isArray: 0 | 1, label: string];
+/** [path, leafType, isArray, ownArray, label]. isArray is 1 when ANY segment on the path is an array. ownArray is 1 when the last segment is. */
+export type R4PathTuple = readonly [path: string, leafType: string, isArray: 0 | 1, ownArray: 0 | 1, label: string];
 
 export const R4_PATH_RESOURCE_TYPES: readonly string[] = ${JSON.stringify(roots)};
 

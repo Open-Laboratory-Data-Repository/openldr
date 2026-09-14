@@ -1,11 +1,12 @@
 import React from 'react';
-import { GripVertical, MoreHorizontal } from 'lucide-react';
+import { GripVertical, MoreHorizontal, Repeat } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,12 +14,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { FormField, FormLintIssue } from '@openldr/forms/pure';
+import { discriminatorLabel, type FormField, type FormLintIssue } from '@openldr/forms/pure';
 
 export interface SortableFieldRowProps {
   field: FormField;
   selected: boolean;
   lintIssue?: FormLintIssue;
+  /** True when this group holds many instances. The list derives it with `groupRepeats`. */
+  repeats?: boolean;
   onSelect: (f: FormField, e: React.MouseEvent) => void;
   onToggleEnabled: (id: string) => void;
   onToggleRequired: (id: string) => void;
@@ -30,6 +33,7 @@ export function SortableFieldRow({
   field,
   selected,
   lintIssue,
+  repeats = false,
   onSelect,
   onToggleEnabled,
   onToggleRequired,
@@ -50,6 +54,10 @@ export function SortableFieldRow({
     transition,
     opacity: isDragging ? 0.5 : field.enabled ? 1 : 0.4,
   };
+
+  const discLabel = discriminatorLabel(field.fhirDiscriminator);
+  const showRepeat = field.fieldType === 'group' ? repeats : field.repeatable === true;
+  const repeatText = field.fieldType === 'group' ? 'Repeating group' : 'Repeats';
 
   return (
     <div
@@ -101,6 +109,12 @@ export function SortableFieldRow({
         {field.fhirPath && (
           <TruncatedText as="span" text={field.fhirPath} className="block text-[10px] text-muted-foreground font-mono leading-4" />
         )}
+        {/* Wraps rather than truncating: the value is the part that tells two slots apart. */}
+        {discLabel && (
+          <span className="block break-all font-mono text-[10px] leading-4 text-primary">
+            {discLabel}
+          </span>
+        )}
       </button>
 
       {/* Lint marker */}
@@ -116,6 +130,25 @@ export function SortableFieldRow({
         >
           {lintIssue.severity === 'error' ? '!' : '?'}
         </span>
+      )}
+
+      {/* Claims the field holds many. A group bound to a one-instance element holds one, so it
+          must not carry the marker. Radix tooltips do not open on touch, hence the aria-label. */}
+      {showRepeat && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                role="img"
+                aria-label={repeatText}
+                className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground"
+              >
+                <Repeat className="h-3 w-3" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{repeatText}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
 
       {/* Type badge */}

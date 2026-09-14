@@ -57,6 +57,31 @@ function openMenuAndClick(triggerLabel: string, itemText: string) {
 }
 
 describe('SortableFieldRow', () => {
+  it('prints the discriminator under the path', () => {
+    renderRow({ field: { ...FIELD, fhirPath: 'Location.identifier.value', fhirDiscriminator: { system: 'urn:x' } } });
+    expect(screen.getByText('system = urn:x')).toBeTruthy();
+  });
+
+  it('prints no discriminator line when the field has none', () => {
+    renderRow();
+    expect(screen.queryByText(/ = /)).toBeNull();
+  });
+
+  it('marks a group that holds many', () => {
+    renderRow({ field: { ...FIELD, fieldType: 'group' }, repeats: true });
+    expect(screen.getByRole('img', { name: 'Repeating group' })).toBeTruthy();
+  });
+
+  it('does not mark a group that holds one', () => {
+    renderRow({ field: { ...FIELD, fieldType: 'group' }, repeats: false });
+    expect(screen.queryByRole('img', { name: 'Repeating group' })).toBeNull();
+  });
+
+  it('marks a repeatable field', () => {
+    renderRow({ field: { ...FIELD, repeatable: true } });
+    expect(screen.getByRole('img', { name: 'Repeats' })).toBeTruthy();
+  });
+
   it('renders the displayLabel', () => {
     renderRow();
     expect(screen.getByText(/Patient name/)).toBeTruthy();

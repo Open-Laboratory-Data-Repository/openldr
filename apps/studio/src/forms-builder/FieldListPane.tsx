@@ -19,9 +19,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import type { FormField, FormLintIssue, FormSection } from '@openldr/forms/pure';
+import { groupRepeats, type FormField, type FormLintIssue, type FormSection } from '@openldr/forms/pure';
 import { SortableFieldRow } from './SortableFieldRow';
 import { SectionsManager } from './SectionsManager';
+import { buildFieldTree, type TreeNode } from './fieldTree';
+import { RepeatRow } from './RepeatRow';
 
 export interface FieldListPaneProps {
   fields: FormField[];
@@ -36,6 +38,8 @@ export interface FieldListPaneProps {
   onReorder: (activeId: string, overId: string) => void;
   onSectionsChange?: (sections: FormSection[]) => void;
   onFieldsClearSection?: (sectionId: string) => void;
+  /** The form's resource type. A group's "holds one or many" reads its bound path against it. */
+  fhirResourceType?: string | null;
 }
 
 export function FieldListPane({
@@ -51,6 +55,7 @@ export function FieldListPane({
   onReorder,
   onSectionsChange,
   onFieldsClearSection,
+  fhirResourceType = null,
 }: FieldListPaneProps): JSX.Element {
   const [searchText, setSearchText] = useState('');
 
@@ -86,15 +91,6 @@ export function FieldListPane({
       .slice()
       .sort((a, b) => a.order - b.order);
   }, [fields, searchText]);
-
-  // Build the set of child field ids (fields that belong to a group)
-  const childFieldIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const f of visibleFields) {
-      if (f.groupId) ids.add(f.id);
-    }
-    return ids;
-  }, [visibleFields]);
 
   // Top-level visible fields (not children of a group)
   const topLevelVisible = useMemo(
@@ -162,6 +158,48 @@ export function FieldListPane({
 
   function issueForField(fieldId: string): FormLintIssue | undefined {
     return issues.find((i) => i.fieldId === fieldId);
+  }
+
+  /**
+   * One field, then its group children at any depth. A group's parts hang off a dashed guide;
+   * a repeat's slots (below) hang off a solid one, so the two kinds of nesting do not read alike.
+   */
+  function renderField(field: FormField): React.ReactNode {
+    const children = field.fieldType === 'group' ? childrenByGroup.get(field.id) ?? [] : [];
+    return (
+      <React.Fragment key={field.id}>
+        <SortableFieldRow
+          field={field}
+          selected={field.id === selectedFieldId}
+          lintIssue={issueForField(field.id)}
+          repeats={groupRepeats(field, fhirResourceType)}
+          onSelect={onSelect}
+          onToggleEnabled={onToggleEnabled}
+          onToggleRequired={onToggleRequired}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
+        />
+        {children.length > 0 && (
+          // border-0 first: here a border is hidden by its style, not its width, so border-dashed
+          // alone would draw all four sides at the default width instead of the left guide.
+          <div data-nested="true" className="ml-3 space-y-1.5 border-0 border-l-2 border-dashed border-border pl-3">
+            {children.map((child) => renderField(child))}
+          </div>
+        )}
+      </React.Fragment>
+    );
+  }
+
+  function renderNode(node: TreeNode): React.ReactNode {
+    if (node.kind === 'field') return renderField(node.field);
+    return (
+      <div key={`repeat:${node.path}`}>
+        <RepeatRow node={node} />
+        <div data-nested="true" className="ml-3 space-y-1.5 border-l-2 border-border pl-3">
+          {node.slots.map((slot) => renderField(slot))}
+        </div>
+      </div>
+    );
   }
 
   // Show section grouping only when there are sections defined or fields span multiple sections
@@ -238,81 +276,13 @@ export function FieldListPane({
 
                   {/* Fields in this section */}
                   <div className="space-y-1.5">
-                  {fieldList.map((field) => (
-                    <React.Fragment key={field.id}>
-                      <SortableFieldRow
-                        field={field}
-                        selected={field.id === selectedFieldId}
-                        lintIssue={issueForField(field.id)}
-                        onSelect={onSelect}
-                        onToggleEnabled={onToggleEnabled}
-                        onToggleRequired={onToggleRequired}
-                        onDuplicate={onDuplicate}
-                        onDelete={onDelete}
-                      />
-                      {/* Render group children indented */}
-                      {field.fieldType === 'group' &&
-                        (childrenByGroup.get(field.id) ?? []).map((child) => (
-                          <div
-                            key={child.id}
-                            className="pl-6"
-                            data-nested="true"
-                          >
-                            <SortableFieldRow
-                              field={child}
-                              selected={child.id === selectedFieldId}
-                              lintIssue={issueForField(child.id)}
-                              onSelect={onSelect}
-                              onToggleEnabled={onToggleEnabled}
-                              onToggleRequired={onToggleRequired}
-                              onDuplicate={onDuplicate}
-                              onDelete={onDelete}
-                            />
-                          </div>
-                        ))}
-                    </React.Fragment>
-                  ))}
+                    {buildFieldTree(fieldList).map(renderNode)}
                   </div>
                 </div>
               ))
             ) : (
-              // No sections: flat list (original behaviour)
-              visibleFields.map((field) => {
-                if (childFieldIds.has(field.id)) return null;
-                return (
-                  <React.Fragment key={field.id}>
-                    <SortableFieldRow
-                      field={field}
-                      selected={field.id === selectedFieldId}
-                      lintIssue={issueForField(field.id)}
-                      onSelect={onSelect}
-                      onToggleEnabled={onToggleEnabled}
-                      onToggleRequired={onToggleRequired}
-                      onDuplicate={onDuplicate}
-                      onDelete={onDelete}
-                    />
-                    {field.fieldType === 'group' &&
-                      (childrenByGroup.get(field.id) ?? []).map((child) => (
-                        <div
-                          key={child.id}
-                          className="pl-6"
-                          data-nested="true"
-                        >
-                          <SortableFieldRow
-                            field={child}
-                            selected={child.id === selectedFieldId}
-                            lintIssue={issueForField(child.id)}
-                            onSelect={onSelect}
-                            onToggleEnabled={onToggleEnabled}
-                            onToggleRequired={onToggleRequired}
-                            onDuplicate={onDuplicate}
-                            onDelete={onDelete}
-                          />
-                        </div>
-                      ))}
-                  </React.Fragment>
-                );
-              })
+              // No sections: top-level nodes; children render under their group.
+              <div className="space-y-1.5">{buildFieldTree(topLevelVisible).map(renderNode)}</div>
             )}
           </SortableContext>
         </DndContext>
