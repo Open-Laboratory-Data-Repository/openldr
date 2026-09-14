@@ -1,6 +1,15 @@
 import { R4_PATHS, R4_PATH_RESOURCE_TYPES, type R4PathTuple } from './r4-paths.generated';
+import { R4_BINDINGS } from './r4-bindings.generated';
+import type { FhirBinding } from './bindings';
 
 export type { R4PathTuple };
+export type { FhirBinding, FhirBindingStrength } from './bindings';
+
+/** The ValueSet FHIR binds this path's element to, and how strongly. Null when FHIR binds none. */
+export function lookupBinding(path: string | null | undefined): FhirBinding | null {
+  if (!path) return null;
+  return R4_BINDINGS[path] ?? null;
+}
 
 /** One bindable path, decoded from the generated tuple table. */
 export interface FhirPathInfo {
