@@ -116,6 +116,26 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return ctx.forms.listPublished(query.targetPage || undefined);
   });
 
+  // Starter packs: read-only seeded data for the builder (spec S5). Static segments, so find-my-way
+  // matches them before `GET /api/forms/:id`, as it does `/api/forms/published`.
+  app.get('/api/forms/starter-packs', VIEW, async (req, reply) => {
+    const resourceType = (req.query as { resourceType?: string }).resourceType?.trim();
+    if (!resourceType) {
+      reply.code(400);
+      return { error: 'resourceType is required' };
+    }
+    return ctx.starterPacks.listForResource(resourceType);
+  });
+
+  app.get('/api/forms/starter-packs/:id', VIEW, async (req, reply) => {
+    const pack = await ctx.starterPacks.get((req.params as { id: string }).id);
+    if (!pack) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    return pack;
+  });
+
   app.get('/api/forms/:id', VIEW, async (req, reply) => {
     const f = await ctx.forms.get((req.params as { id: string }).id);
     if (!f) {

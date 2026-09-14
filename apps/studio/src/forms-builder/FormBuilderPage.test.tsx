@@ -12,7 +12,7 @@ vi.mock('./useElementWidth', () => ({
 import { toast } from 'sonner';
 import { FormBuilderPage } from './FormBuilderPage';
 import * as api from '../api';
-import type { FormField, FormSection } from '@openldr/forms/pure';
+import type { FormField, FormSection, StarterPackWithEntries } from '@openldr/forms/pure';
 
 const NOW = '2026-01-01T00:00:00.000Z';
 
@@ -115,9 +115,49 @@ function openSelectionMenu() {
   if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
 }
 
+const STARTER: StarterPackWithEntries = {
+  id: 'pack-location', resourceType: 'Location', name: 'Facility', version: '1', seeded: true, createdAt: NOW, updatedAt: NOW,
+  entries: [
+    { ord: 0, fhirPath: 'Location.name', label: 'Name', apiProperty: 'name', fieldType: 'text', fhirValueField: null,
+      required: true, locked: true, defaultOn: true, boundValueSet: null, referenceTarget: null, referenceMultiple: false,
+      rationale: 'The Facilities page cannot save a row without it.' },
+    { ord: 1, fhirPath: 'Location.alias', label: 'Other name', apiProperty: null, fieldType: 'text', fhirValueField: null,
+      required: false, locked: false, defaultOn: true, boundValueSet: null, referenceTarget: null, referenceMultiple: false,
+      rationale: 'Other names people use.' },
+  ],
+};
+
+/** Load the builder on a stored form of this type, holding these fields. */
+async function renderBuilderForm(fhirResourceType: string, fields: FormField[]) {
+  const base = makeFormDef();
+  vi.spyOn(api, 'getForm').mockResolvedValue(
+    makeFormDef({ fhirResourceType, schema: { ...base.schema, fhirResourceType, fields } }) as never,
+  );
+  vi.spyOn(api, 'listFormVersions').mockResolvedValue([]);
+  render(
+    <MemoryRouter initialEntries={['/forms/form-1/builder']}>
+      <Routes><Route path="/forms/:id/builder" element={<FormBuilderPage />} /></Routes>
+    </MemoryRouter>,
+  );
+  await screen.findByLabelText('Form name');
+}
+
+function openPackMenu(item: string) {
+  const trigger = screen.getByRole('button', { name: 'Pack actions' });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+  fireEvent.click(screen.getByRole('menuitem', { name: item }));
+}
+
+const oneField = (fhirPath: string): FormField => ({
+  id: 'held', displayLabel: 'Held', fieldType: 'text', required: false, enabled: true, fhirPath,
+  order: 0, cardinality: { min: 0, max: '1' }, description: null,
+});
+
 describe('FormBuilderPage (three-pane shell)', () => {
   beforeEach(() => {
     vi.spyOn(api, 'createForm').mockResolvedValue(makeFormDef());
+    vi.spyOn(api, 'loadStarterPack').mockResolvedValue(null);
     width.value = 0;
     vi.mocked(toast.success).mockReset();
     vi.mocked(toast.error).mockReset();
@@ -766,6 +806,43 @@ describe('FormBuilderPage (three-pane shell)', () => {
     await renderBuilderWith(THREE);
     fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true });
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Search fields' }));
+  });
+
+  it('opens the pack by itself on an empty form whose type has one, and adds it as one undo step', async () => {
+    vi.mocked(api.loadStarterPack).mockResolvedValue(STARTER);
+    await renderBuilderForm('Location', []);
+    expect(await screen.findByRole('dialog', { name: 'Facility pack' })).toBeInTheDocument();
+    openPackMenu('Add 2 fields');
+    expect(await screen.findByRole('button', { name: 'Edit field Name' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit field Other name' })).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'z', ctrlKey: true });
+    expect(screen.queryByRole('button', { name: 'Edit field Name' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit field Other name' })).toBeNull();
+  });
+
+  it('does not open by itself on a form that has fields, but Start from a pack opens it', async () => {
+    vi.mocked(api.loadStarterPack).mockResolvedValue(STARTER);
+    await renderBuilderForm('Location', [oneField('Location.status')]);
+    openBuilderMenu();
+    // The item appears only once the pack has arrived, so from here the chooser could have opened.
+    const item = await screen.findByText('Start from a pack');
+    expect(screen.queryByRole('dialog', { name: 'Facility pack' })).toBeNull();
+    fireEvent.click(item);
+    expect(await screen.findByRole('dialog', { name: 'Facility pack' })).toBeInTheDocument();
+  });
+
+  it('lists the pack entries the form lacks in the Library, and adds one', async () => {
+    vi.mocked(api.loadStarterPack).mockResolvedValue(STARTER);
+    await renderBuilderForm('Location', [oneField('Location.name')]);
+    const group = (await screen.findByText('Left out of the pack')).closest('div')!.parentElement!;
+    fireEvent.click(within(group).getByRole('button', { name: /Other name/ }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Other name');
+  });
+
+  it('never looks for a pack on a survey form', async () => {
+    vi.mocked(api.loadStarterPack).mockClear();
+    await renderBuilderForm('Questionnaire', []);
+    expect(api.loadStarterPack).not.toHaveBeenCalled();
   });
 });
 

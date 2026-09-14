@@ -1281,3 +1281,56 @@ describe('forms routes', () => {
     });
   });
 });
+
+describe('starter pack routes', () => {
+  const PACK = { id: 'pack-location', resourceType: 'Location', name: 'Facility', version: '1', seeded: true, createdAt: NOW, updatedAt: NOW };
+  const ENTRY = {
+    ord: 0, fhirPath: 'Location.name', label: 'Name', apiProperty: 'name', fieldType: 'text', fhirValueField: null,
+    required: true, locked: true, defaultOn: true, boundValueSet: null, referenceTarget: null, referenceMultiple: false,
+    rationale: 'The Facilities page cannot save a row without it.',
+  };
+  const ctx = {
+    starterPacks: {
+      listForResource: async (resourceType: string) => (resourceType === 'Location' ? [PACK] : []),
+      get: async (id: string) => (id === PACK.id ? { ...PACK, entries: [ENTRY] } : null),
+    },
+    forms: { get: async (id: string) => (id === 'form-1' ? { id: 'form-1' } : null) },
+  };
+
+  it('lists the packs for a resource type', async () => {
+    const res = await appWithForms(ctx).inject({ method: 'GET', url: '/api/forms/starter-packs?resourceType=Location' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([PACK]);
+  });
+
+  it('answers an empty list for a type with no pack', async () => {
+    const res = await appWithForms(ctx).inject({ method: 'GET', url: '/api/forms/starter-packs?resourceType=Specimen' });
+    expect(res.json()).toEqual([]);
+  });
+
+  it('refuses a list with no resource type', async () => {
+    const res = await appWithForms(ctx).inject({ method: 'GET', url: '/api/forms/starter-packs' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('returns one pack with its entries', async () => {
+    const res = await appWithForms(ctx).inject({ method: 'GET', url: '/api/forms/starter-packs/pack-location' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ...PACK, entries: [ENTRY] });
+  });
+
+  it('404s an unknown pack', async () => {
+    const res = await appWithForms(ctx).inject({ method: 'GET', url: '/api/forms/starter-packs/nope' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('needs forms.view', async () => {
+    const res = await appWithForms(ctx, ['guest'], []).inject({ method: 'GET', url: '/api/forms/starter-packs?resourceType=Location' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('leaves GET /api/forms/:id working', async () => {
+    const res = await appWithForms(ctx).inject({ method: 'GET', url: '/api/forms/form-1' });
+    expect(res.json()).toEqual({ id: 'form-1' });
+  });
+});

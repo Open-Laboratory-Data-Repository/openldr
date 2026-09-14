@@ -65,9 +65,20 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 - **Locked fields.** A locked field cannot be switched off or deleted from the field list. You can still relabel, reorder, and translate it.
 - **Survey forms.** When the form's Resource Type is `Questionnaire`, the editor hides FHIR Path, API Property, and the discriminator. Observation Extract and the other settings stay.
 
+## Starter packs
+
+- A starter pack is a ready list of fields for one resource type, taken from the forms OpenLDR ships: Location (Facility), Practitioner (Users), Patient, and ServiceRequest (Lab order).
+- When you pick a resource type on an empty form, its pack opens by itself in a sheet. On a form that has fields, choose **Start from a pack** from the ⋯ menu.
+- Each entry says why it is there. Uncheck what you do not collect, then choose **Add N fields** from the sheet's ⋯ menu. Adding is one undo step.
+- A locked entry stays checked, because the page the form feeds cannot save a record without it.
+- Entries already on the form are left out of the sheet.
+- Coded entries take their options from FHIR's own list. The Lab order pack leaves out Ward / Department, because its codes are local; add it from the Library and give it options.
+- Survey forms and forms with no resource type have no pack.
+
 ## The Library
 
 - The pane on the right lists the FHIR elements of the form's resource type that no field uses yet. Click one to add it as a field; its editor opens.
+- Above the elements, **Left out of the pack** lists the pack entries the form does not have, in the pack's order. Click one to add it.
 - A field added this way is named from the element and typed from it. Coded elements become a select, with options when the element lists its codes. Dates arrive as text fields; change the type in the editor.
 - An element inside a group that is already on the form goes into that group.
 - Search filters by name and path. The list goes two levels deep, such as `Location.address.city`.

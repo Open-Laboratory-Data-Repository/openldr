@@ -26,9 +26,20 @@ Esta verificação cobre a configuração. As respostas obrigatórias, as refer�
 - **Campos bloqueados.** Um campo bloqueado não pode ser desativado nem eliminado a partir da lista. Pode ainda mudar o rótulo, a ordem e a tradução.
 - **Formulários de inquérito.** Quando o Resource Type do formulário é `Questionnaire`, o editor esconde FHIR Path, API Property e o discriminador. Observation Extract e as outras definições mantêm-se.
 
+## Pacotes iniciais
+
+- Um pacote inicial é uma lista de campos pronta para um Resource Type, tirada dos formulários que o OpenLDR traz: Location (Facility), Practitioner (Users), Patient e ServiceRequest (Lab order).
+- Quando escolhe um Resource Type num formulário vazio, o pacote abre sozinho num painel lateral. Num formulário que já tem campos, escolha **Start from a pack** no menu ⋯.
+- Cada entrada diz porque está lá. Desmarque o que não recolhe e depois escolha **Add N fields** no menu ⋯ do painel. O acréscimo desfaz-se de uma só vez.
+- Uma entrada bloqueada fica marcada, porque a página que o formulário alimenta não consegue guardar um registo sem ela.
+- As entradas que já estão no formulário não aparecem no painel.
+- As entradas codificadas tiram as opções da lista do próprio FHIR. O pacote Lab order deixa de fora **Ward / Department**, porque os códigos dele são locais; acrescente-o a partir de **Library** e dê-lhe opções.
+- Os formulários de inquérito e os formulários sem Resource Type não têm pacote.
+
 ## O painel Library
 
 - O painel à direita lista os elementos FHIR do Resource Type do formulário que nenhum campo usa ainda. Clique num elemento para o acrescentar como campo; o editor dele abre.
+- Acima dos elementos, **Left out of the pack** lista as entradas do pacote que o formulário não tem, pela ordem do pacote. Clique numa para a acrescentar.
 - Um campo acrescentado assim recebe o nome e o tipo do elemento. Um elemento codificado passa a ser um select, com opções quando o elemento lista os seus códigos. As datas chegam como campos de texto; mude o tipo no editor.
 - Um elemento que pertence a um grupo já presente no formulário entra nesse grupo.
 - A pesquisa filtra por nome e por caminho. A lista desce dois níveis, por exemplo `Location.address.city`.

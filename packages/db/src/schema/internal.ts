@@ -573,6 +573,34 @@ export interface FormDefinitionsTable {
   updated_at: string;
 }
 
+export interface StarterPacksTable {
+  id: string;
+  resource_type: string;
+  name: string;
+  version: string;
+  seeded: Generated<boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface StarterPackEntriesTable {
+  pack_id: string;
+  ord: number;
+  fhir_path: string | null;
+  label: string;
+  api_property: Generated<string | null>;
+  field_type: Generated<string | null>;
+  fhir_value_field: Generated<string | null>;
+  required: Generated<boolean>;
+  locked: Generated<boolean>;
+  default_on: Generated<boolean>;
+  discriminator: Generated<unknown | null>;
+  bound_value_set: Generated<string | null>;
+  reference_target: Generated<string | null>;
+  reference_multiple: Generated<boolean>;
+  rationale: string;
+}
+
 export interface UserProfilesTable {
   user_id: string;
   form_schema_id: string | null;
@@ -932,6 +960,8 @@ export interface InternalSchema {
   facility_import_runs: FacilityImportRunsTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
+  starter_packs: StarterPacksTable;
+  starter_pack_entries: StarterPackEntriesTable;
   user_profiles: UserProfilesTable;
   marketplace_publishers: MarketplacePublishersTable;
   marketplace_installs: MarketplaceInstallsTable;

@@ -26,9 +26,20 @@ Ce contrôle porte sur la configuration. Les réponses obligatoires, les référ
 - **Champs verrouillés.** Un champ verrouillé ne peut être ni désactivé ni supprimé depuis la liste. Vous pouvez encore le renommer, le déplacer et le traduire.
 - **Formulaires d'enquête.** Si le Resource Type du formulaire est `Questionnaire`, l'éditeur masque FHIR Path, API Property et le discriminateur. Observation Extract et les autres réglages restent.
 
+## Packs de départ
+
+- Un pack de départ est une liste de champs prête pour un Resource Type, tirée des formulaires fournis avec OpenLDR : Location (Facility), Practitioner (Users), Patient et ServiceRequest (Lab order).
+- Quand vous choisissez un Resource Type sur un formulaire vide, son pack s'ouvre tout seul dans un panneau latéral. Sur un formulaire qui a déjà des champs, choisissez **Start from a pack** dans le menu ⋯.
+- Chaque entrée dit pourquoi elle est là. Décochez ce que vous ne collectez pas, puis choisissez **Add N fields** dans le menu ⋯ du panneau. L'ajout s'annule en une seule fois.
+- Une entrée verrouillée reste cochée, car la page qu'alimente le formulaire ne peut pas enregistrer sans elle.
+- Les entrées déjà présentes sur le formulaire n'apparaissent pas dans le panneau.
+- Les entrées codées prennent leurs options dans la liste propre à FHIR. Le pack Lab order laisse de côté **Ward / Department**, car ses codes sont locaux ; ajoutez-le depuis **Library** et donnez-lui des options.
+- Les formulaires d'enquête et les formulaires sans Resource Type n'ont pas de pack.
+
 ## Le volet Library
 
 - Le volet de droite liste les éléments FHIR du Resource Type du formulaire qu'aucun champ n'utilise encore. Cliquez sur un élément pour l'ajouter comme champ ; son éditeur s'ouvre.
+- Au-dessus des éléments, **Left out of the pack** liste les entrées du pack absentes du formulaire, dans l'ordre du pack. Cliquez sur une entrée pour l'ajouter.
 - Un champ ajouté ainsi prend le nom et le type de l'élément. Un élément codé devient un select, avec des options quand l'élément liste ses codes. Les dates arrivent en champs texte ; changez le type dans l'éditeur.
 - Un élément qui appartient à un groupe déjà présent sur le formulaire va dans ce groupe.
 - La recherche filtre par nom et par chemin. La liste descend sur deux niveaux, par exemple `Location.address.city`.

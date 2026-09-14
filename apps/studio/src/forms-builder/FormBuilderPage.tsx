@@ -1,11 +1,14 @@
-import { type MouseEvent, useEffect, useMemo, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
+import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, loadStarterPack, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, makeUniqueFieldId, newField, slugify } from './builderModel';
-import { buildFieldFromElement, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf } from './newFormFields';
+import {
+  buildFieldFromElement, buildFieldFromPackEntry, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
+} from './newFormFields';
+import { StarterPackChooser } from './StarterPackChooser';
 import type { RepeatNode } from './fieldTree';
 import { CompareDialog } from './CompareDialog';
 import { FieldEditorSheet } from './FieldEditorSheet';
@@ -18,7 +21,7 @@ import { LanguageControl } from './LanguageControl';
 import { SubmissionReadiness } from '@/forms-runtime/SubmissionReadiness';
 import { PreviewSheet } from './PreviewSheet';
 import { LibraryPane } from './LibraryPane';
-import { libraryElements } from './libraryEntries';
+import { libraryElements, packEntriesNotOnForm } from './libraryEntries';
 import { elementDisplayName } from './fhirTypeMap';
 import { NARROW_WORKSPACE_PX, useElementWidth } from './useElementWidth';
 import {
@@ -41,6 +44,8 @@ import {
   normalizeFormSchema,
   type FormField,
   type FormSchema,
+  type StarterPackEntry,
+  type StarterPackWithEntries,
 } from '@openldr/forms/pure';
 
 export function FormBuilderPage(): JSX.Element {
@@ -66,6 +71,9 @@ export function FormBuilderPage(): JSX.Element {
   const [status, setStatus] = useState<string | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [publishedVersion, setPublishedVersion] = useState<number | null>(null);
+  const [pack, setPack] = useState<StarterPackWithEntries | null>(null);
+  const [packLoading, setPackLoading] = useState(false);
+  const [packChooserOpen, setPackChooserOpen] = useState(false);
 
   const history = useTemplateHistory<FormSchema>(() => schema);
 
@@ -257,11 +265,60 @@ export function FormBuilderPage(): JSX.Element {
     [schema.fhirResourceType, schema.fields],
   );
 
-  /** A Library element becomes a field, inside its parent group when that group is on the form. One undo step. */
-  const addFromLibrary = (info: FhirPathInfo) => {
+  // The pack for the form's resource type. The chooser and the Library both read it. Empty is a real
+  // answer: a survey, a Bundle form and a type with no pack get none. A failed load must not break the
+  // builder, so it reads as no pack.
+  useEffect(() => {
+    const resourceType = schema.fhirResourceType;
+    if (!mapsToResource(resourceType) || !resourceType) {
+      setPack(null);
+      return;
+    }
+    let cancelled = false;
+    setPackLoading(true);
+    void loadStarterPack(resourceType)
+      .then((p) => { if (!cancelled) setPack(p); })
+      .catch(() => { if (!cancelled) setPack(null); })
+      .finally(() => { if (!cancelled) setPackLoading(false); });
+    return () => { cancelled = true; };
+  }, [schema.fhirResourceType]);
+
+  // An empty form whose type has a pack offers it. Keyed on the pack, not the fields, so adding the
+  // pack's fields does not reopen it. Corlix `FormBuilderPage.tsx:432-437`.
+  const fieldCountRef = useRef(schema.fields.length);
+  fieldCountRef.current = schema.fields.length;
+  useEffect(() => {
+    if (pack && fieldCountRef.current === 0) setPackChooserOpen(true);
+  }, [pack]);
+
+  const packLeft = useMemo(
+    () => (pack ? packEntriesNotOnForm(pack.entries, schema.fields, schema.fhirResourceType) : []),
+    [pack, schema.fields, schema.fhirResourceType],
+  );
+
+  /** Add the chosen pack entries after the last field, in pack order. One undo step. */
+  const addPackEntries = (entries: StarterPackEntry[]) => {
+    if (entries.length === 0) return;
     history.pushHistory();
-    const field = buildFieldFromElement(info, freshId(elementDisplayName(info.path)));
-    const groupId = groupIdForPath(schema.fields, info.path);
+    setSchema((prev) => {
+      const taken = new Set(prev.fields.map((f) => f.id));
+      let order = prev.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
+      const added = entries.map((e) => {
+        const id = makeUniqueFieldId(slugify(e.label), taken);
+        taken.add(id);
+        return { ...buildFieldFromPackEntry(e, id), order: order++ };
+      });
+      return { ...prev, fields: [...prev.fields, ...added] };
+    });
+  };
+
+  /**
+   * Put a field made in the Library on the form, inside its parent group when that group is there.
+   * One undo step. Library elements and pack entries both come through here.
+   */
+  const placeLibraryField = (field: FormField) => {
+    history.pushHistory();
+    const groupId = groupIdForPath(schema.fields, field.fhirPath);
     setSchema((prev) => {
       if (groupId) {
         return { ...prev, fields: insertFieldAfter(prev.fields, lastPartIdOf(prev.fields, groupId), { ...field, groupId }) };
@@ -274,6 +331,12 @@ export function FormBuilderPage(): JSX.Element {
     // On a narrow workspace the new field would otherwise sit behind the Library tab.
     setPane('form');
   };
+
+  const addFromLibrary = (info: FhirPathInfo) =>
+    placeLibraryField(buildFieldFromElement(info, freshId(elementDisplayName(info.path))));
+
+  const addPackEntryFromLibrary = (entry: StarterPackEntry) =>
+    placeLibraryField(buildFieldFromPackEntry(entry, freshId(entry.label)));
 
   /**
    * A click on a row. Only a plain click opens the editor. A Shift or Ctrl-click that opened it would
@@ -509,6 +572,7 @@ export function FormBuilderPage(): JSX.Element {
           onVersions={() => setVersionsOpen(true)}
           onAddField={addField}
           onPreview={() => setPreviewOpen(true)}
+          onStartFromPack={pack ? () => setPackChooserOpen(true) : undefined}
           onArchive={() => { void archive(); }}
           onDisable={() => { void disable(); }}
           onDelete={() => setConfirmDeleteOpen(true)}
@@ -553,7 +617,7 @@ export function FormBuilderPage(): JSX.Element {
                 </TabsTrigger>
                 <TabsTrigger value="library" className="gap-1.5">
                   Library
-                  <span className="rounded-full border border-border px-1.5 font-mono text-[10px] leading-4 text-muted-foreground">{elements.length}</span>
+                  <span className="rounded-full border border-border px-1.5 font-mono text-[10px] leading-4 text-muted-foreground">{packLeft.length + elements.length}</span>
                 </TabsTrigger>
               </TabsList>
               {/* forceMount keeps the list's scroll, drag state and search text across a tab
@@ -567,7 +631,11 @@ export function FormBuilderPage(): JSX.Element {
                   elements={elements}
                   showHeader={false}
                   fullWidth
+                  packName={pack?.name ?? null}
+                  packLeft={packLeft}
+                  packLoading={packLoading}
                   onAddElement={addFromLibrary}
+                  onAddPackEntry={addPackEntryFromLibrary}
                 />
               </TabsContent>
             </Tabs>
@@ -578,7 +646,11 @@ export function FormBuilderPage(): JSX.Element {
                 <LibraryPane
                   resourceType={schema.fhirResourceType ?? null}
                   elements={elements}
+                  packName={pack?.name ?? null}
+                  packLeft={packLeft}
+                  packLoading={packLoading}
                   onAddElement={addFromLibrary}
+                  onAddPackEntry={addPackEntryFromLibrary}
                 />
               )}
             </>
@@ -601,6 +673,16 @@ export function FormBuilderPage(): JSX.Element {
       />
 
       <PreviewSheet schema={schema} open={previewOpen} onOpenChange={setPreviewOpen} />
+
+      <StarterPackChooser
+        open={packChooserOpen}
+        onOpenChange={setPackChooserOpen}
+        pack={pack}
+        loading={packLoading}
+        fields={schema.fields}
+        resourceType={schema.fhirResourceType ?? null}
+        onAdd={addPackEntries}
+      />
 
       <CompareDialog
         formId={formId}
