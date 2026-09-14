@@ -154,8 +154,11 @@ describe('FieldListPane', () => {
     const { onSectionsChange, onFieldsClearSection } = renderPane();
     // Open popover
     fireEvent.click(screen.getByText(/Sections/i));
-    // Delete the "Main Section" row
-    fireEvent.click(screen.getByRole('button', { name: /delete section main section/i }));
+    // Delete the "Main Section" row from its ⋯ menu
+    const trigger = screen.getByRole('button', { name: 'Actions for section Main Section' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     expect(onSectionsChange).toHaveBeenCalledOnce();
     expect(onFieldsClearSection).toHaveBeenCalledWith('main');
   });
@@ -357,5 +360,18 @@ describe('FieldListPane', () => {
     expect(screen.getAllByRole('img', { name: 'Repeating group' })).toHaveLength(1);
     const telCard = screen.getByText('Contacts').closest('[data-sortable-card]');
     expect(telCard?.querySelector('[aria-label="Repeating group"]')).toBeTruthy();
+  });
+
+  it('Edit visibility on a section opens a sheet that writes the rule to the section', () => {
+    const { onSectionsChange } = renderPane();
+    fireEvent.click(screen.getByRole('button', { name: /Sections \(2\)/ }));
+    const trigger = screen.getByRole('button', { name: 'Actions for section Main Section' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit visibility' }));
+    expect(screen.getByRole('dialog', { name: 'Visibility' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /add condition/i }));
+    const [sections] = onSectionsChange.mock.calls[0] as [FormSection[]];
+    expect(sections.find((s) => s.id === 'main')!.visibility?.conditions[0].fieldId).toBe('f-1');
   });
 });

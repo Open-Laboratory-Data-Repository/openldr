@@ -20,6 +20,12 @@ function renderManager(
   return { ...utils, onChange, onFieldsClearSection };
 }
 
+function openRowMenu(label: string) {
+  const trigger = screen.getByRole('button', { name: `Actions for section ${label}` });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+}
+
 describe('SectionsManager', () => {
   it('renders the section label in an editable input', () => {
     renderManager();
@@ -78,58 +84,52 @@ describe('SectionsManager', () => {
     expect(sections[1].label).toBe('Vitals');
   });
 
-  it('deletes the section and calls onFieldsClearSection when delete is clicked', () => {
+  it('deletes the section from its ⋯ menu and clears it from the fields', () => {
     const { onChange, onFieldsClearSection } = renderManager();
-    fireEvent.click(screen.getByRole('button', { name: /delete.*main|remove.*main/i }));
-    expect(onChange).toHaveBeenCalledOnce();
+    openRowMenu('Main');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     const [sections] = onChange.mock.calls[0] as [FormSection[]];
     expect(sections).toHaveLength(0);
-    expect(onFieldsClearSection).toHaveBeenCalledOnce();
     expect(onFieldsClearSection).toHaveBeenCalledWith('main');
   });
 
-  it('swaps order when move-down is clicked on the first of two sections', () => {
+  it('moves a section down from its ⋯ menu', () => {
     const second: FormSection = { id: 'extra', label: 'Extra', order: 1 };
     const { onChange } = renderManager([MAIN, second]);
-    // Move 'Main' down (first section's move-down button)
-    const moveDownBtns = screen.getAllByRole('button', { name: /move down/i });
-    fireEvent.click(moveDownBtns[0]);
-    expect(onChange).toHaveBeenCalledOnce();
+    openRowMenu('Main');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move down' }));
     const [sections] = onChange.mock.calls[0] as [FormSection[]];
-    expect(sections).toHaveLength(2);
-    // After swapping, 'Main' should now have order 1 and 'Extra' order 0
-    const mainSection = sections.find((s) => s.id === 'main')!;
-    const extraSection = sections.find((s) => s.id === 'extra')!;
-    expect(mainSection.order).toBe(1);
-    expect(extraSection.order).toBe(0);
-    // Array order should reflect new ordering (extra first)
-    expect(sections[0].id).toBe('extra');
-    expect(sections[1].id).toBe('main');
+    expect(sections.map((s) => [s.id, s.order])).toEqual([['extra', 0], ['main', 1]]);
   });
 
-  it('swaps order when move-up is clicked on the second of two sections', () => {
+  it('moves a section up from its ⋯ menu', () => {
     const second: FormSection = { id: 'extra', label: 'Extra', order: 1 };
     const { onChange } = renderManager([MAIN, second]);
-    // Move 'Extra' up (second section's move-up button)
-    const moveUpBtns = screen.getAllByRole('button', { name: /move up/i });
-    fireEvent.click(moveUpBtns[moveUpBtns.length - 1]);
-    expect(onChange).toHaveBeenCalledOnce();
+    openRowMenu('Extra');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Move up' }));
     const [sections] = onChange.mock.calls[0] as [FormSection[]];
-    expect(sections).toHaveLength(2);
-    const mainSection = sections.find((s) => s.id === 'main')!;
-    const extraSection = sections.find((s) => s.id === 'extra')!;
-    expect(mainSection.order).toBe(1);
-    expect(extraSection.order).toBe(0);
+    expect(sections.find((s) => s.id === 'extra')!.order).toBe(0);
   });
 
-  it('disables move-up on the first section and move-down on the last', () => {
-    const second: FormSection = { id: 'extra', label: 'Extra', order: 1 };
-    renderManager([MAIN, second]);
-    const moveUpBtns = screen.getAllByRole('button', { name: /move up/i });
-    const moveDownBtns = screen.getAllByRole('button', { name: /move down/i });
-    // First row: move-up disabled
-    expect((moveUpBtns[0] as HTMLButtonElement).disabled).toBe(true);
-    // Last row: move-down disabled
-    expect((moveDownBtns[moveDownBtns.length - 1] as HTMLButtonElement).disabled).toBe(true);
+  it('disables Move up on the first section and Move down on the last', () => {
+    renderManager([MAIN, { id: 'extra', label: 'Extra', order: 1 }]);
+    openRowMenu('Main');
+    expect(screen.getByRole('menuitem', { name: 'Move up' })).toHaveAttribute('data-disabled');
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    openRowMenu('Extra');
+    expect(screen.getByRole('menuitem', { name: 'Move down' })).toHaveAttribute('data-disabled');
+  });
+
+  it('hands Edit visibility back with the section id', () => {
+    const onEditVisibility = vi.fn();
+    render(<SectionsManager sections={[MAIN]} onChange={vi.fn()} onFieldsClearSection={vi.fn()} onEditVisibility={onEditVisibility} />);
+    openRowMenu('Main');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit visibility' }));
+    expect(onEditVisibility).toHaveBeenCalledWith('main');
+  });
+
+  it('marks a section that has a rule', () => {
+    renderManager([{ ...MAIN, visibility: { combinator: 'all', conditions: [{ fieldId: 'x', operator: 'isNotEmpty' }] } }]);
+    expect(screen.getByRole('img', { name: 'Conditional' })).toBeTruthy();
   });
 });

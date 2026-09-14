@@ -25,6 +25,7 @@ import { SectionsManager } from './SectionsManager';
 import { buildFieldTree, type RepeatNode, type TreeNode } from './fieldTree';
 import { AddNamedSlotRow, RepeatRow } from './RepeatRow';
 import { buildFieldListModel } from './listOrder';
+import { SectionVisibilitySheet } from './SectionVisibilitySheet';
 
 export interface FieldListPaneProps {
   fields: FormField[];
@@ -69,6 +70,8 @@ export function FieldListPane({
   const [localSearch, setLocalSearch] = useState('');
   const search = searchText ?? localSearch;
   const setSearch = onSearchTextChange ?? setLocalSearch;
+  const [sectionsOpen, setSectionsOpen] = useState(false);
+  const [visibilitySectionId, setVisibilitySectionId] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -155,7 +158,7 @@ export function FieldListPane({
         </div>
 
         {/* Sections popover — trigger shows count; content is SectionsManager */}
-        <Popover>
+        <Popover open={sectionsOpen} onOpenChange={setSectionsOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="w-full justify-between text-xs h-8">
               {`Sections (${sections.length})`}
@@ -167,6 +170,8 @@ export function FieldListPane({
               sections={sections}
               onChange={(s) => onSectionsChange?.(s)}
               onFieldsClearSection={(sid) => onFieldsClearSection?.(sid)}
+              // The popover closes first. The sheet lives outside it, or it would unmount with it.
+              onEditVisibility={(id) => { setSectionsOpen(false); setVisibilitySectionId(id); }}
             />
           </PopoverContent>
         </Popover>
@@ -207,6 +212,15 @@ export function FieldListPane({
           </SortableContext>
         </DndContext>
       </div>
+
+      <SectionVisibilitySheet
+        section={sections.find((s) => s.id === visibilitySectionId) ?? null}
+        fields={fields}
+        onChange={(id, rule) =>
+          onSectionsChange?.(sections.map((s) => (s.id === id ? { ...s, visibility: rule } : s)))
+        }
+        onOpenChange={(open) => { if (!open) setVisibilitySectionId(null); }}
+      />
     </div>
   );
 }
