@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "14bd4d09",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A locked field cannot be switched off or deleted"
+        },
+        {
+          "hash": "01e5b545",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Add a named slot or a group part from the structure"
+        },
+        {
+          "hash": "79c121ce",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A Reference Configuration block, and Mapping above Codes"
+        },
+        {
+          "hash": "c726019c",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Edit a discriminator, and hide mapping on a survey form"
+        },
+        {
+          "hash": "0af98fd0",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Name survey forms and the searchable reference entities"
+        },
+        {
+          "hash": "c3af2951",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Let a discriminator say any, not equals and starts with"
+        },
+        {
           "hash": "4c9a3b8d",
           "type": "fix",
           "scope": "studio",
