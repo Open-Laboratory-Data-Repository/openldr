@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "1ed021ce",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Rank codes other forms use above binding codes in suggested codes"
+        },
+        {
           "hash": "f2a15f81",
           "type": "feat",
           "scope": "studio",
