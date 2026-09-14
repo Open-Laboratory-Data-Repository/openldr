@@ -21,7 +21,7 @@ import { LanguageControl } from './LanguageControl';
 import { SubmissionReadiness } from '@/forms-runtime/SubmissionReadiness';
 import { PreviewSheet } from './PreviewSheet';
 import { LibraryPane } from './LibraryPane';
-import { libraryElements } from './libraryEntries';
+import { libraryElements, packEntriesNotOnForm } from './libraryEntries';
 import { elementDisplayName } from './fhirTypeMap';
 import { NARROW_WORKSPACE_PX, useElementWidth } from './useElementWidth';
 import {
@@ -291,6 +291,11 @@ export function FormBuilderPage(): JSX.Element {
     if (pack && fieldCountRef.current === 0) setPackChooserOpen(true);
   }, [pack]);
 
+  const packLeft = useMemo(
+    () => (pack ? packEntriesNotOnForm(pack.entries, schema.fields, schema.fhirResourceType) : []),
+    [pack, schema.fields, schema.fhirResourceType],
+  );
+
   /** Add the chosen pack entries after the last field, in pack order. One undo step. */
   const addPackEntries = (entries: StarterPackEntry[]) => {
     if (entries.length === 0) return;
@@ -307,11 +312,13 @@ export function FormBuilderPage(): JSX.Element {
     });
   };
 
-  /** A Library element becomes a field, inside its parent group when that group is on the form. One undo step. */
-  const addFromLibrary = (info: FhirPathInfo) => {
+  /**
+   * Put a field made in the Library on the form, inside its parent group when that group is there.
+   * One undo step. Library elements and pack entries both come through here.
+   */
+  const placeLibraryField = (field: FormField) => {
     history.pushHistory();
-    const field = buildFieldFromElement(info, freshId(elementDisplayName(info.path)));
-    const groupId = groupIdForPath(schema.fields, info.path);
+    const groupId = groupIdForPath(schema.fields, field.fhirPath);
     setSchema((prev) => {
       if (groupId) {
         return { ...prev, fields: insertFieldAfter(prev.fields, lastPartIdOf(prev.fields, groupId), { ...field, groupId }) };
@@ -324,6 +331,12 @@ export function FormBuilderPage(): JSX.Element {
     // On a narrow workspace the new field would otherwise sit behind the Library tab.
     setPane('form');
   };
+
+  const addFromLibrary = (info: FhirPathInfo) =>
+    placeLibraryField(buildFieldFromElement(info, freshId(elementDisplayName(info.path))));
+
+  const addPackEntryFromLibrary = (entry: StarterPackEntry) =>
+    placeLibraryField(buildFieldFromPackEntry(entry, freshId(entry.label)));
 
   /**
    * A click on a row. Only a plain click opens the editor. A Shift or Ctrl-click that opened it would
@@ -604,7 +617,7 @@ export function FormBuilderPage(): JSX.Element {
                 </TabsTrigger>
                 <TabsTrigger value="library" className="gap-1.5">
                   Library
-                  <span className="rounded-full border border-border px-1.5 font-mono text-[10px] leading-4 text-muted-foreground">{elements.length}</span>
+                  <span className="rounded-full border border-border px-1.5 font-mono text-[10px] leading-4 text-muted-foreground">{packLeft.length + elements.length}</span>
                 </TabsTrigger>
               </TabsList>
               {/* forceMount keeps the list's scroll, drag state and search text across a tab
@@ -618,7 +631,11 @@ export function FormBuilderPage(): JSX.Element {
                   elements={elements}
                   showHeader={false}
                   fullWidth
+                  packName={pack?.name ?? null}
+                  packLeft={packLeft}
+                  packLoading={packLoading}
                   onAddElement={addFromLibrary}
+                  onAddPackEntry={addPackEntryFromLibrary}
                 />
               </TabsContent>
             </Tabs>
@@ -629,7 +646,11 @@ export function FormBuilderPage(): JSX.Element {
                 <LibraryPane
                   resourceType={schema.fhirResourceType ?? null}
                   elements={elements}
+                  packName={pack?.name ?? null}
+                  packLeft={packLeft}
+                  packLoading={packLoading}
                   onAddElement={addFromLibrary}
+                  onAddPackEntry={addPackEntryFromLibrary}
                 />
               )}
             </>

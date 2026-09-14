@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { lookupFhirPath } from '@openldr/fhir/paths';
+import type { StarterPackEntry } from '@openldr/forms/pure';
 import { LibraryPane } from './LibraryPane';
 
 const els = ['Location.name', 'Location.address.city', 'Location.status'].map((p) => lookupFhirPath(p)!);
@@ -46,5 +47,47 @@ describe('LibraryPane', () => {
   it('asks for a resource type when there is none', () => {
     render(<LibraryPane resourceType={null} elements={[]} onAddElement={vi.fn()} />);
     expect(screen.getByText('Pick a resource type and the library will list what this form could hold.')).toBeTruthy();
+  });
+
+  const packEntry = (ord: number, label: string, extra: Partial<StarterPackEntry> = {}): StarterPackEntry => ({
+    ord, fhirPath: `Location.${label.toLowerCase()}`, label, apiProperty: null, fieldType: 'text', fhirValueField: null,
+    required: false, locked: false, defaultOn: true, boundValueSet: null, referenceTarget: null, referenceMultiple: false,
+    rationale: 'r', ...extra,
+  });
+
+  it('lists what the form lacks from the pack first, with the discriminator line', () => {
+    const left = [packEntry(1, 'Code', { fhirPath: 'Location.identifier.value', discriminator: { system: 'urn:national' } })];
+    render(<LibraryPane resourceType="Location" elements={els} packName="Facility" packLeft={left} onAddElement={vi.fn()} onAddPackEntry={vi.fn()} />);
+    expect(screen.getByText('Left out of the pack')).toBeTruthy();
+    expect(screen.getByText('These are in the Facility pack and not on the form. Click one to put it back.')).toBeTruthy();
+    expect(screen.getByText('system = urn:national')).toBeTruthy();
+  });
+
+  it('hands a clicked pack entry back', () => {
+    const onAddPackEntry = vi.fn();
+    const left = [packEntry(0, 'Alias')];
+    render(<LibraryPane resourceType="Location" elements={[]} packName="Facility" packLeft={left} onAddElement={vi.fn()} onAddPackEntry={onAddPackEntry} />);
+    fireEvent.click(screen.getByRole('button', { name: /Alias/ }));
+    expect(onAddPackEntry).toHaveBeenCalledWith(left[0]);
+  });
+
+  it('says so when every pack entry is on the form', () => {
+    render(<LibraryPane resourceType="Location" elements={els} packName="Facility" packLeft={[]} onAddElement={vi.fn()} />);
+    expect(screen.getByText('Every entry in the Facility pack is on the form.')).toBeTruthy();
+  });
+
+  it('shows a spinner while the pack loads, and no pack group without a pack', () => {
+    const { rerender } = render(<LibraryPane resourceType="Location" elements={els} packLoading onAddElement={vi.fn()} />);
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeTruthy();
+    rerender(<LibraryPane resourceType="Location" elements={els} onAddElement={vi.fn()} />);
+    expect(screen.queryByText('Left out of the pack')).toBeNull();
+  });
+
+  it('search filters the pack group too', () => {
+    const left = [packEntry(0, 'Alias'), packEntry(1, 'Description')];
+    render(<LibraryPane resourceType="Location" elements={[]} packName="Facility" packLeft={left} onAddElement={vi.fn()} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search the library' }), { target: { value: 'desc' } });
+    expect(screen.queryByText('Alias')).toBeNull();
+    expect(screen.getByText('Description')).toBeTruthy();
   });
 });

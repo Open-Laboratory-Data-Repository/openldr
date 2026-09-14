@@ -831,6 +831,14 @@ describe('FormBuilderPage (three-pane shell)', () => {
     expect(await screen.findByRole('dialog', { name: 'Facility pack' })).toBeInTheDocument();
   });
 
+  it('lists the pack entries the form lacks in the Library, and adds one', async () => {
+    vi.mocked(api.loadStarterPack).mockResolvedValue(STARTER);
+    await renderBuilderForm('Location', [oneField('Location.name')]);
+    const group = (await screen.findByText('Left out of the pack')).closest('div')!.parentElement!;
+    fireEvent.click(within(group).getByRole('button', { name: /Other name/ }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Other name');
+  });
+
   it('never looks for a pack on a survey form', async () => {
     vi.mocked(api.loadStarterPack).mockClear();
     await renderBuilderForm('Questionnaire', []);
