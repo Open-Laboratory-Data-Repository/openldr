@@ -139,9 +139,10 @@ describe('notifications DB store', () => {
   // re-sorted into its true chronological position, or an install with > limit notifications can
   // push it past the page boundary and hide it forever (see notifications.ts:listNotifications).
   it('sorts the update entry to the top when its firstSeenAt is the newest', async () => {
-    // "now", captured after beforeEach's seed rows were written, so it is strictly newer than them
-    // and still in the past by the time listNotifications runs below.
-    const newest = new Date().toISOString();
+    // One minute ahead of now, so it is strictly newer than beforeEach's seed rows. Plain "now"
+    // often lands in the same millisecond as the seeded audit row, the comparator sees a tie,
+    // and the audit row keeps first place.
+    const newest = new Date(Date.now() + 60_000).toISOString();
     const c = { ...ctx, updateState: state({ firstSeenAt: newest }) } as never;
     const { notifications } = await listNotifications(c, 'user1', {});
     expect(notifications[0].id).toBe('update:0.2.0');
