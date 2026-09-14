@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "d2d68f10",
+          "type": "feat",
+          "scope": "studio",
+          "title": "List the pack entries a form lacks at the top of the Library"
+        },
+        {
+          "hash": "2d858461",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Offer the starter pack when a form starts"
+        },
+        {
+          "hash": "cea8c2db",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Turn a starter pack entry into a field, and find what a form lacks"
+        },
+        {
+          "hash": "db46da04",
+          "type": "feat",
+          "scope": "server",
+          "title": "Serve starter packs to the form builder"
+        },
+        {
+          "hash": "f6c64fa7",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Store starter packs and write them on every boot"
+        },
+        {
+          "hash": "fbc51605",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add the starter pack tables (migration 099)"
+        },
+        {
+          "hash": "3f087a17",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Build four starter packs from the forms OpenLDR ships"
+        },
+        {
           "hash": "7068a3c6",
           "type": "feat",
           "scope": "studio",
