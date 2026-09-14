@@ -100,6 +100,7 @@ export function SortableFieldRow({
           interactive element that would nest the drag/checkbox/⋯ controls inside it. */}
       <button
         type="button"
+        data-row-label
         onClick={(e) => onSelect(field, e)}
         aria-pressed={selected}
         aria-label={`Edit field ${field.displayLabel}`}

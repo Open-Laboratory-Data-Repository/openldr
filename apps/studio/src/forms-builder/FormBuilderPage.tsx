@@ -21,7 +21,15 @@ import { LibraryPane } from './LibraryPane';
 import { libraryElements } from './libraryEntries';
 import { elementDisplayName } from './fhirTypeMap';
 import { NARROW_WORKSPACE_PX, useElementWidth } from './useElementWidth';
-import { NO_SELECTION, clickSelection, selectOnly, withoutRows, type FieldSelection } from './selection';
+import {
+  NO_SELECTION,
+  clickSelection,
+  moveAnchor,
+  selectAllRows,
+  selectOnly,
+  withoutRows,
+  type FieldSelection,
+} from './selection';
 import { deleteFields, moveFieldsToSection, toggleFieldsEnabled } from './bulkActions';
 import { buildFieldListModel, drawnOrder } from './listOrder';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -310,16 +318,21 @@ export function FormBuilderPage(): JSX.Element {
 
   useBuilderKeyboard({
     focusSearch: () => document.getElementById('builder-field-search')?.focus(),
-    next: () => undefined,
-    previous: () => undefined,
-    open: () => undefined,
-    toggle: () => undefined,
-    duplicate: () => undefined,
-    remove: () => { if (editingId) deleteField(editingId); },
-    selectAll: () => undefined,
+    next: () => setSelection((s) => moveAnchor(s, listOrder, 1)),
+    previous: () => setSelection((s) => moveAnchor(s, listOrder, -1)),
+    open: () => { if (selection.anchor) openEditor(selection.anchor); },
+    // Space and d act on the whole selection when it holds two or more, else on the anchor.
+    // Corlix `FormBuilderPage.tsx:988-1008`.
+    toggle: () => bulkToggle(selection.ids.size >= 2 ? selection.ids : new Set(selection.anchor ? [selection.anchor] : [])),
+    duplicate: () => { if (selection.anchor) duplicateField(selection.anchor); },
+    remove: () => {
+      if (selection.ids.size >= 2) setConfirmBulkDeleteOpen(true);
+      else if (selection.anchor) deleteField(selection.anchor);
+    },
+    selectAll: () => setSelection((s) => selectAllRows(s, listOrder)),
     undo: () => applyHistory(history.undo()),
     redo: () => applyHistory(history.redo()),
-    clear: () => setEditingId(null),
+    clear: () => setSelection(NO_SELECTION),
   });
 
   // ── API actions ──────────────────────────────────────────────────────────────

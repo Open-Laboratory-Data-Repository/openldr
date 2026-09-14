@@ -717,6 +717,56 @@ describe('FormBuilderPage (three-pane shell)', () => {
     expect(await screen.findByText('1 fields (1 enabled)')).toBeInTheDocument();
     expect(row('Bravo')).toBeInTheDocument();
   });
+
+  it('j and k move the anchor and Enter opens it', async () => {
+    await renderBuilderWith(THREE);
+    for (const key of ['j', 'j', 'j', 'k']) fireEvent.keyDown(document.body, { key });
+    fireEvent.keyDown(document.body, { key: 'Enter' });
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Bravo');
+  });
+
+  it('Space switches the anchor off and d deletes it', async () => {
+    await renderBuilderWith(THREE);
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: ' ' });
+    expect(screen.getByText('3 fields (2 enabled)')).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'd' });
+    expect(screen.getByText('2 fields (2 enabled)')).toBeInTheDocument();
+  });
+
+  it('Space leaves a locked anchor alone', async () => {
+    await renderBuilderWith([field('a', 'Alpha', 0, { locked: true })]);
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: ' ' });
+    expect(screen.getByText('1 fields (1 enabled)')).toBeInTheDocument();
+  });
+
+  it('Ctrl+A selects every row, Space and d act on all of them, and Escape clears', async () => {
+    await renderBuilderWith(THREE);
+    fireEvent.keyDown(document.body, { key: 'a', ctrlKey: true });
+    expect(screen.getByText('3 selected')).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: ' ' });
+    expect(enabledRows()).toBe(0);
+    fireEvent.keyDown(document.body, { key: 'd' });
+    const confirm = await screen.findByRole('alertdialog');
+    expect(confirm).toHaveTextContent('Delete 3 fields?');
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Cancel' }));
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByText('3 selected')).toBeNull();
+  });
+
+  it('Ctrl+D duplicates the anchor', async () => {
+    await renderBuilderWith(THREE);
+    fireEvent.keyDown(document.body, { key: 'j' });
+    fireEvent.keyDown(document.body, { key: 'd', ctrlKey: true });
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Alpha (copy)');
+  });
+
+  it('Ctrl+F puts the cursor in the field search', async () => {
+    await renderBuilderWith(THREE);
+    fireEvent.keyDown(document.body, { key: 'f', ctrlKey: true });
+    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Search fields' }));
+  });
 });
 
 it('shows capture configuration guidance without blocking publishing', async () => {
