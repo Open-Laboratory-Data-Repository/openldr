@@ -310,6 +310,12 @@ export function FormBuilderPage(): JSX.Element {
     setSelection(NO_SELECTION);
   };
 
+  /** A field dropped on a section moves into it. One undo step. */
+  const moveDroppedField = (fieldId: string, sectionId: string | undefined) => {
+    history.pushHistory();
+    setSchema((prev) => ({ ...prev, fields: moveFieldsToSection(prev.fields, new Set([fieldId]), sectionId) }));
+  };
+
   const applyHistory = (next: FormSchema | null) => {
     if (!next) return;
     setSchema(next);
@@ -472,6 +478,7 @@ export function FormBuilderPage(): JSX.Element {
         onDuplicate={duplicateField}
         onDelete={deleteField}
         onReorder={reorderFields}
+        onMoveToSection={moveDroppedField}
         onSectionsChange={(sections) => updateSchema({ sections })}
         onFieldsClearSection={(sid) =>
           updateSchema({

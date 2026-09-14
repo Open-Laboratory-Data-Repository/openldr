@@ -27,6 +27,7 @@ import { AddNamedSlotRow, RepeatRow } from './RepeatRow';
 import { buildFieldListModel } from './listOrder';
 import { SectionVisibilitySheet } from './SectionVisibilitySheet';
 import { BulkSelectionMenu } from './BulkSelectionMenu';
+import { SectionDropPanel, dropAction } from './SectionDropPanel';
 
 export interface FieldListPaneProps {
   fields: FormField[];
@@ -46,6 +47,8 @@ export interface FieldListPaneProps {
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
   onReorder: (activeId: string, overId: string) => void;
+  /** Drop a dragged field on a section, or on "(no section)" with undefined. */
+  onMoveToSection?: (fieldId: string, sectionId: string | undefined) => void;
   onSectionsChange?: (sections: FormSection[]) => void;
   onFieldsClearSection?: (sectionId: string) => void;
   /** Add another named slot under a repeating list. */
@@ -73,6 +76,7 @@ export function FieldListPane({
   onDuplicate,
   onDelete,
   onReorder,
+  onMoveToSection,
   onSectionsChange,
   onFieldsClearSection,
   onAddSlot,
@@ -96,11 +100,20 @@ export function FieldListPane({
   const model = useMemo(() => buildFieldListModel(fields, sections, search), [fields, sections, search]);
   const sortedSections = useMemo(() => [...sections].sort((a, b) => a.order - b.order), [sections]);
 
+  const [dragging, setDragging] = useState(false);
+  const fieldCountBySection = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const f of fields) if (f.section) out[f.section] = (out[f.section] ?? 0) + 1;
+    return out;
+  }, [fields]);
+  const unsectionedCount = fields.filter((f) => !f.section).length;
+
   function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (over && active.id !== over.id) {
-      onReorder(String(active.id), String(over.id));
-    }
+    setDragging(false);
+    const action = dropAction(String(event.active.id), event.over ? String(event.over.id) : null);
+    if (!action) return;
+    if (action.kind === 'section') onMoveToSection?.(action.fieldId, action.sectionId);
+    else onReorder(action.activeId, action.overId);
   }
 
   function issueForField(fieldId: string): FormLintIssue | undefined {
@@ -211,8 +224,18 @@ export function FieldListPane({
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={() => setDragging(true)}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => setDragging(false)}
         >
+          {sections.length > 0 && (
+            <SectionDropPanel
+              visible={dragging}
+              sections={sortedSections}
+              fieldCountBySection={fieldCountBySection}
+              unsectionedCount={unsectionedCount}
+            />
+          )}
           {/* SortableContext items stay flat over all visible ids so reorder still works */}
           <SortableContext
             items={model.visible.map((f) => f.id)}

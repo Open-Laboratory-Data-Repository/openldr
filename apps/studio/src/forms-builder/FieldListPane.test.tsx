@@ -49,6 +49,10 @@ const SECTIONS: FormSection[] = [
 
 const ISSUES: FormLintIssue[] = [];
 
+/** Text outside the folded section drop panel, which stays mounted and repeats each section label. */
+const shownText = (text: string | RegExp) =>
+  screen.queryAllByText(text).filter((el) => !el.closest('[aria-hidden="true"]'));
+
 function renderPane(overrides: Partial<Parameters<typeof FieldListPane>[0]> = {}) {
   const onSelect = vi.fn();
   const onToggleEnabled = vi.fn();
@@ -192,8 +196,8 @@ describe('FieldListPane', () => {
   it('renders a section header for "main" and "extra" using section labels', () => {
     renderPane();
     // SECTIONS provides label 'Main Section' for id 'main' and 'Extra Section' for 'extra'
-    expect(screen.getByText('Main Section')).toBeTruthy();
-    expect(screen.getByText('Extra Section')).toBeTruthy();
+    expect(shownText('Main Section')).toHaveLength(1);
+    expect(shownText('Extra Section')).toHaveLength(1);
   });
 
   it('renders a "No section" header for fields with no section when sections prop provided', () => {
@@ -210,7 +214,7 @@ describe('FieldListPane', () => {
       description: null,
     };
     renderPane({ fields: [...FIELDS, unsectionedField] });
-    expect(screen.getByText(/No section/i)).toBeTruthy();
+    expect(shownText(/No section/i)).toHaveLength(1);
     expect(screen.getByText('Unsectioned field')).toBeTruthy();
   });
 
@@ -367,6 +371,16 @@ describe('FieldListPane', () => {
     expect(screen.getByText('2 selected')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Selection actions' })).toBeTruthy();
     expect(screen.queryByText('3 fields (2 enabled)')).toBeNull();
+  });
+
+  it('keeps the section drop panel folded until a drag starts', () => {
+    renderPane();
+    expect(screen.getByText('Drop on a section to reassign').closest('[aria-hidden]')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('has no drop panel on a form without sections', () => {
+    renderPane({ sections: [] });
+    expect(screen.queryByText('Drop on a section to reassign')).toBeNull();
   });
 
   it('keeps the field count with one field selected', () => {
