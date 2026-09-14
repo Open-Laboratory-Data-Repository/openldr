@@ -55,6 +55,16 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 - **The repeat icon.** A field that takes more than one answer, or a group that holds many entries, shows a repeat icon. A group holds one entry when it is bound to an element that holds one, such as `Location.address`, or when **Max Items** is 1. The Questionnaire export marks such a group as not repeating.
 - Data entry still shows every group once. Adding more entries to a group during data entry comes in a later release.
 
+## Editing a field
+
+- **Which entry of a list.** Under Mapping, tick **Array element (discriminator)**. Each condition is an element, an operator, and a value, such as `system` `equals` `urn:x`. The operators are `equals`, `not equals`, and `starts with`. With two or more conditions, choose **All** when every condition must hold, or **Any** when one is enough. **Value Field** names the element that holds the answer, usually `value`.
+- A discriminator is used by the form checks and the Questionnaire export. Data entry does not use it yet.
+- **Another slot.** Under the last slot of a list, **+ Add a named slot** adds a copy with the same path, value field, and type, and blank discriminator values. The API property, codes, and translations are left blank.
+- **Parts of a group.** A group's editor lists its parts after Mapping. Click one to edit it. Your unsaved changes to the group are saved first. **+ Add a part** adds a field inside the group with no FHIR path.
+- **Reference fields.** A reference field has a **Reference Configuration** block after General. **Target** is `Patient` or an active code system. **Depends On** and **Searchable** are saved and exported, but data entry does not use them yet.
+- **Locked fields.** A locked field cannot be switched off or deleted from the field list. You can still relabel, reorder, and translate it.
+- **Survey forms.** When the form's Resource Type is `Questionnaire`, the editor hides FHIR Path, API Property, and the discriminator. Observation Extract and the other settings stay.
+
 ## Expected result
 
 The form is saved as a draft during design, published when ready, and available from **View/Run**. Submission also requires a supported extraction configuration.
@@ -142,8 +152,8 @@ Use a test installation with an existing patient, loaded LOINC terminology, and 
 
 1. In Forms, open the page's ⋯ menu and choose New. Name the form Lab request example.
 2. Set FHIR version to R4, resource type to ServiceRequest, and target page to Forms. Open the builder.
-3. Add an enabled, required reference field labeled Patient. Under Mapping, expand Advanced and set Reference Target to Patient and FHIR Path to ServiceRequest.subject.
-4. Add an enabled, required reference field labeled Tests. Set Reference Target to the installed LOINC system URL, http://loinc.org. Set FHIR Path to ServiceRequest.code. Choose codes through the terminology picker; do not enter a made-up code.
+3. Add an enabled, required reference field labeled Patient. In **Reference Configuration**, set Target to Patient. Under Mapping, set FHIR Path to ServiceRequest.subject.
+4. Add an enabled, required reference field labeled Tests. In **Reference Configuration**, set Target to the installed LOINC system, http://loinc.org. Set FHIR Path to ServiceRequest.code. Choose codes through the terminology picker; do not enter a made-up code.
 5. Save each field through its ⋯ menu. Confirm the submission configuration message. No Observation Extract flag is needed for this ServiceRequest form.
 6. Open the builder's ⋯ menu and choose Publish. Resolve any publish errors. Publishing also saves the current schema.
 7. Return to Forms and choose View/Run from the form's ⋯ menu. Select an existing patient and one loaded test from the lists.
