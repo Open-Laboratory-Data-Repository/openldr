@@ -15,7 +15,7 @@ import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, Tar
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
-import { createFormStore, type FormStore } from '@openldr/forms';
+import { createFormStore, createStarterPackStore, seededStarterPacks, type FormStore, type StarterPackStore } from '@openldr/forms';
 import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
 import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, StoredQueryRowLimitError, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
@@ -472,6 +472,8 @@ export interface AppContext {
   roles: RoleStore;
   userProfiles: UserProfileStore;
   forms: FormStore;
+  /** Read-only starter packs for the form builder. Rewritten from source on every boot. */
+  starterPacks: StarterPackStore;
   marketplaceForms: FormArtifactInstaller;
   reporting: ReportingApi;
   health: HealthRegistry;
@@ -659,6 +661,17 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
   // (the pull endpoint's source). Safe on every node: a lab serves no pull so its log is inert, and
   // the apply path writes tables directly (capture-free) → no re-origination loop.
   const forms = createFormStore(internal.db, referenceCapture);
+  const starterPacks = createStarterPackStore(internal.db);
+  // Starter packs are read-only seeded data, rewritten on every boot from
+  // `packages/forms/src/samples/starter-packs.ts` so a release that changes one reaches every
+  // install. Unconditional and best-effort, like the column-exposure seed above. A failure leaves the
+  // builder with no pack to offer, never an install that will not boot. The try also covers
+  // `seededStarterPacks()` itself, which throws on a sample field with no rationale.
+  try {
+    await starterPacks.replaceSeeded(seededStarterPacks());
+  } catch (err) {
+    logger.warn({ err }, 'starter-pack seed failed');
+  }
   const marketplaceInstalls = createMarketplaceInstallStore(internal.db);
 
   // Canonical persist for the Persist Store workflow node — same wiring as ingest-context.
@@ -1638,6 +1651,7 @@ const reporting: ReportingApi = {
     roles,
     userProfiles,
     forms,
+    starterPacks,
     marketplaceForms,
     reporting,
     health,
@@ -1846,6 +1860,11 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   // `roles.manage` — until the process restarts. seedSystemRoles() is idempotent, so calling it
   // here is safe even though createAppContext already seeded it once at boot.
   await ctx.roles.seedSystemRoles();
+  // The wipe empties the starter pack tables too, and only boot writes them. Without this the
+  // builder offers no pack until the process restarts. Best-effort, as at boot.
+  await ctx.starterPacks.replaceSeeded(seededStarterPacks()).catch((err) => {
+    ctx.logger.warn({ err }, 'starter-pack reseed after factory reset failed');
+  });
   ctx.featureFlags.invalidate();
 }
 export { inspectConnectorConfig, updateConnectorConfig, hostConnectorPatchSchema, type ConnectorConfigView } from './connector-config';

@@ -28,6 +28,7 @@ export * from './samples/forms';
 export * from './starter-pack';
 export * from './samples/starter-packs';
 export * from './store';
+export * from './starter-pack-store';
 export * from './validate-answers';
 export * from './reference-source';
 export * from './validate-references';
