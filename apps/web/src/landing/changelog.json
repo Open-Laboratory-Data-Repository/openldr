@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "7068a3c6",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Drop a dragged field on a section to move it there"
+        },
+        {
+          "hash": "fdc9b1ea",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Wire the field list keys to the selection"
+        },
+        {
+          "hash": "ad280d73",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Select many fields and act on them from one ⋯ menu"
+        },
+        {
+          "hash": "521e85c7",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Edit a section's visibility rule from its ⋯ menu"
+        },
+        {
+          "hash": "a13cd837",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Mark a field that shows only under conditions"
+        },
+        {
+          "hash": "6af946ad",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Decide what a multi-select and a bulk action do"
+        },
+        {
           "hash": "25324908",
           "type": "fix",
           "scope": "studio",
