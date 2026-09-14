@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-09-11",
+  "generatedAt": "2026-09-14",
   "days": [
+    {
+      "date": "2026-09-14",
+      "version": null,
+      "entries": [
+        {
+          "hash": "8c55f419",
+          "type": "fix",
+          "scope": "",
+          "title": "Enforce SQL Server query deadlines"
+        }
+      ]
+    },
     {
       "date": "2026-09-11",
       "version": null,
