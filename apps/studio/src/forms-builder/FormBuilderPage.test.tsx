@@ -680,8 +680,8 @@ describe('FormBuilderPage (three-pane shell)', () => {
       </MemoryRouter>,
     );
 
-    // The Sections trigger button is present showing 0 sections
-    const sectionsTrigger = screen.getByText(/Sections \(0\)/i);
+    // The Sections trigger button is present showing 0 sections. The count is its own muted span.
+    const sectionsTrigger = screen.getByRole('button', { name: /Sections \(0\)/ });
     expect(sectionsTrigger).toBeInTheDocument();
 
     // Open the Sections popover
@@ -697,7 +697,7 @@ describe('FormBuilderPage (three-pane shell)', () => {
 
     // Sections count in the trigger should now be 1
     await waitFor(() => {
-      expect(screen.getByText(/Sections \(1\)/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Sections \(1\)/ })).toBeInTheDocument();
     });
   });
 
