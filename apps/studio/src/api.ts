@@ -2178,6 +2178,23 @@ export const importValueSet = (resource: unknown | Blob): Promise<ValueSet | Val
 };
 export const valueSetExportUrl = (id: string): string => `/api/terminology/valuesets/${id}/export`;
 
+/**
+ * A ValueSet's stored codes, read through the export route. It reads `valueset_expansions` as they
+ * are. `expandValueSet` must not be used for this: it recomputes the codes from CE's own terms and
+ * overwrites the stored ones, which empties a FHIR catalog set whose system CE holds no terms for.
+ */
+export async function storedValueSetCodes(id: string): Promise<ExpandedCode[]> {
+  const resource = await authFetch(valueSetExportUrl(id)).then((r) =>
+    okJson<{ expansion?: { contains?: { system: string; code: string; display?: string }[] } }>(r, 'read value set codes'),
+  );
+  return (resource.expansion?.contains ?? []).map((c) => ({ system: c.system, code: c.code, display: c.display ?? null }));
+}
+
+/** The held ValueSet with this canonical URL, or null. */
+export async function findValueSetByUrl(url: string): Promise<ValueSetSummary | null> {
+  return (await listValueSets()).find((v) => v.url === url) ?? null;
+}
+
 export interface TerminologyIngestJobView {
   id: string; status: 'queued' | 'running' | 'ready' | 'failed';
   phase: string | null; processed: number; total: number | null; error: string | null;
