@@ -180,6 +180,14 @@ describe('BuilderHeader', () => {
     });
   });
 
+  // The value span is stretched with flex-1 so a long label clips. A button centers its text
+  // by default, so without text-left the value sat in the middle of the trigger.
+  it('left-aligns the FHIR Version and Resource Type values', () => {
+    renderHeader();
+    expect(screen.getByRole('combobox', { name: /fhir version/i })).toHaveClass('text-left');
+    expect(screen.getByRole('combobox', { name: /resource type/i })).toHaveClass('text-left');
+  });
+
   describe('Target pages control', () => {
     it('toggles "users" in targetPages when the Users item is checked', () => {
       const { onChange } = renderHeader();
