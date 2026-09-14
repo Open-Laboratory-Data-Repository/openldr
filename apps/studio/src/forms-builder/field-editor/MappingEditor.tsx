@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { SuggestCombobox } from '@/components/ui/suggest-combobox';
 import { fhirPathOptionsFor, lookupFhirPath } from '@openldr/fhir/paths';
+import { DiscriminatorEditor } from './DiscriminatorEditor';
 
 export interface MappingEditorProps {
   field: FormField;
@@ -22,6 +23,12 @@ export interface MappingEditorProps {
    * than showing an empty list that looks broken.
    */
   fhirResourceType: string | null;
+  /**
+   * True on a Questionnaire form. A survey question points at no resource, so FHIR Path, the
+   * discriminator and API Property are hidden. Observation Extract and the rest stay: CE needs
+   * Observation Extract to submit a form at all.
+   */
+  surveyMode?: boolean;
   onUpdate: (patch: Partial<FormField>) => void;
 }
 
@@ -38,7 +45,7 @@ function parseNum(raw: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEditorProps): JSX.Element {
+export function MappingEditor({ field, fhirResourceType, surveyMode = false, onUpdate }: MappingEditorProps): JSX.Element {
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
 
   function patchConstraints(patch: Partial<FormFieldConstraints>): void {
@@ -69,6 +76,8 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
       <section className="mt-2">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 py-4">
 
+          {!surveyMode && (
+          <>
           {/* FHIR Path */}
           <Label htmlFor="mapping-fhir-path" className="whitespace-nowrap">
             FHIR Path
@@ -94,6 +103,9 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
             )}
           </div>
 
+          {/* Which entry of a repeating list: after the path it qualifies, as in corlix. */}
+          <DiscriminatorEditor field={field} onUpdate={onUpdate} />
+
           {/* API Property */}
           <Label htmlFor="mapping-api-property" className="whitespace-nowrap">
             API Property
@@ -108,6 +120,8 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
             placeholder="e.g. patientName"
             className="font-mono text-xs"
           />
+          </>
+          )}
 
           {/* Observation Extract */}
           <div className="col-span-2 flex items-center gap-2 pt-1">
