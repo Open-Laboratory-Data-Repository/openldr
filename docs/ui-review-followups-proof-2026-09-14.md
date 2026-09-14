@@ -151,3 +151,17 @@ Only the three existing OpenLDR containers remained running. Both temporary brow
 No commit, push or merge was performed. Changes remain in the isolated worktree.
 The main checkout still uses its existing docs version and ignore rules until these changes are merged.
 Landing changelog generation is deferred until after merge, as required by `AGENTS.md`.
+
+## Merge follow-up
+
+The operator approved merging after the implementation handoff above.
+`pnpm test` passed before integration: 35 tasks succeeded, 33 from cache.
+Studio reran 231 test files and 2,120 tests, all passing.
+Main matched `origin/main` before the merge.
+
+`git merge --ff-only codex/ui-review-followups` fast-forwarded main to `d0cbfcd9`.
+`pnpm make:changelog` then generated 2,712 entries across 71 days.
+The screenshots were copied into the main checkout's ignored `output/playwright/` directory.
+No push was requested or performed.
+Post-merge `pnpm test -- --output-logs=errors-only` passed all 35 tasks, with 33 cached.
+The web suite reran all 103 tests successfully. Studio and API health checks returned HTTP 200.

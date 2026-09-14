@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "d0cbfcd9",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Correct query naming and facility page refresh"
+        },
+        {
           "hash": "5090a3eb",
           "type": "perf",
           "scope": "auth",
