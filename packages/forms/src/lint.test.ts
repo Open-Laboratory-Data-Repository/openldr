@@ -232,6 +232,27 @@ describe('ambiguous-fhir-path', () => {
     expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toHaveLength(2);
   });
 
+  it('flags key order as the same discriminator', () => {
+    const issues = lintFormSchema(form([
+      field({ id: 'a', fhirDiscriminator: { system: 'x', use: 'w' } }),
+      field({ id: 'b', fhirDiscriminator: { use: 'w', system: 'x' } }),
+    ]));
+    expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toHaveLength(2);
+  });
+
+  it('flags an empty discriminator beside none, since both name no element', () => {
+    const issues = lintFormSchema(form([field({ id: 'a', fhirDiscriminator: {} }), field({ id: 'b' })]));
+    expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toHaveLength(2);
+  });
+
+  it('accepts two slots told apart by an Any rule and a record', () => {
+    const issues = lintFormSchema(form([
+      field({ id: 'a', fhirDiscriminator: { system: 'x' } }),
+      field({ id: 'b', fhirDiscriminator: { join: 'any', conds: [{ el: 'system', op: 'equals', val: 'y' }, { el: 'system', op: 'equals', val: 'z' }] } }),
+    ]));
+    expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toEqual([]);
+  });
+
   it('ignores DISABLED fields — they bind nothing', () => {
     const issues = lintFormSchema(form([field({ id: 'local' }), field({ id: 'mfl', enabled: false })]));
     expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toEqual([]);

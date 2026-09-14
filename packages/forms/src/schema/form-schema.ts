@@ -51,6 +51,26 @@ export type VisibilityRule = z.infer<typeof VisibilityRule>;
 export const BindingStrength = z.enum(['required', 'extensible', 'preferred', 'example']);
 export type BindingStrength = z.infer<typeof BindingStrength>;
 
+/**
+ * Which element of a repeating FHIR list a field fills.
+ *
+ * Two shapes. The old key/value map means "every key equals its value". The rule adds `any` and two
+ * more operators. Storage keeps the map whenever it says the same thing, so old forms never change.
+ * Read, compare and store through `discriminator.ts`; nothing should interpret either shape by hand.
+ */
+export const DiscriminatorOp = z.enum(['equals', 'not equals', 'starts with']);
+export type DiscriminatorOp = z.infer<typeof DiscriminatorOp>;
+
+export const DiscriminatorCondition = z.object({ el: z.string(), op: DiscriminatorOp, val: z.string() });
+export type DiscriminatorCondition = z.infer<typeof DiscriminatorCondition>;
+
+export const DiscriminatorRule = z.object({ join: z.enum(['all', 'any']), conds: z.array(DiscriminatorCondition) });
+export type DiscriminatorRule = z.infer<typeof DiscriminatorRule>;
+
+// The rule is tried first: a map needs every value to be a string, so a rule never parses as a map.
+export const FieldDiscriminator = z.union([DiscriminatorRule, z.record(z.string())]);
+export type FieldDiscriminator = z.infer<typeof FieldDiscriminator>;
+
 export const FormField = z.object({
   id: z.string(),
   fhirPath: z.string().nullable(),
@@ -72,7 +92,7 @@ export const FormField = z.object({
   section: z.string().optional(),
   unit: z.string().optional(),
   apiProperty: z.string().optional(),
-  fhirDiscriminator: z.record(z.string()).optional(),
+  fhirDiscriminator: FieldDiscriminator.optional(),
   fhirValueField: z.string().optional(),
   isDisplayName: z.boolean().optional(),
   displayNameOrder: z.number().optional(),
