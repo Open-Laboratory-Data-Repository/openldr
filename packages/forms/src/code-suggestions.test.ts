@@ -45,7 +45,7 @@ describe('tallyFormCodes', () => {
 });
 
 describe('rankCodeSuggestions', () => {
-  it('puts binding codes first, then your forms by count, and marks the codes CE holds', () => {
+  it('puts the codes your forms use first, by count, then binding codes no form uses, and marks the codes CE holds', () => {
     const ranked = rankCodeSuggestions({
       binding: [{ system: 's', code: 'b2', display: 'B2' }, { system: 's', code: 'b1', display: null }],
       yourForms: [
@@ -55,10 +55,11 @@ describe('rankCodeSuggestions', () => {
       ],
       known: new Set([codingKey('s', 'f2')]),
     });
-    expect(ranked.map((r) => r.code)).toEqual(['b2', 'b1', 'f2', 'f1']);
-    expect(ranked[0]).toEqual({ system: 's', code: 'b2', display: 'B2', source: 'binding', count: 2, inTerminology: false });
-    expect(ranked[1]).toEqual({ system: 's', code: 'b1', display: null, source: 'binding', inTerminology: false });
-    expect(ranked[2]).toEqual({ system: 's', code: 'f2', display: 'F2', source: 'your-forms', count: 3, inTerminology: true });
+    // A code in both sources keeps its Binding label and ranks by its count.
+    expect(ranked.map((r) => r.code)).toEqual(['f2', 'b2', 'f1', 'b1']);
+    expect(ranked[0]).toEqual({ system: 's', code: 'f2', display: 'F2', source: 'your-forms', count: 3, inTerminology: true });
+    expect(ranked[1]).toEqual({ system: 's', code: 'b2', display: 'B2', source: 'binding', count: 2, inTerminology: false });
+    expect(ranked[3]).toEqual({ system: 's', code: 'b1', display: null, source: 'binding', inTerminology: false });
   });
 
   it('breaks a tie on code by system, whatever the input order', () => {
