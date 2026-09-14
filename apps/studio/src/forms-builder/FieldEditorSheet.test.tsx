@@ -4,6 +4,13 @@ import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { FieldType } from '@openldr/forms/pure';
 import { FieldEditorSheet } from './FieldEditorSheet';
 
+// Keep the real module and override one function: other editor parts import other api calls,
+// and a factory that returned only this one would break them.
+vi.mock('../api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  listCodingSystems: vi.fn(async () => []),
+}));
+
 const BASE_FIELD: FormField = {
   id: 'f-1',
   displayLabel: 'Patient name',
@@ -59,6 +66,26 @@ function renderSheet(
 }
 
 describe('FieldEditorSheet', () => {
+  describe('block order', () => {
+    const headings = () => screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+
+    it('puts Mapping above Codes', () => {
+      renderSheet();
+      expect(headings()).toEqual(['General', 'Mapping', 'Codes', 'Translations', 'Visibility']);
+    });
+
+    it('gives a reference field its own Reference Configuration block after General', () => {
+      renderSheet({ field: { ...BASE_FIELD, fieldType: 'reference' } });
+      expect(headings()).toEqual(['General', 'Reference Configuration', 'Mapping', 'Codes', 'Translations', 'Visibility']);
+    });
+  });
+
+  it('hides the mapping controls on a survey form', () => {
+    renderSheet({ fhirResourceType: 'Questionnaire' });
+    expect(screen.queryByText('FHIR Path')).toBeNull();
+    expect(screen.getByRole('checkbox', { name: 'Observation Extract' })).toBeTruthy();
+  });
+
   describe('header', () => {
     it('shows "Edit Field" as the sheet title', () => {
       renderSheet();

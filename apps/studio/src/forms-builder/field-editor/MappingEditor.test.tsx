@@ -255,24 +255,6 @@ describe('MappingEditor', () => {
       });
     });
 
-    describe('referenceTarget input', () => {
-      it('calls onUpdate with referenceTarget on change', () => {
-        const { onUpdate } = renderEditor();
-        openAdvanced();
-        const input = screen.getByRole('textbox', { name: /reference target/i });
-        fireEvent.change(input, { target: { value: 'Patient' } });
-        expect(onUpdate).toHaveBeenCalledWith({ referenceTarget: 'Patient' });
-      });
-
-      it('calls onUpdate with undefined when referenceTarget cleared', () => {
-        const { onUpdate } = renderEditor({ referenceTarget: 'Patient' });
-        openAdvanced();
-        const input = screen.getByRole('textbox', { name: /reference target/i });
-        fireEvent.change(input, { target: { value: '' } });
-        expect(onUpdate).toHaveBeenCalledWith({ referenceTarget: undefined });
-      });
-    });
-
     describe('adminNote textarea', () => {
       it('calls onUpdate with adminNote on change', () => {
         const { onUpdate } = renderEditor();

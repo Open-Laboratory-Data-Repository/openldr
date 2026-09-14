@@ -2,7 +2,8 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
-import { FieldType, eligibleParents, groupRepeats } from '@openldr/forms/pure';
+import { FieldType, eligibleParents, groupRepeats, isSurveyForm } from '@openldr/forms/pure';
+import { ReferenceEditor } from './field-editor/ReferenceEditor';
 import { OptionsEditor } from './field-editor/OptionsEditor';
 import { CodesEditor } from './field-editor/CodesEditor';
 import { TranslationsEditor } from './field-editor/TranslationsEditor';
@@ -273,6 +274,20 @@ export function FieldEditorSheet({
           </div>
         </section>
 
+        {/* ── Reference Configuration (reference fields only) ────── */}
+        {activeDraft.fieldType === 'reference' && (
+          <>
+            <div className="border-t border-border" />
+            <div className="px-6 py-3">
+              <h3 className="text-sm font-medium text-foreground">Reference Configuration</h3>
+            </div>
+            <div className="border-t border-border" />
+            <div className="px-6 py-2">
+              <ReferenceEditor field={activeDraft} allFields={allFields} onUpdate={patchDraft} />
+            </div>
+          </>
+        )}
+
         {/* ── Options / Value-set section ──────────────────────────── */}
         {(activeDraft.fieldType === 'select' || activeDraft.fieldType === 'multiselect') && (
           <>
@@ -286,6 +301,21 @@ export function FieldEditorSheet({
             </div>
           </>
         )}
+
+        {/* ── Mapping / FHIR section. Above Codes, as in corlix: mapping is what authors get wrong. ── */}
+        <div className="border-t border-border" />
+        <div className="px-6 py-3">
+          <h3 className="text-sm font-medium text-foreground">Mapping</h3>
+        </div>
+        <div className="border-t border-border" />
+        <div className="px-6 py-2">
+          <MappingEditor
+            field={activeDraft}
+            fhirResourceType={fhirResourceType}
+            surveyMode={isSurveyForm(fhirResourceType)}
+            onUpdate={patchDraft}
+          />
+        </div>
 
         {/* ── Codes section ────────────────────────────────────────── */}
         <div className="border-t border-border" />
@@ -305,16 +335,6 @@ export function FieldEditorSheet({
         <div className="border-t border-border" />
         <div className="px-6 py-2">
           <TranslationsEditor field={activeDraft} languages={languages} onUpdate={patchDraft} />
-        </div>
-
-        {/* ── Mapping / FHIR section ──────────────────────────────── */}
-        <div className="border-t border-border" />
-        <div className="px-6 py-3">
-          <h3 className="text-sm font-medium text-foreground">Mapping</h3>
-        </div>
-        <div className="border-t border-border" />
-        <div className="px-6 py-2">
-          <MappingEditor field={activeDraft} fhirResourceType={fhirResourceType} onUpdate={patchDraft} />
         </div>
 
         {/* ── Visibility / conditions section ─────────────────────── */}
