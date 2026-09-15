@@ -1062,7 +1062,7 @@ export const fr: EnShape = {
       formatCsv: 'Export CSV',
       formatJsonl: 'Publication JSONL',
       formatXlsx: 'Classeur Excel',
-      xlsxTooLargeHint: 'Ce classeur fait {{size}}. Un classeur Excel ne peut pas dépasser 20 Mo, car il ne peut pas être lu en flux. Enregistrez la première feuille au format CSV et choisissez ce fichier.',
+      xlsxTooLargeHint: 'Ce classeur dépasse la limite de 20 Mo d’un classeur Excel, car un classeur ne peut pas être lu en flux. Enregistrez la première feuille au format CSV et choisissez ce fichier.',
       xlsxSheetNote: 'Seule la feuille « {{sheet}} » a été lue, la première des {{count}} feuilles de ce classeur. Les autres ont été ignorées.',
       completeReleaseLabel: 'Ce fichier est une publication complète',
       completeReleaseHint: 'Seule une publication complète permet de vérifier comme absentes les lignes que ce fichier ne mentionne pas.',

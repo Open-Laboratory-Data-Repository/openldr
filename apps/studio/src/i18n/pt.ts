@@ -1062,7 +1062,7 @@ export const pt: EnShape = {
       formatCsv: 'Exportação CSV',
       formatJsonl: 'Publicação JSONL',
       formatXlsx: 'Livro do Excel',
-      xlsxTooLargeHint: 'Este livro tem {{size}}. Um livro do Excel pode ter no máximo 20 MB, porque não pode ser lido em fluxo. Guarde a primeira folha como CSV e escolha esse ficheiro.',
+      xlsxTooLargeHint: 'Este livro excede o limite de 20 MB de um livro do Excel, porque um livro não pode ser lido em fluxo. Guarde a primeira folha como CSV e escolha esse ficheiro.',
       xlsxSheetNote: 'Só foi lida a folha "{{sheet}}", a primeira das {{count}} folhas deste livro. As outras foram ignoradas.',
       completeReleaseLabel: 'Este ficheiro é uma publicação completa',
       completeReleaseHint: 'Só uma publicação completa permite verificar como ausentes as linhas que este ficheiro não menciona.',

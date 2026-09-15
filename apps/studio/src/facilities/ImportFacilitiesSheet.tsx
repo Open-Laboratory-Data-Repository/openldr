@@ -1532,10 +1532,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {noHeaderRow && (
                 <p className="text-xs text-destructive">{t('facilities.import.noHeaderRowHint')}</p>
               )}
-              {workbookTooLarge && file && (
-                <p className="text-xs text-destructive">
-                  {t('facilities.import.xlsxTooLargeHint', { size: humanFileSize(file.size) })}
-                </p>
+              {/* No size in this sentence: the drop zone above already shows it, and a file one byte
+                  over the cap rounds to "20.0 MB", which read as contradicting "20 MB". */}
+              {workbookTooLarge && (
+                <p className="text-xs text-destructive">{t('facilities.import.xlsxTooLargeHint')}</p>
               )}
             </div>
 

@@ -2763,8 +2763,12 @@ describe('the file drop zone', () => {
     fireEvent.change(screen.getByLabelText('File'), { target: { files: [big] } });
     await chooseSystem();
 
-    expect(await screen.findByText(/at most 20 MB/)).toBeInTheDocument();
+    expect(await screen.findByText(/over the 20 MB limit/)).toBeInTheDocument();
     expect(screen.getByText(/save the first sheet as CSV/i)).toBeInTheDocument();
+    // ⛔ The file's size is NOT in this sentence. Measured at 375px on 2026-09-15: a file one byte
+    // over the cap rounds to "20.0 MB", and "This workbook is 20.0 MB. ... at most 20 MB" read as a
+    // contradiction. The drop zone above already shows the size.
+    expect(screen.queryByText(/workbook is 20\.0 MB/)).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled());
     expect(api.uploadFacilityImport).not.toHaveBeenCalled();
   });
@@ -2777,7 +2781,7 @@ describe('the file drop zone', () => {
     await chooseSystem();
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled());
-    expect(screen.queryByText(/at most 20 MB/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/over the 20 MB limit/)).not.toBeInTheDocument();
   });
 
   it('a CSV chosen after a workbook goes back to CSV, unlocked, and reads its head again', async () => {
