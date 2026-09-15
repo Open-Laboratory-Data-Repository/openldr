@@ -911,6 +911,16 @@ export interface ProjectionRetriesTable {
   next_attempt_at: Date;
 }
 
+// Test catalog S1 (migration 104): this install's own settings for a catalog test. Sync never writes it.
+export interface TestCatalogLabSettingsTable {
+  code: string;
+  enabled: Generated<boolean>;
+  // jsonb: a list of { system, code } specimen codings, or null for "use the catalog's own list".
+  specimen_types: unknown | null;
+  local_display: string | null;
+  updated_at: Generated<Date>;
+}
+
 export interface InternalSchema {
   auth_issuer_binding: { id: number; issuer: string };
   'fhir.projection_retries': ProjectionRetriesTable;
@@ -934,6 +944,7 @@ export interface InternalSchema {
   account_access_blocks: { subject: string };
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;
+  test_catalog_lab_settings: TestCatalogLabSettingsTable;
   concept_map_elements: ConceptMapElementsTable;
   concept_map_state: ConceptMapStateTable;
   publishers: PublishersTable;
