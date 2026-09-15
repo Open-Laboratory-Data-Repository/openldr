@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
-import { TestCatalogError, type AppContext, type CatalogTest } from '@openldr/bootstrap';
+import { TestCatalogError, type AppContext, type CatalogOptions, type CatalogTest } from '@openldr/bootstrap';
 import { registerTestCatalogRoutes } from './test-catalog-routes';
 import './auth-plugin';
 
@@ -10,9 +10,15 @@ const TEST: CatalogTest = {
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
+const OPTIONS: CatalogOptions = {
+  categories: [{ code: 'MOL', display: 'Molecular' }],
+  specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }],
+  loinc: null,
+};
+
 type Impl = (...args: any[]) => Promise<unknown>;
 
-function fakeCtx(over: Partial<Record<'list' | 'get' | 'create' | 'update' | 'setLabSettings', Impl>> = {}) {
+function fakeCtx(over: Partial<Record<'list' | 'get' | 'create' | 'update' | 'setLabSettings' | 'options' | 'setEnabled' | 'setActive', Impl>> = {}) {
   const calls: Array<{ method: string; args: unknown[] }> = [];
   const audit: Array<Record<string, unknown>> = [];
   const spy = (method: string, impl: Impl): Impl => async (...args) => {
@@ -25,6 +31,9 @@ function fakeCtx(over: Partial<Record<'list' | 'get' | 'create' | 'update' | 'se
     create: spy('create', over.create ?? (async () => TEST)),
     update: spy('update', over.update ?? (async () => TEST)),
     setLabSettings: spy('setLabSettings', over.setLabSettings ?? (async () => TEST)),
+    options: spy('options', over.options ?? (async () => OPTIONS)),
+    setEnabled: spy('setEnabled', over.setEnabled ?? (async () => TEST)),
+    setActive: spy('setActive', over.setActive ?? (async () => TEST)),
   };
   const ctx = {
     testCatalog,
@@ -134,5 +143,63 @@ describe('test catalog routes', () => {
       { method: 'setLabSettings', args: ['HIVVL', body] },
     ]);
     expect(audit).toMatchObject([{ action: 'test_catalog.lab_settings', entityType: 'test_catalog', entityId: 'HIVVL', before: TEST.lab, after: TEST.lab }]);
+  });
+
+  it('GET /api/test-catalog/options returns the picker choices and needs terminology.view', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx).inject({ method: 'GET', url: '/api/test-catalog/options' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(OPTIONS);
+    expect(calls).toEqual([{ method: 'options', args: [] }]);
+    expect((await appWith(ctx, []).inject({ method: 'GET', url: '/api/test-catalog/options' })).statusCode).toBe(403);
+  });
+
+  it('PUT /:code/enabled switches a test and audits it as test_catalog.enable', async () => {
+    const after = { ...TEST, lab: { ...TEST.lab, enabled: true } };
+    const { ctx, calls, audit } = fakeCtx({ setEnabled: async () => after });
+    const res = await appWith(ctx).inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/enabled', payload: { enabled: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(after);
+    expect(calls).toEqual([
+      { method: 'get', args: ['HIVVL'] },
+      { method: 'setEnabled', args: ['HIVVL', true] },
+    ]);
+    expect(audit).toMatchObject([{
+      action: 'test_catalog.enable', entityType: 'test_catalog', entityId: 'HIVVL', before: { enabled: false }, after: { enabled: true },
+    }]);
+  });
+
+  it('PUT /:code/active retires a test and audits it as test_catalog.retire', async () => {
+    const after = { ...TEST, active: false };
+    const { ctx, calls, audit } = fakeCtx({ setActive: async () => after });
+    const res = await appWith(ctx).inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/active', payload: { active: false } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(after);
+    expect(calls).toEqual([
+      { method: 'get', args: ['HIVVL'] },
+      { method: 'setActive', args: ['HIVVL', false] },
+    ]);
+    expect(audit).toMatchObject([{
+      action: 'test_catalog.retire', entityType: 'test_catalog', entityId: 'HIVVL', before: { active: true }, after: { active: false },
+    }]);
+  });
+
+  it('the row-change routes need terminology.manage and a boolean body', async () => {
+    const { ctx, calls } = fakeCtx();
+    const viewer = appWith(ctx, ['terminology.view']);
+    expect((await viewer.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/enabled', payload: { enabled: true } })).statusCode).toBe(403);
+    expect((await viewer.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/active', payload: { active: false } })).statusCode).toBe(403);
+    const admin = appWith(ctx);
+    expect((await admin.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/enabled', payload: { enabled: 'yes' } })).statusCode).toBe(400);
+    expect((await admin.inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/active', payload: {} })).statusCode).toBe(400);
+    expect(calls).toEqual([]);
+  });
+
+  it('maps a row-change refusal to its status, keeps its words and audits nothing', async () => {
+    const { ctx, audit } = fakeCtx({ setActive: async () => { throw new TestCatalogError('central only', 'central-managed'); } });
+    const res = await appWith(ctx).inject({ method: 'PUT', url: '/api/test-catalog/HIVVL/active', payload: { active: false } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: 'central only', kind: 'central-managed' });
+    expect(audit).toEqual([]);
   });
 });

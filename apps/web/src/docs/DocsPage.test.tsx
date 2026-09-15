@@ -61,6 +61,16 @@ describe('DocsPage', () => {
     }
   });
 
+  it('renders the test catalog guide from its navigation entry in all three languages', () => {
+    renderDocs('/docs/test-catalog');
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Test catalog' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Test catalog' })).toHaveAttribute('aria-current', 'page');
+    for (const name of ['English', 'Français', 'Português']) {
+      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
+    }
+  });
+
   it('renders a professional docs shell for a public doc page', () => {
     renderDocs('/docs/install');
 

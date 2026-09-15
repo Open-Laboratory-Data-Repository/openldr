@@ -8,7 +8,7 @@ import {
 import { createOperations, LOINC_SYSTEM } from '@openldr/terminology';
 import { createTerminologyBulkSync } from '@openldr/sync';
 import {
-  createTestCatalog, parseCatalogListQuery, TEST_CATALOG_SYSTEM,
+  createTestCatalog, parseCatalogListQuery, catalogChangeAction, TEST_CATALOG_SYSTEM,
   type CatalogListQuery, type CatalogListResult, type CatalogTestInput,
 } from './test-catalog';
 
@@ -386,5 +386,129 @@ describe('test catalog: this lab', () => {
     expect((await catalog.get('HIVVL'))?.lab).toEqual({ enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' });
     expect(codes(await catalog.list(q()))).toEqual(['CD4', 'HIVVL']);
     await expect(catalog.update('HIVVL', { display: 'Changed' })).rejects.toMatchObject({ kind: 'central-managed' });
+  });
+});
+
+describe('test catalog: options and row changes', () => {
+  it('offers the categories and specimen types the save accepts, with their names, sorted by name', async () => {
+    const { catalog } = await buildCatalog();
+    const o = await catalog.options();
+    expect(o.categories).toEqual([
+      { code: 'CHEM', display: 'Chemistry' },
+      { code: 'HAEM', display: 'Haematology' },
+      { code: 'MICRO', display: 'Microbiology' },
+      { code: 'MOL', display: 'Molecular' },
+      { code: 'SERO', display: 'Serology' },
+    ]);
+    expect(o.specimenTypes).toEqual([
+      { system: LOCAL, code: 'BLD', display: 'Blood' },
+      { system: LOCAL, code: 'CSF', display: 'CSF' },
+      { system: LOCAL, code: 'SPT', display: 'Sputum' },
+      { system: LOCAL, code: 'UR', display: 'Urine' },
+    ]);
+    expect(o.loinc).toBeNull();
+  });
+
+  it('names the LOINC system only when LOINC is loaded', async () => {
+    const { db, catalog } = await buildCatalog();
+    await db.insertInto('coding_systems').values({
+      id: 'cs-url-LOINC', system_code: 'LOINC', system_name: 'LOINC', url: LOINC_SYSTEM,
+      active: true, publisher_id: 'pub-system', seeded: false,
+    } as never).execute();
+    expect((await catalog.options()).loinc).toBeNull();
+    await db.insertInto('terminology_concepts').values({
+      system: LOINC_SYSTEM, code: '2345-7', display: 'Glucose', status: 'ACTIVE', properties: null,
+    }).execute();
+    expect((await catalog.options()).loinc).toEqual({ systemId: 'cs-url-LOINC', system: LOINC_SYSTEM });
+  });
+
+  it('switches a test on and off and keeps the lab narrowed specimens and local name', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    await catalog.setLabSettings('HIVVL', { enabled: false, specimenTypes: [UR], localDisplay: 'Viral load' });
+    expect((await catalog.setEnabled('HIVVL', true)).lab).toEqual({ enabled: true, specimenTypes: [UR], localDisplay: 'Viral load' });
+    expect((await catalog.setEnabled('HIVVL', false)).lab).toEqual({ enabled: false, specimenTypes: [UR], localDisplay: 'Viral load' });
+  });
+
+  it('switches on a test the lab has never touched', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    expect((await catalog.setEnabled('CD4', true)).lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: null });
+  });
+
+  it('still switches a test on after central dropped a specimen the lab had kept', async () => {
+    const { db, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD] });
+    // The lab kept UR, which the catalog no longer lists, as after a later pull from central.
+    await db.insertInto('test_catalog_lab_settings')
+      .values({ code: 'HIVVL', enabled: false, specimen_types: JSON.stringify([UR]) }).execute();
+    expect((await catalog.setEnabled('HIVVL', true)).lab.enabled).toBe(true);
+  });
+
+  it('lets a lab that receives central catalog switch tests, and refuses an unknown test', async () => {
+    const { db, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await markCentral(db);
+    expect((await catalog.setEnabled('HIVVL', true)).lab.enabled).toBe(true);
+    await expect(catalog.setEnabled('NOPE', true))
+      .rejects.toMatchObject({ kind: 'not-found', message: 'Test NOPE is not in the catalog.' });
+  });
+
+  it('never signals a sync change for a switch', async () => {
+    const { db, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    const count = async () => (await db.selectFrom('reference_change_log').select('seq').execute()).length;
+    const before = await count();
+    await catalog.setEnabled('HIVVL', true);
+    expect(await count()).toBe(before);
+  });
+
+  it('retires and restores a test and changes nothing else', async () => {
+    const { db, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
+    expect(await catalog.setActive('HIVVL', false))
+      .toMatchObject({ active: false, category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
+    expect((await storedConcept(db, 'HIVVL')).status).toBe('DEPRECATED');
+    expect((await catalog.setActive('HIVVL', true)).active).toBe(true);
+    expect((await storedConcept(db, 'HIVVL')).status).toBe('ACTIVE');
+  });
+
+  it('retires a test whose LOINC code a later LOINC load does not hold', async () => {
+    const { db, catalog } = await buildCatalog();
+    // With no LOINC loaded, the link stubs a DRAFT 25836-8. Loading LOINC without it makes a full re-save fail.
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
+    await db.insertInto('terminology_concepts').values({
+      system: LOINC_SYSTEM, code: '2345-7', display: 'Glucose', status: 'ACTIVE', properties: null,
+    }).execute();
+    await expect(catalog.update('HIVVL', { display: 'HIV viral load', loinc: '25836-8', active: false }))
+      .rejects.toMatchObject({ kind: 'invalid' });
+    expect((await catalog.setActive('HIVVL', false)).active).toBe(false);
+  });
+
+  it('signals one sync change per real status change, and none when nothing changes', async () => {
+    const { db, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    const generation = async () => Number((await db.selectFrom('terminology_systems').select('generation')
+      .where('url', '=', TEST_CATALOG_SYSTEM).executeTakeFirstOrThrow()).generation);
+    expect(await generation()).toBe(1);
+    await catalog.setActive('HIVVL', true);
+    expect(await generation()).toBe(1);
+    await catalog.setActive('HIVVL', false);
+    expect(await generation()).toBe(2);
+  });
+
+  it('refuses to retire an unknown test, or at a lab that receives central catalog', async () => {
+    const { db, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await expect(catalog.setActive('NOPE', false)).rejects.toMatchObject({ kind: 'not-found' });
+    await markCentral(db);
+    await expect(catalog.setActive('HIVVL', false)).rejects.toMatchObject({ kind: 'central-managed' });
+  });
+
+  it('names the audit action for each row change', () => {
+    expect([
+      catalogChangeAction('enabled', true), catalogChangeAction('enabled', false),
+      catalogChangeAction('active', false), catalogChangeAction('active', true),
+    ]).toEqual(['test_catalog.enable', 'test_catalog.disable', 'test_catalog.retire', 'test_catalog.restore']);
   });
 });

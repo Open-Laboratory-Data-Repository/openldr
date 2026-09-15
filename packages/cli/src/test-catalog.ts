@@ -1,5 +1,6 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext, parseCatalogListQuery } from '@openldr/bootstrap';
+import { catalogChangeAction, createAppContext, parseCatalogListQuery, recordAuditEvent } from '@openldr/bootstrap';
+import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
 export interface TestCatalogListOpts {
@@ -42,6 +43,43 @@ export async function runTestCatalogList(opts: TestCatalogListOpts): Promise<num
     const msg = redactError(err);
     if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
     else process.stderr.write(`test-catalog list failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export type TestCatalogChange = 'enable' | 'disable' | 'retire' | 'restore';
+
+const CHANGES: Record<TestCatalogChange, { field: 'enabled' | 'active'; value: boolean; done: string }> = {
+  enable: { field: 'enabled', value: true, done: 'is now on at this lab' },
+  disable: { field: 'enabled', value: false, done: 'is now off at this lab' },
+  retire: { field: 'active', value: false, done: 'is retired' },
+  restore: { field: 'active', value: true, done: 'is active again' },
+};
+
+/** `openldr test-catalog enable | disable | retire | restore <code>`: the CLI door to the page's row
+ *  actions, PUT /api/test-catalog/:code/enabled and /active. It calls the same service methods and
+ *  records the same audit action, as the CLI actor. Retire is reversible, so none takes --force. */
+export async function runTestCatalogChange(change: TestCatalogChange, code: string, opts: { json: boolean }): Promise<number> {
+  const { field, value, done } = CHANGES[change];
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const before = await ctx.testCatalog.get(code);
+    const after = field === 'enabled'
+      ? await ctx.testCatalog.setEnabled(code, value)
+      : await ctx.testCatalog.setActive(code, value);
+    await recordAuditEvent(ctx, cliActor(), {
+      action: catalogChangeAction(field, value), entityType: 'test_catalog', entityId: code,
+      before: field === 'enabled' ? { enabled: before?.lab.enabled ?? null } : { active: before?.active ?? null },
+      after: field === 'enabled' ? { enabled: after.lab.enabled } : { active: after.active },
+    });
+    process.stdout.write(opts.json ? JSON.stringify(after, null, 2) + '\n' : `${code} ${done}.\n`);
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`test-catalog ${change} failed: ${msg}\n`);
     return 1;
   } finally {
     await ctx.close();
