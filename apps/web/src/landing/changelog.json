@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "b9c3f797",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Add and edit catalog tests in a sheet"
+        },
+        {
+          "hash": "f274405c",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Add the Test catalog page"
+        },
+        {
+          "hash": "b9dbd906",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Switch catalog tests on or off, and retire or restore them"
+        },
+        {
+          "hash": "1738df97",
+          "type": "feat",
+          "scope": "server",
+          "title": "Serve the catalog's picker choices and its two row actions"
+        },
+        {
+          "hash": "b0e1a851",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Offer the catalog's picker choices, and switch or retire one test"
+        },
+        {
           "hash": "07db36bb",
           "type": "feat",
           "scope": "cli",
