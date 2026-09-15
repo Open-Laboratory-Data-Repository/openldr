@@ -33,7 +33,7 @@ import {
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
   runFacilitiesDelete, runFacilitiesAddType,
 } from './facilities';
-import { runTestCatalogList, type TestCatalogListOpts } from './test-catalog';
+import { runTestCatalogList, runTestCatalogChange, type TestCatalogListOpts } from './test-catalog';
 import { setActorOverride } from './cli-actor';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -343,6 +343,24 @@ export function buildProgram(): Command {
     .action(async (opts: TestCatalogListOpts) => {
       process.exitCode = await runTestCatalogList(opts);
     });
+
+  // Test catalog S2: the CLI doors for the page's row actions. Retire is reversible (restore undoes
+  // it), so none of these takes --force.
+  const testCatalogChanges = [
+    ['enable', 'Switch a test on at this lab'],
+    ['disable', 'Switch a test off at this lab'],
+    ['retire', 'Retire a test (only where this install owns the catalog)'],
+    ['restore', 'Undo a retire'],
+  ] as const;
+  for (const [change, description] of testCatalogChanges) {
+    testCatalog
+      .command(`${change} <code>`)
+      .description(description)
+      .option('--json', 'emit JSON', false)
+      .action(async (code: string, opts: { json: boolean }) => {
+        process.exitCode = await runTestCatalogChange(change, code, opts);
+      });
+  }
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');
   // Task 4: CLI parity for Task 3's `GET /api/facilities` — the same `parseWhereFlags`/
