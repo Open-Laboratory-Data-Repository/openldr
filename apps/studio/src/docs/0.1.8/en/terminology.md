@@ -42,6 +42,7 @@ Terms are searchable, ValueSets are available for coded fields, and ontology ind
 - **Missing code or display name:** fix the source file before importing; both are needed for usable coded fields.
 - **A source is unavailable:** confirm licensing and source availability before expecting the web app to show that terminology.
 - **An ontology index is empty:** the code system may not include hierarchy data, or the ontology index has not been built for that source.
+- **An entry lost properties after it was edited:** before 2026-09-15, saving a term here dropped every property the page does not show, such as LOINC's parts, an organism's type or a result parameter's role. Saving no longer does. Entries damaged before then stay damaged until their source is imported again: `openldr terminology import loinc <path> --accept-license` for LOINC, `openldr terminology import organisms <file>` for organisms, and `openldr terminology import parameters <file>` for result parameters.
 
 ## Advanced web usage
 
