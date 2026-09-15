@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
-import type { AppContext } from '@openldr/bootstrap';
+import { TEST_CATALOG_SYSTEM, type AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
-import { extractorsForForm, isEntityAnswer, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
+import { extractorsForForm, isEntityAnswer, isCodingAnswer, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -58,6 +58,29 @@ function extractionContextFor(schema: FormSchema, answers: Record<string, unknow
     context.subject = { reference: answer.reference, ...(answer.display ? { display: answer.display } : {}) };
   }
   return context;
+}
+
+/** The Corlix fhir-path a Lab order binds its tests to. */
+const ORDER_CODE_FHIR_PATH = 'ServiceRequest.code';
+
+/**
+ * For each catalog test on the order, the LOINC coding the extractor writes in front of it (test
+ * catalog S4, spec 4.5). The warehouse keeps an order's first coding (packages/db/src/relational/extract.ts),
+ * so a LOINC-linked test still lands as LOINC. The catalog is asked only when an answer is a catalog test.
+ */
+async function catalogCodingsBefore(
+  ctx: AppContext, schema: FormSchema, answers: Record<string, unknown>,
+): Promise<ExtractionContext['codingBefore']> {
+  const tests: Array<{ system: string; code: string }> = [];
+  for (const field of schema.fields) {
+    if (field.fhirPath !== ORDER_CODE_FHIR_PATH) continue;
+    const value = answers[field.id];
+    for (const v of Array.isArray(value) ? value : [value]) {
+      if (isCodingAnswer(v) && v.system === TEST_CATALOG_SYSTEM) tests.push({ system: v.system, code: v.code });
+    }
+  }
+  if (tests.length === 0) return undefined;
+  return ctx.testCatalog.loincCodingsFor(tests);
 }
 
 /** Id of the seeded ingest graph's Persist Store node — the one that reports what it wrote. */
@@ -396,6 +419,8 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
 
     const questionnaire = toQuestionnaire(f.schema);
     const extractionContext = extractionContextFor(f.schema, p.data.answers, submittedAt);
+    const codingBefore = await catalogCodingsBefore(ctx, f.schema, p.data.answers);
+    if (codingBefore) extractionContext.codingBefore = codingBefore;
     const resources = extractorsForForm(f.schema as never)
       .flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext));
     if (resources.length === 0) {

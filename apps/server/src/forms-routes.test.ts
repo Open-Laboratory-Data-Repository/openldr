@@ -153,6 +153,29 @@ const referenceSchema = {
   updatedAt: NOW,
 } satisfies FormInput['schema'];
 
+// Test catalog S4: a Lab order whose Tests field binds this lab's test list.
+const catalogOrderSchema = {
+  ...referenceSchema,
+  id: 'catalog-order',
+  fields: [
+    ...referenceSchema.fields,
+    {
+      id: 'tests',
+      fhirPath: 'ServiceRequest.code',
+      displayLabel: 'Tests',
+      description: null,
+      fieldType: 'reference' as const,
+      required: true,
+      enabled: true,
+      order: 1,
+      cardinality: { min: 1, max: '*' },
+      referenceMultiple: true,
+      section: 'main',
+      valueSetUrl: 'urn:openldr:valueset:lab-tests',
+    },
+  ],
+} satisfies FormInput['schema'];
+
 // Task 9: fakeCtx() previously provided no fhirStore/terminology stubs because nothing
 // needed them — the second validator wired into POST /responses (`validateReferences`)
 // was never actually exercised. These record what they were called with (not merely
@@ -977,6 +1000,59 @@ describe('forms routes', () => {
     expect(serviceRequest.subject).toEqual({ display: 'Unknown subject' });
     // authoredOn is still stamped — it comes from the submission time, not the subject binding.
     expect(serviceRequest.authoredOn).toEqual(expect.any(String));
+  });
+
+  it('writes each catalog test LOINC coding in front of it on the derived ServiceRequest', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    const asked: unknown[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async (tests: unknown) => {
+        asked.push(tests);
+        return new Map([['urn:openldr:codesystem:test-catalog|HIVVL', { system: 'http://loinc.org', code: '25836-8' }]]);
+      },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: catalogOrderSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [
+          { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' },
+          { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4', display: 'CD4 count' },
+        ],
+      } },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(asked).toEqual([[
+      { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' },
+      { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4' },
+    ]]);
+    const serviceRequest = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'ServiceRequest');
+    expect(serviceRequest.code.coding).toEqual([
+      { system: 'http://loinc.org', code: '25836-8' },
+      { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' },
+      { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4' },
+    ]);
+  });
+
+  it('does not ask the catalog when no answer is a catalog test', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).testCatalog = { loincCodingsFor: async () => { throw new Error('the catalog was asked'); } };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+    expect(res.statusCode).toBe(201);
   });
 
   it('records the submitting user as the QuestionnaireResponse author', async () => {
