@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { parseCatalogListQuery, TestCatalogError, type AppContext } from '@openldr/bootstrap';
+import { catalogChangeAction, parseCatalogListQuery, TestCatalogError, type AppContext } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -24,6 +24,8 @@ const labInput = z.object({
   specimenTypes: z.array(coding).nullable(),
   localDisplay: z.string().nullable(),
 });
+const enabledInput = z.object({ enabled: z.boolean() });
+const activeInput = z.object({ active: z.boolean() });
 
 // A catalog refusal keeps its words and says which kind it is. Anything else goes to the shared
 // error handler.
@@ -38,6 +40,11 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     const parsed = parseCatalogListQuery(req.query as Record<string, unknown>);
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
     return reply.send(await ctx.testCatalog.list(parsed.query));
+  });
+
+  // The page's pickers read this, not a ValueSet expansion, so they offer exactly what a save accepts.
+  app.get('/api/test-catalog/options', VIEW, async (_req, reply) => {
+    return reply.send(await ctx.testCatalog.options());
   });
 
   app.post('/api/test-catalog', MANAGE, async (req, reply) => {
@@ -74,6 +81,42 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
       const before = (await ctx.testCatalog.get(code))?.lab ?? null;
       const saved = await ctx.testCatalog.setLabSettings(code, parsed.data);
       await recordAudit(ctx, req, { action: 'test_catalog.lab_settings', entityType: 'test_catalog', entityId: code, before, after: saved.lab });
+      return reply.send(saved);
+    } catch (err) {
+      return replyCatalogError(err, reply);
+    }
+  });
+
+  // The page's row actions. Each changes one field; `openldr test-catalog enable | disable | retire |
+  // restore` calls the same service methods and records the same audit action.
+  app.put('/api/test-catalog/:code/enabled', MANAGE, async (req, reply) => {
+    const { code } = req.params as { code: string };
+    const parsed = enabledInput.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    try {
+      const before = await ctx.testCatalog.get(code);
+      const saved = await ctx.testCatalog.setEnabled(code, parsed.data.enabled);
+      await recordAudit(ctx, req, {
+        action: catalogChangeAction('enabled', parsed.data.enabled), entityType: 'test_catalog', entityId: code,
+        before: { enabled: before?.lab.enabled ?? null }, after: { enabled: saved.lab.enabled },
+      });
+      return reply.send(saved);
+    } catch (err) {
+      return replyCatalogError(err, reply);
+    }
+  });
+
+  app.put('/api/test-catalog/:code/active', MANAGE, async (req, reply) => {
+    const { code } = req.params as { code: string };
+    const parsed = activeInput.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    try {
+      const before = await ctx.testCatalog.get(code);
+      const saved = await ctx.testCatalog.setActive(code, parsed.data.active);
+      await recordAudit(ctx, req, {
+        action: catalogChangeAction('active', parsed.data.active), entityType: 'test_catalog', entityId: code,
+        before: { active: before?.active ?? null }, after: { active: saved.active },
+      });
       return reply.send(saved);
     } catch (err) {
       return replyCatalogError(err, reply);
