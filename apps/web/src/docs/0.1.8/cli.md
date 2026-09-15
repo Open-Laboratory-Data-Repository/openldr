@@ -62,6 +62,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see [Facilities](/docs/facilities)). |
+| `test-catalog` | The national test catalog: `list` the tests with their category, LOINC code and whether this lab runs them. |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |
 | `provenance` | Provenance audit tooling. |
@@ -294,3 +295,47 @@ openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true 
 O JSON contém `rows`, `offset`, `limit`, `total: null` e `hasMore`. Some `limit` a `offset` enquanto `hasMore` for true. Omita `--enabled` para incluir ambos os estados. `openldr user list` mantém a lista de contas locais.
 
 Sem administração do fornecedor configurada, a listagem usa contas locais. A pesquisa local procura fragmentos no nome de utilizador, nome e e-mail. Os resultados locais seguem a ordem nome de utilizador e ID. A pesquisa do fornecedor segue as regras desse fornecedor.
+
+## Test catalog
+
+### English
+
+The test catalog is the national list of tests. It is a code system on the Terminology page, **Test catalog**. Its categories are a second code system, **Test categories**, with five to start: Chemistry, Haematology, Microbiology, Serology and Molecular. Edit categories on the Terminology page.
+
+Central keeps the catalog. A lab receives it through terminology sync and cannot change its tests. Each lab records its own settings for a test: whether it runs it, a shorter specimen list, and a local name. Sync never sends those settings.
+
+List the catalog from the command line:
+
+```sh
+openldr test-catalog list --search viral --category MOL --loinc linked --enabled on --json
+```
+
+Retired tests are hidden unless you pass `--status retired` or `--status all`. `--loinc none` lists tests with no LOINC code. `--limit` is 25 by default and 200 at most. Page with `--offset`. The JSON holds `rows`, `total` and `ownedHere`. `ownedHere` is false when this install received its catalog from central.
+
+### Français
+
+Le catalogue des examens est la liste nationale des examens. C'est un système de codes de la page Terminologie, **Test catalog**. Ses catégories forment un second système de codes, **Test categories**, avec cinq catégories au départ : Chemistry, Haematology, Microbiology, Serology et Molecular. Modifiez les catégories sur la page Terminologie.
+
+Le site central tient le catalogue. Un laboratoire le reçoit par la synchronisation de la terminologie et ne peut pas modifier ses examens. Chaque laboratoire enregistre ses propres réglages pour un examen : s'il le réalise, une liste de prélèvements plus courte et un nom local. La synchronisation n'envoie jamais ces réglages.
+
+Depuis la ligne de commande :
+
+```sh
+openldr test-catalog list --search viral --category MOL --loinc linked --enabled on --json
+```
+
+Les examens retirés sont masqués, sauf avec `--status retired` ou `--status all`. `--loinc none` liste les examens sans code LOINC. `--limit` vaut 25 par défaut et 200 au plus. Paginez avec `--offset`. Le JSON contient `rows`, `total` et `ownedHere`. `ownedHere` vaut false quand cette installation a reçu son catalogue du site central.
+
+### Português
+
+O catálogo de exames é a lista nacional de exames. É um sistema de códigos na página Terminologia, **Test catalog**. As categorias formam um segundo sistema de códigos, **Test categories**, com cinco no início: Chemistry, Haematology, Microbiology, Serology e Molecular. Edite as categorias na página Terminologia.
+
+O nível central mantém o catálogo. Um laboratório recebe-o pela sincronização da terminologia e não pode alterar os seus exames. Cada laboratório regista as suas próprias definições para um exame: se o realiza, uma lista de amostras mais curta e um nome local. A sincronização nunca envia essas definições.
+
+Na linha de comandos:
+
+```sh
+openldr test-catalog list --search viral --category MOL --loinc linked --enabled on --json
+```
+
+Os exames retirados ficam ocultos, exceto com `--status retired` ou `--status all`. `--loinc none` lista os exames sem código LOINC. `--limit` é 25 por omissão e 200 no máximo. Pagine com `--offset`. O JSON contém `rows`, `total` e `ownedHere`. `ownedHere` é false quando esta instalação recebeu o catálogo do nível central.
