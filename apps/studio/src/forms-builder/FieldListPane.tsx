@@ -99,6 +99,7 @@ export function FieldListPane({
 
   const model = useMemo(() => buildFieldListModel(fields, sections, search), [fields, sections, search]);
   const sortedSections = useMemo(() => [...sections].sort((a, b) => a.order - b.order), [sections]);
+  const sectionLabelById = useMemo(() => new Map(sections.map((s) => [s.id, s.label])), [sections]);
 
   const [dragging, setDragging] = useState(false);
   const fieldCountBySection = useMemo(() => {
@@ -134,6 +135,7 @@ export function FieldListPane({
           anchor={field.id === anchorId}
           lintIssue={issueForField(field.id)}
           repeats={groupRepeats(field, fhirResourceType)}
+          sectionLabel={field.section ? sectionLabelById.get(field.section) : undefined}
           onSelect={onSelect}
           onToggleEnabled={onToggleEnabled}
           onToggleRequired={onToggleRequired}

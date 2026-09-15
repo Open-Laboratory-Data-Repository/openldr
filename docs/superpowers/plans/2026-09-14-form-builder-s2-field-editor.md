@@ -1,5 +1,7 @@
 # Form builder S2: the field editor
 
+**Status:** merged to `main` on 2026-09-14 as `dbdfe74d`. The checkboxes below were not ticked while the work ran, so they do not show what was done. Git history does.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make CE's field editor act like corlix's: a discriminator editor with All/Any and three operators, Mapping above Codes, a Parts block and "+ Add a named slot", a Reference Configuration block, locked fields, and survey forms that hide the mapping controls.

@@ -1,5 +1,7 @@
 # Form builder S6: ValueSets
 
+**Status:** merged to `main` on 2026-09-14 as `62719f40`. The checkboxes below were not ticked while the work ran, so they do not show what was done. Git history does.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. The operator prefers inline execution, one task at a time.
 
 **Goal:** Bind a field's options to a ValueSet picked from a list, show and apply FHIR's own binding for a picked path, and give every install FHIR's standard ValueSets, as corlix does.

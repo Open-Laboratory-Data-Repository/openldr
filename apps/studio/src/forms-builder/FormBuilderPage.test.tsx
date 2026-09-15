@@ -742,7 +742,10 @@ describe('FormBuilderPage (three-pane shell)', () => {
     openSelectionMenu();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Move to Vitals' }));
     expect(screen.queryByText('No section')).toBeNull();
-    expect(screen.getAllByText('vitals')).toHaveLength(3);
+    // Each row's pill names the section by its label. The header and drop panel repeat it, so
+    // count inside the rows.
+    const cards = [...document.querySelectorAll<HTMLElement>('[data-sortable-card]')];
+    expect(cards.filter((c) => within(c).queryByText('Vitals'))).toHaveLength(3);
   });
 
   it('Delete asks first, then removes the selection and keeps a locked field', async () => {

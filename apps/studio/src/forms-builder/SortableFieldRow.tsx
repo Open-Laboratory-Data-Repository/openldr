@@ -25,6 +25,8 @@ export interface SortableFieldRowProps {
   lintIssue?: FormLintIssue;
   /** True when this group holds many instances. The list derives it with `groupRepeats`. */
   repeats?: boolean;
+  /** The label of the field's section. The pill falls back to the id when no section has one. */
+  sectionLabel?: string;
   onSelect: (f: FormField, e: React.MouseEvent) => void;
   onToggleEnabled: (id: string) => void;
   onToggleRequired: (id: string) => void;
@@ -38,6 +40,7 @@ export function SortableFieldRow({
   anchor = false,
   lintIssue,
   repeats = false,
+  sectionLabel,
   onSelect,
   onToggleEnabled,
   onToggleRequired,
@@ -164,10 +167,10 @@ export function SortableFieldRow({
         {field.fieldType}
       </Badge>
 
-      {/* Section badge */}
+      {/* Section badge: the section's label, as corlix's FieldRow prints it, not its id */}
       {field.section && (
         <Badge variant="outline" className="text-[10px] shrink-0">
-          {field.section}
+          {sectionLabel ?? field.section}
         </Badge>
       )}
 

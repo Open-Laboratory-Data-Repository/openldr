@@ -1,5 +1,7 @@
 # Form builder S3: layout (preview sheet, Library pane, narrow tabs)
 
+**Status:** merged to `main` on 2026-09-14 as `56529531`. The checkboxes below were not ticked while the work ran, so they do not show what was done. Git history does.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. The operator prefers inline execution, one task at a time.
 
 **Goal:** Make CE's form builder layout act like corlix's: Preview moves into a sheet opened from the `⋯` menu, a Library pane on the right lists the FHIR elements the form does not bind yet, and below 980px of workspace the two panes become Form and Library tabs.

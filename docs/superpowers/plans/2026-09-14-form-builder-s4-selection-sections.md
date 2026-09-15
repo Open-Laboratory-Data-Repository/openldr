@@ -1,5 +1,7 @@
 # Form builder S4: selection and sections
 
+**Status:** merged to `main` on 2026-09-14 as `b59bdee0`. The checkboxes below were not ticked while the work ran, so they do not show what was done. Git history does.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. The operator prefers inline execution, one task at a time.
 
 **Goal:** Select many fields and act on them together, drag a field onto a section, and edit a section's visibility rule, as corlix does.

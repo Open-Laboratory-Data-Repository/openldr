@@ -1,5 +1,7 @@
 # Form builder S7: Suggested codes
 
+**Status:** merged to `main` on 2026-09-14 as `eb80932f`. The checkboxes below were not ticked while the work ran, so they do not show what was done. Git history does.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. The operator prefers inline execution, one task at a time.
 
 **Goal:** Offer codes for a field in the Codes block, each labelled with where it came from, and let an author add one with a click. Adding a code CE lacks also adds it to the terminology, with an Undo.

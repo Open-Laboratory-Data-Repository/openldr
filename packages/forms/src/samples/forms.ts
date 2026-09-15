@@ -49,8 +49,10 @@ const facilityForm: FormSchema = {
       // belonged in. That is what let the Facilities table display a code the Edit sheet could not
       // bind, and what sent the first hand-registered facility into the wrong box. Migration 086
       // collapsed the columns; 087 collapsed the form onto them.
+      // The value field is what lets the builder draw the code as a slot of Location.identifier
+      // (migration 100). With the discriminator alone it drew as a loose row.
       id: 'fld-fac-code', fhirPath: 'Location.identifier.value',
-      fhirDiscriminator: { system: NATIONAL_FACILITY_SYSTEM },
+      fhirDiscriminator: { system: NATIONAL_FACILITY_SYSTEM }, fhirValueField: 'value',
       displayLabel: 'Facility code', description: null, fieldType: 'identifier',
       required: true, enabled: true, order: 1, cardinality: { min: 1, max: '1' },
       apiProperty: 'facilityCode',
@@ -223,6 +225,10 @@ const patientForm: FormSchema = {
       cardinality: { min: 0, max: '1' },
       section: 'demographics',
       apiProperty: 'firstName',
+      // Which entry of Patient.name this fills, and the element it writes. Together they draw
+      // first and last name as two slots of one list (migration 100), as corlix's Patient form does.
+      fhirDiscriminator: { use: 'official' },
+      fhirValueField: 'given',
     },
     {
       id: 'fld-pat-last-name',
@@ -236,6 +242,8 @@ const patientForm: FormSchema = {
       cardinality: { min: 0, max: '1' },
       section: 'demographics',
       apiProperty: 'lastName',
+      fhirDiscriminator: { use: 'official' },
+      fhirValueField: 'family',
     },
     {
       id: 'fld-pat-dob',
@@ -281,6 +289,8 @@ const patientForm: FormSchema = {
       cardinality: { min: 0, max: '1' },
       section: 'demographics',
       placeholder: '+254…',
+      fhirDiscriminator: { system: 'phone' },
+      fhirValueField: 'value',
     },
   ],
 }

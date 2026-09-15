@@ -1,5 +1,7 @@
 # Form builder S5: starter packs
 
+**Status:** merged to `main` on 2026-09-14 as `5f311e08`. The checkboxes below were not ticked while the work ran, so they do not show what was done. Git history does.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. The operator prefers inline execution, one task at a time.
 
 **Goal:** Offer a pre-checked list of fields when a form starts, one pack per resource type, and list the pack entries a form lacks at the top of the Library, as corlix does.
