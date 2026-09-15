@@ -8,9 +8,10 @@ import {
 import { createOperations, LOINC_SYSTEM } from '@openldr/terminology';
 import { createTerminologyBulkSync } from '@openldr/sync';
 import {
-  createTestCatalog, parseCatalogListQuery, catalogChangeAction, TEST_CATALOG_SYSTEM,
-  type CatalogListQuery, type CatalogListResult, type CatalogTestInput,
+  createTestCatalog, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TEST_CATALOG_SYSTEM,
+  type CatalogListQuery, type CatalogListResult, type CatalogTestInput, type CatalogImportInput,
 } from './test-catalog';
+import type { CatalogColumnMap } from './test-catalog-import';
 
 const LOCAL = 'urn:openldr:cs:local';
 // Three of the four codes the seeded specimen-type ValueSet lists (migration 014).
@@ -72,6 +73,22 @@ function q(over: Partial<CatalogListQuery> = {}): CatalogListQuery {
 
 function codes(result: CatalogListResult): string[] {
   return result.rows.map((t) => t.code);
+}
+
+// The export's own layout, so every import test also exercises the headers an export writes.
+const IMPORT_HEAD = ['code', 'name', 'short_name', 'loinc', 'category', 'specimen_types'];
+const ALL_COLUMNS: CatalogColumnMap = {
+  code: 'code', name: 'name', shortName: 'short_name', loinc: 'loinc', category: 'category', specimenTypes: 'specimen_types',
+};
+
+function importInput(rows: string[][], over: Partial<CatalogImportInput> = {}): CatalogImportInput {
+  return { table: { headers: IMPORT_HEAD, rows }, columnMap: ALL_COLUMNS, ...over };
+}
+
+async function catalogGeneration(db: Kysely<InternalSchema>): Promise<number> {
+  const row = await db.selectFrom('terminology_systems').select('generation')
+    .where('url', '=', TEST_CATALOG_SYSTEM).executeTakeFirst();
+  return row ? Number(row.generation) : 0;
 }
 
 async function storedConcept(db: Kysely<InternalSchema>, code: string): Promise<{ status: string | null; properties: unknown }> {
@@ -510,5 +527,144 @@ describe('test catalog: options and row changes', () => {
       catalogChangeAction('enabled', true), catalogChangeAction('enabled', false),
       catalogChangeAction('active', false), catalogChangeAction('active', true),
     ]).toEqual(['test_catalog.enable', 'test_catalog.disable', 'test_catalog.retire', 'test_catalog.restore']);
+  });
+});
+
+describe('test catalog: import preview', () => {
+  it('reads a file for import and suggests its columns, and refuses a bad one as invalid', () => {
+    const file = readCatalogImportFile(new TextEncoder().encode('Test code,Test name\nHIVVL,HIV viral load\n'), 'csv');
+    expect(file).toEqual({
+      headers: ['Test code', 'Test name'], rows: [['HIVVL', 'HIV viral load']], sheetName: null, sheetCount: 1,
+      suggested: { code: 'Test code', name: 'Test name' },
+    });
+    let caught: unknown;
+    try {
+      readCatalogImportFile(new TextEncoder().encode('code,name\n'), 'xlsx');
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toMatchObject({ kind: 'invalid', message: 'The file is not an Excel workbook (.xlsx).' });
+  });
+
+  it('counts new, changed, unchanged and refused rows, and writes nothing', async () => {
+    const { db, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', specimenTypes: [BLD] });
+    await catalog.create({ code: 'CD4', display: 'CD4 count', category: 'HAEM' });
+    const generation = await catalogGeneration(db);
+
+    const report = await catalog.importPreview(importInput([
+      ['HIVVL', 'HIV viral load', '', '', 'Molecular', 'Blood'],
+      ['CD4', 'CD4 cell count', '', '', 'haem', ''],
+      ['GLU', 'Glucose', '', '', 'Chemistry', 'Blood; urine'],
+      ['', 'No code', '', '', '', ''],
+      ['HIVVL', 'HIV viral load again', '', '', '', ''],
+    ]));
+
+    expect(report).toEqual({
+      counts: { new: 1, changed: 1, unchanged: 1, refused: 2 },
+      refused: [
+        { line: 5, code: null, reason: 'A test needs a national code or a LOINC code.' },
+        { line: 6, code: 'HIVVL', reason: 'Test HIVVL is already on row 2 of this file.' },
+      ],
+      unmatched: { categories: [], specimens: [] },
+      categoriesToAdd: [],
+      loincChecked: false,
+    });
+    expect((await catalog.get('CD4'))?.display).toBe('CD4 count');
+    expect(await catalog.get('GLU')).toBeNull();
+    expect(await catalogGeneration(db)).toBe(generation);
+  });
+
+  it('lists text that matched nothing, refuses its rows until answered, and adds a category the operator names', async () => {
+    const { catalog } = await buildCatalog();
+    const rows = [
+      ['VL1', 'Viral load 1', '', '', 'Virology', 'Plasma'],
+      ['VL2', 'Viral load 2', '', '', 'virology', 'Blood'],
+    ];
+
+    const unanswered = await catalog.importPreview(importInput(rows));
+    expect(unanswered.counts).toEqual({ new: 0, changed: 0, unchanged: 0, refused: 2 });
+    expect(unanswered.refused).toEqual([
+      {
+        line: 2, code: 'VL1',
+        reason: 'Category "Virology" is not in the test category list. Choose a category for it. '
+          + 'Specimen "Plasma" is not in the specimen type list. Choose a specimen for it.',
+      },
+      { line: 3, code: 'VL2', reason: 'Category "virology" is not in the test category list. Choose a category for it.' },
+    ]);
+    expect(unanswered.unmatched).toEqual({ categories: [{ text: 'Virology', rows: 2 }], specimens: [{ text: 'Plasma', rows: 1 }] });
+
+    const answered = await catalog.importPreview(importInput(rows, {
+      valueMap: {
+        categories: [{ text: 'VIROLOGY', kind: 'new', code: 'VIRO', display: 'Virology' }],
+        specimens: [{ text: 'plasma', system: LOCAL, code: 'BLD' }],
+      },
+    }));
+    expect(answered.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 0 });
+    expect(answered.categoriesToAdd).toEqual([{ code: 'VIRO', display: 'Virology' }]);
+    // Answered text stays listed, so the Values step can show the answer.
+    expect(answered.unmatched).toEqual(unanswered.unmatched);
+  });
+
+  it('refuses a new category with no code or name, or one that already exists', async () => {
+    const { catalog } = await buildCatalog();
+    const withNew = (code: string, display: string) => importInput([['VL1', 'Viral load', '', '', 'Virology', '']], {
+      valueMap: { categories: [{ text: 'Virology', kind: 'new', code, display }], specimens: [] },
+    });
+    await expect(catalog.importPreview(withNew(' ', 'Virology')))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'The new category for "Virology" needs a code.' });
+    await expect(catalog.importPreview(withNew('VIRO', ' ')))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'The new category VIRO needs a name.' });
+    await expect(catalog.importPreview(withNew('MOL', 'Molecular again')))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'Category MOL already exists. Choose it instead of adding it.' });
+  });
+
+  it('leaves a field alone when its column is not mapped', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
+    const report = await catalog.importPreview({
+      table: { headers: ['code', 'name'], rows: [['HIVVL', 'HIV viral load']] },
+      columnMap: { code: 'code', name: 'name' },
+    });
+    expect(report.counts).toEqual({ new: 0, changed: 0, unchanged: 1, refused: 0 });
+  });
+
+  it('checks LOINC codes against LOINC when it is loaded, and says when it could check only their format', async () => {
+    const { db, catalog } = await buildCatalog();
+    const rows = [['A', 'A', '', 'ABC', '', ''], ['B', 'B', '', '25836-8', '', ''], ['C', 'C', '', '2345-7', '', '']];
+
+    const unloaded = await catalog.importPreview(importInput(rows));
+    expect(unloaded.loincChecked).toBe(false);
+    expect(unloaded.refused).toEqual([{ line: 2, code: 'A', reason: '"ABC" is not a LOINC code. LOINC codes look like 12345-6.' }]);
+
+    await db.insertInto('terminology_concepts').values({
+      system: LOINC_SYSTEM, code: '2345-7', display: 'Glucose', status: 'ACTIVE', properties: null,
+    }).execute();
+    const loaded = await catalog.importPreview(importInput(rows));
+    expect(loaded.loincChecked).toBe(true);
+    expect(loaded.counts).toEqual({ new: 1, changed: 0, unchanged: 0, refused: 2 });
+    expect(loaded.refused[1]).toEqual({ line: 3, code: 'B', reason: 'LOINC code 25836-8 is not in the LOINC loaded on this install.' });
+  });
+
+  it('does not check again a LOINC code the test already has', async () => {
+    const { db, catalog } = await buildCatalog();
+    // Linked before LOINC was loaded, so only a DRAFT stub stands behind the code.
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
+    await db.insertInto('terminology_concepts').values({
+      system: LOINC_SYSTEM, code: '2345-7', display: 'Glucose', status: 'ACTIVE', properties: null,
+    }).execute();
+    const report = await catalog.importPreview(importInput([['HIVVL', 'HIV viral load', '', '25836-8', '', '']]));
+    expect(report.counts).toEqual({ new: 0, changed: 0, unchanged: 1, refused: 0 });
+  });
+
+  it('refuses a map with no name, a table over the row limit, and a lab whose catalog comes from central', async () => {
+    const { db, catalog } = await buildCatalog();
+    await expect(catalog.importPreview(importInput([], { columnMap: { code: 'code' } })))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'Choose the column that holds the test name. It is required.' });
+    const many = Array.from({ length: 5001 }, (_, i) => [`T${i}`, `Test ${i}`, '', '', '', '']);
+    await expect(catalog.importPreview(importInput(many)))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'The file has 5001 rows under its header. The limit is 5000.' });
+    await markCentral(db);
+    await expect(catalog.importPreview(importInput([]))).rejects.toMatchObject({ kind: 'central-managed' });
   });
 });

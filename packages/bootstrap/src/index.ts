@@ -1744,12 +1744,20 @@ export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities, resolveKnownNationalSystem } from './facility-import';
 export {
-  createTestCatalog, parseCatalogListQuery, catalogChangeAction, TestCatalogError,
+  createTestCatalog, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TestCatalogError,
   TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CATEGORY_VALUE_SET, SPECIMEN_TYPE_VALUE_SET,
   type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
   type LabSettingsInput, type SpecimenCoding,
   type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption,
+  type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal,
+  type CatalogUnmatchedValue,
 } from './test-catalog';
+export {
+  CATALOG_IMPORT_FIELDS, CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS,
+  catalogColumnMapSchema, catalogValueMapSchema, catalogImportInputSchema,
+  type CatalogImportField, type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer, type SpecimenAnswer,
+} from './test-catalog-import';
+export type { TableFileFormat } from './table-file';
 export type {
   FacilityImportDeps, FacilityImportOptions, FacilityImportResult,
   // Reachable through `FacilityImportResult` — exported so a consumer can name the type of a
