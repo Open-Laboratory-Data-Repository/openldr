@@ -84,11 +84,38 @@ export interface LabSettingsInput {
   localDisplay: string | null;
 }
 
+/** A category the sheet can offer. */
+export interface CatalogCategoryOption {
+  code: string;
+  display: string | null;
+}
+
+/** A specimen type the sheet can offer. */
+export interface CatalogSpecimenOption {
+  system: string;
+  code: string;
+  display: string | null;
+}
+
+/** Everything the page's pickers offer, taken from the same ValueSets the save checks against. */
+export interface CatalogOptions {
+  categories: CatalogCategoryOption[];
+  specimenTypes: CatalogSpecimenOption[];
+  /** The LOINC code system when LOINC is loaded here, so the sheet can search it. Null otherwise. */
+  loinc: { systemId: string; system: string } | null;
+}
+
 export class TestCatalogError extends Error {
   constructor(message: string, public readonly kind: 'invalid' | 'not-found' | 'conflict' | 'central-managed') {
     super(message);
     this.name = 'TestCatalogError';
   }
+}
+
+/** The audit action for a row change. The route and the CLI both record it, so they must agree. */
+export function catalogChangeAction(field: 'enabled' | 'active', value: boolean): string {
+  if (field === 'enabled') return value ? 'test_catalog.enable' : 'test_catalog.disable';
+  return value ? 'test_catalog.restore' : 'test_catalog.retire';
 }
 
 export interface TestCatalog {
@@ -98,6 +125,9 @@ export interface TestCatalog {
   create(input: CatalogTestInput): Promise<CatalogTest>;
   update(code: string, input: CatalogTestInput): Promise<CatalogTest>;
   setLabSettings(code: string, input: LabSettingsInput): Promise<CatalogTest>;
+  options(): Promise<CatalogOptions>;
+  setEnabled(code: string, enabled: boolean): Promise<CatalogTest>;
+  setActive(code: string, active: boolean): Promise<CatalogTest>;
 }
 
 export interface TestCatalogDeps {
@@ -206,6 +236,11 @@ function uniqueCodings(list: SpecimenCoding[]): SpecimenCoding[] {
   return out;
 }
 
+/** Order picker choices by what the operator reads: the name, or the code when there is none. */
+function byLabel(a: { code: string; display: string | null }, b: { code: string; display: string | null }): number {
+  return (a.display ?? a.code).localeCompare(b.display ?? b.code);
+}
+
 export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   const { db } = deps;
 
@@ -286,9 +321,14 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     }
   }
 
-  async function expandCodes(url: string): Promise<SpecimenCoding[]> {
+  async function expandEntries(url: string): Promise<CatalogSpecimenOption[]> {
     const vs = await deps.ops.expand(url, { count: 100_000 });
-    return (vs.expansion?.contains ?? []).map((c) => ({ system: c.system ?? '', code: c.code ?? '' }));
+    return (vs.expansion?.contains ?? [])
+      .map((c) => ({ system: c.system ?? '', code: c.code ?? '', display: c.display ?? null }));
+  }
+
+  async function expandCodes(url: string): Promise<SpecimenCoding[]> {
+    return (await expandEntries(url)).map(({ system, code }) => ({ system, code }));
   }
 
   async function loincLoaded(): Promise<boolean> {
@@ -428,6 +468,49 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return saved(code);
   }
 
+  async function options(): Promise<CatalogOptions> {
+    const [categories, specimenTypes] = await Promise.all([
+      expandEntries(TEST_CATEGORY_VALUE_SET),
+      expandEntries(SPECIMEN_TYPE_VALUE_SET),
+    ]);
+    let loinc: CatalogOptions['loinc'] = null;
+    if (await loincLoaded()) {
+      const row = await db.selectFrom('coding_systems').select('id').where('url', '=', LOINC_SYSTEM).executeTakeFirst();
+      if (row) loinc = { systemId: row.id, system: LOINC_SYSTEM };
+    }
+    return {
+      categories: categories.map(({ code, display }) => ({ code, display })).sort(byLabel),
+      specimenTypes: specimenTypes.sort(byLabel),
+      loinc,
+    };
+  }
+
+  async function setEnabled(code: string, enabled: boolean): Promise<CatalogTest> {
+    // Only the switch changes. The lab's narrowed specimens and local name stay as they are, even when
+    // central has since dropped a specimen the lab kept: switching a test on must not fail on a field
+    // the operator did not touch. Nothing here signals sync.
+    if (!(await storedConcept(code))) throw notFound(code);
+    await db.insertInto('test_catalog_lab_settings').values({ code, enabled, updated_at: sql<Date>`now()` })
+      .onConflict((oc) => oc.column('code').doUpdateSet({ enabled, updated_at: sql<Date>`now()` }))
+      .execute();
+    return saved(code);
+  }
+
+  async function setActive(code: string, active: boolean): Promise<CatalogTest> {
+    await refuseUnlessOwned();
+    const test = await get(code);
+    if (!test) throw notFound(code);
+    // Only the status changes, so retiring never fails on a field it does not touch. No change means
+    // no write and no sync signal.
+    if (test.active === active) return test;
+    await db.updateTable('terminology_concepts')
+      .set({ status: active ? 'ACTIVE' : RETIRED_STATUS })
+      .where('system', '=', TEST_CATALOG_SYSTEM).where('code', '=', code)
+      .execute();
+    await markTerminologyChanged(db, TEST_CATALOG_SYSTEM);
+    return saved(code);
+  }
+
   return {
     ownedHere,
     list,
@@ -435,5 +518,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     create,
     update,
     setLabSettings,
+    options,
+    setEnabled,
+    setActive,
   };
 }
