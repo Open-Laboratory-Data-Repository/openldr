@@ -52,7 +52,7 @@
 - **The table is re-sent with each step.** The server parses the file once and returns the table. The studio sends it back with each preview and with the apply, and the apply re-plans from scratch, never trusting the preview. At 5,000 rows that is well under the 16 MiB body cap set on those routes.
 - **`toCsv` guards against spreadsheet formulas** (`packages/reporting/src/helpers.ts:83`), so an export writes a value that starts with `=`, `@` or a non-numeric `+`/`-` with a leading `'`. Importing that file back reads the `'` as part of the value. No real test code starts that way today.
 - **A specimen code shared by two systems in the specimen list** is ambiguous in a file, so it is reported as unmatched and must be mapped.
-- **`saveExclusive` re-inserts the ConceptMap mirror even for an inactive write** (`packages/db/src/terminology-admin-store.ts:1045-1048`), unlike `update` (`:937-942`). S3 unlinks through `update` and never writes an inactive row through `saveExclusive`. Not fixed here.
+- **`saveExclusive` re-inserts the ConceptMap mirror even for an inactive write** (`packages/db/src/terminology-admin-store.ts:1079-1082`), unlike `update` (`:971-976`). S3 unlinks through `update` and never writes an inactive row through `saveExclusive`. Not fixed here.
 - **Line numbers in the review are row numbers:** the header is row 1, the first test is row 2.
 - **Two columns with the same header** read as the first of them, and the Columns step offers the header once.
 - **A new category is written to the category code system.** The category ValueSet includes that whole system (migration 104), so the category is offered at once. If an operator has changed the ValueSet to a list of codes, the new category is not in it, and the next edit of an imported test would refuse it.
@@ -94,7 +94,7 @@
 ### Task 1: term mappings can join the caller's transaction
 
 **Files:**
-- Modify: `packages/db/src/terminology-admin-store.ts` (the `TerminologyAdminStore` interface at `:187` and `:222`; the `update` implementation at `:919`; the `saveExclusive` implementation at `:961`)
+- Modify: `packages/db/src/terminology-admin-store.ts` (the `TerminologyAdminStore` interface at `:187` and `:222`; the `update` implementation at `:953`; the `saveExclusive` implementation at `:995`)
 - Modify: `packages/db/src/terminology-admin-store.test.ts`
 
 **Interfaces:**
