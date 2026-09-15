@@ -26,7 +26,7 @@ const REPORT: CatalogImportReport = {
 type Impl = (...args: any[]) => Promise<unknown>;
 
 type Method = 'list' | 'get' | 'create' | 'update' | 'setLabSettings' | 'options' | 'setEnabled' | 'setActive'
-  | 'importPreview' | 'importApply' | 'exportCsv';
+  | 'importPreview' | 'importApply' | 'exportCsv' | 'specimensFor';
 
 function fakeCtx(over: Partial<Record<Method, Impl>> = {}) {
   const calls: Array<{ method: string; args: unknown[] }> = [];
@@ -47,6 +47,7 @@ function fakeCtx(over: Partial<Record<Method, Impl>> = {}) {
     importPreview: spy('importPreview', over.importPreview ?? (async () => REPORT)),
     importApply: spy('importApply', over.importApply ?? (async () => REPORT)),
     exportCsv: spy('exportCsv', over.exportCsv ?? (async () => 'code,name\nHIVVL,HIV viral load\n')),
+    specimensFor: spy('specimensFor', over.specimensFor ?? (async () => [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }])),
   };
   const ctx = {
     testCatalog,
@@ -327,5 +328,24 @@ describe('test catalog routes', () => {
     expect(res.headers['content-type']).toBe('text/csv; charset=utf-8');
     expect(res.headers['content-disposition']).toBe('attachment; filename="test-catalog.csv"');
     expect(res.body).toBe('code,name\nHIVVL,HIV viral load\n');
+  });
+
+  it('POST /specimens answers the specimens for the chosen tests, to anyone who can use forms', async () => {
+    const { ctx, calls } = fakeCtx();
+    const tests = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' }];
+    const res = await appWith(ctx, ['forms.view']).inject({ method: 'POST', url: '/api/test-catalog/specimens', payload: { tests } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ specimens: [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }] });
+    expect(calls).toEqual([{ method: 'specimensFor', args: [tests] }]);
+  });
+
+  it('POST /specimens needs forms.view, and refuses a body that is not a list of codings', async () => {
+    const { ctx, calls } = fakeCtx();
+    const terminologyOnly = await appWith(ctx, ['terminology.view', 'terminology.manage'])
+      .inject({ method: 'POST', url: '/api/test-catalog/specimens', payload: { tests: [] } });
+    expect(terminologyOnly.statusCode).toBe(403);
+    const bad = await appWith(ctx, ['forms.view']).inject({ method: 'POST', url: '/api/test-catalog/specimens', payload: { tests: 'HIVVL' } });
+    expect(bad.statusCode).toBe(400);
+    expect(calls).toEqual([]);
   });
 });

@@ -2534,6 +2534,14 @@ export async function downloadTestCatalogCsv(): Promise<void> {
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
+/** The specimens at least one of these tests accepts, by this lab's lists (test catalog S4). The server
+ *  ignores codings that are not catalog tests, so an empty list means the picker does not narrow. */
+export const catalogSpecimensFor = (
+  tests: { system: string; code: string }[],
+): Promise<{ system: string; code: string; display: string | null }[]> =>
+  authFetch('/api/test-catalog/specimens', jbody({ tests }, 'POST'))
+    .then((r) => okJson<{ specimens: { system: string; code: string; display: string | null }[] }>(r, 'narrow specimens'))
+    .then((b) => b.specimens);
 
 // ── Marketplace (SP-4) ─────────────────────────────────────────────────────────
 export interface AvailableArtifact {

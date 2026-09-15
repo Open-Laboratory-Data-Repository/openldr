@@ -13,6 +13,10 @@ const VIEW = { preHandler: requireCapability('terminology.view') };
 const MANAGE = { preHandler: requireCapability('terminology.manage') };
 // An import step sends the whole table back, up to 5,000 rows, which passes Fastify's 1 MiB default.
 const IMPORT_STEP = { ...MANAGE, bodyLimit: 16 * 1024 * 1024 };
+// Data entry narrows the Lab order's specimen picker through the specimens route, and a Lab Technician
+// holds forms.view and forms.submit only (packages/rbac/src/presets.ts:52). So that route takes the gate
+// reference search takes (reference-search-routes.ts:9), not terminology.view.
+const FORMS_VIEW = { preHandler: requireCapability('forms.view') };
 const importFormat = z.enum(['csv', 'xlsx']);
 
 const coding = z.object({ system: z.string().min(1), code: z.string().min(1) });
@@ -32,6 +36,7 @@ const labInput = z.object({
 });
 const enabledInput = z.object({ enabled: z.boolean() });
 const activeInput = z.object({ active: z.boolean() });
+const specimensInput = z.object({ tests: z.array(coding) });
 
 // A catalog refusal keeps its words and says which kind it is. Anything else goes to the shared
 // error handler.
@@ -195,5 +200,12 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
       .header('content-type', 'text/csv; charset=utf-8')
       .header('content-disposition', 'attachment; filename="test-catalog.csv"')
       .send(csv);
+  });
+
+  // Test catalog S4: the specimens the chosen tests accept, for the Lab order's specimen picker (spec 4.5).
+  app.post('/api/test-catalog/specimens', FORMS_VIEW, async (req, reply) => {
+    const parsed = specimensInput.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    return reply.send({ specimens: await ctx.testCatalog.specimensFor(parsed.data.tests) });
   });
 }

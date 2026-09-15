@@ -20,8 +20,9 @@ import { ReferencePicker } from './ReferencePicker';
 vi.mock('@/api', () => ({
   referenceSearch: vi.fn(),
   referenceSearchPreview: vi.fn(),
+  catalogSpecimensFor: vi.fn(),
 }));
-import { referenceSearch, referenceSearchPreview } from '@/api';
+import { catalogSpecimensFor, referenceSearch, referenceSearchPreview } from '@/api';
 
 const field = { id: 'patient', displayLabel: 'Patient', fieldType: 'reference', referenceTarget: 'Patient' } as never;
 const entityResult = {
@@ -33,6 +34,7 @@ const entityResult = {
 beforeEach(() => {
   vi.mocked(referenceSearch).mockReset();
   vi.mocked(referenceSearchPreview).mockReset();
+  vi.mocked(catalogSpecimensFor).mockReset();
 });
 
 describe('ReferencePicker — endpoint selection', () => {
@@ -243,5 +245,49 @@ describe('ReferencePicker', () => {
     const optionEl = option.closest('[role="option"]') as HTMLElement;
     expect(optionEl).toHaveAttribute('id');
     expect(combobox).toHaveAttribute('aria-activedescendant', optionEl.id);
+  });
+});
+
+describe('ReferencePicker: narrowed by the chosen tests (test catalog S4)', () => {
+  const specimenField = {
+    id: 'fld-ord-specimen-type', displayLabel: 'Specimen Type', fieldType: 'reference',
+    valueSetUrl: 'urn:openldr:valueset:specimen-type', referenceDependsOn: 'tests',
+  } as never;
+  const chosen = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' }];
+  const accepted = [
+    { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' },
+    { system: 'urn:openldr:cs:local', code: 'UR', display: 'Urine' },
+  ];
+
+  it('offers only the specimens the chosen tests accept, without searching the whole list', async () => {
+    vi.mocked(catalogSpecimensFor).mockResolvedValue(accepted);
+    const user = userEvent.setup();
+    render(<ReferencePicker field={specimenField} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} dependsOnValue={chosen} />);
+
+    await waitFor(() => expect(catalogSpecimensFor).toHaveBeenCalledWith([{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' }]));
+    await user.click(screen.getByRole('combobox'));
+    await waitFor(() => expect(screen.getByText('Urine')).toBeInTheDocument());
+    expect(screen.getByText('Blood')).toBeInTheDocument();
+
+    await user.type(screen.getByRole('combobox'), 'ur');
+    await waitFor(() => expect(screen.queryByText('Blood')).toBeNull());
+    expect(screen.getByText('Urine')).toBeInTheDocument();
+    expect(referenceSearch).not.toHaveBeenCalled();
+  });
+
+  it('searches as before when the chosen tests give nothing to narrow by', async () => {
+    vi.mocked(catalogSpecimensFor).mockResolvedValue([]);
+    vi.mocked(referenceSearch).mockResolvedValue({ kind: 'coding', rows: [{ system: 'urn:openldr:cs:local', code: 'CSF', display: 'CSF' }], total: 1 });
+    const user = userEvent.setup();
+    render(<ReferencePicker field={specimenField} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} dependsOnValue={chosen} />);
+
+    await waitFor(() => expect(catalogSpecimensFor).toHaveBeenCalledTimes(1));
+    await user.type(screen.getByRole('combobox'), 'cs');
+    await waitFor(() => expect(referenceSearch).toHaveBeenCalledWith('f1', 'fld-ord-specimen-type', { q: 'cs' }));
+  });
+
+  it('does not ask to narrow when nothing is chosen', () => {
+    render(<ReferencePicker field={specimenField} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} dependsOnValue={undefined} />);
+    expect(catalogSpecimensFor).not.toHaveBeenCalled();
   });
 });

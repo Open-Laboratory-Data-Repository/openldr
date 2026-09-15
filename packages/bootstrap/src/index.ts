@@ -67,7 +67,7 @@ import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegis
 import { createFacilityJobWorker } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
-import { createTestCatalog, type TestCatalog } from './test-catalog';
+import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -935,7 +935,7 @@ const reporting: ReportingApi = {
       getConcept: (s, c) => termStore.getConcept(s, c),
       findConcepts: (q) => termStore.findConcepts(q),
       countConcepts: (q) => termStore.countConcepts(q),
-      getResourceByUrl: (u) => termStore.getResourceByUrl(u),
+      getResourceByUrl: withLabTestsList(termDb, (u) => termStore.getResourceByUrl(u)),
       translate: (q) => termStore.translate(q),
     }),
     admin: termAdmin,
@@ -1746,6 +1746,7 @@ export { importFacilities, resolveKnownNationalSystem } from './facility-import'
 export {
   createTestCatalog, parseCatalogListQuery, catalogChangeAction, catalogImportAudit, readCatalogImportFile, TestCatalogError,
   TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CATEGORY_VALUE_SET, SPECIMEN_TYPE_VALUE_SET,
+  LAB_TESTS_VALUE_SET, labTestsCompose, withLabTestsList,
   type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
   type LabSettingsInput, type SpecimenCoding,
   type CatalogOptions, type CatalogCategoryOption, type CatalogSpecimenOption,

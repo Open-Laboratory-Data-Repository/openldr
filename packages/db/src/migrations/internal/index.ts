@@ -103,6 +103,7 @@ import * as m101 from './101_users_form_slots';
 import * as m102 from './102_lab_order_notes_ward_paths';
 import * as m103 from './103_lab_order_requisition_slot';
 import * as m104 from './104_test_catalog';
+import * as m105 from './105_lab_order_test_catalog';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -210,4 +211,5 @@ export const internalMigrations: Record<string, Migration> = {
   '102_lab_order_notes_ward_paths': { up: m102.up, down: m102.down },
   '103_lab_order_requisition_slot': { up: m103.up, down: m103.down },
   '104_test_catalog': { up: m104.up, down: m104.down },
+  '105_lab_order_test_catalog': { up: m105.up, down: m105.down },
 };

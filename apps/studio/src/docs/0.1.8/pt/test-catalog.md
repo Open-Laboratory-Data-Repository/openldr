@@ -48,3 +48,13 @@ Os exames são comparados pelo código, por isso importar o mesmo ficheiro duas 
 Escolha **Exportar CSV** no menu ⋯. Qualquer instalação pode exportar, incluindo um laboratório que recebe o catálogo do nível central. O ficheiro tem os exames ativos nas colunas que uma importação lê: `code`, `name`, `short_name`, `loinc`, `category` e `specimen_types`. Edite-o numa folha de cálculo e importe-o de novo. Um valor que começa por `=` ou `@` recebe um `'` no início, para que uma folha de cálculo não o execute como fórmula.
 
 Na linha de comandos: `openldr test-catalog import <ficheiro>` mostra o que mudaria, e `--apply` escreve-o. `openldr test-catalog export` escreve o CSV.
+
+## O pedido de exames
+
+O campo **Tests** do pedido de exames lista os exames deste laboratório: os exames do catálogo ativados aqui, com o nome local quando existe. Um exame retirado sai da lista. Ative exames antes de qualquer pedido: o campo é obrigatório, e uma lista vazia não deixa passar nenhum pedido.
+
+O campo **Specimen Type** oferece então só as amostras aceites por pelo menos um exame escolhido, pela lista mais curta deste laboratório quando a definiu. Sem exames escolhidos, ou se nenhum lista amostras, oferece toda a lista de amostras, como antes.
+
+Um pedido enviado indica primeiro o código LOINC de cada exame, quando o tem, e depois o código do catálogo. Os relatórios que leem o primeiro código de um pedido continuam a encontrar LOINC. Um exame sem código LOINC é enviado com o código do catálogo.
+
+Uma instalação cujo pedido de exames foi alterado no editor de formulários mantém o seu próprio campo Tests. Para usar esta lista, escolha o conjunto de valores `urn:openldr:valueset:lab-tests` para esse campo no editor. Na linha de comandos, `openldr terminology expand urn:openldr:valueset:lab-tests` mostra a lista que o campo Tests oferece.

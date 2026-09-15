@@ -5,14 +5,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/api', () => ({
   referenceSearch: vi.fn(),
   referenceSearchPreview: vi.fn(),
+  catalogSpecimensFor: vi.fn(),
 }));
-import { referenceSearch, referenceSearchPreview } from '@/api';
+import { catalogSpecimensFor, referenceSearch, referenceSearchPreview } from '@/api';
 import { FormRuntime } from './FormRuntime';
 import type { FormSchema } from './types';
 
 beforeEach(() => {
   vi.mocked(referenceSearch).mockReset();
   vi.mocked(referenceSearchPreview).mockReset();
+  vi.mocked(catalogSpecimensFor).mockReset();
 });
 
 // New flat-model schema: required text field, a boolean, and a conditional text field.
@@ -656,6 +658,29 @@ describe('FormRuntime', () => {
     const input = screen.getByLabelText('Name');
     fireEvent.change(input, { target: { value: 'No listener' } });
     expect((input as HTMLInputElement).value).toBe('No listener');
+  });
+
+  it('hands a depends-on field the answer it depends on, so its picker can narrow', async () => {
+    vi.mocked(catalogSpecimensFor).mockResolvedValue([]);
+    const orderSchema = {
+      ...schema,
+      fields: [
+        {
+          id: 'tests', fhirPath: 'ServiceRequest.code', displayLabel: 'Tests', description: null, fieldType: 'reference',
+          required: true, enabled: true, order: 1, cardinality: { min: 1, max: '*' }, referenceMultiple: true,
+          valueSetUrl: 'urn:openldr:valueset:lab-tests',
+        },
+        {
+          id: 'specimen', fhirPath: 'Specimen.type', displayLabel: 'Specimen Type', description: null, fieldType: 'reference',
+          required: true, enabled: true, order: 2, cardinality: { min: 1, max: '1' },
+          valueSetUrl: 'urn:openldr:valueset:specimen-type', referenceDependsOn: 'tests',
+        },
+      ],
+    } as FormSchema;
+    const chosen = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' }];
+    render(<FormRuntime schema={orderSchema} formDefinitionId="f1" initialAnswers={{ tests: chosen }} onSubmit={() => {}} />);
+    await waitFor(() => expect(catalogSpecimensFor).toHaveBeenCalledWith([{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' }]));
+    expect(catalogSpecimensFor).toHaveBeenCalledTimes(1);
   });
 });
 

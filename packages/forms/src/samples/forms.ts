@@ -349,13 +349,14 @@ const orderForm: FormSchema = {
       required: true,
       enabled: true,
       order: 1,
-      // A lab order carries several tests. LOINC is the orderable vocabulary; a site with a
-      // curated panel list can point this field at a ValueSet instead, which wins over
-      // referenceTarget.
+      // A lab order carries several tests, chosen from this lab's test list: the catalog tests switched
+      // on here, under their local names (test catalog S4, migration 105). The list is worked out when
+      // read (packages/bootstrap/src/test-catalog.ts), and an order still leads with each test's LOINC
+      // code when it has one (packages/forms/src/extract/extract.ts).
       cardinality: { min: 1, max: '*' },
       referenceMultiple: true,
       section: 'order',
-      referenceTarget: 'http://loinc.org',
+      valueSetUrl: 'urn:openldr:valueset:lab-tests',
       placeholder: 'Search tests…',
     },
     {
@@ -480,6 +481,9 @@ const orderForm: FormSchema = {
       // that needs no change to this form. `valueSetUrl` wins over `referenceTarget`, and the
       // form linter warns when both are set, so `referenceTarget` is deliberately absent.
       valueSetUrl: 'urn:openldr:valueset:specimen-type',
+      // Offers only the specimens at least one chosen test accepts, by this lab's lists (test catalog
+      // S4). With no tests chosen, or none that lists specimens, it offers the whole list.
+      referenceDependsOn: 'tests',
       placeholder: 'Search specimen types…',
     },
   ],
