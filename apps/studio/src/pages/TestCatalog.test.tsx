@@ -93,6 +93,13 @@ describe('Test catalog page', () => {
     expect(api.listTestCatalog).toHaveBeenCalledWith({ q: undefined, limit: 25, offset: 0 });
   });
 
+  it('keeps a test code and its LOINC code on one line', async () => {
+    renderPage();
+    const row = await screen.findByTestId('test-row-HIVVL');
+    expect(within(row).getByText('HIVVL').closest('td')).toHaveClass('whitespace-nowrap');
+    expect(within(row).getByText('25836-8').closest('td')).toHaveClass('whitespace-nowrap');
+  });
+
   it('filters by category through the standard toolbar', async () => {
     renderPage();
     await screen.findByTestId('test-row-HIVVL');
@@ -108,10 +115,11 @@ describe('Test catalog page', () => {
     await waitFor(() => expect(api.listTestCatalog).toHaveBeenLastCalledWith({ q: 'viral', limit: 25, offset: 0 }));
   });
 
-  it('shows the striped empty state, and no table header, when there are no tests', async () => {
+  it('shows the striped empty state, and no table header, when there are no active tests', async () => {
+    // The default list hides retired tests, so the words must stay true when only retired ones exist.
     vi.mocked(api.listTestCatalog).mockResolvedValue({ rows: [], total: 0, ownedHere: true });
     renderPage();
-    expect(await screen.findByText('No tests in the catalog yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No active tests. Retired tests stay hidden unless you filter for them.')).toBeInTheDocument();
     expect(screen.queryByRole('columnheader')).toBeNull();
   });
 

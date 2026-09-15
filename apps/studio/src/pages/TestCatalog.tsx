@@ -72,7 +72,8 @@ export function TestCatalog() {
   const columns = useMemo<ColumnDef<CatalogTest>[]>(() => [
     {
       id: 'code', labelKey: 'testCatalog.col.code', type: 'text', defaultVisible: true, filterable: false, sortable: false,
-      cellClassName: 'font-mono text-xs', accessor: (r) => r.code,
+      // A code never breaks across lines; the table's own frame scrolls sideways instead.
+      cellClassName: 'whitespace-nowrap font-mono text-xs', accessor: (r) => r.code,
     },
     {
       id: 'name', labelKey: 'testCatalog.col.name', type: 'text', defaultVisible: true, filterable: false, sortable: false,
@@ -108,6 +109,7 @@ export function TestCatalog() {
     },
     {
       id: 'loinc', labelKey: 'testCatalog.col.loinc', type: 'enum', defaultVisible: true, sortable: false, operators: ['eq'],
+      cellClassName: 'whitespace-nowrap',
       enumOptions: [
         { value: 'linked', labelKey: 'testCatalog.loincLinked' },
         { value: 'none', labelKey: 'testCatalog.noLoinc' },
