@@ -1,10 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import {
+  discriminatorEquals,
   discriminatorIdentity,
   discriminatorLabel,
   normalizeDiscriminator,
   toStoredDiscriminator,
 } from './discriminator';
+
+// What the order extractor asks: which `system` does this identifier slot name?
+describe('discriminatorEquals', () => {
+  it('reads the value an element must equal, from a map', () => {
+    expect(discriminatorEquals({ system: 'urn:x' }, 'system')).toBe('urn:x');
+  });
+
+  it('reads it from an all-of rule too', () => {
+    const rule = { join: 'all' as const, conds: [{ el: 'use', op: 'equals' as const, val: 'official' }, { el: 'system', op: 'equals' as const, val: 'urn:x' }] };
+    expect(discriminatorEquals(rule, 'system')).toBe('urn:x');
+  });
+
+  it('is null for an any-of rule, which does not name one entry', () => {
+    const rule = { join: 'any' as const, conds: [{ el: 'system', op: 'equals' as const, val: 'urn:x' }, { el: 'system', op: 'equals' as const, val: 'urn:y' }] };
+    expect(discriminatorEquals(rule, 'system')).toBeNull();
+  });
+
+  it('is null for an operator other than equals', () => {
+    const rule = { join: 'all' as const, conds: [{ el: 'system', op: 'starts with' as const, val: 'urn:' }] };
+    expect(discriminatorEquals(rule, 'system')).toBeNull();
+  });
+
+  it('is null with no discriminator, or none on that element', () => {
+    expect(discriminatorEquals(undefined, 'system')).toBeNull();
+    expect(discriminatorEquals({ use: 'official' }, 'system')).toBeNull();
+  });
+});
 import { toQuestionnaire } from './to-questionnaire';
 import { fromQuestionnaire } from './from-questionnaire';
 import { makeField, makeSchema } from './__fixtures__/forms';

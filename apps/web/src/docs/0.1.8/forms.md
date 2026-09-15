@@ -38,7 +38,7 @@ If a reference list is empty, check the configured source and loaded terminology
 ### Editing a field
 
 - **Which entry of a list.** Under Mapping, tick **Array element (discriminator)**. Each condition is an element, an operator, and a value, such as `system` `equals` `urn:x`. The operators are `equals`, `not equals`, and `starts with`. With two or more conditions, choose **All** when every condition must hold, or **Any** when one is enough. **Value Field** names the element that holds the answer, usually `value`.
-- A discriminator is used by the form checks and the Questionnaire export. Data entry does not use it yet.
+- A discriminator is used by the form checks and the Questionnaire export. Data entry does not use it yet, with one exception: when a Lab order is submitted, its reference number carries the `system` its discriminator names.
 - **Another slot.** Under the last slot of a list, **+ Add a named slot** adds a copy with the same path, value field, and type, and blank discriminator values. The API property, codes, and translations are left blank.
 - **Parts of a group.** A group's editor lists its parts after Mapping. Click one to edit it. Your unsaved changes to the group are saved first. **+ Add a part** adds a field inside the group with no FHIR path.
 - **Reference fields.** A reference field has a **Reference Configuration** block after General. **Target** is `Patient` or an active code system. **Depends On** and **Searchable** are saved and exported, but data entry does not use them yet.
@@ -140,7 +140,7 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 ### Modifier un champ
 
 - **L'entrée d'une liste.** Sous Mapping, cochez **Array element (discriminator)**. Chaque condition est un élément, un opérateur et une valeur, par exemple `system` `equals` `urn:x`. Les opérateurs sont `equals`, `not equals` et `starts with`. À partir de deux conditions, choisissez **All** si toutes doivent être vraies, ou **Any** si une seule suffit. **Value Field** désigne l'élément qui porte la réponse, en général `value`.
-- Le discriminateur sert aux contrôles du formulaire et à l'export Questionnaire. La saisie ne l'utilise pas encore.
+- Le discriminateur sert aux contrôles du formulaire et à l'export Questionnaire. La saisie ne l'utilise pas encore, à une exception près : quand une demande Lab order est soumise, son numéro de référence porte le `system` que nomme son discriminateur.
 - **Un autre emplacement.** Sous le dernier emplacement d'une liste, **+ Add a named slot** ajoute une copie avec le même chemin, le même champ de valeur et le même type, et des valeurs de discriminateur vides. La propriété API, les codes et les traductions restent vides.
 - **Parties d'un groupe.** L'éditeur d'un groupe liste ses parties après Mapping. Cliquez sur une partie pour la modifier. Vos modifications non enregistrées du groupe sont d'abord enregistrées. **+ Add a part** ajoute un champ dans le groupe, sans chemin FHIR.
 - **Champs reference.** Un champ reference a un bloc **Reference Configuration** après General. **Target** vaut `Patient` ou un système de codes actif. **Depends On** et **Searchable** sont enregistrés et exportés, mais la saisie ne les utilise pas encore.
@@ -241,7 +241,7 @@ Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative 
 ### Editar um campo
 
 - **Qual entrada de uma lista.** Em Mapping, marque **Array element (discriminator)**. Cada condição é um elemento, um operador e um valor, por exemplo `system` `equals` `urn:x`. Os operadores são `equals`, `not equals` e `starts with`. Com duas ou mais condições, escolha **All** quando todas têm de se cumprir, ou **Any** quando basta uma. **Value Field** indica o elemento que guarda a resposta, normalmente `value`.
-- O discriminador é usado pelas verificações do formulário e pela exportação Questionnaire. A introdução de dados ainda não o usa.
+- O discriminador é usado pelas verificações do formulário e pela exportação Questionnaire. A introdução de dados ainda não o usa, com uma exceção: quando um pedido Lab order é submetido, o seu número de referência leva o `system` que o seu discriminador indica.
 - **Outra posição.** Sob a última posição de uma lista, **+ Add a named slot** acrescenta uma cópia com o mesmo caminho, o mesmo campo de valor e o mesmo tipo, e valores de discriminador em branco. A propriedade API, os códigos e as traduções ficam em branco.
 - **Partes de um grupo.** O editor de um grupo lista as suas partes depois de Mapping. Clique numa parte para a editar. As alterações do grupo ainda não guardadas são guardadas primeiro. **+ Add a part** acrescenta um campo dentro do grupo, sem caminho FHIR.
 - **Campos reference.** Um campo reference tem um bloco **Reference Configuration** depois de General. **Target** é `Patient` ou um sistema de códigos ativo. **Depends On** e **Searchable** são guardados e exportados, mas a introdução de dados ainda não os usa.

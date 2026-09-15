@@ -336,9 +336,10 @@ describe('migrations 102 and 103 on the Lab order form', () => {
 
   // The order extractor reads only the tests, the requisition number and the priority
   // (extract.ts). It reads the requisition number from the old path and the new one. This proves
-  // the new paths change nothing in a submitted order: the shape before 102 and the shape after
-  // 103 extract the same ServiceRequest.
-  it('extracts the same ServiceRequest from the same answers before and after', () => {
+  // the new paths change a submitted order in one way only: the shape after 103 names the
+  // requisition system on the identifier, as the operator asked on 2026-09-15. Everything else,
+  // including the identifier's value, is the same as the shape before 102 produces.
+  it('extracts the same ServiceRequest from the same answers, plus the requisition system', () => {
     const answers = {
       tests: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }],
       'fld-ord-priority': 'urgent',
@@ -352,8 +353,11 @@ describe('migrations 102 and 103 on the Lab order form', () => {
       return ServiceRequestExtractor.extract(toQuestionnaireResponse(model, answers as never), toQuestionnaire(model), ctx);
     };
     const before = extract(LAB_ORDER_FORM_MIGRATION_PREV_FIELDS);
-    expect(extract(order().fields)).toEqual(before);
+    const after = extract(order().fields);
     expect(before[0]).toMatchObject({ priority: 'urgent', identifier: [{ value: 'REF-42' }] });
+    expect((after[0] as any).identifier).toEqual([{ system: 'urn:openldr:order:requisition', value: 'REF-42' }]);
+    const withoutIdentifier = (r: unknown[]) => r.map(({ identifier, ...rest }: any) => rest);
+    expect(withoutIdentifier(after)).toEqual(withoutIdentifier(before));
   });
 });
 

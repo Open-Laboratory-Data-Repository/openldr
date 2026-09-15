@@ -11,9 +11,10 @@ import type {
   Reference,
   ServiceRequest,
 } from 'fhir/r4'
-import type { FormField, FormSchema } from '../schema/form-schema'
+import type { FieldDiscriminator, FormField, FormSchema } from '../schema/form-schema'
 import { fromAnswer } from '../answer-value'
-import { EXT_CORLIX_FHIR_PATH, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
+import { discriminatorEquals } from '../discriminator'
+import { EXT_CORLIX_FHIR_PATH, EXT_CORLIX_FIELD_EXTRAS, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
 
 /** Context the extractors need but the form can't supply (e.g. the encounter's subject). */
 export interface ExtractionContext {
@@ -39,6 +40,18 @@ interface ItemMeta {
   unit?: string
   fhirPath?: string
   answerOptions?: Array<{ code?: string; display?: string }>
+  /** The field's discriminator, carried in the field-extras extension. */
+  discriminator?: FieldDiscriminator
+}
+
+function extrasDiscriminator(item: QuestionnaireItem): FieldDiscriminator | undefined {
+  const json = item.extension?.find((e) => e.url === EXT_CORLIX_FIELD_EXTRAS)?.valueString
+  if (!json) return undefined
+  try {
+    return (JSON.parse(json) as { fhirDiscriminator?: FieldDiscriminator }).fhirDiscriminator
+  } catch {
+    return undefined // a malformed extras blob names no discriminator; the rest still extracts
+  }
 }
 
 function indexItems(questionnaire: Questionnaire): Map<string, ItemMeta> {
@@ -52,6 +65,7 @@ function indexItems(questionnaire: Questionnaire): Map<string, ItemMeta> {
         unit: item.extension?.find((e) => e.url === EXT_QUESTIONNAIRE_UNIT)?.valueCoding?.code,
         fhirPath: item.extension?.find((e) => e.url === EXT_CORLIX_FHIR_PATH)?.valueString,
         answerOptions: item.answerOption?.map((o) => ({ code: o.valueCoding?.code, display: o.valueCoding?.display })),
+        discriminator: extrasDiscriminator(item),
       })
       walk(item.item)
     }
@@ -176,9 +190,11 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       if (value === undefined) return
       // The shipped Lab order binds its requisition number to ServiceRequest.identifier.value since
       // migration 103. A form an operator edited before then keeps the whole-list path, so both
-      // count. The number is still written without a system, exactly as before.
+      // count. The identifier carries the system the field's discriminator names, when it names one.
+      // Every CE reader of an order identifier reads its value only, so the system adds, not moves.
       if (path === 'ServiceRequest.identifier' || path === 'ServiceRequest.identifier.value') {
-        request.identifier = [{ value: String(value) }]
+        const system = discriminatorEquals(meta?.discriminator, 'system')
+        request.identifier = [{ ...(system ? { system } : {}), value: String(value) }]
       }
       if (path === 'ServiceRequest.priority') request.priority = String(value) as ServiceRequest['priority']
     })

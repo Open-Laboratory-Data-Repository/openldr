@@ -5,7 +5,9 @@ import type { DiscriminatorCondition, DiscriminatorRule, FieldDiscriminator } fr
  *
  * Ported from corlix `apps/desktop/src/renderer/lib/discriminator.ts` and `discriminatorLabel.ts`.
  * Corlix also has `matchesDiscriminator` and `discriminatorSeed`, which pick and create a list entry
- * when a record is saved. CE does not read the discriminator on save yet, so they are not ported.
+ * when a record is saved. CE does not pick or create list entries on save, so they are not ported.
+ * The order extractor reads one thing on save: the `system` an identifier slot names
+ * (`discriminatorEquals`).
  */
 
 function isRule(d: FieldDiscriminator): d is DiscriminatorRule {
@@ -24,6 +26,19 @@ export function normalizeDiscriminator(d: FieldDiscriminator | undefined): Discr
     join: 'all',
     conds: Object.keys(d).sort().map((el) => ({ el, op: 'equals' as const, val: d[el] })),
   };
+}
+
+/**
+ * The value `el` must equal for this discriminator to hold, or null when it does not pin one.
+ *
+ * Only an all-of rule pins a value: an any-of rule over two systems names neither. Only `equals`
+ * counts; `starts with urn:` describes many systems, not one. The order extractor uses this to write
+ * the `system` an identifier slot names.
+ */
+export function discriminatorEquals(d: FieldDiscriminator | undefined, el: string): string | null {
+  const rule = normalizeDiscriminator(d);
+  if (!rule || rule.join !== 'all') return null;
+  return rule.conds.find((c) => c.el === el && c.op === 'equals')?.val ?? null;
 }
 
 /**
