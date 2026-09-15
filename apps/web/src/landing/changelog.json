@@ -6,6 +6,60 @@
       "version": null,
       "entries": [
         {
+          "hash": "c65db7f2",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Import a national test list into the test catalog"
+        },
+        {
+          "hash": "59854f09",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Export the test catalog from the page menu"
+        },
+        {
+          "hash": "645effea",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr test-catalog import and export"
+        },
+        {
+          "hash": "67afc82a",
+          "type": "feat",
+          "scope": "server",
+          "title": "Test catalog import and export routes"
+        },
+        {
+          "hash": "fbc5a40d",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Apply a test catalog import and export the catalog"
+        },
+        {
+          "hash": "3983c2aa",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Preview a test catalog import"
+        },
+        {
+          "hash": "58beb1b2",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Match an imported test list's columns and values"
+        },
+        {
+          "hash": "3137a045",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Read a CSV or Excel file into a table of text"
+        },
+        {
+          "hash": "c68075f3",
+          "type": "feat",
+          "scope": "db",
+          "title": "Let a term mapping write join the caller's transaction"
+        },
+        {
           "hash": "cf02672e",
           "type": "fix",
           "scope": "facilities",
