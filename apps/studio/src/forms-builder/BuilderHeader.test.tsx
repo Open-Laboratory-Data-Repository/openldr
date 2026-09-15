@@ -217,6 +217,38 @@ describe('BuilderHeader', () => {
       renderHeader({ issues });
       expect(screen.getByText(/1 error/i)).toBeTruthy();
     });
+
+    const warning = (id: string): FormLintIssue => ({ severity: 'warning', code: 'fhir-path-cardinality', message: `w ${id}`, fieldId: id });
+
+    // The banner read "0 errors, 3 warnings" in amber-800 on a dark ground: 2.15:1 contrast,
+    // measured. Corlix names only the counts that are not zero and uses amber-400 in dark mode.
+    it('names only the counts that are not zero', () => {
+      renderHeader({ issues: [warning('a'), warning('b'), warning('c')] });
+      const banner = screen.getByRole('status');
+      expect(banner).toHaveTextContent('3 warnings');
+      expect(banner).not.toHaveTextContent(/error/i);
+    });
+
+    it('says "1 warning" for one, not "1 warnings"', () => {
+      renderHeader({ issues: [warning('a')] });
+      expect(screen.getByRole('status')).toHaveTextContent(/^1 warning$/);
+    });
+
+    it('draws warnings in amber with a dark-mode colour that stays readable', () => {
+      renderHeader({ issues: [warning('a')] });
+      const banner = screen.getByRole('status');
+      expect(banner).toHaveClass('dark:text-amber-400');
+      expect(banner.querySelector('svg')).toBeTruthy();
+    });
+
+    it('turns red once there is an error', () => {
+      renderHeader({
+        issues: [{ severity: 'error', code: 'duplicate-id', message: 'dup', fieldId: 'x' }, warning('a')],
+      });
+      const banner = screen.getByRole('status');
+      expect(banner).toHaveClass('text-destructive');
+      expect(banner).toHaveTextContent('1 error, 1 warning');
+    });
   });
 
   describe('Builder actions menu (⋯)', () => {
