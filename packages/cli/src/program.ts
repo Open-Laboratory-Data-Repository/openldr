@@ -33,6 +33,7 @@ import {
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
   runFacilitiesDelete, runFacilitiesAddType,
 } from './facilities';
+import { runTestCatalogList, type TestCatalogListOpts } from './test-catalog';
 import { setActorOverride } from './cli-actor';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -323,6 +324,24 @@ export function buildProgram(): Command {
   dataExposure.command('show <table> <columns...>').description('Expose columns to analytics').option('--json', 'emit JSON', false)
     .action(async (table: string, columns: string[], opts: { json: boolean }) => {
       try { process.exitCode = await runDataExposureShow(table, columns, opts); } catch (err) { process.stderr.write(`data-exposure show failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+
+  // Test catalog S1: the list door for GET /api/test-catalog. runTestCatalogList catches its own
+  // errors and returns a code, like `facilities list`.
+  const testCatalog = program.command('test-catalog').description('National test catalog: the tests offered and which this lab runs');
+  testCatalog
+    .command('list')
+    .description('List catalog tests. Retired tests are hidden unless --status says otherwise.')
+    .option('--search <text>', 'match code, name, short name or local name')
+    .option('--category <code>', 'only tests in this category')
+    .option('--loinc <linked|none>', 'only tests with, or without, a LOINC code')
+    .option('--enabled <on|off>', 'only tests this lab runs, or does not run')
+    .option('--status <active|retired|all>', 'which tests to include (default: active)')
+    .option('--limit <n>', 'rows per page, 1 to 200 (default: 25)')
+    .option('--offset <n>', 'rows to skip (default: 0)')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: TestCatalogListOpts) => {
+      process.exitCode = await runTestCatalogList(opts);
     });
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');

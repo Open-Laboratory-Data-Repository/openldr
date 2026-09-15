@@ -67,6 +67,7 @@ import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegis
 import { createFacilityJobWorker } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
+import { createTestCatalog, type TestCatalog } from './test-catalog';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -530,6 +531,9 @@ export interface AppContext {
   /** Curated facility records (slice 1's registry). Capture-aware: registry writes land in
    *  reference_change_log ready for the eventual central→lab down-sync. */
   facilityRegistry: FacilityRegistryStore;
+  /** The national test catalog (test catalog S1): the catalog code system, its LOINC links and this
+   *  install's own settings for each test. The test catalog routes and CLI share it. */
+  testCatalog: TestCatalog;
   /** Gates persistResources() strictness for the webhook (Persist Store node) and ingest paths
    *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
   validationStrictness: ValidationStrictness;
@@ -967,6 +971,8 @@ const reporting: ReportingApi = {
       return { conceptsLoaded };
     },
   };
+
+  const testCatalog = createTestCatalog({ db: termDb, admin: termAdmin, ops: terminology.ops });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
   // the polling worker that drains it. `runIngest` streams+extracts the uploaded zip to a fresh
@@ -1671,6 +1677,7 @@ const reporting: ReportingApi = {
     labIdentity,
     updateCheck,
     facilityRegistry,
+    testCatalog,
     facilityJobs,
     featureFlags,
     numberSettings,
@@ -1736,6 +1743,12 @@ export { sealDefinitionSecrets } from './workflow-secret-seal';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities, resolveKnownNationalSystem } from './facility-import';
+export {
+  createTestCatalog, parseCatalogListQuery, TestCatalogError,
+  TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM, TEST_CATEGORY_VALUE_SET, SPECIMEN_TYPE_VALUE_SET,
+  type TestCatalog, type CatalogTest, type CatalogTestInput, type CatalogListQuery, type CatalogListResult,
+  type LabSettingsInput, type SpecimenCoding,
+} from './test-catalog';
 export type {
   FacilityImportDeps, FacilityImportOptions, FacilityImportResult,
   // Reachable through `FacilityImportResult` — exported so a consumer can name the type of a

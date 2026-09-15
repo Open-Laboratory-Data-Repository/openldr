@@ -36,6 +36,12 @@ You can browse publishers and code systems, search terms, inspect term details, 
 
 Terms are searchable, ValueSets are available for coded fields, and ontology indexes can be browsed when the source includes hierarchy data.
 
+## Test catalog and categories
+
+Every install has two code systems under the System publisher. **Test catalog** holds the national list of tests. **Test categories** holds the categories a test can belong to, starting with Chemistry, Haematology, Microbiology, Serology and Molecular. Add or rename categories here.
+
+A catalog test also carries a category and specimen types that this page does not show. Its LOINC code is a mapping, shown on the term's Mappings tab. Editing a test here keeps its category, specimen types and LOINC link. A term added here has no category or specimen types. On a lab that receives the catalog from central, central's next change replaces any edit made here.
+
 ## Troubleshooting
 
 - **Unsupported file shape:** reopen the import dialog and compare your file to the required columns and format guidance.
