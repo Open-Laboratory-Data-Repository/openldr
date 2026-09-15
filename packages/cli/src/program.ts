@@ -33,7 +33,10 @@ import {
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
   runFacilitiesDelete, runFacilitiesAddType,
 } from './facilities';
-import { runTestCatalogList, runTestCatalogChange, type TestCatalogListOpts } from './test-catalog';
+import {
+  runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport,
+  type TestCatalogListOpts, type TestCatalogImportOpts,
+} from './test-catalog';
 import { setActorOverride } from './cli-actor';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -361,6 +364,24 @@ export function buildProgram(): Command {
         process.exitCode = await runTestCatalogChange(change, code, opts);
       });
   }
+  // Test catalog S3: import and export. Import shows what would change unless --apply is given.
+  testCatalog
+    .command('import <file>')
+    .description('Import tests from a CSV or Excel (.xlsx) file. Shows what would change unless --apply is given.')
+    .option('--apply', 'write the changes', false)
+    .option('--column-map <file>', 'JSON file naming the column for each field (default: matched by header)')
+    .option('--value-map <file>', 'JSON file answering category and specimen text that matched nothing')
+    .option('--json', 'emit JSON', false)
+    .action(async (file: string, opts: TestCatalogImportOpts) => {
+      process.exitCode = await runTestCatalogImport(file, opts);
+    });
+  testCatalog
+    .command('export')
+    .description('Write the active tests as CSV, in the layout import reads')
+    .option('--out <file>', 'write to this file instead of standard output')
+    .action(async (opts: { out?: string }) => {
+      process.exitCode = await runTestCatalogExport(opts);
+    });
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');
   // Task 4: CLI parity for Task 3's `GET /api/facilities` — the same `parseWhereFlags`/

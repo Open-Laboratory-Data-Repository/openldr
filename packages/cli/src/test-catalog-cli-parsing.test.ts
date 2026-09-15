@@ -6,11 +6,15 @@ import { buildProgram } from './program';
 const mocks = vi.hoisted(() => ({
   runTestCatalogList: vi.fn().mockResolvedValue(0),
   runTestCatalogChange: vi.fn().mockResolvedValue(0),
+  runTestCatalogImport: vi.fn().mockResolvedValue(0),
+  runTestCatalogExport: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('./test-catalog', () => ({
   runTestCatalogList: mocks.runTestCatalogList,
   runTestCatalogChange: mocks.runTestCatalogChange,
+  runTestCatalogImport: mocks.runTestCatalogImport,
+  runTestCatalogExport: mocks.runTestCatalogExport,
 }));
 
 describe('test-catalog list: commander parsing', () => {
@@ -41,5 +45,19 @@ describe('test-catalog list: commander parsing', () => {
       await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', change, 'HIVVL', '--json']);
       expect(mocks.runTestCatalogChange).toHaveBeenCalledWith(change, 'HIVVL', { json: true });
     }
+  });
+
+  it('hands import its file and flags, and export its --out', async () => {
+    await buildProgram().exitOverride().parseAsync([
+      'node', 'openldr', 'test-catalog', 'import', 'tests.xlsx',
+      '--apply', '--column-map', 'cols.json', '--value-map', 'vals.json', '--json',
+    ]);
+    expect(mocks.runTestCatalogImport).toHaveBeenCalledWith(
+      'tests.xlsx', { apply: true, columnMap: 'cols.json', valueMap: 'vals.json', json: true },
+    );
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'import', 'tests.csv']);
+    expect(mocks.runTestCatalogImport).toHaveBeenLastCalledWith('tests.csv', { apply: false, json: false });
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'export', '--out', 'catalog.csv']);
+    expect(mocks.runTestCatalogExport).toHaveBeenCalledWith({ out: 'catalog.csv' });
   });
 });
