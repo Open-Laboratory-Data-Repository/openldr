@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "07db36bb",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Add openldr test-catalog list"
+        },
+        {
+          "hash": "b51adfd3",
+          "type": "feat",
+          "scope": "server",
+          "title": "Serve the test catalog under /api/test-catalog"
+        },
+        {
+          "hash": "0a268824",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Let a lab switch catalog tests on and narrow their specimens"
+        },
+        {
+          "hash": "9c8888e9",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Add and edit catalog tests with their category, specimens and LOINC link"
+        },
+        {
+          "hash": "d2b6b45f",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Read the test catalog with each lab's own settings"
+        },
+        {
+          "hash": "3a031dc2",
+          "type": "feat",
+          "scope": "db",
+          "title": "Seed the test catalog and category systems, and the lab settings table"
+        },
+        {
           "hash": "77e7bf03",
           "type": "fix",
           "scope": "db",
