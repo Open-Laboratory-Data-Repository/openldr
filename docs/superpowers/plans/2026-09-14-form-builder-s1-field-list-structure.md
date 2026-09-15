@@ -1,5 +1,7 @@
 # Form builder S1: the field list draws the structure
 
+**Status:** merged to `main` on 2026-09-14 as `5ea7d394`. The checkboxes below were not ticked while the work ran, so they do not show what was done. Git history does.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make CE's form builder field list show discriminators, repeat nodes, nested groups and the repeat marker the way corlix does, and make the Questionnaire export say whether a group repeats.

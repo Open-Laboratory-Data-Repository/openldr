@@ -1,6 +1,7 @@
 # Form builder: match corlix
 
-Date: 2026-09-14. Status: design, approved in chat, not built.
+Date: 2026-09-14. Status: built. S1 to S7 merged to `main` on 2026-09-14: S1 `5ea7d394`,
+S2 `dbdfe74d`, S3 `56529531`, S4 `b59bdee0`, S5 `5f311e08`, S6 `62719f40`, S7 `eb80932f`.
 
 The operator asked for CE's form builder to act the same as corlix's. Corlix is the sibling
 desktop app at `~/Projects/Repositories/corlix`. Match the behavior first and add nothing
@@ -585,6 +586,9 @@ No CLI work, per section 4.
 ---
 
 ## 10. Verification status
+
+This section was written before any code, on 2026-09-14. The status line at the top records the
+build.
 
 **HONEST NON-PROOF.** No CE code was written for this spec.
 
