@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "77e7bf03",
+          "type": "fix",
+          "scope": "db",
+          "title": "Keep a term's unmanaged properties when create updates it"
+        },
+        {
+          "hash": "c9ec77c2",
+          "type": "fix",
+          "scope": "db",
+          "title": "Keep a term's unmanaged properties when it is edited"
+        },
+        {
           "hash": "3c29d5ca",
           "type": "feat",
           "scope": "forms",
