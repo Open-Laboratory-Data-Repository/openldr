@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "92efbd4a",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Draw the shipped Patient and Facility lists as named slots"
+        },
+        {
+          "hash": "2c51dbaf",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Make the builder's lint banner readable in the dark theme"
+        },
+        {
+          "hash": "1d87e112",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Name a field's section by its label on the row"
+        },
+        {
           "hash": "6bb93eb5",
           "type": "feat",
           "scope": "studio",
