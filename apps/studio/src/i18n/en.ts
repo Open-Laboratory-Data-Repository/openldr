@@ -892,7 +892,7 @@ export const en = {
     rowActions: 'Actions',
     actionsFor: 'Actions for {{code}}',
     fromCentral: 'This catalog comes from central. You can switch tests on or off at this lab, narrow their specimens and set a local name.',
-    empty: 'No tests in the catalog yet.',
+    empty: 'No active tests. Retired tests stay hidden unless you filter for them.',
     noMatch: 'No tests match.',
     count_one: '{{count}} test',
     count_other: '{{count}} tests',

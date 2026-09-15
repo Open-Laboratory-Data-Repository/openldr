@@ -882,7 +882,7 @@ export const fr: EnShape = {
     rowActions: 'Actions',
     actionsFor: 'Actions pour {{code}}',
     fromCentral: 'Ce catalogue vient du site central. Vous pouvez activer ou désactiver les examens dans ce laboratoire, restreindre leurs prélèvements et définir un nom local.',
-    empty: 'Le catalogue ne contient encore aucun examen.',
+    empty: 'Aucun examen actif. Les examens retirés restent masqués, sauf si vous filtrez sur eux.',
     noMatch: 'Aucun examen ne correspond.',
     count_one: '{{count}} examen',
     count_other: '{{count}} examens',
