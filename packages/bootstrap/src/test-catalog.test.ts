@@ -6,6 +6,7 @@ import {
   type InternalSchema, type ValueSetProjection,
 } from '@openldr/db';
 import { createOperations, LOINC_SYSTEM } from '@openldr/terminology';
+import { createTerminologyBulkSync } from '@openldr/sync';
 import {
   createTestCatalog, parseCatalogListQuery, TEST_CATALOG_SYSTEM,
   type CatalogListQuery, type CatalogListResult, type CatalogTestInput,
@@ -324,5 +325,66 @@ describe('test catalog: writes', () => {
     const logged = await db.selectFrom('reference_change_log').select('op')
       .where('entity_type', '=', 'terminology_system').where('entity_id', '=', TEST_CATALOG_SYSTEM).execute();
     expect(logged).toHaveLength(2);
+  });
+});
+
+describe('test catalog: this lab', () => {
+  it('switches a test on with a local name', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    const t = await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: '  Viral load ' });
+    expect(t.lab).toEqual({ enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
+  });
+
+  it('lets a lab narrow the specimen list but never add to it', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    expect((await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [UR], localDisplay: null })).lab.specimenTypes)
+      .toEqual([UR]);
+    await expect(catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [CSF], localDisplay: null })).rejects.toMatchObject({
+      kind: 'invalid',
+      message: "Specimen CSF is not on this test's catalog list. A lab can narrow the list but not add to it.",
+    });
+    expect((await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: null })).lab.specimenTypes)
+      .toBeNull();
+  });
+
+  it('refuses settings for a test not in the catalog', async () => {
+    const { catalog } = await buildCatalog();
+    await expect(catalog.setLabSettings('NOPE', { enabled: true, specimenTypes: null, localDisplay: null }))
+      .rejects.toMatchObject({ kind: 'not-found', message: 'Test NOPE is not in the catalog.' });
+  });
+
+  it('never signals a sync change for lab settings', async () => {
+    const { db, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    const count = async () => (await db.selectFrom('reference_change_log').select('seq').execute()).length;
+    const before = await count();
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
+    expect(await count()).toBe(before);
+  });
+
+  it('keeps lab settings through a pull from central, which hands the catalog to central', async () => {
+    const { db, catalog } = await buildCatalog();
+    const central = [
+      { code: 'CD4', display: 'CD4 count', status: 'ACTIVE', properties: null },
+      { code: 'HIVVL', display: 'HIV viral load', status: 'ACTIVE', properties: { specimenTypes: [BLD, UR] } },
+    ];
+    const bulk = createTerminologyBulkSync({
+      labDb: db,
+      fetchConceptsPage: async () => ({ concepts: central, nextCode: null }),
+      fetchMapElementsPage: async () => ({ elements: [], nextKey: null }),
+      getToken: async () => 'token',
+      logger: { info() {}, warn() {}, error() {}, debug() {} },
+    });
+
+    await bulk.syncSystem(TEST_CATALOG_SYSTEM, { kind: 'CodeSystem', generation: 1 });
+    expect(await catalog.ownedHere()).toBe(false);
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' });
+
+    await bulk.syncSystem(TEST_CATALOG_SYSTEM, { kind: 'CodeSystem', generation: 2 });
+    expect((await catalog.get('HIVVL'))?.lab).toEqual({ enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' });
+    expect(codes(await catalog.list(q()))).toEqual(['CD4', 'HIVVL']);
+    await expect(catalog.update('HIVVL', { display: 'Changed' })).rejects.toMatchObject({ kind: 'central-managed' });
   });
 });

@@ -1,4 +1,4 @@
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import { markTerminologyChanged, type InternalSchema, type TerminologyAdminStore } from '@openldr/db';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 
@@ -77,6 +77,13 @@ export interface CatalogTestInput {
   active?: boolean;
 }
 
+export interface LabSettingsInput {
+  enabled: boolean;
+  /** null means "use the catalog's list". A list may only narrow it. */
+  specimenTypes: SpecimenCoding[] | null;
+  localDisplay: string | null;
+}
+
 export class TestCatalogError extends Error {
   constructor(message: string, public readonly kind: 'invalid' | 'not-found' | 'conflict' | 'central-managed') {
     super(message);
@@ -90,6 +97,7 @@ export interface TestCatalog {
   get(code: string): Promise<CatalogTest | null>;
   create(input: CatalogTestInput): Promise<CatalogTest>;
   update(code: string, input: CatalogTestInput): Promise<CatalogTest>;
+  setLabSettings(code: string, input: LabSettingsInput): Promise<CatalogTest>;
 }
 
 export interface TestCatalogDeps {
@@ -396,11 +404,36 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return saved(code);
   }
 
+  async function setLabSettings(code: string, input: LabSettingsInput): Promise<CatalogTest> {
+    // Any install may set these, a lab that receives central's catalog included. Nothing here signals
+    // sync: the table is this install's own.
+    const test = await get(code);
+    if (!test) throw notFound(code);
+    let specimenTypes: SpecimenCoding[] | null = null;
+    if (input.specimenTypes !== null) {
+      specimenTypes = uniqueCodings(input.specimenTypes);
+      const offered = new Set(test.specimenTypes.map(codingKey));
+      const extra = specimenTypes.find((s) => !offered.has(codingKey(s)));
+      if (extra) throw invalid(`Specimen ${extra.code} is not on this test's catalog list. A lab can narrow the list but not add to it.`);
+    }
+    const values = {
+      enabled: input.enabled,
+      specimen_types: specimenTypes === null ? null : JSON.stringify(specimenTypes),
+      local_display: clean(input.localDisplay),
+      updated_at: sql<Date>`now()`,
+    };
+    await db.insertInto('test_catalog_lab_settings').values({ code, ...values })
+      .onConflict((oc) => oc.column('code').doUpdateSet(values))
+      .execute();
+    return saved(code);
+  }
+
   return {
     ownedHere,
     list,
     get,
     create,
     update,
+    setLabSettings,
   };
 }
