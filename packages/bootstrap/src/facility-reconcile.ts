@@ -154,17 +154,11 @@ function parseProperties(raw: unknown): Record<string, unknown> | null {
  * which is an aggregate over the warehouse the hook cannot see from one row; and it repairs any gap
  * (a hook added after data landed, a failed cycle, a restored database).
  *
- * ⚠ `firstSeen` guarantee is WEAKER than it looks: it is carried forward across re-scans (see
- * `does not advance firstSeen on a re-scan` in the test file), but an operator editing this facility's
- * display through `/terminology` resets it. `admin.terms.update()` calls `packProps`
- * (`terminology-admin-store.ts:185-193`), which keeps only `shortName`/`class`/`unit`/`replacedBy`/
- * `metadata` and returns `null` otherwise; `update` (`terminology-admin-store.ts:520-528`) then
- * writes `properties: props === null ? null : …` unconditionally, destroying the
- * `firstSeen`/`lastSeen`/`reportCount` blob this function relies on. The next scan sees no prior
- * `firstSeen` and re-stamps it to "now". This is a pre-existing bug in shared terminology code
- * (also destroys `organism_type`/`result_role` elsewhere) and is out of scope here; see
- * `firstSeen resets if an operator edits the term in /terminology` in the test file for the pinned
- * behaviour.
+ * `firstSeen` is carried forward across re-scans (see `does not advance firstSeen on a re-scan` in
+ * the test file), and it survives an operator editing this facility's display through
+ * `/terminology`: `terms.update` keeps every property key it does not manage (see `firstSeen
+ * survives an operator edit in /terminology`). Before 2026-09-15 that edit wiped the
+ * firstSeen/lastSeen/reportCount blob and the next scan re-stamped firstSeen to "now".
  *
  * Feed-aware (Task 9b): groups by `(performer, source_system)`, not `performer` alone, then routes
  * each group to ITS system via `observedSystemForFeed(source_system)`. Two `source_system` values

@@ -105,20 +105,16 @@ describe('scanObservedFacilities', () => {
     expect(propsAfterSecond.reportCount).toBe(15);
   });
 
-  // ⛔ PINS THE BUG, does not endorse it. `admin.terms.update()` (`terminology-admin-store.ts`
-  // `packProps`/`update`, lines 185-193 and 520-528) overwrites `properties` wholesale — an operator
-  // curating a facility's display through `/terminology` wipes `firstSeen`/`lastSeen`/`reportCount`.
-  // This test asserts the CONCRETE observed value (not merely "it is a string") so it breaks the
-  // moment that upstream bug is fixed, forcing whoever fixes it to find and update this test
-  // deliberately rather than leaving a stale doc comment behind.
-  it('firstSeen resets if an operator edits the term in /terminology (see terms.update properties loss)', async () => {
+  // An operator editing a facility's display in /terminology keeps the scan's blob. Before
+  // S0 of the test catalog (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.1),
+  // terms.update replaced the whole properties object and wiped firstSeen/lastSeen/reportCount,
+  // and this test pinned that behaviour so the fix would have to find it.
+  it('firstSeen survives an operator edit in /terminology', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['Dodoma', 1]]);
     await scanObservedFacilities(deps, { now: '2026-08-01T00:00:00.000Z', apply: true });
 
-    // Operator curates the display in /terminology. `terms.update` packs only shortName/class/
-    // unit/replacedBy/metadata — none supplied here — so `packProps` returns null and `update`
-    // writes `properties: null`, destroying the firstSeen/lastSeen/reportCount blob.
+    // The operator curates the display. No managed field is supplied, so only the display changes.
     await deps.admin.terms.update('urn:openldr:default_fac', 'Dodoma', {
       system: 'urn:openldr:default_fac',
       code: 'Dodoma',
@@ -140,9 +136,9 @@ describe('scanObservedFacilities', () => {
       lastSeen: string;
       reportCount: number;
     };
-    // The ACTUAL observed behaviour: firstSeen is NOT '2026-08-01...' (the original scan) — the
-    // operator edit wiped it, so the re-scan re-stamps it to its own `now`.
-    expect(props.firstSeen).toBe('2026-08-10T00:00:00.000Z');
+    // firstSeen is carried forward from the first scan; lastSeen and reportCount come from the
+    // second scan, which counts both seeded performer rows.
+    expect(props.firstSeen).toBe('2026-08-01T00:00:00.000Z');
     expect(props.lastSeen).toBe('2026-08-10T00:00:00.000Z');
     expect(props.reportCount).toBe(2);
   });
