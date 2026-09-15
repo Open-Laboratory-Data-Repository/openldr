@@ -10,6 +10,8 @@ Add a test from the page's ⋯ menu, and edit one from its row's ⋯ menu. The s
 
 A LOINC code is searched when LOINC is loaded on this install. Otherwise it is typed, and only its format is checked. Specimen types come from CE's specimen-type list, and categories from **Test categories** on the Terminology page.
 
+Import a national list from a CSV or Excel (.xlsx) file with **Import** in the page's ⋯ menu, where this install owns the catalog. The sheet reads the file, matches its headers to the fields for you to check, asks what each unmatched category or specimen means, and shows new, changed, unchanged and refused rows before anything is written. A file holds at most 5,000 tests. Tests match on their code, so the same file twice changes nothing, and a test missing from the file is not retired. **Export CSV** writes the active tests in the same columns, so an export imports back as it is.
+
 ## Français
 
 La page **Catalogue des examens** présente la liste nationale des examens : code, nom, catégorie, types de prélèvement, code LOINC (ou **Sans LOINC**) et si ce laboratoire réalise chaque examen. Il faut la permission de consulter la Terminologie pour l'ouvrir, et celle de la gérer pour modifier quoi que ce soit.
@@ -20,6 +22,8 @@ Ajoutez un examen depuis le menu ⋯ de la page, et modifiez-en un depuis le men
 
 Un code LOINC est recherché quand LOINC est chargé sur cette installation. Sinon il est saisi, et seul son format est vérifié. Les types de prélèvement viennent de la liste des types de prélèvement de CE, et les catégories de **Test categories** sur la page Terminologie.
 
+Importez une liste nationale depuis un fichier CSV ou Excel (.xlsx) avec **Importer** dans le menu ⋯ de la page, si cette installation est propriétaire du catalogue. Le panneau lit le fichier, associe ses en-têtes aux champs pour que vous les vérifiiez, demande ce que signifie chaque catégorie ou prélèvement sans correspondance, et montre les lignes nouvelles, modifiées, inchangées et refusées avant toute écriture. Un fichier contient au plus 5 000 examens. Les examens sont rapprochés par leur code : le même fichier importé deux fois ne change rien, et un examen absent du fichier n'est pas retiré. **Exporter en CSV** écrit les examens actifs dans les mêmes colonnes, pour qu'un export s'importe tel quel.
+
 ## Português
 
 A página **Catálogo de exames** mostra a lista nacional de exames: código, nome, categoria, tipos de amostra, código LOINC (ou **Sem LOINC**) e se este laboratório realiza cada exame. Precisa da permissão de ver a Terminologia para a abrir, e da permissão de a gerir para alterar qualquer coisa.
@@ -29,3 +33,5 @@ Uma instalação que não recebeu o catálogo do nível central é dona dele, e 
 Adicione um exame no menu ⋯ da página, e edite-o no menu ⋯ da sua linha. Esse mesmo menu ativa ou desativa um exame neste laboratório, e retira-o ou repõe-no. A pesquisa abrange o código, o nome, o nome curto e o nome local. Filtre por categoria, LOINC, ativado ou não, e estado. Os exames retirados ficam ocultos, exceto se filtrar por eles.
 
 Um código LOINC é pesquisado quando o LOINC está carregado nesta instalação. Caso contrário é escrito, e só o formato é verificado. Os tipos de amostra vêm da lista de tipos de amostra do CE, e as categorias de **Test categories** na página Terminologia.
+
+Importe uma lista nacional de um ficheiro CSV ou Excel (.xlsx) com **Importar** no menu ⋯ da página, quando esta instalação é dona do catálogo. O painel lê o ficheiro, associa os cabeçalhos aos campos para que os verifique, pergunta o que significa cada categoria ou amostra sem correspondência, e mostra as linhas novas, alteradas, sem alteração e recusadas antes de escrever qualquer coisa. Um ficheiro tem no máximo 5000 exames. Os exames são comparados pelo código: o mesmo ficheiro importado duas vezes não muda nada, e um exame que não está no ficheiro não é retirado. **Exportar CSV** escreve os exames ativos nas mesmas colunas, para que uma exportação se importe tal como está.

@@ -31,3 +31,20 @@ Os tipos de amostra vêm da lista de tipos de amostra do CE. As categorias vêm 
 O menu ⋯ de cada linha ativa ou desativa o exame neste laboratório. Quando esta instalação é dona do catálogo, também retira ou repõe o exame. Retirar é reversível, por isso não pede confirmação.
 
 Na linha de comandos: `openldr test-catalog enable`, `disable`, `retire` ou `restore`, seguido do código.
+
+## Importar uma lista de exames
+
+Quando esta instalação é dona do catálogo, escolha **Importar** no menu ⋯. O painel tem quatro passos. Voltar, Seguinte, Aplicar e Fechar estão no seu menu ⋯. Nada é escrito antes de **Aplicar**.
+
+1. **Ficheiro.** Arraste um ficheiro CSV ou Excel (.xlsx), ou clique para escolher um. O CE lê a primeira folha de um ficheiro Excel. Um ficheiro tem no máximo 5000 exames e 5 MB.
+2. **Colunas.** O CE associa os cabeçalhos aos campos. Verifique cada um. O nome é obrigatório. Um campo definido como **Não está no ficheiro** não muda nos exames que já estão no catálogo. Uma célula vazia numa coluna escolhida apaga esse campo.
+3. **Valores.** Os textos de categoria e de amostra são comparados com as listas pelo código ou pelo nome, sem contar maiúsculas nem espaços. Uma célula de amostra pode ter várias, separadas por `;`. Escolha o que significa cada texto sem correspondência. Pode adicionar uma categoria: o código parte do texto, e pode alterá-lo. Uma linha com texto sem escolha é recusada.
+4. **Revisão.** O CE mostra quantos exames são novos, alterados, sem alteração e recusados, cada recusa com a linha e o motivo, e as categorias que vai adicionar. Escolha **Aplicar** para escrever tudo de uma vez.
+
+Os exames são comparados pelo código, por isso importar o mesmo ficheiro duas vezes não muda nada. Um exame que não está no ficheiro não é retirado. Uma importação nunca muda o estado de um exame nem as definições deste laboratório. Quando o LOINC não está carregado aqui, só o formato dos códigos LOINC é verificado, e a revisão indica-o.
+
+## Exportar o catálogo
+
+Escolha **Exportar CSV** no menu ⋯. Qualquer instalação pode exportar, incluindo um laboratório que recebe o catálogo do nível central. O ficheiro tem os exames ativos nas colunas que uma importação lê: `code`, `name`, `short_name`, `loinc`, `category` e `specimen_types`. Edite-o numa folha de cálculo e importe-o de novo. Um valor que começa por `=` ou `@` recebe um `'` no início, para que uma folha de cálculo não o execute como fórmula.
+
+Na linha de comandos: `openldr test-catalog import <ficheiro>` mostra o que mudaria, e `--apply` escreve-o. `openldr test-catalog export` escreve o CSV.

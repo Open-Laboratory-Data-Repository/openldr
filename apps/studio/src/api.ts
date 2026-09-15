@@ -2479,6 +2479,62 @@ export const setCatalogTestActive = (code: string, active: boolean): Promise<Cat
   authFetch(catalogTestPath(code, '/active'), jbody({ active }, 'PUT'))
     .then((r) => okJson<CatalogTest>(r, active ? 'restore test' : 'retire test'));
 
+// ── Test catalog import and export (test catalog S3) ──────────────────────────
+// Mirrors of @openldr/bootstrap's test-catalog-import.ts and test-catalog.ts import types.
+export type CatalogImportField = 'code' | 'name' | 'shortName' | 'loinc' | 'category' | 'specimenTypes';
+/** Which file column feeds each field, by header text. A field left out is not changed on existing tests. */
+export type CatalogColumnMap = Partial<Record<CatalogImportField, string>>;
+export type CatalogCategoryAnswer =
+  | { text: string; kind: 'existing'; code: string }
+  | { text: string; kind: 'new'; code: string; display: string };
+export interface CatalogSpecimenAnswer { text: string; system: string; code: string }
+export interface CatalogValueMap { categories: CatalogCategoryAnswer[]; specimens: CatalogSpecimenAnswer[] }
+export interface CatalogImportFile {
+  headers: string[];
+  rows: string[][];
+  sheetName: string | null;
+  sheetCount: number;
+  suggested: CatalogColumnMap;
+}
+export interface CatalogImportInput {
+  table: { headers: string[]; rows: string[][] };
+  columnMap: CatalogColumnMap;
+  valueMap?: CatalogValueMap;
+}
+export interface CatalogImportReport {
+  counts: { new: number; changed: number; unchanged: number; refused: number };
+  refused: { line: number; code: string | null; reason: string }[];
+  unmatched: { categories: { text: string; rows: number }[]; specimens: { text: string; rows: number }[] };
+  categoriesToAdd: { code: string; display: string }[];
+  loincChecked: boolean;
+}
+
+/** The server needs the format said, and the file name is where the studio can read it. */
+export function catalogImportFormat(name: string): 'csv' | 'xlsx' | null {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.csv')) return 'csv';
+  if (lower.endsWith('.xlsx')) return 'xlsx';
+  return null;
+}
+export const readTestCatalogFile = (file: File, format: 'csv' | 'xlsx'): Promise<CatalogImportFile> =>
+  authFetch(`/api/test-catalog/import/read?format=${format}`, {
+    method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file,
+  }).then((r) => okJson<CatalogImportFile>(r, 'read file'));
+export const previewTestCatalogImport = (i: CatalogImportInput): Promise<CatalogImportReport> =>
+  authFetch('/api/test-catalog/import/preview', jbody(i, 'POST')).then((r) => okJson<CatalogImportReport>(r, 'check import'));
+export const applyTestCatalogImport = (i: CatalogImportInput): Promise<CatalogImportReport> =>
+  authFetch('/api/test-catalog/import/apply', jbody(i, 'POST')).then((r) => okJson<CatalogImportReport>(r, 'import tests'));
+/** Fetched with the token, then saved through a link, as exportFormBundle does. */
+export async function downloadTestCatalogCsv(): Promise<void> {
+  const r = await authFetch('/api/test-catalog/export', { method: 'GET' });
+  if (!r.ok) throw new Error(formatApiError('export tests', await errorDetail(r)));
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = url; a.download = 'test-catalog.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ── Marketplace (SP-4) ─────────────────────────────────────────────────────────
 export interface AvailableArtifact {
   ref: string;

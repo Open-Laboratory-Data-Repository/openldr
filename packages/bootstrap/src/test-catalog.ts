@@ -1,6 +1,17 @@
 import { sql, type Kysely } from 'kysely';
-import { markTerminologyChanged, type InternalSchema, type TerminologyAdminStore } from '@openldr/db';
+import {
+  markTerminologyChanged, type InternalSchema, type TerminologyAdminStore, type TermMapping, type TermMappingInput,
+} from '@openldr/db';
+import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
+import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
+import type { AuditDetails } from './record-audit';
+import {
+  CATALOG_EXPORT_COLUMNS, catalogExportRow,
+  CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS, checkColumnMap, matchCategory, matchSpecimen,
+  readCatalogRows, splitSpecimens, suggestCatalogColumns, valueKey,
+  type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer,
+} from './test-catalog-import';
 
 // The national test catalog, slice S1 (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.2).
 // The route and the `openldr test-catalog` CLI both call this module, so they share every rule
@@ -28,6 +39,8 @@ const MAX_LIMIT = 200;
  *  nothing else (apps/server/src/terminology-admin-routes.ts), so a retired test is stored as DEPRECATED. */
 const RETIRED_STATUS = 'DEPRECATED';
 const LOINC_CODE = /^\d{1,7}-\d$/;
+/** An import looks its LOINC codes up in batches, so thousands of rows cost a few queries. */
+const LOINC_LOOKUP_CHUNK = 1000;
 
 export interface SpecimenCoding {
   system: string;
@@ -105,6 +118,47 @@ export interface CatalogOptions {
   loinc: { systemId: string; system: string } | null;
 }
 
+/** A file read for import: its table, and CE's guess at which column feeds which field. */
+export interface CatalogImportFile {
+  headers: string[];
+  rows: string[][];
+  sheetName: string | null;
+  sheetCount: number;
+  suggested: CatalogColumnMap;
+}
+
+/** One import step. The studio sends the table back with each one, so the server keeps nothing between steps. */
+export interface CatalogImportInput {
+  table: { headers: string[]; rows: string[][] };
+  columnMap: CatalogColumnMap;
+  valueMap?: CatalogValueMap;
+}
+
+export interface CatalogImportRefusal {
+  /** The spreadsheet row. The header is row 1. */
+  line: number;
+  code: string | null;
+  reason: string;
+}
+
+/** File text that matched nothing in a list, and how many rows use it. */
+export interface CatalogUnmatchedValue {
+  text: string;
+  rows: number;
+}
+
+/** What an import will do (preview) or did (apply). Both are worked out by the same code. */
+export interface CatalogImportReport {
+  counts: { new: number; changed: number; unchanged: number; refused: number };
+  refused: CatalogImportRefusal[];
+  /** Every text that matched nothing on its own, answered or not, so the Values step can list it. */
+  unmatched: { categories: CatalogUnmatchedValue[]; specimens: CatalogUnmatchedValue[] };
+  /** The new categories the operator named that a written test uses. */
+  categoriesToAdd: Array<{ code: string; display: string }>;
+  /** false when LOINC is not loaded here, so LOINC codes were checked for their format only. */
+  loincChecked: boolean;
+}
+
 export class TestCatalogError extends Error {
   constructor(message: string, public readonly kind: 'invalid' | 'not-found' | 'conflict' | 'central-managed') {
     super(message);
@@ -112,10 +166,32 @@ export class TestCatalogError extends Error {
   }
 }
 
+/**
+ * Read an uploaded file for import. The route and `openldr test-catalog import` both call this, so they
+ * refuse the same files in the same words.
+ */
+export function readCatalogImportFile(bytes: Uint8Array, format: TableFileFormat): CatalogImportFile {
+  try {
+    const table = readTableFile(bytes, format, { maxBytes: CATALOG_IMPORT_MAX_BYTES, maxRows: CATALOG_IMPORT_MAX_ROWS });
+    return { ...table, suggested: suggestCatalogColumns(table.headers) };
+  } catch (err) {
+    if (err instanceof TableFileError) throw new TestCatalogError(err.message, 'invalid');
+    throw err;
+  }
+}
+
 /** The audit action for a row change. The route and the CLI both record it, so they must agree. */
 export function catalogChangeAction(field: 'enabled' | 'active', value: boolean): string {
   if (field === 'enabled') return value ? 'test_catalog.enable' : 'test_catalog.disable';
   return value ? 'test_catalog.restore' : 'test_catalog.retire';
+}
+
+/** The audit entry for an applied import. The route and the CLI both record it, so they must agree. */
+export function catalogImportAudit(report: CatalogImportReport): AuditDetails {
+  return {
+    action: 'test_catalog.import', entityType: 'test_catalog', entityId: TEST_CATALOG_SYSTEM,
+    metadata: { counts: report.counts, categoriesAdded: report.categoriesToAdd.map((c) => c.code) },
+  };
 }
 
 export interface TestCatalog {
@@ -128,6 +204,9 @@ export interface TestCatalog {
   options(): Promise<CatalogOptions>;
   setEnabled(code: string, enabled: boolean): Promise<CatalogTest>;
   setActive(code: string, active: boolean): Promise<CatalogTest>;
+  importPreview(input: CatalogImportInput): Promise<CatalogImportReport>;
+  importApply(input: CatalogImportInput): Promise<CatalogImportReport>;
+  exportCsv(): Promise<string>;
 }
 
 export interface TestCatalogDeps {
@@ -212,6 +291,42 @@ type ValidTest = {
   loinc: string | null;
   active: boolean;
 };
+
+/** What checkTest needs from the database. An import reads it once for every row. */
+interface CheckContext {
+  categories: CatalogSpecimenOption[];
+  specimens: CatalogSpecimenOption[];
+  loincLoaded: boolean;
+  /** The LOINC codes asked about that LOINC holds as more than a DRAFT stub. */
+  knownLoinc: Set<string>;
+}
+
+/** A row the import will write. */
+interface PlannedWrite {
+  code: string;
+  test: ValidTest;
+  /** The stored properties, so keys this catalog does not manage survive. Null for a new test. */
+  stored: unknown;
+  /** The LOINC code linked before the import. */
+  loincBefore: string | null;
+}
+
+/** Status is not compared: an import never changes it. */
+function sameTest(a: CatalogTest, b: ValidTest): boolean {
+  return a.display === b.display && a.shortName === b.shortName && a.category === b.category && a.loinc === b.loinc
+    && a.specimenTypes.map(codingKey).join('\n') === b.specimenTypes.map(codingKey).join('\n');
+}
+
+function isLoincLink(m: TermMapping): boolean {
+  return m.toSystem === LOINC_SYSTEM && m.mapType === LOINC_MAP_TYPE && m.isActive;
+}
+
+function loincLinkInput(code: string, loinc: string): TermMappingInput {
+  return {
+    fromSystem: TEST_CATALOG_SYSTEM, fromCode: code, toSystem: LOINC_SYSTEM, toCode: loinc,
+    toDisplay: null, mapType: LOINC_MAP_TYPE, isActive: true,
+  };
+}
 
 function clean(value: string | null | undefined): string | null {
   const t = value?.trim();
@@ -327,10 +442,6 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       .map((c) => ({ system: c.system ?? '', code: c.code ?? '', display: c.display ?? null }));
   }
 
-  async function expandCodes(url: string): Promise<SpecimenCoding[]> {
-    return (await expandEntries(url)).map(({ system, code }) => ({ system, code }));
-  }
-
   async function loincLoaded(): Promise<boolean> {
     // Linking a test to a LOINC code that is not loaded stubs a DRAFT concept (terminology-admin-store.ts,
     // termMappings.create and saveExclusive), so DRAFT rows alone do not mean LOINC is loaded.
@@ -342,31 +453,56 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return row !== undefined;
   }
 
-  async function checkLoinc(code: string): Promise<void> {
-    if (!LOINC_CODE.test(code)) throw invalid(`"${code}" is not a LOINC code. LOINC codes look like 12345-6.`);
-    // With no LOINC loaded, only the format can be checked.
-    if (!(await loincLoaded())) return;
-    const hit = await db.selectFrom('terminology_concepts').select('status')
-      .where('system', '=', LOINC_SYSTEM).where('code', '=', code).executeTakeFirst();
-    if (!hit || hit.status === 'DRAFT') throw invalid(`LOINC code ${code} is not in the LOINC loaded on this install.`);
-  }
-
-  async function validate(input: CatalogTestInput): Promise<ValidTest> {
+  /**
+   * The rules every write shares: create, update and each import row. It reads nothing, so an import
+   * checks thousands of rows against one read of the lists. `linked` is the LOINC code the test already
+   * has. It was checked when it was linked, so a row that keeps it is not checked again.
+   */
+  function checkTest(input: CatalogTestInput, ctx: CheckContext, linked: string | null = null): ValidTest {
     const display = clean(input.display);
     if (!display) throw invalid('A test needs a name.');
     const category = clean(input.category);
-    if (category && !(await expandCodes(TEST_CATEGORY_VALUE_SET)).some((c) => c.code === category)) {
+    if (category && !ctx.categories.some((c) => c.code === category)) {
       throw invalid(`Category ${category} is not in the test category list.`);
     }
     const specimenTypes = uniqueCodings(input.specimenTypes ?? []);
-    if (specimenTypes.length) {
-      const offered = new Set((await expandCodes(SPECIMEN_TYPE_VALUE_SET)).map(codingKey));
-      const missing = specimenTypes.find((s) => !offered.has(codingKey(s)));
-      if (missing) throw invalid(`Specimen ${missing.code} (${missing.system}) is not in the specimen type list.`);
-    }
+    const offered = new Set(ctx.specimens.map(codingKey));
+    const missing = specimenTypes.find((s) => !offered.has(codingKey(s)));
+    if (missing) throw invalid(`Specimen ${missing.code} (${missing.system}) is not in the specimen type list.`);
     const loinc = clean(input.loinc);
-    if (loinc) await checkLoinc(loinc);
+    if (loinc && loinc !== linked) {
+      if (!LOINC_CODE.test(loinc)) throw invalid(`"${loinc}" is not a LOINC code. LOINC codes look like 12345-6.`);
+      // With no LOINC loaded, only the format can be checked.
+      if (ctx.loincLoaded && !ctx.knownLoinc.has(loinc)) {
+        throw invalid(`LOINC code ${loinc} is not in the LOINC loaded on this install.`);
+      }
+    }
     return { display, shortName: clean(input.shortName), category, specimenTypes, loinc, active: input.active ?? true };
+  }
+
+  async function loadCheckContext(loincCodes: string[]): Promise<CheckContext> {
+    const [categories, specimens, loaded] = await Promise.all([
+      expandEntries(TEST_CATEGORY_VALUE_SET), expandEntries(SPECIMEN_TYPE_VALUE_SET), loincLoaded(),
+    ]);
+    const knownLoinc = new Set<string>();
+    const wanted = [...new Set(loincCodes.filter((c) => LOINC_CODE.test(c)))];
+    if (loaded) {
+      for (let i = 0; i < wanted.length; i += LOINC_LOOKUP_CHUNK) {
+        const found = await db.selectFrom('terminology_concepts').select('code')
+          .where('system', '=', LOINC_SYSTEM)
+          .where('code', 'in', wanted.slice(i, i + LOINC_LOOKUP_CHUNK))
+          // A DRAFT row is the stub an earlier link left, not a loaded code.
+          .where((eb) => eb.or([eb('status', 'is', null), eb('status', '!=', 'DRAFT')]))
+          .execute();
+        for (const f of found) knownLoinc.add(f.code);
+      }
+    }
+    return { categories, specimens, loincLoaded: loaded, knownLoinc };
+  }
+
+  async function validate(input: CatalogTestInput): Promise<ValidTest> {
+    const loinc = clean(input.loinc);
+    return checkTest(input, await loadCheckContext(loinc ? [loinc] : []));
   }
 
   async function storedConcept(code: string): Promise<{ properties: unknown } | undefined> {
@@ -374,7 +510,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       .where('system', '=', TEST_CATALOG_SYSTEM).where('code', '=', code).executeTakeFirst();
   }
 
-  async function writeConcept(code: string, t: ValidTest, stored: unknown): Promise<void> {
+  async function writeConceptOn(exec: Kysely<InternalSchema>, code: string, t: ValidTest, stored: unknown): Promise<void> {
     // Keep every key this catalog does not manage, as terms.update does since test catalog S0.
     const parsed = parseJson(stored);
     const next: Record<string, unknown> = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -387,26 +523,26 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (t.category) next.category = t.category;
     if (t.specimenTypes.length) next.specimenTypes = t.specimenTypes;
     const properties = Object.keys(next).length ? JSON.stringify(next) : null;
-    await db.insertInto('terminology_concepts').values({
+    await exec.insertInto('terminology_concepts').values({
       system: TEST_CATALOG_SYSTEM, code, display: t.display,
       status: t.active ? 'ACTIVE' : RETIRED_STATUS,
       properties: properties as never,
     }).onConflict((oc) => oc.columns(['system', 'code']).doUpdateSet((eb) => ({
       display: eb.ref('excluded.display'), status: eb.ref('excluded.status'), properties: eb.ref('excluded.properties'),
     }))).execute();
+  }
+
+  async function writeConcept(code: string, t: ValidTest, stored: unknown): Promise<void> {
+    await writeConceptOn(db, code, t, stored);
     // One terminology_system signal per edit, as terms.create does, so labs pull the change.
     await markTerminologyChanged(db, TEST_CATALOG_SYSTEM);
   }
 
   async function writeLoincLink(code: string, loinc: string | null): Promise<void> {
-    const current = (await deps.admin.termMappings.listOutgoing(TEST_CATALOG_SYSTEM, code))
-      .find((m) => m.toSystem === LOINC_SYSTEM && m.mapType === LOINC_MAP_TYPE && m.isActive);
+    const current = (await deps.admin.termMappings.listOutgoing(TEST_CATALOG_SYSTEM, code)).find(isLoincLink);
     if (loinc && current?.toCode !== loinc) {
       // saveExclusive keeps one active LOINC link per test and deactivates the old one.
-      await deps.admin.termMappings.saveExclusive({
-        fromSystem: TEST_CATALOG_SYSTEM, fromCode: code, toSystem: LOINC_SYSTEM, toCode: loinc,
-        toDisplay: null, mapType: LOINC_MAP_TYPE, isActive: true,
-      });
+      await deps.admin.termMappings.saveExclusive(loincLinkInput(code, loinc));
     } else if (!loinc && current) {
       const { id, ...rest } = current;
       await deps.admin.termMappings.update(id, { ...rest, isActive: false });
@@ -511,6 +647,213 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return saved(code);
   }
 
+  /**
+   * The new categories the operator named, checked. A bad one stops the whole step, because it is the
+   * operator's own answer and they can fix it on the Values step.
+   */
+  async function newCategories(answers: CategoryAnswer[]): Promise<Array<{ code: string; display: string }>> {
+    const taken = new Set((await db.selectFrom('terminology_concepts').select('code')
+      .where('system', '=', TEST_CATEGORY_SYSTEM).execute()).map((r) => r.code));
+    const added = new Map<string, string>();
+    for (const a of answers) {
+      if (a.kind !== 'new') continue;
+      const code = a.code.trim();
+      const display = a.display.trim();
+      if (!code) throw invalid(`The new category for "${a.text}" needs a code.`);
+      if (!display) throw invalid(`The new category ${code} needs a name.`);
+      // Checked against every concept in the category system, a retired one included, because the
+      // insert would collide with it.
+      if (taken.has(code)) throw invalid(`Category ${code} already exists. Choose it instead of adding it.`);
+      const seen = added.get(code);
+      if (seen !== undefined && seen !== display) throw invalid(`Category ${code} is added twice, with two names.`);
+      added.set(code, display);
+    }
+    return [...added].map(([code, display]) => ({ code, display })).sort((a, b) => a.code.localeCompare(b.code));
+  }
+
+  /**
+   * Work out what an import does, row by row, writing nothing. The preview returns the report; the apply
+   * runs this again and writes the plan, so it never trusts what an earlier preview said.
+   */
+  async function planImport(input: CatalogImportInput): Promise<{ report: CatalogImportReport; writes: PlannedWrite[] }> {
+    await refuseUnlessOwned();
+    const { table, columnMap } = input;
+    if (table.rows.length > CATALOG_IMPORT_MAX_ROWS) {
+      throw invalid(`The file has ${table.rows.length} rows under its header. The limit is ${CATALOG_IMPORT_MAX_ROWS}.`);
+    }
+    const mapProblem = checkColumnMap(columnMap, table.headers);
+    if (mapProblem) throw invalid(mapProblem);
+    const rows = readCatalogRows(table, columnMap);
+
+    const tests = new Map((await readTests()).map((t) => [t.code, t]));
+    const storedByCode = new Map((await db.selectFrom('terminology_concepts').select(['code', 'properties'])
+      .where('system', '=', TEST_CATALOG_SYSTEM).execute()).map((r) => [r.code, r.properties as unknown]));
+    const ctx = await loadCheckContext(rows.flatMap((r) => (r.values.loinc ? [r.values.loinc] : [])));
+    const answers = input.valueMap ?? { categories: [], specimens: [] };
+    const toAdd = await newCategories(answers.categories);
+    // A row may use a category this import adds.
+    const rowCtx: CheckContext = {
+      ...ctx,
+      categories: [...ctx.categories, ...toAdd.map((c) => ({ system: TEST_CATEGORY_SYSTEM, code: c.code, display: c.display }))],
+    };
+    const categoryAnswers = new Map(answers.categories
+      .filter((a) => a.code.trim() !== '')
+      .map((a) => [valueKey(a.text), a.code.trim()]));
+    const specimenAnswers = new Map(answers.specimens.map((a) => [valueKey(a.text), { system: a.system, code: a.code }]));
+
+    const unmatchedCategories = new Map<string, CatalogUnmatchedValue>();
+    const unmatchedSpecimens = new Map<string, CatalogUnmatchedValue>();
+    const tally = (into: Map<string, CatalogUnmatchedValue>, text: string): void => {
+      const seen = into.get(valueKey(text));
+      if (seen) seen.rows += 1;
+      else into.set(valueKey(text), { text, rows: 1 });
+    };
+
+    const report: CatalogImportReport = {
+      counts: { new: 0, changed: 0, unchanged: 0, refused: 0 },
+      refused: [],
+      unmatched: { categories: [], specimens: [] },
+      categoriesToAdd: [],
+      loincChecked: ctx.loincLoaded,
+    };
+    const writes: PlannedWrite[] = [];
+    const firstLine = new Map<string, number>();
+
+    for (const { line, values: v } of rows) {
+      // A test with no national code takes its LOINC code, as create does.
+      const code = v.code || v.loinc || null;
+      if (!code) {
+        report.refused.push({ line, code: null, reason: 'A test needs a national code or a LOINC code.' });
+        continue;
+      }
+      const first = firstLine.get(code);
+      if (first !== undefined) {
+        report.refused.push({ line, code, reason: `Test ${code} is already on row ${first} of this file.` });
+        continue;
+      }
+      firstLine.set(code, line);
+
+      const problems: string[] = [];
+      // undefined means the column is not mapped, so the test keeps what it has (decision 4).
+      let category: string | null | undefined;
+      if (v.category !== undefined) {
+        category = v.category === '' ? null : matchCategory(v.category, ctx.categories);
+        if (v.category !== '' && category === null) {
+          tally(unmatchedCategories, v.category);
+          category = categoryAnswers.get(valueKey(v.category)) ?? null;
+          if (category === null) problems.push(`Category "${v.category}" is not in the test category list. Choose a category for it.`);
+        }
+      }
+      let specimenTypes: SpecimenCoding[] | undefined;
+      if (v.specimenTypes !== undefined) {
+        specimenTypes = [];
+        for (const text of splitSpecimens(v.specimenTypes)) {
+          let hit = matchSpecimen(text, ctx.specimens);
+          if (!hit) {
+            tally(unmatchedSpecimens, text);
+            hit = specimenAnswers.get(valueKey(text)) ?? null;
+          }
+          if (hit) specimenTypes.push(hit);
+          else problems.push(`Specimen "${text}" is not in the specimen type list. Choose a specimen for it.`);
+        }
+      }
+      if (problems.length) {
+        report.refused.push({ line, code, reason: problems.join(' ') });
+        continue;
+      }
+
+      const before = tests.get(code);
+      // A mapped column is authoritative, so an empty cell clears the field. An unmapped one is left alone.
+      const merged: CatalogTestInput = {
+        display: v.name ?? '',
+        shortName: v.shortName !== undefined ? v.shortName : before?.shortName ?? null,
+        category: category !== undefined ? category : before?.category ?? null,
+        specimenTypes: specimenTypes ?? before?.specimenTypes ?? [],
+        loinc: v.loinc !== undefined ? v.loinc : before?.loinc ?? null,
+        // An import never retires or restores a test. Retiring is always explicit (spec 4.4).
+        active: before?.active ?? true,
+      };
+      let test: ValidTest;
+      try {
+        test = checkTest(merged, rowCtx, before?.loinc ?? null);
+      } catch (err) {
+        if (!(err instanceof TestCatalogError)) throw err;
+        report.refused.push({ line, code, reason: err.message });
+        continue;
+      }
+      if (!before) {
+        report.counts.new += 1;
+        writes.push({ code, test, stored: null, loincBefore: null });
+      } else if (sameTest(before, test)) {
+        report.counts.unchanged += 1;
+      } else {
+        report.counts.changed += 1;
+        writes.push({ code, test, stored: storedByCode.get(code) ?? null, loincBefore: before.loinc });
+      }
+    }
+
+    report.counts.refused = report.refused.length;
+    const byText = (a: CatalogUnmatchedValue, b: CatalogUnmatchedValue): number => a.text.localeCompare(b.text);
+    report.unmatched = {
+      categories: [...unmatchedCategories.values()].sort(byText),
+      specimens: [...unmatchedSpecimens.values()].sort(byText),
+    };
+    // Only a new category a written test uses is added.
+    report.categoriesToAdd = toAdd.filter((c) => writes.some((w) => w.test.category === c.code));
+    return { report, writes };
+  }
+
+  async function importPreview(input: CatalogImportInput): Promise<CatalogImportReport> {
+    return (await planImport(input)).report;
+  }
+
+  async function importApply(input: CatalogImportInput): Promise<CatalogImportReport> {
+    const { report, writes } = await planImport(input);
+    if (writes.length === 0) return report;
+
+    // The links to switch off are read before the transaction, so every statement inside it runs on it.
+    // No row touches another row's link: a code appears once in a plan.
+    const unlink = new Map<string, TermMapping>();
+    for (const w of writes) {
+      if (w.loincBefore === null || w.test.loinc !== null) continue;
+      const link = (await deps.admin.termMappings.listOutgoing(TEST_CATALOG_SYSTEM, w.code)).find(isLoincLink);
+      if (link) unlink.set(w.code, link);
+    }
+
+    // ⛔ One transaction for categories, tests and links (spec 4.4). saveExclusive and update take it,
+    // so neither opens one of its own and a failure part way leaves nothing behind.
+    await db.transaction().execute(async (trx) => {
+      for (const c of report.categoriesToAdd) {
+        await trx.insertInto('terminology_concepts').values({
+          system: TEST_CATEGORY_SYSTEM, code: c.code, display: c.display, status: 'ACTIVE', properties: null as never,
+        }).execute();
+      }
+      for (const w of writes) {
+        await writeConceptOn(trx, w.code, w.test, w.stored);
+        if (w.test.loinc !== null && w.test.loinc !== w.loincBefore) {
+          await deps.admin.termMappings.saveExclusive(loincLinkInput(w.code, w.test.loinc), { trx });
+        } else {
+          const link = unlink.get(w.code);
+          if (link) {
+            const { id, ...rest } = link;
+            await deps.admin.termMappings.update(id, { ...rest, isActive: false }, { trx });
+          }
+        }
+      }
+    });
+    // markTerminologyChanged opens its own transaction, so the signals follow the commit, one per system,
+    // as the loaders send them (packages/db/src/terminology-sync.ts). A failed import sends none.
+    await markTerminologyChanged(db, TEST_CATALOG_SYSTEM);
+    if (report.categoriesToAdd.length) await markTerminologyChanged(db, TEST_CATEGORY_SYSTEM);
+    return report;
+  }
+
+  async function exportCsv(): Promise<string> {
+    // Active tests only, as the page shows by default. Retired tests stay out of a file meant for editing.
+    const tests = (await readTests()).filter((t) => t.active);
+    return toCsv(CATALOG_EXPORT_COLUMNS, tests.map(catalogExportRow));
+  }
+
   return {
     ownedHere,
     list,
@@ -521,5 +864,8 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     options,
     setEnabled,
     setActive,
+    importPreview,
+    importApply,
+    exportCsv,
   };
 }

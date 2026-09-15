@@ -15,11 +15,12 @@ import {
 import { ActiveFilterChips, DataTableToolbar, useTableState, type ColumnDef } from '@/components/data-table';
 import { useAuth } from '@/auth/AuthProvider';
 import {
-  getTestCatalogOptions, listTestCatalog, setCatalogTestActive, setCatalogTestEnabled,
+  getTestCatalogOptions, downloadTestCatalogCsv, listTestCatalog, setCatalogTestActive, setCatalogTestEnabled,
   type CatalogTest, type TestCatalogOptions,
 } from '@/api';
 import { translateFilters } from '@/test-catalog/catalogFilters';
 import { TestSheet, type TestSheetTarget } from '@/test-catalog/TestSheet';
+import { ImportCatalogSheet } from '@/test-catalog/ImportCatalogSheet';
 
 // Test catalog S2 (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.3). Server-paged with
 // named filters, as Notifications.tsx is. The toolbar menu, row menu and empty state copy
@@ -47,12 +48,16 @@ export function TestCatalog() {
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   const [sheet, setSheet] = useState<TestSheetTarget | null>(null);
+  const [importing, setImporting] = useState(false);
 
-  useEffect(() => {
+  // Read again after an import, which can add categories.
+  const loadOptions = useCallback(() => {
     getTestCatalogOptions()
       .then(setOptions)
       .catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
   }, []);
+
+  useEffect(() => { loadOptions(); }, [loadOptions]);
 
   const categoryLabel = useMemo(
     () => new Map(options.categories.map((c) => [c.code, c.display ?? c.code])),
@@ -196,7 +201,7 @@ export function TestCatalog() {
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder={t('testCatalog.searchPlaceholder')}
-            actions={canManage && ownedHere ? (
+            actions={canManage ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -207,8 +212,24 @@ export function TestCatalog() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem data-testid="add-test" onSelect={() => setSheet({ kind: 'create' })}>
-                    {t('testCatalog.add')}
+                  {ownedHere && (
+                    <DropdownMenuItem data-testid="add-test" onSelect={() => setSheet({ kind: 'create' })}>
+                      {t('testCatalog.add')}
+                    </DropdownMenuItem>
+                  )}
+                  {ownedHere && (
+                    <DropdownMenuItem data-testid="import-tests" onSelect={() => setImporting(true)}>
+                      {t('testCatalog.importAction')}
+                    </DropdownMenuItem>
+                  )}
+                  {/* Any install can export, a lab that receives central's catalog included. */}
+                  <DropdownMenuItem
+                    data-testid="export-tests"
+                    onSelect={() => {
+                      downloadTestCatalogCsv().catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
+                    }}
+                  >
+                    {t('testCatalog.exportAction')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -309,6 +330,12 @@ export function TestCatalog() {
           ownedHere={ownedHere}
           onClose={() => setSheet(null)}
           onSaved={() => { void load(); }}
+        />
+        <ImportCatalogSheet
+          open={importing}
+          options={options}
+          onClose={() => setImporting(false)}
+          onImported={() => { void load(); loadOptions(); }}
         />
       </div>
     </AppShell>

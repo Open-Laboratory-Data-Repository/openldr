@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
-import { TestCatalogError, type AppContext, type CatalogOptions, type CatalogTest } from '@openldr/bootstrap';
+import {
+  TestCatalogError, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest,
+} from '@openldr/bootstrap';
 import { registerTestCatalogRoutes } from './test-catalog-routes';
 import './auth-plugin';
 
@@ -16,9 +18,17 @@ const OPTIONS: CatalogOptions = {
   loinc: null,
 };
 
+const REPORT: CatalogImportReport = {
+  counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [],
+  unmatched: { categories: [], specimens: [] }, categoriesToAdd: [{ code: 'VIRO', display: 'Virology' }], loincChecked: false,
+};
+
 type Impl = (...args: any[]) => Promise<unknown>;
 
-function fakeCtx(over: Partial<Record<'list' | 'get' | 'create' | 'update' | 'setLabSettings' | 'options' | 'setEnabled' | 'setActive', Impl>> = {}) {
+type Method = 'list' | 'get' | 'create' | 'update' | 'setLabSettings' | 'options' | 'setEnabled' | 'setActive'
+  | 'importPreview' | 'importApply' | 'exportCsv';
+
+function fakeCtx(over: Partial<Record<Method, Impl>> = {}) {
   const calls: Array<{ method: string; args: unknown[] }> = [];
   const audit: Array<Record<string, unknown>> = [];
   const spy = (method: string, impl: Impl): Impl => async (...args) => {
@@ -34,6 +44,9 @@ function fakeCtx(over: Partial<Record<'list' | 'get' | 'create' | 'update' | 'se
     options: spy('options', over.options ?? (async () => OPTIONS)),
     setEnabled: spy('setEnabled', over.setEnabled ?? (async () => TEST)),
     setActive: spy('setActive', over.setActive ?? (async () => TEST)),
+    importPreview: spy('importPreview', over.importPreview ?? (async () => REPORT)),
+    importApply: spy('importApply', over.importApply ?? (async () => REPORT)),
+    exportCsv: spy('exportCsv', over.exportCsv ?? (async () => 'code,name\nHIVVL,HIV viral load\n')),
   };
   const ctx = {
     testCatalog,
@@ -201,5 +214,118 @@ describe('test catalog routes', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json()).toEqual({ error: 'central only', kind: 'central-managed' });
     expect(audit).toEqual([]);
+  });
+
+  it('POST /import/read reads the raw file and answers its table and suggested columns', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog/import/read?format=csv',
+      headers: { 'content-type': 'application/octet-stream' },
+      payload: Buffer.from('Test code,Test name\nHIVVL,HIV viral load\n'),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      headers: ['Test code', 'Test name'], rows: [['HIVVL', 'HIV viral load']], sheetName: null, sheetCount: 1,
+      suggested: { code: 'Test code', name: 'Test name' },
+    });
+    // Reading a file touches no data, so no service call.
+    expect(calls).toEqual([]);
+  });
+
+  it('POST /import/read refuses a bad format, a body that is not a file, and a file over 5 MB, in words', async () => {
+    const { ctx } = fakeCtx();
+    const app = appWith(ctx);
+    const badFormat = await app.inject({
+      method: 'POST', url: '/api/test-catalog/import/read?format=pdf',
+      headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x'),
+    });
+    expect(badFormat.statusCode).toBe(400);
+    expect(badFormat.json()).toEqual({ error: 'format must be "csv" or "xlsx"' });
+
+    const json = await app.inject({ method: 'POST', url: '/api/test-catalog/import/read?format=csv', payload: { a: 1 } });
+    expect(json.statusCode).toBe(400);
+    expect(json.json()).toEqual({ error: 'Send the file itself as the request body, as application/octet-stream.' });
+
+    const big = await app.inject({
+      method: 'POST', url: '/api/test-catalog/import/read?format=csv',
+      headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.alloc(5 * 1024 * 1024 + 1, 0x61),
+    });
+    expect(big.statusCode).toBe(400);
+    expect(big.json()).toEqual({ error: 'The file is larger than 5 MB, the limit.', kind: 'invalid' });
+  });
+
+  it('import needs terminology.manage, and export needs terminology.view', async () => {
+    const { ctx } = fakeCtx();
+    const viewer = appWith(ctx, ['terminology.view']);
+    const body = { table: { headers: ['name'], rows: [] }, columnMap: { name: 'name' } };
+    expect((await viewer.inject({
+      method: 'POST', url: '/api/test-catalog/import/read?format=csv',
+      headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('name\nA\n'),
+    })).statusCode).toBe(403);
+    expect((await viewer.inject({ method: 'POST', url: '/api/test-catalog/import/preview', payload: body })).statusCode).toBe(403);
+    expect((await viewer.inject({ method: 'POST', url: '/api/test-catalog/import/apply', payload: body })).statusCode).toBe(403);
+    expect((await viewer.inject({ method: 'GET', url: '/api/test-catalog/export' })).statusCode).toBe(200);
+  });
+
+  it('POST /import/preview hands the checked body to the service, and refuses a bad one before it', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    const body = { table: { headers: ['code', 'name'], rows: [['A', 'Alpha']] }, columnMap: { code: 'code', name: 'name' } };
+    const res = await app.inject({ method: 'POST', url: '/api/test-catalog/import/preview', payload: body });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(REPORT);
+    expect(calls).toEqual([{ method: 'importPreview', args: [body] }]);
+
+    const bad = await app.inject({
+      method: 'POST', url: '/api/test-catalog/import/preview',
+      payload: { ...body, columnMap: { name: 'name', notes: 'notes' } },
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('takes an import step body over 1 MB, the Fastify default', async () => {
+    const { ctx } = fakeCtx();
+    const rows = Array.from({ length: 5000 }, (_, i) => [`T${i}`, 'x'.repeat(300)]);
+    const res = await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog/import/preview',
+      payload: { table: { headers: ['code', 'name'], rows }, columnMap: { code: 'code', name: 'name' } },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('POST /import/apply applies, audits the counts and the categories added, and answers the report', async () => {
+    const { ctx, calls, audit } = fakeCtx();
+    const body = { table: { headers: ['code', 'name'], rows: [['A', 'Alpha']] }, columnMap: { code: 'code', name: 'name' } };
+    const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/import/apply', payload: body });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(REPORT);
+    expect(calls).toEqual([{ method: 'importApply', args: [body] }]);
+    expect(audit).toMatchObject([{
+      action: 'test_catalog.import', entityType: 'test_catalog', entityId: 'urn:openldr:codesystem:test-catalog',
+      metadata: { counts: REPORT.counts, categoriesAdded: ['VIRO'] },
+    }]);
+  });
+
+  it('POST /import/apply keeps a refusal words and audits nothing', async () => {
+    const { ctx, audit } = fakeCtx({
+      importApply: async () => { throw new TestCatalogError('This catalog comes from central.', 'central-managed'); },
+    });
+    const res = await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog/import/apply',
+      payload: { table: { headers: ['name'], rows: [] }, columnMap: { name: 'name' } },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: 'This catalog comes from central.', kind: 'central-managed' });
+    expect(audit).toEqual([]);
+  });
+
+  it('GET /export answers the CSV as a download', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx).inject({ method: 'GET', url: '/api/test-catalog/export' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toBe('text/csv; charset=utf-8');
+    expect(res.headers['content-disposition']).toBe('attachment; filename="test-catalog.csv"');
+    expect(res.body).toBe('code,name\nHIVVL,HIV viral load\n');
   });
 });
