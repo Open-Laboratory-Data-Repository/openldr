@@ -80,6 +80,13 @@ describe('the shipped starter packs', () => {
     ]);
   });
 
+  it('draw a fresh Users form with its names under Practitioner.name and its email under Practitioner.telecom', () => {
+    expect(lists('pack-practitioner')).toEqual([
+      ['Practitioner.name', ['First name', 'Last name']],
+      ['Practitioner.telecom', ['Email']],
+    ]);
+  });
+
   it('draw a fresh Facility form with its code as a slot of Location.identifier', () => {
     expect(lists('pack-location')).toEqual([['Location.identifier', ['Facility code']]]);
   });

@@ -14,6 +14,9 @@ import {
   FACILITY_FORM_MIGRATION_PREV_SLOTLESS,
   PATIENT_FORM_MIGRATION_BOUND_FIELDS,
   PATIENT_FORM_MIGRATION_PREV_FIELDS,
+  USERS_FORM_MIGRATION_BOUND_FIELDS,
+  USERS_FORM_MIGRATION_PREV_CANONICALISED,
+  USERS_FORM_MIGRATION_PREV_FIELDS,
 } from '@openldr/db';
 
 describe('sample forms', () => {
@@ -283,17 +286,44 @@ describe('every shipped sample passes the FHIR path rules', () => {
   //
   // 13 became 10 on 2026-09-15 (migration 100): the Patient form's first name, last name and
   // phone now say which list entry they fill, so they stop tripping fhir-path-cardinality.
-  it('the other samples carry exactly the 10 known structural warnings', () => {
+  // 10 became 7 the same day (migration 101): the Users form's name and email do the same.
+  // All 7 left are on the Lab order form.
+  it('the other samples carry exactly the 7 known structural warnings', () => {
     const warnings = sampleForms
       .filter((f) => f.name !== 'Facility')
       .flatMap((f) => lintFormSchema(f).filter((i) => i.severity === 'warning'))
       .filter((i) => i.code === 'fhir-path-cardinality' || i.code === 'fhir-path-type-mismatch');
-    expect(warnings).toHaveLength(10);
+    expect(warnings).toHaveLength(7);
   });
 
   it('the Patient form produces no findings of any severity', () => {
     const patient = sampleForms.find((f) => f.name === 'Patient')!;
     expect(lintFormSchema(patient)).toEqual([]);
+  });
+
+  it('the Users form produces no findings of any severity', () => {
+    const users = sampleForms.find((f) => f.name === 'Users')!;
+    expect(lintFormSchema(users)).toEqual([]);
+  });
+});
+
+describe('migration 101 Users form slots', () => {
+  it("matches migration 101's frozen BOUND_FIELDS snapshot exactly", () => {
+    expect(sampleForms.find((f) => f.name === 'Users')!.fields).toEqual(USERS_FORM_MIGRATION_BOUND_FIELDS);
+  });
+
+  // The migration hand-writes what it believes a builder save turns the shipped bare paths into.
+  // Only the real normaliser can confirm that, and packages/db cannot import it. Same proof 089's
+  // canonicalised guard has above.
+  it('normalizing the shipped Users shape produces exactly the second shape 101 expects to find', () => {
+    const normalized = normalizeFormSchema({
+      id: 'form-sample-users',
+      name: 'Users',
+      fhirResourceType: 'Practitioner',
+      targetPages: ['users'],
+      fields: USERS_FORM_MIGRATION_PREV_FIELDS,
+    });
+    expect(normalized.fields).toEqual(USERS_FORM_MIGRATION_PREV_CANONICALISED);
   });
 });
 

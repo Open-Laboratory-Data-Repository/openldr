@@ -99,6 +99,7 @@ import * as m097 from './097_workflow_webhook_receipts';
 import * as m098 from './098_auth_issuer_binding';
 import * as m099 from './099_starter_packs';
 import * as m100 from './100_sample_form_slots';
+import * as m101 from './101_users_form_slots';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -202,4 +203,5 @@ export const internalMigrations: Record<string, Migration> = {
   '098_auth_issuer_binding': { up: m098.up, down: m098.down },
   '099_starter_packs': { up: m099.up, down: m099.down },
   '100_sample_form_slots': { up: m100.up, down: m100.down },
+  '101_users_form_slots': { up: m101.up, down: m101.down },
 };

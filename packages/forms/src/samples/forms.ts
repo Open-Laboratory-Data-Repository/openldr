@@ -156,7 +156,10 @@ const usersForm: FormSchema = {
   fields: [
     {
       id: 'fld-usr-first-name',
-      fhirPath: 'name.given',
+      fhirPath: 'Practitioner.name.given',
+      // Which entry of Practitioner.name this fills, and the element it writes (migration 101).
+      fhirDiscriminator: { use: 'official' },
+      fhirValueField: 'given',
       displayLabel: 'First name',
       description: null,
       fieldType: 'text',
@@ -168,7 +171,9 @@ const usersForm: FormSchema = {
     },
     {
       id: 'fld-usr-last-name',
-      fhirPath: 'name.family',
+      fhirPath: 'Practitioner.name.family',
+      fhirDiscriminator: { use: 'official' },
+      fhirValueField: 'family',
       displayLabel: 'Last name',
       description: null,
       fieldType: 'text',
@@ -180,7 +185,9 @@ const usersForm: FormSchema = {
     },
     {
       id: 'fld-usr-email',
-      fhirPath: 'telecom.value',
+      fhirPath: 'Practitioner.telecom.value',
+      fhirDiscriminator: { system: 'email' },
+      fhirValueField: 'value',
       displayLabel: 'Email',
       description: null,
       fieldType: 'email',
