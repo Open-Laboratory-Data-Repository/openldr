@@ -7,6 +7,7 @@ import { createAuditStore, type AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
 import { createBlobFromConfig } from './s3-config';
 import { createResultParametersLoader } from './reexpand-value-sets';
+import { withLabTestsList } from './test-catalog';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
   return {
@@ -121,7 +122,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     getConcept: (s, c) => store.getConcept(s, c),
     findConcepts: (q) => store.findConcepts(q),
     countConcepts: (q) => store.countConcepts(q),
-    getResourceByUrl: (u) => store.getResourceByUrl(u),
+    getResourceByUrl: withLabTestsList(db, (u) => store.getResourceByUrl(u)),
     translate: (q) => store.translate(q),
   });
   return {

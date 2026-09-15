@@ -5,10 +5,11 @@ import {
   createFhirStore, createTerminologyStore, createTerminologyAdminStore,
   type InternalSchema, type ValueSetProjection,
 } from '@openldr/db';
-import { createOperations, LOINC_SYSTEM } from '@openldr/terminology';
+import { createOperations, LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { createTerminologyBulkSync } from '@openldr/sync';
 import {
   createTestCatalog, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM,
+  LAB_TESTS_VALUE_SET, TEST_CATEGORY_VALUE_SET, withLabTestsList,
   type CatalogListQuery, type CatalogListResult, type CatalogTestInput, type CatalogImportInput,
 } from './test-catalog';
 import type { CatalogColumnMap } from './test-catalog-import';
@@ -754,5 +755,84 @@ describe('test catalog: import apply and export', () => {
     const { db, catalog } = await buildCatalog();
     await markCentral(db);
     await expect(catalog.importApply(importInput([['A', 'A', '', '', '', '']]))).rejects.toMatchObject({ kind: 'central-managed' });
+  });
+});
+
+// The lab list is read through withLabTestsList, as bootstrap builds ops (index.ts, terminology-context.ts).
+async function buildWithLabList() {
+  const built = await buildCatalog();
+  const store = createTerminologyStore(built.db, createFhirStore(built.db));
+  const ops = createOperations({
+    getConcept: (s, c) => store.getConcept(s, c),
+    findConcepts: (q) => store.findConcepts(q),
+    countConcepts: (q) => store.countConcepts(q),
+    getResourceByUrl: withLabTestsList(built.db, (u) => store.getResourceByUrl(u)),
+    translate: (q) => store.translate(q),
+  });
+  return { ...built, ops };
+}
+
+async function labList(ops: Operations, filter?: string): Promise<Array<[string, string | undefined]>> {
+  const vs = await ops.expand(LAB_TESTS_VALUE_SET, { count: 100, ...(filter ? { filter } : {}) });
+  return (vs.expansion?.contains ?? []).map((c) => [c.code ?? '', c.display]);
+}
+
+describe('test catalog: the lab test list', () => {
+  it('lists nothing, not the whole catalog, when no test is switched on here', async () => {
+    const { catalog, ops } = await buildWithLabList();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    expect(await labList(ops)).toEqual([]);
+  });
+
+  it('lists the active tests switched on here, under the local name when there is one', async () => {
+    const { catalog, ops } = await buildWithLabList();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    await catalog.create({ code: 'GLU', display: 'Glucose' });
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
+    await catalog.setEnabled('CD4', true);
+    expect(await labList(ops)).toEqual([['CD4', 'CD4 count'], ['HIVVL', 'Viral load']]);
+  });
+
+  it('drops a retired test, even while it stays switched on', async () => {
+    const { catalog, ops } = await buildWithLabList();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.setEnabled('HIVVL', true);
+    await catalog.setActive('HIVVL', false);
+    expect(await labList(ops)).toEqual([]);
+  });
+
+  it('searches the local name, and the submit check accepts only listed tests', async () => {
+    const { catalog, ops } = await buildWithLabList();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.create({ code: 'GLU', display: 'Glucose' });
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
+    expect(await labList(ops, 'viral')).toEqual([['HIVVL', 'Viral load']]);
+    const check = (code: string) => ops.validateCode({ valueSetUrl: LAB_TESTS_VALUE_SET, code, system: TEST_CATALOG_SYSTEM });
+    expect((await check('HIVVL')).result).toBe(true);
+    expect((await check('GLU')).result).toBe(false);
+  });
+
+  it('keeps a test switched on here through a pull from central', async () => {
+    const { db, catalog, ops } = await buildWithLabList();
+    const central = [{ code: 'HIVVL', display: 'HIV viral load', status: 'ACTIVE', properties: null }];
+    const bulk = createTerminologyBulkSync({
+      labDb: db,
+      fetchConceptsPage: async () => ({ concepts: central, nextCode: null }),
+      fetchMapElementsPage: async () => ({ elements: [], nextKey: null }),
+      getToken: async () => 'token',
+      logger: { info() {}, warn() {}, error() {}, debug() {} },
+    });
+    await bulk.syncSystem(TEST_CATALOG_SYSTEM, { kind: 'CodeSystem', generation: 1 });
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: null, localDisplay: 'Viral load' });
+    await bulk.syncSystem(TEST_CATALOG_SYSTEM, { kind: 'CodeSystem', generation: 2 });
+    expect(await labList(ops)).toEqual([['HIVVL', 'Viral load']]);
+  });
+
+  it('reads every other url exactly as stored', async () => {
+    const { ops } = await buildWithLabList();
+    const categories = (await ops.expand(TEST_CATEGORY_VALUE_SET, { count: 100 })).expansion?.contains?.map((c) => c.code);
+    expect(categories).toEqual(expect.arrayContaining(['CHEM', 'HAEM', 'MICRO', 'MOL', 'SERO']));
   });
 });

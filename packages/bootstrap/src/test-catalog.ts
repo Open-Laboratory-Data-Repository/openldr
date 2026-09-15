@@ -1,6 +1,7 @@
 import { sql, type Kysely } from 'kysely';
 import {
   markTerminologyChanged, type InternalSchema, type TerminologyAdminStore, type TermMapping, type TermMappingInput,
+  type VsCompose,
 } from '@openldr/db';
 import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
@@ -30,6 +31,9 @@ export const TEST_CATEGORY_VALUE_SET = 'urn:openldr:valueset:test-category';
 /** A test's specimens must come from the list the Lab order's specimen picker offers
  *  (packages/forms/src/samples/forms.ts), or narrowing at data entry could never match. */
 export const SPECIMEN_TYPE_VALUE_SET = 'urn:openldr:valueset:specimen-type';
+/** The lab's test list, which the Lab order's Tests field binds. Must equal LAB_TESTS_VALUE_SET in
+ *  migration 105, which seeds its row. */
+export const LAB_TESTS_VALUE_SET = 'urn:openldr:valueset:lab-tests';
 
 /** The map type of a test's LOINC link. concept_map_elements stores it as the equivalence. */
 const LOINC_MAP_TYPE = 'SAME-AS' as const;
@@ -354,6 +358,48 @@ function uniqueCodings(list: SpecimenCoding[]): SpecimenCoding[] {
 /** Order picker choices by what the operator reads: the name, or the code when there is none. */
 function byLabel(a: { code: string; display: string | null }, b: { code: string; display: string | null }): number {
   return (a.display ?? a.code).localeCompare(b.display ?? b.code);
+}
+
+/**
+ * The lab's test list as a ValueSet compose: the active catalog tests switched on here, each under the
+ * lab's local name when it set one. Worked out on every read, so it is never stale and never stored
+ * (test catalog S4, decision 1). With nothing switched on it is `{ include: [] }`: an include of the
+ * catalog system with no concepts would list the whole catalog (packages/db/src/value-set-expander.ts:53-62).
+ */
+export async function labTestsCompose(db: Kysely<InternalSchema>): Promise<VsCompose> {
+  const rows = await db.selectFrom('terminology_concepts as c')
+    .innerJoin('test_catalog_lab_settings as l', 'l.code', 'c.code')
+    .select(['c.code as code', 'c.display as display', 'l.local_display as localDisplay'])
+    .where('c.system', '=', TEST_CATALOG_SYSTEM)
+    .where('l.enabled', '=', true)
+    // NULL counts as ACTIVE, as toTest reads it.
+    .where((eb) => eb.or([eb('c.status', '=', 'ACTIVE'), eb('c.status', 'is', null)]))
+    .orderBy('c.code')
+    .execute();
+  if (rows.length === 0) return { include: [] };
+  return {
+    include: [{
+      system: TEST_CATALOG_SYSTEM,
+      concept: rows.map((r) => ({ code: r.code, display: r.localDisplay ?? r.display ?? r.code })),
+    }],
+  };
+}
+
+/**
+ * Wrap a terminology source's getResourceByUrl so the lab's test list is worked out when read. Only
+ * that url changes, and only when migration 105's row exists: the stored resource keeps its id and
+ * title, and its compose is replaced. Both places bootstrap builds ops use this (index.ts and
+ * terminology-context.ts), so the pickers, the submit check and `openldr terminology expand` agree.
+ */
+export function withLabTestsList(
+  db: Kysely<InternalSchema>,
+  getResourceByUrl: (url: string) => Promise<unknown | null>,
+): (url: string) => Promise<unknown | null> {
+  return async (url) => {
+    const stored = await getResourceByUrl(url);
+    if (url !== LAB_TESTS_VALUE_SET || !stored || typeof stored !== 'object') return stored;
+    return { ...(stored as Record<string, unknown>), compose: await labTestsCompose(db) };
+  };
 }
 
 export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
