@@ -836,3 +836,37 @@ describe('test catalog: the lab test list', () => {
     expect(categories).toEqual(expect.arrayContaining(['CHEM', 'HAEM', 'MICRO', 'MOL', 'SERO']));
   });
 });
+
+describe('test catalog: what an order needs', () => {
+  const test = (code: string) => ({ system: TEST_CATALOG_SYSTEM, code });
+
+  it('offers the specimens at least one chosen test accepts, by this lab narrower list', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', specimenTypes: [BLD, UR] });
+    await catalog.create({ code: 'GLU', display: 'Glucose', specimenTypes: [BLD, CSF] });
+    await catalog.setLabSettings('HIVVL', { enabled: true, specimenTypes: [UR], localDisplay: null });
+    expect(await catalog.specimensFor([test('HIVVL'), test('GLU')])).toEqual([
+      { system: LOCAL, code: 'BLD', display: 'Blood' },
+      { system: LOCAL, code: 'CSF', display: 'CSF' },
+      { system: LOCAL, code: 'UR', display: 'Urine' },
+    ]);
+    expect(await catalog.specimensFor([test('HIVVL')])).toEqual([{ system: LOCAL, code: 'UR', display: 'Urine' }]);
+  });
+
+  it('offers nothing to narrow by for codings outside the catalog, or tests with no specimens', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    expect(await catalog.specimensFor([{ system: LOINC_SYSTEM, code: '718-7' }])).toEqual([]);
+    expect(await catalog.specimensFor([test('CD4'), test('NOPE')])).toEqual([]);
+  });
+
+  it('names each catalog test LOINC coding, for tests with an active link only', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', loinc: '25836-8' });
+    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    await catalog.create({ code: 'GLU', display: 'Glucose', loinc: '2345-7' });
+    await catalog.update('GLU', { display: 'Glucose', loinc: null });
+    const found = await catalog.loincCodingsFor([test('HIVVL'), test('CD4'), test('GLU'), { system: LOINC_SYSTEM, code: '718-7' }]);
+    expect([...found]).toEqual([[`${TEST_CATALOG_SYSTEM}|HIVVL`, { system: LOINC_SYSTEM, code: '25836-8' }]]);
+  });
+});

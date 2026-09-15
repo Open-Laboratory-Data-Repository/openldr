@@ -211,6 +211,11 @@ export interface TestCatalog {
   importPreview(input: CatalogImportInput): Promise<CatalogImportReport>;
   importApply(input: CatalogImportInput): Promise<CatalogImportReport>;
   exportCsv(): Promise<string>;
+  /** The specimens at least one of these tests accepts, by this lab's lists. Codings outside the
+   *  catalog are ignored. Empty means there is nothing to narrow by (test catalog S4). */
+  specimensFor(tests: Array<{ system: string; code: string }>): Promise<CatalogSpecimenOption[]>;
+  /** Each catalog test's LOINC coding, keyed `system|code` of the test, for tests with an active link. */
+  loincCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, { system: string; code: string }>>;
 }
 
 export interface TestCatalogDeps {
@@ -900,6 +905,32 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return toCsv(CATALOG_EXPORT_COLUMNS, tests.map(catalogExportRow));
   }
 
+  async function specimensFor(tests: Array<{ system: string; code: string }>): Promise<CatalogSpecimenOption[]> {
+    const codes = new Set(tests.filter((t) => t.system === TEST_CATALOG_SYSTEM).map((t) => t.code));
+    if (codes.size === 0) return [];
+    // The lab's narrower list when it set one, else the catalog's (spec 4.5).
+    const accepted = new Set((await readTests())
+      .filter((t) => codes.has(t.code))
+      .flatMap((t) => (t.lab.specimenTypes ?? t.specimenTypes).map(codingKey)));
+    if (accepted.size === 0) return [];
+    // Only what the specimen picker offers can be submitted, so a specimen since dropped from that
+    // list is left out.
+    return (await expandEntries(SPECIMEN_TYPE_VALUE_SET)).filter((s) => accepted.has(codingKey(s))).sort(byLabel);
+  }
+
+  async function loincCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, { system: string; code: string }>> {
+    const codes = [...new Set(tests.filter((t) => t.system === TEST_CATALOG_SYSTEM).map((t) => t.code))];
+    if (codes.length === 0) return new Map();
+    const links = await db.selectFrom('term_mappings').select(['from_code', 'to_code'])
+      .where('from_system', '=', TEST_CATALOG_SYSTEM)
+      .where('from_code', 'in', codes)
+      .where('to_system', '=', LOINC_SYSTEM)
+      .where('map_type', '=', LOINC_MAP_TYPE)
+      .where('is_active', '=', true)
+      .execute();
+    return new Map(links.map((l) => [`${TEST_CATALOG_SYSTEM}|${l.from_code}`, { system: LOINC_SYSTEM, code: l.to_code }]));
+  }
+
   return {
     ownedHere,
     list,
@@ -913,5 +944,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     importPreview,
     importApply,
     exportCsv,
+    specimensFor,
+    loincCodingsFor,
   };
 }
