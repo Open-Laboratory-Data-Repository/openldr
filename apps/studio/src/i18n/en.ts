@@ -1083,7 +1083,7 @@ export const en = {
       formatCsv: 'CSV export',
       formatJsonl: 'JSONL release',
       formatXlsx: 'Excel workbook',
-      xlsxTooLargeHint: 'This workbook is {{size}}. An Excel workbook can be at most 20 MB, because it cannot be streamed. Save the first sheet as CSV and choose that file instead.',
+      xlsxTooLargeHint: 'This workbook is over the 20 MB limit for an Excel workbook, because a workbook cannot be streamed. Save the first sheet as CSV and choose that file instead.',
       xlsxSheetNote: 'Read the sheet "{{sheet}}", the first of {{count}} sheets in this workbook. The others were ignored.',
       completeReleaseLabel: 'This file is a complete release',
       completeReleaseHint: 'Only a complete release lets rows this file is silent about be checked against the registry as absent.',
