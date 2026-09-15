@@ -18,6 +18,7 @@ import {
   USERS_FORM_MIGRATION_PREV_CANONICALISED,
   USERS_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS,
+  LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
 } from '@openldr/db';
@@ -71,10 +72,13 @@ describe('Lab order reference fields', () => {
       .toEqual({ ok: true, source: { kind: 'entity', target: 'Patient' } });
   });
 
-  it('binds tests to a coding system rather than an unregistered entity', () => {
-    const r = resolveReferenceSource(field('tests'));
-    expect(r.ok).toBe(true);
-    expect(r.ok && r.source.kind).toBe('coding');
+  it("binds tests to this lab's test list", () => {
+    expect(resolveReferenceSource(field('tests')))
+      .toEqual({ ok: true, source: { kind: 'coding', mode: 'valueset', url: 'urn:openldr:valueset:lab-tests' } });
+  });
+
+  it('narrows the specimen type by the chosen tests', () => {
+    expect(field('fld-ord-specimen-type').referenceDependsOn).toBe('tests');
   });
 
   // Binds to the SEEDED ValueSet, not to the whole SNOMED CodeSystem.
@@ -318,8 +322,13 @@ describe('every shipped sample passes the FHIR path rules', () => {
 describe('migrations 102 and 103 on the Lab order form', () => {
   const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
 
-  it("matches migration 103's frozen BOUND_FIELDS snapshot exactly", () => {
-    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS);
+  it("matches migration 105's frozen CATALOG_FIELDS snapshot exactly", () => {
+    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS);
+  });
+
+  it('tests and specimen type trip no rule', () => {
+    const ids = ['tests', 'fld-ord-specimen-type'];
+    expect(lintFormSchema(order()).filter((i) => ids.includes(i.fieldId ?? ''))).toEqual([]);
   });
 
   it('notes, ward and the requisition number trip no rule', () => {
@@ -328,7 +337,10 @@ describe('migrations 102 and 103 on the Lab order form', () => {
   });
 
   it("a builder save leaves both prior Lab order shapes unchanged, so each migration's one prior shape is enough", () => {
-    for (const prior of [LAB_ORDER_FORM_MIGRATION_PREV_FIELDS, LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION]) {
+    for (const prior of [
+      LAB_ORDER_FORM_MIGRATION_PREV_FIELDS, LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
+      LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS, LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
+    ]) {
       const normalized = normalizeFormSchema({ ...order(), fields: prior as never });
       expect(normalized.fields).toEqual(prior);
     }

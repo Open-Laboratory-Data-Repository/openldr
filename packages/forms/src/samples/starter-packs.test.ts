@@ -47,7 +47,9 @@ describe('seeded starter packs', () => {
 
   it('carries the Lab order reference sources and several tests', () => {
     expect(entry('pack-service-request', 'Patient')).toMatchObject({ referenceTarget: 'Patient', referenceMultiple: false });
-    expect(entry('pack-service-request', 'Tests')).toMatchObject({ referenceTarget: 'http://loinc.org', referenceMultiple: true });
+    expect(entry('pack-service-request', 'Tests')).toMatchObject({
+      boundValueSet: 'urn:openldr:valueset:lab-tests', referenceTarget: null, referenceMultiple: true,
+    });
     expect(entry('pack-location', 'Status')?.boundValueSet).toBe('urn:openldr:valueset:location-status');
   });
 
