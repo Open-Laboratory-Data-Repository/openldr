@@ -27,6 +27,7 @@ import {
   uploadFacilityImport,
   revalidateFacilityImportRun,
   writeFacilityValueMappings,
+  FACILITY_IMPORT_MAX_XLSX_BYTES,
   type ColumnMapError,
   type ColumnSuggestion,
   type FacilityColumnMap,
@@ -186,10 +187,14 @@ interface ImportFacilitiesSheetProps {
   onImported: () => void;
 }
 
-/** The two shapes this importer reads, named ONCE so the drop check below and the `accept` on the
+/** The three shapes this importer reads, named ONCE so the drop check below and the `accept` on the
  *  input itself cannot drift apart. `parseFacilityCsv` and `parseFacilityRelease` are what actually
- *  read them (packages/terminology). */
-const ACCEPTED_FILE_EXTENSIONS = ['.csv', '.jsonl'] as const;
+ *  read them (packages/terminology). An `.xlsx` is converted to CSV by the upload route before
+ *  either parser sees it (`facilityXlsxToCsv`, packages/bootstrap). */
+const ACCEPTED_FILE_EXTENSIONS = ['.csv', '.jsonl', '.xlsx'] as const;
+
+/** Is this an Excel workbook? Decided by name, the same way the drop check above decides. */
+const isWorkbookName = (name: string): boolean => name.toLowerCase().endsWith('.xlsx');
 
 /** How much of the chosen file is read into this tab.
  *
@@ -286,7 +291,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // `FacilityImportRequest.format`/`completeRelease` (api.ts) on every preview AND apply. Without
   // these, `absent`/`deleted` (and their retirement Selects below) could never be anything but
   // `null`/`0` from this sheet — see the CT-3 finding this task fixes.
-  const [format, setFormat] = useState<'csv' | 'jsonl'>('csv');
+  // `xlsx` is set by `selectFile` from the file's name and never by the operator: the format Select
+  // locks while a workbook is chosen, because there is only one right answer for it.
+  const [format, setFormat] = useState<'csv' | 'jsonl' | 'xlsx'>('csv');
+  /** Which sheet of a workbook the server read, and how many it has. Comes back in the upload's
+   *  response. `null` for anything that is not a workbook, and until the upload answers. */
+  const [workbookSheet, setWorkbookSheet] = useState<{ name: string; count: number } | null>(null);
   const [completeRelease, setCompleteRelease] = useState(false);
   // Optional provenance only — never read by `importFacilities` itself (see api.ts's doc comment).
   const [releaseVersion, setReleaseVersion] = useState('');
@@ -514,12 +524,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    * whose headers were never checked against them, which is the defect the reset exists to prevent.
    */
   const selectFile = (f: File | null) => {
+    const workbook = !!f && isWorkbookName(f.name);
     setWrongType(null);
     setFile(f);
     setAllowUnknownColumns(false);
     setAllowMalformedRows(false);
     setAllowInvalidCoordinates(false);
-    setFormat('csv');
+    setFormat(workbook ? 'xlsx' : 'csv');
+    setWorkbookSheet(null);
     setCompleteRelease(false);
     setReleaseVersion('');
     setOnDeleted('retire');
@@ -553,7 +565,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     // ⚠ THE HEAD, NOT THE FILE. Only the header row is ever read out of it — see `HEAD_BYTES`.
     // The upload path touches neither: the `File` itself is the request body (see
     // `uploadFacilityImport`), which is what keeps a national register out of this tab's memory.
-    if (!f) { setCsvHead(null); return; }
+    //
+    // ⛔ NOT FOR A WORKBOOK. Its first 64 KB are compressed ZIP bytes, and posting them to
+    // `suggest-map` as a header row would fill Mapping with garbage. A workbook's header row comes
+    // back from the SERVER instead, in the upload's own response (see `handleUpload`).
+    if (!f || workbook) { setCsvHead(null); return; }
     void f.slice(0, HEAD_BYTES).text().then((text) => {
       // Both setters in one handler so React batches them: the effect below sees the new text and
       // the new read count together, and never fires once for each.
@@ -669,7 +685,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // CT-3: any change to the file's declared SHAPE invalidates the preview the same way
   // `handleNationalSystemChange` already does — a preview computed for `format: 'csv'` describes a
   // different parse entirely once the operator switches to `'jsonl'`.
-  const handleFormatChange = (value: 'csv' | 'jsonl') => {
+  const handleFormatChange = (value: 'csv' | 'jsonl' | 'xlsx') => {
     setFormat(value);
     invalidatePreview();
   };
@@ -813,7 +829,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setError(null);
     try {
       // ⛔ The `File` itself, never `csv`. See `uploadFacilityImport`.
-      const { runId: id } = await uploadFacilityImport(
+      const uploaded = await uploadFacilityImport(
         {
           file,
           nationalSystem: nationalSystem.trim(),
@@ -841,6 +857,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         },
         setUploadProgress,
       );
+      const id = uploaded.runId;
+      // A workbook's header row, read by the server because this tab cannot unzip the file. Headers
+      // and suggestions are set together, never one then the other, for the reason the CSV effect
+      // above gives: `ColumnMapStep` seeds on the header signature alone and would never retry.
+      if (uploaded.headers) {
+        setColumnMapHeaders(uploaded.headers);
+        setColumnMapSuggestions(uploaded.columns ?? []);
+        setWorkbookSheet(uploaded.sheetName
+          ? { name: uploaded.sheetName, count: uploaded.sheetCount ?? 1 }
+          : null);
+      }
       setCancelOutcome(null);
       // ⛔ The OLD run's view, not just its id. A re-upload supersedes the run whose summary is on
       // screen (`awaiting_confirmation` is a supersedable state), so leaving `run` set would keep
@@ -1177,6 +1204,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  Only an empty FIRST LINE reaches this: a data-only CSV still has one, whose values become the
    *  headers, and a 0-byte file is `emptyFile` above. */
   const noHeaderRow = format === 'csv' && !!file && !emptyFile && headerRowMissing;
+  /** A workbook the server would refuse for its size. Refused HERE because `file.size` is known the
+   *  moment the file is chosen, so nothing is sent just to learn the answer. The server's own cap
+   *  (`FACILITY_IMPORT_MAX_XLSX_BYTES`, packages/bootstrap) is the one that binds. */
+  const workbookTooLarge = format === 'xlsx' && !!file && file.size > FACILITY_IMPORT_MAX_XLSX_BYTES;
   // `!csvHead` matters as its own gate, distinct from `!file`: reading the file's text back out is
   // asynchronous (File.text()), so there is a real window after picking a file where `file` is
   // already set but `csv` has not resolved yet. Without this, a click in that window would fall
@@ -1184,7 +1215,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // A2b: Upload deliberately does NOT wait on `csv` — the File is the request body, so there is
   // nothing to read first. `emptyFile` is still a gate: the upload route refuses a 0-byte body with a
   // 400, and a request that cannot succeed is never worth sending.
-  const uploadDisabled = !file || !nationalSystem.trim() || uploading || emptyFile || noHeaderRow;
+  const uploadDisabled = !file || !nationalSystem.trim() || uploading || emptyFile || noHeaderRow
+    || workbookTooLarge;
   // parsed === 0 covers BOTH the "nothing recognised" trap (unknownColumns populated, blocked
   // outright) and the "wrong file entirely" trap (parsed 0, unknownColumns empty) — neither has
   // anything to apply. Over the row cap is refused for the same reason a doomed request is: never
@@ -1257,7 +1289,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   //  panel stays and step 2's action becomes a re-upload. The RUN's map is still immutable, which
   //  is what the confirm route's guarantees rest on: editing here mints a NEW run that supersedes
   //  this one, exactly as the refusal path already did.
-  const columnMapPanelShown = step === 2 && format === 'csv' && columnMapHeaders.length > 0
+  // `!== 'jsonl'`, not `=== 'csv'`: a workbook is stored and read as CSV, so it is mapped as one.
+  const columnMapPanelShown = step === 2 && format !== 'jsonl' && columnMapHeaders.length > 0
     && !appliedSummary && !runInFlight;
   // While a run holds the register, the inputs it was uploaded with must not drift out from under
   // it — the run is for THAT file under THAT national system, and nothing here can retract it.
@@ -1481,7 +1514,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   ref={fileInputRef}
                   id="facility-import-file"
                   type="file"
-                  accept=".csv,text/csv,.jsonl,application/x-ndjson"
+                  accept=".csv,text/csv,.jsonl,application/x-ndjson,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   disabled={inputsDisabled}
                   onChange={handleFileChange}
                   className="sr-only"
@@ -1498,6 +1531,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               )}
               {noHeaderRow && (
                 <p className="text-xs text-destructive">{t('facilities.import.noHeaderRowHint')}</p>
+              )}
+              {workbookTooLarge && file && (
+                <p className="text-xs text-destructive">
+                  {t('facilities.import.xlsxTooLargeHint', { size: humanFileSize(file.size) })}
+                </p>
               )}
             </div>
 
@@ -1559,13 +1597,21 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 and `absent`/`deleted` (declaration-only fields a plain CSV can never carry) stayed
                 permanently unreachable. */}
             <Label htmlFor="facility-import-format" className="whitespace-nowrap">{t('facilities.import.formatLabel')}</Label>
-            <Select value={format} onValueChange={(v) => handleFormatChange(v as 'csv' | 'jsonl')} disabled={inputsDisabled}>
+            {/* A workbook locks this: `selectFile` set `xlsx` from the file's name, and choosing CSV
+                or JSONL for a ZIP would only send it to be refused. The `xlsx` item exists only
+                while a workbook is chosen, so it can never be picked for a CSV. */}
+            <Select
+              value={format}
+              onValueChange={(v) => handleFormatChange(v as 'csv' | 'jsonl' | 'xlsx')}
+              disabled={inputsDisabled || format === 'xlsx'}
+            >
               <SelectTrigger id="facility-import-format">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="csv">{t('facilities.import.formatCsv')}</SelectItem>
                 <SelectItem value="jsonl">{t('facilities.import.formatJsonl')}</SelectItem>
+                {format === 'xlsx' && <SelectItem value="xlsx">{t('facilities.import.formatXlsx')}</SelectItem>}
               </SelectContent>
             </Select>
 
@@ -1678,9 +1724,18 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               the header-fetch effect above). Gone once a run exists at all (`!run`) or a summary is
               on screen (`!awaitingSummary`): the design's own flow maps columns exactly once, before
               the file ever leaves this tab, and the operator cannot edit it again afterwards — see
-              `columnMap`'s own reset-on-file-swap comment for why it must not persist past that. */}
+              `columnMap`'s own reset-on-file-swap comment for why it must not persist past that.
+              A workbook is mapped here too: it is stored as CSV, and its headers come from the
+              upload's response rather than the header-fetch effect. */}
           {columnMapPanelShown && (
             <div className="mx-6 mt-4">
+              {/* Only the first sheet is read. When there are others, say which one, so an operator
+                  whose register is on sheet two sees why these columns look wrong. */}
+              {workbookSheet && workbookSheet.count > 1 && (
+                <p className="mb-3 text-sm text-muted-foreground">
+                  {t('facilities.import.xlsxSheetNote', { sheet: workbookSheet.name, count: workbookSheet.count })}
+                </p>
+              )}
               <ColumnMapStep
                 headers={columnMapHeaders}
                 suggestions={columnMapSuggestions}

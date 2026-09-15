@@ -11,7 +11,7 @@ export interface ImportInputs {
   fileName: string | null;
   fileSize: number | null;
   nationalSystem: string;
-  format: 'csv' | 'jsonl';
+  format: 'csv' | 'jsonl' | 'xlsx';
   completeRelease: boolean;
   releaseVersion: string;
   /** How many times the OPERATOR has changed the column map, NOT the map itself.

@@ -2675,6 +2675,124 @@ describe('the file drop zone', () => {
     clicked.mockRestore();
   });
 
+  // ── Excel workbooks ─────────────────────────────────────────────────────────────────────────
+  //
+  // A workbook is a ZIP, so this tab can read nothing out of it. The server converts its first
+  // sheet to CSV at the upload and hands the header row back in the upload's own response.
+
+  const xlsxFile = (name = 'register.xlsx', bytes = 'PK not really a workbook') =>
+    new File([bytes], name, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const WORKBOOK_UPLOAD = {
+    runId: 'run-xlsx',
+    headers: ['MFL Code', 'Name'],
+    columns: [
+      { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' as const }] },
+      { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' as const }] },
+    ],
+    sheetName: 'Register',
+    sheetCount: 1,
+  };
+  async function chooseSystem() {
+    const trigger = await screen.findByRole('combobox', { name: 'National system' });
+    await waitFor(() => expect(trigger).toBeEnabled());
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
+  }
+
+  it('accepts a dropped .xlsx, sets the format to Excel workbook and locks it', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    drop(dropZone(), xlsxFile());
+
+    expect(await screen.findByText(/register\.xlsx/)).toBeInTheDocument();
+    expect(screen.queryByText(/that is a/i)).not.toBeInTheDocument();
+    const formatSelect = screen.getByRole('combobox', { name: 'File format' });
+    expect(formatSelect).toHaveTextContent('Excel workbook');
+    // One right answer for this file, so nothing to choose.
+    expect(formatSelect).toBeDisabled();
+  });
+
+  it('offers .xlsx in the browse dialog too', () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    expect((screen.getByLabelText('File') as HTMLInputElement).accept).toContain('.xlsx');
+  });
+
+  // ⛔ The head read and `suggest-map` are both CSV machinery. Slicing a ZIP's first 64 KB yields
+  // compressed bytes, and posting those as a "header row" would fill Mapping with garbage.
+  it('never reads a workbook in the tab and never asks suggest-map about it', async () => {
+    const file = xlsxFile();
+    const sliceSpy = vi.spyOn(file, 'slice');
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [file] } });
+    await screen.findByText(/register\.xlsx/);
+
+    expect(sliceSpy).not.toHaveBeenCalled();
+    expect(api.suggestColumnMap).not.toHaveBeenCalled();
+  });
+
+  it('uploads a workbook as xlsx and fills Mapping from the upload\'s response', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue(WORKBOOK_UPLOAD);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [xlsxFile()] } });
+    await chooseSystem();
+    await advanceToMapping();
+
+    expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({ format: 'xlsx', validate: false }), expect.any(Function),
+    );
+    expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
+    expect(screen.queryByText(/first of/i)).not.toBeInTheDocument();
+  });
+
+  it('says which sheet was read when the workbook has several', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ ...WORKBOOK_UPLOAD, sheetCount: 3 });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [xlsxFile()] } });
+    await chooseSystem();
+    await advanceToMapping();
+
+    expect(await screen.findByText(/"Register", the first of 3 sheets/)).toBeInTheDocument();
+  });
+
+  // `file.size` is known the moment the file is chosen, so a workbook the server would refuse is
+  // refused here, before any of it is sent. The server's own cap still applies to anything else.
+  it('refuses a workbook over 20 MB on Source, before any upload', async () => {
+    const big = xlsxFile('huge.xlsx');
+    Object.defineProperty(big, 'size', { value: 20 * 1024 * 1024 + 1 });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [big] } });
+    await chooseSystem();
+
+    expect(await screen.findByText(/at most 20 MB/)).toBeInTheDocument();
+    expect(screen.getByText(/save the first sheet as CSV/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled());
+    expect(api.uploadFacilityImport).not.toHaveBeenCalled();
+  });
+
+  it('a workbook of exactly 20 MB is not refused for its size', async () => {
+    const edge = xlsxFile('edge.xlsx');
+    Object.defineProperty(edge, 'size', { value: 20 * 1024 * 1024 });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [edge] } });
+    await chooseSystem();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled());
+    expect(screen.queryByText(/at most 20 MB/)).not.toBeInTheDocument();
+  });
+
+  it('a CSV chosen after a workbook goes back to CSV, unlocked, and reads its head again', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [xlsxFile()] } });
+    await screen.findByText(/register\.xlsx/);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
+    await screen.findByText(/register\.csv/);
+
+    const formatSelect = screen.getByRole('combobox', { name: 'File format' });
+    expect(formatSelect).toHaveTextContent('CSV export');
+    expect(formatSelect).toBeEnabled();
+    await waitFor(() => expect(api.suggestColumnMap).toHaveBeenCalledTimes(1));
+  });
+
   // ── The two menu items that both said "cancel" ──────────────────────────────────────────────
 
   // Reported from the screenshots: the menu read "Cancel this import" above a bare "Cancel", and

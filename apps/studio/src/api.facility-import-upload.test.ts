@@ -58,6 +58,28 @@ describe('uploadFacilityImport', () => {
     expect(url.searchParams.get('validate')).toBe('false');
   });
 
+  // A browser cannot unzip a workbook, so the server hands its header row back in this response.
+  // Dropping those fields here would leave Mapping with no columns for every workbook.
+  it('sends a workbook as format=xlsx and passes its header row back to the caller', async () => {
+    const reply = {
+      runId: 'fir_x', headers: ['MFL Code'], sheetName: 'Register', sheetCount: 2,
+      columns: [{ header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] }],
+    };
+    class WorkbookXHR extends FakeXHR {
+      send(b: any) { this.body = b; this.status = 202; this.responseText = JSON.stringify(reply); this.onload?.(); }
+    }
+    (globalThis as any).XMLHttpRequest = WorkbookXHR as never;
+    const file = new File([new Uint8Array([0x50, 0x4b, 3, 4])], 'register.xlsx');
+
+    const res = await uploadFacilityImport({ file, nationalSystem: 'zm-mfl', format: 'xlsx', validate: false });
+
+    expect(res).toEqual(reply);
+    const xhr = FakeXHR.instances[0];
+    expect(new URL(xhr.url, 'http://localhost').searchParams.get('format')).toBe('xlsx');
+    expect(xhr.headers['content-type']).toBe('application/octet-stream');
+    expect(xhr.body).toBe(file);
+  });
+
   it('omits validate from the query string for an ordinary upload-and-validate call', async () => {
     const file = new File([new Uint8Array([1, 2, 3])], 'register.csv');
     // Neither omitting the field nor passing `true` explicitly should ever put `validate` on the

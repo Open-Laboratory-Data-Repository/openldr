@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 // ⛔ NOT mocked by the `vi.mock('@openldr/db', ...)` below — that mock only replaces the base
 // `@openldr/db` specifier; `@openldr/db/testing` is a distinct export path (package.json's
@@ -117,6 +118,11 @@ vi.mock('@openldr/bootstrap', async () => {
     // ⛔ REAL, not mocked. This IS the shared decision the route calls (AGENTS.md §6 item 2), so
     // mocking it here would leave the CLI's half of that promise untested.
     revalidateImportRun: actual.revalidateImportRun,
+    // REAL, and pure: the SAME workbook conversion the upload route runs. A stub would let the CLI
+    // agree with itself about what a workbook turns into.
+    facilityXlsxToCsv: actual.facilityXlsxToCsv,
+    FacilityXlsxError: actual.FacilityXlsxError,
+    FACILITY_IMPORT_MAX_XLSX_BYTES: actual.FACILITY_IMPORT_MAX_XLSX_BYTES,
   };
 });
 
@@ -155,7 +161,8 @@ import {
 // field resolves to, the same way `runFacilitiesSuggestValues` itself does.
 // Task 6 (Slice B): `FacilityTypeCollisionError` is the real class (see the mock factory above),
 // constructed here with the same shape `addRegisterFacilityType` throws it with.
-import { CONTROLLED_VALUE_SETS, FacilityTypeCollisionError } from '@openldr/bootstrap';
+import { CONTROLLED_VALUE_SETS, FacilityTypeCollisionError, FACILITY_IMPORT_MAX_XLSX_BYTES } from '@openldr/bootstrap';
+import * as XLSX from 'xlsx';
 // Fix pass (finding 3): real, pure constant — NOT mocked (this file never mocks
 // `@openldr/terminology`) — so the count named in `describeColumnMapError`'s `unknown_target`
 // message can be asserted against the SAME source the fix reads, not a copy that could drift.
@@ -1313,6 +1320,159 @@ describe('facilities import CLI', () => {
 // never the authoritative parse) and runs the REAL `suggestColumns` (`@openldr/bootstrap`, see the
 // mock factory's docblock above) to print a `FacilityColumnMap` ready to edit and feed back to
 // `--column-map`. No database: this command never calls `createAppContext`.
+/** An Excel workbook built in memory, one entry per sheet, in order. */
+function workbookBytes(sheets: Array<[name: string, rows: unknown[][]]>): Buffer {
+  const wb = XLSX.utils.book_new();
+  for (const [name, rows] of sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
+// The three commands that read a register file (`import`, `suggest-map`, `suggest-values`) all read
+// an Excel workbook through the SAME converter the upload route uses, so the CLI and the browser
+// turn one workbook into one CSV.
+describe('facilities CLI with an Excel workbook', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+  const out = () => stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+  const err = () => stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+  const REGISTER = workbookBytes([['Register', [['national_code', 'name'], ['100', 'Dodoma']]]]);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+    mocks.readFileSync.mockReturnValue(REGISTER);
+    mocks.createFacilityImportRunStore.mockReturnValue(mocks.runStore);
+    mocks.runStore.startPreview.mockResolvedValue(DEFAULT_RUN);
+    mocks.runStore.finishApply.mockResolvedValue(undefined);
+    mocks.createFacilityRegisterSourceStore.mockReturnValue(mocks.registerStore);
+    mocks.registerStore.getByUrl.mockResolvedValue(HFR_SOURCE);
+    mocks.importFacilities.mockResolvedValue(CLEAN_RESULT);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('import reads a .xlsx path as a workbook and imports its first sheet as CSV', async () => {
+    const code = await runFacilitiesImport('/some/mfl.xlsx', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(code).toBe(0);
+    // Read as BYTES. Reading a ZIP as UTF-8 text is what the command did before, and it mangles it.
+    expect(mocks.readFileSync).toHaveBeenCalledWith('/some/mfl.xlsx');
+    expect(mocks.importFacilities).toHaveBeenCalledWith(
+      expect.anything(),
+      'national_code,name\n100,Dodoma',
+      expect.objectContaining({ format: 'csv' }),
+    );
+  });
+
+  it('import --format xlsx reads a workbook whatever the file is called', async () => {
+    const code = await runFacilitiesImport('/some/mfl.download', { nationalSystem: 'urn:tz:hfr', format: 'xlsx', json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.importFacilities).toHaveBeenCalledWith(
+      expect.anything(), 'national_code,name\n100,Dodoma', expect.objectContaining({ format: 'csv' }),
+    );
+  });
+
+  it('import --apply records the run as the CSV it imported, and audits the workbook it came from', async () => {
+    const code = await runFacilitiesImport('/some/mfl.xlsx', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(0);
+    const csv = 'national_code,name\n100,Dodoma';
+    expect(mocks.runStore.startPreview).toHaveBeenCalledWith(expect.objectContaining({
+      sourceFormat: 'csv',
+      fileHash: createHash('sha256').update(csv, 'utf8').digest('hex'),
+      byteSize: Buffer.byteLength(csv, 'utf8'),
+    }));
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.ctx, expect.anything(), expect.objectContaining({
+      action: 'facility.import',
+      metadata: expect.objectContaining({ convertedFrom: 'xlsx', workbookBytes: REGISTER.length, sheetName: 'Register' }),
+    }));
+  });
+
+  it('import refuses a workbook over the cap before opening a database connection', async () => {
+    mocks.readFileSync.mockReturnValue(Buffer.alloc(FACILITY_IMPORT_MAX_XLSX_BYTES + 1));
+
+    const code = await runFacilitiesImport('/some/huge.xlsx', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(code).toBe(1);
+    expect(err()).toContain('20 MB');
+    expect(err()).toContain('CSV');
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+    expect(mocks.importFacilities).not.toHaveBeenCalled();
+  });
+
+  it('import refuses a .xlsx file that is not a workbook, with the error on stdout under --json', async () => {
+    mocks.readFileSync.mockReturnValue(Buffer.from('national_code,name\n100,Dodoma\n', 'utf8'));
+
+    const code = await runFacilitiesImport('/some/renamed.xlsx', { nationalSystem: 'urn:tz:hfr', json: true });
+
+    expect(code).toBe(1);
+    expect(JSON.parse(out()).error).toMatch(/not an Excel workbook/);
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
+  // The note goes to stderr so `--json` stdout stays one parseable object.
+  it('import says which sheet it read when the workbook has several, without touching --json stdout', async () => {
+    mocks.readFileSync.mockReturnValue(workbookBytes([
+      ['Register', [['national_code', 'name'], ['100', 'Dodoma']]],
+      ['Notes', [['not a facility']]],
+    ]));
+
+    const code = await runFacilitiesImport('/some/mfl.xlsx', { nationalSystem: 'urn:tz:hfr', json: true });
+
+    expect(code).toBe(0);
+    expect(() => JSON.parse(out())).not.toThrow();
+    expect(err()).toContain('"Register"');
+    expect(err()).toContain('first of 2 sheets');
+  });
+
+  it('import still reads a .csv path as text, unchanged', async () => {
+    mocks.readFileSync.mockReturnValue('national_code,name\n100,Dodoma\n');
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(mocks.readFileSync).toHaveBeenCalledWith('/some/file.csv', 'utf8');
+    expect(mocks.importFacilities).toHaveBeenCalledWith(
+      expect.anything(), 'national_code,name\n100,Dodoma\n', expect.objectContaining({ format: undefined }),
+    );
+  });
+
+  it('suggest-map reads a workbook\'s header row, a header holding a comma kept whole', async () => {
+    mocks.readFileSync.mockReturnValue(workbookBytes([['Register', [['MFL Code', 'Name, official'], ['100001', 'Chunga']]]]));
+
+    const code = await runFacilitiesSuggestMap('/some/mfl.xlsx', { json: false });
+
+    expect(code).toBe(0);
+    // The table lists every header. A naive comma split of the converted first line would list
+    // `"Name` and `official"` instead, and never this.
+    const table = out().split('\n');
+    expect(table.some((line) => line.startsWith('Name, official '))).toBe(true);
+    expect(table.some((line) => line.startsWith('MFL Code ') && line.includes('national_code'))).toBe(true);
+  });
+
+  it('suggest-values reads a workbook\'s rows', async () => {
+    mocks.readFileSync.mockReturnValue(workbookBytes([
+      ['Register', [['national_code', 'name', 'level'], ['1', 'Chunga Clinic', 'Health Centre']]],
+    ]));
+    mocks.resolveControlledFields.mockResolvedValue({
+      mapped: { level: new Map(), status: new Map(), country: new Map() },
+      unmapped: { level: [], status: [], country: [] },
+      notValidated: [],
+    });
+
+    const code = await runFacilitiesSuggestValues('/some/mfl.xlsx', { nationalSystem: 'urn:zm:mfl', json: true });
+
+    expect(code).toBe(0);
+    const records = mocks.resolveControlledFields.mock.calls[0][2] as Array<{ name: string; level: string }>;
+    expect(records).toEqual([expect.objectContaining({ name: 'Chunga Clinic', level: 'Health Centre' })]);
+  });
+});
+
 describe('facilities suggest-map CLI', () => {
   let stdoutSpy: ReturnType<typeof vi.fn>;
   let stderrSpy: ReturnType<typeof vi.fn>;
