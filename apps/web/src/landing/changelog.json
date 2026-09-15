@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "6ce9f0a5",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Import an Excel workbook's first sheet"
+        },
+        {
           "hash": "7ef3fb1c",
           "type": "fix",
           "scope": "studio",
