@@ -1,10 +1,64 @@
 {
-  "generatedAt": "2026-09-15",
+  "generatedAt": "2026-09-16",
   "days": [
+    {
+      "date": "2026-09-16",
+      "version": null,
+      "entries": [
+        {
+          "hash": "b5534071",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Narrow the specimen picker to the tests chosen on an order"
+        },
+        {
+          "hash": "2aebc41e",
+          "type": "feat",
+          "scope": "server",
+          "title": "Lead a submitted order with each test's LOINC code"
+        },
+        {
+          "hash": "30d0088d",
+          "type": "feat",
+          "scope": "server",
+          "title": "Answer which specimens the chosen tests accept"
+        },
+        {
+          "hash": "1272e4cd",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Tell an order which specimens and LOINC codes its tests have"
+        },
+        {
+          "hash": "6f1008b3",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Work the lab test list out when it is read"
+        },
+        {
+          "hash": "6c7c3ec8",
+          "type": "feat",
+          "scope": "forms",
+          "title": "The shipped Lab order orders from this lab's test list"
+        },
+        {
+          "hash": "2076798f",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Write an ordered test under its own coding system"
+        }
+      ]
+    },
     {
       "date": "2026-09-15",
       "version": null,
       "entries": [
+        {
+          "hash": "d3256617",
+          "type": "feat",
+          "scope": "db",
+          "title": "Seed the lab test list and point the Lab order at it"
+        },
         {
           "hash": "c65db7f2",
           "type": "feat",
