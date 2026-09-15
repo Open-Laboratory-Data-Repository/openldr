@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import type { FormField, FormLintIssue, FormSection } from '@openldr/forms/pure';
 import { FieldListPane } from './FieldListPane';
 
@@ -236,9 +236,25 @@ describe('FieldListPane', () => {
 
   it('renders a section header for "main" and "extra" using section labels', () => {
     renderPane();
-    // SECTIONS provides label 'Main Section' for id 'main' and 'Extra Section' for 'extra'
-    expect(shownText('Main Section')).toHaveLength(1);
-    expect(shownText('Extra Section')).toHaveLength(1);
+    // SECTIONS provides label 'Main Section' for id 'main' and 'Extra Section' for 'extra'.
+    // Each card's pill repeats the label, so count only the text outside the cards.
+    const headers = (text: string) => shownText(text).filter((el) => !el.closest('[data-sortable-card]'));
+    expect(headers('Main Section')).toHaveLength(1);
+    expect(headers('Extra Section')).toHaveLength(1);
+  });
+
+  // The row's pill printed the section's id ("main"), where corlix prints its label.
+  it("names the field's section by its label on the row, not by its id", () => {
+    renderPane();
+    const card = screen.getByText('Patient name').closest('[data-sortable-card]') as HTMLElement;
+    expect(within(card).getByText('Main Section')).toBeTruthy();
+    expect(within(card).queryByText('main')).toBeNull();
+  });
+
+  it('falls back to the id on the row when no section carries that id', () => {
+    renderPane({ sections: [] });
+    const card = screen.getByText('Patient name').closest('[data-sortable-card]') as HTMLElement;
+    expect(within(card).getByText('main')).toBeTruthy();
   });
 
   it('renders a "No section" header for fields with no section when sections prop provided', () => {
