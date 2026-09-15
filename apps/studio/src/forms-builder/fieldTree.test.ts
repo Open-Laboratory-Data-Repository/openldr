@@ -87,6 +87,10 @@ describe('the shipped starter packs', () => {
     ]);
   });
 
+  it('draw a fresh Lab order form with its reference number as a slot of ServiceRequest.identifier', () => {
+    expect(lists('pack-service-request')).toEqual([['ServiceRequest.identifier', ['Reference Number']]]);
+  });
+
   it('draw a fresh Facility form with its code as a slot of Location.identifier', () => {
     expect(lists('pack-location')).toEqual([['Location.identifier', ['Facility code']]]);
   });

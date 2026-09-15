@@ -8,6 +8,9 @@ export const LOCAL_FACILITY_SYSTEM = 'urn:openldr:facility:local'
  *  (Tanzania HFR, Kenya MFL, …), so the real value belongs in configuration, never in a shipped
  *  sample. See docs/superpowers/specs/2026-08-04-facility-registry-design.md. */
 export const NATIONAL_FACILITY_SYSTEM = 'urn:openldr:facility:national'
+/** The requisition number on the paper order form, as one entry of ServiceRequest.identifier.
+ *  Chosen by the operator on 2026-09-15 (migration 103). */
+export const ORDER_REQUISITION_SYSTEM = 'urn:openldr:order:requisition'
 
 /** Facility / Location form — drives the facilities management page. */
 const facilityForm: FormSchema = {
@@ -406,7 +409,10 @@ const orderForm: FormSchema = {
     },
     {
       id: 'fld-ord-ref-number',
-      fhirPath: 'ServiceRequest.identifier',
+      // The requisition entry of ServiceRequest.identifier, not the whole list (migration 103).
+      fhirPath: 'ServiceRequest.identifier.value',
+      fhirDiscriminator: { system: ORDER_REQUISITION_SYSTEM },
+      fhirValueField: 'value',
       displayLabel: 'Reference Number',
       description: 'External requisition number',
       fieldType: 'text',

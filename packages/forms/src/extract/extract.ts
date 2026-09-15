@@ -174,7 +174,12 @@ export const ServiceRequestExtractor: ResourceExtractor = {
 
       const value = item.answer?.[0] ? fromAnswer(item.answer[0]) : undefined
       if (value === undefined) return
-      if (path === 'ServiceRequest.identifier') request.identifier = [{ value: String(value) }]
+      // The shipped Lab order binds its requisition number to ServiceRequest.identifier.value since
+      // migration 103. A form an operator edited before then keeps the whole-list path, so both
+      // count. The number is still written without a system, exactly as before.
+      if (path === 'ServiceRequest.identifier' || path === 'ServiceRequest.identifier.value') {
+        request.identifier = [{ value: String(value) }]
+      }
       if (path === 'ServiceRequest.priority') request.priority = String(value) as ServiceRequest['priority']
     })
     if (codings.length) request.code = { coding: codings }
