@@ -1575,9 +1575,25 @@ export interface FacilityImportRunView {
  *  browser will admit to). ⛔ `null` is NOT `0`: a caller that collapsed the two would sit on
  *  "Uploading… 0%" for the whole of a 64 MiB transfer, which is a measurement nobody took rendered
  *  as one that was. */
+/** What `POST /api/facilities/import/upload` answers. The four optional fields come back for an
+ *  Excel workbook only: the server converted its first sheet to CSV, and this is the one place the
+ *  sheet learns the workbook's columns, because a browser cannot unzip it to read a header row. */
+export interface FacilityImportUploadResult {
+  runId: string;
+  headers?: string[];
+  columns?: ColumnSuggestion[];
+  sheetName?: string;
+  sheetCount?: number;
+}
+
+/** The largest Excel workbook the upload route accepts. A copy of `FACILITY_IMPORT_MAX_XLSX_BYTES`
+ *  (`packages/bootstrap/src/facility-xlsx.ts`), kept so the sheet can refuse on Source instead of
+ *  after sending 20 MB. The server's own check is the one that binds. */
+export const FACILITY_IMPORT_MAX_XLSX_BYTES = 20 * 1024 * 1024;
+
 export function uploadFacilityImport(
   p: {
-    file: File; nationalSystem: string; format: 'csv' | 'jsonl'; releaseVersion?: string | null;
+    file: File; nationalSystem: string; format: 'csv' | 'jsonl' | 'xlsx'; releaseVersion?: string | null;
     /** Declares the file a COMPLETE release of this register — see `FacilityImportRequest.
      *  completeRelease`. Sent on the query string and stored in the run's `options`, where the
      *  worker's validate spreads it into `importFacilities`; without it a background run reports
@@ -1608,7 +1624,7 @@ export function uploadFacilityImport(
     validate?: boolean;
   },
   onProgress?: (fraction: number | null) => void,
-): Promise<{ runId: string }> {
+): Promise<FacilityImportUploadResult> {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams({ nationalSystem: p.nationalSystem, format: p.format });
     if (p.releaseVersion) params.set('releaseVersion', p.releaseVersion);
@@ -1639,8 +1655,8 @@ export function uploadFacilityImport(
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          const body = JSON.parse(xhr.responseText) as { runId?: unknown };
-          if (typeof body.runId === 'string' && body.runId !== '') { resolve({ runId: body.runId }); return; }
+          const body = JSON.parse(xhr.responseText) as FacilityImportUploadResult;
+          if (typeof body.runId === 'string' && body.runId !== '') { resolve(body); return; }
         } catch { /* fall through to the rejection below */ }
         reject(new Error('the upload was accepted but no import run id came back'));
         return;

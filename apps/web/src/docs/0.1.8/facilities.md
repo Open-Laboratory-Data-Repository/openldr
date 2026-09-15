@@ -38,6 +38,24 @@ registered source. The internal record id stays unchanged. A later import finds 
 by its current System and Facility code; its conflict policy decides which values to keep.
 Do not delete and recreate a facility just to correct its code.
 
+### Importing an Excel workbook
+
+The import accepts a `.xlsx` workbook as well as a `.csv` or `.jsonl` file, in the wizard and in
+the CLI.
+
+- Only the first sheet is read. When the workbook has more than one, Mapping names the sheet it
+  read. If those columns look wrong, move the register to the first sheet, or save it as CSV.
+- The server turns that sheet into CSV when the file is uploaded, and every later step reads the
+  CSV. That is why the run history lists the run's format as `csv`.
+- Numbers keep their full value. A long facility code is not shortened to `1.23457E+14`, and a
+  coordinate keeps every decimal. A number with a format of its own, such as a code padded with
+  zeros, keeps the text Excel shows.
+- A workbook can be at most 20 MB. A CSV can be far larger, because it is read a piece at a time,
+  and a workbook has to be opened whole. For a bigger register, save the first sheet as CSV and
+  import that.
+- On the command line, a path ending in `.xlsx` is read as a workbook. Add `--format xlsx` for a
+  workbook with another name. `suggest-map` and `suggest-values` read workbooks too.
+
 ## Français
 
 Après Créer ou Enregistrer, le registre recharge la page avec ses filtres et son tri. L'établissement peut appartenir à une autre page ou ne plus correspondre au filtre. Recherchez son code pour le vérifier. La taille de page reste limitée.
@@ -75,6 +93,26 @@ une source enregistrée active. L'identifiant interne reste inchangé. Un import
 par son Système et son Code actuels. Sa politique de conflit décide quelles valeurs conserver.
 Ne supprimez pas un établissement pour corriger son code.
 
+### Importer un classeur Excel
+
+L'import accepte un classeur `.xlsx` en plus d'un fichier `.csv` ou `.jsonl`, dans l'assistant
+comme dans la CLI.
+
+- Seule la première feuille est lue. Si le classeur en contient plusieurs, l'étape Mappage indique
+  la feuille lue. Si les colonnes semblent fausses, placez le registre dans la première feuille ou
+  enregistrez-le au format CSV.
+- Le serveur convertit cette feuille en CSV au moment du téléversement, et toutes les étapes
+  suivantes lisent ce CSV. C'est pourquoi l'historique des imports indique le format `csv`.
+- Les nombres gardent leur valeur complète. Un long code d'établissement n'est pas réduit à
+  `1.23457E+14`, et une coordonnée garde toutes ses décimales. Un nombre qui a son propre format,
+  comme un code complété par des zéros, garde le texte affiché par Excel.
+- Un classeur ne peut pas dépasser 20 Mo. Un CSV peut être bien plus gros, car il est lu par
+  morceaux, alors qu'un classeur doit être ouvert en entier. Pour un registre plus gros,
+  enregistrez la première feuille au format CSV et importez ce fichier.
+- En ligne de commande, un chemin qui se termine par `.xlsx` est lu comme un classeur. Ajoutez
+  `--format xlsx` pour un classeur qui porte un autre nom. `suggest-map` et `suggest-values`
+  lisent aussi les classeurs.
+
 ## Português
 
 Após Criar ou Guardar, o registo recarrega a página com os filtros e a ordenação atuais. A unidade pode pertencer a outra página ou ficar fora do filtro. Procure o código para a verificar. O tamanho da página mantém o limite.
@@ -111,6 +149,25 @@ Pode corrigir Sistema ou Código da unidade em Editar. Um novo Sistema deve iden
 registada ativa. O identificador interno permanece igual. Uma importação posterior encontra a linha pelo
 Sistema e Código atuais. A política de conflitos decide quais os valores a manter.
 Não elimine uma unidade apenas para corrigir o código.
+
+### Importar um livro do Excel
+
+A importação aceita um livro `.xlsx`, além de um ficheiro `.csv` ou `.jsonl`, no assistente e na
+CLI.
+
+- Só é lida a primeira folha. Se o livro tiver mais do que uma, o passo Mapeamento indica a folha
+  lida. Se as colunas parecerem erradas, coloque o registo na primeira folha ou guarde-o como CSV.
+- O servidor converte essa folha em CSV quando o ficheiro é carregado, e todos os passos
+  seguintes leem esse CSV. Por isso, o histórico de importações mostra o formato `csv`.
+- Os números mantêm o valor completo. Um código de unidade longo não é encurtado para
+  `1.23457E+14`, e uma coordenada mantém todas as casas decimais. Um número com formato próprio,
+  como um código preenchido com zeros, mantém o texto que o Excel mostra.
+- Um livro pode ter no máximo 20 MB. Um CSV pode ser muito maior, porque é lido por partes,
+  enquanto um livro tem de ser aberto por inteiro. Para um registo maior, guarde a primeira folha
+  como CSV e importe esse ficheiro.
+- Na linha de comandos, um caminho terminado em `.xlsx` é lido como livro. Acrescente
+  `--format xlsx` para um livro com outro nome. `suggest-map` e `suggest-values` também leem
+  livros.
 
 ## The import contract
 

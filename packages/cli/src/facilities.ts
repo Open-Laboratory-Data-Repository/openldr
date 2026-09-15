@@ -13,6 +13,8 @@ import {
   // Task 6 (Slice B): the SAME writer `POST /api/facilities/import/facility-types`
   // (apps/server/src/facilities-routes.ts) calls. See runFacilitiesAddType below.
   addRegisterFacilityType, FacilityTypeCollisionError,
+  // The SAME workbook conversion `POST /api/facilities/import/upload` runs. See readRegisterFile.
+  facilityXlsxToCsv, FacilityXlsxError,
   // The SAME cleanup helpers the delete route calls, in the same order — see runFacilitiesDelete.
   retireRegistryConcepts, reprojectAfterRegistryDelete, revalidateImportRun,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
@@ -59,9 +61,11 @@ export interface FacilitiesImportOpts {
    *  validation anyway, with both `latitude`/`longitude` written as null. Third member of the same
    *  explicit-override family as the two above. */
   allowInvalidCoordinates?: boolean;
-  /** Task 12: mirrors `FacilityImportOptions.format` exactly — which shape `path` is: a national
-   *  register CSV or a JSONL release. Default `'csv'`, same as `importFacilities` itself. */
-  format?: 'csv' | 'jsonl';
+  /** Task 12: mirrors `FacilityImportOptions.format`, which says what shape `path` is: a national register
+   *  CSV or a JSONL release. Default `'csv'`, same as `importFacilities` itself. `'xlsx'` is this
+   *  command's own: the workbook's first sheet is converted to CSV before `importFacilities` sees it
+   *  (see `readRegisterFile`). A path ending `.xlsx` is read as a workbook without the flag. */
+  format?: 'csv' | 'jsonl' | 'xlsx';
   /** A publisher-supplied release version, recorded on the `facility_import_runs` row an `--apply`
    *  mints (see below) and passed through to `FacilityImportOptions.releaseVersion`, which defaults
    *  it from a JSONL release's own `meta.version` when this is omitted. Pure provenance. */
@@ -123,6 +127,51 @@ function readJsonFile<T>(path: string): { ok: true; value: T } | { ok: false; er
   }
 }
 
+/** A register file read into the text the importer parses. */
+type RegisterFile =
+  | {
+    ok: true;
+    text: string;
+    /** What to hand `importFacilities`. A workbook is `csv`; anything else is whatever the caller
+     *  passed, left `undefined` when it passed nothing, so `importFacilities` keeps its own default. */
+    format: 'csv' | 'jsonl' | undefined;
+    /** Set for a workbook only: the header row parsed as CSV, and where it came from. */
+    workbook?: { bytes: number; sheetName: string; sheetCount: number; headers: string[] };
+  }
+  /** `error` is what `--json` prints; `human` is the same thing with the path, for stderr. */
+  | { ok: false; error: string; human: string };
+
+/**
+ * Read the register file for `import`, `suggest-map` or `suggest-values`.
+ *
+ * An Excel workbook, named `.xlsx` or passed with `--format xlsx`, goes through
+ * `facilityXlsxToCsv`, the SAME converter the upload route runs, so the CLI and the browser turn
+ * one workbook into one CSV. Its first sheet is read and a note on stderr says so when there are
+ * others. stderr and not stdout, so `--json` stays one parseable object. Everything else is read as
+ * UTF-8 text, as before.
+ */
+function readRegisterFile(path: string, format?: 'csv' | 'jsonl' | 'xlsx'): RegisterFile {
+  const isWorkbook = format === 'xlsx' || (format === undefined && path.toLowerCase().endsWith('.xlsx'));
+  let bytes: Buffer;
+  try {
+    if (!isWorkbook) return { ok: true, text: readFileSync(path, 'utf8'), format: format as 'csv' | 'jsonl' | undefined };
+    bytes = readFileSync(path);
+  } catch (err) {
+    const msg = redactError(err);
+    return { ok: false, error: msg, human: `could not read ${path}: ${msg}` };
+  }
+  try {
+    const { csv, headers, sheetName, sheetCount } = facilityXlsxToCsv(bytes);
+    if (sheetCount > 1) {
+      process.stderr.write(`note: read "${sheetName}", the first of ${sheetCount} sheets in ${path}. The others were ignored.\n`);
+    }
+    return { ok: true, text: csv, format: 'csv', workbook: { bytes: bytes.length, sheetName, sheetCount, headers } };
+  } catch (err) {
+    if (!(err instanceof FacilityXlsxError)) throw err;
+    return { ok: false, error: err.message, human: `${path}: ${err.message}` };
+  }
+}
+
 /** One `ColumnMapError` (packages/terminology/src/facility-csv.ts), rendered for an operator to act
  *  on — the fix for the bug this task closes: every blocked import used to print "N row(s)
  *  quarantined" regardless of WHY it was blocked, so a misrouted column sent an operator chasing a
@@ -148,7 +197,7 @@ function describeColumnMapError(e: ColumnMapError): string {
 
 /**
  * `openldr facilities import <path> --national-system <sys> [--apply] [--allow-unknown-columns]
- * [--allow-malformed-rows] [--allow-invalid-coordinates] [--format csv|jsonl] [--release-version <v>]
+ * [--allow-malformed-rows] [--allow-invalid-coordinates] [--format csv|jsonl|xlsx] [--release-version <v>]
  * [--complete-release] [--on-deleted retire|report] [--on-absent retire|report]
  * [--on-conflict skip|overwrite] [--json]`
  *
@@ -191,16 +240,17 @@ function describeColumnMapError(e: ColumnMapError): string {
  * unique `active_key` index already give this call exclusive claim to `opts.nationalSystem` for as
  * long as it runs, which is the entire concurrency guarantee an inline CLI import needs.
  */
-export async function runFacilitiesImport(path: string, opts: FacilitiesImportOpts): Promise<number> {
-  let csv: string;
-  try {
-    csv = readFileSync(path, 'utf8');
-  } catch (err) {
-    const msg = redactError(err);
-    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
-    else process.stderr.write(`facilities import failed: could not read ${path}: ${msg}\n`);
+export async function runFacilitiesImport(path: string, requested: FacilitiesImportOpts): Promise<number> {
+  const file = readRegisterFile(path, requested.format);
+  if (!file.ok) {
+    if (requested.json) process.stdout.write(JSON.stringify({ error: file.error }) + '\n');
+    else process.stderr.write(`facilities import failed: ${file.human}\n`);
     return 1;
   }
+  const csv = file.text;
+  // ⛔ From here on `opts.format` is what was READ, never what was asked for. A workbook is CSV by
+  // now, and every later use (the run row, `importFacilities`, the JSONL-only refusals) must say so.
+  const opts: FacilitiesImportOpts & { format?: 'csv' | 'jsonl' } = { ...requested, format: file.format };
 
   // Task 9: `--column-map`/`--value-map` files are read and parsed HERE — before `createAppContext`
   // — so a typo'd path or broken JSON refuses fast, the same way the missing-`path`-file check above
@@ -494,6 +544,10 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
           path, nationalSystem: opts.nationalSystem, allowUnknownColumns: !!opts.allowUnknownColumns,
           allowMalformedRows: !!opts.allowMalformedRows,
           allowInvalidCoordinates: !!opts.allowInvalidCoordinates, result,
+          // The same three keys the upload route audits for a workbook. The run row records the CSV.
+          ...(file.workbook
+            ? { convertedFrom: 'xlsx', workbookBytes: file.workbook.bytes, sheetName: file.workbook.sheetName }
+            : {}),
         },
       });
       if (run) await finishRun(importRuns, run.id, 'applied', null, result);
@@ -657,18 +711,19 @@ export interface FacilitiesSuggestMapOpts {
  * not read is worse than a blank they must fill in (facility-mapping-suggest.ts's own header).
  */
 export async function runFacilitiesSuggestMap(path: string, opts: FacilitiesSuggestMapOpts): Promise<number> {
-  let csv: string;
-  try {
-    csv = readFileSync(path, 'utf8');
-  } catch (err) {
-    const msg = redactError(err);
-    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
-    else process.stderr.write(`facilities suggest-map failed: could not read ${path}: ${msg}\n`);
+  const file = readRegisterFile(path);
+  if (!file.ok) {
+    if (opts.json) process.stdout.write(JSON.stringify({ error: file.error }) + '\n');
+    else process.stderr.write(`facilities suggest-map failed: ${file.human}\n`);
     return 1;
   }
 
-  const firstLine = csv.split(/\r?\n/, 1)[0] ?? '';
-  const headers = firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
+  // A workbook's header row comes from the converter, parsed as CSV: the converted first line quotes
+  // any header holding a comma, which the naive split below would cut in two. Same headers the
+  // upload route hands the studio for that workbook.
+  const firstLine = file.text.split(/\r?\n/, 1)[0] ?? '';
+  const headers = file.workbook?.headers
+    ?? firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
   if (headers.length === 0) {
     const msg = `no header row found in ${path}`;
     if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
@@ -776,15 +831,13 @@ interface SuggestValuesFieldResult {
 export async function runFacilitiesSuggestValues(
   path: string, opts: FacilitiesSuggestValuesOpts,
 ): Promise<number> {
-  let csv: string;
-  try {
-    csv = readFileSync(path, 'utf8');
-  } catch (err) {
-    const msg = redactError(err);
-    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
-    else process.stderr.write(`facilities suggest-values failed: could not read ${path}: ${msg}\n`);
+  const file = readRegisterFile(path);
+  if (!file.ok) {
+    if (opts.json) process.stdout.write(JSON.stringify({ error: file.error }) + '\n');
+    else process.stderr.write(`facilities suggest-values failed: ${file.human}\n`);
     return 1;
   }
+  const csv = file.text;
 
   let columnMap: FacilityColumnMap | undefined;
   if (opts.columnMap) {

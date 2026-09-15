@@ -11,7 +11,11 @@ import {
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
   VALIDATE_PHASE,
 } from '@openldr/db';
-import { projectRegistryRows, observedFieldSystem, addRegisterFacilityType, CONTROLLED_VALUE_SETS } from '@openldr/bootstrap';
+import {
+  projectRegistryRows, observedFieldSystem, addRegisterFacilityType, CONTROLLED_VALUE_SETS,
+  suggestColumns, FACILITY_IMPORT_MAX_XLSX_BYTES,
+} from '@openldr/bootstrap';
+import * as XLSX from 'xlsx';
 import { registerFacilitiesRoutes } from './facilities-routes';
 // The over-cap upload test registers the REAL central error handler, as production does, so its 413
 // carries the app-wide {error, code, correlationId} contract rather than a bespoke body.
@@ -3659,6 +3663,191 @@ function onlyStoredObject(ctx: any): { key: string; bytes: Buffer } {
   return { key: entries[0][0], bytes: entries[0][1] };
 }
 
+/** An Excel workbook built in memory, one entry per sheet, in order. */
+function workbookBytes(sheets: Array<[name: string, rows: unknown[][]]>): Buffer {
+  const wb = XLSX.utils.book_new();
+  for (const [name, rows] of sheets) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+}
+
+/** A Fastify app with the REAL central error handler, so a 413 carries the app-wide
+ *  `{error, code, correlationId}` body. Same setup as the CSV over-cap test below. */
+async function appWithErrorHandler(ctx: any) {
+  const app = Fastify({ logger: false });
+  registerErrorHandler(app as any);
+  app.addHook('onRequest', async (req: any) => { req.user = { id: 'u1', capabilities: ['facilities.view', 'facilities.manage'] }; });
+  registerFacilitiesRoutes(app as any, ctx);
+  await app.ready();
+  return app;
+}
+
+// An Excel workbook is converted to CSV AT THE UPLOAD, and what gets stored is the CSV. So the run,
+// the worker, the column-values route and the apply all read an ordinary CSV and none of them know
+// a workbook was involved. These tests pin that seam.
+describe('POST /api/facilities/import/upload with format=xlsx', () => {
+  const HEADERS = CSV_HEADER.split(',');
+  const DATA_ROW = ['100', 'Dodoma Regional Referral'];
+
+  it('stores the first worksheet as CSV and returns its header row for the Mapping step', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      // `validate=false` is the studio's own Source-step call, the one that feeds Mapping.
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: workbookBytes([['Register', [HEADERS, DATA_ROW]], ['Notes', [['not a facility']]]]),
+    });
+
+    expect(res.statusCode).toBe(202);
+    // ⛔ The browser cannot unzip a workbook, so this response is the ONLY place the Mapping step
+    // learns the columns. `columns` is the same ranking `suggest-map` returns for a CSV.
+    expect(res.json()).toEqual({
+      runId: expect.any(String),
+      headers: HEADERS,
+      columns: suggestColumns(HEADERS),
+      sheetName: 'Register',
+      sheetCount: 2,
+    });
+
+    // What was stored is CSV, byte for byte: the first sheet only, every row padded to the header's
+    // width. The second sheet is nowhere in it.
+    const stored = onlyStoredObject(ctx);
+    const csv = `${CSV_HEADER}\n100,Dodoma Regional Referral${','.repeat(HEADERS.length - 2)}`;
+    expect(stored.bytes.toString('utf8')).toBe(csv);
+    expect(stored.key).toMatch(/^facility-import\/[a-z0-9-]+\/[0-9a-f-]{36}\.csv$/);
+
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run).toMatchObject({
+      status: 'stored',
+      // ⛔ `csv`, because the stored file IS csv. Every reader keys on this to pick its parser.
+      sourceFormat: 'csv',
+      blobKey: stored.key,
+      // Hash and size of what was STORED, the same rule the CSV path follows.
+      fileHash: createHash('sha256').update(stored.bytes).digest('hex'),
+      byteSize: stored.bytes.length,
+      options: { nationalSystem: SYSTEM },
+    });
+  });
+
+  it('leaves a stored file the next step can read: the column values come back from the converted CSV', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const upload = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx', validate: 'false' }),
+      headers: UPLOAD_HEADERS,
+      payload: workbookBytes([['Register', [HEADERS, DATA_ROW, ['101', 'Mbeya Zonal']]]]),
+    });
+    expect(upload.statusCode).toBe(202);
+    const res = await app.inject({
+      method: 'GET', url: `/api/facilities/import/runs/${upload.json().runId}/columns/name/values`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().values).toEqual(['Dodoma Regional Referral', 'Mbeya Zonal']);
+  });
+
+  it('audits the upload as converted from a workbook, with the workbook\'s own size and sheet', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const payload = workbookBytes([['Register', [HEADERS, DATA_ROW]]]);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      headers: UPLOAD_HEADERS, payload,
+    });
+    expect(res.statusCode).toBe(202);
+    expect(ctx.__audit).toHaveLength(1);
+    expect(ctx.__audit[0].metadata).toMatchObject({
+      runId: res.json().runId,
+      sourceFormat: 'csv',
+      byteSize: onlyStoredObject(ctx).bytes.length,
+      convertedFrom: 'xlsx',
+      workbookBytes: payload.length,
+      sheetName: 'Register',
+    });
+  });
+
+  it('⛔ 413s a workbook over the XLSX cap, naming the limit and the CSV way round it', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWithErrorHandler(ctx);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.alloc(FACILITY_IMPORT_MAX_XLSX_BYTES + 1),
+    });
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ code: 'SY0413' });
+    expect(res.json().error).toContain('20 MB');
+    expect(res.json().error).toContain('CSV');
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  }, 15000);
+
+  it('refuses a file that is not a workbook (400) and stores nothing', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/not an Excel workbook/);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('refuses a workbook whose first worksheet is empty (400), naming the sheet', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      headers: UPLOAD_HEADERS, payload: workbookBytes([['Cover', []], ['Register', [HEADERS, DATA_ROW]]]),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('"Cover"');
+    expect(ctx.blob.__objects.size).toBe(0);
+  });
+
+  // ⛔ A bad workbook must not cost the operator the run already on the register. The conversion
+  // runs BEFORE the in-progress gate supersedes anything.
+  it('a refused workbook leaves the register\'s current run alone', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const first = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(first.statusCode).toBe(202);
+    const bad = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from('not a workbook', 'utf8'),
+    });
+    expect(bad.statusCode).toBe(400);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${first.json().runId}` })).json();
+    expect(run.status).toBe('queued');
+  });
+
+  // The converted CSV still has to fit the worker, which reads the stored file into memory under
+  // `FACILITY_IMPORT_MAX_UPLOAD_BYTES`. Checked by the same counter the CSV path uses.
+  it('⛔ 413s a workbook whose CSV is over `FACILITY_IMPORT_MAX_UPLOAD_BYTES`', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES = 10;
+    const app = await appWithErrorHandler(ctx);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      headers: UPLOAD_HEADERS, payload: workbookBytes([['Register', [HEADERS, DATA_ROW]]]),
+    });
+    expect(res.statusCode).toBe(413);
+    expect(res.json().error).toContain('10-byte upload limit');
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  }, 8000);
+});
+
 describe('POST /api/facilities/import/upload', () => {
   it('gated on facilities.manage — a facilities.view-only user gets 403 and nothing is stored', async () => {
     const db = await importDb();
@@ -4040,7 +4229,7 @@ describe('POST /api/facilities/import/upload', () => {
     expect(noSystem.json().error).toMatch(/nationalSystem/);
 
     const badFormat = await app.inject({
-      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xml' }),
       headers: UPLOAD_HEADERS, payload,
     });
     expect(badFormat.statusCode).toBe(400);

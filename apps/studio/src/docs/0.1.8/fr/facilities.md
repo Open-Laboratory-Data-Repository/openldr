@@ -69,6 +69,26 @@ de bouton Retour séparé.
 - **Vérification.** Rapporte ce que la vérification a trouvé et propose une seule action,
   Appliquer. Rien n'y est modifiable.
 
+### Importer un classeur Excel
+
+L'import accepte un classeur `.xlsx` en plus d'un fichier `.csv` ou `.jsonl`, dans l'assistant
+comme dans la CLI.
+
+- Seule la première feuille est lue. Si le classeur en contient plusieurs, l'étape Mappage indique
+  la feuille lue. Si les colonnes semblent fausses, placez le registre dans la première feuille ou
+  enregistrez-le au format CSV.
+- Le serveur convertit cette feuille en CSV au moment du téléversement, et toutes les étapes
+  suivantes lisent ce CSV. C'est pourquoi l'historique des imports indique le format `csv`.
+- Les nombres gardent leur valeur complète. Un long code d'établissement n'est pas réduit à
+  `1.23457E+14`, et une coordonnée garde toutes ses décimales. Un nombre qui a son propre format,
+  comme un code complété par des zéros, garde le texte affiché par Excel.
+- Un classeur ne peut pas dépasser 20 Mo. Un CSV peut être bien plus gros, car il est lu par
+  morceaux, alors qu'un classeur doit être ouvert en entier. Pour un registre plus gros,
+  enregistrez la première feuille au format CSV et importez ce fichier.
+- En ligne de commande, un chemin qui se termine par `.xlsx` est lu comme un classeur. Ajoutez
+  `--format xlsx` pour un classeur qui porte un autre nom. `suggest-map` et `suggest-values`
+  lisent aussi les classeurs.
+
 ### Le mappage décide, la vérification rapporte
 
 Si la vérification révèle quelque chose que vous voulez changer, revenez au Mappage, changez-le,

@@ -63,6 +63,24 @@ step in that strip to move between them. There is no separate Back button.
   does not send the file a second time.
 - **Review.** Reports what the check found and offers one action, Apply. Nothing on it is editable.
 
+### Importing an Excel workbook
+
+The import accepts a `.xlsx` workbook as well as a `.csv` or `.jsonl` file, in the wizard and in
+the CLI.
+
+- Only the first sheet is read. When the workbook has more than one, Mapping names the sheet it
+  read. If those columns look wrong, move the register to the first sheet, or save it as CSV.
+- The server turns that sheet into CSV when the file is uploaded, and every later step reads the
+  CSV. That is why the run history lists the run's format as `csv`.
+- Numbers keep their full value. A long facility code is not shortened to `1.23457E+14`, and a
+  coordinate keeps every decimal. A number with a format of its own, such as a code padded with
+  zeros, keeps the text Excel shows.
+- A workbook can be at most 20 MB. A CSV can be far larger, because it is read a piece at a time,
+  and a workbook has to be opened whole. For a bigger register, save the first sheet as CSV and
+  import that.
+- On the command line, a path ending in `.xlsx` is read as a workbook. Add `--format xlsx` for a
+  workbook with another name. `suggest-map` and `suggest-values` read workbooks too.
+
 ### Mapping decides, Review reports
 
 If the check turns up something you want to change, go back to Mapping, change it, and come

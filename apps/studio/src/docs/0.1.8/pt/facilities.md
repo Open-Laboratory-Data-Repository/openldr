@@ -68,6 +68,25 @@ Revisão. Clique num passo dessa faixa para se mover entre eles. Não há um bot
 - **Revisão.** Relata o que a verificação encontrou e oferece uma única ação, Aplicar. Nada nela é
   editável.
 
+### Importar um livro do Excel
+
+A importação aceita um livro `.xlsx`, além de um ficheiro `.csv` ou `.jsonl`, no assistente e na
+CLI.
+
+- Só é lida a primeira folha. Se o livro tiver mais do que uma, o passo Mapeamento indica a folha
+  lida. Se as colunas parecerem erradas, coloque o registo na primeira folha ou guarde-o como CSV.
+- O servidor converte essa folha em CSV quando o ficheiro é carregado, e todos os passos
+  seguintes leem esse CSV. Por isso, o histórico de importações mostra o formato `csv`.
+- Os números mantêm o valor completo. Um código de unidade longo não é encurtado para
+  `1.23457E+14`, e uma coordenada mantém todas as casas decimais. Um número com formato próprio,
+  como um código preenchido com zeros, mantém o texto que o Excel mostra.
+- Um livro pode ter no máximo 20 MB. Um CSV pode ser muito maior, porque é lido por partes,
+  enquanto um livro tem de ser aberto por inteiro. Para um registo maior, guarde a primeira folha
+  como CSV e importe esse ficheiro.
+- Na linha de comandos, um caminho terminado em `.xlsx` é lido como livro. Acrescente
+  `--format xlsx` para um livro com outro nome. `suggest-map` e `suggest-values` também leem
+  livros.
+
 ### O mapeamento decide, a revisão relata
 
 Se a verificação revelar algo que queira mudar, volte ao Mapeamento, mude-o e avance de novo. Essa

@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto';
-import { Transform } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
@@ -20,8 +20,9 @@ import {
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   revalidateImportRun, readColumnValues, FacilityFileUnreadableError,
   addRegisterFacilityType, FacilityTypeCollisionError,
+  facilityXlsxToCsv, facilityXlsxTooLarge, FacilityXlsxError, FACILITY_IMPORT_MAX_XLSX_BYTES,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
-  type ValueMappingEntry,
+  type ValueMappingEntry, type FacilityXlsxCsv,
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
@@ -2410,10 +2411,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     if (!nationalSystem) { reply.code(400); return { error: 'nationalSystem is required' }; }
 
     const format = ownFirstString(q, 'format') ?? 'csv';
-    if (format !== 'csv' && format !== 'jsonl') {
+    if (format !== 'csv' && format !== 'jsonl' && format !== 'xlsx') {
       reply.code(400);
-      return { error: `format must be "csv" or "jsonl", not "${format}"` };
+      return { error: `format must be "csv", "jsonl" or "xlsx", not "${format}"` };
     }
+    // What is STORED. A workbook is converted to CSV below, before anything is written, so the run,
+    // the worker and every later reader see an ordinary CSV and never learn a workbook existed.
+    const storedFormat: 'csv' | 'jsonl' = format === 'jsonl' ? 'jsonl' : 'csv';
     const releaseVersion = ownFirstString(q, 'releaseVersion') ?? null;
 
     // Task 2 (facility-import-data-stage, Slice A): OPT-IN, so every existing caller (the CLI, any
@@ -2504,6 +2508,31 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const register = await resolveFacilityRegisterForImport(registerSources, nationalSystem);
     if (!register.ok) { reply.code(400); return { error: register.error }; }
 
+    // An Excel workbook cannot be streamed: SheetJS needs the whole ZIP before it can hand back a
+    // row. So it is read into memory under its own, smaller cap (`FACILITY_IMPORT_MAX_XLSX_BYTES`),
+    // converted, and the CSV becomes the source the transfer below hashes and stores. From there on
+    // it is the CSV path, including the `FACILITY_IMPORT_MAX_UPLOAD_BYTES` counter, which the
+    // converted CSV must also fit because the worker reads the stored file into memory under it.
+    //
+    // ⛔ CONVERTED BEFORE `takeOverRegister`, not after it. A file that is not a workbook, or whose
+    // first sheet is empty, must not first supersede the run already on the register. The cost is
+    // that a busy register's 409 arrives after up to 20 MB has been read, which is the better trade.
+    let source = req.body as NodeJS.ReadableStream;
+    let workbook: { bytes: number; converted: FacilityXlsxCsv } | null = null;
+    if (format === 'xlsx') {
+      try {
+        const bytes = await readWorkbook(source);
+        workbook = { bytes: bytes.length, converted: facilityXlsxToCsv(bytes) };
+      } catch (err) {
+        if (!(err instanceof FacilityXlsxError)) throw err;
+        // The same SY0413 contract as the CSV ceiling, through the central error handler.
+        if (err.reason === 'too_large') throw appError('SY0413', { message: err.message });
+        reply.code(400);
+        return { error: err.message };
+      }
+      source = Readable.from([Buffer.from(workbook.converted.csv, 'utf8')]);
+    }
+
     // ⛔ The register gate runs BEFORE the transfer, not after it. A refused upload must not first
     // cost a national register's worth of bandwidth and leave an orphan object behind. Shared with
     // the inline preview route — see `takeOverRegister`.
@@ -2518,12 +2547,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // is `facility_import_runs.blob_key`, written below — it resolves run→object directly and
     // object→run through that column; the slug is there so a human browsing the bucket can tell the
     // registers apart.
-    const key = `facility-import/${nationalSystemSlug(nationalSystem)}/${randomUUID()}.${format}`;
+    const key = `facility-import/${nationalSystemSlug(nationalSystem)}/${randomUUID()}.${storedFormat}`;
 
     // ⛔ Hash and size are computed AS THE BYTES TRAVEL, in a transform between the request and the
     // blob store — the file is never buffered, at any size. Reading the object back to hash it (or
     // collecting it into a Buffer first) would put a national register in memory twice and defeat
-    // the whole point of streaming it.
+    // the whole point of streaming it. A workbook is the one exception, bounded by its own 20 MB
+    // cap: it was read whole by `readWorkbook` above, and what streams through here is its CSV.
     // ⛔ THE UPLOAD'S ONLY REAL BYTE CEILING. `bodyLimit` is inert for this route's passthrough
     // parser (measured — see `MAX_UPLOAD_BYTES`), so without this counter an authenticated client
     // could stream without end. Enforced HERE, in the transform that already counts the bytes,
@@ -2554,7 +2584,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     });
 
     try {
-      const stored = ctx.blob.putStream(key, hashing, format === 'csv' ? 'text/csv' : 'application/x-ndjson');
+      const stored = ctx.blob.putStream(key, hashing, storedFormat === 'csv' ? 'text/csv' : 'application/x-ndjson');
       // ⛔ Wire the SINK's failure back into the transform, or the transfer never tears down. A blob
       // store that rejects WITHOUT draining `hashing` — the realistic S3 case, `Upload.done()`
       // rejecting on a bad bucket or credentials while its chunk generator stops consuming — leaves
@@ -2583,7 +2613,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       // necessarily finished, `discardBlob` below can race a sink that is still flushing. That is
       // tolerable precisely because that cleanup is best-effort by construction (see its doc
       // comment) — a leaked object is a leak, whereas a reply that is never sent is a hung request.
-      await Promise.all([pipeline(req.body as NodeJS.ReadableStream, hashing), stored]);
+      await Promise.all([pipeline(source, hashing), stored]);
     } catch (err) {
       // The register was freed by the gate above and no run row exists, so the only thing left over
       // is a possibly-partial object. Best-effort delete, logged — a lost cleanup must not change
@@ -2608,7 +2638,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     try {
       run = await importRuns.startUpload({
         nationalSystem,
-        sourceFormat: format,
+        sourceFormat: storedFormat,
         blobKey: key,
         fileHash,
         byteSize,
@@ -2662,11 +2692,38 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       entityId: nationalSystem,
       before: null,
       after: null,
-      metadata: { runId: run.id, nationalSystem, sourceFormat: format, blobKey: key, fileHash, byteSize, releaseVersion },
+      metadata: {
+        runId: run.id, nationalSystem, sourceFormat: storedFormat, blobKey: key, fileHash, byteSize, releaseVersion,
+        // The run records the CSV it stored, so this is the one durable record that the operator
+        // actually sent a workbook, and which sheet of it was read.
+        ...(workbook
+          ? { convertedFrom: 'xlsx', workbookBytes: workbook.bytes, sheetName: workbook.converted.sheetName }
+          : {}),
+      },
     });
     reply.code(202);
-    return { runId: run.id };
+    if (!workbook) return { runId: run.id };
+    // ⛔ The Mapping step's ONLY way to learn a workbook's columns: the browser cannot unzip it to
+    // read a header row the way it reads a CSV's first 64 KB. `columns` is the same ranking the
+    // `suggest-map` route returns for a CSV, so the studio fills the panel the same way from either.
+    const { headers, sheetName, sheetCount } = workbook.converted;
+    return { runId: run.id, headers, columns: suggestColumns(headers), sheetName, sheetCount };
   });
+
+  /** Read a workbook upload into memory, refusing the moment it passes the XLSX cap rather than
+   *  after the whole body has arrived. Throwing inside `for await` ends the iteration, which
+   *  destroys the request stream. */
+  async function readWorkbook(body: NodeJS.ReadableStream): Promise<Buffer> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of body) {
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      size += buf.length;
+      if (size > FACILITY_IMPORT_MAX_XLSX_BYTES) throw facilityXlsxTooLarge();
+      chunks.push(buf);
+    }
+    return Buffer.concat(chunks);
+  }
 
   /** Drop an object nothing will ever reference again. Contained and logged for the same reason
    *  every other best-effort side-write in this file is: it runs on a path that has already decided

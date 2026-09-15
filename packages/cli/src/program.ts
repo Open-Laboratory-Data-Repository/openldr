@@ -344,13 +344,13 @@ export function buildProgram(): Command {
     });
   facilities
     .command('import <path>')
-    .description('Import a national facility register CSV/JSONL. DRY RUN BY DEFAULT — pass --apply to write.')
+    .description('Import a national facility register CSV, JSONL or Excel workbook (.xlsx, first sheet, up to 20 MB). DRY RUN BY DEFAULT. Pass --apply to write.')
     .requiredOption('--national-system <sys>', 'canonical URI of the national facility register the codes belong to (e.g. urn:tz:hfr)')
     .option('--apply', 'write the import (default: dry run — parse and report, write nothing)', false)
     .option('--allow-unknown-columns', 'import despite unrecognised CSV columns (carried into each row\'s extras)', false)
     .option('--allow-malformed-rows', 'import despite structurally malformed rows (quarantined rows are printed with their line number and skipped either way)', false)
     .option('--allow-invalid-coordinates', 'import a row whose latitude/longitude failed validation anyway, with BOTH coordinates written as null (the error is reported either way)', false)
-    .option('--format <csv|jsonl>', 'input file shape (default: csv)')
+    .option('--format <csv|jsonl|xlsx>', 'input file shape (default: csv, or xlsx for a path ending .xlsx). An Excel workbook\'s first sheet is converted to CSV')
     .option('--release-version <v>', 'publisher-supplied release version, recorded on the facility_import_runs row')
     .option('--complete-release', 'the file is a COMPLETE release of this register — only then can a row\'s absence from it mean anything (default: false, absent stays "not evaluated")', false)
     .option('--on-deleted <retire|report>', 'what to do with rows the publisher explicitly declared removed (JSONL only; default: retire)')
@@ -362,7 +362,7 @@ export function buildProgram(): Command {
     .action(async (path: string, opts: {
       nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; allowMalformedRows: boolean;
       allowInvalidCoordinates: boolean;
-      format?: 'csv' | 'jsonl'; releaseVersion?: string; completeRelease: boolean;
+      format?: 'csv' | 'jsonl' | 'xlsx'; releaseVersion?: string; completeRelease: boolean;
       onDeleted?: 'retire' | 'report'; onAbsent?: 'retire' | 'report'; onConflict?: 'skip' | 'overwrite';
       columnMap?: string; valueMap?: string;
       json: boolean;
@@ -373,7 +373,7 @@ export function buildProgram(): Command {
   // (@openldr/bootstrap, Task 2) the route calls. No database, no --apply: read-only and pure.
   facilities
     .command('suggest-map <path>')
-    .description('Print a FacilityColumnMap of ranked column suggestions for this file\'s header row, ready to review and feed back to `import --column-map`.')
+    .description('Print a FacilityColumnMap of ranked column suggestions for this file\'s header row, ready to review and feed back to `import --column-map`. A path ending .xlsx is read as an Excel workbook (first sheet).')
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (path: string, opts: { json: boolean }) => {
       process.exitCode = await runFacilitiesSuggestMap(path, opts);
@@ -383,7 +383,7 @@ export function buildProgram(): Command {
   // SAME `resolveControlledFields`/`suggestValues` (@openldr/bootstrap) `importFacilities` runs.
   facilities
     .command('suggest-values <path>')
-    .description('Rank candidate canonical values for every level/status/country value this file carries with no mapping yet, ready to review and write with `import --value-map`.')
+    .description('Rank candidate canonical values for every level/status/country value this file carries with no mapping yet, ready to review and write with `import --value-map`. A path ending .xlsx is read as an Excel workbook (first sheet).')
     .requiredOption('--national-system <sys>', 'the register these raw values were captured under. WARNING: free text on this command — a mistyped register finds no existing mappings and every value looks unmapped, with no error; spell it exactly as `facilities import-sources` prints it')
     .option('--column-map <file.json>', 'the same FacilityColumnMap `import --column-map` takes, so the raw values come from this file\'s own headers rather than requiring them to already be named level/status/country')
     .option('--json', 'emit machine-readable JSON', false)
