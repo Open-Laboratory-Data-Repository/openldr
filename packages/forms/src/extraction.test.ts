@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { toQuestionnaire } from './to-questionnaire'
 import { fromQuestionnaire } from './from-questionnaire'
 import { toQuestionnaireResponse } from './response'
-import { ObservationExtractor } from './extract/extract'
+import { ObservationExtractor, ServiceRequestExtractor } from './extract/extract'
 import { toTransactionBundle } from './to-transaction-bundle'
 import { makeField, makeSchema, definitionOf } from './__fixtures__/forms'
 
@@ -74,5 +74,42 @@ describe('toTransactionBundle', () => {
     expect(bundle.entry?.[0].resource?.resourceType).toBe('QuestionnaireResponse')
     expect(bundle.entry?.[1].resource?.resourceType).toBe('Observation')
     expect(bundle.entry?.[1].request).toEqual({ method: 'POST', url: 'Observation' })
+  })
+})
+
+// The Lab order's requisition number moved from ServiceRequest.identifier to
+// ServiceRequest.identifier.value with a discriminator (migration 103). The extractor matched the
+// old path exactly, so without reading the new one a submitted order would silently lose it. It
+// reads both: a form an operator edited keeps the old path, because the migration leaves it alone.
+describe('ServiceRequestExtractor requisition number', () => {
+  const orderWith = (field: Partial<Parameters<typeof makeField>[0]>) =>
+    makeSchema({
+      id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest',
+      fields: [makeField({ id: 'ref', displayLabel: 'Reference Number', fieldType: 'text', order: 0, ...field })],
+    })
+  const extract = (model: ReturnType<typeof orderWith>) =>
+    ServiceRequestExtractor.extract(toQuestionnaireResponse(model, { ref: 'REF-42' }), toQuestionnaire(model), ctx)[0]
+
+  it('reads the number from the identifier slot the shipped form now binds', () => {
+    const model = orderWith({
+      fhirPath: 'ServiceRequest.identifier.value',
+      fhirDiscriminator: { system: 'urn:openldr:order:requisition' },
+      fhirValueField: 'value',
+    })
+    expect(extract(model)).toMatchObject({ identifier: [{ value: 'REF-42' }] })
+  })
+
+  it('still reads it from the old whole-list path', () => {
+    expect(extract(orderWith({ fhirPath: 'ServiceRequest.identifier' }))).toMatchObject({ identifier: [{ value: 'REF-42' }] })
+  })
+
+  it('writes the number as before, without a system, so a submitted order does not change', () => {
+    const model = orderWith({
+      fhirPath: 'ServiceRequest.identifier.value',
+      fhirDiscriminator: { system: 'urn:openldr:order:requisition' },
+      fhirValueField: 'value',
+    })
+    expect(extract(model)).toMatchObject({ identifier: [{ value: 'REF-42' }] })
+    expect((extract(model) as any).identifier[0]).toEqual({ value: 'REF-42' })
   })
 })

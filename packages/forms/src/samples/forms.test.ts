@@ -19,6 +19,7 @@ import {
   USERS_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_FIELDS,
+  LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
 } from '@openldr/db';
 import { toQuestionnaireResponse } from '../response';
 import { ServiceRequestExtractor } from '../extract/extract';
@@ -292,16 +293,15 @@ describe('every shipped sample passes the FHIR path rules', () => {
   // phone now say which list entry they fill, so they stop tripping fhir-path-cardinality.
   // 10 became 7 the same day (migration 101): the Users form's name and email do the same.
   // 7 became 4 (migration 102): the Lab order's notes and ward point at the first entry of
-  // their lists. The 4 left are the clinician, the requisition number and the referring
-  // facility, which need decisions this change did not make.
-  it('the other samples carry exactly the 4 known structural warnings', () => {
+  // their lists. 4 became 2 (migration 103): the requisition number fills the
+  // urn:openldr:order:requisition entry of ServiceRequest.identifier. The 2 left are the
+  // clinician and the referring facility, which need decisions these changes did not make.
+  it('the other samples carry exactly the 2 known structural warnings', () => {
     const warnings = sampleForms
       .filter((f) => f.name !== 'Facility')
       .flatMap((f) => lintFormSchema(f).filter((i) => i.severity === 'warning'))
       .filter((i) => i.code === 'fhir-path-cardinality' || i.code === 'fhir-path-type-mismatch');
-    expect(warnings.map((i) => i.fieldId).sort()).toEqual(
-      ['fld-ord-clinician', 'fld-ord-ref-facility', 'fld-ord-ref-number', 'fld-ord-ref-number'].sort(),
-    );
+    expect(warnings.map((i) => i.fieldId).sort()).toEqual(['fld-ord-clinician', 'fld-ord-ref-facility']);
   });
 
   it('the Patient form produces no findings of any severity', () => {
@@ -315,25 +315,29 @@ describe('every shipped sample passes the FHIR path rules', () => {
   });
 });
 
-describe('migration 102 Lab order notes and ward paths', () => {
+describe('migrations 102 and 103 on the Lab order form', () => {
   const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
 
-  it("matches migration 102's frozen BOUND_FIELDS snapshot exactly", () => {
+  it("matches migration 103's frozen BOUND_FIELDS snapshot exactly", () => {
     expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS);
   });
 
-  it('notes and ward trip no rule', () => {
-    const issues = lintFormSchema(order()).filter((i) => i.fieldId === 'fld-ord-notes' || i.fieldId === 'fld-ord-ward');
-    expect(issues).toEqual([]);
+  it('notes, ward and the requisition number trip no rule', () => {
+    const ids = ['fld-ord-notes', 'fld-ord-ward', 'fld-ord-ref-number'];
+    expect(lintFormSchema(order()).filter((i) => ids.includes(i.fieldId ?? ''))).toEqual([]);
   });
 
-  it('a builder save leaves the prior Lab order shape unchanged, so one prior shape is enough', () => {
-    const normalized = normalizeFormSchema({ ...order(), fields: LAB_ORDER_FORM_MIGRATION_PREV_FIELDS as never });
-    expect(normalized.fields).toEqual(LAB_ORDER_FORM_MIGRATION_PREV_FIELDS);
+  it("a builder save leaves both prior Lab order shapes unchanged, so each migration's one prior shape is enough", () => {
+    for (const prior of [LAB_ORDER_FORM_MIGRATION_PREV_FIELDS, LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION]) {
+      const normalized = normalizeFormSchema({ ...order(), fields: prior as never });
+      expect(normalized.fields).toEqual(prior);
+    }
   });
 
   // The order extractor reads only the tests, the requisition number and the priority
-  // (extract.ts). This proves the new paths change nothing in a submitted order.
+  // (extract.ts). It reads the requisition number from the old path and the new one. This proves
+  // the new paths change nothing in a submitted order: the shape before 102 and the shape after
+  // 103 extract the same ServiceRequest.
   it('extracts the same ServiceRequest from the same answers before and after', () => {
     const answers = {
       tests: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }],
