@@ -1415,6 +1415,63 @@ describe('publishRegistryConcepts', () => {
     expect(rows.map((r) => r.code).sort()).toEqual(['DOD', 'fac-ghost']);
   });
 
+  // The sync signal labs pull the registry on. Every app context queues a rebuild that re-publishes the
+  // whole registry, so a re-publish that changes nothing must stay silent, and one that only DELETES
+  // a concept must still speak (nothing else in the call writes, so `importRows` would not signal it).
+  describe('facility-registry sync signal', () => {
+    const registrySignals = async (deps: Awaited<ReturnType<typeof makeReconcileDeps>>) =>
+      (await deps.internalDb.selectFrom('reference_change_log').select('seq')
+        .where('entity_type', '=', 'terminology_system').where('entity_id', '=', FACILITY_REGISTRY_SYSTEM)
+        .execute()).length;
+    const rawConcept = (deps: Awaited<ReturnType<typeof makeReconcileDeps>>, code: string, display: string) =>
+      deps.internalDb.insertInto('terminology_concepts')
+        .values({ system: FACILITY_REGISTRY_SYSTEM, code, display, status: 'ACTIVE', properties: null }).execute();
+
+    it('adds no signal when a re-publish changes nothing', async () => {
+      const deps = await makeReconcileDeps();
+      await seedRegistry(deps, { id: 'fac-1', name: 'Alpha', localCode: 'A-1' });
+      await seedRegistry(deps, { id: 'fac-2', name: 'Beta', localCode: 'B-1' });
+      await publishRegistryConcepts(deps, { apply: true });
+      const before = await registrySignals(deps);
+      expect(before).toBeGreaterThan(0);
+
+      await publishRegistryConcepts(deps, { apply: true });
+
+      expect(await registrySignals(deps)).toBe(before);
+    });
+
+    it('signals a re-publish whose only change is removing a superseded id-keyed concept', async () => {
+      const deps = await makeReconcileDeps();
+      await seedRegistry(deps, { id: 'fac-1', name: 'Alpha', localCode: 'A-1' });
+      await publishRegistryConcepts(deps, { apply: true });
+      await rawConcept(deps, 'fac-1', 'Alpha'); // the pre-0518e7d3 id-keyed leftover, written without a signal
+      const before = await registrySignals(deps);
+
+      await publishRegistryConcepts(deps, { apply: true });
+
+      const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 10, offset: 0 });
+      expect(rows.map((r) => r.code)).toEqual(['A-1']);
+      expect(await registrySignals(deps)).toBe(before + 1);
+    });
+
+    it('signals a re-publish whose only change is removing the concept a moved code left behind', async () => {
+      const deps = await makeReconcileDeps();
+      await seedRegistry(deps, { id: 'fac-1', name: 'Alpha', localCode: 'OLD-1' });
+      await publishRegistryConcepts(deps, { apply: true });
+      await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
+      // The destination concept already exists exactly as the projection would write it, so the upsert
+      // step changes nothing and the delete of OLD-1 is the whole change.
+      await rawConcept(deps, 'NEW-1', 'Alpha');
+      const before = await registrySignals(deps);
+
+      await publishRegistryConcepts(deps, { apply: true });
+
+      const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 10, offset: 0 });
+      expect(rows.map((r) => r.code)).toEqual(['NEW-1']);
+      expect(await registrySignals(deps)).toBe(before + 1);
+    });
+  });
+
   // Migration 075 seeds the row directly, ahead of any scan/publish — fixes the fresh-install defect
   // where `TermMappingDialog`'s target-system dropdown had nothing to pick until an operator ran a
   // publish. Asserted here (not just in `packages/db`) because it is `publishRegistryConcepts`'s

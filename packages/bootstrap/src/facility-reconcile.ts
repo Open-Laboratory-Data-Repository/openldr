@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ConceptRowInput, ExternalSchema, InternalSchema, MapType, RegistryRowForConcept, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, registryRowIdsWithSupersededIdConcept, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, markTerminologyChanged, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, registryRowIdsWithSupersededIdConcept, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -1040,6 +1040,9 @@ async function deleteSupersededIdConcepts(deps: Pick<ReconcileDeps, 'internalDb'
     .returning('code')
     .execute();
   if (deleted.length === 0) return;
+  // ⛔ This delete signals itself. `importRows` signals only rows it actually wrote, so a re-publish
+  // whose only change is this delete would otherwise never reach a lab.
+  await markTerminologyChanged(deps.internalDb, FACILITY_REGISTRY_SYSTEM);
   const deletedCodes = deleted.map((d) => d.code);
 
   // A mapping authored against the id-code just removed did not just lose its target — it already
@@ -1594,63 +1597,73 @@ export async function reprojectRegistryRows(
     // just wrote it for its new owner.
     const reclaimedInBatch = new Set(desired.map((d) => d.code));
 
-    for (const m of moved) {
-      let mappingsMigrated = 0;
-      const contested = contestedInBatch.has(m.from);
-      const carryOverSkipped = linkedElsewhere.has(m.from) || contested;
-      if (carryOverSkipped) {
-        // ⛔ Say so out loud. Skipping is the RIGHT call (see both guards above), but it suppresses
-        // the exact repair this function exists to perform, and `mappingsMigrated: 0` alone reads
-        // identically to "there was nothing on the old code to carry". A skip that cannot be told
-        // apart from a no-op is a skip nobody will ever investigate. Same containment reasoning as
-        // `deleteSupersededIdConcepts`' warn, for a strictly more alarming case. The two reasons get
-        // two messages because the REPAIR differs: one is fixed by widening the batch, the other by
-        // fixing the link rows that disagree.
-        // eslint-disable-next-line no-console -- deliberate: this module takes no logger dependency
-        // (see the `err` catches elsewhere in this file); diagnostic-only, and mirrored on the
-        // result as `carryOverSkipped` for callers that render a summary.
-        console.warn(
-          contested
-            ? `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'`
-              + ' is recorded in facility_concept_projection as MORE THAN ONE facility\'s projection, so there is no way'
-              + ' to tell whose mappings it carries — its term_mappings were NOT migrated and the stale concept was NOT'
-              + ' removed. Repair the link rows sharing that code, then re-publish.'
-            : `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'`
-              + ' is still linked by a facility outside this batch — its term_mappings were NOT migrated and the stale'
-              + ' concept was NOT removed. Re-publish the WHOLE registry so both facilities are in one batch, or repair'
-              + ' the mapping by hand.',
-        );
-      } else {
-        // STEP 2: repoint the mappings, through the admin store so `concept_map_elements` and
-        // `reference_change_log` follow. The full `TermMappingInput` is required (it is a replace,
-        // not a patch), so every other field is carried across verbatim — including `to_display`,
-        // which is the operator's own denormalised label and not this function's to re-curate.
-        for (const stale of staleByCode.get(m.from) ?? []) {
-          await deps.admin.termMappings.update(stale.id, {
-            fromSystem: stale.from_system,
-            fromCode: stale.from_code,
-            toSystem: FACILITY_REGISTRY_SYSTEM,
-            toCode: m.to,
-            toDisplay: stale.to_display,
-            mapType: stale.map_type as MapType,
-            relationship: stale.relationship,
-            owner: stale.owner,
-            isActive: stale.is_active,
-          });
-          mappingsMigrated += 1;
-        }
+    // ⛔ The STEP 3 deletes below signal for themselves, once, after the loop. `importRows` signals only
+    // rows it actually wrote, so a move whose destination concept was already current would otherwise
+    // reach no lab. In a `finally` so a loop that throws part-way still signals the deletes it made:
+    // the retry finds nothing left to delete and would never signal them.
+    let removedOnMove = 0;
+    try {
+      for (const m of moved) {
+        let mappingsMigrated = 0;
+        const contested = contestedInBatch.has(m.from);
+        const carryOverSkipped = linkedElsewhere.has(m.from) || contested;
+        if (carryOverSkipped) {
+          // ⛔ Say so out loud. Skipping is the RIGHT call (see both guards above), but it suppresses
+          // the exact repair this function exists to perform, and `mappingsMigrated: 0` alone reads
+          // identically to "there was nothing on the old code to carry". A skip that cannot be told
+          // apart from a no-op is a skip nobody will ever investigate. Same containment reasoning as
+          // `deleteSupersededIdConcepts`' warn, for a strictly more alarming case. The two reasons get
+          // two messages because the REPAIR differs: one is fixed by widening the batch, the other by
+          // fixing the link rows that disagree.
+          // eslint-disable-next-line no-console -- deliberate: this module takes no logger dependency
+          // (see the `err` catches elsewhere in this file); diagnostic-only, and mirrored on the
+          // result as `carryOverSkipped` for callers that render a summary.
+          console.warn(
+            contested
+              ? `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'`
+                + ' is recorded in facility_concept_projection as MORE THAN ONE facility\'s projection, so there is no way'
+                + ' to tell whose mappings it carries — its term_mappings were NOT migrated and the stale concept was NOT'
+                + ' removed. Repair the link rows sharing that code, then re-publish.'
+              : `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'`
+                + ' is still linked by a facility outside this batch — its term_mappings were NOT migrated and the stale'
+                + ' concept was NOT removed. Re-publish the WHOLE registry so both facilities are in one batch, or repair'
+                + ' the mapping by hand.',
+          );
+        } else {
+          // STEP 2: repoint the mappings, through the admin store so `concept_map_elements` and
+          // `reference_change_log` follow. The full `TermMappingInput` is required (it is a replace,
+          // not a patch), so every other field is carried across verbatim — including `to_display`,
+          // which is the operator's own denormalised label and not this function's to re-curate.
+          for (const stale of staleByCode.get(m.from) ?? []) {
+            await deps.admin.termMappings.update(stale.id, {
+              fromSystem: stale.from_system,
+              fromCode: stale.from_code,
+              toSystem: FACILITY_REGISTRY_SYSTEM,
+              toCode: m.to,
+              toDisplay: stale.to_display,
+              mapType: stale.map_type as MapType,
+              relationship: stale.relationship,
+              owner: stale.owner,
+              isActive: stale.is_active,
+            });
+            mappingsMigrated += 1;
+          }
 
-        // STEP 3, and only now: the old concept is unreferenced. Doing this before the rewrite above
-        // would strand every mapping still pointing at it if the rewrite then failed.
-        if (!reclaimedInBatch.has(m.from)) {
-          await deps.internalDb
-            .deleteFrom('terminology_concepts')
-            .where('system', '=', FACILITY_REGISTRY_SYSTEM)
-            .where('code', '=', m.from)
-            .execute();
+          // STEP 3, and only now: the old concept is unreferenced. Doing this before the rewrite above
+          // would strand every mapping still pointing at it if the rewrite then failed.
+          if (!reclaimedInBatch.has(m.from)) {
+            const res = await deps.internalDb
+              .deleteFrom('terminology_concepts')
+              .where('system', '=', FACILITY_REGISTRY_SYSTEM)
+              .where('code', '=', m.from)
+              .executeTakeFirst();
+            removedOnMove += Number(res.numDeletedRows ?? 0);
+          }
         }
+        codeChanges.push({ registryId: m.registryId, from: m.from, to: m.to, mappingsMigrated, carryOverSkipped });
       }
-      codeChanges.push({ registryId: m.registryId, from: m.from, to: m.to, mappingsMigrated, carryOverSkipped });
+    } finally {
+      if (removedOnMove > 0) await markTerminologyChanged(deps.internalDb, FACILITY_REGISTRY_SYSTEM);
     }
   }
 

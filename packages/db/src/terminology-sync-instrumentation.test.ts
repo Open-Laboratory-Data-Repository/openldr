@@ -61,6 +61,80 @@ describe('terminology change instrumentation (Sync S3 / B2)', () => {
     await db.destroy();
   });
 
+  // A re-import of what is already stored is not a change. Labs re-download a whole system for every
+  // signal, and the facility projection re-imports the full registry on every app-context start.
+  it('terms.importRows of rows identical to the stored ones adds no signal', async () => {
+    const db = await makeMigratedDb();
+    const admin = createTerminologyAdminStore(db as never);
+    const system = 'http://example.org/same';
+    const rows = [
+      { system, code: 'A', display: 'Alpha', status: 'ACTIVE', properties: null },
+      { system, code: 'B', display: 'Beta', status: 'ACTIVE', properties: { unit: 'mg', group: 'x' } },
+    ];
+    await admin.terms.importRows(rows);
+    expect(await systemSignals(db, system)).toHaveLength(1);
+
+    const res = await admin.terms.importRows(rows);
+    expect(res.imported).toBe(2); // still counts every row it was handed
+    expect(await systemSignals(db, system)).toHaveLength(1);
+    await db.destroy();
+  });
+
+  it('terms.importRows treats the same properties in another key order as unchanged', async () => {
+    const db = await makeMigratedDb();
+    const admin = createTerminologyAdminStore(db as never);
+    const system = 'http://example.org/keys';
+    await admin.terms.importRows([
+      { system, code: 'A', display: 'Alpha', status: 'ACTIVE', properties: { zeta: 1, alpha: { b: 2, a: [1, 2] } } },
+    ]);
+    await admin.terms.importRows([
+      { system, code: 'A', display: 'Alpha', status: 'ACTIVE', properties: { alpha: { a: [1, 2], b: 2 }, zeta: 1 } },
+    ]);
+    expect(await systemSignals(db, system)).toHaveLength(1);
+    await db.destroy();
+  });
+
+  it('terms.importRows signals once when a display, a status, a property or a new code changes', async () => {
+    const db = await makeMigratedDb();
+    const admin = createTerminologyAdminStore(db as never);
+    const system = 'http://example.org/diff';
+    const base = [
+      { system, code: 'A', display: 'Alpha', status: 'ACTIVE', properties: null },
+      { system, code: 'B', display: 'Beta', status: 'ACTIVE', properties: { unit: 'mg' } as Record<string, unknown> | null },
+    ];
+    await admin.terms.importRows(base);
+
+    await admin.terms.importRows([{ ...base[0], display: 'Alpha v2' }, base[1]]);
+    expect(await systemSignals(db, system)).toHaveLength(2);
+    await admin.terms.importRows([{ ...base[0], display: 'Alpha v2', status: 'RETIRED' }]);
+    expect(await systemSignals(db, system)).toHaveLength(3);
+    await admin.terms.importRows([{ ...base[1], properties: { unit: 'g' } }]);
+    expect(await systemSignals(db, system)).toHaveLength(4);
+    await admin.terms.importRows([{ ...base[1], properties: { unit: 'g' } }, { system, code: 'C', display: 'Gamma', status: 'ACTIVE', properties: null }]);
+    expect(await systemSignals(db, system)).toHaveLength(5);
+
+    const stored = await db.selectFrom('terminology_concepts').select(['code', 'display', 'status'])
+      .where('system', '=', system).orderBy('code').execute();
+    expect(stored).toEqual([
+      { code: 'A', display: 'Alpha v2', status: 'RETIRED' },
+      { code: 'B', display: 'Beta', status: 'ACTIVE' },
+      { code: 'C', display: 'Gamma', status: 'ACTIVE' },
+    ]);
+    await db.destroy();
+  });
+
+  it('terms.importRows signals only the system that had a changed row', async () => {
+    const db = await makeMigratedDb();
+    const admin = createTerminologyAdminStore(db as never);
+    const a = { system: 'http://a', code: 'x', display: 'X', status: 'ACTIVE', properties: null };
+    const b = { system: 'http://b', code: 'y', display: 'Y', status: 'ACTIVE', properties: null };
+    await admin.terms.importRows([a, b]);
+    await admin.terms.importRows([a, { ...b, display: 'Y v2' }]);
+    expect(await systemSignals(db, 'http://a')).toHaveLength(1);
+    expect(await systemSignals(db, 'http://b')).toHaveLength(2);
+    await db.destroy();
+  });
+
   it('terms.update of one concept adds one MORE terminology_system signal for its system', async () => {
     const db = await makeMigratedDb();
     const admin = createTerminologyAdminStore(db as never);
