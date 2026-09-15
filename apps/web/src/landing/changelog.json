@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "7ef3fb1c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Line up the test sheet's catalog and lab fields"
+        },
+        {
+          "hash": "d9a15dd7",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Say no active tests when the catalog list is empty"
+        },
+        {
+          "hash": "62d07c98",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep test codes and LOINC codes on one line"
+        },
+        {
           "hash": "b9c3f797",
           "type": "feat",
           "scope": "studio",
