@@ -100,7 +100,12 @@ export { NEW_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_NEW_FIELDS } from './mig
 // './migrations/internal/072_facility_level_status_valuesets' — e.g. 073's own test file imports it
 // as PREV_BOUND_FIELDS_SNAPSHOT — this re-export just tracks whichever migration is CURRENT), and
 // packages/forms/src/samples/forms.test.ts pins the CURRENT sample against it from the forms side.
-export { BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/089_facility_form_canonical_paths';
+// Repointed from 089 to 100: 100 is now the migration that writes the CURRENT Facility shape (089's,
+// with a value field on the code). 089's PREV snapshots below stay on 089, whose guard test uses them.
+export { FACILITY_BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/100_sample_form_slots';
+export { FACILITY_PREV_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_SLOTLESS } from './migrations/internal/100_sample_form_slots';
+export { PATIENT_BOUND_FIELDS_SNAPSHOT as PATIENT_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/100_sample_form_slots';
+export { PATIENT_PREV_FIELDS_SNAPSHOT as PATIENT_FORM_MIGRATION_PREV_FIELDS } from './migrations/internal/100_sample_form_slots';
 export { PREV_BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS } from './migrations/internal/089_facility_form_canonical_paths';
 export { PREV_CANONICALISED_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_CANONICALISED } from './migrations/internal/089_facility_form_canonical_paths';
 // Same reasoning as the two re-exports above: `export * from './migrations/internal/index'` only

@@ -11,6 +11,9 @@ import {
   FACILITY_FORM_MIGRATION_BOUND_FIELDS,
   FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS,
   FACILITY_FORM_MIGRATION_PREV_CANONICALISED,
+  FACILITY_FORM_MIGRATION_PREV_SLOTLESS,
+  PATIENT_FORM_MIGRATION_BOUND_FIELDS,
+  PATIENT_FORM_MIGRATION_PREV_FIELDS,
 } from '@openldr/db';
 
 describe('sample forms', () => {
@@ -269,20 +272,64 @@ describe('every shipped sample passes the FHIR path rules', () => {
     expect(lintFormSchema(facility)).toEqual([]);
   });
 
-  // The three other samples carry 13 known warnings, not the 11 the design spec's "Two defect
+  // The three other samples carried 13 known warnings, not the 11 the design spec's "Two defect
   // classes" section counted. Measured directly against lintFormSchema on 2026-08-21: the spec's
   // count named identifier's and note's type mismatches on the Lab order form but not the
   // cardinality finding each one ALSO carries (identifier and note are both arrays, same as
   // locationCode and performer), and it did not name performer's cardinality finding at all. This
-  // pins the measured count so a future edit that adds a fourteenth has to say so out loud. See
+  // pins the measured count so a future edit that adds another has to say so out loud. See
   // the spec's "Two defect classes" section for what each finding is and why they are warnings
   // rather than errors.
-  it('the other samples carry exactly the 13 known structural warnings', () => {
+  //
+  // 13 became 10 on 2026-09-15 (migration 100): the Patient form's first name, last name and
+  // phone now say which list entry they fill, so they stop tripping fhir-path-cardinality.
+  it('the other samples carry exactly the 10 known structural warnings', () => {
     const warnings = sampleForms
       .filter((f) => f.name !== 'Facility')
       .flatMap((f) => lintFormSchema(f).filter((i) => i.severity === 'warning'))
       .filter((i) => i.code === 'fhir-path-cardinality' || i.code === 'fhir-path-type-mismatch');
-    expect(warnings).toHaveLength(13);
+    expect(warnings).toHaveLength(10);
+  });
+
+  it('the Patient form produces no findings of any severity', () => {
+    const patient = sampleForms.find((f) => f.name === 'Patient')!;
+    expect(lintFormSchema(patient)).toEqual([]);
+  });
+});
+
+describe('migration 100 sample form slots', () => {
+  const patient = () => sampleForms.find((f) => f.name === 'Patient')!;
+
+  // Same drift guard as the Facility pin above: migration 100 carries its own frozen copy of this
+  // sample, and only this side can compare the two.
+  it("matches migration 100's frozen BOUND_FIELDS snapshot exactly", () => {
+    expect(patient().fields).toEqual(PATIENT_FORM_MIGRATION_BOUND_FIELDS);
+  });
+
+  // The builder normalizes a form when an operator saves it. If that changed the prior shape, an
+  // install whose operator opened and saved the form without editing it would no longer match
+  // the migration's guard and would keep flat rows. It does not change it, so one prior shape is
+  // enough.
+  it('normalizing the prior Patient shape leaves it unchanged, so a saved but unedited form still matches', () => {
+    const normalized = normalizeFormSchema({
+      id: 'form-sample-patient',
+      name: 'Patient',
+      fhirResourceType: 'Patient',
+      targetPages: ['forms'],
+      fields: PATIENT_FORM_MIGRATION_PREV_FIELDS,
+    });
+    expect(normalized.fields).toEqual(PATIENT_FORM_MIGRATION_PREV_FIELDS);
+  });
+
+  it('normalizing the prior Facility shape leaves it unchanged too', () => {
+    const normalized = normalizeFormSchema({
+      id: 'form-sample-facility',
+      name: 'Facility',
+      fhirResourceType: 'Location',
+      targetPages: ['facilities'],
+      fields: FACILITY_FORM_MIGRATION_PREV_SLOTLESS,
+    });
+    expect(normalized.fields).toEqual(FACILITY_FORM_MIGRATION_PREV_SLOTLESS);
   });
 });
 

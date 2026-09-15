@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { FormField } from '@openldr/forms/pure';
+import { seededStarterPacks, type FormField } from '@openldr/forms/pure';
 import { arrayPathOf, buildFieldTree } from './fieldTree';
+import { buildFieldFromPackEntry } from './newFormFields';
 
 function field(overrides: Partial<FormField> & Pick<FormField, 'id' | 'order'>): FormField {
   return {
@@ -58,5 +59,28 @@ describe('buildFieldTree', () => {
     const child = { ...slot('local', 1, 'urn:local'), groupId: 'g' };
     const nodes = buildFieldTree([child]);
     expect(nodes).toEqual([{ kind: 'field', field: child }]);
+  });
+});
+
+// The shipped forms had no field with both a discriminator and a value field, so no install ever
+// saw a list drawn as slots: the Patient form's names drew as two unrelated rows. A fresh form
+// built from a pack takes the pack's entries, and the packs are built from the shipped forms.
+describe('the shipped starter packs', () => {
+  const treeOf = (packId: string) => {
+    const pack = seededStarterPacks().find((p) => p.id === packId)!;
+    return buildFieldTree(pack.entries.map((e, i) => ({ ...buildFieldFromPackEntry(e, `f-${i}`), order: i })));
+  };
+  const lists = (packId: string) =>
+    treeOf(packId).flatMap((n) => (n.kind === 'repeat' ? [[n.path, n.slots.map((s) => s.displayLabel)]] : []));
+
+  it('draw a fresh Patient form with its names under Patient.name and its phone under Patient.telecom', () => {
+    expect(lists('pack-patient')).toEqual([
+      ['Patient.name', ['First name', 'Last name']],
+      ['Patient.telecom', ['Phone']],
+    ]);
+  });
+
+  it('draw a fresh Facility form with its code as a slot of Location.identifier', () => {
+    expect(lists('pack-location')).toEqual([['Location.identifier', ['Facility code']]]);
   });
 });
