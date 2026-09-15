@@ -62,7 +62,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see [Facilities](/docs/facilities)). |
-| `test-catalog` | The national test catalog: `list` the tests with their category, LOINC code and whether this lab runs them. |
+| `test-catalog` | The national test catalog: `list` the tests, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |
 | `provenance` | Provenance audit tooling. |
@@ -312,6 +312,15 @@ openldr test-catalog list --search viral --category MOL --loinc linked --enabled
 
 Retired tests are hidden unless you pass `--status retired` or `--status all`. `--loinc none` lists tests with no LOINC code. `--limit` is 25 by default and 200 at most. Page with `--offset`. The JSON holds `rows`, `total` and `ownedHere`. `ownedHere` is false when this install received its catalog from central.
 
+Switch a test on or off at this lab, or retire and restore it, by code:
+
+```sh
+openldr test-catalog enable HIVVL
+openldr test-catalog retire HIVVL --json
+```
+
+`enable` and `disable` work on any install. `retire` and `restore` work only where this install owns the catalog. Retiring is reversible, so none of them takes `--force`. Each is recorded in the audit log as the CLI user.
+
 ### Français
 
 Le catalogue des examens est la liste nationale des examens. C'est un système de codes de la page Terminologie, **Test catalog**. Ses catégories forment un second système de codes, **Test categories**, avec cinq catégories au départ : Chemistry, Haematology, Microbiology, Serology et Molecular. Modifiez les catégories sur la page Terminologie.
@@ -326,6 +335,15 @@ openldr test-catalog list --search viral --category MOL --loinc linked --enabled
 
 Les examens retirés sont masqués, sauf avec `--status retired` ou `--status all`. `--loinc none` liste les examens sans code LOINC. `--limit` vaut 25 par défaut et 200 au plus. Paginez avec `--offset`. Le JSON contient `rows`, `total` et `ownedHere`. `ownedHere` vaut false quand cette installation a reçu son catalogue du site central.
 
+Activer ou désactiver un examen dans ce laboratoire, ou le retirer et le rétablir, par son code :
+
+```sh
+openldr test-catalog enable HIVVL
+openldr test-catalog retire HIVVL --json
+```
+
+`enable` et `disable` fonctionnent sur toute installation. `retire` et `restore` ne fonctionnent que si cette installation est propriétaire du catalogue. Le retrait est réversible, aucune de ces commandes ne prend donc `--force`. Chacune est inscrite au journal d'audit au nom de l'utilisateur de la CLI.
+
 ### Português
 
 O catálogo de exames é a lista nacional de exames. É um sistema de códigos na página Terminologia, **Test catalog**. As categorias formam um segundo sistema de códigos, **Test categories**, com cinco no início: Chemistry, Haematology, Microbiology, Serology e Molecular. Edite as categorias na página Terminologia.
@@ -339,3 +357,12 @@ openldr test-catalog list --search viral --category MOL --loinc linked --enabled
 ```
 
 Os exames retirados ficam ocultos, exceto com `--status retired` ou `--status all`. `--loinc none` lista os exames sem código LOINC. `--limit` é 25 por omissão e 200 no máximo. Pagine com `--offset`. O JSON contém `rows`, `total` e `ownedHere`. `ownedHere` é false quando esta instalação recebeu o catálogo do nível central.
+
+Ativar ou desativar um exame neste laboratório, ou retirá-lo e repô-lo, pelo código:
+
+```sh
+openldr test-catalog enable HIVVL
+openldr test-catalog retire HIVVL --json
+```
+
+`enable` e `disable` funcionam em qualquer instalação. `retire` e `restore` só funcionam quando esta instalação é dona do catálogo. Retirar é reversível, por isso nenhum destes comandos aceita `--force`. Cada um fica no registo de auditoria em nome do utilizador da CLI.
