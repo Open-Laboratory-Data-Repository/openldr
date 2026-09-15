@@ -184,7 +184,7 @@ export interface TerminologyAdminStore {
     listOutgoing(system: string, code: string): Promise<TermMapping[]>;
     listReverse(system: string, code: string): Promise<TermMapping[]>;
     create(input: TermMappingInput): Promise<{ mapping: TermMapping; draftCreated: boolean }>;
-    update(id: string, input: TermMappingInput): Promise<TermMapping>;
+    update(id: string, input: TermMappingInput, opts?: { trx?: Kysely<InternalSchema> }): Promise<TermMapping>;
     delete(id: string): Promise<void>;
     /**
      * Write `input` as the ONE active mapping for its `(fromSystem, fromCode)` within the
@@ -218,8 +218,14 @@ export interface TerminologyAdminStore {
      * caller is the terminology mapping routes, and only for `toSystem = FACILITY_REGISTRY_SYSTEM`
      * (apps/server/src/terminology-admin-routes.ts). `create`/`update` remain the writers for every
      * other coding system, where multiple active mappings are legitimate.
+     *
+     * `opts.trx`: run on the caller's transaction and open none, so the write commits or fails with
+     * the rest of the caller's work (the test catalog import). Without it, this opens its own.
      */
-    saveExclusive(input: TermMappingInput, opts?: { id?: string }): Promise<{ mapping: TermMapping; draftCreated: boolean; superseded: string[] }>;
+    saveExclusive(
+      input: TermMappingInput,
+      opts?: { id?: string; trx?: Kysely<InternalSchema> },
+    ): Promise<{ mapping: TermMapping; draftCreated: boolean; superseded: string[] }>;
   };
   valueSets: {
     list(publisherId?: string): Promise<ValueSetSummary[]>;
@@ -950,10 +956,12 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         const row = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
         return { mapping: tmRow(row), draftCreated };
       },
-      async update(id, input) {
-        const existing = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirst();
+      async update(id, input, opts) {
+        // A caller that already holds a transaction passes it, so this write joins the caller's work.
+        const exec = opts?.trx ?? db;
+        const existing = await exec.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirst();
         if (!existing) throw new TerminologyAdminError(`mapping not found: ${id}`, 'not-found');
-        await db.transaction().execute(async (trx) => {
+        const run = async (trx: Kysely<InternalSchema>): Promise<void> => {
           await trx.deleteFrom('concept_map_elements').where('map_url', '=', LOCAL_MAP_URL)
             .where('source_system', '=', existing.from_system).where('source_code', '=', existing.from_code)
             .where('target_system', '=', existing.to_system).where('target_code', '=', existing.to_code).execute();
@@ -976,8 +984,10 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
           }
           const persisted = await trx.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
           if (capture) await capture.record(trx, 'term_mapping', id, 'upsert', tmContentHash(persisted));
-        });
-        const row = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+        };
+        if (opts?.trx) await run(opts.trx);
+        else await db.transaction().execute(run);
+        const row = await exec.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
         return tmRow(row);
       },
       async delete(id) {
@@ -996,7 +1006,7 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         const superseded: string[] = [];
         let draftCreated = false;
         let id = opts?.id ?? '';
-        await db.transaction().execute(async (trx) => {
+        const run = async (trx: Kysely<InternalSchema>): Promise<void> => {
           // The row `input` is being written INTO, resolved before anything is superseded so it can
           // be excluded from the supersede set (a row must never deactivate itself).
           let previous: { from_system: string; from_code: string; to_system: string; to_code: string } | undefined;
@@ -1093,8 +1103,12 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
 
           const persisted = await trx.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
           if (capture) await capture.record(trx, 'term_mapping', id, 'upsert', tmContentHash(persisted));
-        });
-        const row = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+        };
+        // A caller that already holds a transaction (the test catalog import) passes it, so this
+        // write commits or fails with the rest of its work. Otherwise it opens its own.
+        if (opts?.trx) await run(opts.trx);
+        else await db.transaction().execute(run);
+        const row = await (opts?.trx ?? db).selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
         return { mapping: tmRow(row), draftCreated, superseded };
       },
     },

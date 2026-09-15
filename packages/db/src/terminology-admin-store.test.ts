@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
 import { internalMigrations } from './migrations/internal/index';
@@ -1117,5 +1117,52 @@ describe('terminology admin store', () => {
       expect(mirrored).toHaveLength(1);
       expect((await s.codingSystems.deletionImpact(id)).mappingCount).toBe(1);
     });
+  });
+});
+
+describe('term mappings inside a caller transaction (test catalog S3)', () => {
+  const input = (toCode: string, isActive = true): TermMappingInput => ({
+    fromSystem: 'urn:openldr:codesystem:test-catalog', fromCode: 'HIVVL',
+    toSystem: 'http://loinc.org', toCode, toDisplay: null, mapType: 'SAME-AS', isActive,
+  });
+
+  it('saveExclusive writes on the given transaction and opens none of its own', async () => {
+    const db = await makeMigratedDb();
+    const admin = createTerminologyAdminStore(db);
+    const opened = vi.spyOn(db, 'transaction');
+    let result: Awaited<ReturnType<typeof admin.termMappings.saveExclusive>> | undefined;
+    await db.transaction().execute(async (trx) => {
+      opened.mockClear(); // the outer transaction above is the caller's own
+      result = await admin.termMappings.saveExclusive(input('25836-8'), { trx });
+      expect(opened).not.toHaveBeenCalled();
+    });
+    expect(result?.mapping).toMatchObject({ fromCode: 'HIVVL', toCode: '25836-8', isActive: true });
+    expect(await db.selectFrom('concept_map_elements').select('target_code').where('source_code', '=', 'HIVVL').execute())
+      .toEqual([{ target_code: '25836-8' }]);
+  });
+
+  it('update writes on the given transaction, opens none, and drops the mirror of a deactivated link', async () => {
+    const db = await makeMigratedDb();
+    const admin = createTerminologyAdminStore(db);
+    const { mapping } = await admin.termMappings.saveExclusive(input('25836-8'));
+    const opened = vi.spyOn(db, 'transaction');
+    await db.transaction().execute(async (trx) => {
+      opened.mockClear();
+      const { id, ...rest } = mapping;
+      await admin.termMappings.update(id, { ...rest, isActive: false }, { trx });
+      expect(opened).not.toHaveBeenCalled();
+    });
+    expect(await db.selectFrom('term_mappings').select('is_active').where('id', '=', mapping.id).executeTakeFirstOrThrow())
+      .toEqual({ is_active: false });
+    expect(await db.selectFrom('concept_map_elements').select('target_code').where('source_code', '=', 'HIVVL').execute())
+      .toEqual([]);
+  });
+
+  it('still opens its own transaction when no caller transaction is given', async () => {
+    const db = await makeMigratedDb();
+    const admin = createTerminologyAdminStore(db);
+    const opened = vi.spyOn(db, 'transaction');
+    await admin.termMappings.saveExclusive(input('25836-8'));
+    expect(opened).toHaveBeenCalledTimes(1);
   });
 });
