@@ -62,7 +62,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see [Facilities](/docs/facilities)). |
-| `test-catalog` | The national test catalog: `list` the tests, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
+| `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |
 | `provenance` | Provenance audit tooling. |
@@ -321,6 +321,28 @@ openldr test-catalog retire HIVVL --json
 
 `enable` and `disable` work on any install. `retire` and `restore` work only where this install owns the catalog. Retiring is reversible, so none of them takes `--force`. Each is recorded in the audit log as the CLI user.
 
+Import a test list from a CSV or Excel (.xlsx) file:
+
+```sh
+openldr test-catalog import national-tests.xlsx
+openldr test-catalog import national-tests.xlsx --value-map answers.json --apply
+```
+
+Without `--apply` nothing is written. The command prints the counts of new, changed, unchanged and refused rows, each refusal with its row number, and any category or specimen text that matched nothing. Columns are matched by their header. To name them yourself, pass `--column-map` with a JSON file such as `{"code": "Test code", "name": "Test name"}`. Answer unmatched text with `--value-map`:
+
+```json
+{
+  "categories": [{ "text": "Virology", "kind": "new", "code": "VIRO", "display": "Virology" }],
+  "specimens": [{ "text": "Plasma", "system": "urn:openldr:cs:local", "code": "BLD" }]
+}
+```
+
+A category answer is `"kind": "existing"` with a `code`, or `"kind": "new"` with a `code` and a `display`. Only an install that owns the catalog can import. An apply is recorded in the audit log as the CLI user. Export the active tests as CSV, to standard output or to a file:
+
+```sh
+openldr test-catalog export --out catalog.csv
+```
+
 ### Français
 
 Le catalogue des examens est la liste nationale des examens. C'est un système de codes de la page Terminologie, **Test catalog**. Ses catégories forment un second système de codes, **Test categories**, avec cinq catégories au départ : Chemistry, Haematology, Microbiology, Serology et Molecular. Modifiez les catégories sur la page Terminologie.
@@ -344,6 +366,28 @@ openldr test-catalog retire HIVVL --json
 
 `enable` et `disable` fonctionnent sur toute installation. `retire` et `restore` ne fonctionnent que si cette installation est propriétaire du catalogue. Le retrait est réversible, aucune de ces commandes ne prend donc `--force`. Chacune est inscrite au journal d'audit au nom de l'utilisateur de la CLI.
 
+Importer une liste d'examens depuis un fichier CSV ou Excel (.xlsx) :
+
+```sh
+openldr test-catalog import national-tests.xlsx
+openldr test-catalog import national-tests.xlsx --value-map answers.json --apply
+```
+
+Sans `--apply`, rien n'est écrit. La commande affiche le nombre de lignes nouvelles, modifiées, inchangées et refusées, chaque refus avec son numéro de ligne, et tout texte de catégorie ou de prélèvement sans correspondance. Les colonnes sont associées par leur en-tête. Pour les nommer vous-même, passez `--column-map` avec un fichier JSON comme `{"code": "Test code", "name": "Test name"}`. Répondez aux textes sans correspondance avec `--value-map` :
+
+```json
+{
+  "categories": [{ "text": "Virology", "kind": "new", "code": "VIRO", "display": "Virology" }],
+  "specimens": [{ "text": "Plasma", "system": "urn:openldr:cs:local", "code": "BLD" }]
+}
+```
+
+Une réponse de catégorie est `"kind": "existing"` avec un `code`, ou `"kind": "new"` avec un `code` et un `display`. Seule une installation propriétaire du catalogue peut importer. Une application est inscrite au journal d'audit au nom de l'utilisateur de la CLI. Exporter les examens actifs en CSV, vers la sortie standard ou un fichier :
+
+```sh
+openldr test-catalog export --out catalog.csv
+```
+
 ### Português
 
 O catálogo de exames é a lista nacional de exames. É um sistema de códigos na página Terminologia, **Test catalog**. As categorias formam um segundo sistema de códigos, **Test categories**, com cinco no início: Chemistry, Haematology, Microbiology, Serology e Molecular. Edite as categorias na página Terminologia.
@@ -366,3 +410,25 @@ openldr test-catalog retire HIVVL --json
 ```
 
 `enable` e `disable` funcionam em qualquer instalação. `retire` e `restore` só funcionam quando esta instalação é dona do catálogo. Retirar é reversível, por isso nenhum destes comandos aceita `--force`. Cada um fica no registo de auditoria em nome do utilizador da CLI.
+
+Importar uma lista de exames de um ficheiro CSV ou Excel (.xlsx):
+
+```sh
+openldr test-catalog import national-tests.xlsx
+openldr test-catalog import national-tests.xlsx --value-map answers.json --apply
+```
+
+Sem `--apply` nada é escrito. O comando mostra o número de linhas novas, alteradas, sem alteração e recusadas, cada recusa com o número da linha, e qualquer texto de categoria ou de amostra sem correspondência. As colunas são associadas pelo cabeçalho. Para as indicar, passe `--column-map` com um ficheiro JSON como `{"code": "Test code", "name": "Test name"}`. Responda aos textos sem correspondência com `--value-map`:
+
+```json
+{
+  "categories": [{ "text": "Virology", "kind": "new", "code": "VIRO", "display": "Virology" }],
+  "specimens": [{ "text": "Plasma", "system": "urn:openldr:cs:local", "code": "BLD" }]
+}
+```
+
+Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "new"` com um `code` e um `display`. Só uma instalação dona do catálogo pode importar. Uma aplicação fica no registo de auditoria em nome do utilizador da CLI. Exportar os exames ativos em CSV, para a saída padrão ou para um ficheiro:
+
+```sh
+openldr test-catalog export --out catalog.csv
+```
