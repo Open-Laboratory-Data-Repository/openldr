@@ -309,6 +309,67 @@ describe('terminology admin store', () => {
     });
   });
 
+  // A loader, an ontology build or the facility scan writes property keys the Terminology page
+  // knows nothing about: LOINC's axis parts, the AMR `organism_type`, the facility scan's
+  // firstSeen. An edit used to replace the whole blob with the page's five fields, dropping them.
+  describe('terms keep the properties an edit does not manage', () => {
+    const edit = {
+      system: 'http://x', code: 'ECO', display: 'Escherichia coli', status: 'ACTIVE' as const,
+      shortName: null, class: null, unit: null, replacedBy: null, metadata: null,
+    };
+
+    async function seeded(properties: Record<string, unknown>) {
+      const { db, s } = await store();
+      await db.insertInto('terminology_concepts').values({
+        system: 'http://x', code: 'ECO', display: 'E. coli', status: 'ACTIVE',
+        properties: JSON.stringify(properties) as never,
+      }).execute();
+      return { db, s };
+    }
+
+    async function stored(db: Kysely<InternalSchema>): Promise<unknown> {
+      const row = await db.selectFrom('terminology_concepts').select('properties')
+        .where('system', '=', 'http://x').where('code', '=', 'ECO').executeTakeFirstOrThrow();
+      return typeof row.properties === 'string' ? JSON.parse(row.properties) : row.properties;
+    }
+
+    it('update keeps unknown keys through a display-only edit', async () => {
+      const { db, s } = await seeded({ organism_type: 'bacteria', SYSTEM: 'Ser/Plas' });
+      await s.terms.update('http://x', 'ECO', edit);
+      expect(await stored(db)).toEqual({ organism_type: 'bacteria', SYSTEM: 'Ser/Plas' });
+    });
+
+    it('update writes the managed fields over the unknown ones', async () => {
+      const { db, s } = await seeded({ organism_type: 'bacteria', shortName: 'Old' });
+      await s.terms.update('http://x', 'ECO', { ...edit, shortName: 'New' });
+      expect(await stored(db)).toEqual({ organism_type: 'bacteria', shortName: 'New' });
+    });
+
+    it('update clears a managed field the edit leaves empty', async () => {
+      const { db, s } = await seeded({ organism_type: 'bacteria', shortName: 'Old' });
+      await s.terms.update('http://x', 'ECO', edit);
+      expect(await stored(db)).toEqual({ organism_type: 'bacteria' });
+    });
+
+    it('update stores null when nothing is left', async () => {
+      const { db, s } = await seeded({ shortName: 'Old' });
+      await s.terms.update('http://x', 'ECO', edit);
+      expect(await stored(db)).toBeNull();
+    });
+
+    it('create on an existing entry keeps unknown keys', async () => {
+      const { db, s } = await seeded({ organism_type: 'bacteria' });
+      await s.terms.create({ ...edit, class: 'GNB' });
+      expect(await stored(db)).toEqual({ organism_type: 'bacteria', class: 'GNB' });
+    });
+
+    it('create of a new entry stores only the managed fields', async () => {
+      const { db, s } = await store();
+      await s.terms.create({ ...edit, shortName: 'E. coli' });
+      expect(await stored(db)).toEqual({ shortName: 'E. coli' });
+    });
+  });
+
   describe('termMappings', () => {
     it('creates a mapping, projects into concept_map_elements, and auto-creates a DRAFT target concept', async () => {
       const { db, s } = await store();

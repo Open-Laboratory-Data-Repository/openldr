@@ -258,6 +258,26 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
     if (i.metadata && Object.keys(i.metadata).length) p.meta = i.metadata;
     return Object.keys(p).length ? p : null;
   }
+  /** The property keys `packProps` writes. Every other key belongs to whoever put it there (a
+   *  loader, an ontology build, the facility scan) and an edit must keep it. */
+  const MANAGED_PROPS: readonly string[] = ['shortName', 'class', 'unit', 'replacedBy', 'meta'];
+
+  /**
+   * The properties to store after an edit: every stored key the edit does not manage, kept as it
+   * was, with the edit's managed fields written over them. A managed field the edit leaves empty is
+   * dropped, so clearing Short name still clears it. Null when nothing is left.
+   */
+  function mergeProps(stored: unknown, i: TermInput): Record<string, unknown> | null {
+    const parsed = typeof stored === 'string' ? (JSON.parse(stored) as unknown) : stored;
+    const kept: Record<string, unknown> = {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (!MANAGED_PROPS.includes(k)) kept[k] = v;
+      }
+    }
+    const next = { ...kept, ...(packProps(i) ?? {}) };
+    return Object.keys(next).length ? next : null;
+  }
   function termRow(r: { system: string; code: string; display: string | null; status: string | null; properties: unknown }, mappingCount: number): Term {
     const p = (r.properties ?? {}) as Record<string, unknown>;
     return {
@@ -750,7 +770,11 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         return { rows: out, total: Number(totalRow?.n ?? 0) };
       },
       async create(input) {
-        const props = packProps(input);
+        // An upsert. On an existing entry, keep the keys this edit does not manage, as `update`
+        // does; the conflict branch below writes `excluded.properties`, which is this value.
+        const held = await db.selectFrom('terminology_concepts').select(['properties'])
+          .where('system', '=', input.system).where('code', '=', input.code).executeTakeFirst();
+        const props = held ? mergeProps(held.properties, input) : packProps(input);
         await db.insertInto('terminology_concepts').values({
           system: input.system, code: input.code, display: input.display, status: input.status,
           properties: props === null ? null : (JSON.stringify(props) as never),
@@ -764,10 +788,12 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         return termRow(row, await mappingCountFor(input.system, input.code));
       },
       async update(system, code, input) {
-        const existing = await db.selectFrom('terminology_concepts').select(['code'])
+        const existing = await db.selectFrom('terminology_concepts').select(['code', 'properties'])
           .where('system', '=', system).where('code', '=', code).executeTakeFirst();
         if (!existing) throw new TerminologyAdminError(`term not found: ${system}|${code}`, 'not-found');
-        const props = packProps(input);
+        // Keep the keys this edit does not manage (LOINC parts, organism_type, the facility scan's
+        // firstSeen). Replacing the whole blob dropped them.
+        const props = mergeProps(existing.properties, input);
         await db.updateTable('terminology_concepts').set({
           display: input.display, status: input.status,
           properties: props === null ? null : (JSON.stringify(props) as never),
