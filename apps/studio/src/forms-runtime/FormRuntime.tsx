@@ -409,6 +409,7 @@ function FieldRow({
           field={field}
           value={answers[field.id]}
           onChange={(v) => onChange(field.id, v)}
+          dependsOnValue={field.referenceDependsOn ? answers[field.referenceDependsOn] : undefined}
           formDefinitionId={formDefinitionId}
           preview={preview}
           fieldSuggestions={fieldSuggestions}
@@ -426,6 +427,7 @@ function FieldControl({
   field,
   value,
   onChange,
+  dependsOnValue,
   formDefinitionId,
   preview,
   fieldSuggestions,
@@ -434,6 +436,7 @@ function FieldControl({
   field: FormField;
   value: unknown;
   onChange: (value: unknown) => void;
+  dependsOnValue?: unknown;
   formDefinitionId?: string;
   preview?: boolean;
   fieldSuggestions?: FieldSuggestions;
@@ -588,6 +591,7 @@ function FieldControl({
             multiple={multiple}
             value={(value ?? null) as ReferenceValue | ReferenceValue[] | null}
             onChange={(v) => onChange(v)}
+            dependsOnValue={dependsOnValue}
           />
         );
       }

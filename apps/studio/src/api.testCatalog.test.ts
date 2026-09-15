@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  applyTestCatalogImport, catalogImportFormat, downloadTestCatalogCsv, getTestCatalogOptions, listTestCatalog,
+  applyTestCatalogImport, catalogImportFormat, catalogSpecimensFor, downloadTestCatalogCsv, getTestCatalogOptions, listTestCatalog,
   previewTestCatalogImport, readTestCatalogFile, setCatalogTestActive, setCatalogTestEnabled, updateCatalogTest,
 } from './api';
 
@@ -78,5 +78,14 @@ describe('test catalog api client', () => {
     expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('test-catalog.csv');
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:catalog');
     click.mockRestore();
+  });
+
+  it('asks which specimens the chosen tests accept', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ specimens: [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }] })));
+    const tests = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' }];
+    expect(await catalogSpecimensFor(tests)).toEqual([{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }]);
+    expect(fetch).toHaveBeenCalledWith('/api/test-catalog/specimens', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tests }),
+    });
   });
 });

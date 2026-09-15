@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CodingAnswer, EntityAnswer, FormField } from '@openldr/forms/pure';
-import { referenceSearch, referenceSearchPreview, type ReferenceSearchResponse } from '@/api';
+import { isCodingAnswer, type CodingAnswer, type EntityAnswer, type FormField } from '@openldr/forms/pure';
+import { catalogSpecimensFor, referenceSearch, referenceSearchPreview, type ReferenceSearchResponse } from '@/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -22,6 +22,15 @@ function toRows(res: ReferenceSearchResponse): Row[] {
       }));
 }
 
+function codingRow(c: { system: string; code: string; display: string | null }): Row {
+  return { key: `${c.system}|${c.code}`, display: c.display ?? c.code, secondary: c.code, value: { system: c.system, code: c.code, display: c.display } };
+}
+
+/** The coding answers in a field's value, one or many. */
+function codingsIn(value: unknown): CodingAnswer[] {
+  return (Array.isArray(value) ? value : [value]).filter(isCodingAnswer);
+}
+
 /**
  * A value here is not guaranteed to be an object: `fromAnswer` decodes a display-less
  * valueReference back to a bare reference string, so legacy stored answers arrive as
@@ -40,7 +49,7 @@ const keyOf = (v: ReferenceValue): string => {
   return 'reference' in v ? v.reference : `${v.system}|${v.code}`;
 };
 
-export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange }: {
+export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange, dependsOnValue }: {
   field: FormField;
   /**
    * Id of the STORED form definition this field belongs to — the `:formId` path segment of
@@ -59,6 +68,11 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
   multiple: boolean;
   value: ReferenceValue | ReferenceValue[] | null;
   onChange: (v: ReferenceValue | ReferenceValue[] | null) => void;
+  /**
+   * The answer of the field this one depends on (`referenceDependsOn`). When it holds catalog tests,
+   * the picker offers only the specimens at least one of them accepts (test catalog S4).
+   */
+  dependsOnValue?: unknown;
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
@@ -70,6 +84,23 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
   const containerRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
 
+  // Test catalog S4: a field that depends on the order's tests offers only the specimens at least one
+  // chosen test accepts. The server decides which answers are catalog tests. An empty answer, or a
+  // failed request, means no narrowing, so the picker never ends up offering nothing.
+  const [narrowTo, setNarrowTo] = useState<Row[] | null>(null);
+  const dependsOn = codingsIn(dependsOnValue);
+  const dependsOnKey = dependsOn.map((c) => `${c.system}|${c.code}`).join('\n');
+  useEffect(() => {
+    if (!dependsOnKey) { setNarrowTo(null); return; }
+    let cancelled = false;
+    catalogSpecimensFor(dependsOn.map(({ system, code }) => ({ system, code })))
+      .then((rows) => { if (!cancelled) setNarrowTo(rows.length > 0 ? rows.map(codingRow) : null); })
+      .catch(() => { if (!cancelled) setNarrowTo(null); });
+    return () => { cancelled = true; };
+    // Keyed on the chosen codes, not on the answer object, which is new on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dependsOnKey]);
+
   const selected: ReferenceValue[] = value == null ? [] : Array.isArray(value) ? value : [value];
 
   // Neither a stored form to scope the search to nor an explicit preview opt-in: there is no
@@ -79,6 +110,16 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
 
   const search = useCallback(async (q: string) => {
     if (unavailable) return;
+    if (narrowTo) {
+      // The narrowed list is a few codes, so it is filtered here, from the first keystroke.
+      const needle = q.trim().toLowerCase();
+      setRows(needle
+        ? narrowTo.filter((r) => r.display.toLowerCase().includes(needle) || (r.secondary ?? '').toLowerCase().includes(needle))
+        : narrowTo);
+      setError(null);
+      setActive(-1);
+      return;
+    }
     const trimmed = q.trim();
     if (trimmed.length < 2) { setRows([]); setError(null); return; }
     const requestId = ++requestIdRef.current;
@@ -97,7 +138,7 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
     } finally {
       if (requestIdRef.current === requestId) setBusy(false);
     }
-  }, [field, formDefinitionId, preview, unavailable]);
+  }, [field, formDefinitionId, preview, unavailable, narrowTo]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -199,7 +240,7 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
         />
       )}
 
-      {open && query.trim().length >= 2 && (
+      {open && (narrowTo !== null || query.trim().length >= 2) && (
         <div
           id={`${field.id}-reference-listbox`}
           role="listbox"
