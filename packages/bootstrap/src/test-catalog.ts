@@ -5,6 +5,7 @@ import {
 import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
+import type { AuditDetails } from './record-audit';
 import {
   CATALOG_EXPORT_COLUMNS, catalogExportRow,
   CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS, checkColumnMap, matchCategory, matchSpecimen,
@@ -183,6 +184,14 @@ export function readCatalogImportFile(bytes: Uint8Array, format: TableFileFormat
 export function catalogChangeAction(field: 'enabled' | 'active', value: boolean): string {
   if (field === 'enabled') return value ? 'test_catalog.enable' : 'test_catalog.disable';
   return value ? 'test_catalog.restore' : 'test_catalog.retire';
+}
+
+/** The audit entry for an applied import. The route and the CLI both record it, so they must agree. */
+export function catalogImportAudit(report: CatalogImportReport): AuditDetails {
+  return {
+    action: 'test_catalog.import', entityType: 'test_catalog', entityId: TEST_CATALOG_SYSTEM,
+    metadata: { counts: report.counts, categoriesAdded: report.categoriesToAdd.map((c) => c.code) },
+  };
 }
 
 export interface TestCatalog {

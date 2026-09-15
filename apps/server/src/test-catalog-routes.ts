@@ -1,5 +1,8 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { catalogChangeAction, parseCatalogListQuery, TestCatalogError, type AppContext } from '@openldr/bootstrap';
+import {
+  catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
+  CATALOG_IMPORT_MAX_BYTES, TestCatalogError, type AppContext,
+} from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -8,6 +11,9 @@ import { requireCapability } from './rbac';
 // to read, terminology.manage to change anything, central edits and lab settings alike.
 const VIEW = { preHandler: requireCapability('terminology.view') };
 const MANAGE = { preHandler: requireCapability('terminology.manage') };
+// An import step sends the whole table back, up to 5,000 rows, which passes Fastify's 1 MiB default.
+const IMPORT_STEP = { ...MANAGE, bodyLimit: 16 * 1024 * 1024 };
+const importFormat = z.enum(['csv', 'xlsx']);
 
 const coding = z.object({ system: z.string().min(1), code: z.string().min(1) });
 const testInput = z.object({
@@ -35,7 +41,30 @@ function replyCatalogError(err: unknown, reply: FastifyReply) {
   return reply.code(status).send({ error: err.message, kind: err.kind });
 }
 
+/**
+ * The uploaded file's bytes, or null when the body is not a file. `bodyLimit` does not bound a
+ * passthrough parser (facilities-routes.ts, MAX_UPLOAD_BYTES), so the count happens here. Reading stops
+ * one chunk past the limit, and readCatalogImportFile refuses that size in its own words.
+ */
+async function readUpload(body: unknown): Promise<Buffer | null> {
+  if (!body || typeof (body as AsyncIterable<Buffer>)[Symbol.asyncIterator] !== 'function') return null;
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of body as AsyncIterable<Buffer>) {
+    chunks.push(chunk);
+    size += chunk.length;
+    if (size > CATALOG_IMPORT_MAX_BYTES) break;
+  }
+  return Buffer.concat(chunks);
+}
+
 export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+  // The upload arrives as raw bytes. terminology-admin-routes.ts registers this parser first on the same
+  // app, and a second registration throws, so it is guarded as in facilities-routes.ts.
+  if (!app.hasContentTypeParser('application/octet-stream')) {
+    app.addContentTypeParser('application/octet-stream', (_req: unknown, payload: unknown, done: (e: null, b: unknown) => void) => done(null, payload));
+  }
+
   app.get('/api/test-catalog', VIEW, async (req, reply) => {
     const parsed = parseCatalogListQuery(req.query as Record<string, unknown>);
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
@@ -121,5 +150,50 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     } catch (err) {
       return replyCatalogError(err, reply);
     }
+  });
+
+  // Import step 1: read the file. Nothing is stored. The table goes back to the studio, which sends it
+  // with each later step, so the server keeps no state between steps.
+  app.post('/api/test-catalog/import/read', MANAGE, async (req, reply) => {
+    const format = importFormat.safeParse((req.query as Record<string, unknown>).format);
+    if (!format.success) return reply.code(400).send({ error: 'format must be "csv" or "xlsx"' });
+    const bytes = await readUpload(req.body);
+    if (!bytes) return reply.code(400).send({ error: 'Send the file itself as the request body, as application/octet-stream.' });
+    try {
+      return reply.send(readCatalogImportFile(bytes, format.data));
+    } catch (err) {
+      return replyCatalogError(err, reply);
+    }
+  });
+
+  app.post('/api/test-catalog/import/preview', IMPORT_STEP, async (req, reply) => {
+    const parsed = catalogImportInputSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    try {
+      return reply.send(await ctx.testCatalog.importPreview(parsed.data));
+    } catch (err) {
+      return replyCatalogError(err, reply);
+    }
+  });
+
+  // `openldr test-catalog import --apply` calls the same service method and records the same entry.
+  app.post('/api/test-catalog/import/apply', IMPORT_STEP, async (req, reply) => {
+    const parsed = catalogImportInputSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    try {
+      const report = await ctx.testCatalog.importApply(parsed.data);
+      await recordAudit(ctx, req, catalogImportAudit(report));
+      return reply.send(report);
+    } catch (err) {
+      return replyCatalogError(err, reply);
+    }
+  });
+
+  app.get('/api/test-catalog/export', VIEW, async (_req, reply) => {
+    const csv = await ctx.testCatalog.exportCsv();
+    return reply
+      .header('content-type', 'text/csv; charset=utf-8')
+      .header('content-disposition', 'attachment; filename="test-catalog.csv"')
+      .send(csv);
   });
 }
