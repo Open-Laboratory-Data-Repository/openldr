@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
-import { canonicalHash } from '@openldr/core';
+import { canonicalHash, canonicalJson } from '@openldr/core';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { fhirValueSetCatalogToInputs, fhirValueSetToInput, valueSetToFhirResource } from './fhir-value-set';
@@ -277,6 +277,33 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
     }
     const next = { ...kept, ...(packProps(i) ?? {}) };
     return Object.keys(next).length ? next : null;
+  }
+  /** One string per concept value, equal exactly when display, status and properties are equal.
+   *  `canonicalJson` sorts object keys: Postgres re-sorts jsonb keys on read, so a plain stringify
+   *  would count key order as a change. */
+  function conceptValue(display: string | null, status: string | null, properties: unknown): string {
+    const parsed = typeof properties === 'string' ? (JSON.parse(properties) as unknown) : properties;
+    return canonicalJson([display ?? null, status ?? null, parsed ?? null]);
+  }
+  /** The rows of `rows` that are new, or whose display, status or properties differ from the stored
+   *  concept. Read in batches of 1000, as `existing` does, to stay under a statement's parameter limit. */
+  async function changedConceptRows<R extends { system: string; code: string; display: string | null; status: string; properties: Record<string, unknown> | null }>(rows: R[]): Promise<R[]> {
+    const codesBySystem = new Map<string, Set<string>>();
+    for (const r of rows) {
+      const codes = codesBySystem.get(r.system) ?? new Set<string>();
+      codes.add(r.code);
+      codesBySystem.set(r.system, codes);
+    }
+    const stored = new Map<string, string>();
+    for (const [system, codeSet] of codesBySystem) {
+      const codes = [...codeSet];
+      for (let i = 0; i < codes.length; i += 1000) {
+        const found = await db.selectFrom('terminology_concepts').select(['code', 'display', 'status', 'properties'])
+          .where('system', '=', system).where('code', 'in', codes.slice(i, i + 1000)).execute();
+        for (const f of found) stored.set(`${system}\n${f.code}`, conceptValue(f.display, f.status, f.properties));
+      }
+    }
+    return rows.filter((r) => stored.get(`${r.system}\n${r.code}`) !== conceptValue(r.display, r.status, r.properties));
   }
   function termRow(r: { system: string; code: string; display: string | null; status: string | null; properties: unknown }, mappingCount: number): Term {
     const p = (r.properties ?? {}) as Record<string, unknown>;
@@ -818,9 +845,16 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         // method is the single import-OPERATION choke point. Sync S3: the per-system signal is emitted
         // ONCE here after all rows land — NOT per batch — so a multi-batch import produces one signal
         // per distinct system, not N. (Callers must pass the whole import in one call, not per-batch.)
+        //
+        // ⛔ Only rows that are new or differ from the stored concept are written, and only their
+        // systems are signalled. A lab re-downloads the WHOLE system for every signal, and the facility
+        // projection re-imports the full registry every time an app context starts (every CLI command
+        // included), so an unconditional signal made every lab re-pull the registry for nothing.
+        // `imported` still counts every row handed in: the import route reports it to the operator.
+        const changed = await changedConceptRows(rows);
         const batchSize = 1000;
-        for (let i = 0; i < rows.length; i += batchSize) {
-          const batch = rows.slice(i, i + batchSize);
+        for (let i = 0; i < changed.length; i += batchSize) {
+          const batch = changed.slice(i, i + batchSize);
           await db.insertInto('terminology_concepts').values(batch.map((r) => ({
             system: r.system, code: r.code, display: r.display, status: r.status,
             properties: r.properties === null ? null : (JSON.stringify(r.properties) as never),
@@ -828,8 +862,8 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             display: eb.ref('excluded.display'), status: eb.ref('excluded.status'), properties: eb.ref('excluded.properties'),
           }))).execute();
         }
-        // One signal per DISTINCT system, after the whole import commits (each mark opens its own txn).
-        for (const system of new Set(rows.map((r) => r.system))) {
+        // One signal per DISTINCT changed system, after the whole import commits (each mark opens its own txn).
+        for (const system of new Set(changed.map((r) => r.system))) {
           await markTerminologyChanged(db, system);
         }
         return { imported: rows.length };
