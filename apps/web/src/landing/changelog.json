@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "36618c3d",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Bind the Lab order's reference number to its identifier entry"
+        },
+        {
           "hash": "e72eb408",
           "type": "fix",
           "scope": "forms",
