@@ -103,13 +103,28 @@ describe('ServiceRequestExtractor requisition number', () => {
     expect(extract(orderWith({ fhirPath: 'ServiceRequest.identifier' }))).toMatchObject({ identifier: [{ value: 'REF-42' }] })
   })
 
-  it('writes the number as before, without a system, so a submitted order does not change', () => {
+  // The operator asked on 2026-09-15 for the identifier to carry the system the slot names. Every
+  // CE reader of an order identifier uses its value only, so this adds information and moves
+  // nothing: the warehouse still projects identifier[0].value into lab_requests.request_id.
+  it("writes the system the slot's discriminator names", () => {
     const model = orderWith({
       fhirPath: 'ServiceRequest.identifier.value',
       fhirDiscriminator: { system: 'urn:openldr:order:requisition' },
       fhirValueField: 'value',
     })
-    expect(extract(model)).toMatchObject({ identifier: [{ value: 'REF-42' }] })
-    expect((extract(model) as any).identifier[0]).toEqual({ value: 'REF-42' })
+    expect((extract(model) as any).identifier).toEqual([{ system: 'urn:openldr:order:requisition', value: 'REF-42' }])
+  })
+
+  it('writes the value alone when the field names no system', () => {
+    expect((extract(orderWith({ fhirPath: 'ServiceRequest.identifier' })) as any).identifier).toEqual([{ value: 'REF-42' }])
+  })
+
+  it('writes the value alone when the discriminator does not name one system', () => {
+    const model = orderWith({
+      fhirPath: 'ServiceRequest.identifier.value',
+      fhirDiscriminator: { join: 'any', conds: [{ el: 'system', op: 'equals', val: 'urn:a' }, { el: 'system', op: 'equals', val: 'urn:b' }] },
+      fhirValueField: 'value',
+    })
+    expect((extract(model) as any).identifier).toEqual([{ value: 'REF-42' }])
   })
 })

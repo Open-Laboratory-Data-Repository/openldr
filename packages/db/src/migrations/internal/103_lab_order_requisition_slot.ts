@@ -9,9 +9,10 @@ import { type Kysely } from 'kysely';
 // field, so the builder draws it as a slot of ServiceRequest.identifier.
 //
 // The ServiceRequest extractor matched the old path exactly (packages/forms/src/extract/extract.ts)
-// and now reads the new one too. It still writes the number as `{ value }` with no system, so a
-// submitted order does not change; packages/forms/src/samples/forms.test.ts proves the same answers
-// extract to the same order. The old path stays readable because an install whose operator edited
+// and now reads the new one too. Since 2026-09-15 it also writes the `system` the discriminator
+// names, at the operator's request; every CE reader of an order identifier reads its value only.
+// packages/forms/src/samples/forms.test.ts proves the same answers extract to the same order apart
+// from that system. The old path stays readable because an install whose operator edited
 // the form keeps it: this migration leaves such a form alone.
 //
 // Field literals are INLINED, not imported from @openldr/forms: packages/db must not depend on it.

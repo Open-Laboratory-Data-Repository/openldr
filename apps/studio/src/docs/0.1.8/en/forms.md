@@ -59,7 +59,7 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 ## Editing a field
 
 - **Which entry of a list.** Under Mapping, tick **Array element (discriminator)**. Each condition is an element, an operator, and a value, such as `system` `equals` `urn:x`. The operators are `equals`, `not equals`, and `starts with`. With two or more conditions, choose **All** when every condition must hold, or **Any** when one is enough. **Value Field** names the element that holds the answer, usually `value`.
-- A discriminator is used by the form checks and the Questionnaire export. Data entry does not use it yet.
+- A discriminator is used by the form checks and the Questionnaire export. Data entry does not use it yet, with one exception: when a Lab order is submitted, its reference number carries the `system` its discriminator names.
 - **Another slot.** Under the last slot of a list, **+ Add a named slot** adds a copy with the same path, value field, and type, and blank discriminator values. The API property, codes, and translations are left blank.
 - **Parts of a group.** A group's editor lists its parts after Mapping. Click one to edit it. Your unsaved changes to the group are saved first. **+ Add a part** adds a field inside the group with no FHIR path.
 - **Reference fields.** A reference field has a **Reference Configuration** block after General. **Target** is `Patient` or an active code system. **Depends On** and **Searchable** are saved and exported, but data entry does not use them yet.
