@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "cf02672e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Drop the size from the workbook-too-large hint"
+        },
+        {
           "hash": "b1f525fb",
           "type": "fix",
           "scope": "terminology",
