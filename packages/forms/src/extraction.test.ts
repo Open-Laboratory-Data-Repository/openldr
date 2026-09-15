@@ -128,3 +128,39 @@ describe('ServiceRequestExtractor requisition number', () => {
     expect((extract(model) as any).identifier).toEqual([{ value: 'REF-42' }])
   })
 })
+
+describe('ServiceRequestExtractor tests codings (test catalog S4)', () => {
+  const CATALOG = 'urn:openldr:codesystem:test-catalog'
+  const order = (fieldType: 'reference' | 'text') =>
+    makeSchema({
+      id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest',
+      fields: [makeField({
+        id: 'tests', displayLabel: 'Tests', fieldType, order: 0, fhirPath: 'ServiceRequest.code',
+        ...(fieldType === 'reference' ? { referenceMultiple: true, cardinality: { min: 1, max: '*' } } : {}),
+      })],
+    })
+  const codings = (model: ReturnType<typeof order>, answers: Record<string, unknown>, extra: object = {}) =>
+    (ServiceRequestExtractor.extract(toQuestionnaireResponse(model, answers as never), toQuestionnaire(model), { ...ctx, ...extra })[0] as any).code?.coding
+
+  it('writes a catalog test under its own system, not as LOINC', () => {
+    expect(codings(order('reference'), { tests: [{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }] }))
+      .toEqual([{ system: CATALOG, code: 'HIVVL' }])
+  })
+
+  it('writes the coding the context names in front of the test, test by test', () => {
+    const codingBefore = new Map([[`${CATALOG}|HIVVL`, { system: 'http://loinc.org', code: '25836-8' }]])
+    expect(codings(order('reference'), {
+      tests: [{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }, { system: CATALOG, code: 'CD4', display: 'CD4 count' }],
+    }, { codingBefore })).toEqual([
+      { system: 'http://loinc.org', code: '25836-8' },
+      { system: CATALOG, code: 'HIVVL' },
+      { system: CATALOG, code: 'CD4' },
+    ])
+  })
+
+  it('keeps a LOINC answer as LOINC, and an answer that names no system as LOINC', () => {
+    expect(codings(order('reference'), { tests: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }] }))
+      .toEqual([{ system: 'http://loinc.org', code: '718-7' }])
+    expect(codings(order('text'), { tests: '718-7' })).toEqual([{ system: 'http://loinc.org', code: '718-7' }])
+  })
+})

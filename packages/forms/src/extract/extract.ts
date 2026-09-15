@@ -20,6 +20,13 @@ import { EXT_CORLIX_FHIR_PATH, EXT_CORLIX_FIELD_EXTRAS, EXT_QUESTIONNAIRE_UNIT, 
 export interface ExtractionContext {
   subject?: Reference
   authored?: string
+  /**
+   * For an order's test answer coded `system|code`, a coding to write in front of the answer's own.
+   * The forms route fills it from the test catalog's LOINC links (test catalog S4), so an order still
+   * leads with LOINC and the warehouse, which keeps the first coding, keeps matching. Other callers
+   * leave it out.
+   */
+  codingBefore?: ReadonlyMap<string, Coding>
 }
 
 /** Pluggable extraction of discrete FHIR resources from a filled form (PRD §3.2). */
@@ -173,15 +180,19 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       const path = meta?.fhirPath
       if (path === undefined) return
 
-      // The ordered test(s) → ServiceRequest.code (LOINC). A field bound to
-      // ServiceRequest.code carries the LOINC code as its answer; display comes
-      // from the Questionnaire answerOption.
+      // The ordered test(s) → ServiceRequest.code. An answer carries its own system: a catalog test
+      // since the Lab order moved to the lab's test list (test catalog S4), LOINC before that. An answer
+      // naming no system predates both and was always LOINC. Display comes from the Questionnaire
+      // answerOption.
       if (path === 'ServiceRequest.code') {
         for (const answer of item.answer ?? []) {
           const code = answer.valueCoding?.code ?? answer.valueString
           if (!code) continue
+          const system = answer.valueCoding?.system || LOINC
           const display = meta?.answerOptions?.find((o) => o.code === code)?.display
-          codings.push({ system: LOINC, code, ...(display ? { display } : {}) })
+          const before = ctx.codingBefore?.get(`${system}|${code}`)
+          if (before) codings.push(before)
+          codings.push({ system, code, ...(display ? { display } : {}) })
         }
         return
       }
