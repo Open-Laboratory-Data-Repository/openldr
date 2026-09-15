@@ -13,6 +13,7 @@ import type { AppContext } from '@openldr/bootstrap';
 import { registerReportRoutes } from './reports-routes';
 import { registerTerminologyRoutes } from './terminology-routes';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
+import { registerTestCatalogRoutes } from './test-catalog-routes';
 import { registerOntologyRoutes } from './ontology-routes';
 import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
@@ -149,6 +150,7 @@ export async function buildApp(ctx: AppContext) {
   registerReportRoutes(app, ctx);
   registerTerminologyRoutes(app, ctx);
   registerTerminologyAdminRoutes(app, ctx);
+  registerTestCatalogRoutes(app, ctx);
   registerOntologyRoutes(app, ctx);
   registerDashboardRoutes(app, ctx);
   registerAuditRoutes(app, ctx);
