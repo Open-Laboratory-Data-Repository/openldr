@@ -17,7 +17,11 @@ import {
   USERS_FORM_MIGRATION_BOUND_FIELDS,
   USERS_FORM_MIGRATION_PREV_CANONICALISED,
   USERS_FORM_MIGRATION_PREV_FIELDS,
+  LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS,
+  LAB_ORDER_FORM_MIGRATION_PREV_FIELDS,
 } from '@openldr/db';
+import { toQuestionnaireResponse } from '../response';
+import { ServiceRequestExtractor } from '../extract/extract';
 
 describe('sample forms', () => {
   it('parse against the schema and export to Questionnaire', () => {
@@ -287,13 +291,17 @@ describe('every shipped sample passes the FHIR path rules', () => {
   // 13 became 10 on 2026-09-15 (migration 100): the Patient form's first name, last name and
   // phone now say which list entry they fill, so they stop tripping fhir-path-cardinality.
   // 10 became 7 the same day (migration 101): the Users form's name and email do the same.
-  // All 7 left are on the Lab order form.
-  it('the other samples carry exactly the 7 known structural warnings', () => {
+  // 7 became 4 (migration 102): the Lab order's notes and ward point at the first entry of
+  // their lists. The 4 left are the clinician, the requisition number and the referring
+  // facility, which need decisions this change did not make.
+  it('the other samples carry exactly the 4 known structural warnings', () => {
     const warnings = sampleForms
       .filter((f) => f.name !== 'Facility')
       .flatMap((f) => lintFormSchema(f).filter((i) => i.severity === 'warning'))
       .filter((i) => i.code === 'fhir-path-cardinality' || i.code === 'fhir-path-type-mismatch');
-    expect(warnings).toHaveLength(7);
+    expect(warnings.map((i) => i.fieldId).sort()).toEqual(
+      ['fld-ord-clinician', 'fld-ord-ref-facility', 'fld-ord-ref-number', 'fld-ord-ref-number'].sort(),
+    );
   });
 
   it('the Patient form produces no findings of any severity', () => {
@@ -304,6 +312,44 @@ describe('every shipped sample passes the FHIR path rules', () => {
   it('the Users form produces no findings of any severity', () => {
     const users = sampleForms.find((f) => f.name === 'Users')!;
     expect(lintFormSchema(users)).toEqual([]);
+  });
+});
+
+describe('migration 102 Lab order notes and ward paths', () => {
+  const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
+
+  it("matches migration 102's frozen BOUND_FIELDS snapshot exactly", () => {
+    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS);
+  });
+
+  it('notes and ward trip no rule', () => {
+    const issues = lintFormSchema(order()).filter((i) => i.fieldId === 'fld-ord-notes' || i.fieldId === 'fld-ord-ward');
+    expect(issues).toEqual([]);
+  });
+
+  it('a builder save leaves the prior Lab order shape unchanged, so one prior shape is enough', () => {
+    const normalized = normalizeFormSchema({ ...order(), fields: LAB_ORDER_FORM_MIGRATION_PREV_FIELDS as never });
+    expect(normalized.fields).toEqual(LAB_ORDER_FORM_MIGRATION_PREV_FIELDS);
+  });
+
+  // The order extractor reads only the tests, the requisition number and the priority
+  // (extract.ts). This proves the new paths change nothing in a submitted order.
+  it('extracts the same ServiceRequest from the same answers before and after', () => {
+    const answers = {
+      tests: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }],
+      'fld-ord-priority': 'urgent',
+      'fld-ord-ward': 'icu',
+      'fld-ord-ref-number': 'REF-42',
+      'fld-ord-notes': 'Suspected anaemia',
+    };
+    const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-09-15T00:00:00Z' };
+    const extract = (fields: readonly unknown[]) => {
+      const model = { ...order(), fields: fields as never };
+      return ServiceRequestExtractor.extract(toQuestionnaireResponse(model, answers as never), toQuestionnaire(model), ctx);
+    };
+    const before = extract(LAB_ORDER_FORM_MIGRATION_PREV_FIELDS);
+    expect(extract(order().fields)).toEqual(before);
+    expect(before[0]).toMatchObject({ priority: 'urgent', identifier: [{ value: 'REF-42' }] });
   });
 });
 

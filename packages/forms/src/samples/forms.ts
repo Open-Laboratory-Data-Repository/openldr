@@ -375,7 +375,8 @@ const orderForm: FormSchema = {
     },
     {
       id: 'fld-ord-ward',
-      fhirPath: 'ServiceRequest.locationCode',
+      // The first entry of the list, not the whole list (migration 102).
+      fhirPath: 'ServiceRequest.locationCode.0',
       displayLabel: 'Ward / Department',
       description: null,
       fieldType: 'select',
@@ -418,7 +419,8 @@ const orderForm: FormSchema = {
     },
     {
       id: 'fld-ord-notes',
-      fhirPath: 'ServiceRequest.note',
+      // The text of the first note. A text box cannot fill a whole Annotation (migration 102).
+      fhirPath: 'ServiceRequest.note.0.text',
       displayLabel: 'Clinical Notes',
       description: 'Clinical context, suspected diagnosis…',
       fieldType: 'text',
