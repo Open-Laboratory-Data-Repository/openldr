@@ -2396,6 +2396,73 @@ export const ontologyAnswerOptions = (id: string, loinc: string): Promise<Answer
 export const ontologySpecimenCodes = (id: string, loinc: string): Promise<SpecimenCode[]> =>
   apiGet(`/api/terminology/ontology/${id}/specimens?loinc=${encodeURIComponent(loinc)}`, 'ontology specimen codes');
 
+// ── Test catalog (test catalog S1 and S2) ──────────────────────────────────────
+// These types mirror @openldr/bootstrap's test-catalog.ts. The routes are apps/server/src/test-catalog-routes.ts.
+export interface CatalogSpecimenCoding { system: string; code: string }
+export interface CatalogTest {
+  code: string;
+  display: string;
+  shortName: string | null;
+  category: string | null;
+  specimenTypes: CatalogSpecimenCoding[];
+  loinc: string | null;
+  /** false when the test is retired. */
+  active: boolean;
+  /** This install's own settings. specimenTypes null means "use the catalog's list". */
+  lab: { enabled: boolean; specimenTypes: CatalogSpecimenCoding[] | null; localDisplay: string | null };
+}
+export interface TestCatalogListResult { rows: CatalogTest[]; total: number; ownedHere: boolean }
+export interface TestCatalogListParams {
+  q?: string;
+  category?: string;
+  loinc?: 'linked' | 'none';
+  enabled?: 'on' | 'off';
+  status?: 'active' | 'retired' | 'all';
+  limit?: number;
+  offset?: number;
+}
+export interface CatalogTestInput {
+  code?: string | null;
+  display: string;
+  shortName?: string | null;
+  category?: string | null;
+  specimenTypes?: CatalogSpecimenCoding[];
+  loinc?: string | null;
+  active?: boolean;
+}
+export interface CatalogLabSettingsInput {
+  enabled: boolean;
+  specimenTypes: CatalogSpecimenCoding[] | null;
+  localDisplay: string | null;
+}
+export interface TestCatalogOptions {
+  categories: { code: string; display: string | null }[];
+  specimenTypes: { system: string; code: string; display: string | null }[];
+  /** The loaded LOINC code system, or null when LOINC is not loaded here. */
+  loinc: { systemId: string; system: string } | null;
+}
+
+export function listTestCatalog(p: TestCatalogListParams = {}): Promise<TestCatalogListResult> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== '') qs.set(k, String(v));
+  const s = qs.toString();
+  return apiGet<TestCatalogListResult>(`/api/test-catalog${s ? `?${s}` : ''}`, 'list tests');
+}
+export const getTestCatalogOptions = (): Promise<TestCatalogOptions> =>
+  apiGet<TestCatalogOptions>('/api/test-catalog/options', 'load test catalog choices');
+const catalogTestPath = (code: string, rest = ''): string => `/api/test-catalog/${encodeURIComponent(code)}${rest}`;
+export const createCatalogTest = (i: CatalogTestInput): Promise<CatalogTest> =>
+  authFetch('/api/test-catalog', jbody(i, 'POST')).then((r) => okJson<CatalogTest>(r, 'add test'));
+export const updateCatalogTest = (code: string, i: CatalogTestInput): Promise<CatalogTest> =>
+  authFetch(catalogTestPath(code), jbody(i, 'PUT')).then((r) => okJson<CatalogTest>(r, 'save test'));
+export const setCatalogLabSettings = (code: string, i: CatalogLabSettingsInput): Promise<CatalogTest> =>
+  authFetch(catalogTestPath(code, '/lab'), jbody(i, 'PUT')).then((r) => okJson<CatalogTest>(r, 'save lab settings'));
+export const setCatalogTestEnabled = (code: string, enabled: boolean): Promise<CatalogTest> =>
+  authFetch(catalogTestPath(code, '/enabled'), jbody({ enabled }, 'PUT')).then((r) => okJson<CatalogTest>(r, 'switch test'));
+export const setCatalogTestActive = (code: string, active: boolean): Promise<CatalogTest> =>
+  authFetch(catalogTestPath(code, '/active'), jbody({ active }, 'PUT'))
+    .then((r) => okJson<CatalogTest>(r, active ? 'restore test' : 'retire test'));
+
 // ── Marketplace (SP-4) ─────────────────────────────────────────────────────────
 export interface AvailableArtifact {
   ref: string;
