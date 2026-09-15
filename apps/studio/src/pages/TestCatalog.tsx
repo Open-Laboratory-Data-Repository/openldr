@@ -19,6 +19,7 @@ import {
   type CatalogTest, type TestCatalogOptions,
 } from '@/api';
 import { translateFilters } from '@/test-catalog/catalogFilters';
+import { TestSheet, type TestSheetTarget } from '@/test-catalog/TestSheet';
 
 // Test catalog S2 (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.3). Server-paged with
 // named filters, as Notifications.tsx is. The toolbar menu, row menu and empty state copy
@@ -45,6 +46,7 @@ export function TestCatalog() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
+  const [sheet, setSheet] = useState<TestSheetTarget | null>(null);
 
   useEffect(() => {
     getTestCatalogOptions()
@@ -192,6 +194,23 @@ export function TestCatalog() {
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder={t('testCatalog.searchPlaceholder')}
+            actions={canManage && ownedHere ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost" size="icon" className="h-8 w-8"
+                    data-testid="test-catalog-menu-trigger" aria-label={t('testCatalog.menuLabel')}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem data-testid="add-test" onSelect={() => setSheet({ kind: 'create' })}>
+                    {t('testCatalog.add')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : undefined}
           />
           <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
           {!ownedHere && <div className="text-xs text-muted-foreground">{t('testCatalog.fromCentral')}</div>}
@@ -238,6 +257,9 @@ export function TestCatalog() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem data-testid={`test-edit-${r.code}`} onSelect={() => setSheet({ kind: 'edit', test: r })}>
+                                {t('testCatalog.edit')}
+                              </DropdownMenuItem>
                               <DropdownMenuItem
                                 data-testid={`test-switch-${r.code}`}
                                 onSelect={() => void runRowAction(
@@ -277,6 +299,14 @@ export function TestCatalog() {
           onPageChange={table.setPage}
           onPageSizeChange={table.setPageSize}
           leftSlot={<span className="text-muted-foreground">{t('testCatalog.count', { count: total })}</span>}
+        />
+
+        <TestSheet
+          target={sheet}
+          options={options}
+          ownedHere={ownedHere}
+          onClose={() => setSheet(null)}
+          onSaved={() => { void load(); }}
         />
       </div>
     </AppShell>

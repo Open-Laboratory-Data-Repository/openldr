@@ -170,4 +170,28 @@ describe('Test catalog page', () => {
     expect(screen.queryByTestId('test-actions-HIVVL')).toBeNull();
     expect(screen.queryByTestId('test-catalog-menu-trigger')).toBeNull();
   });
+
+  it('opens the add sheet from the header menu', async () => {
+    renderPage();
+    await screen.findByTestId('test-row-HIVVL');
+    openMenu('test-catalog-menu-trigger');
+    fireEvent.click(await screen.findByTestId('add-test'));
+    expect(await screen.findByRole('heading', { name: 'Add test' })).toBeInTheDocument();
+  });
+
+  it('opens the edit sheet for a row', async () => {
+    renderPage();
+    await screen.findByTestId('test-row-HIVVL');
+    openMenu('test-actions-HIVVL');
+    fireEvent.click(await screen.findByTestId('test-edit-HIVVL'));
+    expect(await screen.findByRole('heading', { name: 'Edit test' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('HIV viral load');
+  });
+
+  it('offers no Add test when the catalog came from central', async () => {
+    vi.mocked(api.listTestCatalog).mockResolvedValue({ rows: [HIVVL], total: 1, ownedHere: false });
+    renderPage();
+    await screen.findByTestId('test-row-HIVVL');
+    expect(screen.queryByTestId('test-catalog-menu-trigger')).toBeNull();
+  });
 });
