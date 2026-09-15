@@ -146,6 +146,15 @@ describe('TestSheet', () => {
     expect(api.setCatalogLabSettings).toHaveBeenCalledWith('HIVVL', { enabled: false, specimenTypes: [BLD], localDisplay: null });
   });
 
+  it('lays the catalog and lab fields in one grid, so their labels share one column', () => {
+    renderSheet();
+    const name = screen.getByRole('textbox', { name: 'Name' });
+    const localName = screen.getByRole('textbox', { name: 'Local name' });
+    expect(name.closest('.grid')).not.toBeNull();
+    expect(name.closest('.grid')).toBe(localName.closest('.grid'));
+    expect(screen.getByText('Specimens taken')).toBeInTheDocument();
+  });
+
   it('types a LOINC code, and says only its format is checked, when LOINC is not loaded here', () => {
     renderSheet();
     expect(screen.getByRole('textbox', { name: 'LOINC code' })).toBeInTheDocument();

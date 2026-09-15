@@ -272,14 +272,13 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                 {text((saved?.specimenTypes ?? []).map(specimenName).join(', '))}
               </>
             )}
-          </div>
-        </section>
 
-        <section>
-          <div className="border-t border-border" />
-          <div className="px-6 py-3 text-sm font-medium text-foreground">{t('testCatalog.sheet.thisLab')}</div>
-          <div className="border-t border-border" />
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4 text-sm">
+            {/* The catalog and lab fields share this one grid, so their labels share one column and
+                line up. The title row's borders bleed to the sheet edges (-mx-6 against the px-6). */}
+            <div className="col-span-2 -mx-6 border-y border-border px-6 py-3 font-medium text-foreground">
+              {t('testCatalog.sheet.thisLab')}
+            </div>
+
             <Label className="whitespace-nowrap">{t('testCatalog.sheet.enabled')}</Label>
             <Switch
               aria-label={t('testCatalog.sheet.enabled')}

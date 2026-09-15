@@ -933,7 +933,7 @@ export const en = {
       noSpecimens: 'The catalog lists no specimens for this test.',
       active: 'Active',
       enabled: 'On at this lab',
-      labSpecimens: 'Specimens this lab takes',
+      labSpecimens: 'Specimens taken',
       localName: 'Local name',
       saved: '{{code}} saved.',
     },
