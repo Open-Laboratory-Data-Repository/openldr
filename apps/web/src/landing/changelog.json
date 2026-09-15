@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "1b336858",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Draw the shipped Users form's name and email as named slots"
+        },
+        {
           "hash": "92efbd4a",
           "type": "feat",
           "scope": "forms",
