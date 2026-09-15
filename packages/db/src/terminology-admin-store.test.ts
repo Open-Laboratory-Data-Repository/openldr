@@ -356,6 +356,18 @@ describe('terminology admin store', () => {
       await s.terms.update('http://x', 'ECO', edit);
       expect(await stored(db)).toBeNull();
     });
+
+    it('create on an existing entry keeps unknown keys', async () => {
+      const { db, s } = await seeded({ organism_type: 'bacteria' });
+      await s.terms.create({ ...edit, class: 'GNB' });
+      expect(await stored(db)).toEqual({ organism_type: 'bacteria', class: 'GNB' });
+    });
+
+    it('create of a new entry stores only the managed fields', async () => {
+      const { db, s } = await store();
+      await s.terms.create({ ...edit, shortName: 'E. coli' });
+      expect(await stored(db)).toEqual({ shortName: 'E. coli' });
+    });
   });
 
   describe('termMappings', () => {

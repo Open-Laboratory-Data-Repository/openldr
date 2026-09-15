@@ -770,7 +770,11 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         return { rows: out, total: Number(totalRow?.n ?? 0) };
       },
       async create(input) {
-        const props = packProps(input);
+        // An upsert. On an existing entry, keep the keys this edit does not manage, as `update`
+        // does; the conflict branch below writes `excluded.properties`, which is this value.
+        const held = await db.selectFrom('terminology_concepts').select(['properties'])
+          .where('system', '=', input.system).where('code', '=', input.code).executeTakeFirst();
+        const props = held ? mergeProps(held.properties, input) : packProps(input);
         await db.insertInto('terminology_concepts').values({
           system: input.system, code: input.code, display: input.display, status: input.status,
           properties: props === null ? null : (JSON.stringify(props) as never),
