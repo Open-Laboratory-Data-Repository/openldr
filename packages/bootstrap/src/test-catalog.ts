@@ -1,8 +1,12 @@
 import { sql, type Kysely } from 'kysely';
-import { markTerminologyChanged, type InternalSchema, type TerminologyAdminStore } from '@openldr/db';
+import {
+  markTerminologyChanged, type InternalSchema, type TerminologyAdminStore, type TermMapping, type TermMappingInput,
+} from '@openldr/db';
+import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
 import {
+  CATALOG_EXPORT_COLUMNS, catalogExportRow,
   CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS, checkColumnMap, matchCategory, matchSpecimen,
   readCatalogRows, splitSpecimens, suggestCatalogColumns, valueKey,
   type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer,
@@ -192,6 +196,8 @@ export interface TestCatalog {
   setEnabled(code: string, enabled: boolean): Promise<CatalogTest>;
   setActive(code: string, active: boolean): Promise<CatalogTest>;
   importPreview(input: CatalogImportInput): Promise<CatalogImportReport>;
+  importApply(input: CatalogImportInput): Promise<CatalogImportReport>;
+  exportCsv(): Promise<string>;
 }
 
 export interface TestCatalogDeps {
@@ -300,6 +306,17 @@ interface PlannedWrite {
 function sameTest(a: CatalogTest, b: ValidTest): boolean {
   return a.display === b.display && a.shortName === b.shortName && a.category === b.category && a.loinc === b.loinc
     && a.specimenTypes.map(codingKey).join('\n') === b.specimenTypes.map(codingKey).join('\n');
+}
+
+function isLoincLink(m: TermMapping): boolean {
+  return m.toSystem === LOINC_SYSTEM && m.mapType === LOINC_MAP_TYPE && m.isActive;
+}
+
+function loincLinkInput(code: string, loinc: string): TermMappingInput {
+  return {
+    fromSystem: TEST_CATALOG_SYSTEM, fromCode: code, toSystem: LOINC_SYSTEM, toCode: loinc,
+    toDisplay: null, mapType: LOINC_MAP_TYPE, isActive: true,
+  };
 }
 
 function clean(value: string | null | undefined): string | null {
@@ -484,7 +501,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       .where('system', '=', TEST_CATALOG_SYSTEM).where('code', '=', code).executeTakeFirst();
   }
 
-  async function writeConcept(code: string, t: ValidTest, stored: unknown): Promise<void> {
+  async function writeConceptOn(exec: Kysely<InternalSchema>, code: string, t: ValidTest, stored: unknown): Promise<void> {
     // Keep every key this catalog does not manage, as terms.update does since test catalog S0.
     const parsed = parseJson(stored);
     const next: Record<string, unknown> = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
@@ -497,26 +514,26 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (t.category) next.category = t.category;
     if (t.specimenTypes.length) next.specimenTypes = t.specimenTypes;
     const properties = Object.keys(next).length ? JSON.stringify(next) : null;
-    await db.insertInto('terminology_concepts').values({
+    await exec.insertInto('terminology_concepts').values({
       system: TEST_CATALOG_SYSTEM, code, display: t.display,
       status: t.active ? 'ACTIVE' : RETIRED_STATUS,
       properties: properties as never,
     }).onConflict((oc) => oc.columns(['system', 'code']).doUpdateSet((eb) => ({
       display: eb.ref('excluded.display'), status: eb.ref('excluded.status'), properties: eb.ref('excluded.properties'),
     }))).execute();
+  }
+
+  async function writeConcept(code: string, t: ValidTest, stored: unknown): Promise<void> {
+    await writeConceptOn(db, code, t, stored);
     // One terminology_system signal per edit, as terms.create does, so labs pull the change.
     await markTerminologyChanged(db, TEST_CATALOG_SYSTEM);
   }
 
   async function writeLoincLink(code: string, loinc: string | null): Promise<void> {
-    const current = (await deps.admin.termMappings.listOutgoing(TEST_CATALOG_SYSTEM, code))
-      .find((m) => m.toSystem === LOINC_SYSTEM && m.mapType === LOINC_MAP_TYPE && m.isActive);
+    const current = (await deps.admin.termMappings.listOutgoing(TEST_CATALOG_SYSTEM, code)).find(isLoincLink);
     if (loinc && current?.toCode !== loinc) {
       // saveExclusive keeps one active LOINC link per test and deactivates the old one.
-      await deps.admin.termMappings.saveExclusive({
-        fromSystem: TEST_CATALOG_SYSTEM, fromCode: code, toSystem: LOINC_SYSTEM, toCode: loinc,
-        toDisplay: null, mapType: LOINC_MAP_TYPE, isActive: true,
-      });
+      await deps.admin.termMappings.saveExclusive(loincLinkInput(code, loinc));
     } else if (!loinc && current) {
       const { id, ...rest } = current;
       await deps.admin.termMappings.update(id, { ...rest, isActive: false });
@@ -781,6 +798,53 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return (await planImport(input)).report;
   }
 
+  async function importApply(input: CatalogImportInput): Promise<CatalogImportReport> {
+    const { report, writes } = await planImport(input);
+    if (writes.length === 0) return report;
+
+    // The links to switch off are read before the transaction, so every statement inside it runs on it.
+    // No row touches another row's link: a code appears once in a plan.
+    const unlink = new Map<string, TermMapping>();
+    for (const w of writes) {
+      if (w.loincBefore === null || w.test.loinc !== null) continue;
+      const link = (await deps.admin.termMappings.listOutgoing(TEST_CATALOG_SYSTEM, w.code)).find(isLoincLink);
+      if (link) unlink.set(w.code, link);
+    }
+
+    // ⛔ One transaction for categories, tests and links (spec 4.4). saveExclusive and update take it,
+    // so neither opens one of its own and a failure part way leaves nothing behind.
+    await db.transaction().execute(async (trx) => {
+      for (const c of report.categoriesToAdd) {
+        await trx.insertInto('terminology_concepts').values({
+          system: TEST_CATEGORY_SYSTEM, code: c.code, display: c.display, status: 'ACTIVE', properties: null as never,
+        }).execute();
+      }
+      for (const w of writes) {
+        await writeConceptOn(trx, w.code, w.test, w.stored);
+        if (w.test.loinc !== null && w.test.loinc !== w.loincBefore) {
+          await deps.admin.termMappings.saveExclusive(loincLinkInput(w.code, w.test.loinc), { trx });
+        } else {
+          const link = unlink.get(w.code);
+          if (link) {
+            const { id, ...rest } = link;
+            await deps.admin.termMappings.update(id, { ...rest, isActive: false }, { trx });
+          }
+        }
+      }
+    });
+    // markTerminologyChanged opens its own transaction, so the signals follow the commit, one per system,
+    // as the loaders send them (packages/db/src/terminology-sync.ts). A failed import sends none.
+    await markTerminologyChanged(db, TEST_CATALOG_SYSTEM);
+    if (report.categoriesToAdd.length) await markTerminologyChanged(db, TEST_CATEGORY_SYSTEM);
+    return report;
+  }
+
+  async function exportCsv(): Promise<string> {
+    // Active tests only, as the page shows by default. Retired tests stay out of a file meant for editing.
+    const tests = (await readTests()).filter((t) => t.active);
+    return toCsv(CATALOG_EXPORT_COLUMNS, tests.map(catalogExportRow));
+  }
+
   return {
     ownedHere,
     list,
@@ -792,5 +856,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     setEnabled,
     setActive,
     importPreview,
+    importApply,
+    exportCsv,
   };
 }

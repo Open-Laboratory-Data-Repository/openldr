@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import {
@@ -8,7 +8,7 @@ import {
 import { createOperations, LOINC_SYSTEM } from '@openldr/terminology';
 import { createTerminologyBulkSync } from '@openldr/sync';
 import {
-  createTestCatalog, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TEST_CATALOG_SYSTEM,
+  createTestCatalog, parseCatalogListQuery, catalogChangeAction, readCatalogImportFile, TEST_CATALOG_SYSTEM, TEST_CATEGORY_SYSTEM,
   type CatalogListQuery, type CatalogListResult, type CatalogTestInput, type CatalogImportInput,
 } from './test-catalog';
 import type { CatalogColumnMap } from './test-catalog-import';
@@ -666,5 +666,93 @@ describe('test catalog: import preview', () => {
       .rejects.toMatchObject({ kind: 'invalid', message: 'The file has 5001 rows under its header. The limit is 5000.' });
     await markCentral(db);
     await expect(catalog.importPreview(importInput([]))).rejects.toMatchObject({ kind: 'central-managed' });
+  });
+});
+
+describe('test catalog: import apply and export', () => {
+  it('writes the rows it can, skips refused ones, and opens one transaction for all of them', async () => {
+    const { db, catalog } = await buildCatalog();
+    const opened = vi.spyOn(db, 'transaction');
+    const report = await catalog.importApply(importInput([
+      ['HIVVL', 'HIV viral load', 'VL', '25836-8', 'Virology', 'Blood'],
+      ['CD4', 'CD4 count', '', '24467-3', 'HAEM', 'blood; urine'],
+      ['', 'No code', '', '', '', ''],
+    ], { valueMap: { categories: [{ text: 'Virology', kind: 'new', code: 'VIRO', display: 'Virology' }], specimens: [] } }));
+
+    expect(report.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 1 });
+    expect(report.categoriesToAdd).toEqual([{ code: 'VIRO', display: 'Virology' }]);
+    // The import's own transaction, then one sync signal for the catalog and one for the categories.
+    // A LOINC link that opened a transaction of its own would make this 5.
+    expect(opened).toHaveBeenCalledTimes(3);
+    expect(await catalog.get('HIVVL')).toMatchObject({
+      shortName: 'VL', loinc: '25836-8', category: 'VIRO', specimenTypes: [BLD], active: true,
+    });
+    expect(await catalog.get('CD4')).toMatchObject({ loinc: '24467-3', category: 'HAEM', specimenTypes: [BLD, UR] });
+    // The category ValueSet includes its whole system, so the new category is offered at once.
+    expect((await catalog.options()).categories.map((c) => c.code)).toContain('VIRO');
+    expect(await catalogGeneration(db)).toBe(1);
+    const categories = await db.selectFrom('terminology_systems').select('generation')
+      .where('url', '=', TEST_CATEGORY_SYSTEM).executeTakeFirstOrThrow();
+    expect(Number(categories.generation)).toBe(1);
+  });
+
+  it('clears a field whose mapped cell is empty, and leaves an unmapped one alone', async () => {
+    const { admin, catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD], loinc: '25836-8' });
+    const report = await catalog.importApply({
+      table: { headers: ['code', 'name', 'short_name', 'loinc'], rows: [['HIVVL', 'HIV viral load', '', '']] },
+      columnMap: { code: 'code', name: 'name', shortName: 'short_name', loinc: 'loinc' },
+    });
+    expect(report.counts.changed).toBe(1);
+    expect(await catalog.get('HIVVL')).toMatchObject({ shortName: null, loinc: null, category: 'MOL', specimenTypes: [BLD] });
+    const links = await admin.termMappings.listOutgoing(TEST_CATALOG_SYSTEM, 'HIVVL');
+    expect(links.filter((m) => m.isActive)).toEqual([]);
+  });
+
+  it('never changes a test status or this lab settings', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load' });
+    await catalog.setEnabled('HIVVL', true);
+    await catalog.setActive('HIVVL', false);
+    await catalog.importApply(importInput([['HIVVL', 'HIV-1 viral load', '', '', '', '']]));
+    expect(await catalog.get('HIVVL')).toMatchObject({ display: 'HIV-1 viral load', active: false, lab: { enabled: true } });
+  });
+
+  it('changes nothing, and signals nothing, when the same file is applied twice', async () => {
+    const { db, catalog } = await buildCatalog();
+    const file = importInput([
+      ['HIVVL', 'HIV viral load', 'VL', '25836-8', 'MOL', 'Blood'],
+      ['CD4', 'CD4 count', '', '', 'HAEM', ''],
+    ]);
+    await catalog.importApply(file);
+    const generation = await catalogGeneration(db);
+    const opened = vi.spyOn(db, 'transaction');
+    expect((await catalog.importApply(file)).counts).toEqual({ new: 0, changed: 0, unchanged: 2, refused: 0 });
+    expect(opened).not.toHaveBeenCalled();
+    expect(await catalogGeneration(db)).toBe(generation);
+  });
+
+  it('exports the active tests in the import layout, and the export imports back unchanged', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR], loinc: '25836-8' });
+    await catalog.create({ code: 'CD4', display: 'CD4 count, absolute', category: 'HAEM' });
+    await catalog.create({ code: 'OLD', display: 'Old test' });
+    await catalog.setActive('OLD', false);
+
+    const csv = await catalog.exportCsv();
+    expect(csv).toBe(
+      'code,name,short_name,loinc,category,specimen_types\n'
+      + 'CD4,"CD4 count, absolute",,,HAEM,\n'
+      + 'HIVVL,HIV viral load,VL,25836-8,MOL,BLD;UR\n',
+    );
+    const file = readCatalogImportFile(new TextEncoder().encode(csv), 'csv');
+    const report = await catalog.importPreview({ table: file, columnMap: file.suggested });
+    expect(report.counts).toEqual({ new: 0, changed: 0, unchanged: 2, refused: 0 });
+  });
+
+  it('refuses to apply at a lab whose catalog comes from central', async () => {
+    const { db, catalog } = await buildCatalog();
+    await markCentral(db);
+    await expect(catalog.importApply(importInput([['A', 'A', '', '', '', '']]))).rejects.toMatchObject({ kind: 'central-managed' });
   });
 });
