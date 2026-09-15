@@ -93,6 +93,13 @@ describe('Test catalog page', () => {
     expect(api.listTestCatalog).toHaveBeenCalledWith({ q: undefined, limit: 25, offset: 0 });
   });
 
+  it('keeps a test code and its LOINC code on one line', async () => {
+    renderPage();
+    const row = await screen.findByTestId('test-row-HIVVL');
+    expect(within(row).getByText('HIVVL').closest('td')).toHaveClass('whitespace-nowrap');
+    expect(within(row).getByText('25836-8').closest('td')).toHaveClass('whitespace-nowrap');
+  });
+
   it('filters by category through the standard toolbar', async () => {
     renderPage();
     await screen.findByTestId('test-row-HIVVL');
