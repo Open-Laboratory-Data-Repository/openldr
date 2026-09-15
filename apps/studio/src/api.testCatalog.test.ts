@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  getTestCatalogOptions, listTestCatalog, setCatalogTestActive, setCatalogTestEnabled, updateCatalogTest,
+  applyTestCatalogImport, catalogImportFormat, downloadTestCatalogCsv, getTestCatalogOptions, listTestCatalog,
+  previewTestCatalogImport, readTestCatalogFile, setCatalogTestActive, setCatalogTestEnabled, updateCatalogTest,
 } from './api';
 
 const json = (body: unknown, status = 200) =>
@@ -40,5 +41,42 @@ describe('test catalog api client', () => {
   it('carries the server refusal words into the error', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ error: 'Test HIVVL is not in the catalog.', kind: 'not-found' }, 404)));
     await expect(updateCatalogTest('HIVVL', { display: 'x' })).rejects.toThrow('save test failed: Test HIVVL is not in the catalog.');
+  });
+
+  it('sends the file as raw bytes with its format, and each import step as JSON', async () => {
+    const file = new File(['code,name\n'], 'tests.csv', { type: 'text/csv' });
+    await readTestCatalogFile(file, 'csv');
+    expect(fetch).toHaveBeenLastCalledWith('/api/test-catalog/import/read?format=csv', {
+      method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file,
+    });
+    const input = { table: { headers: ['name'], rows: [['A']] }, columnMap: { name: 'name' } };
+    await previewTestCatalogImport(input);
+    expect(fetch).toHaveBeenLastCalledWith('/api/test-catalog/import/preview', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    });
+    await applyTestCatalogImport(input);
+    expect(fetch).toHaveBeenLastCalledWith('/api/test-catalog/import/apply', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input),
+    });
+  });
+
+  it('tells a file format from its name', () => {
+    expect(catalogImportFormat('Tests.XLSX')).toBe('xlsx');
+    expect(catalogImportFormat('tests.csv')).toBe('csv');
+    expect(catalogImportFormat('tests.xls')).toBeNull();
+  });
+
+  it('downloads the export through a link named test-catalog.csv', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('code,name\n', { status: 200, headers: { 'content-type': 'text/csv' } })));
+    const revokeObjectURL = vi.fn();
+    // jsdom has no object URLs.
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:catalog'), revokeObjectURL });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    await downloadTestCatalogCsv();
+    expect(fetch).toHaveBeenCalledWith('/api/test-catalog/export', { method: 'GET' });
+    expect(click).toHaveBeenCalledTimes(1);
+    expect((click.mock.contexts[0] as HTMLAnchorElement).download).toBe('test-catalog.csv');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:catalog');
+    click.mockRestore();
   });
 });

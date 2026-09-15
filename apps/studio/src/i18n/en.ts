@@ -914,6 +914,7 @@ export const en = {
     restoredToast: '{{code}} is active again.',
     add: 'Add test',
     edit: 'Edit',
+    exportAction: 'Export CSV',
     sheet: {
       addTitle: 'Add test',
       editTitle: 'Edit test',

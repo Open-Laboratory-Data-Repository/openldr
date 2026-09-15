@@ -904,6 +904,7 @@ export const fr: EnShape = {
     restoredToast: '{{code}} est de nouveau actif.',
     add: 'Ajouter un examen',
     edit: 'Modifier',
+    exportAction: 'Exporter en CSV',
     sheet: {
       addTitle: 'Ajouter un examen',
       editTitle: "Modifier l'examen",

@@ -20,6 +20,7 @@ vi.mock('@/api', async (orig) => {
     getTestCatalogOptions: vi.fn(),
     setCatalogTestEnabled: vi.fn(),
     setCatalogTestActive: vi.fn(),
+    downloadTestCatalogCsv: vi.fn(),
     // AppShell's notification bell and plugin menu call these on mount (see Notifications.test.tsx).
     listNotifications: vi.fn(async () => ({ notifications: [], unreadCount: 0, total: 0 })),
     listPluginUis: vi.fn(async () => []),
@@ -196,10 +197,27 @@ describe('Test catalog page', () => {
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('HIV viral load');
   });
 
-  it('offers no Add test when the catalog came from central', async () => {
+  it('offers only Export when the catalog came from central', async () => {
     vi.mocked(api.listTestCatalog).mockResolvedValue({ rows: [HIVVL], total: 1, ownedHere: false });
     renderPage();
     await screen.findByTestId('test-row-HIVVL');
-    expect(screen.queryByTestId('test-catalog-menu-trigger')).toBeNull();
+    openMenu('test-catalog-menu-trigger');
+    expect(await screen.findByTestId('export-tests')).toBeInTheDocument();
+    expect(screen.queryByTestId('add-test')).toBeNull();
+    expect(screen.queryByTestId('import-tests')).toBeNull();
+  });
+
+  it('exports the catalog from the header menu, and shows a failure', async () => {
+    vi.mocked(api.downloadTestCatalogCsv).mockResolvedValueOnce(undefined);
+    renderPage();
+    await screen.findByTestId('test-row-HIVVL');
+    openMenu('test-catalog-menu-trigger');
+    fireEvent.click(await screen.findByTestId('export-tests'));
+    await waitFor(() => expect(api.downloadTestCatalogCsv).toHaveBeenCalledTimes(1));
+
+    vi.mocked(api.downloadTestCatalogCsv).mockRejectedValueOnce(new Error('export tests failed: 500'));
+    openMenu('test-catalog-menu-trigger');
+    fireEvent.click(await screen.findByTestId('export-tests'));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('export tests failed: 500'));
   });
 });

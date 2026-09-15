@@ -15,7 +15,7 @@ import {
 import { ActiveFilterChips, DataTableToolbar, useTableState, type ColumnDef } from '@/components/data-table';
 import { useAuth } from '@/auth/AuthProvider';
 import {
-  getTestCatalogOptions, listTestCatalog, setCatalogTestActive, setCatalogTestEnabled,
+  getTestCatalogOptions, downloadTestCatalogCsv, listTestCatalog, setCatalogTestActive, setCatalogTestEnabled,
   type CatalogTest, type TestCatalogOptions,
 } from '@/api';
 import { translateFilters } from '@/test-catalog/catalogFilters';
@@ -196,7 +196,7 @@ export function TestCatalog() {
             searchValue={search}
             onSearchChange={setSearch}
             searchPlaceholder={t('testCatalog.searchPlaceholder')}
-            actions={canManage && ownedHere ? (
+            actions={canManage ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -207,8 +207,19 @@ export function TestCatalog() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem data-testid="add-test" onSelect={() => setSheet({ kind: 'create' })}>
-                    {t('testCatalog.add')}
+                  {ownedHere && (
+                    <DropdownMenuItem data-testid="add-test" onSelect={() => setSheet({ kind: 'create' })}>
+                      {t('testCatalog.add')}
+                    </DropdownMenuItem>
+                  )}
+                  {/* Any install can export, a lab that receives central's catalog included. */}
+                  <DropdownMenuItem
+                    data-testid="export-tests"
+                    onSelect={() => {
+                      downloadTestCatalogCsv().catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
+                    }}
+                  >
+                    {t('testCatalog.exportAction')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
