@@ -220,4 +220,12 @@ describe('Test catalog page', () => {
     fireEvent.click(await screen.findByTestId('export-tests'));
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('export tests failed: 500'));
   });
+
+  it('opens the import sheet from the header menu', async () => {
+    renderPage();
+    await screen.findByTestId('test-row-HIVVL');
+    openMenu('test-catalog-menu-trigger');
+    fireEvent.click(await screen.findByTestId('import-tests'));
+    expect(await screen.findByRole('heading', { name: 'Import tests' })).toBeInTheDocument();
+  });
 });

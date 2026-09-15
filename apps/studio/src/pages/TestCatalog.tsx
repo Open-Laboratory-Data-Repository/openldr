@@ -20,6 +20,7 @@ import {
 } from '@/api';
 import { translateFilters } from '@/test-catalog/catalogFilters';
 import { TestSheet, type TestSheetTarget } from '@/test-catalog/TestSheet';
+import { ImportCatalogSheet } from '@/test-catalog/ImportCatalogSheet';
 
 // Test catalog S2 (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.3). Server-paged with
 // named filters, as Notifications.tsx is. The toolbar menu, row menu and empty state copy
@@ -47,12 +48,16 @@ export function TestCatalog() {
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   const [sheet, setSheet] = useState<TestSheetTarget | null>(null);
+  const [importing, setImporting] = useState(false);
 
-  useEffect(() => {
+  // Read again after an import, which can add categories.
+  const loadOptions = useCallback(() => {
     getTestCatalogOptions()
       .then(setOptions)
       .catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
   }, []);
+
+  useEffect(() => { loadOptions(); }, [loadOptions]);
 
   const categoryLabel = useMemo(
     () => new Map(options.categories.map((c) => [c.code, c.display ?? c.code])),
@@ -212,6 +217,11 @@ export function TestCatalog() {
                       {t('testCatalog.add')}
                     </DropdownMenuItem>
                   )}
+                  {ownedHere && (
+                    <DropdownMenuItem data-testid="import-tests" onSelect={() => setImporting(true)}>
+                      {t('testCatalog.importAction')}
+                    </DropdownMenuItem>
+                  )}
                   {/* Any install can export, a lab that receives central's catalog included. */}
                   <DropdownMenuItem
                     data-testid="export-tests"
@@ -320,6 +330,12 @@ export function TestCatalog() {
           ownedHere={ownedHere}
           onClose={() => setSheet(null)}
           onSaved={() => { void load(); }}
+        />
+        <ImportCatalogSheet
+          open={importing}
+          options={options}
+          onClose={() => setImporting(false)}
+          onImported={() => { void load(); loadOptions(); }}
         />
       </div>
     </AppShell>
