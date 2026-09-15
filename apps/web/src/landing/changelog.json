@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "3c29d5ca",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Write the requisition system on a submitted order's identifier"
+        },
+        {
           "hash": "36618c3d",
           "type": "fix",
           "scope": "forms",
