@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "e72eb408",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Point the Lab order's notes and ward at the first entry of their lists"
+        },
+        {
           "hash": "1b336858",
           "type": "fix",
           "scope": "forms",
