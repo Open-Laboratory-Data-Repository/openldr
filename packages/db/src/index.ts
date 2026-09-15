@@ -109,6 +109,8 @@ export { PATIENT_PREV_FIELDS_SNAPSHOT as PATIENT_FORM_MIGRATION_PREV_FIELDS } fr
 export { USERS_BOUND_FIELDS_SNAPSHOT as USERS_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/101_users_form_slots';
 export { USERS_PREV_FIELDS_SNAPSHOT as USERS_FORM_MIGRATION_PREV_FIELDS } from './migrations/internal/101_users_form_slots';
 export { USERS_PREV_CANONICALISED_SNAPSHOT as USERS_FORM_MIGRATION_PREV_CANONICALISED } from './migrations/internal/101_users_form_slots';
+export { LAB_ORDER_BOUND_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/102_lab_order_notes_ward_paths';
+export { LAB_ORDER_PREV_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_PREV_FIELDS } from './migrations/internal/102_lab_order_notes_ward_paths';
 export { PREV_BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS } from './migrations/internal/089_facility_form_canonical_paths';
 export { PREV_CANONICALISED_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_CANONICALISED } from './migrations/internal/089_facility_form_canonical_paths';
 // Same reasoning as the two re-exports above: `export * from './migrations/internal/index'` only
