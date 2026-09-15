@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "b1f525fb",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Signal a code system only when an import changes it"
+        },
+        {
           "hash": "6ce9f0a5",
           "type": "feat",
           "scope": "facilities",
