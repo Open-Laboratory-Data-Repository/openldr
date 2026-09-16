@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "9f8175e6",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show bench result entry in the capture page's language"
+        },
+        {
           "hash": "dbf8242b",
           "type": "feat",
           "scope": "studio",
