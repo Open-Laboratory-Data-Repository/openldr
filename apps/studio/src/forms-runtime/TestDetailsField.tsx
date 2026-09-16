@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { LoadingState } from '@/components/ui/spinner';
+import { TestDetailSheet } from './TestDetailSheet';
+import { RejectSheet } from './RejectSheet';
 
 /**
  * Chrome copy. FormRuntime is schema-driven and has no i18n of its own (FormRuntime.tsx:84-92), so
@@ -81,9 +83,8 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
     return detail.specimen ? (detail.specimen.display ?? detail.specimen.code) : t.noSpecimen;
   };
 
-  // The sheets themselves arrive with the next slice of this feature. Until then opening a row and
-  // rejecting record which test the operator chose, and nothing else.
-  void paramsFor; void write; void openTest; void rejecting; void reasons;
+  const open = tests.find((test) => keyOf(test) === openTest);
+  const reject = tests.find((test) => keyOf(test) === rejecting);
 
   return (
     <div className="rounded-md border border-border">
@@ -113,6 +114,24 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
           </DropdownMenu>
         </div>
       ))}
+
+      {open ? (
+        <TestDetailSheet
+          test={open}
+          params={paramsFor(open)}
+          detail={detailFor(open)}
+          onChange={(detail) => write(open, detail)}
+          onClose={() => setOpenTest(null)}
+        />
+      ) : null}
+      {reject ? (
+        <RejectSheet
+          level="test"
+          reasons={reasons.test}
+          onReject={(reason) => { write(reject, { ...detailFor(reject), rejection: reason }); setRejecting(null); }}
+          onClose={() => setRejecting(null)}
+        />
+      ) : null}
     </div>
   );
 }
