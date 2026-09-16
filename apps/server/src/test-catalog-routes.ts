@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
-  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, type AppContext,
+  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, SEX_OPTIONS, type AppContext,
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
@@ -23,8 +23,10 @@ const TEST_REJECT_VALUE_SET = 'urn:openldr:valueset:test-reject-reason';
 const importFormat = z.enum(['csv', 'xlsx']);
 
 const coding = z.object({ system: z.string().min(1), code: z.string().min(1) });
-// A reference band. Every edge is optional: a band naming neither sex nor age is the catch-all.
+// A reference band. Every edge is optional: a band naming neither sex nor age is the catch-all. The
+// name must be declared here, or zod drops it before the service sees it.
 const band = z.object({
+  name: z.string().nullish(),
   low: z.number().nullish(), high: z.number().nullish(), unit: z.string().nullish(),
   sex: z.string().nullish(), ageLow: z.number().nullish(), ageHigh: z.number().nullish(),
 });
@@ -42,6 +44,7 @@ const resultParam = z.object({
   resultType: p.resultType,
   valueSetUrl: p.valueSetUrl ?? null,
   bands: (p.bands ?? []).map((b) => ({
+    name: b.name ?? null,
     low: b.low ?? null, high: b.high ?? null, unit: b.unit ?? null,
     sex: b.sex ?? null, ageLow: b.ageLow ?? null, ageHigh: b.ageHigh ?? null,
   })),
@@ -300,6 +303,7 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
       expandReasons(ctx, ORDER_REJECT_VALUE_SET),
       expandReasons(ctx, TEST_REJECT_VALUE_SET),
     ]);
-    return reply.send({ tests, rejectReasons: { order, test } });
+    // The results sheet cannot read the options route (terminology.view), so the sex labels come here too.
+    return reply.send({ tests, rejectReasons: { order, test }, sexes: SEX_OPTIONS });
   });
 }
