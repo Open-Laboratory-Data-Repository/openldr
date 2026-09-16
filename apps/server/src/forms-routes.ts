@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
-import { TEST_CATALOG_SYSTEM, type AppContext, type ResultBand } from '@openldr/bootstrap';
+import { TEST_CATALOG_SYSTEM, bandInCatalog, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
 import { extractorsForForm, isEntityAnswer, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
@@ -95,11 +95,48 @@ function testBandsFrom(schema: FormSchema, answers: Record<string, unknown>): Ma
     if (field.fieldType !== 'testDetails') continue;
     for (const [testKey, detail] of Object.entries(parseTestDetails(answers[field.id]))) {
       for (const result of detail.results) {
-        if (result.band) out.set(`${testKey}#${result.param.system}|${result.param.code}`, result.band);
+        if (result.band) out.set(`${testKey}#${result.param.system}|${result.param.code}`, { ...result.band, name: result.band.name ?? null });
       }
     }
   }
   return out;
+}
+
+/**
+ * Each typed result's band, checked against the ranges the catalog holds for that test and parameter
+ * (named reference ranges spec, 5). The sheet sends the range the bench picked, so without this an
+ * edited request could store a range the catalog never had. Asks the catalog only when a result
+ * carries a band.
+ */
+async function catalogBandErrors(
+  ctx: AppContext, schema: FormSchema, answers: Record<string, unknown>,
+): Promise<Array<{ fieldId: string; label: string; reason: string }>> {
+  const checks: Array<{ fieldId: string; label: string; testKey: string; param: { system: string; code: string }; band: unknown }> = [];
+  for (const field of schema.fields) {
+    if (field.fieldType !== 'testDetails') continue;
+    for (const [testKey, detail] of Object.entries(parseTestDetails(answers[field.id]))) {
+      for (const result of detail.results) {
+        if (result.band) checks.push({ fieldId: field.id, label: field.displayLabel, testKey, param: result.param, band: result.band });
+      }
+    }
+  }
+  if (checks.length === 0) return [];
+  const tests = [...new Set(checks.map((c) => c.testKey))].map((key) => {
+    const cut = key.lastIndexOf('|');
+    return { system: key.slice(0, cut), code: key.slice(cut + 1) };
+  });
+  const held = await ctx.testCatalog.resultParamsFor(tests, {});
+  return checks
+    .filter((c) => {
+      const bands = held.find((t) => `${t.test.system}|${t.test.code}` === c.testKey)
+        ?.params.find((p) => p.system === c.param.system && p.code === c.param.code)?.bands ?? [];
+      return !bandInCatalog(c.band, bands);
+    })
+    .map((c) => ({
+      fieldId: c.fieldId,
+      label: c.label,
+      reason: `The reference ranges for ${c.param.code} on ${c.testKey.slice(c.testKey.lastIndexOf('|') + 1)} changed. Reopen the test and pick a range again.`,
+    }));
 }
 
 /** Id of the seeded ingest graph's Persist Store node — the one that reports what it wrote. */
@@ -425,6 +462,12 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     if (referenceErrors.length > 0) {
       reply.code(400);
       return { error: 'invalid answers', errors: referenceErrors };
+    }
+
+    const bandErrors = await catalogBandErrors(ctx, f.schema, p.data.answers);
+    if (bandErrors.length > 0) {
+      reply.code(400);
+      return { error: 'invalid answers', errors: bandErrors };
     }
 
     // Manual capture goes through the SAME pipeline as automated ingest, down the FHIR

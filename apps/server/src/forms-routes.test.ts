@@ -1083,8 +1083,15 @@ describe('forms routes', () => {
     (ctx as any).workflows = {
       runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
     };
-    // The order carries catalog tests, so S4's LOINC lookup runs too.
-    (ctx as any).testCatalog = { loincCodingsFor: async () => new Map() };
+    // The order carries catalog tests, so S4's LOINC lookup runs too, and the submit checks the band.
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async () => new Map(),
+      resultParamsFor: async () => [{
+        test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
+        params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [],
+          bands: [{ name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] }],
+      }],
+    };
     const app = authedApp(ctx);
     const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
     const res = await app.inject({
@@ -1103,6 +1110,74 @@ describe('forms routes', () => {
     const observation = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'Observation');
     expect(observation.valueQuantity).toEqual({ value: 11.2, unit: 'g/dL' });
     expect(observation.referenceRange).toEqual([{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' } }]);
+  });
+
+  it('refuses a result whose range the catalog does not hold, and stores nothing', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async () => new Map(),
+      resultParamsFor: async () => [{
+        test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
+        params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [],
+          bands: [{ name: 'Highland women', low: 12, high: 16, unit: 'g/dL', sex: 'female', ageLow: 15, ageHigh: null }] }],
+      }],
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL',
+            band: { name: 'Highland women', low: 5, high: 30, unit: 'g/dL', sex: 'female', ageLow: 15, ageHigh: null } },
+        ] } },
+      } },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: 'invalid answers',
+      errors: [{ fieldId: 'details', label: 'Results', reason: 'The reference ranges for HGB on FBC changed. Reopen the test and pick a range again.' }],
+    });
+    expect(runs).toEqual([]);
+  });
+
+  it('accepts a named range the catalog holds, and writes its name', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    const named = { name: 'Highland women', low: 12, high: 16, unit: 'g/dL', sex: 'female', ageLow: 15, ageHigh: null };
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async () => new Map(),
+      resultParamsFor: async () => [{
+        test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
+        params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [], bands: [named] }],
+      }],
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL', band: named },
+        ] } },
+      } },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const observation = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'Observation');
+    expect(observation.referenceRange[0].text).toBe('Highland women');
   });
 
   it('records the submitting user as the QuestionnaireResponse author', async () => {
