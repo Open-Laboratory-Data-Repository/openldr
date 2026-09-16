@@ -74,6 +74,7 @@ Each was read on 2026-09-16 at `c31e80b7`.
 - **A test with no result parameters behaves exactly as today.** Its row opens a sheet with the specimen picker only.
 - **Ingested Observations are untouched.** Nothing in this slice reads or rewrites them.
 - **Bands are not validated against each other.** Two overlapping bands for one sex and age are allowed, and the first match wins.
+- **A response replayed through ingest produces Observations with no `referenceRange`.** The band rides in the extraction context, not in the response, because a FHIR answer has nowhere to carry it. Values, units and codes all survive. The catalog still holds the bands.
 
 ---
 
@@ -93,6 +94,8 @@ Each was read on 2026-09-16 at `c31e80b7`.
 | `packages/forms/src/validate-answers.ts`, `.test.ts` | Validate the new answer |
 | `packages/forms/src/response.ts`, `capture.test.ts` | Nested items for the new field |
 | `packages/forms/src/extract/test-results.ts`, `extraction.test.ts` | Create the extractor |
+| `packages/forms/src/extract/extract.ts` | `ExtractionContext.testBands` |
+| `apps/server/src/forms-routes.ts`, `.test.ts` | Pass the bands to the extractor |
 | `packages/forms/src/routing.ts`, `routing.test.ts` | Register it |
 | `apps/studio/src/api.ts`, `api.testCatalog.test.ts` | `catalogResultParams`, `expandValueSetByUrl` |
 | `apps/studio/src/pages/FormCapture.tsx`, `.test.tsx` | Translated chrome, and the order-level reject |
@@ -1229,9 +1232,20 @@ git commit -m "feat(forms): a field that holds what the bench typed for each tes
 - Modify: `packages/forms/src/extraction.test.ts`
 - Modify: `packages/forms/src/routing.ts:42-48`, `routing.test.ts`
 
+**Files (added when the round trip was settled):**
+- Modify: `apps/server/src/forms-routes.ts` (the extraction context, beside S4's `codingBefore`)
+- Modify: `apps/server/src/forms-routes.test.ts`
+
 **Interfaces:**
 - Consumes: `parseTestDetails`, `TestDetailsAnswer` (Task 6), `ExtractionContext` (S4).
-- Produces: `TestResultsExtractor`, added to `extractorsForForm` for a requisition.
+- Produces: `TestResultsExtractor`, added to `extractorsForForm` for a requisition; `ExtractionContext.testBands?: ReadonlyMap<string, ResultBand>`, keyed `testKey#paramSystem|paramCode`.
+
+**The round trip, settled 2026-09-16.** A FHIR `QuestionnaireResponse.item.answer` has nowhere to carry a reference band, and inventing an extension for reference data the catalog already owns is not worth the machinery. So the two halves come from two places:
+
+- **Values come from the response.** The extractor reads the nested items, which means the ingest replay path still produces Observations from a stored response (`packages/ingest/src/converters/questionnaire-response.ts:10-23` passes an empty context).
+- **Bands come from the context.** The forms route still holds the raw answers when it builds the extraction context (`apps/server/src/forms-routes.ts:394-404`), exactly where S4 fills `codingBefore`. It puts each typed result's band there.
+
+**The effect, accepted:** a response replayed through ingest yields Observations with no `referenceRange`. The band is reference data, not something the bench typed, and the catalog still holds it. Nothing else changes.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1312,6 +1326,31 @@ describe('TestResultsExtractor (bench result entry)', () => {
     const model = makeSchema({ id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest', fields: [makeField({ id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 0, fhirPath: 'ServiceRequest.code' })] })
     expect(TestResultsExtractor.extract(toQuestionnaireResponse(model, { tests: [] } as never), toQuestionnaire(model), ctx)).toEqual([])
   })
+
+  // The round trip, settled 2026-09-16: values survive a stored response, bands do not.
+  it('takes the band from the context, keyed by test and parameter', () => {
+    const model = order()
+    const answers = { tests: [{ system: CATALOG, code: 'FBC' }], details: {
+      [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+        { param: { system: PARAM, code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL' },
+      ] },
+    } } as never
+    const testBands = new Map([[`${CATALOG}|FBC#${PARAM}|HGB`, { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }]])
+    const out = TestResultsExtractor.extract(toQuestionnaireResponse(model, answers), toQuestionnaire(model), { ...ctx, testBands }) as any[]
+    expect(out[0].referenceRange).toEqual([{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' } }])
+  })
+
+  it('writes the value with no range when the context carries no band, as a replayed response does', () => {
+    const model = order()
+    const answers = { tests: [{ system: CATALOG, code: 'FBC' }], details: {
+      [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+        { param: { system: PARAM, code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL' },
+      ] },
+    } } as never
+    const out = TestResultsExtractor.extract(toQuestionnaireResponse(model, answers), toQuestionnaire(model), ctx) as any[]
+    expect(out[0].valueQuantity).toEqual({ value: 11.2, unit: 'g/dL' })
+    expect(out[0].referenceRange).toBeUndefined()
+  })
 })
 ```
 
@@ -1350,8 +1389,12 @@ function valueOf(result: TypedResult): Partial<Observation> {
   return {}
 }
 
-function rangeOf(result: TypedResult): Partial<Observation> {
-  const band = result.band
+function rangeOf(result: TypedResult, key: string, ctx: ExtractionContext): Partial<Observation> {
+  // The band never survives a QuestionnaireResponse answer, so the forms route puts it in the
+  // context (settled 2026-09-16). A response replayed through ingest carries no context and so gets
+  // no referenceRange, which is correct: the band is reference data the catalog owns, not something
+  // the bench typed.
+  const band = ctx.testBands?.get(`${key}#${result.param.system}|${result.param.code}`) ?? result.band
   if (!band || (band.low === null && band.high === null)) return {}
   const unit = band.unit ?? result.unit ?? undefined
   return {
@@ -1384,7 +1427,7 @@ function observationsFor(key: string, detail: TestDetail, ctx: ExtractionContext
       status: 'final',
       code: { coding: [{ system: result.param.system, code: result.param.code }] },
       ...valueOf(result),
-      ...rangeOf(result),
+      ...rangeOf(result, key, ctx),
     }) as Observation)
 }
 
@@ -1431,9 +1474,85 @@ function readTestDetails(response: QuestionnaireResponse): Record<string, unknow
 }
 ```
 
-SKETCH, verify when run: the band cannot survive a round trip through QuestionnaireResponse items, because a FHIR answer carries no room for it. If the first test fails on a missing `referenceRange`, stop and report. The fix is for the forms route to hand the extractor the raw answer alongside the response, not to drop the range from the test.
+Add `testBands` to `ExtractionContext` in `packages/forms/src/extract/extract.ts`, beside S4's `codingBefore`:
 
-- [ ] **Step 4: Register it**
+```ts
+  /**
+   * For a result coded `testKey#paramSystem|paramCode`, the reference band that applied when it was
+   * typed. A QuestionnaireResponse answer has nowhere to carry it, so the forms route supplies it
+   * (bench result entry). A replayed response carries none, and the Observation then has no
+   * referenceRange.
+   */
+  testBands?: ReadonlyMap<string, ResultBand>
+```
+
+- [ ] **Step 4: The forms route supplies the bands**
+
+In `apps/server/src/forms-routes.ts`, directly after S4's `codingBefore` lines, add:
+
+```ts
+    const testBands = testBandsFrom(f.schema, p.data.answers);
+    if (testBands.size > 0) extractionContext.testBands = testBands;
+```
+
+and beside `catalogCodingsBefore`:
+
+```ts
+/**
+ * The band each typed result was measured against, keyed the way the extractor reads it. A
+ * QuestionnaireResponse answer has nowhere to carry a reference band, so it travels in the
+ * extraction context instead (settled 2026-09-16). The bands were chosen by the server when the
+ * sheet asked for parameters, so nothing is recomputed here.
+ */
+function testBandsFrom(schema: FormSchema, answers: Record<string, unknown>): Map<string, ResultBand> {
+  const out = new Map<string, ResultBand>();
+  for (const field of schema.fields) {
+    if (field.fieldType !== 'testDetails') continue;
+    for (const [testKey, detail] of Object.entries(parseTestDetails(answers[field.id]))) {
+      for (const result of detail.results) {
+        if (result.band) out.set(`${testKey}#${result.param.system}|${result.param.code}`, result.band);
+      }
+    }
+  }
+  return out;
+}
+```
+
+Import `parseTestDetails` from `@openldr/forms` and `ResultBand` from `@openldr/bootstrap` at the top of that file.
+
+Add one route test in `apps/server/src/forms-routes.test.ts`, in the shape of S4's LOINC test:
+
+```ts
+  it('hands the extractor the band each result was measured against', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL',
+            band: { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null } },
+        ] } },
+      } },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const observation = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'Observation');
+    expect(observation.valueQuantity).toEqual({ value: 11.2, unit: 'g/dL' });
+    expect(observation.referenceRange).toEqual([{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' } }]);
+  });
+```
+
+`resultOrderSchema` is `catalogOrderSchema` from S4's tests plus the `testDetails` field, declared beside it.
+
+- [ ] **Step 5: Register it**
 
 In `packages/forms/src/routing.ts:42-48`:
 
@@ -1449,23 +1568,29 @@ export function extractorsForForm(model: FormSchema): ResourceExtractor[] {
 
 Add its import at the top of that file.
 
-- [ ] **Step 5: Run the tests and watch them pass**
+- [ ] **Step 6: Run the tests and watch them pass**
 
 Run: `cd packages/forms && npx vitest run src/extraction.test.ts src/routing.test.ts src/samples --testTimeout 30000`
 
-Expected: PASS, every test in those files. S4's extractor tests do not change.
+Run: `cd apps/server && npx vitest run src/forms-routes.test.ts --testTimeout 30000`
 
-- [ ] **Step 6: Typecheck the package**
+Expected: PASS in both. S4's extractor and route tests do not change.
 
-Run: `cd packages/forms && npx tsc --noEmit -p . > "$TEMP/br-t7-tc.txt" 2>&1; echo "exit=$?"`
+- [ ] **Step 7: Typecheck both packages, and lint the server**
 
-Expected: `exit=0`.
+Run: `cd packages/forms && npx tsc --noEmit -p . > "$TEMP/br-t7-forms.txt" 2>&1; echo "exit=$?"`
 
-- [ ] **Step 7: Commit**
+Run: `cd apps/server && npx tsc --noEmit -p . > "$TEMP/br-t7-server.txt" 2>&1; echo "exit=$?"`
+
+Run: `cd apps/server && npx eslint src/forms-routes.ts > "$TEMP/br-t7-lint.txt" 2>&1; echo "exit=$?"`
+
+Expected: `exit=0` three times.
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add packages/forms/src/extract/test-results.ts packages/forms/src/extraction.test.ts packages/forms/src/routing.ts
-git commit -m "feat(forms): write an Observation for each result the bench typed" -m "A new extractor turns a testDetails answer into one final Observation per typed result, carrying the parameter's own coding, the value under the type the parameter declares, and the reference band the server chose as its referenceRange. A rejected test becomes one cancelled Observation carrying the reason, and any value typed before the rejection is left out."
+git add packages/forms/src/extract/test-results.ts packages/forms/src/extract/extract.ts packages/forms/src/extraction.test.ts packages/forms/src/routing.ts apps/server/src/forms-routes.ts apps/server/src/forms-routes.test.ts
+git commit -m "feat(forms): write an Observation for each result the bench typed" -m "A new extractor turns a testDetails answer into one final Observation per typed result, carrying the parameter's own coding and the value under the type the parameter declares. A rejected test becomes one cancelled Observation carrying the reason, and any value typed before the rejection is left out. The reference band cannot ride inside a QuestionnaireResponse answer, so the forms route passes it in the extraction context beside the LOINC codings it already passes. A response replayed through ingest keeps its values and loses its ranges, which the catalog still holds."
 ```
 
 ---
@@ -2706,7 +2831,7 @@ Report to the operator:
    - Migration 106 on a real Postgres boot against a stored Lab order.
    - The sheet at 375px on a real phone.
    - `openldr test-catalog params` against Postgres.
-   - Whether the reference band survives the round trip through the QuestionnaireResponse, which Task 7 flags as a sketch.
+   - That a response replayed through ingest still yields the right Observations, minus their ranges. The route tests cover the bench path only.
    - The live check needs `AUTH_DEV_BYPASS`, the dev servers, and scratch tests and parameters switched on. Say so before starting it.
 4. Anything skipped or changed from this plan, and why.
 
