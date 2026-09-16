@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  applyTestCatalogImport, browseTestCatalog, catalogImportFormat, catalogResultParams, catalogSpecimensFor, downloadTestCatalogCsv,
+  applyTestCatalogImport, browseTestCatalog, browseTestCategories, catalogImportFormat, catalogResultParams, catalogSpecimensFor, downloadTestCatalogCsv,
   expandValueSetByUrl, getTestCatalogOptions, listTestCatalog,
   previewTestCatalogImport, readTestCatalogFile, setCatalogTestActive, setCatalogTestEnabled, updateCatalogTest,
 } from './api';
@@ -133,5 +133,11 @@ describe('test catalog api client', () => {
   it('answers the rows, the total and the coding system as given', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ rows: [{ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true }], total: 1, system: 'urn:x' })));
     expect(await browseTestCatalog({})).toEqual({ rows: [{ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true }], total: 1, system: 'urn:x' });
+  });
+
+  it('reads every catalog category for the browse filter', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ categories: [{ code: 'MOL', display: 'Molecular' }] })));
+    expect(await browseTestCategories()).toEqual([{ code: 'MOL', display: 'Molecular' }]);
+    expect(fetch).toHaveBeenCalledWith('/api/test-catalog/browse/categories');
   });
 });
