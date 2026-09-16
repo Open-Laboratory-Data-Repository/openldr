@@ -266,8 +266,11 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                   ))}
                 </div>
 
-                <Label className="self-start whitespace-nowrap pt-1.5">{t('testCatalog.sheet.resultParams')}</Label>
-                <div className="flex flex-col gap-2">
+                {/* On a phone this section sits under its heading at full width: beside the heading, each range
+                    field was left about 108px and a range name was cut off (measured live at 375px). From sm up it
+                    keeps the label-left layout the rest of the sheet uses. */}
+                <Label className="col-span-2 self-start whitespace-nowrap pt-1.5 sm:col-span-1">{t('testCatalog.sheet.resultParams')}</Label>
+                <div className="col-span-2 flex flex-col gap-2 sm:col-span-1">
                   {options.resultParams.length === 0 ? (
                     <span className="text-xs text-muted-foreground">{t('testCatalog.sheet.noResultParams')}</span>
                   ) : null}
