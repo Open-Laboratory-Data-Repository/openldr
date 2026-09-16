@@ -64,6 +64,6 @@ Uma instalação cujo pedido de exames foi alterado no editor de formulários ma
 
 Um exame pode nomear os parâmetros de resultado que produz: hemoglobina, contagem de CD4, leitura de um TDR de malária. Os parâmetros vêm do dicionário de resultados desta instalação, por isso nada se escreve à mão. Marque um no painel do exame e indique se o resultado é um número, um código de uma lista, ou texto livre.
 
-Um parâmetro numérico pode ter intervalos de referência. Um intervalo tem um limite inferior, um superior e uma unidade, e pode nomear um sexo e uma faixa etária. A bancada vê o único intervalo que corresponde ao doente do pedido. Um exame sem parâmetros continua a funcionar: o painel pede apenas uma amostra.
+Um parâmetro numérico pode ter intervalos de referência. Cada intervalo tem um limite inferior, um superior, uma unidade, e um nome opcional, por exemplo Mulheres do planalto. Pode também nomear um sexo e uma faixa etária. O menu ⋯ da linha de um intervalo move-o para cima, para baixo ou remove-o, e o menu ⋯ do parâmetro acrescenta um. A ordem decide qual o intervalo que começa selecionado na bancada. Dois intervalos do mesmo parâmetro não podem ter o mesmo nome. Um exame sem parâmetros continua a funcionar: o painel pede apenas uma amostra.
 
 Na linha de comandos, `openldr test-catalog params <code>` mostra os parâmetros de um exame, e `--set <ficheiro>` substitui-os a partir de um ficheiro JSON.

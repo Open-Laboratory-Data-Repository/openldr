@@ -103,7 +103,7 @@ If a reference list is empty, check the configured source and loaded terminology
 
 
 
-On a Lab order, each chosen test gets a row where the bench types its results, sees the reference range that fits the patient, and can reject the test or the whole order with a coded reason. Results are typed with the order, in one pass.
+On a Lab order, each chosen test gets a row where the bench types its results, sees the reference range that fits the patient, and can reject the test or the whole order with a coded reason. Results are typed with the order, in one pass. A range can be named, and the bench picks which range applies to each result.
 
 If you do not know a test's code or name, the Tests field's ⋯ menu opens **Browse all tests**, the whole catalog a page at a time. A test this lab does not run is marked and cannot be picked. An install with no catalog loaded has nothing to browse: tests come from the Test catalog page, and OpenLDR ships none.
 
@@ -209,7 +209,7 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 - Un champ ou une section qui a une règle de visibilité affiche une icône de branche.
 
 
-Sur une demande d'examens, chaque examen choisi reçoit une ligne où la paillasse saisit ses résultats, voit l'intervalle de référence qui correspond au patient, et peut refuser l'examen ou la demande entière avec un motif codé. Les résultats se saisissent avec la demande, en une seule fois.
+Sur une demande d'examens, chaque examen choisi reçoit une ligne où la paillasse saisit ses résultats, voit l'intervalle de référence qui correspond au patient, et peut refuser l'examen ou la demande entière avec un motif codé. Les résultats se saisissent avec la demande, en une seule fois. Un intervalle peut porter un nom, et la paillasse choisit celui qui s'applique à chaque résultat.
 
 Si vous ne connaissez pas le code ou le nom d'un examen, le menu ⋯ du champ Tests ouvre **Parcourir tous les examens**, tout le catalogue page par page. Un examen que ce laboratoire ne réalise pas est marqué et ne peut pas être choisi. Une installation sans catalogue chargé n'a rien à parcourir : les examens viennent de la page Catalogue des examens, et OpenLDR n'en fournit aucun.
 
@@ -314,6 +314,6 @@ Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative 
 - **Edit visibility** abre o mesmo editor de regras de um campo. Só os campos ativos podem ser usados numa condição. A introdução de dados esconde a secção enquanto a regra não se cumpre.
 - Um campo ou secção com uma regra de visibilidade mostra um ícone de ramificação.
 
-Num pedido de exames, cada exame escolhido recebe uma linha onde a bancada escreve os resultados, vê o intervalo de referência que corresponde ao doente, e pode recusar o exame ou o pedido inteiro com um motivo codificado. Os resultados são escritos junto com o pedido, de uma só vez.
+Num pedido de exames, cada exame escolhido recebe uma linha onde a bancada escreve os resultados, vê o intervalo de referência que corresponde ao doente, e pode recusar o exame ou o pedido inteiro com um motivo codificado. Os resultados são escritos junto com o pedido, de uma só vez. Um intervalo pode ter um nome, e a bancada escolhe qual se aplica a cada resultado.
 
 Se não conhece o código ou o nome de um exame, o menu ⋯ do campo Tests abre **Ver todos os exames**, todo o catálogo página a página. Um exame que este laboratório não faz aparece marcado e não pode ser escolhido. Uma instalação sem catálogo carregado não tem nada para ver: os exames vêm da página Catálogo de exames, e o OpenLDR não traz nenhum.

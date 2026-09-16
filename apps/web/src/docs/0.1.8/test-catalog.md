@@ -15,7 +15,7 @@ Import a national list from a CSV or Excel (.xlsx) file with **Import** in the p
 The Lab order's Tests field lists the catalog tests switched on at this lab, under their local names, and each chosen test carries its own specimen, from the specimens that test accepts. A submitted order lists each test's LOINC code first, then its catalog code, so reports that read an order's first code keep matching LOINC. Switch tests on before taking orders: an empty list lets no order through.
 
 
-A test can also name the result parameters it yields, each with a result type and, for a numeric one, reference bands by sex and age. The bench sees the band that fits the patient.
+A test can also name the result parameters it yields, each with a result type and, for a numeric one, reference bands by sex and age. The bench sees the band that fits the patient. A range can be named, and the bench picks which range applies to each result.
 
 ## Français
 
@@ -32,7 +32,7 @@ Importez une liste nationale depuis un fichier CSV ou Excel (.xlsx) avec **Impor
 Le champ Tests de la demande d'examens liste les examens du catalogue activés dans ce laboratoire, sous leurs noms locaux, et chaque examen choisi porte son propre prélèvement, parmi ceux que cet examen accepte. Une demande envoyée donne d'abord le code LOINC de chaque examen, puis son code du catalogue, pour que les rapports qui lisent le premier code d'une demande trouvent toujours LOINC. Activez des examens avant de prendre des demandes : une liste vide ne laisse passer aucune demande.
 
 
-Un examen peut aussi nommer les paramètres de résultat qu'il produit, chacun avec un type de résultat et, pour un paramètre numérique, des intervalles de référence par sexe et par âge. La paillasse voit l'intervalle qui correspond au patient.
+Un examen peut aussi nommer les paramètres de résultat qu'il produit, chacun avec un type de résultat et, pour un paramètre numérique, des intervalles de référence par sexe et par âge. La paillasse voit l'intervalle qui correspond au patient. Un intervalle peut porter un nom, et la paillasse choisit celui qui s'applique à chaque résultat.
 
 ## Português
 
@@ -48,4 +48,4 @@ Importe uma lista nacional de um ficheiro CSV ou Excel (.xlsx) com **Importar** 
 
 O campo Tests do pedido de exames lista os exames do catálogo ativados neste laboratório, com os nomes locais, e cada exame escolhido tem a sua própria amostra, entre as que esse exame aceita. Um pedido enviado indica primeiro o código LOINC de cada exame e depois o código do catálogo, para que os relatórios que leem o primeiro código de um pedido continuem a encontrar LOINC. Ative exames antes de receber pedidos: uma lista vazia não deixa passar nenhum pedido.
 
-Um exame também pode nomear os parâmetros de resultado que produz, cada um com um tipo de resultado e, para um numérico, intervalos de referência por sexo e idade. A bancada vê o intervalo que corresponde ao doente.
+Um exame também pode nomear os parâmetros de resultado que produz, cada um com um tipo de resultado e, para um numérico, intervalos de referência por sexo e idade. A bancada vê o intervalo que corresponde ao doente. Um intervalo pode ter um nome, e a bancada escolhe qual se aplica a cada resultado.

@@ -114,6 +114,8 @@ Chaque examen choisi sur une demande reçoit une ligne sous le champ Tests. La l
 
 Une valeur hors de son intervalle est signalée à côté de la saisie. Elle n'est jamais refusée : c'est la paillasse qui décide.
 
+Chaque résultat numérique a un sélecteur d'intervalle sous sa saisie, qui liste chaque intervalle par son nom, ou, s'il n'en a pas, par qui il vise. Il démarre sur l'intervalle qui correspond au patient. Choisir un intervalle qui ne correspond pas affiche un avertissement et reste permis. Le signalement suit l'intervalle choisi. Si les intervalles de l'examen ont changé depuis l'ouverture du panneau, l'envoi de la demande est refusé tant que l'examen n'est pas rouvert.
+
 Un examen peut être refusé depuis le menu de sa ligne, et la demande entière depuis le menu de la page, chacun avec un motif pris dans une liste. Un examen refusé est enregistré avec son motif, et n'apparaît pas encore dans les rapports.
 
 Une demande envoyée écrit un enregistrement de résultat par valeur saisie. Les résultats se saisissent avec la demande, en une seule fois. Il n'existe pas encore de moyen de rouvrir une demande envoyée pour les ajouter plus tard.

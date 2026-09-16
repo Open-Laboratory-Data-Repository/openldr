@@ -234,6 +234,8 @@ Each test chosen on a Lab order gets a row under the Tests field. The row shows 
 
 A value outside its range is flagged beside the input. It is never refused: the bench decides.
 
+Each numeric result has a range picker under its input, listing every range by name, or, when unnamed, by who it is for. It starts on the range that fits the patient. Picking a range that does not fit shows a warning and is still allowed. The flag follows the picked range. If the test's ranges changed after the sheet opened, submitting the order is refused until the test is reopened.
+
 A test can be rejected from its row menu, and the whole order from the page menu, each with a reason from a list. A rejected test is recorded with its reason, and does not yet appear in reports.
 
 A submitted order writes one result record per value typed. Results are typed with the order, in one pass. There is no way yet to reopen a submitted order and add them later.
