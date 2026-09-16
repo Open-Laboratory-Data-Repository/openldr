@@ -6,6 +6,96 @@
       "version": null,
       "entries": [
         {
+          "hash": "61e640d3",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Echo the second range's name as typed in the refusal"
+        },
+        {
+          "hash": "1ca76c77",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Rename the English Add band label to Add range"
+        },
+        {
+          "hash": "d4e07e50",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Stop the picker showing a range the answer does not hold"
+        },
+        {
+          "hash": "7e4fbbca",
+          "type": "fix",
+          "scope": "server",
+          "title": "Hand the extractor the catalog's band, not the request's"
+        },
+        {
+          "hash": "52916d91",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Refuse a wrong-typed band field instead of coercing it"
+        },
+        {
+          "hash": "b1aa1d30",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Translate the range picker on the capture page"
+        },
+        {
+          "hash": "fd0f3042",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Pick the reference range for each result"
+        },
+        {
+          "hash": "1871aea5",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Read a range bound that is not a number as blank"
+        },
+        {
+          "hash": "9082ab46",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Name a range and set its sex, age and order in the test sheet"
+        },
+        {
+          "hash": "4ed6697a",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Label a range by its name, or by who it is for"
+        },
+        {
+          "hash": "3db8cffb",
+          "type": "feat",
+          "scope": "server",
+          "title": "Refuse a result whose range is not in the catalog"
+        },
+        {
+          "hash": "87a1c2df",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Record which named range a result was measured against"
+        },
+        {
+          "hash": "9a922421",
+          "type": "feat",
+          "scope": "server",
+          "title": "Carry range names and send the sex choices to the results sheet"
+        },
+        {
+          "hash": "879c61e7",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Check named ranges on save and answer whether each fits"
+        },
+        {
+          "hash": "8971289f",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Name a reference range and say whether it fits a patient"
+        },
+        {
           "hash": "be5e8897",
           "type": "fix",
           "scope": "studio",
