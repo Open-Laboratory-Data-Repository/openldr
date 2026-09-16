@@ -998,7 +998,7 @@ export const en = {
     typeNumeric: 'numeric',
     typeCoded: 'coded',
     typeText: 'text',
-    addBand: 'Add band',
+    addBand: 'Add range',
     removeBand: 'Remove',
     bandUnit: 'unit',
     bandName: 'name',
