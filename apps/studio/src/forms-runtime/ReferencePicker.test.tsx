@@ -116,6 +116,20 @@ describe('ReferencePicker', () => {
     expect(onChange).toHaveBeenCalledWith({ reference: 'Patient/p1', display: 'Doe Jane' });
   });
 
+  it('draws a trailing control inside the search input, at its right edge', () => {
+    render(<ReferencePicker field={field} formDefinitionId="form-7" multiple value={[]} onChange={() => {}} trailing={<span data-testid="trail" />} />);
+    const input = screen.getByRole('combobox');
+    expect(input.parentElement).toContainElement(screen.getByTestId('trail'));
+    // Room on the right, so typed text does not run under the control.
+    expect(input).toHaveClass('pr-10');
+  });
+
+  it('keeps the trailing control once a single value is picked and the input is hidden', () => {
+    render(<ReferencePicker field={field} formDefinitionId="form-7" multiple={false} value={{ reference: 'Patient/p1', display: 'Doe Jane' }} onChange={() => {}} trailing={<span data-testid="trail" />} />);
+    expect(screen.queryByRole('combobox')).toBeNull();
+    expect(screen.getByTestId('trail')).toBeInTheDocument();
+  });
+
   it('clears a selection', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();

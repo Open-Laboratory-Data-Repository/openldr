@@ -738,6 +738,12 @@ describe('FormRuntime', () => {
     expect(screen.getByText('Aucun examen choisi.')).toBeInTheDocument();
   });
 
+  it('draws the actions menu inside the Tests input, not beside the label', () => {
+    render(<FormRuntime schema={orderSchema} formDefinitionId="f1" onSubmit={() => {}} />);
+    const trigger = screen.getByRole('button', { name: /tests actions/i });
+    expect(document.getElementById('tests')!.parentElement).toContainElement(trigger);
+  });
+
   it('offers no such menu on an ordinary reference field', () => {
     // The tests field alone: still a reference field, but nothing depends on it.
     const refSchema = { ...orderSchema, fields: [orderSchema.fields[0]] } as FormSchema;

@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { isCodingAnswer, type CodingAnswer, type EntityAnswer, type FormField } from '@openldr/forms/pure';
 import { catalogSpecimensFor, referenceSearch, referenceSearchPreview, type ReferenceSearchResponse } from '@/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/cn';
 
 export type ReferenceValue = CodingAnswer | EntityAnswer;
 
@@ -49,7 +50,7 @@ const keyOf = (v: ReferenceValue): string => {
   return 'reference' in v ? v.reference : `${v.system}|${v.code}`;
 };
 
-export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange, dependsOnValue }: {
+export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange, dependsOnValue, trailing }: {
   field: FormField;
   /**
    * Id of the STORED form definition this field belongs to — the `:formId` path segment of
@@ -73,6 +74,8 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
    * the picker offers only the specimens at least one of them accepts (test catalog S4).
    */
   dependsOnValue?: unknown;
+  /** A control drawn inside the right edge of the search box, such as a field's dots menu. */
+  trailing?: ReactNode;
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [rows, setRows] = useState<Row[]>([]);
@@ -219,25 +222,30 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
               >
                 ×
               </Button>
+              {/* A single pick hides the search box, so the trailing control moves here. */}
+              {!multiple && trailing}
             </span>
           ))}
         </div>
       )}
 
       {!showSingleSelected && (
-        <Input
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={`${field.id}-reference-listbox`}
-          aria-activedescendant={active >= 0 && rows[active] ? `${field.id}-reference-option-${active}` : undefined}
-          id={field.id}
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={onKeyDown}
-          placeholder={field.placeholder ?? 'Search…'}
-          className="h-9 text-sm"
-        />
+        <div className="relative">
+          <Input
+            role="combobox"
+            aria-expanded={open}
+            aria-controls={`${field.id}-reference-listbox`}
+            aria-activedescendant={active >= 0 && rows[active] ? `${field.id}-reference-option-${active}` : undefined}
+            id={field.id}
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            onKeyDown={onKeyDown}
+            placeholder={field.placeholder ?? 'Search…'}
+            className={cn('h-9 text-sm', trailing && 'pr-10')}
+          />
+          {trailing && <div className="absolute inset-y-0 right-1 flex items-center">{trailing}</div>}
+        </div>
       )}
 
       {open && (narrowTo !== null || query.trim().length >= 2) && (
