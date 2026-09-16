@@ -27,7 +27,7 @@ function asFormSchema(value: unknown): FormSchema | null {
 }
 
 export function FormCapture() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState<FormDefinition | null>(null);
@@ -136,6 +136,14 @@ export function FormCapture() {
                 remove: t('forms.testsRemove'),
                 noSpecimen: t('forms.testsNoSpecimen'),
                 rejected: t('forms.testsRejected'),
+                language: i18n.language,
+                range: t('forms.range'),
+                chooseRange: t('forms.rangeChoose'),
+                misfit: t('forms.rangeMisfit'),
+                anyone: t('forms.rangeAnyone'),
+                ageFrom: t('forms.rangeAgeFrom'),
+                ageTo: t('forms.rangeAgeTo'),
+                ageBetween: t('forms.rangeAgeBetween'),
               }}
               browseCopy={{
                 title: t('forms.browseTitle'),
