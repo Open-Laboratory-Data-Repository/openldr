@@ -147,6 +147,20 @@ describe('TestDetailSheet', () => {
     expect(screen.getByText('13 to 17 g/dL')).toBeInTheDocument();
   });
 
+  // Fix 2 of the named-reference-ranges review: a result typed while no range matched is saved with
+  // no band. If params then reload with a non-null param.band (the patient changed), the old code
+  // fell back to param.band and showed a range the saved answer does not hold.
+  it('shows no range picked for a result with no band, even when the server now matches one', async () => {
+    const typed = { specimen: null, rejection: null, results: [
+      { param: { system: numeric.system, code: 'HGB' }, resultType: 'numeric' as const, value: 12.5, unit: 'g/dL' },
+    ] };
+    render(<TestDetailSheet test={test} params={[numeric]} detail={typed} sexes={sexes} onChange={() => {}} onClose={() => {}} />);
+    const picker = await screen.findByRole('combobox', { name: /range haemoglobin/i });
+    expect(picker).toHaveTextContent('Choose a range');
+    expect(screen.queryByText('12 to 15 g/dL')).toBeNull();
+    expect(screen.queryByText(/below|above|this range is for/i)).toBeNull();
+  });
+
   it('warns when the picked range does not fit the patient, and allows it', async () => {
     const typed = { specimen: null, rejection: null, results: [
       { param: { system: numeric.system, code: 'HGB' }, resultType: 'numeric' as const, value: 14, unit: 'g/dL', band: MEN },

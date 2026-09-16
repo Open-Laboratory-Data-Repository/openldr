@@ -87,9 +87,15 @@ export function TestDetailSheet({ test, params, detail, sexes, copy, onChange, o
     onChange({ ...detail, results: [...others, next] });
   };
 
-  /** The range the bench picked for this parameter, or the one the server matched when none is picked yet. */
+  /**
+   * The range the bench picked for this parameter, or the one the server matched when nothing has
+   * been typed yet. A typed result with no band means the bench picked no range for it, which must
+   * stay "no range" even after the params reload and `param.band` starts naming one (a patient
+   * change re-matches sex and age) — otherwise the picker and the flag would show a range the saved
+   * answer does not hold.
+   */
   const pickedIndex = (param: CatalogResultParam, current: TypedResult | undefined): number => {
-    const chosen = current?.band ?? param.band;
+    const chosen = current ? (current.band ?? null) : param.band;
     return chosen ? param.bands.findIndex((b) => sameBand(b, chosen)) : -1;
   };
 
