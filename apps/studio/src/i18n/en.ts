@@ -324,7 +324,7 @@ export const en = {
     range: 'Range',
     rangeChoose: 'Choose a range',
     rangeMisfit: 'This range is for {label}',
-    rangeAnyone: 'Anyone',
+    rangeAnyone: 'Default',
     rangeAgeFrom: '{from}+',
     rangeAgeTo: 'up to {to}',
     rangeAgeBetween: '{from} to {to}',

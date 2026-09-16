@@ -322,7 +322,7 @@ export const pt: EnShape = {
     range: 'Intervalo',
     rangeChoose: 'Escolher um intervalo',
     rangeMisfit: 'Este intervalo é para {label}',
-    rangeAnyone: 'Todos',
+    rangeAnyone: 'Padrão',
     rangeAgeFrom: '{from} anos ou mais',
     rangeAgeTo: 'até {to} anos',
     rangeAgeBetween: '{from} a {to} anos',

@@ -19,7 +19,7 @@ export const RANGE_EN: Required<RangeCopy> = {
   range: 'Range',
   chooseRange: 'Choose a range',
   misfit: 'This range is for {label}',
-  anyone: 'Anyone',
+  anyone: 'Default',
   ageFrom: '{from}+',
   ageTo: 'up to {to}',
   ageBetween: '{from} to {to}',

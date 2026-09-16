@@ -13,7 +13,7 @@ describe('range labels', () => {
     expect(rangeLabel(band({ sex: 'female', ageLow: 15 }), sexes, RANGE_EN)).toBe('Female 15+');
     expect(rangeLabel(band({ ageHigh: 5 }), sexes, RANGE_EN)).toBe('up to 5');
     expect(rangeLabel(band({ ageLow: 2, ageHigh: 17 }), sexes, RANGE_EN)).toBe('2 to 17');
-    expect(rangeLabel(band({}), sexes, RANGE_EN)).toBe('Anyone');
+    expect(rangeLabel(band({}), sexes, RANGE_EN)).toBe('Default');
   });
 
   it('describes who a range is for without its name, for the warning', () => {

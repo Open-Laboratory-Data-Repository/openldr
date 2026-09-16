@@ -322,7 +322,7 @@ export const fr: EnShape = {
     range: 'Intervalle',
     rangeChoose: 'Choisir un intervalle',
     rangeMisfit: 'Cet intervalle est pour {label}',
-    rangeAnyone: 'Tout le monde',
+    rangeAnyone: 'Par défaut',
     rangeAgeFrom: '{from} ans et plus',
     rangeAgeTo: "jusqu'à {to} ans",
     rangeAgeBetween: '{from} à {to} ans',
