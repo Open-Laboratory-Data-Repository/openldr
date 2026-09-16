@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { formDomainOwner, domainForResourceType, extractorsForForm } from './routing'
 import { ObservationExtractor, ServiceRequestExtractor } from './extract/extract'
+import { TestResultsExtractor } from './extract/test-results'
 import { makeSchema } from './__fixtures__/forms'
 
 describe('domain ownership (§3.1)', () => {
@@ -30,9 +31,9 @@ describe('domainForResourceType', () => {
 })
 
 describe('extractorsForForm', () => {
-  it('runs Observation + ServiceRequest extractors for a requisition', () => {
+  it('runs the Observation, ServiceRequest and test result extractors for a requisition', () => {
     const extractors = extractorsForForm(makeSchema({ id: 'r', name: 'Req', fhirResourceType: 'ServiceRequest', fields: [] }))
-    expect(extractors).toEqual([ObservationExtractor, ServiceRequestExtractor])
+    expect(extractors).toEqual([ObservationExtractor, ServiceRequestExtractor, TestResultsExtractor])
   })
 
   it('runs only the Observation extractor for a screening form', () => {
