@@ -58,3 +58,12 @@ The **Specimen Type** field then offers only the specimens at least one chosen t
 A submitted order lists each test's LOINC code first, when the test has one, and then its catalog code. Reports that read an order's first code keep matching LOINC. A test with no LOINC code is sent under its catalog code.
 
 An install whose Lab order was edited in the form builder keeps its own Tests field. To use this list, set the field's value set to `urn:openldr:valueset:lab-tests` in the builder. From the command line, `openldr terminology expand urn:openldr:valueset:lab-tests` prints the list the Tests field offers.
+
+
+## Result parameters
+
+A test can name the result parameters it yields: haemoglobin, a CD4 count, a malaria RDT reading. The parameters come from this install's result dictionary, so nothing is typed by hand. Tick one in the test's sheet, then say whether its result is a number, a code from a list, or free text.
+
+A numeric parameter can carry reference bands. A band has a low, a high and a unit, and may name a sex and an age window. The bench sees the one band that fits the patient on the order. A test that names no parameters still works: its sheet asks only for a specimen.
+
+From the command line, `openldr test-catalog params <code>` prints a test's parameters, and `--set <file>` replaces them from a JSON file.

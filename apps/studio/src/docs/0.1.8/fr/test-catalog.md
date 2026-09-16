@@ -58,3 +58,12 @@ Le champ **Specimen Type** ne propose alors que les prélèvements acceptés par
 Une demande envoyée donne d'abord le code LOINC de chaque examen, s'il en a un, puis son code du catalogue. Les rapports qui lisent le premier code d'une demande continuent de trouver LOINC. Un examen sans code LOINC est envoyé sous son code du catalogue.
 
 Une installation dont la demande d'examens a été modifiée dans l'éditeur de formulaires garde son propre champ Tests. Pour utiliser cette liste, choisissez le jeu de valeurs `urn:openldr:valueset:lab-tests` pour ce champ dans l'éditeur. En ligne de commande, `openldr terminology expand urn:openldr:valueset:lab-tests` affiche la liste que propose le champ Tests.
+
+
+## Paramètres de résultat
+
+Un examen peut nommer les paramètres de résultat qu'il produit : hémoglobine, numération CD4, lecture d'un TDR du paludisme. Les paramètres viennent du dictionnaire de résultats de cette installation, donc rien ne se saisit à la main. Cochez-en un dans le panneau de l'examen, puis indiquez si son résultat est un nombre, un code d'une liste, ou du texte libre.
+
+Un paramètre numérique peut porter des intervalles de référence. Un intervalle a une borne basse, une borne haute et une unité, et peut nommer un sexe et une tranche d'âge. La paillasse voit le seul intervalle qui correspond au patient de la demande. Un examen sans paramètre fonctionne toujours : son panneau ne demande qu'un prélèvement.
+
+En ligne de commande, `openldr test-catalog params <code>` affiche les paramètres d'un examen, et `--set <fichier>` les remplace depuis un fichier JSON.

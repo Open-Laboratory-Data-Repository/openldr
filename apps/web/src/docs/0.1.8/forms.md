@@ -102,6 +102,9 @@ If a reference list is empty, check the configured source and loaded terminology
 - A field or section with a visibility rule shows a branch icon.
 
 
+
+On a Lab order, each chosen test gets a row where the bench types its results, sees the reference range that fits the patient, and can reject the test or the whole order with a coded reason. Results are typed with the order, in one pass.
+
 ## Français
 
 ### Conditions de soumission
@@ -203,6 +206,9 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 - **Edit visibility** ouvre le même éditeur de règle que pour un champ. Seuls les champs actifs peuvent servir dans une condition. La saisie masque la section tant que sa règle n'est pas remplie.
 - Un champ ou une section qui a une règle de visibilité affiche une icône de branche.
 
+
+Sur une demande d'examens, chaque examen choisi reçoit une ligne où la paillasse saisit ses résultats, voit l'intervalle de référence qui correspond au patient, et peut refuser l'examen ou la demande entière avec un motif codé. Les résultats se saisissent avec la demande, en une seule fois.
+
 ## Português
 
 ### Condições de envio
@@ -303,3 +309,5 @@ Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative 
 - Na lista Sections, o menu ⋯ de cada secção tem **Edit visibility**, **Move up**, **Move down** e **Delete**.
 - **Edit visibility** abre o mesmo editor de regras de um campo. Só os campos ativos podem ser usados numa condição. A introdução de dados esconde a secção enquanto a regra não se cumpre.
 - Um campo ou secção com uma regra de visibilidade mostra um ícone de ramificação.
+
+Num pedido de exames, cada exame escolhido recebe uma linha onde a bancada escreve os resultados, vê o intervalo de referência que corresponde ao doente, e pode recusar o exame ou o pedido inteiro com um motivo codificado. Os resultados são escritos junto com o pedido, de uma só vez.
