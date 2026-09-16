@@ -577,7 +577,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         }
         if (band.name !== null) {
           const key = band.name.toLowerCase();
-          if (names.has(key)) throw invalid(`${param.code} has two ranges named ${key}.`);
+          if (names.has(key)) throw invalid(`${param.code} has two ranges named ${band.name}.`);
           names.add(key);
         }
       });

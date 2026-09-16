@@ -946,6 +946,18 @@ describe('test catalog: result parameters on a test', () => {
     })).rejects.toMatchObject({ kind: 'invalid', message: 'HGB has two ranges named highland.' });
   });
 
+  // The refusal must echo the name as the second range typed it, not lower-cased for the compare.
+  // A fixture where both ranges already type the name in lower case cannot show that: the lower-cased
+  // compare key and the typed name are the same string either way.
+  it('echoes the second range name as typed, not lower-cased', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await expect(catalog.create({
+      code: 'FBC', display: 'Full blood count',
+      resultParams: [{ ...HGB, bands: [range({ name: 'highland', low: 12, high: 16 }), range({ name: 'HIGHLAND', low: 11, high: 15 })] }],
+    })).rejects.toMatchObject({ kind: 'invalid', message: 'HGB has two ranges named HIGHLAND.' });
+  });
+
   it('refuses a range whose low is above its high, or whose age from is above its age to', async () => {
     const { db, catalog } = await buildCatalog();
     await seedResultParams(db, ['HGB']);
