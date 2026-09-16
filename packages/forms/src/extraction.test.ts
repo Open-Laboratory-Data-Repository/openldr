@@ -3,6 +3,7 @@ import { toQuestionnaire } from './to-questionnaire'
 import { fromQuestionnaire } from './from-questionnaire'
 import { toQuestionnaireResponse } from './response'
 import { ObservationExtractor, ServiceRequestExtractor } from './extract/extract'
+import { TestResultsExtractor } from './extract/test-results'
 import { toTransactionBundle } from './to-transaction-bundle'
 import { makeField, makeSchema, definitionOf } from './__fixtures__/forms'
 
@@ -162,5 +163,92 @@ describe('ServiceRequestExtractor tests codings (test catalog S4)', () => {
     expect(codings(order('reference'), { tests: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }] }))
       .toEqual([{ system: 'http://loinc.org', code: '718-7' }])
     expect(codings(order('text'), { tests: '718-7' })).toEqual([{ system: 'http://loinc.org', code: '718-7' }])
+  })
+})
+
+describe('TestResultsExtractor (bench result entry)', () => {
+  const CATALOG = 'urn:openldr:codesystem:test-catalog'
+  const PARAM = 'urn:openldr:default_result'
+  const order = () =>
+    makeSchema({
+      id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest',
+      fields: [
+        makeField({ id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 0, fhirPath: 'ServiceRequest.code', referenceMultiple: true, cardinality: { min: 1, max: '*' } }),
+        makeField({ id: 'details', displayLabel: 'Results', fieldType: 'testDetails', order: 1, referenceDependsOn: 'tests' }),
+      ],
+    })
+  const extract = (details: unknown, extra: object = {}) => {
+    const model = order()
+    const answers = { tests: [{ system: CATALOG, code: 'FBC' }], details } as never
+    return TestResultsExtractor.extract(toQuestionnaireResponse(model, answers), toQuestionnaire(model), { ...ctx, ...extra })
+  }
+
+  it('writes one final Observation per typed result, with the band as its reference range', () => {
+    expect(extract({
+      [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+        { param: { system: PARAM, code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL',
+          band: { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null } },
+      ] },
+    }, { testBands: new Map([[`${CATALOG}|FBC#${PARAM}|HGB`, { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }]]) })).toEqual([
+      {
+        resourceType: 'Observation',
+        status: 'final',
+        code: { coding: [{ system: PARAM, code: 'HGB' }] },
+        subject: { reference: 'Patient/p1' },
+        effectiveDateTime: '2026-06-04T00:00:00Z',
+        valueQuantity: { value: 11.2, unit: 'g/dL' },
+        referenceRange: [{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' } }],
+      },
+    ])
+  })
+
+  it('writes a coded result and a text result under the right value', () => {
+    const out = extract({
+      [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+        { param: { system: PARAM, code: 'MRDT' }, resultType: 'coded', value: { system: 'urn:openldr:cs:local', code: 'NEG', display: 'Not detected' } },
+        { param: { system: PARAM, code: 'NOTE' }, resultType: 'text', value: 'sample clotted' },
+      ] },
+    }) as any[]
+    expect(out[0].valueCodeableConcept).toEqual({ coding: [{ system: 'urn:openldr:cs:local', code: 'NEG', display: 'Not detected' }] })
+    expect(out[1].valueString).toBe('sample clotted')
+  })
+
+  it('writes a cancelled Observation carrying the reason for a rejected test, and no values', () => {
+    expect(extract({
+      [`${CATALOG}|FBC`]: {
+        specimen: null,
+        rejection: { system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' },
+        results: [{ param: { system: PARAM, code: 'HGB' }, resultType: 'numeric', value: 11.2 }],
+      },
+    })).toEqual([
+      {
+        resourceType: 'Observation',
+        status: 'cancelled',
+        code: { coding: [{ system: CATALOG, code: 'FBC' }] },
+        subject: { reference: 'Patient/p1' },
+        effectiveDateTime: '2026-06-04T00:00:00Z',
+        dataAbsentReason: { coding: [{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }] },
+      },
+    ])
+  })
+
+  it('writes nothing for a test with no typed value', () => {
+    expect(extract({ [`${CATALOG}|FBC`]: { specimen: { system: 'urn:openldr:cs:local', code: 'BLD' }, rejection: null, results: [] } })).toEqual([])
+  })
+
+  it('writes nothing when the form has no testDetails field', () => {
+    const model = makeSchema({ id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest', fields: [makeField({ id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 0, fhirPath: 'ServiceRequest.code' })] })
+    expect(TestResultsExtractor.extract(toQuestionnaireResponse(model, { tests: [] } as never), toQuestionnaire(model), ctx)).toEqual([])
+  })
+
+  // The round trip, settled 2026-09-16: values survive a stored response, bands do not.
+  it('writes the value with no range when the context carries no band, as a replayed response does', () => {
+    const out = extract({
+      [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+        { param: { system: PARAM, code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL' },
+      ] },
+    }) as any[]
+    expect(out[0].valueQuantity).toEqual({ value: 11.2, unit: 'g/dL' })
+    expect(out[0].referenceRange).toBeUndefined()
   })
 })

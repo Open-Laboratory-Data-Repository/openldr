@@ -176,6 +176,28 @@ const catalogOrderSchema = {
   ],
 } satisfies FormInput['schema'];
 
+// Bench result entry: the same order, plus the field that holds what the bench typed.
+const resultOrderSchema = {
+  ...catalogOrderSchema,
+  id: 'result-order',
+  fields: [
+    ...catalogOrderSchema.fields,
+    {
+      id: 'details',
+      fhirPath: null,
+      displayLabel: 'Results',
+      description: null,
+      fieldType: 'testDetails' as const,
+      required: false,
+      enabled: true,
+      order: 2,
+      cardinality: { min: 0, max: '1' },
+      referenceDependsOn: 'tests',
+      section: 'main',
+    },
+  ],
+} satisfies FormInput['schema'];
+
 // Task 9: fakeCtx() previously provided no fhirStore/terminology stubs because nothing
 // needed them — the second validator wired into POST /responses (`validateReferences`)
 // was never actually exercised. These record what they were called with (not merely
@@ -1053,6 +1075,34 @@ describe('forms routes', () => {
       payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
     });
     expect(res.statusCode).toBe(201);
+  });
+
+  it('hands the extractor the band each result was measured against', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    // The order carries catalog tests, so S4's LOINC lookup runs too.
+    (ctx as any).testCatalog = { loincCodingsFor: async () => new Map() };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL',
+            band: { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null } },
+        ] } },
+      } },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const observation = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'Observation');
+    expect(observation.valueQuantity).toEqual({ value: 11.2, unit: 'g/dL' });
+    expect(observation.referenceRange).toEqual([{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' } }]);
   });
 
   it('records the submitting user as the QuestionnaireResponse author', async () => {

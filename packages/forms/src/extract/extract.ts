@@ -27,6 +27,13 @@ export interface ExtractionContext {
    * leave it out.
    */
   codingBefore?: ReadonlyMap<string, Coding>
+  /**
+   * For a result coded `testKey#paramSystem|paramCode`, the reference band that applied when it was
+   * typed. A QuestionnaireResponse answer has nowhere to carry it, so the forms route supplies it
+   * (bench result entry). A replayed response carries none, and the Observation then has no
+   * referenceRange.
+   */
+  testBands?: ReadonlyMap<string, { low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }>
 }
 
 /** Pluggable extraction of discrete FHIR resources from a filled form (PRD §3.2). */
