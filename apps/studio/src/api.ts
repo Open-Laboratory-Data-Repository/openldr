@@ -2577,6 +2577,25 @@ export const catalogResultParams = (
   authFetch('/api/test-catalog/result-params', jbody({ tests, ...(patient ? { patient } : {}) }, 'POST'))
     .then((r) => okJson<CatalogResultParamsAnswer>(r, 'read result parameters'));
 
+export interface BrowseTest { code: string; display: string; category: string | null; enabled: boolean }
+/** `system` is the catalog's coding system, sent by the server so the studio never names it. */
+export interface BrowseTestsAnswer { rows: BrowseTest[]; total: number; system: string }
+
+/** The catalog as a Lab order browses it: what a test is, and whether this lab runs it. Only the
+ *  filters that are set are sent, as listTestCatalog does. */
+export const browseTestCatalog = (
+  p: { q?: string; category?: string; limit?: number; offset?: number },
+): Promise<BrowseTestsAnswer> => {
+  const qs = new URLSearchParams();
+  if (p.q) qs.set('q', p.q);
+  if (p.category) qs.set('category', p.category);
+  if (p.limit !== undefined) qs.set('limit', String(p.limit));
+  if (p.offset !== undefined) qs.set('offset', String(p.offset));
+  const query = qs.toString();
+  return authFetch(`/api/test-catalog/browse${query ? `?${query}` : ''}`)
+    .then((r) => okJson<BrowseTestsAnswer>(r, 'browse tests'));
+};
+
 /** Expand a ValueSet by url, through the FHIR operation. The url always comes from the server, never
  *  from a literal in the studio. */
 export const expandValueSetByUrl = (url: string): Promise<CatalogRejectReason[]> =>
