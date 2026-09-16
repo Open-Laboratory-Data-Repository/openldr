@@ -34,6 +34,8 @@ export const TEST_CATEGORY_VALUE_SET = 'urn:openldr:valueset:test-category';
 /** A test's specimens must come from the list the Lab order's specimen picker offers
  *  (packages/forms/src/samples/forms.ts), or narrowing at data entry could never match. */
 export const SPECIMEN_TYPE_VALUE_SET = 'urn:openldr:valueset:specimen-type';
+/** The site result-parameter dictionary. Must equal RESULT_PARAM_SYSTEM in @openldr/terminology. */
+const RESULT_PARAM_SYSTEM_URL = 'urn:openldr:default_result';
 /** The lab's test list, which the Lab order's Tests field binds. Must equal LAB_TESTS_VALUE_SET in
  *  migration 105, which seeds its row. */
 export const LAB_TESTS_VALUE_SET = 'urn:openldr:valueset:lab-tests';
@@ -205,6 +207,12 @@ export function catalogImportAudit(report: CatalogImportReport): AuditDetails {
   };
 }
 
+/** One test's parameters, ready for the sheet to draw. */
+export interface TestParamsAnswer {
+  test: { system: string; code: string };
+  params: Array<TestResultParam & { unit: string | null; display: string | null; band: ResultBand | null }>;
+}
+
 export interface TestCatalog {
   ownedHere(): Promise<boolean>;
   list(query: CatalogListQuery): Promise<CatalogListResult>;
@@ -223,6 +231,12 @@ export interface TestCatalog {
   specimensFor(tests: Array<{ system: string; code: string }>): Promise<CatalogSpecimenOption[]>;
   /** Each catalog test's LOINC coding, keyed `system|code` of the test, for tests with an active link. */
   loincCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, { system: string; code: string }>>;
+  /** Each test's result parameters, with each parameter's unit, display and the band that fits this
+   *  patient. Codings outside the catalog are ignored (bench result entry, spec 7). */
+  resultParamsFor(
+    tests: Array<{ system: string; code: string }>,
+    patient: { sex?: string | null; ageYears?: number | null },
+  ): Promise<TestParamsAnswer[]>;
 }
 
 export interface TestCatalogDeps {
@@ -961,6 +975,39 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return new Map(links.map((l) => [`${TEST_CATALOG_SYSTEM}|${l.from_code}`, { system: LOINC_SYSTEM, code: l.to_code }]));
   }
 
+  async function resultParamsFor(
+    tests: Array<{ system: string; code: string }>,
+    patient: { sex?: string | null; ageYears?: number | null },
+  ): Promise<TestParamsAnswer[]> {
+    const codes = tests.filter((t) => t.system === TEST_CATALOG_SYSTEM).map((t) => t.code);
+    if (codes.length === 0) return [];
+    const wanted = new Set(codes);
+    const found = (await readTests()).filter((t) => wanted.has(t.code));
+    const paramCodes = [...new Set(found.flatMap((t) => t.resultParams.map((p) => p.code)))];
+    // The dictionary already holds each parameter's units and display, so the sheet never carries them.
+    const dictionary = paramCodes.length === 0 ? [] : await db.selectFrom('terminology_concepts')
+      .select(['code', 'display', 'properties'])
+      .where('system', '=', RESULT_PARAM_SYSTEM_URL)
+      .where('code', 'in', paramCodes)
+      .execute();
+    const unitOf = new Map(dictionary.map((row) => {
+      const props = (parseJson(row.properties) ?? {}) as Record<string, unknown>;
+      return [row.code, { unit: typeof props.parm_units === 'string' ? props.parm_units : null, display: row.display ?? null }];
+    }));
+    return codes.map((code) => {
+      const test = found.find((t) => t.code === code);
+      return {
+        test: { system: TEST_CATALOG_SYSTEM, code },
+        params: (test?.resultParams ?? []).map((p) => ({
+          ...p,
+          unit: unitOf.get(p.code)?.unit ?? null,
+          display: unitOf.get(p.code)?.display ?? null,
+          band: matchBand(p.bands, patient),
+        })),
+      };
+    });
+  }
+
   return {
     ownedHere,
     list,
@@ -976,5 +1023,6 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     exportCsv,
     specimensFor,
     loincCodingsFor,
+    resultParamsFor,
   };
 }

@@ -927,3 +927,44 @@ describe('test catalog: result parameters on a test', () => {
     })).rejects.toMatchObject({ kind: 'invalid' });
   });
 });
+
+describe('test catalog: what a result sheet needs', () => {
+  const test = (code: string) => ({ system: TEST_CATALOG_SYSTEM, code });
+  const HGB = {
+    system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null,
+    bands: [
+      { low: 13, high: 17, unit: 'g/dL', sex: 'male', ageLow: 18, ageHigh: null },
+      { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
+    ],
+  };
+
+  it('answers each test its parameters, with the band that fits the patient', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    const answer = await catalog.resultParamsFor([test('FBC')], { sex: 'female', ageYears: 30 });
+    expect(answer).toEqual([{
+      test: { system: TEST_CATALOG_SYSTEM, code: 'FBC' },
+      params: [{ ...HGB, unit: 'g/dL', display: 'HGB', band: { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null } }],
+    }]);
+  });
+
+  it('answers a null band when no band fits, rather than a wrong one', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, ageYears: null });
+    expect(answer[0].params[0].band).toBeNull();
+  });
+
+  it('answers an empty parameter list for a test that names none', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    expect(await catalog.resultParamsFor([test('CD4')], {})).toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: 'CD4' }, params: [] }]);
+  });
+
+  it('ignores codings that are not catalog tests', async () => {
+    const { catalog } = await buildCatalog();
+    expect(await catalog.resultParamsFor([{ system: LOINC_SYSTEM, code: '718-7' }], {})).toEqual([]);
+  });
+});
