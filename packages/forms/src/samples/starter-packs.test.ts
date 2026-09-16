@@ -37,7 +37,6 @@ describe('seeded starter packs', () => {
 
   it('writes every path with its resource, the bare Users paths included', () => {
     expect(entry('pack-practitioner', 'First name')?.fhirPath).toBe('Practitioner.name.given');
-    expect(entry('pack-service-request', 'Specimen Type')?.fhirPath).toBe('Specimen.type');
   });
 
   it('keeps the Facility code discriminator and the fields with no FHIR path', () => {

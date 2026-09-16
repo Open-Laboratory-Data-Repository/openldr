@@ -53,7 +53,7 @@ En ligne de commande : `openldr test-catalog import <fichier>` montre ce qui cha
 
 Le champ **Tests** de la demande d'examens liste les examens de ce laboratoire : les examens du catalogue activés ici, sous le nom local s'il y en a un. Un examen retiré quitte la liste. Activez des examens avant toute demande : le champ est obligatoire, et une liste vide ne laisse passer aucune demande.
 
-Le champ **Specimen Type** ne propose alors que les prélèvements acceptés par au moins un examen choisi, selon la liste plus courte de ce laboratoire s'il en a fixé une. Sans examen choisi, ou si aucun ne liste de prélèvements, il propose toute la liste des prélèvements, comme avant.
+Chaque examen porte son propre prélèvement. Ouvrez la ligne d'un examen et choisissez parmi les prélèvements que cet examen accepte, selon la liste plus courte de ce laboratoire s'il en a fixé une. La demande n'a plus de champ prélèvement séparé.
 
 Une demande envoyée donne d'abord le code LOINC de chaque examen, s'il en a un, puis son code du catalogue. Les rapports qui lisent le premier code d'une demande continuent de trouver LOINC. Un examen sans code LOINC est envoyé sous son code du catalogue.
 

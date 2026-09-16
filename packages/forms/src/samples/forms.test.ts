@@ -19,6 +19,7 @@ import {
   USERS_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS,
   LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
+  LAB_ORDER_FORM_MIGRATION_NO_ORDER_SPECIMEN,
   LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
@@ -78,34 +79,6 @@ describe('Lab order reference fields', () => {
       .toEqual({ ok: true, source: { kind: 'coding', mode: 'valueset', url: 'urn:openldr:valueset:lab-tests' } });
   });
 
-  it('narrows the specimen type by the chosen tests', () => {
-    expect(field('fld-ord-specimen-type').referenceDependsOn).toBe('tests');
-  });
-
-  // Binds to the SEEDED ValueSet, not to the whole SNOMED CodeSystem.
-  //
-  // Targeting `http://snomed.info/sct` was broken two ways on a fresh install. SNOMED is not
-  // shipped (it needs an affiliate licence), so the picker searched an empty vocabulary and
-  // returned "No matches" for every term. And where SNOMED HAD been imported, searching the
-  // whole CodeSystem ranked by code across 532k concepts, so "serum" surfaced
-  // "BOVI-SERA ANTISERUM (product)" while "Serum specimen" never appeared.
-  //
-  // `urn:openldr:valueset:specimen-type` is seeded by migration 014, so it is present and
-  // populated on EVERY install — which is what makes `required` below safe. A site that
-  // imports SNOMED can repoint that ValueSet at the specimen hierarchy without touching this form.
-  it('binds specimen type to the seeded specimen ValueSet', () => {
-    const r = resolveReferenceSource(field('fld-ord-specimen-type'));
-    expect(r).toEqual({ ok: true, source: { kind: 'coding', mode: 'valueset', url: 'urn:openldr:valueset:specimen-type' } });
-  });
-
-  // A lab order without a specimen type is not actionable in the lab. Only safe because the
-  // binding above resolves against a seeded ValueSet — required against an empty vocabulary
-  // would make the form unsubmittable.
-  it('requires a specimen type', () => {
-    const f = field('fld-ord-specimen-type');
-    expect(f.required).toBe(true);
-    expect(f.cardinality.min).toBe(1);
-  });
 
   it('allows more than one test per order', () => {
     expect(field('tests').cardinality.max).not.toBe('1');
@@ -323,8 +296,15 @@ describe('every shipped sample passes the FHIR path rules', () => {
 describe('migrations 102 and 103 on the Lab order form', () => {
   const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
 
-  it("matches migration 106's frozen RESULT_FIELDS snapshot exactly", () => {
-    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS);
+  it("matches migration 107's frozen snapshot exactly", () => {
+    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_NO_ORDER_SPECIMEN);
+  });
+
+  // The order asked for a specimen twice: once per test in the results sheet, once here. The
+  // operator kept the per-test one (2026-09-16), so migration 107 dropped this field.
+  it('has no order-level specimen field', () => {
+    expect(order().fields.find((f) => f.id === 'fld-ord-specimen-type')).toBeUndefined();
+    expect(order().sections.find((s) => s.id === 'specimen')).toBeUndefined();
   });
 
   it('carries the results field, depending on the tests field', () => {
@@ -332,8 +312,8 @@ describe('migrations 102 and 103 on the Lab order form', () => {
     expect(results).toMatchObject({ fieldType: 'testDetails', referenceDependsOn: 'tests' });
   });
 
-  it('tests and specimen type trip no rule', () => {
-    const ids = ['tests', 'fld-ord-specimen-type'];
+  it('tests and results trip no rule', () => {
+    const ids = ['tests', 'fld-ord-results'];
     expect(lintFormSchema(order()).filter((i) => ids.includes(i.fieldId ?? ''))).toEqual([]);
   });
 

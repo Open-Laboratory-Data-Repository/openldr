@@ -53,7 +53,7 @@ From the command line: `openldr test-catalog import <file>` shows what would cha
 
 The Lab order's **Tests** field lists this lab's tests: the catalog tests switched on here, under the local name when one is set. A retired test drops off the list. Switch tests on before anyone takes an order: the field is required, so an empty list lets no order through.
 
-The **Specimen Type** field then offers only the specimens at least one chosen test accepts, using this lab's narrower list where it set one. With no tests chosen, or none that lists specimens, it offers the whole specimen list as before.
+Each test carries its own specimen. Open a test's row and choose from the specimens that test accepts, by this lab's narrower list where it set one. The order has no separate specimen field.
 
 A submitted order lists each test's LOINC code first, when the test has one, and then its catalog code. Reports that read an order's first code keep matching LOINC. A test with no LOINC code is sent under its catalog code.
 
