@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "43851697",
+          "type": "feat",
+          "scope": "forms",
+          "title": "The Lab order asks for a specimen once, per test"
+        },
+        {
+          "hash": "45cc3245",
+          "type": "fix",
+          "scope": "server",
+          "title": "Keep a test's result parameters through the save route"
+        },
+        {
           "hash": "37acebbd",
           "type": "feat",
           "scope": "db",
