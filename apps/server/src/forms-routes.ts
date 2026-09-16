@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
-import { TEST_CATALOG_SYSTEM, bandInCatalog, type AppContext, type ResultBand } from '@openldr/bootstrap';
+import { TEST_CATALOG_SYSTEM, findCatalogBand, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
 import { extractorsForForm, isEntityAnswer, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
@@ -84,59 +84,53 @@ async function catalogCodingsBefore(
 }
 
 /**
- * The band each typed result was measured against, keyed the way the extractor reads it. A
- * QuestionnaireResponse answer has nowhere to carry a reference band, so it travels in the
- * extraction context instead (bench result entry, settled 2026-09-16). The bands were chosen by the
- * server when the sheet asked for parameters, so nothing is recomputed here.
- */
-function testBandsFrom(schema: FormSchema, answers: Record<string, unknown>): Map<string, ResultBand> {
-  const out = new Map<string, ResultBand>();
-  for (const field of schema.fields) {
-    if (field.fieldType !== 'testDetails') continue;
-    for (const [testKey, detail] of Object.entries(parseTestDetails(answers[field.id]))) {
-      for (const result of detail.results) {
-        if (result.band) out.set(`${testKey}#${result.param.system}|${result.param.code}`, { ...result.band, name: result.band.name ?? null });
-      }
-    }
-  }
-  return out;
-}
-
-/**
  * Each typed result's band, checked against the ranges the catalog holds for that test and parameter
- * (named reference ranges spec, 5). The sheet sends the range the bench picked, so without this an
- * edited request could store a range the catalog never had. Asks the catalog only when a result
- * carries a band.
+ * (named reference ranges spec, 5), and the matched catalog range for each one that checks out.
+ *
+ * The sheet sends the range the bench picked, so without the check an edited request could store a
+ * range the catalog never had. The extractor must then be handed the CATALOG's copy of that range,
+ * never the submitted one field for field: `findCatalogBand` refuses a wrong-typed field rather than
+ * coercing it, so a malformed submitted band cannot pass a check that then writes its own values.
+ * Skips a rejected test's results, since a rejected test's results are never extracted (its
+ * Observation carries the rejection reason instead), so a stale band there must not block the submit.
+ * Asks the catalog only when a result carries a band.
  */
-async function catalogBandErrors(
+async function checkTestBands(
   ctx: AppContext, schema: FormSchema, answers: Record<string, unknown>,
-): Promise<Array<{ fieldId: string; label: string; reason: string }>> {
+): Promise<{ errors: Array<{ fieldId: string; label: string; reason: string }>; matched: Map<string, ResultBand> }> {
   const checks: Array<{ fieldId: string; label: string; testKey: string; param: { system: string; code: string }; band: unknown }> = [];
   for (const field of schema.fields) {
     if (field.fieldType !== 'testDetails') continue;
     for (const [testKey, detail] of Object.entries(parseTestDetails(answers[field.id]))) {
+      if (detail.rejection) continue;
       for (const result of detail.results) {
         if (result.band) checks.push({ fieldId: field.id, label: field.displayLabel, testKey, param: result.param, band: result.band });
       }
     }
   }
-  if (checks.length === 0) return [];
+  if (checks.length === 0) return { errors: [], matched: new Map() };
   const tests = [...new Set(checks.map((c) => c.testKey))].map((key) => {
     const cut = key.lastIndexOf('|');
     return { system: key.slice(0, cut), code: key.slice(cut + 1) };
   });
   const held = await ctx.testCatalog.resultParamsFor(tests, {});
-  return checks
-    .filter((c) => {
-      const bands = held.find((t) => `${t.test.system}|${t.test.code}` === c.testKey)
-        ?.params.find((p) => p.system === c.param.system && p.code === c.param.code)?.bands ?? [];
-      return !bandInCatalog(c.band, bands);
-    })
-    .map((c) => ({
-      fieldId: c.fieldId,
-      label: c.label,
-      reason: `The reference ranges for ${c.param.code} on ${c.testKey.slice(c.testKey.lastIndexOf('|') + 1)} changed. Reopen the test and pick a range again.`,
-    }));
+  const errors: Array<{ fieldId: string; label: string; reason: string }> = [];
+  const matched = new Map<string, ResultBand>();
+  for (const c of checks) {
+    const bands = held.find((t) => `${t.test.system}|${t.test.code}` === c.testKey)
+      ?.params.find((p) => p.system === c.param.system && p.code === c.param.code)?.bands ?? [];
+    const found = findCatalogBand(c.band, bands);
+    if (found) {
+      matched.set(`${c.testKey}#${c.param.system}|${c.param.code}`, found);
+    } else {
+      errors.push({
+        fieldId: c.fieldId,
+        label: c.label,
+        reason: `The reference ranges for ${c.param.code} on ${c.testKey.slice(c.testKey.lastIndexOf('|') + 1)} changed. Reopen the test and pick a range again.`,
+      });
+    }
+  }
+  return { errors, matched };
 }
 
 /** Id of the seeded ingest graph's Persist Store node — the one that reports what it wrote. */
@@ -464,7 +458,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'invalid answers', errors: referenceErrors };
     }
 
-    const bandErrors = await catalogBandErrors(ctx, f.schema, p.data.answers);
+    const { errors: bandErrors, matched: matchedBands } = await checkTestBands(ctx, f.schema, p.data.answers);
     if (bandErrors.length > 0) {
       reply.code(400);
       return { error: 'invalid answers', errors: bandErrors };
@@ -483,8 +477,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const extractionContext = extractionContextFor(f.schema, p.data.answers, submittedAt);
     const codingBefore = await catalogCodingsBefore(ctx, f.schema, p.data.answers);
     if (codingBefore) extractionContext.codingBefore = codingBefore;
-    const testBands = testBandsFrom(f.schema, p.data.answers);
-    if (testBands.size > 0) extractionContext.testBands = testBands;
+    if (matchedBands.size > 0) extractionContext.testBands = matchedBands;
     const resources = extractorsForForm(f.schema as never)
       .flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext));
     if (resources.length === 0) {

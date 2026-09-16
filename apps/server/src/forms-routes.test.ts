@@ -1180,6 +1180,79 @@ describe('forms routes', () => {
     expect(observation.referenceRange[0].text).toBe('Highland women');
   });
 
+  // Fix 1 of the named-reference-ranges review: `low` in the catalog band is null, so a coerce-first
+  // check (turning the submitted string "5" into null) would wrongly match it. The route must refuse
+  // instead, and it must not hand the extractor a value it never checked.
+  it('refuses a band whose field has the wrong type rather than treating it as the catalog null', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async () => new Map(),
+      resultParamsFor: async () => [{
+        test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
+        params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [],
+          bands: [{ name: null, low: null, high: 15, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }] }],
+      }],
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL',
+            band: { name: null, low: '5', high: 15, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null } },
+        ] } },
+      } },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: 'invalid answers',
+      errors: [{ fieldId: 'details', label: 'Results', reason: 'The reference ranges for HGB on FBC changed. Reopen the test and pick a range again.' }],
+    });
+    expect(runs).toEqual([]);
+  });
+
+  // Fix 6 of the review: a rejected test's results are never extracted (the Observation carries the
+  // rejection reason instead), so a stale band left on one of its results must not block the submit.
+  it('submits a rejected test carrying a band the catalog does not hold', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async () => new Map(),
+      resultParamsFor: async () => { throw new Error('the catalog should not be asked: the only band belongs to a rejected test'); },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': {
+          specimen: null,
+          rejection: { system: 'urn:openldr:codesystem:rejection-reason', code: 'haemolysed', display: 'Haemolysed' },
+          results: [
+            { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL',
+              band: { name: 'Stale range', low: 5, high: 30, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null } },
+          ],
+        } },
+      } },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(runs.length).toBe(1);
+  });
+
   it('records the submitting user as the QuestionnaireResponse author', async () => {
     const ctx = fakeCtx();
     const runs: any[] = [];
