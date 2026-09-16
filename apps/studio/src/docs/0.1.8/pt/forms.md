@@ -100,6 +100,14 @@ Use uma instalação de teste com um paciente existente, terminologia LOINC carr
 Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative um fluxo desativado antes de repetir. As mensagens de campos obrigatórios usam o rótulo visível.
 
 
+## Escolher exames no pedido de exames
+
+Escreva pelo menos dois caracteres do código ou do nome de um exame no campo Tests para o procurar. Se não conhece nenhum dos dois, abra o menu ⋯ ao lado do rótulo Tests e escolha **Ver todos os exames**. O painel lista todo o catálogo página a página, com uma pesquisa e um filtro por categoria. O filtro oferece as categorias da página que está a ver.
+
+Escolha um exame para o juntar aos que já estão escolhidos. Um exame que este laboratório não faz aparece marcado **Não oferecido aqui** e não pode ser escolhido, porque o pedido seria recusado no envio. Quem pode gerir o catálogo ativa-o na página Catálogo de exames.
+
+Uma instalação sem catálogo carregado não tem nada para ver, e o painel diz isso. Os exames vêm da página Catálogo de exames, onde um laboratório importa a sua lista. O OpenLDR não traz exames.
+
 ## Resultados no pedido de exames
 
 Cada exame escolhido num pedido recebe uma linha por baixo do campo Tests. A linha mostra o código e o nome do exame, e se a amostra está definida. Abrir uma linha mostra a escolha da amostra, o intervalo de referência que corresponde a este doente, e um campo por parâmetro de resultado.

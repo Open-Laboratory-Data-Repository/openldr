@@ -220,6 +220,14 @@ Use a test installation with an existing patient, loaded LOINC terminology, and 
 If a reference list is empty, check the configured source and loaded terminology. If the workflow is disabled, enable it before retrying. Required-field messages identify the field by its visible label.
 
 
+## Choosing tests on the Lab order
+
+Type two or more characters of a test's code or name in the Tests field to search for it. If you know neither, open the ⋯ menu beside the Tests label and choose **Browse all tests**. The sheet lists the whole catalog a page at a time, with a search box and a category filter. The filter offers the categories on the page you are looking at.
+
+Pick a test to add it beside the tests already chosen. A test this lab does not run is marked **Not offered here** and cannot be picked, because the order would be refused on submit. Someone who can manage the catalog switches it on from the Test catalog page.
+
+An install with no catalog loaded has nothing to browse, and the sheet says so. Tests come from the Test catalog page, where a lab imports its list. OpenLDR ships no tests.
+
 ## Results on the Lab order
 
 Each test chosen on a Lab order gets a row under the Tests field. The row shows the test's code and name, and whether its specimen is set. Opening a row shows the specimen picker, the reference range that fits this patient, and one input per result parameter.
