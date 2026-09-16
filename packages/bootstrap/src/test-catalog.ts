@@ -7,7 +7,8 @@ import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
 import {
-  matchBand, parseResultParams, RESULT_PARAM_VALUE_SET, type ResultBand, type TestResultParam,
+  bandFit, matchBand, parseResultParams, RESULT_PARAM_VALUE_SET, SEX_OPTIONS, type BandFit, type ResultBand,
+  type SexOption, type TestResultParam,
 } from './result-params';
 import type { AuditDetails } from './record-audit';
 import {
@@ -131,6 +132,8 @@ export interface CatalogOptions {
   resultParams: CatalogSpecimenOption[];
   /** The LOINC code system when LOINC is loaded here, so the sheet can search it. Null otherwise. */
   loinc: { systemId: string; system: string } | null;
+  /** The sexes a range may name, with labels, so the studio names no code (named reference ranges). */
+  sexes: SexOption[];
 }
 
 /** A file read for import: its table, and CE's guess at which column feeds which field. */
@@ -209,10 +212,11 @@ export function catalogImportAudit(report: CatalogImportReport): AuditDetails {
   };
 }
 
-/** One test's parameters, ready for the sheet to draw. */
+/** One test's parameters, ready for the sheet to draw. `fits` says, for each band by index, whether
+ *  it fits this patient, so the browser never works out an age. */
 export interface TestParamsAnswer {
   test: { system: string; code: string };
-  params: Array<TestResultParam & { unit: string | null; display: string | null; band: ResultBand | null }>;
+  params: Array<TestResultParam & { unit: string | null; display: string | null; band: ResultBand | null; fits: BandFit[] }>;
 }
 
 export interface TestCatalog {
@@ -559,6 +563,24 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       if (param.resultType === 'coded' && !param.valueSetUrl) {
         throw invalid(`${param.code} is a coded result and needs a value set.`);
       }
+      // A duplicate name leaves the bench two choices it cannot tell apart. A sex outside the Patient
+      // codes can never fit anyone, silently.
+      const names = new Set<string>();
+      param.bands.forEach((band, i) => {
+        const where = `${param.code} range ${i + 1}`;
+        if (band.low !== null && band.high !== null && band.low > band.high) throw invalid(`${where} has a low above its high.`);
+        if (band.ageLow !== null && band.ageHigh !== null && band.ageLow > band.ageHigh) {
+          throw invalid(`${where} has an age from above its age to.`);
+        }
+        if (band.sex !== null && !SEX_OPTIONS.some((s) => s.code === band.sex)) {
+          throw invalid(`${where} names ${band.sex}, which is not a sex this install knows.`);
+        }
+        if (band.name !== null) {
+          const key = band.name.toLowerCase();
+          if (names.has(key)) throw invalid(`${param.code} has two ranges named ${band.name}.`);
+          names.add(key);
+        }
+      });
     }
     const loinc = clean(input.loinc);
     if (loinc && loinc !== linked) {
@@ -717,6 +739,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       specimenTypes: specimenTypes.sort(byLabel),
       resultParams: resultParams.sort(byLabel),
       loinc,
+      sexes: SEX_OPTIONS,
     };
   }
 
@@ -1007,6 +1030,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
           unit: unitOf.get(p.code)?.unit ?? null,
           display: unitOf.get(p.code)?.display ?? null,
           band: matchBand(p.bands, patient),
+          fits: p.bands.map((b) => bandFit(b, patient)),
         })),
       };
     });

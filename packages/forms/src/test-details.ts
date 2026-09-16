@@ -17,7 +17,7 @@ export interface TypedResult {
   resultType: 'numeric' | 'coded' | 'text'
   value: number | string | ResultCoding | null
   unit?: string | null
-  band?: { low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null } | null
+  band?: { name?: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null } | null
 }
 
 export interface TestDetail {

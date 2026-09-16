@@ -24,10 +24,11 @@ beforeEach(() => {
   vi.mocked(expandValueSetByUrl).mockResolvedValue([]);
   vi.mocked(catalogResultParams).mockResolvedValue({
     tests: [
-      { test: { system: CATALOG, code: 'FBC' }, params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [], unit: 'g/dL', display: 'Haemoglobin', band: null }] },
+      { test: { system: CATALOG, code: 'FBC' }, params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [], fits: [], unit: 'g/dL', display: 'Haemoglobin', band: null }] },
       { test: { system: CATALOG, code: 'CD4' }, params: [] },
     ],
     rejectReasons: { order: [], test: [{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }] },
+    sexes: [],
   });
 });
 

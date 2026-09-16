@@ -64,6 +64,6 @@ An install whose Lab order was edited in the form builder keeps its own Tests fi
 
 A test can name the result parameters it yields: haemoglobin, a CD4 count, a malaria RDT reading. The parameters come from this install's result dictionary, so nothing is typed by hand. Tick one in the test's sheet, then say whether its result is a number, a code from a list, or free text.
 
-A numeric parameter can carry reference bands. A band has a low, a high and a unit, and may name a sex and an age window. The bench sees the one band that fits the patient on the order. A test that names no parameters still works: its sheet asks only for a specimen.
+A numeric parameter can carry reference ranges. Each range has a low, a high, a unit, and an optional name such as Highland women. It may also name a sex and an age window. A range row's ⋯ menu moves it up, moves it down or removes it, and the parameter's ⋯ menu adds one. Order decides which range starts selected at the bench. Two ranges on one parameter cannot share a name. A test that names no parameters still works: its sheet asks only for a specimen.
 
 From the command line, `openldr test-catalog params <code>` prints a test's parameters, and `--set <file>` replaces them from a JSON file.

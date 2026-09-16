@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import {
-  TestCatalogError, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest,
+  TestCatalogError, type AppContext, type CatalogImportReport, type CatalogOptions, type CatalogTest, SEX_OPTIONS,
 } from '@openldr/bootstrap';
 import { registerTestCatalogRoutes } from './test-catalog-routes';
 import './auth-plugin';
@@ -17,6 +17,7 @@ const OPTIONS: CatalogOptions = {
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }],
   resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin' }],
   loinc: null,
+  sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }],
 };
 
 const REPORT: CatalogImportReport = {
@@ -361,7 +362,7 @@ describe('test catalog routes', () => {
   it('carries a test result parameters through a create and an update', async () => {
     const params = [{
       system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null,
-      bands: [{ low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }],
+      bands: [{ name: 'Highland women', low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }],
     }];
     const { ctx, calls } = fakeCtx();
     const app = appWith(ctx);
@@ -371,6 +372,27 @@ describe('test catalog routes', () => {
     await app.inject({ method: 'PUT', url: '/api/test-catalog/FBC', payload: { display: 'FBC', resultParams: [] } });
     const updated = calls.find((c) => c.method === 'update');
     expect((updated?.args[1] as { resultParams?: unknown }).resultParams).toEqual([]);
+  });
+
+  it('keeps a range with no name as a null name, not a missing key', async () => {
+    const { ctx, calls } = fakeCtx();
+    await appWith(ctx).inject({
+      method: 'POST', url: '/api/test-catalog',
+      payload: { code: 'FBC', display: 'FBC', resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ low: 12, high: 15 }] }] },
+    });
+    const created = calls.find((c) => c.method === 'create');
+    expect((created?.args[0] as { resultParams: Array<{ bands: unknown[] }> }).resultParams[0].bands[0]).toEqual({
+      name: null, low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null,
+    });
+  });
+
+  it('POST /result-params answers the sex choices with their labels, so the studio names no code', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }] },
+    });
+    expect(res.json().sexes).toEqual(SEX_OPTIONS);
   });
 
   it('POST /result-params answers each test its parameters, to anyone who can use forms', async () => {

@@ -64,6 +64,6 @@ Une installation dont la demande d'examens a été modifiée dans l'éditeur de 
 
 Un examen peut nommer les paramètres de résultat qu'il produit : hémoglobine, numération CD4, lecture d'un TDR du paludisme. Les paramètres viennent du dictionnaire de résultats de cette installation, donc rien ne se saisit à la main. Cochez-en un dans le panneau de l'examen, puis indiquez si son résultat est un nombre, un code d'une liste, ou du texte libre.
 
-Un paramètre numérique peut porter des intervalles de référence. Un intervalle a une borne basse, une borne haute et une unité, et peut nommer un sexe et une tranche d'âge. La paillasse voit le seul intervalle qui correspond au patient de la demande. Un examen sans paramètre fonctionne toujours : son panneau ne demande qu'un prélèvement.
+Un paramètre numérique peut porter des intervalles de référence. Chaque intervalle a une borne basse, une borne haute, une unité, et un nom facultatif, par exemple Femmes des hauts plateaux. Il peut aussi nommer un sexe et une tranche d'âge. Le menu ⋯ de la ligne d'un intervalle le monte, le descend ou le supprime, et le menu ⋯ du paramètre en ajoute un. L'ordre décide quel intervalle est sélectionné au départ à la paillasse. Deux intervalles d'un même paramètre ne peuvent pas porter le même nom. Un examen sans paramètre fonctionne toujours : son panneau ne demande qu'un prélèvement.
 
 En ligne de commande, `openldr test-catalog params <code>` affiche les paramètres d'un examen, et `--set <fichier>` les remplace depuis un fichier JSON.

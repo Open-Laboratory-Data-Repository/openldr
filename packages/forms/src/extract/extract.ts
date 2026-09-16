@@ -33,7 +33,7 @@ export interface ExtractionContext {
    * (bench result entry). A replayed response carries none, and the Observation then has no
    * referenceRange.
    */
-  testBands?: ReadonlyMap<string, { low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }>
+  testBands?: ReadonlyMap<string, { name?: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }>
 }
 
 /** Pluggable extraction of discrete FHIR resources from a filled form (PRD §3.2). */

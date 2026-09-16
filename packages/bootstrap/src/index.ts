@@ -1754,8 +1754,8 @@ export {
   type CatalogUnmatchedValue,
 } from './test-catalog';
 export {
-  RESULT_PARAM_VALUE_SET, matchBand, parseResultParams,
-  type TestResultParam, type ResultBand, type ResultType,
+  RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams,
+  type BandFit, type SexOption, type TestResultParam, type ResultBand, type ResultType,
 } from './result-params';
 export {
   CATALOG_IMPORT_FIELDS, CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS,

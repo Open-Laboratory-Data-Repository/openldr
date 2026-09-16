@@ -202,6 +202,16 @@ describe('TestResultsExtractor (bench result entry)', () => {
     ])
   })
 
+  it('writes the range name as the reference range text', () => {
+    const named = { name: 'Highland women', low: 12, high: 16, unit: 'g/dL', sex: 'female', ageLow: 15, ageHigh: null }
+    const out = extract({
+      [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+        { param: { system: PARAM, code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL', band: named },
+      ] },
+    }, { testBands: new Map([[`${CATALOG}|FBC#${PARAM}|HGB`, named]]) }) as any[]
+    expect(out[0].referenceRange).toEqual([{ low: { value: 12, unit: 'g/dL' }, high: { value: 16, unit: 'g/dL' }, text: 'Highland women' }])
+  })
+
   it('writes a coded result and a text result under the right value', () => {
     const out = extract({
       [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [

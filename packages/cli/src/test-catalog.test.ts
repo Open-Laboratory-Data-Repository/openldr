@@ -83,7 +83,7 @@ describe('test-catalog params', () => {
   it('prints one line per parameter, with its type and band count', () => {
     expect(formatResultParams([
       { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null,
-        bands: [{ low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] },
+        bands: [{ name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] },
       { system: 'urn:openldr:default_result', code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [] },
     ])).toBe('HGB\tnumeric\t1 band\nNOTE\ttext\t0 bands');
   });
@@ -95,6 +95,13 @@ describe('test-catalog params', () => {
   it('reads a set file as a list of parameters', () => {
     expect(readResultParamsFile(JSON.stringify([{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' }])))
       .toEqual([{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [] }]);
+  });
+
+  it('keeps a range name from a set file', () => {
+    const [param] = readResultParamsFile(JSON.stringify([
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ name: 'Highland women', low: 12, high: 16 }] },
+    ]));
+    expect(param.bands[0].name).toBe('Highland women');
   });
 
   it('refuses a set file that is not a list', () => {

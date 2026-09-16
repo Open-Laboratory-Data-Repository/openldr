@@ -426,6 +426,7 @@ describe('test catalog: options and row changes', () => {
       { system: LOCAL, code: 'SPT', display: 'Sputum' },
       { system: LOCAL, code: 'UR', display: 'Urine' },
     ]);
+    expect(o.sexes.map((s) => s.code)).toEqual(['male', 'female', 'other', 'unknown']);
     expect(o.loinc).toBeNull();
   });
 
@@ -885,7 +886,7 @@ async function seedResultParams(db: Kysely<InternalSchema>, codes: string[]): Pr
 
 describe('test catalog: result parameters on a test', () => {
   const HGB = { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null,
-    bands: [{ low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] };
+    bands: [{ name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] };
 
   it('keeps the parameters a save writes, bands and all', async () => {
     const { db, catalog } = await buildCatalog();
@@ -926,6 +927,52 @@ describe('test catalog: result parameters on a test', () => {
       resultParams: [{ system: 'urn:openldr:default_result', code: 'MRDT', resultType: 'coded', valueSetUrl: null, bands: [] }],
     })).rejects.toMatchObject({ kind: 'invalid' });
   });
+
+  const range = (b: object) => ({ name: null, low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: null, ...b });
+
+  it('keeps a range name through a save', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ name: 'Highland women', low: 12, high: 16 })] }] });
+    expect((await catalog.get('FBC'))?.resultParams[0].bands[0].name).toBe('Highland women');
+  });
+
+  it('refuses two ranges with the same name on one parameter, ignoring case', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await expect(catalog.create({
+      code: 'FBC', display: 'Full blood count',
+      resultParams: [{ ...HGB, bands: [range({ name: 'Highland', low: 12, high: 16 }), range({ name: 'highland', low: 11, high: 15 })] }],
+    })).rejects.toMatchObject({ kind: 'invalid', message: 'HGB has two ranges named highland.' });
+  });
+
+  // The refusal must echo the name as the second range typed it, not lower-cased for the compare.
+  // A fixture where both ranges already type the name in lower case cannot show that: the lower-cased
+  // compare key and the typed name are the same string either way.
+  it('echoes the second range name as typed, not lower-cased', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await expect(catalog.create({
+      code: 'FBC', display: 'Full blood count',
+      resultParams: [{ ...HGB, bands: [range({ name: 'highland', low: 12, high: 16 }), range({ name: 'HIGHLAND', low: 11, high: 15 })] }],
+    })).rejects.toMatchObject({ kind: 'invalid', message: 'HGB has two ranges named HIGHLAND.' });
+  });
+
+  it('refuses a range whose low is above its high, or whose age from is above its age to', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ low: 16, high: 12 })] }] }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 has a low above its high.' });
+    await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ ageLow: 20, ageHigh: 15 })] }] }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 has an age from above its age to.' });
+  });
+
+  it('refuses a range whose sex is not one of the Patient codes', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await expect(catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [{ ...HGB, bands: [range({ sex: 'woman' })] }] }))
+      .rejects.toMatchObject({ kind: 'invalid', message: 'HGB range 1 names woman, which is not a sex this install knows.' });
+  });
 });
 
 describe('test catalog: what a result sheet needs', () => {
@@ -933,8 +980,8 @@ describe('test catalog: what a result sheet needs', () => {
   const HGB = {
     system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null,
     bands: [
-      { low: 13, high: 17, unit: 'g/dL', sex: 'male', ageLow: 18, ageHigh: null },
-      { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
+      { name: null, low: 13, high: 17, unit: 'g/dL', sex: 'male', ageLow: 18, ageHigh: null },
+      { name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
     ],
   };
 
@@ -945,7 +992,11 @@ describe('test catalog: what a result sheet needs', () => {
     const answer = await catalog.resultParamsFor([test('FBC')], { sex: 'female', ageYears: 30 });
     expect(answer).toEqual([{
       test: { system: TEST_CATALOG_SYSTEM, code: 'FBC' },
-      params: [{ ...HGB, unit: 'g/dL', display: 'HGB', band: { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null } }],
+      params: [{
+        ...HGB, unit: 'g/dL', display: 'HGB',
+        band: { name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
+        fits: ['no', 'yes'],
+      }],
     }]);
   });
 
@@ -966,5 +1017,13 @@ describe('test catalog: what a result sheet needs', () => {
   it('ignores codings that are not catalog tests', async () => {
     const { catalog } = await buildCatalog();
     expect(await catalog.resultParamsFor([{ system: LOINC_SYSTEM, code: '718-7' }], {})).toEqual([]);
+  });
+
+  it('answers unknown for a range that names a fact the patient record lacks', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, ageYears: null });
+    expect(answer[0].params[0].fits).toEqual(['unknown', 'unknown']);
   });
 });
