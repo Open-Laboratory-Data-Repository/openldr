@@ -56,6 +56,18 @@ function type(label: string, value: string) {
   fireEvent.change(screen.getByRole('textbox', { name: label }), { target: { value } });
 }
 
+async function openMenu(testId: string) {
+  const trigger = screen.getByTestId(testId);
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+  await screen.findByRole('menu');
+}
+
+async function addBand(code: string) {
+  await openMenu(`param-menu-${code}`);
+  await act(async () => { fireEvent.click(await screen.findByTestId(`add-band-${code}`)); });
+}
+
 // Radix Select opens from the keyboard in jsdom.
 async function pickCategory(name: RegExp) {
   fireEvent.keyDown(screen.getByRole('combobox', { name: 'Category' }), { key: 'ArrowDown' });
@@ -213,13 +225,42 @@ describe('TestSheet: result parameters', () => {
   it('saves a band the operator typed', async () => {
     vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
     renderSheet({ target: { kind: 'edit', test: withParam } });
-    fireEvent.click(screen.getByRole('button', { name: /add band for HGB/i }));
+    await addBand('HGB');
     fireEvent.change(screen.getByLabelText(/low for HGB band 1/i), { target: { value: '12' } });
     fireEvent.change(screen.getByLabelText(/high for HGB band 1/i), { target: { value: '15' } });
     await save();
     expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands).toEqual([
-      { low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null },
+      { name: null, low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null },
     ]);
+  });
+
+  it('saves a range name, sex and age the operator set', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    await addBand('HGB');
+    fireEvent.change(screen.getByLabelText(/name for HGB band 1/i), { target: { value: 'Highland women' } });
+    fireEvent.keyDown(screen.getByRole('combobox', { name: /sex for HGB band 1/i }), { key: 'ArrowDown' });
+    await act(async () => { fireEvent.click(await screen.findByRole('option', { name: 'Female' })); });
+    fireEvent.change(screen.getByLabelText(/age from for HGB band 1/i), { target: { value: '15' } });
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands).toEqual([
+      { name: 'Highland women', low: null, high: null, unit: null, sex: 'female', ageLow: 15, ageHigh: null },
+    ]);
+  });
+
+  it('moves a range up, and removes one, from the range menu', async () => {
+    const twoBands: api.CatalogTest = { ...withParam, resultParams: [{ ...withParam.resultParams[0], bands: [
+      { name: 'Lowland', low: 11, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null },
+      { name: 'Highland', low: 12, high: 16, unit: null, sex: null, ageLow: null, ageHigh: null },
+    ] }] };
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(twoBands);
+    renderSheet({ target: { kind: 'edit', test: twoBands } });
+    await openMenu('band-menu-HGB-2');
+    await act(async () => { fireEvent.click(await screen.findByTestId('band-up-HGB-2')); });
+    await openMenu('band-menu-HGB-2');
+    await act(async () => { fireEvent.click(await screen.findByTestId('band-remove-HGB-2')); });
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands.map((b) => b.name)).toEqual(['Highland']);
   });
 
   it('clears the parameters when the operator unticks the last one', async () => {

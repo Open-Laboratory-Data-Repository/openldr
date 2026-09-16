@@ -16,8 +16,9 @@ import { TermPicker } from '@/terminology/TermPicker';
 import {
   createCatalogTest, setCatalogLabSettings, updateCatalogTest,
   type CatalogLabSettingsInput, type CatalogTestResultParam, type CatalogSpecimenCoding, type CatalogTest, type CatalogTestInput,
-  type TestCatalogOptions,
+  type CatalogResultBand, type TestCatalogOptions,
 } from '@/api';
+import { sexLabel } from '@/forms-runtime/rangeLabel';
 
 // Test catalog S2 (spec 4.3): add or edit one test, and this lab's own settings for it. Copies
 // forms-builder/FieldEditorSheet.tsx (AGENTS.md section 5).
@@ -43,7 +44,9 @@ interface Draft {
   localDisplay: string;
 }
 
-const EMPTY_BAND = { low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: null };
+const EMPTY_BAND: CatalogResultBand = { name: null, low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: null };
+/** Radix Select cannot hold an empty value, so "any sex" is this sentinel in the picker only. */
+const ANY_SEX = '__any__';
 
 /** Tick or untick one parameter, keeping the order the operator ticked them in. */
 function toggleParam(list: CatalogTestResultParam[], option: { system: string; code: string }, on: boolean): CatalogTestResultParam[] {
@@ -104,7 +107,7 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(null));
   // The test as last saved. A create that went through sets it, so saving again edits instead of
   // adding the test twice.
@@ -298,52 +301,108 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                 </SelectContent>
                               </Select>
                               {chosen.resultType === 'numeric' ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  aria-label={`Add band for ${p.code}`}
-                                  onClick={() => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands: [...chosen.bands, EMPTY_BAND] }) })}
-                                >
-                                  {t('testCatalog.sheet.addBand')}
-                                </Button>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost" size="icon" className="h-8 w-8"
+                                      data-testid={`param-menu-${p.code}`}
+                                      aria-label={t('testCatalog.sheet.paramActions', { code: p.code })}
+                                    >
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      data-testid={`add-band-${p.code}`}
+                                      onSelect={() => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands: [...chosen.bands, EMPTY_BAND] }) })}
+                                    >
+                                      {t('testCatalog.sheet.addBand')}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               ) : null}
                             </div>
-                            {chosen.resultType === 'numeric' && chosen.bands.map((band, i) => (
-                              <div key={i} className="flex flex-wrap items-center gap-1.5">
-                                {(['low', 'high'] as const).map((edge) => (
+                            {chosen.resultType === 'numeric' && chosen.bands.map((band, i) => {
+                              const n = i + 1;
+                              const writeBands = (bands: CatalogResultBand[]) => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands }) });
+                              const setBand = (patch: Partial<CatalogResultBand>) => writeBands(chosen.bands.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+                              const numberOrNull = (value: string) => (value.trim() === '' ? null : Number(value));
+                              const move = (by: number) => {
+                                const next = [...chosen.bands];
+                                [next[i], next[i + by]] = [next[i + by], next[i]];
+                                writeBands(next);
+                              };
+                              return (
+                                <div key={i} className="flex flex-wrap items-center gap-1.5">
                                   <Input
-                                    key={edge}
-                                    className="h-8 w-20"
-                                    aria-label={`${edge} for ${p.code} band ${i + 1}`}
-                                    value={band[edge] === null ? '' : String(band[edge])}
-                                    onChange={(e) => set({ resultParams: setParam(draft.resultParams, p.code, {
-                                      ...chosen,
-                                      bands: chosen.bands.map((b, j) => (j === i ? { ...b, [edge]: e.target.value === '' ? null : Number(e.target.value) } : b)),
-                                    }) })}
+                                    className="h-8 w-40"
+                                    aria-label={t('testCatalog.sheet.bandNameFor', { code: p.code, n })}
+                                    placeholder={t('testCatalog.sheet.bandName')}
+                                    value={band.name ?? ''}
+                                    onChange={(e) => setBand({ name: e.target.value === '' ? null : e.target.value })}
                                   />
-                                ))}
-                                <Input
-                                  className="h-8 w-20"
-                                  aria-label={`unit for ${p.code} band ${i + 1}`}
-                                  placeholder={t('testCatalog.sheet.bandUnit')}
-                                  value={band.unit ?? ''}
-                                  onChange={(e) => set({ resultParams: setParam(draft.resultParams, p.code, {
-                                    ...chosen,
-                                    bands: chosen.bands.map((b, j) => (j === i ? { ...b, unit: e.target.value || null } : b)),
-                                  }) })}
-                                />
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  aria-label={`Remove band ${i + 1} for ${p.code}`}
-                                  onClick={() => set({ resultParams: setParam(draft.resultParams, p.code, {
-                                    ...chosen, bands: chosen.bands.filter((_, j) => j !== i),
-                                  }) })}
-                                >
-                                  {t('testCatalog.sheet.removeBand')}
-                                </Button>
-                              </div>
-                            ))}
+                                  {(['low', 'high'] as const).map((edge) => (
+                                    <Input
+                                      key={edge}
+                                      className="h-8 w-20"
+                                      aria-label={`${edge} for ${p.code} band ${n}`}
+                                      value={band[edge] === null ? '' : String(band[edge])}
+                                      onChange={(e) => setBand({ [edge]: numberOrNull(e.target.value) })}
+                                    />
+                                  ))}
+                                  <Input
+                                    className="h-8 w-20"
+                                    aria-label={`unit for ${p.code} band ${n}`}
+                                    placeholder={t('testCatalog.sheet.bandUnit')}
+                                    value={band.unit ?? ''}
+                                    onChange={(e) => setBand({ unit: e.target.value || null })}
+                                  />
+                                  <Select value={band.sex ?? ANY_SEX} onValueChange={(v) => setBand({ sex: v === ANY_SEX ? null : v })}>
+                                    <SelectTrigger className="h-8 w-32" aria-label={t('testCatalog.sheet.bandSexFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value={ANY_SEX}>{t('testCatalog.sheet.bandAnySex')}</SelectItem>
+                                      {options.sexes.map((s) => <SelectItem key={s.code} value={s.code}>{sexLabel(s, i18n.language)}</SelectItem>)}
+                                    </SelectContent>
+                                  </Select>
+                                  {(['ageLow', 'ageHigh'] as const).map((edge) => (
+                                    <Input
+                                      key={edge}
+                                      className="h-8 w-20"
+                                      aria-label={t(edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFromFor' : 'testCatalog.sheet.bandAgeToFor', { code: p.code, n })}
+                                      placeholder={t(edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFrom' : 'testCatalog.sheet.bandAgeTo')}
+                                      value={band[edge] === null ? '' : String(band[edge])}
+                                      onChange={(e) => setBand({ [edge]: numberOrNull(e.target.value) })}
+                                    />
+                                  ))}
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost" size="icon" className="h-8 w-8"
+                                        data-testid={`band-menu-${p.code}-${n}`}
+                                        aria-label={t('testCatalog.sheet.bandActions', { code: p.code, n })}
+                                      >
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem data-testid={`band-up-${p.code}-${n}`} disabled={i === 0} onSelect={() => move(-1)}>
+                                        {t('testCatalog.sheet.moveUp')}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem data-testid={`band-down-${p.code}-${n}`} disabled={i === chosen.bands.length - 1} onSelect={() => move(1)}>
+                                        {t('testCatalog.sheet.moveDown')}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        data-testid={`band-remove-${p.code}-${n}`}
+                                        className="text-destructive focus:text-destructive"
+                                        onSelect={() => writeBands(chosen.bands.filter((_, j) => j !== i))}
+                                      >
+                                        {t('testCatalog.sheet.removeBand')}
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : null}
                       </div>
