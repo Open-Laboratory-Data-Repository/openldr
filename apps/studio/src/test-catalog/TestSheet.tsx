@@ -285,7 +285,8 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                           <span className="font-mono text-xs text-muted-foreground">{p.code}</span>
                         </label>
                         {chosen ? (
-                          <div className="ml-8 flex flex-col gap-1.5">
+                          <div className="flex flex-col gap-1.5 sm:ml-8">
+                            {/* The indent is desktop-only. On a phone it cost the range fields 32px they cannot spare. */}
                             <div className="flex items-center gap-2">
                               <Select
                                 value={chosen.resultType}
@@ -343,8 +344,11 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                 // A block with a visible word beside every field, label left and input right as elsewhere
                                 // in the studio (AGENTS.md section 5). On a phone the fields stack one per line, so a
                                 // filled low or high box never reads as a bare number. From sm up, two pairs per line.
-                                <div key={i} data-testid={`band-${p.code}-${n}`} className="relative rounded-md border border-border p-3 pr-11">
-                                  <div className="absolute right-1.5 top-1.5">
+                                <div key={i} data-testid={`band-${p.code}-${n}`} className="rounded-md border border-border p-3 sm:relative sm:pr-11">
+                                  {/* On a phone the menu takes its own line at the top, so the fields keep the full width.
+                                      From sm up it sits in the corner, beside the Name line. Measured live at 375px: the
+                                      reserved corner left the inputs 44px wide. */}
+                                  <div className="-mt-1.5 mb-1 flex justify-end sm:absolute sm:right-1.5 sm:top-1.5 sm:mt-0 sm:mb-0">
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
                                         <Button
