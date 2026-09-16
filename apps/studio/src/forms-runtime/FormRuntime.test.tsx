@@ -702,6 +702,39 @@ describe('FormRuntime', () => {
     expect(await screen.findByText('Parcourir tous les examens')).toBeInTheDocument();
   });
 
+  it('hands the results copy from the caller to the results field, since the runtime has no i18n', () => {
+    // The defect: FormCapture passed testDetailsCopy, and FormRuntime never passed it on, so the results
+    // field showed English in French and Portuguese.
+    const resultsSchema = {
+      ...orderSchema,
+      fields: [
+        orderSchema.fields[0],
+        {
+          id: 'results', fhirPath: null, displayLabel: 'Results', description: null, fieldType: 'testDetails',
+          required: false, enabled: true, order: 2, cardinality: { min: 0, max: '1' }, referenceDependsOn: 'tests',
+        },
+      ],
+    } as FormSchema;
+    render(<FormRuntime schema={resultsSchema} formDefinitionId="f1" onSubmit={() => {}} testDetailsCopy={{ empty: 'Aucun examen choisi.' }} />);
+    expect(screen.getByText('Aucun examen choisi.')).toBeInTheDocument();
+  });
+
+  it('hands the results copy to a results field inside a group too', () => {
+    const groupedSchema = {
+      ...orderSchema,
+      fields: [
+        { id: 'grp', fhirPath: null, displayLabel: 'Order', description: null, fieldType: 'group', required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' } },
+        { ...orderSchema.fields[0], groupId: 'grp' },
+        {
+          id: 'results', fhirPath: null, displayLabel: 'Results', description: null, fieldType: 'testDetails', groupId: 'grp',
+          required: false, enabled: true, order: 2, cardinality: { min: 0, max: '1' }, referenceDependsOn: 'tests',
+        },
+      ],
+    } as FormSchema;
+    render(<FormRuntime schema={groupedSchema} formDefinitionId="f1" onSubmit={() => {}} testDetailsCopy={{ empty: 'Aucun examen choisi.' }} />);
+    expect(screen.getByText('Aucun examen choisi.')).toBeInTheDocument();
+  });
+
   it('offers no such menu on an ordinary reference field', () => {
     // The tests field alone: still a reference field, but nothing depends on it.
     const refSchema = { ...orderSchema, fields: [orderSchema.fields[0]] } as FormSchema;
