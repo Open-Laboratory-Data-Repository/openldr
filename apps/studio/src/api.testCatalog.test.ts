@@ -94,6 +94,7 @@ describe('test catalog api client', () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({
       tests: [{ test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }, params: [] }],
       rejectReasons: { order: [], test: [] },
+      sexes: [],
     })));
     const tests = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }];
     const answer = await catalogResultParams(tests, { reference: 'Patient/p1' });
@@ -105,7 +106,7 @@ describe('test catalog api client', () => {
   });
 
   it('leaves the patient out when the order names none', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => json({ tests: [], rejectReasons: { order: [], test: [] } })));
+    vi.stubGlobal('fetch', vi.fn(async () => json({ tests: [], rejectReasons: { order: [], test: [] }, sexes: [] })));
     await catalogResultParams([], null);
     expect(fetch).toHaveBeenCalledWith('/api/test-catalog/result-params', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tests: [] }),

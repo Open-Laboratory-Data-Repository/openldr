@@ -1,19 +1,19 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { catalogSpecimensFor, expandValueSetByUrl, type CatalogResultParam } from '@/api';
+import { catalogSpecimensFor, expandValueSetByUrl, type CatalogResultBand, type CatalogResultParam, type CatalogSexOption } from '@/api';
 import type { CodingAnswer, ResultCoding, TestDetail, TypedResult } from '@openldr/forms/pure';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Textarea } from '@/components/ui/textarea';
+import { criteriaLabel, RANGE_EN, rangeLabel, type RangeCopy } from './rangeLabel';
 
 const keyOf = (c: { system: string; code: string }): string => `${c.system}|${c.code}`;
 
-/** "12 to 15 g/dL", "12 or more g/dL", "up to 15 g/dL". Null when no band matched this patient. */
-function bandText(param: CatalogResultParam): string | null {
-  const band = param.band;
+/** "12 to 15 g/dL", "12 or more g/dL", "up to 15 g/dL". Null when no range is picked. */
+function bandText(band: CatalogResultBand | null, unitOfParam: string | null): string | null {
   if (!band || (band.low === null && band.high === null)) return null;
-  const unit = band.unit ?? param.unit ?? '';
+  const unit = band.unit ?? unitOfParam ?? '';
   const range = band.low !== null && band.high !== null
     ? `${band.low} to ${band.high}`
     : band.low !== null ? `${band.low} or more` : `up to ${band.high}`;
@@ -25,21 +25,29 @@ function bandText(param: CatalogResultParam): string | null {
 const TOP_LABEL = 'self-start pt-[11px]';
 
 /** The flag beside a numeric input. Never refuses the value: the bench decides, not the band. */
-function flagFor(param: CatalogResultParam, value: number | null): string | null {
-  const band = param.band;
+function flagFor(band: CatalogResultBand | null, value: number | null): string | null {
   if (!band || value === null) return null;
   if (band.low !== null && value < band.low) return `below ${band.low}`;
   if (band.high !== null && value > band.high) return `above ${band.high}`;
   return null;
 }
 
-export function TestDetailSheet({ test, params, detail, onChange, onClose }: {
+const sameBand = (a: CatalogResultBand, b: { name?: string | null } & Omit<CatalogResultBand, 'name'>): boolean =>
+  a.name === (b.name ?? null) && a.low === b.low && a.high === b.high && a.unit === b.unit
+  && a.sex === b.sex && a.ageLow === b.ageLow && a.ageHigh === b.ageHigh;
+
+export function TestDetailSheet({ test, params, detail, sexes, copy, onChange, onClose }: {
   test: CodingAnswer;
   params: CatalogResultParam[];
   detail: TestDetail;
+  /** The sex choices the server sent, for labelling unnamed ranges. */
+  sexes: CatalogSexOption[];
+  /** Range words. The runtime has no i18n (TestDetailsField). */
+  copy?: RangeCopy;
   onChange: (detail: TestDetail) => void;
   onClose: () => void;
 }): JSX.Element {
+  const words = { ...RANGE_EN, ...(copy ?? {}) };
   const [specimens, setSpecimens] = useState<ResultCoding[]>([]);
   const [codedOptions, setCodedOptions] = useState<Record<string, ResultCoding[]>>({});
 
@@ -67,16 +75,22 @@ export function TestDetailSheet({ test, params, detail, onChange, onClose }: {
   const resultFor = (param: CatalogResultParam): TypedResult | undefined =>
     detail.results.find((r) => keyOf(r.param) === keyOf(param));
 
-  const writeResult = (param: CatalogResultParam, value: TypedResult['value']): void => {
+  const writeResult = (param: CatalogResultParam, value: TypedResult['value'], band: CatalogResultBand | null): void => {
     const next: TypedResult = {
       param: { system: param.system, code: param.code },
       resultType: param.resultType,
       value,
       ...(param.unit ? { unit: param.unit } : {}),
-      ...(param.band ? { band: param.band } : {}),
+      ...(band ? { band } : {}),
     };
     const others = detail.results.filter((r) => keyOf(r.param) !== keyOf(param));
     onChange({ ...detail, results: [...others, next] });
+  };
+
+  /** The range the bench picked for this parameter, or the one the server matched when none is picked yet. */
+  const pickedIndex = (param: CatalogResultParam, current: TypedResult | undefined): number => {
+    const chosen = current?.band ?? param.band;
+    return chosen ? param.bands.findIndex((b) => sameBand(b, chosen)) : -1;
   };
 
   return (
@@ -104,15 +118,19 @@ export function TestDetailSheet({ test, params, detail, onChange, onClose }: {
           {params.map((param) => {
             const current = resultFor(param);
             const label = param.display ?? param.code;
-            const range = bandText(param);
             if (param.resultType === 'numeric') {
               const typed = typeof current?.value === 'number' ? current.value : null;
-              const flag = flagFor(param, typed);
+              const index = pickedIndex(param, current);
+              const band = index >= 0 ? param.bands[index] : null;
+              const flag = flagFor(band, typed);
+              const range = bandText(band, param.unit);
+              const misfit = band !== null && param.fits[index] === 'no';
+              const hasLine = param.bands.length > 0;
               return (
                 // A fragment, not a nested grid: every label shares the sheet's one label column, so the
                 // inputs line up.
                 <Fragment key={keyOf(param)}>
-                  <Label htmlFor={keyOf(param)} className={range ? TOP_LABEL : undefined}>{label}</Label>
+                  <Label htmlFor={keyOf(param)} className={hasLine ? TOP_LABEL : undefined}>{label}</Label>
                   <div>
                     <div className="flex items-center gap-2">
                       <Input
@@ -123,14 +141,32 @@ export function TestDetailSheet({ test, params, detail, onChange, onClose }: {
                         onChange={(e) => {
                           const raw = e.target.value.trim();
                           const next = raw === '' ? null : Number(raw);
-                          writeResult(param, next !== null && Number.isFinite(next) ? next : null);
+                          writeResult(param, next !== null && Number.isFinite(next) ? next : null, band);
                         }}
                       />
                       {param.unit ? <span className="text-sm text-muted-foreground">{param.unit}</span> : null}
                       {flag ? <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-xs text-amber-700">{flag}</span> : null}
                     </div>
-                    {/* A div: the studio has no CSS reset, and a <p> keeps a 1em bottom margin. */}
-                    {range ? <div className="mt-1 text-xs text-muted-foreground">{range}</div> : null}
+                    {hasLine ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <Select
+                          value={index >= 0 ? String(index) : undefined}
+                          onValueChange={(v) => writeResult(param, typed, param.bands[Number(v)] ?? null)}
+                        >
+                          <SelectTrigger className="h-8 w-48" aria-label={`${words.range} ${label}`}>
+                            <SelectValue placeholder={words.chooseRange} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {param.bands.map((b, i) => <SelectItem key={i} value={String(i)}>{rangeLabel(b, sexes, words)}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {/* A span, not a <p>, because the studio has no CSS reset and a <p> keeps a 1em margin. */}
+                        {range ? <span className="text-xs text-muted-foreground">{range}</span> : null}
+                      </div>
+                    ) : null}
+                    {misfit && band ? (
+                      <div className="mt-1 text-xs text-amber-700">{words.misfit.replace('{label}', criteriaLabel(band, sexes, words))}</div>
+                    ) : null}
                   </div>
                 </Fragment>
               );
@@ -141,7 +177,7 @@ export function TestDetailSheet({ test, params, detail, onChange, onClose }: {
               return (
                 <Fragment key={keyOf(param)}>
                   <Label htmlFor={keyOf(param)}>{label}</Label>
-                  <Select value={chosen} onValueChange={(v) => writeResult(param, options.find((o) => keyOf(o) === v) ?? null)}>
+                  <Select value={chosen} onValueChange={(v) => writeResult(param, options.find((o) => keyOf(o) === v) ?? null, null)}>
                     <SelectTrigger id={keyOf(param)}><SelectValue placeholder="Choose a result" /></SelectTrigger>
                     <SelectContent>
                       {options.map((o) => <SelectItem key={keyOf(o)} value={keyOf(o)}>{o.display ?? o.code}</SelectItem>)}
@@ -157,7 +193,7 @@ export function TestDetailSheet({ test, params, detail, onChange, onClose }: {
                   id={keyOf(param)}
                   rows={2}
                   value={typeof current?.value === 'string' ? current.value : ''}
-                  onChange={(e) => writeResult(param, e.target.value === '' ? null : e.target.value)}
+                  onChange={(e) => writeResult(param, e.target.value === '' ? null : e.target.value, null)}
                 />
               </Fragment>
             );

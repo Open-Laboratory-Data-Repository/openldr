@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
-import { catalogResultParams, type CatalogResultParam, type CatalogRejectReason, type CatalogTestParams } from '@/api';
+import { catalogResultParams, type CatalogResultParam, type CatalogRejectReason, type CatalogSexOption, type CatalogTestParams } from '@/api';
 import type { CodingAnswer, TestDetail, TestDetailsAnswer } from '@openldr/forms/pure';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -8,12 +8,13 @@ import { StripedEmpty } from '@/components/ui/striped-empty';
 import { LoadingState } from '@/components/ui/spinner';
 import { TestDetailSheet } from './TestDetailSheet';
 import { RejectSheet } from './RejectSheet';
+import { RANGE_EN, type RangeCopy } from './rangeLabel';
 
 /**
  * Chrome copy. FormRuntime is schema-driven and has no i18n of its own (FormRuntime.tsx:84-92), so
  * the caller that does have one supplies these. Every key falls back to English.
  */
-export interface TestDetailsCopy {
+export interface TestDetailsCopy extends RangeCopy {
   empty?: string;
   loading?: string;
   open?: string;
@@ -24,6 +25,7 @@ export interface TestDetailsCopy {
 }
 
 const EN: Required<TestDetailsCopy> = {
+  ...RANGE_EN,
   empty: 'No tests chosen yet.',
   loading: 'Reading the tests',
   open: 'Open',
@@ -48,6 +50,7 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
   const t = { ...EN, ...(copy ?? {}) };
   const [params, setParams] = useState<CatalogTestParams[]>([]);
   const [reasons, setReasons] = useState<{ order: CatalogRejectReason[]; test: CatalogRejectReason[] }>({ order: [], test: [] });
+  const [sexes, setSexes] = useState<CatalogSexOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [openTest, setOpenTest] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<string | null>(null);
@@ -60,7 +63,7 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
     let cancelled = false;
     setBusy(true);
     catalogResultParams(tests.map(({ system, code }) => ({ system, code })), patient)
-      .then((answer) => { if (!cancelled) { setParams(answer.tests); setReasons(answer.rejectReasons); } })
+      .then((answer) => { if (!cancelled) { setParams(answer.tests); setReasons(answer.rejectReasons); setSexes(answer.sexes); } })
       .catch(() => { if (!cancelled) setParams([]); })
       .finally(() => { if (!cancelled) setBusy(false); });
     return () => { cancelled = true; };
@@ -120,6 +123,8 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
           test={open}
           params={paramsFor(open)}
           detail={detailFor(open)}
+          sexes={sexes}
+          copy={copy}
           onChange={(detail) => write(open, detail)}
           onClose={() => setOpenTest(null)}
         />
