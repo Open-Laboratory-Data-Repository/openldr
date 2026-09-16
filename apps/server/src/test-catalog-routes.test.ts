@@ -15,6 +15,7 @@ const TEST: CatalogTest = {
 const OPTIONS: CatalogOptions = {
   categories: [{ code: 'MOL', display: 'Molecular' }],
   specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }],
+  resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin' }],
   loinc: null,
 };
 
