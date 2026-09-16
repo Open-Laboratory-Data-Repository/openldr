@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import '@/i18n';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
@@ -245,6 +245,26 @@ describe('TestSheet: result parameters', () => {
     const [band] = vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands ?? [];
     expect(band.low).toBeNull();
     expect(band.ageLow).toBeNull();
+  });
+
+  // On a phone the range fields stack, so a filled low or high box read as a bare number. Every field
+  // now has a visible word beside it. Found on the live sheet at 375px, 2026-09-16.
+  it('labels every field of a range with a visible word tied to its input', () => {
+    const oneBand: api.CatalogTest = { ...withParam, resultParams: [{ ...withParam.resultParams[0], bands: [
+      { name: 'Highland women', low: 13, high: 17, unit: null, sex: 'female', ageLow: 15, ageHigh: null },
+    ] }] };
+    renderSheet({ target: { kind: 'edit', test: oneBand } });
+    const block = screen.getByTestId('band-HGB-1');
+    const pairs: Array<[string, RegExp]> = [
+      ['Name', /name for HGB band 1/i], ['Low', /low for HGB band 1/i], ['High', /high for HGB band 1/i],
+      ['Unit', /unit for HGB band 1/i], ['Age from', /age from for HGB band 1/i], ['Age to', /age to for HGB band 1/i],
+    ];
+    for (const [word, control] of pairs) {
+      const label = within(block).getByText(word, { selector: 'label' });
+      expect(label.getAttribute('for')).toBe(screen.getByLabelText(control).id);
+    }
+    const sex = within(block).getByText('Sex', { selector: 'label' });
+    expect(sex.getAttribute('for')).toBe(screen.getByRole('combobox', { name: /sex for HGB band 1/i }).id);
   });
 
   it('saves a range name, sex and age the operator set', async () => {
