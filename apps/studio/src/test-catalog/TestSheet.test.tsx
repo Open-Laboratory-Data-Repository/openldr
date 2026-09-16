@@ -234,6 +234,19 @@ describe('TestSheet: result parameters', () => {
     ]);
   });
 
+  it('reads text that is not a number as a blank bound, never NaN', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    await addBand('HGB');
+    fireEvent.change(screen.getByLabelText(/low for HGB band 1/i), { target: { value: 'abc' } });
+    fireEvent.change(screen.getByLabelText(/age from for HGB band 1/i), { target: { value: '-' } });
+    expect(screen.getByLabelText(/low for HGB band 1/i)).toHaveValue('');
+    await save();
+    const [band] = vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands ?? [];
+    expect(band.low).toBeNull();
+    expect(band.ageLow).toBeNull();
+  });
+
   it('saves a range name, sex and age the operator set', async () => {
     vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
     renderSheet({ target: { kind: 'edit', test: withParam } });

@@ -326,7 +326,10 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                               const n = i + 1;
                               const writeBands = (bands: CatalogResultBand[]) => set({ resultParams: setParam(draft.resultParams, p.code, { ...chosen, bands }) });
                               const setBand = (patch: Partial<CatalogResultBand>) => writeBands(chosen.bands.map((b, j) => (j === i ? { ...b, ...patch } : b)));
-                              const numberOrNull = (value: string) => (value.trim() === '' ? null : Number(value));
+                              const numberOrNull = (value: string) => {
+                                const n = Number(value);
+                                return value.trim() === '' || !Number.isFinite(n) ? null : n;
+                              };
                               const move = (by: number) => {
                                 const next = [...chosen.bands];
                                 [next[i], next[i + by]] = [next[i + by], next[i]];
