@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "ae1bdd45",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Call the catch-all reference range Default"
+        },
+        {
           "hash": "61e640d3",
           "type": "fix",
           "scope": "bootstrap",
