@@ -8,8 +8,9 @@ vi.mock('@/api', () => ({
   referenceSearchPreview: vi.fn(),
   catalogSpecimensFor: vi.fn(),
   browseTestCatalog: vi.fn(),
+  browseTestCategories: vi.fn(),
 }));
-import { browseTestCatalog, catalogSpecimensFor, referenceSearch, referenceSearchPreview } from '@/api';
+import { browseTestCatalog, browseTestCategories, catalogSpecimensFor, referenceSearch, referenceSearchPreview } from '@/api';
 import { FormRuntime } from './FormRuntime';
 import type { FormSchema } from './types';
 
@@ -18,6 +19,8 @@ beforeEach(() => {
   vi.mocked(referenceSearchPreview).mockReset();
   vi.mocked(catalogSpecimensFor).mockReset();
   vi.mocked(browseTestCatalog).mockReset();
+  vi.mocked(browseTestCategories).mockReset();
+  vi.mocked(browseTestCategories).mockResolvedValue([]);
 });
 
 // New flat-model schema: required text field, a boolean, and a conditional text field.

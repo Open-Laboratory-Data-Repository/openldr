@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { browseTestCatalog, type BrowseTest } from '@/api';
+import { browseTestCatalog, browseTestCategories, type BrowseCategory, type BrowseTest } from '@/api';
 import type { CodingAnswer } from '@openldr/forms/pure';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,6 +61,17 @@ export function BrowseTestsSheet({ onPick, onClose, copy }: {
   const [system, setSystem] = useState('');
   const [busy, setBusy] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [categories, setCategories] = useState<BrowseCategory[]>([]);
+
+  // Every category in the catalog, read once. A failure leaves only "any category": the list and the
+  // search still work.
+  useEffect(() => {
+    let cancelled = false;
+    browseTestCategories()
+      .then((answer) => { if (!cancelled) setCategories(answer); })
+      .catch(() => { if (!cancelled) setCategories([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   // Waits for a pause in typing, then goes back to page one. An unchanged search sets no timer, so
   // it never resets a page the operator just moved to.
@@ -87,13 +98,10 @@ export function BrowseTestsSheet({ onPick, onClose, copy }: {
     return () => { cancelled = true; };
   }, [q, category, page, pageSize]);
 
-  // The categories the loaded rows carry, not a second request. The chosen one stays offered even
-  // when no loaded row carries it, so the filter can always be read back.
-  const categories = useMemo(() => {
-    const seen = new Set(rows.map((r) => r.category).filter((c): c is string => !!c));
-    if (category) seen.add(category);
-    return [...seen].sort((a, b) => a.localeCompare(b));
-  }, [rows, category]);
+  const categoryLabel = useMemo(
+    () => new Map(categories.map((c) => [c.code, c.display ?? c.code])),
+    [categories],
+  );
 
   const pick = (row: BrowseTest): void => {
     if (!row.enabled || !system) return;
@@ -128,7 +136,7 @@ export function BrowseTestsSheet({ onPick, onClose, copy }: {
             <SelectTrigger id="browse-tests-category"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ANY}>{t.anyCategory}</SelectItem>
-              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              {categories.map((c) => <SelectItem key={c.code} value={c.code}>{c.display ?? c.code}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -160,7 +168,7 @@ export function BrowseTestsSheet({ onPick, onClose, copy }: {
                       <div>{r.display}</div>
                       {!r.enabled && <div className="text-xs">{t.notOffered}</div>}
                     </TableCell>
-                    <TableCell className="align-top text-xs text-muted-foreground">{r.category ?? ''}</TableCell>
+                    <TableCell className="align-top text-xs text-muted-foreground">{r.category ? categoryLabel.get(r.category) ?? r.category : ''}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
