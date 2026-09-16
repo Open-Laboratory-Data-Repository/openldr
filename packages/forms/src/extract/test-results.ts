@@ -33,6 +33,8 @@ function rangeOf(result: TypedResult, key: string, ctx: ExtractionContext): Part
     referenceRange: [{
       ...(band.low !== null ? { low: { value: band.low, ...(unit ? { unit } : {}) } } : {}),
       ...(band.high !== null ? { high: { value: band.high, ...(unit ? { unit } : {}) } } : {}),
+      // The name the bench picked by, so the record says which range was used.
+      ...(band.name ? { text: band.name } : {}),
     }],
   }
 }

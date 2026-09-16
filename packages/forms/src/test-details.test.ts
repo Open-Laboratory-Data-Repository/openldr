@@ -21,6 +21,14 @@ describe('test details answer', () => {
     })
   })
 
+  it('keeps the name of the range the bench picked', () => {
+    const named = { [`${CATALOG}|FBC`]: { specimen: null, rejection: null, results: [
+      { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL',
+        band: { name: 'Highland women', low: 12, high: 16, unit: 'g/dL', sex: 'female', ageLow: 15, ageHigh: null } },
+    ] } }
+    expect(parseTestDetails(named)[`${CATALOG}|FBC`].results[0].band?.name).toBe('Highland women')
+  })
+
   it('reads a rejection and drops nothing else', () => {
     const rejected = { [`${CATALOG}|FBC`]: { ...answer[`${CATALOG}|FBC`], rejection: { system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' } } }
     const parsed = parseTestDetails(rejected)[`${CATALOG}|FBC`]
