@@ -439,4 +439,35 @@ describe('test catalog routes', () => {
     expect(bad.statusCode).toBe(400);
     expect(calls).toEqual([]);
   });
+
+  it('GET /browse lists the catalog for anyone who can use forms, marking what this lab runs', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx, ['forms.view']).inject({ method: 'GET', url: '/api/test-catalog/browse?q=viral&limit=10' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      rows: [{ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: false }],
+      total: 1,
+      system: 'urn:openldr:codesystem:test-catalog',
+    });
+    expect(calls).toEqual([
+      { method: 'list', args: [{ q: 'viral', status: 'active', limit: 10, offset: 0 }] },
+    ]);
+  });
+
+  it('GET /browse answers nothing a data-entry surface has no business seeing', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx, ['forms.view']).inject({ method: 'GET', url: '/api/test-catalog/browse' });
+    const body = res.json() as Record<string, unknown>;
+    expect(body.ownedHere).toBeUndefined();
+    expect(Object.keys(body.rows as object[]).length).toBe(1);
+    expect(Object.keys((body.rows as Record<string, unknown>[])[0])).toEqual(['code', 'display', 'category', 'enabled']);
+  });
+
+  it('GET /browse needs forms.view, and refuses a bad filter before the store', async () => {
+    const { ctx, calls } = fakeCtx();
+    expect((await appWith(ctx, ['terminology.manage']).inject({ method: 'GET', url: '/api/test-catalog/browse' })).statusCode).toBe(403);
+    const bad = await appWith(ctx, ['forms.view']).inject({ method: 'GET', url: '/api/test-catalog/browse?status=gone' });
+    expect(bad.statusCode).toBe(400);
+    expect(calls).toEqual([]);
+  });
 });
