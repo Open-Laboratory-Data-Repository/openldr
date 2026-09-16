@@ -114,7 +114,7 @@ Cada exame escolhido num pedido recebe uma linha por baixo do campo Tests. A lin
 
 Um valor fora do intervalo é assinalado ao lado do campo. Nunca é recusado: quem decide é a bancada.
 
-Cada resultado numérico tem um seletor de intervalo por baixo do campo, que lista cada intervalo pelo nome, ou, quando não tem nome, por quem é. Começa no intervalo que corresponde ao doente. Escolher um intervalo que não corresponde mostra um aviso e continua permitido. O sinal segue o intervalo escolhido. Se os intervalos do exame mudaram depois de o painel ter sido aberto, o envio do pedido é recusado até o exame ser reaberto.
+Cada resultado numérico tem um seletor de intervalo por baixo do campo, que lista cada intervalo pelo nome, ou, quando não tem nome, por quem é. Começa no intervalo que corresponde ao doente. Escolher um intervalo que não corresponde mostra um aviso e continua permitido. O sinal segue o intervalo escolhido. Se os intervalos do exame mudaram depois de o painel ter sido aberto, o envio do pedido é recusado. Reabra o exame e escolha um intervalo novamente.
 
 Um exame pode ser recusado no menu da sua linha, e o pedido inteiro no menu da página, cada um com um motivo de uma lista. Um exame recusado fica registado com o motivo, e ainda não aparece nos relatórios.
 
