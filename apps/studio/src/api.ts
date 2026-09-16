@@ -2596,6 +2596,14 @@ export const browseTestCatalog = (
     .then((r) => okJson<BrowseTestsAnswer>(r, 'browse tests'));
 };
 
+export interface BrowseCategory { code: string; display: string | null }
+
+/** Every category in the catalog, for the browse sheet's filter. Read once when the sheet opens. */
+export const browseTestCategories = (): Promise<BrowseCategory[]> =>
+  authFetch('/api/test-catalog/browse/categories')
+    .then((r) => okJson<{ categories: BrowseCategory[] }>(r, 'read test categories'))
+    .then((answer) => answer.categories);
+
 /** Expand a ValueSet by url, through the FHIR operation. The url always comes from the server, never
  *  from a literal in the studio. */
 export const expandValueSetByUrl = (url: string): Promise<CatalogRejectReason[]> =>

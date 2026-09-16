@@ -102,7 +102,7 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 
 ## Choisir les examens sur la demande d'examens
 
-Tapez au moins deux caractères du code ou du nom d'un examen dans le champ Tests pour le chercher. Si vous ne connaissez ni l'un ni l'autre, ouvrez le menu ⋯ à côté du libellé Tests et choisissez **Parcourir tous les examens**. Le volet liste tout le catalogue page par page, avec une recherche et un filtre par catégorie. Le filtre propose les catégories de la page affichée.
+Tapez au moins deux caractères du code ou du nom d'un examen dans le champ Tests pour le chercher. Si vous ne connaissez ni l'un ni l'autre, ouvrez le menu ⋯ à côté du libellé Tests et choisissez **Parcourir tous les examens**. Le volet liste tout le catalogue page par page, avec une recherche et un filtre par catégorie.
 
 Choisissez un examen pour l'ajouter à ceux déjà choisis. Un examen que ce laboratoire ne réalise pas est marqué **Non proposé ici** et ne peut pas être choisi, car la demande serait refusée à l'envoi. Une personne qui peut gérer le catalogue l'active depuis la page Catalogue des examens.
 

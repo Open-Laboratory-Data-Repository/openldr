@@ -280,6 +280,14 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     });
   });
 
+  // The browse sheet's category filter: every category in the catalog, not only those on the page it
+  // has loaded. Read once when the sheet opens, and narrowed to the categories, because options() also
+  // answers the management page's other pickers.
+  app.get('/api/test-catalog/browse/categories', FORMS_VIEW, async (_req, reply) => {
+    const { categories } = await ctx.testCatalog.options();
+    return reply.send({ categories: categories.map(({ code, display }) => ({ code, display })) });
+  });
+
   // Bench result entry: the parameters each chosen test yields, with the band that fits the patient,
   // and the rejection reasons for both levels. The reasons are expanded here because the studio must
   // never name a clinical value set (AGENTS.md section 8).

@@ -470,4 +470,20 @@ describe('test catalog routes', () => {
     expect(bad.statusCode).toBe(400);
     expect(calls).toEqual([]);
   });
+
+  it('GET /browse/categories answers every category in the catalog, to anyone who can use forms', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx, ['forms.view']).inject({ method: 'GET', url: '/api/test-catalog/browse/categories' });
+    expect(res.statusCode).toBe(200);
+    // Only the categories: the specimen types, result parameters and LOINC link options() also reads stay out.
+    expect(res.json()).toEqual({ categories: [{ code: 'MOL', display: 'Molecular' }] });
+    expect(calls).toEqual([{ method: 'options', args: [] }]);
+  });
+
+  it('GET /browse/categories needs forms.view', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx, ['terminology.view', 'terminology.manage']).inject({ method: 'GET', url: '/api/test-catalog/browse/categories' });
+    expect(res.statusCode).toBe(403);
+    expect(calls).toEqual([]);
+  });
 });

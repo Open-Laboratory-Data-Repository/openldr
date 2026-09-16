@@ -222,7 +222,7 @@ If a reference list is empty, check the configured source and loaded terminology
 
 ## Choosing tests on the Lab order
 
-Type two or more characters of a test's code or name in the Tests field to search for it. If you know neither, open the ⋯ menu beside the Tests label and choose **Browse all tests**. The sheet lists the whole catalog a page at a time, with a search box and a category filter. The filter offers the categories on the page you are looking at.
+Type two or more characters of a test's code or name in the Tests field to search for it. If you know neither, open the ⋯ menu beside the Tests label and choose **Browse all tests**. The sheet lists the whole catalog a page at a time, with a search box and a category filter.
 
 Pick a test to add it beside the tests already chosen. A test this lab does not run is marked **Not offered here** and cannot be picked, because the order would be refused on submit. Someone who can manage the catalog switches it on from the Test catalog page.
 
