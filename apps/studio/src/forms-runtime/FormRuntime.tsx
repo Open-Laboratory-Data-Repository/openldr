@@ -52,6 +52,7 @@ export function FormRuntime({
   fieldSuggestions,
   onAnswersChange,
   suggestCopy,
+  testDetailsCopy,
   browseCopy,
 }: {
   schema: FormSchema;
@@ -265,6 +266,7 @@ export function FormRuntime({
         preview={preview}
         fieldSuggestions={fieldSuggestions}
         suggestCopy={suggestCopy}
+        testDetailsCopy={testDetailsCopy}
         browseCopy={browseCopy}
       />
     ));
@@ -396,6 +398,7 @@ function FieldRow({
             preview={preview}
             fieldSuggestions={fieldSuggestions}
             suggestCopy={suggestCopy}
+            testDetailsCopy={testDetailsCopy}
             browseCopy={browseCopy}
           />
         ))}
