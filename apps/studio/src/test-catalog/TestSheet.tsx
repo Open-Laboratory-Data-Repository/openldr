@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -335,74 +335,93 @@ export function TestSheet({ target, options, ownedHere, onClose, onSaved }: {
                                 [next[i], next[i + by]] = [next[i + by], next[i]];
                                 writeBands(next);
                               };
+                              const id = (field: string) => `band-${p.code}-${n}-${field}`;
+                              const label = (field: string, key: string) => (
+                                <Label htmlFor={id(field)} className="whitespace-nowrap text-xs text-muted-foreground">{t(key)}</Label>
+                              );
                               return (
-                                <div key={i} className="flex flex-wrap items-center gap-1.5">
-                                  <Input
-                                    className="h-8 w-40"
-                                    aria-label={t('testCatalog.sheet.bandNameFor', { code: p.code, n })}
-                                    placeholder={t('testCatalog.sheet.bandName')}
-                                    value={band.name ?? ''}
-                                    onChange={(e) => setBand({ name: e.target.value === '' ? null : e.target.value })}
-                                  />
-                                  {(['low', 'high'] as const).map((edge) => (
+                                // A block with a visible word beside every field, label left and input right as elsewhere
+                                // in the studio (AGENTS.md section 5). On a phone the fields stack one per line, so a
+                                // filled low or high box never reads as a bare number. From sm up, two pairs per line.
+                                <div key={i} data-testid={`band-${p.code}-${n}`} className="relative rounded-md border border-border p-3 pr-11">
+                                  <div className="absolute right-1.5 top-1.5">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost" size="icon" className="h-8 w-8"
+                                          data-testid={`band-menu-${p.code}-${n}`}
+                                          aria-label={t('testCatalog.sheet.bandActions', { code: p.code, n })}
+                                        >
+                                          <MoreHorizontal className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem data-testid={`band-up-${p.code}-${n}`} disabled={i === 0} onSelect={() => move(-1)}>
+                                          {t('testCatalog.sheet.moveUp')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem data-testid={`band-down-${p.code}-${n}`} disabled={i === chosen.bands.length - 1} onSelect={() => move(1)}>
+                                          {t('testCatalog.sheet.moveDown')}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          data-testid={`band-remove-${p.code}-${n}`}
+                                          className="text-destructive focus:text-destructive"
+                                          onSelect={() => writeBands(chosen.bands.filter((_, j) => j !== i))}
+                                        >
+                                          {t('testCatalog.sheet.removeBand')}
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                  <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
+                                    {label('name', 'testCatalog.sheet.bandName')}
                                     <Input
-                                      key={edge}
-                                      className="h-8 w-20"
-                                      aria-label={`${edge} for ${p.code} band ${n}`}
-                                      value={band[edge] === null ? '' : String(band[edge])}
-                                      onChange={(e) => setBand({ [edge]: numberOrNull(e.target.value) })}
+                                      id={id('name')}
+                                      className="h-8 sm:col-span-3"
+                                      aria-label={t('testCatalog.sheet.bandNameFor', { code: p.code, n })}
+                                      value={band.name ?? ''}
+                                      onChange={(e) => setBand({ name: e.target.value === '' ? null : e.target.value })}
                                     />
-                                  ))}
-                                  <Input
-                                    className="h-8 w-20"
-                                    aria-label={`unit for ${p.code} band ${n}`}
-                                    placeholder={t('testCatalog.sheet.bandUnit')}
-                                    value={band.unit ?? ''}
-                                    onChange={(e) => setBand({ unit: e.target.value || null })}
-                                  />
-                                  <Select value={band.sex ?? ANY_SEX} onValueChange={(v) => setBand({ sex: v === ANY_SEX ? null : v })}>
-                                    <SelectTrigger className="h-8 w-32" aria-label={t('testCatalog.sheet.bandSexFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value={ANY_SEX}>{t('testCatalog.sheet.bandAnySex')}</SelectItem>
-                                      {options.sexes.map((s) => <SelectItem key={s.code} value={s.code}>{sexLabel(s, i18n.language)}</SelectItem>)}
-                                    </SelectContent>
-                                  </Select>
-                                  {(['ageLow', 'ageHigh'] as const).map((edge) => (
+                                    {(['low', 'high'] as const).map((edge) => (
+                                      <Fragment key={edge}>
+                                        {label(edge, edge === 'low' ? 'testCatalog.sheet.bandLow' : 'testCatalog.sheet.bandHigh')}
+                                        <Input
+                                          id={id(edge)}
+                                          className="h-8"
+                                          aria-label={`${edge} for ${p.code} band ${n}`}
+                                          value={band[edge] === null ? '' : String(band[edge])}
+                                          onChange={(e) => setBand({ [edge]: numberOrNull(e.target.value) })}
+                                        />
+                                      </Fragment>
+                                    ))}
+                                    {label('unit', 'testCatalog.sheet.bandUnit')}
                                     <Input
-                                      key={edge}
-                                      className="h-8 w-20"
-                                      aria-label={t(edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFromFor' : 'testCatalog.sheet.bandAgeToFor', { code: p.code, n })}
-                                      placeholder={t(edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFrom' : 'testCatalog.sheet.bandAgeTo')}
-                                      value={band[edge] === null ? '' : String(band[edge])}
-                                      onChange={(e) => setBand({ [edge]: numberOrNull(e.target.value) })}
+                                      id={id('unit')}
+                                      className="h-8"
+                                      aria-label={`unit for ${p.code} band ${n}`}
+                                      value={band.unit ?? ''}
+                                      onChange={(e) => setBand({ unit: e.target.value || null })}
                                     />
-                                  ))}
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        variant="ghost" size="icon" className="h-8 w-8"
-                                        data-testid={`band-menu-${p.code}-${n}`}
-                                        aria-label={t('testCatalog.sheet.bandActions', { code: p.code, n })}
-                                      >
-                                        <MoreHorizontal className="h-4 w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                      <DropdownMenuItem data-testid={`band-up-${p.code}-${n}`} disabled={i === 0} onSelect={() => move(-1)}>
-                                        {t('testCatalog.sheet.moveUp')}
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem data-testid={`band-down-${p.code}-${n}`} disabled={i === chosen.bands.length - 1} onSelect={() => move(1)}>
-                                        {t('testCatalog.sheet.moveDown')}
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem
-                                        data-testid={`band-remove-${p.code}-${n}`}
-                                        className="text-destructive focus:text-destructive"
-                                        onSelect={() => writeBands(chosen.bands.filter((_, j) => j !== i))}
-                                      >
-                                        {t('testCatalog.sheet.removeBand')}
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                                    {label('sex', 'testCatalog.sheet.bandSex')}
+                                    <Select value={band.sex ?? ANY_SEX} onValueChange={(v) => setBand({ sex: v === ANY_SEX ? null : v })}>
+                                      <SelectTrigger id={id('sex')} className="h-8" aria-label={t('testCatalog.sheet.bandSexFor', { code: p.code, n })}><SelectValue /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value={ANY_SEX}>{t('testCatalog.sheet.bandAnySex')}</SelectItem>
+                                        {options.sexes.map((s) => <SelectItem key={s.code} value={s.code}>{sexLabel(s, i18n.language)}</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                    {(['ageLow', 'ageHigh'] as const).map((edge) => (
+                                      <Fragment key={edge}>
+                                        {label(edge, edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFrom' : 'testCatalog.sheet.bandAgeTo')}
+                                        <Input
+                                          id={id(edge)}
+                                          className="h-8"
+                                          aria-label={t(edge === 'ageLow' ? 'testCatalog.sheet.bandAgeFromFor' : 'testCatalog.sheet.bandAgeToFor', { code: p.code, n })}
+                                          value={band[edge] === null ? '' : String(band[edge])}
+                                          onChange={(e) => setBand({ [edge]: numberOrNull(e.target.value) })}
+                                        />
+                                      </Fragment>
+                                    ))}
+                                  </div>
                                 </div>
                               );
                             })}
