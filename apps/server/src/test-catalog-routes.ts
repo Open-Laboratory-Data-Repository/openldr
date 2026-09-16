@@ -23,12 +23,36 @@ const TEST_REJECT_VALUE_SET = 'urn:openldr:valueset:test-reject-reason';
 const importFormat = z.enum(['csv', 'xlsx']);
 
 const coding = z.object({ system: z.string().min(1), code: z.string().min(1) });
+// A reference band. Every edge is optional: a band naming neither sex nor age is the catch-all.
+const band = z.object({
+  low: z.number().nullish(), high: z.number().nullish(), unit: z.string().nullish(),
+  sex: z.string().nullish(), ageLow: z.number().nullish(), ageHigh: z.number().nullish(),
+});
+// zod strips what it does not declare, so a parameter list left out of this schema would vanish
+// between the sheet and the service without a word. Found live 2026-09-16.
+const resultParam = z.object({
+  system: z.string().min(1),
+  code: z.string().min(1),
+  resultType: z.enum(['numeric', 'coded', 'text']),
+  valueSetUrl: z.string().nullish(),
+  bands: z.array(band).optional(),
+}).transform((p) => ({
+  system: p.system,
+  code: p.code,
+  resultType: p.resultType,
+  valueSetUrl: p.valueSetUrl ?? null,
+  bands: (p.bands ?? []).map((b) => ({
+    low: b.low ?? null, high: b.high ?? null, unit: b.unit ?? null,
+    sex: b.sex ?? null, ageLow: b.ageLow ?? null, ageHigh: b.ageHigh ?? null,
+  })),
+}));
 const testInput = z.object({
   code: z.string().nullish(),
   display: z.string(),
   shortName: z.string().nullish(),
   category: z.string().nullish(),
   specimenTypes: z.array(coding).optional(),
+  resultParams: z.array(resultParam).optional(),
   loinc: z.string().nullish(),
   active: z.boolean().optional(),
 });

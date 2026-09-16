@@ -356,6 +356,23 @@ describe('test catalog routes', () => {
     expect(calls).toEqual([{ method: 'specimensFor', args: [tests] }]);
   });
 
+  // Found live 2026-09-16: zod strips a key the schema does not declare, so the whole parameter list
+  // vanished between the sheet and the service, silently.
+  it('carries a test result parameters through a create and an update', async () => {
+    const params = [{
+      system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null,
+      bands: [{ low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }],
+    }];
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/test-catalog', payload: { code: 'FBC', display: 'FBC', resultParams: params } });
+    const created = calls.find((c) => c.method === 'create');
+    expect((created?.args[0] as { resultParams?: unknown }).resultParams).toEqual(params);
+    await app.inject({ method: 'PUT', url: '/api/test-catalog/FBC', payload: { display: 'FBC', resultParams: [] } });
+    const updated = calls.find((c) => c.method === 'update');
+    expect((updated?.args[1] as { resultParams?: unknown }).resultParams).toEqual([]);
+  });
+
   it('POST /result-params answers each test its parameters, to anyone who can use forms', async () => {
     const { ctx, calls } = fakeCtx();
     const tests = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }];
