@@ -6,6 +6,9 @@ import {
 import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
+import {
+  matchBand, parseResultParams, RESULT_PARAM_VALUE_SET, type ResultBand, type TestResultParam,
+} from './result-params';
 import type { AuditDetails } from './record-audit';
 import {
   CATALOG_EXPORT_COLUMNS, catalogExportRow,
@@ -57,6 +60,8 @@ export interface CatalogTest {
   shortName: string | null;
   category: string | null;
   specimenTypes: SpecimenCoding[];
+  /** The result parameters this test yields, in the order the operator wrote them. */
+  resultParams: TestResultParam[];
   loinc: string | null;
   /** false when the test is retired. */
   active: boolean;
@@ -89,6 +94,8 @@ export interface CatalogTestInput {
   shortName?: string | null;
   category?: string | null;
   specimenTypes?: SpecimenCoding[];
+  /** Left out keeps what is stored. An empty list clears it. */
+  resultParams?: TestResultParam[];
   loinc?: string | null;
   /** false retires the test. Retiring is reversible. Defaults to true. */
   active?: boolean;
@@ -279,6 +286,7 @@ function toTest(c: ConceptRow, loinc: string | null, lab: LabRow | undefined): C
     shortName: typeof p.shortName === 'string' ? p.shortName : null,
     category: typeof p.category === 'string' ? p.category : null,
     specimenTypes: toCodings(p.specimenTypes),
+    resultParams: parseResultParams(p.resultParams),
     loinc,
     // NULL counts as ACTIVE, as it does everywhere else in terminology. DEPRECATED is how this
     // catalog stores a retired test; a DRAFT or DISABLED concept made on the Terminology page also
@@ -297,6 +305,8 @@ type ValidTest = {
   shortName: string | null;
   category: string | null;
   specimenTypes: SpecimenCoding[];
+  /** undefined means the input left them out, so the stored ones are kept. */
+  resultParams: TestResultParam[] | undefined;
   loinc: string | null;
   active: boolean;
 };
@@ -305,6 +315,8 @@ type ValidTest = {
 interface CheckContext {
   categories: CatalogSpecimenOption[];
   specimens: CatalogSpecimenOption[];
+  /** The codes the result dictionary offers, so a test may only name one of them. */
+  resultParams: Set<string>;
   loincLoaded: boolean;
   /** The LOINC codes asked about that LOINC holds as more than a DRAFT stub. */
   knownLoinc: Set<string>;
@@ -520,6 +532,18 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     const offered = new Set(ctx.specimens.map(codingKey));
     const missing = specimenTypes.find((s) => !offered.has(codingKey(s)));
     if (missing) throw invalid(`Specimen ${missing.code} (${missing.system}) is not in the specimen type list.`);
+    // A parameter must be a code the result dictionary offers, as a specimen must come from the
+    // specimen list. A coded parameter must name the ValueSet its answers come from, or data entry
+    // would have nothing to offer.
+    const resultParams = input.resultParams === undefined ? undefined : parseResultParams(input.resultParams);
+    for (const param of resultParams ?? []) {
+      if (!ctx.resultParams.has(param.code)) {
+        throw invalid(`${param.code} is not a result parameter on this install.`);
+      }
+      if (param.resultType === 'coded' && !param.valueSetUrl) {
+        throw invalid(`${param.code} is a coded result and needs a value set.`);
+      }
+    }
     const loinc = clean(input.loinc);
     if (loinc && loinc !== linked) {
       if (!LOINC_CODE.test(loinc)) throw invalid(`"${loinc}" is not a LOINC code. LOINC codes look like 12345-6.`);
@@ -528,12 +552,13 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         throw invalid(`LOINC code ${loinc} is not in the LOINC loaded on this install.`);
       }
     }
-    return { display, shortName: clean(input.shortName), category, specimenTypes, loinc, active: input.active ?? true };
+    return { display, shortName: clean(input.shortName), category, specimenTypes, resultParams, loinc, active: input.active ?? true };
   }
 
   async function loadCheckContext(loincCodes: string[]): Promise<CheckContext> {
-    const [categories, specimens, loaded] = await Promise.all([
-      expandEntries(TEST_CATEGORY_VALUE_SET), expandEntries(SPECIMEN_TYPE_VALUE_SET), loincLoaded(),
+    const [categories, specimens, params, loaded] = await Promise.all([
+      expandEntries(TEST_CATEGORY_VALUE_SET), expandEntries(SPECIMEN_TYPE_VALUE_SET),
+      expandEntries(RESULT_PARAM_VALUE_SET), loincLoaded(),
     ]);
     const knownLoinc = new Set<string>();
     const wanted = [...new Set(loincCodes.filter((c) => LOINC_CODE.test(c)))];
@@ -548,7 +573,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         for (const f of found) knownLoinc.add(f.code);
       }
     }
-    return { categories, specimens, loincLoaded: loaded, knownLoinc };
+    return { categories, specimens, resultParams: new Set(params.map((p) => p.code)), loincLoaded: loaded, knownLoinc };
   }
 
   async function validate(input: CatalogTestInput): Promise<ValidTest> {
@@ -573,6 +598,11 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (t.shortName) next.shortName = t.shortName;
     if (t.category) next.category = t.category;
     if (t.specimenTypes.length) next.specimenTypes = t.specimenTypes;
+    // undefined means the input left them out, so whatever is stored stays. An empty list clears.
+    if (t.resultParams !== undefined) {
+      delete next.resultParams;
+      if (t.resultParams.length) next.resultParams = t.resultParams;
+    }
     const properties = Object.keys(next).length ? JSON.stringify(next) : null;
     await exec.insertInto('terminology_concepts').values({
       system: TEST_CATALOG_SYSTEM, code, display: t.display,

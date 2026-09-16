@@ -80,7 +80,8 @@ describe('catalogExportRow', () => {
   it('writes a test in the import layout, codes for category and specimens', () => {
     const test: CatalogTest = {
       code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL',
-      specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], loinc: '25836-8', active: true,
+      specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], resultParams: [],
+      loinc: '25836-8', active: true,
       lab: { enabled: true, specimenTypes: null, localDisplay: 'VL' },
     };
     expect(catalogExportRow(test)).toEqual({

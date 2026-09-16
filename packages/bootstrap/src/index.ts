@@ -1754,6 +1754,10 @@ export {
   type CatalogUnmatchedValue,
 } from './test-catalog';
 export {
+  RESULT_PARAM_VALUE_SET, matchBand, parseResultParams,
+  type TestResultParam, type ResultBand, type ResultType,
+} from './result-params';
+export {
   CATALOG_IMPORT_FIELDS, CATALOG_IMPORT_MAX_BYTES, CATALOG_IMPORT_MAX_ROWS,
   catalogColumnMapSchema, catalogValueMapSchema, catalogImportInputSchema,
   type CatalogImportField, type CatalogColumnMap, type CatalogValueMap, type CategoryAnswer, type SpecimenAnswer,
