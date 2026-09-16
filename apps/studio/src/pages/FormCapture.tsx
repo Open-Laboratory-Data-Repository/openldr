@@ -137,6 +137,18 @@ export function FormCapture() {
                 noSpecimen: t('forms.testsNoSpecimen'),
                 rejected: t('forms.testsRejected'),
               }}
+              browseCopy={{
+                title: t('forms.browseTitle'),
+                actions: t('forms.browseActions'),
+                search: t('forms.browseSearch'),
+                category: t('forms.browseCategory'),
+                anyCategory: t('forms.browseAnyCategory'),
+                notOffered: t('forms.browseNotOffered'),
+                empty: t('forms.browseEmpty'),
+                noMatch: t('forms.browseNoMatch'),
+                error: t('forms.browseError'),
+                loading: t('forms.browseLoading'),
+              }}
             />
           ) : null}
         </div>

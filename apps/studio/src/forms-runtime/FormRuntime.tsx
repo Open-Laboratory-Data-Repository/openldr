@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +22,7 @@ import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from '.
 import { fieldsNeedingResolution, pickSeededMatch, type ResolvableRow } from './seeded-references';
 import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
 import { TestDetailsField, type TestDetailsCopy } from './TestDetailsField';
+import { BROWSE_TESTS_EN, BrowseTestsSheet, type BrowseTestsCopy } from './BrowseTestsSheet';
 
 /**
  * Translated copy for `SuggestCombobox`'s listbox chrome — shared by `FormRuntime`, `FieldRow` and
@@ -47,6 +52,7 @@ export function FormRuntime({
   fieldSuggestions,
   onAnswersChange,
   suggestCopy,
+  browseCopy,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -94,6 +100,8 @@ export function FormRuntime({
   suggestCopy?: SuggestCopy;
   /** Bench result entry chrome. Same reasoning as suggestCopy: the runtime has no i18n. */
   testDetailsCopy?: TestDetailsCopy;
+  /** Browsing the test catalog from a depended-on field. Same reasoning: the runtime has no i18n. */
+  browseCopy?: BrowseTestsCopy;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -257,6 +265,7 @@ export function FormRuntime({
         preview={preview}
         fieldSuggestions={fieldSuggestions}
         suggestCopy={suggestCopy}
+        browseCopy={browseCopy}
       />
     ));
   }
@@ -337,6 +346,7 @@ function FieldRow({
   fieldSuggestions,
   suggestCopy,
   testDetailsCopy,
+  browseCopy,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -350,8 +360,22 @@ function FieldRow({
   fieldSuggestions?: FieldSuggestions;
   suggestCopy?: SuggestCopy;
   testDetailsCopy?: TestDetailsCopy;
+  browseCopy?: BrowseTestsCopy;
 }) {
   const label = fieldLabel(field);
+  const [browsing, setBrowsing] = useState(false);
+  // Structural, so the runtime names no value set (AGENTS.md section 8): only a reference field that
+  // another field depends on can be browsed. On the Lab order that is the Tests field.
+  const dependedOn = field.fieldType === 'reference' && schema.fields.some((f) => f.referenceDependsOn === field.id);
+  const browse = { ...BROWSE_TESTS_EN, ...(browseCopy ?? {}) };
+
+  // A browsed test joins what is already chosen. A single-valued field takes it in place.
+  const addBrowsed = (coding: CodingAnswer): void => {
+    if (!isMultiValued(field)) { onChange(field.id, coding); return; }
+    const current = codingsIn(answers[field.id]);
+    if (current.some((c) => c.system === coding.system && c.code === coding.code)) return;
+    onChange(field.id, [...current, coding]);
+  };
 
   if (field.fieldType === 'group') {
     const children = groupChildren(schema, field.id).filter((c) => visible.has(c.id));
@@ -372,6 +396,7 @@ function FieldRow({
             preview={preview}
             fieldSuggestions={fieldSuggestions}
             suggestCopy={suggestCopy}
+            browseCopy={browseCopy}
           />
         ))}
       </fieldset>
@@ -380,35 +405,55 @@ function FieldRow({
 
   return (
     <div className="grid gap-1.5 md:grid-cols-[12rem_minmax(0,1fr)] md:items-start">
-      <Label htmlFor={field.id} className="pt-2 text-sm flex items-center gap-1 flex-wrap">
-        {label}
-        {field.required && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                className="inline-flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground cursor-default"
-                aria-label="Required"
+      <div className="flex items-start justify-between gap-1">
+        <Label htmlFor={field.id} className="pt-2 text-sm flex items-center gap-1 flex-wrap">
+          {label}
+          {field.required && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="inline-flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground cursor-default"
+                  aria-label="Required"
+                >
+                  !
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Required</TooltipContent>
+            </Tooltip>
+          )}
+          {field.description ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="inline-flex size-4 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground cursor-default"
+                  aria-label={field.description}
+                >
+                  ?
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{field.description}</TooltipContent>
+            </Tooltip>
+          ) : null}
+        </Label>
+        {dependedOn ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button" variant="ghost" size="icon" className="mt-1 h-8 w-8 shrink-0"
+                aria-label={browse.actions.replace('{label}', label)}
               >
-                !
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Required</TooltipContent>
-          </Tooltip>
-        )}
-        {field.description ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span
-                className="inline-flex size-4 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-muted-foreground cursor-default"
-                aria-label={field.description}
-              >
-                ?
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>{field.description}</TooltipContent>
-          </Tooltip>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setBrowsing(true)}>{browse.title}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : null}
-      </Label>
+      </div>
+      {browsing ? (
+        <BrowseTestsSheet copy={browseCopy} onPick={addBrowsed} onClose={() => setBrowsing(false)} />
+      ) : null}
       <div>
         <FieldControl
           field={field}

@@ -13,7 +13,10 @@ import { cn } from '@/lib/cn';
 
 /** Chrome copy. The form runtime has no i18n, so the capture page supplies these (see TestDetailsField). */
 export interface BrowseTestsCopy {
+  /** The sheet title, and the menu item that opens it. */
   title?: string;
+  /** The field menu's accessible name. `{label}` is replaced with the field's label. */
+  actions?: string;
   search?: string;
   category?: string;
   anyCategory?: string;
@@ -24,8 +27,9 @@ export interface BrowseTestsCopy {
   loading?: string;
 }
 
-const EN: Required<BrowseTestsCopy> = {
+export const BROWSE_TESTS_EN: Required<BrowseTestsCopy> = {
   title: 'Browse all tests',
+  actions: '{label} actions',
   search: 'Search by code or name',
   category: 'Category',
   anyCategory: 'Any category',
@@ -46,7 +50,7 @@ export function BrowseTestsSheet({ onPick, onClose, copy }: {
   onClose: () => void;
   copy?: BrowseTestsCopy;
 }): JSX.Element {
-  const t = { ...EN, ...(copy ?? {}) };
+  const t = { ...BROWSE_TESTS_EN, ...(copy ?? {}) };
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
