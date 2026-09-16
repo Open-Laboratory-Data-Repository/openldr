@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "be5e8897",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Line up the result inputs on a test's results sheet"
+        },
+        {
           "hash": "409706a7",
           "type": "fix",
           "scope": "studio",
