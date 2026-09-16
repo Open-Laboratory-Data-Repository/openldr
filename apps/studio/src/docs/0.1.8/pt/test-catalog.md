@@ -58,3 +58,12 @@ O campo **Specimen Type** oferece então só as amostras aceites por pelo menos 
 Um pedido enviado indica primeiro o código LOINC de cada exame, quando o tem, e depois o código do catálogo. Os relatórios que leem o primeiro código de um pedido continuam a encontrar LOINC. Um exame sem código LOINC é enviado com o código do catálogo.
 
 Uma instalação cujo pedido de exames foi alterado no editor de formulários mantém o seu próprio campo Tests. Para usar esta lista, escolha o conjunto de valores `urn:openldr:valueset:lab-tests` para esse campo no editor. Na linha de comandos, `openldr terminology expand urn:openldr:valueset:lab-tests` mostra a lista que o campo Tests oferece.
+
+
+## Parâmetros de resultado
+
+Um exame pode nomear os parâmetros de resultado que produz: hemoglobina, contagem de CD4, leitura de um TDR de malária. Os parâmetros vêm do dicionário de resultados desta instalação, por isso nada se escreve à mão. Marque um no painel do exame e indique se o resultado é um número, um código de uma lista, ou texto livre.
+
+Um parâmetro numérico pode ter intervalos de referência. Um intervalo tem um limite inferior, um superior e uma unidade, e pode nomear um sexo e uma faixa etária. A bancada vê o único intervalo que corresponde ao doente do pedido. Um exame sem parâmetros continua a funcionar: o painel pede apenas uma amostra.
+
+Na linha de comandos, `openldr test-catalog params <code>` mostra os parâmetros de um exame, e `--set <ficheiro>` substitui-os a partir de um ficheiro JSON.

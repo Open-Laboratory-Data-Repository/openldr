@@ -6,6 +6,9 @@ import {
 import { toCsv } from '@openldr/reporting';
 import { LOINC_SYSTEM, type Operations } from '@openldr/terminology';
 import { readTableFile, TableFileError, type TableFileFormat } from './table-file';
+import {
+  matchBand, parseResultParams, RESULT_PARAM_VALUE_SET, type ResultBand, type TestResultParam,
+} from './result-params';
 import type { AuditDetails } from './record-audit';
 import {
   CATALOG_EXPORT_COLUMNS, catalogExportRow,
@@ -31,6 +34,8 @@ export const TEST_CATEGORY_VALUE_SET = 'urn:openldr:valueset:test-category';
 /** A test's specimens must come from the list the Lab order's specimen picker offers
  *  (packages/forms/src/samples/forms.ts), or narrowing at data entry could never match. */
 export const SPECIMEN_TYPE_VALUE_SET = 'urn:openldr:valueset:specimen-type';
+/** The site result-parameter dictionary. Must equal RESULT_PARAM_SYSTEM in @openldr/terminology. */
+const RESULT_PARAM_SYSTEM_URL = 'urn:openldr:default_result';
 /** The lab's test list, which the Lab order's Tests field binds. Must equal LAB_TESTS_VALUE_SET in
  *  migration 105, which seeds its row. */
 export const LAB_TESTS_VALUE_SET = 'urn:openldr:valueset:lab-tests';
@@ -57,6 +62,8 @@ export interface CatalogTest {
   shortName: string | null;
   category: string | null;
   specimenTypes: SpecimenCoding[];
+  /** The result parameters this test yields, in the order the operator wrote them. */
+  resultParams: TestResultParam[];
   loinc: string | null;
   /** false when the test is retired. */
   active: boolean;
@@ -89,6 +96,8 @@ export interface CatalogTestInput {
   shortName?: string | null;
   category?: string | null;
   specimenTypes?: SpecimenCoding[];
+  /** Left out keeps what is stored. An empty list clears it. */
+  resultParams?: TestResultParam[];
   loinc?: string | null;
   /** false retires the test. Retiring is reversible. Defaults to true. */
   active?: boolean;
@@ -118,6 +127,8 @@ export interface CatalogSpecimenOption {
 export interface CatalogOptions {
   categories: CatalogCategoryOption[];
   specimenTypes: CatalogSpecimenOption[];
+  /** The result parameters a test may name, from the ValueSet migration 069 seeds. */
+  resultParams: CatalogSpecimenOption[];
   /** The LOINC code system when LOINC is loaded here, so the sheet can search it. Null otherwise. */
   loinc: { systemId: string; system: string } | null;
 }
@@ -198,6 +209,12 @@ export function catalogImportAudit(report: CatalogImportReport): AuditDetails {
   };
 }
 
+/** One test's parameters, ready for the sheet to draw. */
+export interface TestParamsAnswer {
+  test: { system: string; code: string };
+  params: Array<TestResultParam & { unit: string | null; display: string | null; band: ResultBand | null }>;
+}
+
 export interface TestCatalog {
   ownedHere(): Promise<boolean>;
   list(query: CatalogListQuery): Promise<CatalogListResult>;
@@ -216,6 +233,12 @@ export interface TestCatalog {
   specimensFor(tests: Array<{ system: string; code: string }>): Promise<CatalogSpecimenOption[]>;
   /** Each catalog test's LOINC coding, keyed `system|code` of the test, for tests with an active link. */
   loincCodingsFor(tests: Array<{ system: string; code: string }>): Promise<Map<string, { system: string; code: string }>>;
+  /** Each test's result parameters, with each parameter's unit, display and the band that fits this
+   *  patient. Codings outside the catalog are ignored (bench result entry, spec 7). */
+  resultParamsFor(
+    tests: Array<{ system: string; code: string }>,
+    patient: { sex?: string | null; ageYears?: number | null },
+  ): Promise<TestParamsAnswer[]>;
 }
 
 export interface TestCatalogDeps {
@@ -279,6 +302,7 @@ function toTest(c: ConceptRow, loinc: string | null, lab: LabRow | undefined): C
     shortName: typeof p.shortName === 'string' ? p.shortName : null,
     category: typeof p.category === 'string' ? p.category : null,
     specimenTypes: toCodings(p.specimenTypes),
+    resultParams: parseResultParams(p.resultParams),
     loinc,
     // NULL counts as ACTIVE, as it does everywhere else in terminology. DEPRECATED is how this
     // catalog stores a retired test; a DRAFT or DISABLED concept made on the Terminology page also
@@ -297,6 +321,8 @@ type ValidTest = {
   shortName: string | null;
   category: string | null;
   specimenTypes: SpecimenCoding[];
+  /** undefined means the input left them out, so the stored ones are kept. */
+  resultParams: TestResultParam[] | undefined;
   loinc: string | null;
   active: boolean;
 };
@@ -305,6 +331,8 @@ type ValidTest = {
 interface CheckContext {
   categories: CatalogSpecimenOption[];
   specimens: CatalogSpecimenOption[];
+  /** The codes the result dictionary offers, so a test may only name one of them. */
+  resultParams: Set<string>;
   loincLoaded: boolean;
   /** The LOINC codes asked about that LOINC holds as more than a DRAFT stub. */
   knownLoinc: Set<string>;
@@ -520,6 +548,18 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     const offered = new Set(ctx.specimens.map(codingKey));
     const missing = specimenTypes.find((s) => !offered.has(codingKey(s)));
     if (missing) throw invalid(`Specimen ${missing.code} (${missing.system}) is not in the specimen type list.`);
+    // A parameter must be a code the result dictionary offers, as a specimen must come from the
+    // specimen list. A coded parameter must name the ValueSet its answers come from, or data entry
+    // would have nothing to offer.
+    const resultParams = input.resultParams === undefined ? undefined : parseResultParams(input.resultParams);
+    for (const param of resultParams ?? []) {
+      if (!ctx.resultParams.has(param.code)) {
+        throw invalid(`${param.code} is not a result parameter on this install.`);
+      }
+      if (param.resultType === 'coded' && !param.valueSetUrl) {
+        throw invalid(`${param.code} is a coded result and needs a value set.`);
+      }
+    }
     const loinc = clean(input.loinc);
     if (loinc && loinc !== linked) {
       if (!LOINC_CODE.test(loinc)) throw invalid(`"${loinc}" is not a LOINC code. LOINC codes look like 12345-6.`);
@@ -528,12 +568,13 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         throw invalid(`LOINC code ${loinc} is not in the LOINC loaded on this install.`);
       }
     }
-    return { display, shortName: clean(input.shortName), category, specimenTypes, loinc, active: input.active ?? true };
+    return { display, shortName: clean(input.shortName), category, specimenTypes, resultParams, loinc, active: input.active ?? true };
   }
 
   async function loadCheckContext(loincCodes: string[]): Promise<CheckContext> {
-    const [categories, specimens, loaded] = await Promise.all([
-      expandEntries(TEST_CATEGORY_VALUE_SET), expandEntries(SPECIMEN_TYPE_VALUE_SET), loincLoaded(),
+    const [categories, specimens, params, loaded] = await Promise.all([
+      expandEntries(TEST_CATEGORY_VALUE_SET), expandEntries(SPECIMEN_TYPE_VALUE_SET),
+      expandEntries(RESULT_PARAM_VALUE_SET), loincLoaded(),
     ]);
     const knownLoinc = new Set<string>();
     const wanted = [...new Set(loincCodes.filter((c) => LOINC_CODE.test(c)))];
@@ -548,7 +589,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
         for (const f of found) knownLoinc.add(f.code);
       }
     }
-    return { categories, specimens, loincLoaded: loaded, knownLoinc };
+    return { categories, specimens, resultParams: new Set(params.map((p) => p.code)), loincLoaded: loaded, knownLoinc };
   }
 
   async function validate(input: CatalogTestInput): Promise<ValidTest> {
@@ -573,6 +614,11 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     if (t.shortName) next.shortName = t.shortName;
     if (t.category) next.category = t.category;
     if (t.specimenTypes.length) next.specimenTypes = t.specimenTypes;
+    // undefined means the input left them out, so whatever is stored stays. An empty list clears.
+    if (t.resultParams !== undefined) {
+      delete next.resultParams;
+      if (t.resultParams.length) next.resultParams = t.resultParams;
+    }
     const properties = Object.keys(next).length ? JSON.stringify(next) : null;
     await exec.insertInto('terminology_concepts').values({
       system: TEST_CATALOG_SYSTEM, code, display: t.display,
@@ -656,9 +702,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   }
 
   async function options(): Promise<CatalogOptions> {
-    const [categories, specimenTypes] = await Promise.all([
+    const [categories, specimenTypes, resultParams] = await Promise.all([
       expandEntries(TEST_CATEGORY_VALUE_SET),
       expandEntries(SPECIMEN_TYPE_VALUE_SET),
+      expandEntries(RESULT_PARAM_VALUE_SET),
     ]);
     let loinc: CatalogOptions['loinc'] = null;
     if (await loincLoaded()) {
@@ -668,6 +715,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return {
       categories: categories.map(({ code, display }) => ({ code, display })).sort(byLabel),
       specimenTypes: specimenTypes.sort(byLabel),
+      resultParams: resultParams.sort(byLabel),
       loinc,
     };
   }
@@ -931,6 +979,39 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return new Map(links.map((l) => [`${TEST_CATALOG_SYSTEM}|${l.from_code}`, { system: LOINC_SYSTEM, code: l.to_code }]));
   }
 
+  async function resultParamsFor(
+    tests: Array<{ system: string; code: string }>,
+    patient: { sex?: string | null; ageYears?: number | null },
+  ): Promise<TestParamsAnswer[]> {
+    const codes = tests.filter((t) => t.system === TEST_CATALOG_SYSTEM).map((t) => t.code);
+    if (codes.length === 0) return [];
+    const wanted = new Set(codes);
+    const found = (await readTests()).filter((t) => wanted.has(t.code));
+    const paramCodes = [...new Set(found.flatMap((t) => t.resultParams.map((p) => p.code)))];
+    // The dictionary already holds each parameter's units and display, so the sheet never carries them.
+    const dictionary = paramCodes.length === 0 ? [] : await db.selectFrom('terminology_concepts')
+      .select(['code', 'display', 'properties'])
+      .where('system', '=', RESULT_PARAM_SYSTEM_URL)
+      .where('code', 'in', paramCodes)
+      .execute();
+    const unitOf = new Map(dictionary.map((row) => {
+      const props = (parseJson(row.properties) ?? {}) as Record<string, unknown>;
+      return [row.code, { unit: typeof props.parm_units === 'string' ? props.parm_units : null, display: row.display ?? null }];
+    }));
+    return codes.map((code) => {
+      const test = found.find((t) => t.code === code);
+      return {
+        test: { system: TEST_CATALOG_SYSTEM, code },
+        params: (test?.resultParams ?? []).map((p) => ({
+          ...p,
+          unit: unitOf.get(p.code)?.unit ?? null,
+          display: unitOf.get(p.code)?.display ?? null,
+          band: matchBand(p.bands, patient),
+        })),
+      };
+    });
+  }
+
   return {
     ownedHere,
     list,
@@ -946,5 +1027,6 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     exportCsv,
     specimensFor,
     loincCodingsFor,
+    resultParamsFor,
   };
 }

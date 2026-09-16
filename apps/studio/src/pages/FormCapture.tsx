@@ -14,6 +14,7 @@ import { TruncatedText } from '@/components/ui/truncated-text';
 import { getForm, submitFormResponse, type FormDefinition } from '@/api';
 import { canSubmitForm } from '@openldr/forms/pure';
 import { SubmissionReadiness } from '@/forms-runtime/SubmissionReadiness';
+import { useTranslation } from 'react-i18next';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema } from '@/forms-runtime/types';
 
@@ -26,6 +27,7 @@ function asFormSchema(value: unknown): FormSchema | null {
 }
 
 export function FormCapture() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const [form, setForm] = useState<FormDefinition | null>(null);
@@ -124,6 +126,17 @@ export function FormCapture() {
               formDefinitionId={id}
               footer={null}
               onSubmit={handleSubmit}
+              // The runtime is schema-driven and has no i18n of its own, so this page, which has one,
+              // supplies the row list's chrome (FormRuntime.tsx, suggestCopy has the same reasoning).
+              testDetailsCopy={{
+                empty: t('forms.testsEmpty'),
+                loading: t('forms.testsLoading'),
+                open: t('forms.testsOpen'),
+                reject: t('forms.testsReject'),
+                remove: t('forms.testsRemove'),
+                noSpecimen: t('forms.testsNoSpecimen'),
+                rejected: t('forms.testsRejected'),
+              }}
             />
           ) : null}
         </div>

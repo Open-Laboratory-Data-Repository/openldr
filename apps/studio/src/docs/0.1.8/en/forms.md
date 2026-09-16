@@ -218,3 +218,14 @@ Use a test installation with an existing patient, loaded LOINC terminology, and 
 9. Check the corresponding workflow run and stored request before repeating the submission. If the server reports partial persistence, inspect the run first; a retry can create duplicates.
 
 If a reference list is empty, check the configured source and loaded terminology. If the workflow is disabled, enable it before retrying. Required-field messages identify the field by its visible label.
+
+
+## Results on the Lab order
+
+Each test chosen on a Lab order gets a row under the Tests field. The row shows the test's code and name, and whether its specimen is set. Opening a row shows the specimen picker, the reference range that fits this patient, and one input per result parameter.
+
+A value outside its range is flagged beside the input. It is never refused: the bench decides.
+
+A test can be rejected from its row menu, and the whole order from the page menu, each with a reason from a list. A rejected test is recorded with its reason, and does not yet appear in reports.
+
+A submitted order writes one result record per value typed. Results are typed with the order, in one pass. There is no way yet to reopen a submitted order and add them later.

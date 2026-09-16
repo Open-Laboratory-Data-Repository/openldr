@@ -28,7 +28,7 @@ import { ImportCatalogSheet } from '@/test-catalog/ImportCatalogSheet';
 // EmptyState.
 
 const SEARCH_DEBOUNCE_MS = 250;
-const NO_OPTIONS: TestCatalogOptions = { categories: [], specimenTypes: [], loinc: null };
+const NO_OPTIONS: TestCatalogOptions = { categories: [], specimenTypes: [], resultParams: [], loinc: null };
 
 function codingKey(c: { system: string; code: string }): string {
   return `${c.system}|${c.code}`;

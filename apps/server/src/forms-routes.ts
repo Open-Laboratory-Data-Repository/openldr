@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
-import { TEST_CATALOG_SYSTEM, type AppContext } from '@openldr/bootstrap';
+import { TEST_CATALOG_SYSTEM, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
-import { extractorsForForm, isEntityAnswer, isCodingAnswer, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
+import { extractorsForForm, isEntityAnswer, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -81,6 +81,25 @@ async function catalogCodingsBefore(
   }
   if (tests.length === 0) return undefined;
   return ctx.testCatalog.loincCodingsFor(tests);
+}
+
+/**
+ * The band each typed result was measured against, keyed the way the extractor reads it. A
+ * QuestionnaireResponse answer has nowhere to carry a reference band, so it travels in the
+ * extraction context instead (bench result entry, settled 2026-09-16). The bands were chosen by the
+ * server when the sheet asked for parameters, so nothing is recomputed here.
+ */
+function testBandsFrom(schema: FormSchema, answers: Record<string, unknown>): Map<string, ResultBand> {
+  const out = new Map<string, ResultBand>();
+  for (const field of schema.fields) {
+    if (field.fieldType !== 'testDetails') continue;
+    for (const [testKey, detail] of Object.entries(parseTestDetails(answers[field.id]))) {
+      for (const result of detail.results) {
+        if (result.band) out.set(`${testKey}#${result.param.system}|${result.param.code}`, result.band);
+      }
+    }
+  }
+  return out;
 }
 
 /** Id of the seeded ingest graph's Persist Store node — the one that reports what it wrote. */
@@ -421,6 +440,8 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const extractionContext = extractionContextFor(f.schema, p.data.answers, submittedAt);
     const codingBefore = await catalogCodingsBefore(ctx, f.schema, p.data.answers);
     if (codingBefore) extractionContext.codingBefore = codingBefore;
+    const testBands = testBandsFrom(f.schema, p.data.answers);
+    if (testBands.size > 0) extractionContext.testBands = testBands;
     const resources = extractorsForForm(f.schema as never)
       .flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext));
     if (resources.length === 0) {

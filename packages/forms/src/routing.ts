@@ -1,5 +1,6 @@
 import type { FormSchema } from './schema/form-schema'
 import { ObservationExtractor, ServiceRequestExtractor, type ResourceExtractor } from './extract/extract'
+import { TestResultsExtractor } from './extract/test-results'
 
 /** Form domains and who owns capture for each (PRD §3.1). */
 export type FormDomain = 'requisition' | 'intake' | 'screening' | 'eqa' | 'result-entry' | 'instrument'
@@ -42,7 +43,7 @@ export function domainForResourceType(resourceType: string | null): FormDomain {
 export function extractorsForForm(model: FormSchema): ResourceExtractor[] {
   const extractors: ResourceExtractor[] = [ObservationExtractor]
   if (domainForResourceType(model.fhirResourceType) === 'requisition') {
-    extractors.push(ServiceRequestExtractor)
+    extractors.push(ServiceRequestExtractor, TestResultsExtractor)
   }
   return extractors
 }

@@ -18,11 +18,12 @@ const UR = { system: LOCAL, code: 'UR' };
 const OPTIONS: api.TestCatalogOptions = {
   categories: [{ code: 'CHEM', display: 'Chemistry' }, { code: 'MOL', display: 'Molecular' }],
   specimenTypes: [{ ...BLD, display: 'Blood' }, { ...UR, display: 'Urine' }],
+  resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin' }],
   loinc: null,
 };
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],
-  loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
+  resultParams: [], loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
 function renderSheet(props: { target?: TestSheetTarget; options?: api.TestCatalogOptions; ownedHere?: boolean } = {}) {
@@ -77,7 +78,7 @@ describe('TestSheet', () => {
     await save();
     expect(api.createCatalogTest).toHaveBeenCalledWith({
       code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD],
-      loinc: '25836-8', active: true,
+      resultParams: [], loinc: '25836-8', active: true,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('HIVVL saved.');
@@ -128,7 +129,8 @@ describe('TestSheet', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Active' }));
     await save();
     expect(api.updateCatalogTest).toHaveBeenCalledWith('HIVVL', {
-      display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], loinc: '25836-8', active: false,
+      display: 'HIV-1 viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR], resultParams: [],
+      loinc: '25836-8', active: false,
     });
     expect(api.setCatalogLabSettings).not.toHaveBeenCalled();
   });
@@ -176,5 +178,54 @@ describe('TestSheet', () => {
     await save();
     expect(toast.error).toHaveBeenCalledWith('add test failed: Test HIVVL is already in the catalog.');
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('TestSheet: result parameters', () => {
+  const withParam: api.CatalogTest = {
+    ...HIVVL,
+    resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null, bands: [] }],
+  };
+
+  it('offers each parameter the server listed, unticked when the test names none', () => {
+    renderSheet({ target: { kind: 'edit', test: HIVVL } });
+    expect(screen.getByTestId('param-HGB')).not.toBeChecked();
+    expect(screen.getByText('Haemoglobin')).toBeInTheDocument();
+  });
+
+  it('shows a parameter the test already names as ticked, with its type', () => {
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    expect(screen.getByTestId('param-HGB')).toBeChecked();
+    expect(screen.getByLabelText(/result type for HGB/i)).toBeInTheDocument();
+  });
+
+  it('saves a parameter the operator ticked', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: HIVVL } });
+    fireEvent.click(screen.getByTestId('param-HGB'));
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams).toEqual([
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [] },
+    ]);
+  });
+
+  it('saves a band the operator typed', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(withParam);
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    fireEvent.click(screen.getByRole('button', { name: /add band for HGB/i }));
+    fireEvent.change(screen.getByLabelText(/low for HGB band 1/i), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText(/high for HGB band 1/i), { target: { value: '15' } });
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams?.[0].bands).toEqual([
+      { low: 12, high: 15, unit: null, sex: null, ageLow: null, ageHigh: null },
+    ]);
+  });
+
+  it('clears the parameters when the operator unticks the last one', async () => {
+    vi.mocked(api.updateCatalogTest).mockResolvedValue(HIVVL);
+    renderSheet({ target: { kind: 'edit', test: withParam } });
+    fireEvent.click(screen.getByTestId('param-HGB'));
+    await save();
+    expect(vi.mocked(api.updateCatalogTest).mock.calls[0][1].resultParams).toEqual([]);
   });
 });

@@ -147,6 +147,7 @@ describe('test catalog: reads', () => {
     expect(await catalog.list(q())).toEqual({
       rows: [{
         code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
+        resultParams: [],
         loinc: '25836-8', active: true, lab: { enabled: true, specimenTypes: [BLD], localDisplay: 'Viral load' },
       }],
       total: 1,
@@ -229,6 +230,7 @@ describe('test catalog: writes', () => {
     });
     expect(created).toEqual({
       code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL', specimenTypes: [BLD, UR],
+      resultParams: [],
       loinc: '25836-8', active: true, lab: { enabled: false, specimenTypes: null, localDisplay: null },
     });
     expect(await storedConcept(db, 'HIVVL')).toEqual({
@@ -868,5 +870,101 @@ describe('test catalog: what an order needs', () => {
     await catalog.update('GLU', { display: 'Glucose', loinc: null });
     const found = await catalog.loincCodingsFor([test('HIVVL'), test('CD4'), test('GLU'), { system: LOINC_SYSTEM, code: '718-7' }]);
     expect([...found]).toEqual([[`${TEST_CATALOG_SYSTEM}|HIVVL`, { system: LOINC_SYSTEM, code: '25836-8' }]]);
+  });
+});
+
+/** The site result dictionary, seeded so a test may name parameters from it. */
+async function seedResultParams(db: Kysely<InternalSchema>, codes: string[]): Promise<void> {
+  for (const code of codes) {
+    await db.insertInto('terminology_concepts').values({
+      system: 'urn:openldr:default_result', code, display: code, status: 'ACTIVE',
+      properties: JSON.stringify({ result_role: 'result', parm_units: 'g/dL' }) as never,
+    }).execute();
+  }
+}
+
+describe('test catalog: result parameters on a test', () => {
+  const HGB = { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null,
+    bands: [{ low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] };
+
+  it('keeps the parameters a save writes, bands and all', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    expect((await catalog.get('FBC'))?.resultParams).toEqual([HGB]);
+  });
+
+  it('answers an empty list for a test that names none', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    expect((await catalog.get('CD4'))?.resultParams).toEqual([]);
+  });
+
+  it('clears the parameters when a save sends an empty list, and keeps them when it sends none', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    await catalog.update('FBC', { display: 'Full blood count' });
+    expect((await catalog.get('FBC'))?.resultParams).toEqual([HGB]);
+    await catalog.update('FBC', { display: 'Full blood count', resultParams: [] });
+    expect((await catalog.get('FBC'))?.resultParams).toEqual([]);
+  });
+
+  it('refuses a parameter that is not in the reportable-result list', async () => {
+    const { catalog } = await buildCatalog();
+    await expect(catalog.create({
+      code: 'FBC', display: 'Full blood count',
+      resultParams: [{ ...HGB, code: 'NOT-A-PARAM' }],
+    })).rejects.toMatchObject({ kind: 'invalid' });
+  });
+
+  it('refuses a coded parameter that names no value set', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['MRDT']);
+    await expect(catalog.create({
+      code: 'MAL', display: 'Malaria RDT',
+      resultParams: [{ system: 'urn:openldr:default_result', code: 'MRDT', resultType: 'coded', valueSetUrl: null, bands: [] }],
+    })).rejects.toMatchObject({ kind: 'invalid' });
+  });
+});
+
+describe('test catalog: what a result sheet needs', () => {
+  const test = (code: string) => ({ system: TEST_CATALOG_SYSTEM, code });
+  const HGB = {
+    system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' as const, valueSetUrl: null,
+    bands: [
+      { low: 13, high: 17, unit: 'g/dL', sex: 'male', ageLow: 18, ageHigh: null },
+      { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null },
+    ],
+  };
+
+  it('answers each test its parameters, with the band that fits the patient', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    const answer = await catalog.resultParamsFor([test('FBC')], { sex: 'female', ageYears: 30 });
+    expect(answer).toEqual([{
+      test: { system: TEST_CATALOG_SYSTEM, code: 'FBC' },
+      params: [{ ...HGB, unit: 'g/dL', display: 'HGB', band: { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null } }],
+    }]);
+  });
+
+  it('answers a null band when no band fits, rather than a wrong one', async () => {
+    const { db, catalog } = await buildCatalog();
+    await seedResultParams(db, ['HGB']);
+    await catalog.create({ code: 'FBC', display: 'Full blood count', resultParams: [HGB] });
+    const answer = await catalog.resultParamsFor([test('FBC')], { sex: null, ageYears: null });
+    expect(answer[0].params[0].band).toBeNull();
+  });
+
+  it('answers an empty parameter list for a test that names none', async () => {
+    const { catalog } = await buildCatalog();
+    await catalog.create({ code: 'CD4', display: 'CD4 count' });
+    expect(await catalog.resultParamsFor([test('CD4')], {})).toEqual([{ test: { system: TEST_CATALOG_SYSTEM, code: 'CD4' }, params: [] }]);
+  });
+
+  it('ignores codings that are not catalog tests', async () => {
+    const { catalog } = await buildCatalog();
+    expect(await catalog.resultParamsFor([{ system: LOINC_SYSTEM, code: '718-7' }], {})).toEqual([]);
   });
 });

@@ -1,6 +1,7 @@
 import type { FormSchema } from './schema/form-schema';
 import type { AnswerState } from './answer-value';
 import { isCodingAnswer, isEntityAnswer, isReferenceFieldType, resolveReferenceSource } from './reference-source';
+import { parseTestDetails } from './test-details';
 
 export interface AnswerError {
   fieldId: string;
@@ -31,6 +32,19 @@ export function validateAnswers(model: FormSchema, answers: AnswerState): Answer
 
     const value = answers[f.id];
     const push = (reason: string) => errors.push({ fieldId: f.id, label: f.displayLabel, reason });
+
+    // Bench result entry: a testDetails answer is an object keyed by test, not a scalar. Its shape is
+    // checked where it is read (test-details.ts), and the values inside it are the bench's own
+    // numbers, so there is nothing here to refuse. Required means at least one test has a value typed
+    // or was rejected.
+    if (f.fieldType === 'testDetails') {
+      if (f.required) {
+        const detail = parseTestDetails(value);
+        const answered = Object.values(detail).some((d) => d.rejection !== null || d.results.some((r) => r.value !== null));
+        if (!answered) push('required');
+      }
+      continue;
+    }
 
     if (isEmpty(value)) {
       if (f.required) push('required');

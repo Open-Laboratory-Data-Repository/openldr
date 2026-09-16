@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  applyTestCatalogImport, catalogImportFormat, catalogSpecimensFor, downloadTestCatalogCsv, getTestCatalogOptions, listTestCatalog,
+  applyTestCatalogImport, catalogImportFormat, catalogResultParams, catalogSpecimensFor, downloadTestCatalogCsv,
+  expandValueSetByUrl, getTestCatalogOptions, listTestCatalog,
   previewTestCatalogImport, readTestCatalogFile, setCatalogTestActive, setCatalogTestEnabled, updateCatalogTest,
 } from './api';
 
@@ -87,5 +88,33 @@ describe('test catalog api client', () => {
     expect(fetch).toHaveBeenCalledWith('/api/test-catalog/specimens', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tests }),
     });
+  });
+
+  it('asks which result parameters the chosen tests need', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({
+      tests: [{ test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }, params: [] }],
+      rejectReasons: { order: [], test: [] },
+    })));
+    const tests = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }];
+    const answer = await catalogResultParams(tests, { reference: 'Patient/p1' });
+    expect(answer.tests).toEqual([{ test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }, params: [] }]);
+    expect(fetch).toHaveBeenCalledWith('/api/test-catalog/result-params', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tests, patient: { reference: 'Patient/p1' } }),
+    });
+  });
+
+  it('leaves the patient out when the order names none', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ tests: [], rejectReasons: { order: [], test: [] } })));
+    await catalogResultParams([], null);
+    expect(fetch).toHaveBeenCalledWith('/api/test-catalog/result-params', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tests: [] }),
+    });
+  });
+
+  it('expands a value set by url, for a coded result', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ expansion: { contains: [{ system: 'urn:openldr:cs:local', code: 'NEG', display: 'Not detected' }] } })));
+    expect(await expandValueSetByUrl('urn:openldr:valueset:rdt')).toEqual([{ system: 'urn:openldr:cs:local', code: 'NEG', display: 'Not detected' }]);
+    expect(fetch).toHaveBeenCalledWith('/api/terminology/ValueSet/$expand?url=urn%3Aopenldr%3Avalueset%3Ardt&count=500');
   });
 });

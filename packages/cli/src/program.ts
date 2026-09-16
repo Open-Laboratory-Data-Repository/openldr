@@ -34,7 +34,7 @@ import {
   runFacilitiesDelete, runFacilitiesAddType,
 } from './facilities';
 import {
-  runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport,
+  runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams,
   type TestCatalogListOpts, type TestCatalogImportOpts,
 } from './test-catalog';
 import { setActorOverride } from './cli-actor';
@@ -381,6 +381,14 @@ export function buildProgram(): Command {
     .option('--out <file>', 'write to this file instead of standard output')
     .action(async (opts: { out?: string }) => {
       process.exitCode = await runTestCatalogExport(opts);
+    });
+  testCatalog
+    .command('params <code>')
+    .description("List a test's result parameters, or replace them from a JSON file")
+    .option('--set <file>', 'a JSON list of result parameters to write')
+    .option('--json', 'emit JSON', false)
+    .action(async (code: string, opts: { set?: string; json: boolean }) => {
+      process.exitCode = await runTestCatalogParams(code, opts);
     });
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');

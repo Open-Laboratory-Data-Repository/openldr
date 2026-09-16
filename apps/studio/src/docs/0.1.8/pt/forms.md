@@ -98,3 +98,14 @@ Use uma instalação de teste com um paciente existente, terminologia LOINC carr
 9. Verifique a execução do fluxo e o pedido guardado antes de repetir o envio. Se houver armazenamento parcial, inspecione primeiro a execução: uma repetição pode criar duplicados.
 
 Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative um fluxo desativado antes de repetir. As mensagens de campos obrigatórios usam o rótulo visível.
+
+
+## Resultados no pedido de exames
+
+Cada exame escolhido num pedido recebe uma linha por baixo do campo Tests. A linha mostra o código e o nome do exame, e se a amostra está definida. Abrir uma linha mostra a escolha da amostra, o intervalo de referência que corresponde a este doente, e um campo por parâmetro de resultado.
+
+Um valor fora do intervalo é assinalado ao lado do campo. Nunca é recusado: quem decide é a bancada.
+
+Um exame pode ser recusado no menu da sua linha, e o pedido inteiro no menu da página, cada um com um motivo de uma lista. Um exame recusado fica registado com o motivo, e ainda não aparece nos relatórios.
+
+Um pedido enviado escreve um registo de resultado por valor escrito. Os resultados são escritos junto com o pedido, de uma só vez. Ainda não há forma de reabrir um pedido enviado para os adicionar mais tarde.

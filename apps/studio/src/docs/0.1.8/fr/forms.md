@@ -98,3 +98,14 @@ Utilisez une installation de test avec un patient existant, la terminologie LOIN
 9. Vérifiez l'exécution du workflow et la demande enregistrée avant de recommencer. En cas de stockage partiel, inspectez d'abord l'exécution : une nouvelle soumission peut créer des doublons.
 
 Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez un workflow désactivé avant de réessayer. Les messages de champ obligatoire utilisent le libellé visible.
+
+
+## Résultats sur la demande d'examens
+
+Chaque examen choisi sur une demande reçoit une ligne sous le champ Tests. La ligne montre le code et le nom de l'examen, et si son prélèvement est défini. Ouvrir une ligne montre le choix du prélèvement, l'intervalle de référence qui correspond à ce patient, et une saisie par paramètre de résultat.
+
+Une valeur hors de son intervalle est signalée à côté de la saisie. Elle n'est jamais refusée : c'est la paillasse qui décide.
+
+Un examen peut être refusé depuis le menu de sa ligne, et la demande entière depuis le menu de la page, chacun avec un motif pris dans une liste. Un examen refusé est enregistré avec son motif, et n'apparaît pas encore dans les rapports.
+
+Une demande envoyée écrit un enregistrement de résultat par valeur saisie. Les résultats se saisissent avec la demande, en une seule fois. Il n'existe pas encore de moyen de rouvrir une demande envoyée pour les ajouter plus tard.

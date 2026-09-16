@@ -2421,6 +2421,8 @@ export interface CatalogTest {
   shortName: string | null;
   category: string | null;
   specimenTypes: CatalogSpecimenCoding[];
+  /** Bench result entry: the parameters this test yields. */
+  resultParams: CatalogTestResultParam[];
   loinc: string | null;
   /** false when the test is retired. */
   active: boolean;
@@ -2443,6 +2445,8 @@ export interface CatalogTestInput {
   shortName?: string | null;
   category?: string | null;
   specimenTypes?: CatalogSpecimenCoding[];
+  /** Left out keeps what is stored. An empty list clears it. */
+  resultParams?: CatalogTestResultParam[];
   loinc?: string | null;
   active?: boolean;
 }
@@ -2454,6 +2458,8 @@ export interface CatalogLabSettingsInput {
 export interface TestCatalogOptions {
   categories: { code: string; display: string | null }[];
   specimenTypes: { system: string; code: string; display: string | null }[];
+  /** The result parameters a test may name (bench result entry). */
+  resultParams: { system: string; code: string; display: string | null }[];
   /** The loaded LOINC code system, or null when LOINC is not loaded here. */
   loinc: { systemId: string; system: string } | null;
 }
@@ -2542,6 +2548,41 @@ export const catalogSpecimensFor = (
   authFetch('/api/test-catalog/specimens', jbody({ tests }, 'POST'))
     .then((r) => okJson<{ specimens: { system: string; code: string; display: string | null }[] }>(r, 'narrow specimens'))
     .then((b) => b.specimens);
+
+export interface CatalogResultBand { low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }
+export interface CatalogResultParam {
+  system: string; code: string; resultType: 'numeric' | 'coded' | 'text'; valueSetUrl: string | null;
+  bands: CatalogResultBand[]; unit: string | null; display: string | null; band: CatalogResultBand | null;
+}
+export interface CatalogTestParams { test: { system: string; code: string }; params: CatalogResultParam[] }
+/** What a test STORES for one parameter. The route's CatalogResultParam adds the unit, display and
+ *  matched band, which are read from the dictionary and never stored on the test. */
+export interface CatalogTestResultParam {
+  system: string; code: string; resultType: 'numeric' | 'coded' | 'text'; valueSetUrl: string | null;
+  bands: CatalogResultBand[];
+}
+export interface CatalogRejectReason { system: string; code: string; display: string | null }
+export interface CatalogResultParamsAnswer {
+  tests: CatalogTestParams[];
+  rejectReasons: { order: CatalogRejectReason[]; test: CatalogRejectReason[] };
+}
+
+/** The result parameters each chosen test needs, with the reference band that fits this patient, and
+ *  the rejection reasons for both levels. The server reads the patient and expands the reasons, so no
+ *  birth date and no value set url ever live in the browser (bench result entry). */
+export const catalogResultParams = (
+  tests: { system: string; code: string }[],
+  patient: { reference: string } | null,
+): Promise<CatalogResultParamsAnswer> =>
+  authFetch('/api/test-catalog/result-params', jbody({ tests, ...(patient ? { patient } : {}) }, 'POST'))
+    .then((r) => okJson<CatalogResultParamsAnswer>(r, 'read result parameters'));
+
+/** Expand a ValueSet by url, through the FHIR operation. The url always comes from the server, never
+ *  from a literal in the studio. */
+export const expandValueSetByUrl = (url: string): Promise<CatalogRejectReason[]> =>
+  authFetch(`/api/terminology/ValueSet/$expand?url=${encodeURIComponent(url)}&count=500`)
+    .then((r) => okJson<{ expansion?: { contains?: { system?: string; code?: string; display?: string }[] } }>(r, 'expand value set'))
+    .then((vs) => (vs.expansion?.contains ?? []).map((c) => ({ system: c.system ?? '', code: c.code ?? '', display: c.display ?? null })));
 
 // ── Marketplace (SP-4) ─────────────────────────────────────────────────────────
 export interface AvailableArtifact {

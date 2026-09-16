@@ -36,15 +36,18 @@ const LOCAL = 'urn:openldr:cs:local';
 const OPTIONS: api.TestCatalogOptions = {
   categories: [{ code: 'CHEM', display: 'Chemistry' }, { code: 'MOL', display: 'Molecular' }],
   specimenTypes: [{ system: LOCAL, code: 'BLD', display: 'Blood' }, { system: LOCAL, code: 'UR', display: 'Urine' }],
+  resultParams: [],
   loinc: null,
 };
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
-  specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], loinc: '25836-8', active: true,
+  specimenTypes: [{ system: LOCAL, code: 'BLD' }, { system: LOCAL, code: 'UR' }], resultParams: [],
+  loinc: '25836-8', active: true,
   lab: { enabled: true, specimenTypes: [{ system: LOCAL, code: 'UR' }], localDisplay: 'Viral load' },
 };
 const CD4: api.CatalogTest = {
-  code: 'CD4', display: 'CD4 count', shortName: null, category: null, specimenTypes: [], loinc: null, active: true,
+  code: 'CD4', display: 'CD4 count', shortName: null, category: null, specimenTypes: [], resultParams: [],
+  loinc: null, active: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 

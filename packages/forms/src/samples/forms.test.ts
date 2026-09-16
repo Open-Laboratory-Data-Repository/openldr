@@ -19,6 +19,7 @@ import {
   USERS_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS,
   LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
+  LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
 } from '@openldr/db';
@@ -322,8 +323,13 @@ describe('every shipped sample passes the FHIR path rules', () => {
 describe('migrations 102 and 103 on the Lab order form', () => {
   const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
 
-  it("matches migration 105's frozen CATALOG_FIELDS snapshot exactly", () => {
-    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS);
+  it("matches migration 106's frozen RESULT_FIELDS snapshot exactly", () => {
+    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS);
+  });
+
+  it('carries the results field, depending on the tests field', () => {
+    const results = order().fields.find((f) => f.id === 'fld-ord-results');
+    expect(results).toMatchObject({ fieldType: 'testDetails', referenceDependsOn: 'tests' });
   });
 
   it('tests and specimen type trip no rule', () => {
@@ -340,6 +346,7 @@ describe('migrations 102 and 103 on the Lab order form', () => {
     for (const prior of [
       LAB_ORDER_FORM_MIGRATION_PREV_FIELDS, LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
       LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS, LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
+      LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS,
     ]) {
       const normalized = normalizeFormSchema({ ...order(), fields: prior as never });
       expect(normalized.fields).toEqual(prior);
