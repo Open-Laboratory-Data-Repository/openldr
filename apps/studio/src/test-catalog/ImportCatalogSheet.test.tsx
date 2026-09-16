@@ -18,6 +18,7 @@ const OPTIONS: api.TestCatalogOptions = {
   specimenTypes: [{ system: LOCAL, code: 'BLD', display: 'Blood' }, { system: LOCAL, code: 'UR', display: 'Urine' }],
   resultParams: [],
   loinc: null,
+  sexes: [],
 };
 const FILE: api.CatalogImportFile = {
   headers: ['Test code', 'Test name', 'Category', 'Specimens'],

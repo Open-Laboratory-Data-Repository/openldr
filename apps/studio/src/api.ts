@@ -2462,6 +2462,8 @@ export interface TestCatalogOptions {
   resultParams: { system: string; code: string; display: string | null }[];
   /** The loaded LOINC code system, or null when LOINC is not loaded here. */
   loinc: { systemId: string; system: string } | null;
+  /** The sexes a range may name, with labels by language, so the studio names no code. */
+  sexes: CatalogSexOption[];
 }
 
 export function listTestCatalog(p: TestCatalogListParams = {}): Promise<TestCatalogListResult> {
@@ -2549,10 +2551,15 @@ export const catalogSpecimensFor = (
     .then((r) => okJson<{ specimens: { system: string; code: string; display: string | null }[] }>(r, 'narrow specimens'))
     .then((b) => b.specimens);
 
-export interface CatalogResultBand { low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }
+export interface CatalogResultBand { name: string | null; low: number | null; high: number | null; unit: string | null; sex: string | null; ageLow: number | null; ageHigh: number | null }
+export interface CatalogSexOption { code: string; labels: Record<string, string> }
+/** Whether a range fits the patient on the order. Unknown means the record lacks the sex or age it names. */
+export type CatalogBandFit = 'yes' | 'no' | 'unknown';
 export interface CatalogResultParam {
   system: string; code: string; resultType: 'numeric' | 'coded' | 'text'; valueSetUrl: string | null;
   bands: CatalogResultBand[]; unit: string | null; display: string | null; band: CatalogResultBand | null;
+  /** For each band, by index. */
+  fits: CatalogBandFit[];
 }
 export interface CatalogTestParams { test: { system: string; code: string }; params: CatalogResultParam[] }
 /** What a test STORES for one parameter. The route's CatalogResultParam adds the unit, display and
@@ -2565,6 +2572,7 @@ export interface CatalogRejectReason { system: string; code: string; display: st
 export interface CatalogResultParamsAnswer {
   tests: CatalogTestParams[];
   rejectReasons: { order: CatalogRejectReason[]; test: CatalogRejectReason[] };
+  sexes: CatalogSexOption[];
 }
 
 /** The result parameters each chosen test needs, with the reference band that fits this patient, and

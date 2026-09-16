@@ -20,6 +20,7 @@ const OPTIONS: api.TestCatalogOptions = {
   specimenTypes: [{ ...BLD, display: 'Blood' }, { ...UR, display: 'Urine' }],
   resultParams: [{ system: 'urn:openldr:default_result', code: 'HGB', display: 'Haemoglobin' }],
   loinc: null,
+  sexes: [{ code: 'female', labels: { en: 'Female', fr: 'Femme', pt: 'Feminino' } }, { code: 'male', labels: { en: 'Male', fr: 'Homme', pt: 'Masculino' } }],
 };
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: null, category: 'MOL', specimenTypes: [BLD, UR],

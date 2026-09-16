@@ -38,6 +38,7 @@ const OPTIONS: api.TestCatalogOptions = {
   specimenTypes: [{ system: LOCAL, code: 'BLD', display: 'Blood' }, { system: LOCAL, code: 'UR', display: 'Urine' }],
   resultParams: [],
   loinc: null,
+  sexes: [],
 };
 const HIVVL: api.CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
