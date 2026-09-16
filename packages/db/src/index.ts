@@ -115,6 +115,7 @@ export { LAB_ORDER_PREV_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_PREV_REQUISI
 export { LAB_ORDER_PREV_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_PREV_FIELDS } from './migrations/internal/102_lab_order_notes_ward_paths';
 export { LAB_ORDER_CATALOG_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS } from './migrations/internal/105_lab_order_test_catalog';
 export { LAB_ORDER_RESULTS_FIELDS_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS } from './migrations/internal/106_result_entry';
+export { LAB_ORDER_NO_ORDER_SPECIMEN_SNAPSHOT as LAB_ORDER_FORM_MIGRATION_NO_ORDER_SPECIMEN } from './migrations/internal/107_lab_order_drop_specimen';
 export { PREV_BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS } from './migrations/internal/089_facility_form_canonical_paths';
 export { PREV_CANONICALISED_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_CANONICALISED } from './migrations/internal/089_facility_form_canonical_paths';
 // Same reasoning as the two re-exports above: `export * from './migrations/internal/index'` only

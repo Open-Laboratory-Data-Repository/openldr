@@ -318,7 +318,6 @@ const orderForm: FormSchema = {
   sections: [
     { id: 'patient', label: 'Patient', order: 0 },
     { id: 'order', label: 'Order Details', order: 1 },
-    { id: 'specimen', label: 'Specimen Collection', order: 2 },
   ],
   version: 1,
   active: true,
@@ -464,42 +463,6 @@ const orderForm: FormSchema = {
       cardinality: { min: 0, max: '1' },
       section: 'order',
       placeholder: 'Search facilities by name or MFL ID…',
-    },
-    {
-      id: 'fld-ord-specimen-type',
-      fhirPath: 'Specimen.type',
-      displayLabel: 'Specimen Type',
-      description: null,
-      fieldType: 'reference',
-      required: true,
-      enabled: true,
-      order: 9,
-      cardinality: { min: 1, max: '1' },
-      section: 'specimen',
-      // Bound to the SEEDED ValueSet, NOT to the whole SNOMED CodeSystem.
-      //
-      // This previously targeted `http://snomed.info/sct`, which was broken two ways. SNOMED is
-      // not shipped — it needs an affiliate licence — so on a normal install the picker searched
-      // an empty vocabulary and answered "No matches" for every term. And on an install that HAD
-      // imported SNOMED, searching the whole CodeSystem ranked by code across 532k concepts, so
-      // "serum" returned "BOVI-SERA ANTISERUM (product)" and friends while "Serum specimen"
-      // never surfaced. Loading the vocabulary alone did not fix it; the binding was the defect.
-      //
-      // `urn:openldr:valueset:specimen-type` is seeded by migration 014, so it exists and is
-      // populated on EVERY install — which is what makes `required: true` above safe. Required
-      // against an empty vocabulary would make the whole form unsubmittable.
-      //
-      // ⚠ That seed carries only four LOCAL codes (Blood, Urine, CSF, Sputum) — no serum or
-      // plasma — so the default HIV viral-load test ("…in Serum or Plasma") cannot yet be given
-      // its true specimen out of the box. A site that imports SNOMED should repoint this
-      // ValueSet at the specimen hierarchy (`properties.semanticTag = 'specimen'`, ~2k concepts);
-      // that needs no change to this form. `valueSetUrl` wins over `referenceTarget`, and the
-      // form linter warns when both are set, so `referenceTarget` is deliberately absent.
-      valueSetUrl: 'urn:openldr:valueset:specimen-type',
-      // Offers only the specimens at least one chosen test accepts, by this lab's lists (test catalog
-      // S4). With no tests chosen, or none that lists specimens, it offers the whole list.
-      referenceDependsOn: 'tests',
-      placeholder: 'Search specimen types…',
     },
   ],
 }

@@ -53,7 +53,7 @@ Na linha de comandos: `openldr test-catalog import <ficheiro>` mostra o que muda
 
 O campo **Tests** do pedido de exames lista os exames deste laboratório: os exames do catálogo ativados aqui, com o nome local quando existe. Um exame retirado sai da lista. Ative exames antes de qualquer pedido: o campo é obrigatório, e uma lista vazia não deixa passar nenhum pedido.
 
-O campo **Specimen Type** oferece então só as amostras aceites por pelo menos um exame escolhido, pela lista mais curta deste laboratório quando a definiu. Sem exames escolhidos, ou se nenhum lista amostras, oferece toda a lista de amostras, como antes.
+Cada exame tem a sua própria amostra. Abra a linha de um exame e escolha entre as amostras que esse exame aceita, pela lista mais curta deste laboratório quando a definiu. O pedido já não tem um campo de amostra separado.
 
 Um pedido enviado indica primeiro o código LOINC de cada exame, quando o tem, e depois o código do catálogo. Os relatórios que leem o primeiro código de um pedido continuam a encontrar LOINC. Um exame sem código LOINC é enviado com o código do catálogo.
 
