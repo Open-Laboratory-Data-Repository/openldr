@@ -6,6 +6,72 @@
       "version": null,
       "entries": [
         {
+          "hash": "37acebbd",
+          "type": "feat",
+          "scope": "db",
+          "title": "Seed the rejection reasons and give the Lab order its results field"
+        },
+        {
+          "hash": "3f2cd355",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Name a test's result parameters and their reference bands"
+        },
+        {
+          "hash": "0a5116d2",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Type a result for each test, with its range in view"
+        },
+        {
+          "hash": "4b73137b",
+          "type": "feat",
+          "scope": "studio",
+          "title": "List each test chosen on an order, with its state"
+        },
+        {
+          "hash": "1f6213a8",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Write an Observation for each result the bench typed"
+        },
+        {
+          "hash": "c540880b",
+          "type": "feat",
+          "scope": "forms",
+          "title": "A field that holds what the bench typed for each test"
+        },
+        {
+          "hash": "4acf4fb1",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Read and write a test's result parameters"
+        },
+        {
+          "hash": "aaf45aa8",
+          "type": "feat",
+          "scope": "server",
+          "title": "Answer which result parameters and ranges an order's tests need"
+        },
+        {
+          "hash": "a6eb5a6a",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Answer an order's tests with their parameters and matched bands"
+        },
+        {
+          "hash": "02764abb",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "A catalog test names the result parameters it yields"
+        },
+        {
+          "hash": "b87e0a7b",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Read a test's result parameters and pick the band that fits"
+        },
+        {
           "hash": "b5534071",
           "type": "feat",
           "scope": "studio",
