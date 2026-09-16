@@ -3,8 +3,9 @@ import { extname } from 'node:path';
 import { loadConfig } from '@openldr/config';
 import {
   catalogChangeAction, catalogColumnMapSchema, catalogImportAudit, catalogValueMapSchema, createAppContext,
-  parseCatalogListQuery, readCatalogImportFile, recordAuditEvent,
+  parseCatalogListQuery, parseResultParams, readCatalogImportFile, recordAuditEvent,
   type CatalogColumnMap, type CatalogImportFile, type CatalogImportReport, type CatalogValueMap,
+  type TestResultParam,
 } from '@openldr/bootstrap';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
@@ -49,6 +50,64 @@ export async function runTestCatalogList(opts: TestCatalogListOpts): Promise<num
     const msg = redactError(err);
     if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
     else process.stderr.write(`test-catalog list failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** One line per parameter, the way `list` prints one line per test. */
+export function formatResultParams(params: TestResultParam[]): string {
+  if (params.length === 0) return '(no result parameters)';
+  return params
+    .map((p) => `${p.code}\t${p.resultType}\t${p.bands.length} ${p.bands.length === 1 ? 'band' : 'bands'}`)
+    .join('\n');
+}
+
+/** The --set file: a JSON list of parameters, read through the same parser the service uses. */
+export function readResultParamsFile(text: string): TestResultParam[] {
+  const parsed: unknown = JSON.parse(text);
+  if (!Array.isArray(parsed)) throw new Error('expected a list of result parameters');
+  return parseResultParams(parsed);
+}
+
+/** `openldr test-catalog params <code>`: the CLI door to the sheet's result parameters section. With
+ *  --set it replaces them from a JSON file, through the same service the route calls, so both doors
+ *  refuse the same parameters in the same words. */
+export async function runTestCatalogParams(code: string, opts: { set?: string; json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    if (opts.set) {
+      const params = readResultParamsFile(readFileSync(opts.set, 'utf8'));
+      const before = await ctx.testCatalog.get(code);
+      if (!before) {
+        process.stderr.write(`test-catalog params failed: no such test: ${code}\n`);
+        return 1;
+      }
+      await ctx.testCatalog.update(code, {
+        display: before.display, shortName: before.shortName, category: before.category,
+        specimenTypes: before.specimenTypes, loinc: before.loinc, active: before.active,
+        resultParams: params,
+      });
+      await recordAuditEvent(ctx, cliActor(), {
+        action: 'test_catalog.result_params_set', entityType: 'test_catalog', entityId: code,
+        before: { resultParams: before.resultParams },
+        after: { resultParams: params },
+      });
+    }
+    const test = await ctx.testCatalog.get(code);
+    if (!test) {
+      process.stderr.write(`test-catalog params failed: no such test: ${code}\n`);
+      return 1;
+    }
+    process.stdout.write(opts.json
+      ? JSON.stringify(test.resultParams, null, 2) + '\n'
+      : formatResultParams(test.resultParams) + '\n');
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`test-catalog params failed: ${msg}\n`);
     return 1;
   } finally {
     await ctx.close();

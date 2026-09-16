@@ -11,10 +11,14 @@ vi.mock('@openldr/config', () => ({ loadConfig: vi.fn(() => ({ config: true })) 
 // Partial: parseCatalogListQuery stays real, so this test checks the same parser the route uses.
 vi.mock('@openldr/bootstrap', async () => {
   const actual = await vi.importActual<typeof import('@openldr/bootstrap')>('@openldr/bootstrap');
-  return { createAppContext: mocks.createAppContext, parseCatalogListQuery: actual.parseCatalogListQuery };
+  return {
+    createAppContext: mocks.createAppContext,
+    parseCatalogListQuery: actual.parseCatalogListQuery,
+    parseResultParams: actual.parseResultParams,
+  };
 });
 
-import { runTestCatalogList } from './test-catalog';
+import { formatResultParams, readResultParamsFile, runTestCatalogList } from './test-catalog';
 
 const TEST = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
@@ -72,5 +76,28 @@ describe('openldr test-catalog list', () => {
     expect(await runTestCatalogList({ json: false })).toBe(1);
     expect(err.join('')).toContain('test-catalog list failed: boom');
     expect(mocks.close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('test-catalog params', () => {
+  it('prints one line per parameter, with its type and band count', () => {
+    expect(formatResultParams([
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null,
+        bands: [{ low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] },
+      { system: 'urn:openldr:default_result', code: 'NOTE', resultType: 'text', valueSetUrl: null, bands: [] },
+    ])).toBe('HGB\tnumeric\t1 band\nNOTE\ttext\t0 bands');
+  });
+
+  it('says so when a test names none', () => {
+    expect(formatResultParams([])).toBe('(no result parameters)');
+  });
+
+  it('reads a set file as a list of parameters', () => {
+    expect(readResultParamsFile(JSON.stringify([{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric' }])))
+      .toEqual([{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [] }]);
+  });
+
+  it('refuses a set file that is not a list', () => {
+    expect(() => readResultParamsFile('{"code":"HGB"}')).toThrow(/list of result parameters/);
   });
 });

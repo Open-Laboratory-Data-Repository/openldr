@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   runTestCatalogChange: vi.fn().mockResolvedValue(0),
   runTestCatalogImport: vi.fn().mockResolvedValue(0),
   runTestCatalogExport: vi.fn().mockResolvedValue(0),
+  runTestCatalogParams: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('./test-catalog', () => ({
@@ -15,6 +16,7 @@ vi.mock('./test-catalog', () => ({
   runTestCatalogChange: mocks.runTestCatalogChange,
   runTestCatalogImport: mocks.runTestCatalogImport,
   runTestCatalogExport: mocks.runTestCatalogExport,
+  runTestCatalogParams: mocks.runTestCatalogParams,
 }));
 
 describe('test-catalog list: commander parsing', () => {
@@ -59,5 +61,15 @@ describe('test-catalog list: commander parsing', () => {
     expect(mocks.runTestCatalogImport).toHaveBeenLastCalledWith('tests.csv', { apply: false, json: false });
     await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'export', '--out', 'catalog.csv']);
     expect(mocks.runTestCatalogExport).toHaveBeenCalledWith({ out: 'catalog.csv' });
+  });
+
+  it('hands params the code and the set file', async () => {
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'params', 'FBC', '--set', 'params.json', '--json']);
+    expect(mocks.runTestCatalogParams).toHaveBeenCalledWith('FBC', { set: 'params.json', json: true });
+  });
+
+  it('reads params with no flags', async () => {
+    await buildProgram().exitOverride().parseAsync(['node', 'openldr', 'test-catalog', 'params', 'FBC']);
+    expect(mocks.runTestCatalogParams).toHaveBeenCalledWith('FBC', { json: false });
   });
 });
