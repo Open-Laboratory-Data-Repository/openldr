@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "409706a7",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Put the Tests field's dots menu inside its search box"
+        },
+        {
+          "hash": "90801a08",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Filter the browse sheet by any catalog category"
+        },
+        {
+          "hash": "33ac3139",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Read every catalog category for browsing"
+        },
+        {
+          "hash": "fe0ff6d8",
+          "type": "fix",
+          "scope": "server",
+          "title": "Answer every catalog category to the browse sheet"
+        },
+        {
           "hash": "9f8175e6",
           "type": "fix",
           "scope": "studio",
