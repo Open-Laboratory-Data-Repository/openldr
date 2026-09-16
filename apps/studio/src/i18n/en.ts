@@ -314,6 +314,13 @@ export const en = {
     noMatch: 'No roles match.',
   },
   forms: {
+    testsEmpty: 'No tests chosen yet.',
+    testsLoading: 'Reading the tests',
+    testsOpen: 'Open',
+    testsReject: 'Reject with reason',
+    testsRemove: 'Remove from order',
+    testsNoSpecimen: 'Specimen type not set',
+    testsRejected: 'Rejected',
     captureEligible: "Submission is configured. View/Run requires publication and valid answers. For Observation extraction, answer at least one extraction field. The ingest workflow must also be enabled.",
     captureUnavailable: "This form is not configured for submission. In the builder, enable a field, select its code under Codes, and check Observation Extract under Mapping. ServiceRequest forms also support submission. Publishing, export, and embedded editors remain available.",
     colName: 'Name',

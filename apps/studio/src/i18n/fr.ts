@@ -312,6 +312,13 @@ export const fr: EnShape = {
     noMatch: 'Aucun rôle ne correspond.',
   },
   forms: {
+    testsEmpty: 'Aucun examen choisi.',
+    testsLoading: 'Lecture des examens',
+    testsOpen: 'Ouvrir',
+    testsReject: 'Refuser avec un motif',
+    testsRemove: 'Retirer de la demande',
+    testsNoSpecimen: 'Type de prélèvement non défini',
+    testsRejected: 'Refusé',
     captureEligible: "La soumission est configurée. View/Run exige la publication et des réponses valides. Pour extraire une Observation, renseignez au moins un champ d'extraction. Le workflow d'ingestion doit aussi être actif.",
     captureUnavailable: "Ce formulaire n'est pas configuré pour la soumission. Dans l'éditeur, activez un champ, sélectionnez son code sous Codes et cochez Observation Extract sous Mapping. Les formulaires ServiceRequest permettent aussi la soumission. La publication, l'export et les éditeurs intégrés restent disponibles.",
     colName: 'Nom',

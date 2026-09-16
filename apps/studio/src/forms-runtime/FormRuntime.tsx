@@ -11,12 +11,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { isMultiValued, resolveReferenceSource } from '@openldr/forms/pure';
+import { isCodingAnswer, isEntityAnswer, isMultiValued, resolveReferenceSource, type CodingAnswer, type TestDetailsAnswer } from '@openldr/forms/pure';
 import { referenceSearch, referenceSearchPreview } from '@/api';
 import type { FieldSuggestions, FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
 import { fieldsNeedingResolution, pickSeededMatch, type ResolvableRow } from './seeded-references';
 import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
+import { TestDetailsField, type TestDetailsCopy } from './TestDetailsField';
 
 /**
  * Translated copy for `SuggestCombobox`'s listbox chrome — shared by `FormRuntime`, `FieldRow` and
@@ -91,6 +92,8 @@ export function FormRuntime({
    * (or any key in it) falls through to `SuggestCombobox`'s own English defaults.
    */
   suggestCopy?: SuggestCopy;
+  /** Bench result entry chrome. Same reasoning as suggestCopy: the runtime has no i18n. */
+  testDetailsCopy?: TestDetailsCopy;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -333,6 +336,7 @@ function FieldRow({
   preview,
   fieldSuggestions,
   suggestCopy,
+  testDetailsCopy,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -345,6 +349,7 @@ function FieldRow({
   preview?: boolean;
   fieldSuggestions?: FieldSuggestions;
   suggestCopy?: SuggestCopy;
+  testDetailsCopy?: TestDetailsCopy;
 }) {
   const label = fieldLabel(field);
 
@@ -410,6 +415,15 @@ function FieldRow({
           value={answers[field.id]}
           onChange={(v) => onChange(field.id, v)}
           dependsOnValue={field.referenceDependsOn ? answers[field.referenceDependsOn] : undefined}
+          onRemoveDependsOn={field.referenceDependsOn
+            ? (coding) => {
+                const dependsOnId = field.referenceDependsOn!;
+                const current = Array.isArray(answers[dependsOnId]) ? (answers[dependsOnId] as CodingAnswer[]) : [];
+                onChange(dependsOnId, current.filter((c) => c.system !== coding.system || c.code !== coding.code));
+              }
+            : undefined}
+          patient={subjectAnswer(schema, answers)}
+          testDetailsCopy={testDetailsCopy}
           formDefinitionId={formDefinitionId}
           preview={preview}
           fieldSuggestions={fieldSuggestions}
@@ -421,6 +435,18 @@ function FieldRow({
   );
 }
 
+/** The answer of the field bound to ServiceRequest.subject, as a reference the server can read. */
+function subjectAnswer(schema: FormSchema, answers: RuntimeAnswers): { reference: string } | null {
+  const field = schema.fields.find((f) => f.fhirPath === 'ServiceRequest.subject');
+  const value = field ? answers[field.id] : undefined;
+  return isEntityAnswer(value) ? { reference: value.reference } : null;
+}
+
+/** The coding answers in a value, one or many. Mirrors ReferencePicker's own helper. */
+function codingsIn(value: unknown): CodingAnswer[] {
+  return (Array.isArray(value) ? value : [value]).filter(isCodingAnswer);
+}
+
 // ── Field control (input rendering by fieldType) ──────────────────────────────
 
 function FieldControl({
@@ -428,6 +454,9 @@ function FieldControl({
   value,
   onChange,
   dependsOnValue,
+  onRemoveDependsOn,
+  patient,
+  testDetailsCopy,
   formDefinitionId,
   preview,
   fieldSuggestions,
@@ -437,6 +466,10 @@ function FieldControl({
   value: unknown;
   onChange: (value: unknown) => void;
   dependsOnValue?: unknown;
+  /** Bench result entry: drop one test from the field this one depends on. */
+  onRemoveDependsOn?: (coding: { system: string; code: string }) => void;
+  patient?: { reference: string } | null;
+  testDetailsCopy?: TestDetailsCopy;
   formDefinitionId?: string;
   preview?: boolean;
   fieldSuggestions?: FieldSuggestions;
@@ -571,6 +604,19 @@ function FieldControl({
           onChange={(e) => onChange(e.target.files?.[0])}
           aria-label={label}
           required={field.required}
+        />
+      );
+
+    // Bench result entry: the tests chosen on this order, each row opening its result sheet.
+    case 'testDetails':
+      return (
+        <TestDetailsField
+          tests={codingsIn(dependsOnValue)}
+          value={(value ?? {}) as TestDetailsAnswer}
+          onChange={(v) => onChange(v)}
+          onRemoveTest={(test) => onRemoveDependsOn?.(test)}
+          patient={patient ?? null}
+          copy={testDetailsCopy}
         />
       );
 
