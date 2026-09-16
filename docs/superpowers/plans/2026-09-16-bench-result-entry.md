@@ -94,7 +94,8 @@ Each was read on 2026-09-16 at `c31e80b7`.
 | `packages/forms/src/response.ts`, `capture.test.ts` | Nested items for the new field |
 | `packages/forms/src/extract/test-results.ts`, `extraction.test.ts` | Create the extractor |
 | `packages/forms/src/routing.ts`, `routing.test.ts` | Register it |
-| `apps/studio/src/api.ts`, `api.testCatalog.test.ts` | `catalogResultParams` |
+| `apps/studio/src/api.ts`, `api.testCatalog.test.ts` | `catalogResultParams`, `expandValueSetByUrl` |
+| `apps/studio/src/pages/FormCapture.tsx`, `.test.tsx` | Translated chrome, and the order-level reject |
 | `apps/studio/src/forms-runtime/TestDetailsField.tsx`, `.test.tsx` | Create. The row list |
 | `apps/studio/src/forms-runtime/TestDetailSheet.tsx`, `.test.tsx` | Create. Specimen, bands, result inputs |
 | `apps/studio/src/forms-runtime/RejectSheet.tsx`, `.test.tsx` | Create. Coded reason, both levels |
@@ -660,9 +661,11 @@ git commit -m "feat(bootstrap): answer an order's tests with their parameters an
 
 **Interfaces:**
 - Consumes: `TestCatalog.resultParamsFor` (Task 3).
-- Produces: `POST /api/test-catalog/result-params`, body `{ tests: Array<{ system, code }>, patient?: { reference: string } }`, answers `{ tests: TestParamsAnswer[] }`. Gated on `forms.view`.
+- Produces: `POST /api/test-catalog/result-params`, body `{ tests: Array<{ system, code }>, patient?: { reference: string } }`, answers `{ tests: TestParamsAnswer[]; rejectReasons: { order: Coding[]; test: Coding[] } }`. Gated on `forms.view`.
 
 The route resolves the patient itself. The studio sends a reference and never a birth date, so no date arithmetic happens in the browser.
+
+It also answers the rejection reasons, expanded. The studio must never name a clinical value set (AGENTS.md section 8), and a reject sheet that fetched them by url would do exactly that.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -722,6 +725,18 @@ In `apps/server/src/test-catalog-routes.test.ts`:
     expect(calls[0].args[1]).toEqual({ sex: null, ageYears: null });
   });
 
+  it('answers the rejection reasons for both levels, so the studio names no value set', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }] },
+    });
+    expect(res.json().rejectReasons).toEqual({
+      order: [{ system: 'urn:openldr:cs:reject-order', code: 'WRONGPT', display: 'Wrong patient' }],
+      test: [{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }],
+    });
+  });
+
   it('POST /result-params needs forms.view, and refuses a body that is not a list of codings', async () => {
     const { ctx, calls } = fakeCtx();
     const terminologyOnly = await appWith(ctx, ['terminology.view', 'terminology.manage'])
@@ -776,14 +791,42 @@ async function patientBandKey(ctx: AppContext, reference: string | undefined): P
 At the end of `registerTestCatalogRoutes`, after the specimens route, add:
 
 ```ts
-  // Bench result entry: the parameters each chosen test yields, with the band that fits the patient.
+  // Bench result entry: the parameters each chosen test yields, with the band that fits the patient,
+  // and the rejection reasons for both levels. The reasons are expanded here because the studio must
+  // never name a clinical value set (AGENTS.md section 8).
   app.post('/api/test-catalog/result-params', FORMS_VIEW, async (req, reply) => {
     const parsed = resultParamsInput.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
     const patient = await patientBandKey(ctx, parsed.data.patient?.reference);
-    return reply.send({ tests: await ctx.testCatalog.resultParamsFor(parsed.data.tests, patient) });
+    const [tests, order, test] = await Promise.all([
+      ctx.testCatalog.resultParamsFor(parsed.data.tests, patient),
+      expandReasons(ctx, ORDER_REJECT_VALUE_SET),
+      expandReasons(ctx, TEST_REJECT_VALUE_SET),
+    ]);
+    return reply.send({ tests, rejectReasons: { order, test } });
   });
 ```
+
+and beside `patientBandKey`:
+
+```ts
+/** The reasons one value set offers, as plain codings. An unreadable set answers none, so a reject
+ *  sheet opens empty rather than the page failing. */
+async function expandReasons(ctx: AppContext, url: string): Promise<Array<{ system: string; code: string; display: string | null }>> {
+  const vs = await ctx.terminology.ops.expand(url, { count: 500 }).catch(() => null);
+  return (vs?.expansion?.contains ?? []).map((c) => ({ system: c.system ?? '', code: c.code ?? '', display: c.display ?? null }));
+}
+```
+
+with the two urls declared beside `FORMS_VIEW`, mirroring migration 106:
+
+```ts
+// Must equal the urls migration 106 seeds.
+const ORDER_REJECT_VALUE_SET = 'urn:openldr:valueset:order-reject-reason';
+const TEST_REJECT_VALUE_SET = 'urn:openldr:valueset:test-reject-reason';
+```
+
+The route test's fake context needs `terminology: { ops: { expand: async (url: string) => ({ expansion: { contains: url.includes('order') ? [{ system: 'urn:openldr:cs:reject-order', code: 'WRONGPT', display: 'Wrong patient' }] : [{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }] } }) } }`.
 
 - [ ] **Step 4: Run the tests and watch them pass**
 
@@ -946,7 +989,7 @@ git commit -m "feat(cli): read and write a test's result parameters" -m "openldr
 - Modify: `packages/forms/src/response.ts`, `capture.test.ts`
 
 **Interfaces:**
-- Produces: field type `testDetails`; `TestDetail`, `TestDetailsAnswer`, `parseTestDetails(value: unknown): TestDetailsAnswer`, `testDetailItems(answer: TestDetailsAnswer): QuestionnaireResponseItem[]`.
+- Produces: field type `testDetails`; `TestDetail`, `TestDetailsAnswer`, `TypedResult`, `ResultCoding`, `parseTestDetails(value: unknown): TestDetailsAnswer`, `testDetailItems(answer: TestDetailsAnswer): QuestionnaireResponseItem[]`. All of them are exported from `@openldr/forms/pure` as well as the package root, because the studio imports the types and `pure.ts` is its browser-safe entry point (`packages/forms/src/pure.ts`).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1135,6 +1178,8 @@ export function testDetailItems(answer: TestDetailsAnswer): QuestionnaireRespons
 - [ ] **Step 4: Add the field type and teach the two callers**
 
 In `packages/forms/src/schema/form-schema.ts:3-9`, add `'testDetails',` to the enum, after `'reference'`.
+
+In `packages/forms/src/pure.ts` and `packages/forms/src/index.ts`, add `export * from './test-details';` beside the other re-exports, so the studio can import the types from the browser-safe entry point.
 
 In `packages/forms/src/validate-answers.ts`, directly after the `group` skip (line 30), add:
 
@@ -1507,16 +1552,23 @@ describe('TestDetailsField', () => {
   });
 
   it('removes a test through its row menu', async () => {
-    const onChange = vi.fn();
+    const onRemoveTest = vi.fn();
     const user = userEvent.setup();
-    render(<TestDetailsField tests={tests} value={{}} onChange={onChange} patient={null} />);
+    render(<TestDetailsField tests={tests} value={{}} onChange={() => {}} onRemoveTest={onRemoveTest} patient={null} />);
     await waitFor(() => expect(screen.getByText('Full blood count')).toBeInTheDocument());
     await user.click(screen.getAllByRole('button', { name: /actions/i })[0]);
     await user.click(await screen.findByText(/remove/i));
-    expect(onChange).toHaveBeenCalledWith({ removeTest: { system: CATALOG, code: 'FBC' } });
+    expect(onRemoveTest).toHaveBeenCalledWith({ system: CATALOG, code: 'FBC' });
+  });
+
+  it('takes its chrome copy from the caller, and falls back to English', async () => {
+    render(<TestDetailsField tests={[]} value={{}} onChange={() => {}} onRemoveTest={() => {}} patient={null} copy={{ empty: 'Aucun examen choisi' }} />);
+    expect(screen.getByText('Aucun examen choisi')).toBeInTheDocument();
   });
 });
 ```
+
+Every other test in this file passes `onRemoveTest={() => {}}` as well.
 
 - [ ] **Step 2: Run them and watch them fail**
 
@@ -1553,9 +1605,145 @@ export interface CatalogTestParams { test: { system: string; code: string }; par
 
 - [ ] **Step 4: Write the row list**
 
-Create `apps/studio/src/forms-runtime/TestDetailsField.tsx`. It renders one row per chosen test with the code, the name, the category code when the answer carries one, the state line, and a `MoreHorizontal` `DropdownMenu` per row holding open, set specimen type, reject with reason and remove. Follow `apps/studio/src/pages/Users.tsx` for the row menu and `components/ui/striped-empty.tsx` for the empty state. It asks `catalogResultParams` once per distinct list of chosen tests, keyed on the joined codes, exactly as `ReferencePicker` keys its narrowing effect (`ReferencePicker.tsx`, the `dependsOnKey` effect S4 added). While that request is in flight it shows `LoadingState`, never the striped empty.
+Create `apps/studio/src/forms-runtime/TestDetailsField.tsx`:
 
-`onChange` emits the whole answer object for a value change, and `{ removeTest }` for a removal, so the parent can drop the test from the Tests answer as well.
+```tsx
+import { useEffect, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
+import { catalogResultParams, type CatalogResultParam, type CatalogTestParams } from '@/api';
+import type { CodingAnswer } from '@openldr/forms/pure';
+import type { TestDetail, TestDetailsAnswer } from '@openldr/forms/pure';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
+import { TestDetailSheet } from './TestDetailSheet';
+import { RejectSheet, type RejectReason } from './RejectSheet';
+
+/**
+ * Chrome copy. FormRuntime is schema-driven and has no i18n of its own (FormRuntime.tsx:84-92), so
+ * the caller that does have one supplies these. Every key falls back to English.
+ */
+export interface TestDetailsCopy {
+  empty?: string;
+  loading?: string;
+  open?: string;
+  reject?: string;
+  remove?: string;
+  noSpecimen?: string;
+  rejected?: string;
+}
+
+const EN: Required<TestDetailsCopy> = {
+  empty: 'No tests chosen yet.',
+  loading: 'Reading the tests',
+  open: 'Open',
+  reject: 'Reject with reason',
+  remove: 'Remove from order',
+  noSpecimen: 'Specimen type not set',
+  rejected: 'Rejected',
+};
+
+const keyOf = (c: { system: string; code: string }): string => `${c.system}|${c.code}`;
+const EMPTY_DETAIL: TestDetail = { specimen: null, rejection: null, results: [] };
+
+export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient, copy }: {
+  tests: CodingAnswer[];
+  value: TestDetailsAnswer;
+  onChange: (value: TestDetailsAnswer) => void;
+  /** Removing a test drops it from the Tests answer too, which this field does not own. */
+  onRemoveTest: (test: { system: string; code: string }) => void;
+  patient: { reference: string } | null;
+  copy?: TestDetailsCopy;
+}): JSX.Element {
+  const t = { ...EN, ...(copy ?? {}) };
+  const [params, setParams] = useState<CatalogTestParams[]>([]);
+  const [reasons, setReasons] = useState<{ order: RejectReason[]; test: RejectReason[] }>({ order: [], test: [] });
+  const [busy, setBusy] = useState(false);
+  const [openTest, setOpenTest] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<string | null>(null);
+
+  // Keyed on the chosen codes, not the array, which is new on every render. Same shape as the
+  // narrowing effect S4 added to ReferencePicker.
+  const testsKey = tests.map(keyOf).join('\n');
+  useEffect(() => {
+    if (!testsKey) { setParams([]); return; }
+    let cancelled = false;
+    setBusy(true);
+    catalogResultParams(tests.map(({ system, code }) => ({ system, code })), patient)
+      .then((answer) => { if (!cancelled) { setParams(answer.tests); setReasons(answer.rejectReasons); } })
+      .catch(() => { if (!cancelled) setParams([]); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testsKey, patient?.reference]);
+
+  if (tests.length === 0) return <StripedEmpty className="min-h-[8rem]"><span className="text-sm text-muted-foreground">{t.empty}</span></StripedEmpty>;
+  if (busy) return <LoadingState className="min-h-[8rem]" label={t.loading} />;
+
+  const paramsFor = (test: CodingAnswer): CatalogResultParam[] =>
+    params.find((p) => keyOf(p.test) === keyOf(test))?.params ?? [];
+  const detailFor = (test: CodingAnswer): TestDetail => value[keyOf(test)] ?? EMPTY_DETAIL;
+  const write = (test: CodingAnswer, detail: TestDetail): void => onChange({ ...value, [keyOf(test)]: detail });
+
+  const stateLine = (test: CodingAnswer): string => {
+    const detail = detailFor(test);
+    if (detail.rejection) return `${t.rejected}: ${detail.rejection.display ?? detail.rejection.code}`;
+    return detail.specimen ? (detail.specimen.display ?? detail.specimen.code) : t.noSpecimen;
+  };
+
+  const open = tests.find((test) => keyOf(test) === openTest);
+  const reject = tests.find((test) => keyOf(test) === rejecting);
+
+  return (
+    <div className="rounded-md border border-border">
+      {tests.map((test) => (
+        <div key={keyOf(test)} className="flex items-start gap-3 border-b border-border p-3 last:border-b-0">
+          <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpenTest(keyOf(test))}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">{test.code}</span>
+              <span className="text-sm font-medium">{test.display ?? test.code}</span>
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">{stateLine(test)}</div>
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label={`Actions for ${test.display ?? test.code}`}><MoreHorizontal className="h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setOpenTest(keyOf(test))}>{t.open}</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setRejecting(keyOf(test))}>{t.reject}</DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onRemoveTest({ system: test.system, code: test.code })}>
+                {t.remove}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ))}
+
+      {open && (
+        <TestDetailSheet
+          test={open}
+          params={paramsFor(open)}
+          detail={detailFor(open)}
+          onChange={(detail) => write(open, detail)}
+          onClose={() => setOpenTest(null)}
+        />
+      )}
+      {reject && (
+        <RejectSheet
+          level="test"
+          reasons={reasons.test}
+          onReject={(reason) => { write(reject, { ...detailFor(reject), rejection: reason }); setRejecting(null); }}
+          onClose={() => setRejecting(null)}
+        />
+      )}
+    </div>
+  );
+}
+```
+
+`TestDetail` and `TestDetailsAnswer` come from `@openldr/forms/pure`, so add them to that entry point's exports in Task 6 if they are not already there.
 
 - [ ] **Step 5: Render it from the runtime**
 
@@ -1568,16 +1756,58 @@ In `apps/studio/src/forms-runtime/FormRuntime.tsx`, add a case to `FieldControl`
             tests={codingsIn(dependsOnValue)}
             value={(value ?? {}) as TestDetailsAnswer}
             onChange={(v) => onChange(v)}
-            patient={subjectAnswer(answers, schema)}
+            onRemoveTest={(test) => onRemoveDependsOn?.(test)}
+            patient={patient ?? null}
+            copy={testDetailsCopy}
           />
         );
 ```
 
-`subjectAnswer` reads the answer of the field bound to `ServiceRequest.subject` and returns `{ reference }` or null. Write it beside `FieldControl` in the same file.
+`FieldControl` gains three props for this, threaded from `FieldRow` exactly as `dependsOnValue` is: `onRemoveDependsOn?: (coding: { system: string; code: string }) => void`, `patient?: { reference: string } | null`, and `testDetailsCopy?: TestDetailsCopy`.
 
-- [ ] **Step 6: Add the strings**
+In `FieldRow`, pass them:
 
-Add to `en.ts`, `fr.ts` and `pt.ts` together, under a `testDetails` key: the empty state, the four menu items, "specimen type not set", and "rejected". A missing key renders as literal braces, so all three land in this commit.
+```tsx
+          onRemoveDependsOn={field.referenceDependsOn
+            ? (coding) => {
+                const current = Array.isArray(answers[field.referenceDependsOn!]) ? (answers[field.referenceDependsOn!] as CodingAnswer[]) : [];
+                onChange(field.referenceDependsOn!, current.filter((c) => c.system !== coding.system || c.code !== coding.code));
+              }
+            : undefined}
+          patient={subjectAnswer(schema, answers)}
+          testDetailsCopy={testDetailsCopy}
+```
+
+and beside `FieldControl` in the same file:
+
+```tsx
+/** The answer of the field bound to ServiceRequest.subject, as a reference the server can read. */
+function subjectAnswer(schema: FormSchema, answers: RuntimeAnswers): { reference: string } | null {
+  const field = schema.fields.find((f) => f.fhirPath === 'ServiceRequest.subject');
+  const value = field ? answers[field.id] : undefined;
+  return isEntityAnswer(value) ? { reference: value.reference } : null;
+}
+```
+
+`FormRuntime` itself takes `testDetailsCopy?: TestDetailsCopy` beside `suggestCopy`, with the same doc comment reasoning: the runtime has no i18n, so the caller supplies the chrome.
+
+- [ ] **Step 6: Translate the chrome at the caller**
+
+`FormCapture.tsx` is the page with an i18n context, so it builds the copy and passes it down:
+
+```tsx
+  const testDetailsCopy = {
+    empty: t('capture.tests.empty'),
+    loading: t('capture.tests.loading'),
+    open: t('capture.tests.open'),
+    reject: t('capture.tests.reject'),
+    remove: t('capture.tests.remove'),
+    noSpecimen: t('capture.tests.noSpecimen'),
+    rejected: t('capture.tests.rejected'),
+  };
+```
+
+Add those seven keys to `en.ts`, `fr.ts` and `pt.ts` together. A missing key renders as literal braces, so all three land in this commit. The English values are the defaults in `TestDetailsField`, so the field still reads correctly anywhere that passes no copy, such as the builder preview.
 
 - [ ] **Step 7: Run the tests and watch them pass**
 
@@ -1621,8 +1851,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-vi.mock('@/api', () => ({ catalogSpecimensFor: vi.fn() }));
-import { catalogSpecimensFor } from '@/api';
+vi.mock('@/api', () => ({ catalogSpecimensFor: vi.fn(), expandValueSetByUrl: vi.fn() }));
+import { catalogSpecimensFor, expandValueSetByUrl } from '@/api';
 import { TestDetailSheet } from './TestDetailSheet';
 
 const test = { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC', display: 'Full blood count' };
@@ -1634,6 +1864,8 @@ const text = { system: 'urn:openldr:default_result', code: 'NOTE', resultType: '
 beforeEach(() => {
   vi.mocked(catalogSpecimensFor).mockReset();
   vi.mocked(catalogSpecimensFor).mockResolvedValue([{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }]);
+  vi.mocked(expandValueSetByUrl).mockReset();
+  vi.mocked(expandValueSetByUrl).mockResolvedValue([{ system: 'urn:openldr:cs:local', code: 'NEG', display: 'Not detected' }]);
 });
 
 describe('TestDetailSheet', () => {
@@ -1683,41 +1915,52 @@ describe('TestDetailSheet', () => {
 Create `apps/studio/src/forms-runtime/RejectSheet.test.tsx`:
 
 ```tsx
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-
-vi.mock('@/api', () => ({ referenceSearch: vi.fn(), expandValueSet: vi.fn() }));
-import { expandValueSet } from '@/api';
 import { RejectSheet } from './RejectSheet';
 
-beforeEach(() => {
-  vi.mocked(expandValueSet).mockReset();
-  vi.mocked(expandValueSet).mockResolvedValue([{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }]);
-});
+const reasons = [
+  { system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' },
+  { system: 'urn:openldr:cs:reject-test', code: 'QNS', display: 'Insufficient volume' },
+];
 
 describe('RejectSheet', () => {
-  it('offers the reasons for the level it was opened at', async () => {
-    render(<RejectSheet level="test" onReject={() => {}} onClose={() => {}} />);
-    await waitFor(() => expect(screen.getByText('Haemolysed')).toBeInTheDocument());
+  it('offers the reasons it was given, and names no value set of its own', async () => {
+    render(<RejectSheet level="test" reasons={reasons} onReject={() => {}} onClose={() => {}} />);
+    expect(await screen.findByText('Haemolysed')).toBeInTheDocument();
+    expect(screen.getByText('Insufficient volume')).toBeInTheDocument();
   });
 
   it('hands back the chosen reason as a coding', async () => {
     const onReject = vi.fn();
     const user = userEvent.setup();
-    render(<RejectSheet level="test" onReject={onReject} onClose={() => {}} />);
+    render(<RejectSheet level="test" reasons={reasons} onReject={onReject} onClose={() => {}} />);
     await user.click(await screen.findByText('Haemolysed'));
-    await user.click(screen.getByRole('button', { name: /reject/i }));
+    await user.click(screen.getByRole('button', { name: /^reject$/i }));
     expect(onReject).toHaveBeenCalledWith({ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' });
   });
 
   it('refuses to reject with no reason chosen', async () => {
     const onReject = vi.fn();
     const user = userEvent.setup();
-    render(<RejectSheet level="test" onReject={onReject} onClose={() => {}} />);
-    await user.click(screen.getByRole('button', { name: /reject/i }));
+    render(<RejectSheet level="test" reasons={reasons} onReject={onReject} onClose={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /^reject$/i }));
     expect(onReject).not.toHaveBeenCalled();
     expect(screen.getByText(/choose a reason/i)).toBeInTheDocument();
+  });
+
+  it('clears the message as soon as a reason is chosen', async () => {
+    const user = userEvent.setup();
+    render(<RejectSheet level="test" reasons={reasons} onReject={() => {}} onClose={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /^reject$/i }));
+    await user.click(screen.getByText('Haemolysed'));
+    expect(screen.queryByText(/choose a reason/i)).toBeNull();
+  });
+
+  it('shows an empty state when the server offered no reasons', () => {
+    render(<RejectSheet level="order" reasons={[]} onReject={() => {}} onClose={() => {}} />);
+    expect(screen.getByText(/no reasons/i)).toBeInTheDocument();
   });
 });
 ```
@@ -1728,27 +1971,301 @@ Run: `cd apps/studio && npx vitest run src/forms-runtime/TestDetailSheet.test.ts
 
 Expected: FAIL. Neither component exists.
 
-- [ ] **Step 3: Write the two sheets**
+- [ ] **Step 3: Write the reject sheet**
 
-`TestDetailSheet.tsx` is a `Sheet` in the pattern of `apps/studio/src/forms-builder/FieldEditorSheet.tsx`: a header with the code, the name and a `⋯` menu, then one `grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3` holding the specimen picker, the matched band as read-only text, and one input per parameter. Numeric parameters use a text input with the unit beside it and a flag below when the value falls outside the band. Coded parameters use the `ReferencePicker` bound to the parameter's own `valueSetUrl`, so the studio names no value set itself. Text parameters use a `Textarea`. A value change emits the whole detail through `onChange`.
+Create `apps/studio/src/forms-runtime/RejectSheet.tsx`:
 
-`RejectSheet.tsx` is a `Sheet` holding one picker over the value set for its level and a reject action in the header `⋯` menu. It refuses with an inline message when no reason is chosen, and never calls `onReject` without a coding.
+```tsx
+import { useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { cn } from '@/lib/utils';
 
-Wire both into `TestDetailsField`: the row opens `TestDetailSheet`, its menu's reject opens `RejectSheet` at test level, and a rejection clears nothing the operator typed.
+export interface RejectReason { system: string; code: string; display: string | null }
 
-- [ ] **Step 4: Run the tests and watch them pass**
+/**
+ * The reasons arrive as a prop, expanded by the server (test-catalog-routes.ts). This component
+ * names no value set: the studio must never carry clinical vocabulary (AGENTS.md section 8).
+ */
+export function RejectSheet({ level, reasons, onReject, onClose, copy }: {
+  level: 'order' | 'test';
+  reasons: RejectReason[];
+  onReject: (reason: RejectReason) => void;
+  onClose: () => void;
+  copy?: { title?: string; hint?: string; reject?: string; none?: string; choose?: string };
+}): JSX.Element {
+  const t = {
+    title: level === 'order' ? 'Reject this order' : 'Reject this test',
+    hint: 'The reason is stored with the order and reaches the lab record.',
+    reject: 'Reject',
+    none: 'No reasons are configured.',
+    choose: 'Choose a reason first',
+    ...(copy ?? {}),
+  };
+  const [chosen, setChosen] = useState<RejectReason | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-md">
+        <SheetHeader className="flex flex-row items-start justify-between gap-3 p-6 pb-4">
+          <div>
+            <SheetTitle>{t.title}</SheetTitle>
+            <SheetDescription>{t.hint}</SheetDescription>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Reject actions"><MoreHorizontal className="h-4 w-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={() => { if (!chosen) { setError(t.choose); return; } onReject(chosen); }}
+              >
+                {t.reject}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SheetHeader>
+
+        <div className="px-6 pb-6">
+          {reasons.length === 0 ? (
+            <StripedEmpty className="min-h-[8rem]"><span className="text-sm text-muted-foreground">{t.none}</span></StripedEmpty>
+          ) : (
+            <div className="rounded-md border border-border">
+              {reasons.map((reason) => (
+                <button
+                  key={`${reason.system}|${reason.code}`}
+                  type="button"
+                  className={cn('block w-full border-b border-border p-3 text-left text-sm last:border-b-0 hover:bg-accent',
+                    chosen?.code === reason.code && 'bg-accent')}
+                  onClick={() => { setChosen(reason); setError(null); }}
+                >
+                  <span>{reason.display ?? reason.code}</span>
+                  <span className="ml-2 font-mono text-xs text-muted-foreground">{reason.code}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {error && <p className="mt-2 text-xs text-destructive" role="alert">{error}</p>}
+          <Button className="mt-4" variant="outline" onClick={() => { if (!chosen) { setError(t.choose); return; } onReject(chosen); }}>
+            {t.reject}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+```
+
+The header menu carries the action per AGENTS.md section 5. The button below it is the same action, kept because a reject sheet with one action and no visible control reads as broken on a phone; the operator approved the same shape for the import wizard in S3.
+
+- [ ] **Step 4: Write the result sheet**
+
+Create `apps/studio/src/forms-runtime/TestDetailSheet.tsx`:
+
+```tsx
+import { useEffect, useMemo, useState } from 'react';
+import { catalogSpecimensFor, expandValueSetByUrl, type CatalogResultParam } from '@/api';
+import type { CodingAnswer } from '@openldr/forms/pure';
+import type { ResultCoding, TestDetail, TypedResult } from '@openldr/forms/pure';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Textarea } from '@/components/ui/textarea';
+
+const keyOf = (c: { system: string; code: string }): string => `${c.system}|${c.code}`;
+
+/** "12 to 15 g/dL", "12 or more g/dL", "up to 15 g/dL". Null when no band matched this patient. */
+function bandText(param: CatalogResultParam): string | null {
+  const band = param.band;
+  if (!band || (band.low === null && band.high === null)) return null;
+  const unit = band.unit ?? param.unit ?? '';
+  const range = band.low !== null && band.high !== null ? `${band.low} to ${band.high}`
+    : band.low !== null ? `${band.low} or more` : `up to ${band.high}`;
+  return unit ? `${range} ${unit}` : range;
+}
+
+/** The flag beside a numeric input. Never refuses the value: the bench decides, not the band. */
+function flagFor(param: CatalogResultParam, value: number | null): string | null {
+  const band = param.band;
+  if (!band || value === null) return null;
+  if (band.low !== null && value < band.low) return `below ${band.low}`;
+  if (band.high !== null && value > band.high) return `above ${band.high}`;
+  return null;
+}
+
+export function TestDetailSheet({ test, params, detail, onChange, onClose }: {
+  test: CodingAnswer;
+  params: CatalogResultParam[];
+  detail: TestDetail;
+  onChange: (detail: TestDetail) => void;
+  onClose: () => void;
+}): JSX.Element {
+  const [specimens, setSpecimens] = useState<ResultCoding[]>([]);
+  const [codedOptions, setCodedOptions] = useState<Record<string, ResultCoding[]>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    catalogSpecimensFor([{ system: test.system, code: test.code }])
+      .then((rows) => { if (!cancelled) setSpecimens(rows); })
+      .catch(() => { if (!cancelled) setSpecimens([]); });
+    return () => { cancelled = true; };
+  }, [test.system, test.code]);
+
+  // A coded parameter names the ValueSet its answers come from, and the server put that url in the
+  // parameter. The studio still names no vocabulary of its own.
+  const codedUrls = useMemo(
+    () => params.filter((p) => p.resultType === 'coded' && p.valueSetUrl).map((p) => [keyOf(p), p.valueSetUrl!] as const),
+    [params],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(codedUrls.map(async ([key, url]) => [key, await expandValueSetByUrl(url).catch(() => [])] as const))
+      .then((pairs) => { if (!cancelled) setCodedOptions(Object.fromEntries(pairs)); });
+    return () => { cancelled = true; };
+  }, [codedUrls]);
+
+  const resultFor = (param: CatalogResultParam): TypedResult | undefined =>
+    detail.results.find((r) => keyOf(r.param) === keyOf(param));
+
+  const writeResult = (param: CatalogResultParam, value: TypedResult['value']): void => {
+    const next: TypedResult = {
+      param: { system: param.system, code: param.code },
+      resultType: param.resultType,
+      value,
+      ...(param.unit ? { unit: param.unit } : {}),
+      ...(param.band ? { band: param.band } : {}),
+    };
+    const others = detail.results.filter((r) => keyOf(r.param) !== keyOf(param));
+    onChange({ ...detail, results: [...others, next] });
+  };
+
+  return (
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-2xl">
+        <SheetHeader className="p-6 pb-4">
+          <SheetTitle className="flex items-center gap-2">
+            <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">{test.code}</span>
+            <span>{test.display ?? test.code}</span>
+          </SheetTitle>
+        </SheetHeader>
+
+        <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 pb-6">
+          <Label htmlFor="specimen-type">Specimen type</Label>
+          <Select
+            value={detail.specimen ? keyOf(detail.specimen) : undefined}
+            onValueChange={(v) => onChange({ ...detail, specimen: specimens.find((s) => keyOf(s) === v) ?? null })}
+          >
+            <SelectTrigger id="specimen-type"><SelectValue placeholder="Choose a specimen" /></SelectTrigger>
+            <SelectContent>
+              {specimens.map((s) => <SelectItem key={keyOf(s)} value={keyOf(s)}>{s.display ?? s.code}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          {params.map((param) => {
+            const current = resultFor(param);
+            const label = param.display ?? param.code;
+            const range = bandText(param);
+            if (param.resultType === 'numeric') {
+              const typed = typeof current?.value === 'number' ? current.value : null;
+              const flag = flagFor(param, typed);
+              return (
+                <div key={keyOf(param)} className="col-span-2 grid grid-cols-[auto_1fr] items-center gap-x-4">
+                  <Label htmlFor={keyOf(param)}>{label}</Label>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id={keyOf(param)}
+                        inputMode="decimal"
+                        className="w-32"
+                        value={typed === null ? '' : String(typed)}
+                        onChange={(e) => {
+                          const raw = e.target.value.trim();
+                          const next = raw === '' ? null : Number(raw);
+                          writeResult(param, next !== null && Number.isFinite(next) ? next : null);
+                        }}
+                      />
+                      {param.unit && <span className="text-sm text-muted-foreground">{param.unit}</span>}
+                      {flag && <span className="rounded bg-warning/15 px-1.5 py-0.5 text-xs text-warning-foreground">{flag}</span>}
+                    </div>
+                    {range && <p className="mt-1 text-xs text-muted-foreground">{range}</p>}
+                  </div>
+                </div>
+              );
+            }
+            if (param.resultType === 'coded') {
+              const options = codedOptions[keyOf(param)] ?? [];
+              const chosen = current?.value && typeof current.value === 'object' ? keyOf(current.value as ResultCoding) : undefined;
+              return (
+                <div key={keyOf(param)} className="col-span-2 grid grid-cols-[auto_1fr] items-center gap-x-4">
+                  <Label htmlFor={keyOf(param)}>{label}</Label>
+                  <Select value={chosen} onValueChange={(v) => writeResult(param, options.find((o) => keyOf(o) === v) ?? null)}>
+                    <SelectTrigger id={keyOf(param)}><SelectValue placeholder="Choose a result" /></SelectTrigger>
+                    <SelectContent>
+                      {options.map((o) => <SelectItem key={keyOf(o)} value={keyOf(o)}>{o.display ?? o.code}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+            }
+            return (
+              <div key={keyOf(param)} className="col-span-2 grid grid-cols-[auto_1fr] items-start gap-x-4">
+                <Label htmlFor={keyOf(param)}>{label}</Label>
+                <Textarea
+                  id={keyOf(param)}
+                  rows={2}
+                  value={typeof current?.value === 'string' ? current.value : ''}
+                  onChange={(e) => writeResult(param, e.target.value === '' ? null : e.target.value)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+```
+
+Add the client this needs to `apps/studio/src/api.ts`, beside `catalogResultParams`:
+
+```ts
+/** Expand a ValueSet by url, through the FHIR operation (apps/server/src/terminology-routes.ts:25).
+ *  The url always comes from the server, never from a literal in the studio. */
+export const expandValueSetByUrl = (url: string): Promise<{ system: string; code: string; display: string | null }[]> =>
+  authFetch(`/api/terminology/ValueSet/$expand?url=${encodeURIComponent(url)}&count=500`)
+    .then((r) => okJson<{ expansion?: { contains?: { system?: string; code?: string; display?: string }[] } }>(r, 'expand value set'))
+    .then((vs) => (vs.expansion?.contains ?? []).map((c) => ({ system: c.system ?? '', code: c.code ?? '', display: c.display ?? null })));
+```
+
+Add a test for it in `api.testCatalog.test.ts` in the same shape as the others: it calls that url with the url encoded, and maps the expansion to codings.
+
+The sheet's tests mock `@/api` with both `catalogSpecimensFor` and `expandValueSetByUrl`.
+
+- [ ] **Step 5: Wire both into the row list**
+
+In `TestDetailsField.tsx` the wiring is already written in Task 8: the row opens `TestDetailSheet`, and the row menu's reject opens `RejectSheet` at test level with `reasons.test`. Rejecting writes the coding into that test's detail and clears nothing the operator typed, so a mis-click loses no numbers.
+
+The order-level reject belongs to the page, not this field. `FormCapture.tsx` opens `RejectSheet` at order level from its header `⋯` menu with `reasons.order`, and writes the coding into the form's own order-rejection answer.
+
+- [ ] **Step 6: Run the tests and watch them pass**
 
 Run: `cd apps/studio && npx vitest run src/forms-runtime --testTimeout 30000`
 
 Expected: PASS, every test in the folder.
 
-- [ ] **Step 5: Typecheck the package**
+- [ ] **Step 7: Typecheck the package**
 
 Run: `cd apps/studio && npx tsc --noEmit -p . > "$TEMP/br-t9-tc.txt" 2>&1; echo "exit=$?"`
 
 Expected: `exit=0`.
 
-- [ ] **Step 6: Check the sheet at 375px**
+- [ ] **Step 8: Check the sheet at 375px**
 
 Use `resize_window` at 375x812 against the built preview once this merges. In this task, assert instead that the parameter grid wraps: a test that renders six parameters and checks the sheet's own container has no `min-width` beyond the viewport. Note in the report that only a real phone can confirm the bottom edge.
 
@@ -1830,28 +2347,211 @@ Run: `cd apps/studio && npx vitest run src/test-catalog/TestSheet.test.tsx --tes
 
 Expected: FAIL. The section does not exist.
 
-- [ ] **Step 3: Add the section**
+- [ ] **Step 3: Extend the options payload**
 
-In `TestSheet.tsx`, add a "Result parameters" block inside the existing grid, below the specimen rows, as full-width rows spanning both columns (`col-span-2`), because a table inside a two-column grid otherwise inherits the `auto` track's width. One row per parameter: its code, its display, its type, and a `⋯` menu with edit bands and remove. Adding one opens a picker over the reportable-result value set, which the server names in the options payload rather than the studio hardcoding it. A numeric parameter's bands render as a small table with `TablePagination`, per AGENTS.md section 5.
+The picker must not name the result-parameter value set, so the server offers its codes the way it already offers categories and specimens. In `packages/bootstrap/src/test-catalog.ts`, add to `CatalogOptions`:
 
-Extend the draft state and `testInput` so a save carries `resultParams`.
+```ts
+  /** The result parameters a test may name, from the ValueSet migration 069 seeds. */
+  resultParams: CatalogSpecimenOption[];
+```
 
-- [ ] **Step 4: Run the tests and watch them pass**
+and fill it inside `options()` beside the other two:
+
+```ts
+    resultParams: await expandEntries(RESULT_PARAM_VALUE_SET),
+```
+
+Add one route test asserting `GET /api/test-catalog/options` carries them, in the shape the file's other options test uses.
+
+- [ ] **Step 4: Add the section**
+
+In `apps/studio/src/test-catalog/TestSheet.tsx`, add this block inside the existing grid, below the specimen rows. Each row spans both columns, because a table inside a two-column grid otherwise inherits the `auto` track's width, which is the misalignment trap S2 hit.
+
+```tsx
+        <div className="col-span-2 mt-2 border-t border-border pt-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">{t('testCatalog.resultParams.title')}</span>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={t('testCatalog.resultParams.actions')}><MoreHorizontal className="h-4 w-4" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setPickingParam(true)}>{t('testCatalog.resultParams.add')}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {draft.resultParams.length === 0 ? (
+            <StripedEmpty className="mt-2 min-h-[6rem]">
+              <span className="text-sm text-muted-foreground">{t('testCatalog.resultParams.none')}</span>
+            </StripedEmpty>
+          ) : (
+            <div className="mt-2 rounded-md border border-border">
+              {draft.resultParams.map((param, index) => (
+                <div key={`${param.system}|${param.code}`} className="border-b border-border p-3 last:border-b-0">
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs">{param.code}</span>
+                        <span className="text-sm">{paramName(param.code)}</span>
+                        <span className="text-xs text-muted-foreground">{param.resultType}</span>
+                      </div>
+                    </div>
+                    <Select
+                      value={param.resultType}
+                      onValueChange={(v) => setParam(index, { ...param, resultType: v as CatalogResultParam['resultType'], bands: v === 'numeric' ? param.bands : [] })}
+                    >
+                      <SelectTrigger className="w-32" aria-label={t('testCatalog.resultParams.type')}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="numeric">numeric</SelectItem>
+                        <SelectItem value="coded">coded</SelectItem>
+                        <SelectItem value="text">text</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label={t('testCatalog.resultParams.rowActions')}><MoreHorizontal className="h-4 w-4" /></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {param.resultType === 'numeric' && (
+                          <DropdownMenuItem onClick={() => setParam(index, { ...param, bands: [...param.bands, EMPTY_BAND] })}>
+                            {t('testCatalog.resultParams.addBand')}
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setDraft({ ...draft, resultParams: draft.resultParams.filter((_, i) => i !== index) })}
+                        >
+                          {t('testCatalog.resultParams.remove')}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+
+                  {param.resultType === 'numeric' && param.bands.length > 0 && (
+                    <Table className="mt-2">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>{t('testCatalog.resultParams.low')}</TableHead>
+                          <TableHead>{t('testCatalog.resultParams.high')}</TableHead>
+                          <TableHead>{t('testCatalog.resultParams.unit')}</TableHead>
+                          <TableHead>{t('testCatalog.resultParams.sex')}</TableHead>
+                          <TableHead>{t('testCatalog.resultParams.ageFrom')}</TableHead>
+                          <TableHead>{t('testCatalog.resultParams.ageTo')}</TableHead>
+                          <TableHead />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {param.bands.slice(bandPage * BANDS_PER_PAGE, bandPage * BANDS_PER_PAGE + BANDS_PER_PAGE).map((band, bandIndex) => (
+                          <TableRow key={bandIndex}>
+                            {(['low', 'high'] as const).map((edge) => (
+                              <TableCell key={edge}>
+                                <Input
+                                  className="w-20"
+                                  aria-label={t(`testCatalog.resultParams.${edge}`)}
+                                  value={band[edge] === null ? '' : String(band[edge])}
+                                  onChange={(e) => setBand(index, bandIndex, { ...band, [edge]: e.target.value === '' ? null : Number(e.target.value) })}
+                                />
+                              </TableCell>
+                            ))}
+                            <TableCell>
+                              <Input className="w-20" aria-label={t('testCatalog.resultParams.unit')} value={band.unit ?? ''}
+                                onChange={(e) => setBand(index, bandIndex, { ...band, unit: e.target.value || null })} />
+                            </TableCell>
+                            <TableCell>
+                              <Select value={band.sex ?? 'any'} onValueChange={(v) => setBand(index, bandIndex, { ...band, sex: v === 'any' ? null : v })}>
+                                <SelectTrigger className="w-28" aria-label={t('testCatalog.resultParams.sex')}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="any">{t('testCatalog.resultParams.anySex')}</SelectItem>
+                                  <SelectItem value="female">female</SelectItem>
+                                  <SelectItem value="male">male</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            {(['ageLow', 'ageHigh'] as const).map((edge) => (
+                              <TableCell key={edge}>
+                                <Input
+                                  className="w-20"
+                                  aria-label={t(edge === 'ageLow' ? 'testCatalog.resultParams.ageFrom' : 'testCatalog.resultParams.ageTo')}
+                                  value={band[edge] === null ? '' : String(band[edge])}
+                                  onChange={(e) => setBand(index, bandIndex, { ...band, [edge]: e.target.value === '' ? null : Number(e.target.value) })}
+                                />
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="icon" aria-label={t('testCatalog.resultParams.removeBand')}
+                                onClick={() => setParam(index, { ...param, bands: param.bands.filter((_, i) => i !== bandIndex) })}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                  {param.resultType === 'numeric' && param.bands.length > BANDS_PER_PAGE && (
+                    <TablePagination
+                      page={bandPage}
+                      pageSize={BANDS_PER_PAGE}
+                      total={param.bands.length}
+                      onPageChange={setBandPage}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+```
+
+with these beside the file's other helpers:
+
+```tsx
+const BANDS_PER_PAGE = 5;
+const EMPTY_BAND = { low: null, high: null, unit: null, sex: null, ageLow: null, ageHigh: null };
+
+  const paramName = (code: string): string => options.resultParams.find((p) => p.code === code)?.display ?? code;
+  const setParam = (index: number, next: CatalogResultParam): void =>
+    setDraft({ ...draft, resultParams: draft.resultParams.map((p, i) => (i === index ? next : p)) });
+  const setBand = (paramIndex: number, bandIndex: number, next: CatalogResultBand): void => {
+    const param = draft.resultParams[paramIndex];
+    setParam(paramIndex, { ...param, bands: param.bands.map((b, i) => (i === bandIndex ? next : b)) });
+  };
+```
+
+`toDraft` gains `resultParams: test?.resultParams ?? []`, and the `testInput` builder gains `resultParams: draft.resultParams`. `pickingParam` opens a small picker over `options.resultParams` that appends `{ system, code, resultType: 'numeric', valueSetUrl: null, bands: [] }`. Follow the specimen picker directly above it.
+
+Match `TablePagination`'s real prop names from `components/ui/table-pagination.tsx` rather than the names above if they differ.
+
+- [ ] **Step 5: Add the strings**
+
+Add the `testCatalog.resultParams.*` keys used above to `en.ts`, `fr.ts` and `pt.ts` together: title, actions, rowActions, add, none, type, addBand, removeBand, remove, low, high, unit, sex, anySex, ageFrom, ageTo. This page has its own i18n context, unlike the form runtime, so the strings live in the files rather than in a copy prop.
+
+- [ ] **Step 6: Run the tests and watch them pass**
 
 Run: `cd apps/studio && npx vitest run src/test-catalog --testTimeout 30000`
 
-Expected: PASS, every test in the folder.
+Run: `cd apps/server && npx vitest run src/test-catalog-routes.test.ts --testTimeout 30000`
 
-- [ ] **Step 5: Typecheck the package**
+Run: `cd packages/bootstrap && npx vitest run src/test-catalog.test.ts --testTimeout 30000`
 
-Run: `cd apps/studio && npx tsc --noEmit -p . > "$TEMP/br-t10-tc.txt" 2>&1; echo "exit=$?"`
+Expected: PASS in all three. The options payload changed, so the server and bootstrap tests run here too.
 
-Expected: `exit=0`.
+- [ ] **Step 7: Typecheck the three packages**
 
-- [ ] **Step 6: Commit**
+Run: `cd apps/studio && npx tsc --noEmit -p . > "$TEMP/br-t10-studio.txt" 2>&1; echo "exit=$?"`
+
+Run: `cd apps/server && npx tsc --noEmit -p . > "$TEMP/br-t10-server.txt" 2>&1; echo "exit=$?"`
+
+Run: `cd packages/bootstrap && npx tsc --noEmit -p . > "$TEMP/br-t10-bootstrap.txt" 2>&1; echo "exit=$?"`
+
+Expected: `exit=0` three times.
+
+- [ ] **Step 8: Commit**
 
 ```bash
-git add apps/studio/src/test-catalog/TestSheet.tsx apps/studio/src/test-catalog/TestSheet.test.tsx apps/studio/src/api.ts apps/studio/src/i18n/en.ts apps/studio/src/i18n/fr.ts apps/studio/src/i18n/pt.ts
+git add apps/studio/src/test-catalog/TestSheet.tsx apps/studio/src/test-catalog/TestSheet.test.tsx apps/studio/src/api.ts apps/studio/src/i18n/en.ts apps/studio/src/i18n/fr.ts apps/studio/src/i18n/pt.ts packages/bootstrap/src/test-catalog.ts packages/bootstrap/src/test-catalog.test.ts apps/server/src/test-catalog-routes.test.ts
 git commit -m "feat(studio): name a test's result parameters and their reference bands" -m "The test sheet gains a result parameters section: each parameter with its type, chosen from the dictionary the server offers, and for a numeric one a table of reference bands by sex and age. Every action lives in a dots menu, and the bands table is paginated like every other table on the page."
 ```
 
