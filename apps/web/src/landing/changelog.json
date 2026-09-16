@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "e4ea78dc",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Put a test's result parameters under their heading on a phone"
+        },
+        {
           "hash": "c5e19e9a",
           "type": "fix",
           "scope": "studio",
