@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-09-16",
+  "generatedAt": "2026-09-17",
   "days": [
+    {
+      "date": "2026-09-17",
+      "version": null,
+      "entries": [
+        {
+          "hash": "c5e19e9a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Give range fields the full width on a phone"
+        }
+      ]
+    },
     {
       "date": "2026-09-16",
       "version": null,
