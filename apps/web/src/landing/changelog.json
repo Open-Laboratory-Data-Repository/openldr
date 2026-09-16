@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "4d087065",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Label every field of a reference range"
+        },
+        {
           "hash": "ae1bdd45",
           "type": "fix",
           "scope": "studio",
