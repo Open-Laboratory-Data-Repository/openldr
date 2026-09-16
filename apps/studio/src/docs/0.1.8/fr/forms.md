@@ -100,6 +100,14 @@ Utilisez une installation de test avec un patient existant, la terminologie LOIN
 Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez un workflow désactivé avant de réessayer. Les messages de champ obligatoire utilisent le libellé visible.
 
 
+## Choisir les examens sur la demande d'examens
+
+Tapez au moins deux caractères du code ou du nom d'un examen dans le champ Tests pour le chercher. Si vous ne connaissez ni l'un ni l'autre, ouvrez le menu ⋯ à côté du libellé Tests et choisissez **Parcourir tous les examens**. Le volet liste tout le catalogue page par page, avec une recherche et un filtre par catégorie. Le filtre propose les catégories de la page affichée.
+
+Choisissez un examen pour l'ajouter à ceux déjà choisis. Un examen que ce laboratoire ne réalise pas est marqué **Non proposé ici** et ne peut pas être choisi, car la demande serait refusée à l'envoi. Une personne qui peut gérer le catalogue l'active depuis la page Catalogue des examens.
+
+Une installation sans catalogue chargé n'a rien à parcourir, et le volet le dit. Les examens viennent de la page Catalogue des examens, où un laboratoire importe sa liste. OpenLDR ne fournit aucun examen.
+
 ## Résultats sur la demande d'examens
 
 Chaque examen choisi sur une demande reçoit une ligne sous le champ Tests. La ligne montre le code et le nom de l'examen, et si son prélèvement est défini. Ouvrir une ligne montre le choix du prélèvement, l'intervalle de référence qui correspond à ce patient, et une saisie par paramètre de résultat.

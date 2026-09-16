@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  applyTestCatalogImport, catalogImportFormat, catalogResultParams, catalogSpecimensFor, downloadTestCatalogCsv,
+  applyTestCatalogImport, browseTestCatalog, catalogImportFormat, catalogResultParams, catalogSpecimensFor, downloadTestCatalogCsv,
   expandValueSetByUrl, getTestCatalogOptions, listTestCatalog,
   previewTestCatalogImport, readTestCatalogFile, setCatalogTestActive, setCatalogTestEnabled, updateCatalogTest,
 } from './api';
@@ -116,5 +116,22 @@ describe('test catalog api client', () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ expansion: { contains: [{ system: 'urn:openldr:cs:local', code: 'NEG', display: 'Not detected' }] } })));
     expect(await expandValueSetByUrl('urn:openldr:valueset:rdt')).toEqual([{ system: 'urn:openldr:cs:local', code: 'NEG', display: 'Not detected' }]);
     expect(fetch).toHaveBeenCalledWith('/api/terminology/ValueSet/$expand?url=urn%3Aopenldr%3Avalueset%3Ardt&count=500');
+  });
+
+  it('browses the catalog with only the filters that are set', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ rows: [], total: 0, system: 'urn:x' })));
+    await browseTestCatalog({ q: 'vir', category: 'MOL', limit: 25, offset: 50 });
+    expect(fetch).toHaveBeenCalledWith('/api/test-catalog/browse?q=vir&category=MOL&limit=25&offset=50');
+  });
+
+  it('browses with no filters at all', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ rows: [], total: 0, system: 'urn:x' })));
+    await browseTestCatalog({});
+    expect(fetch).toHaveBeenCalledWith('/api/test-catalog/browse');
+  });
+
+  it('answers the rows, the total and the coding system as given', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ rows: [{ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true }], total: 1, system: 'urn:x' })));
+    expect(await browseTestCatalog({})).toEqual({ rows: [{ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true }], total: 1, system: 'urn:x' });
   });
 });

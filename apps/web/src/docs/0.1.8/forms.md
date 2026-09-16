@@ -105,6 +105,8 @@ If a reference list is empty, check the configured source and loaded terminology
 
 On a Lab order, each chosen test gets a row where the bench types its results, sees the reference range that fits the patient, and can reject the test or the whole order with a coded reason. Results are typed with the order, in one pass.
 
+If you do not know a test's code or name, the Tests field's ⋯ menu opens **Browse all tests**, the whole catalog a page at a time. A test this lab does not run is marked and cannot be picked. An install with no catalog loaded has nothing to browse: tests come from the Test catalog page, and OpenLDR ships none.
+
 ## Français
 
 ### Conditions de soumission
@@ -209,6 +211,8 @@ Si une liste est vide, vérifiez sa source et la terminologie chargée. Activez 
 
 Sur une demande d'examens, chaque examen choisi reçoit une ligne où la paillasse saisit ses résultats, voit l'intervalle de référence qui correspond au patient, et peut refuser l'examen ou la demande entière avec un motif codé. Les résultats se saisissent avec la demande, en une seule fois.
 
+Si vous ne connaissez pas le code ou le nom d'un examen, le menu ⋯ du champ Tests ouvre **Parcourir tous les examens**, tout le catalogue page par page. Un examen que ce laboratoire ne réalise pas est marqué et ne peut pas être choisi. Une installation sans catalogue chargé n'a rien à parcourir : les examens viennent de la page Catalogue des examens, et OpenLDR n'en fournit aucun.
+
 ## Português
 
 ### Condições de envio
@@ -311,3 +315,5 @@ Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative 
 - Um campo ou secção com uma regra de visibilidade mostra um ícone de ramificação.
 
 Num pedido de exames, cada exame escolhido recebe uma linha onde a bancada escreve os resultados, vê o intervalo de referência que corresponde ao doente, e pode recusar o exame ou o pedido inteiro com um motivo codificado. Os resultados são escritos junto com o pedido, de uma só vez.
+
+Se não conhece o código ou o nome de um exame, o menu ⋯ do campo Tests abre **Ver todos os exames**, todo o catálogo página a página. Um exame que este laboratório não faz aparece marcado e não pode ser escolhido. Uma instalação sem catálogo carregado não tem nada para ver: os exames vêm da página Catálogo de exames, e o OpenLDR não traz nenhum.

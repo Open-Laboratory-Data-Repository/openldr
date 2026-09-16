@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 // Same shape ReferencePicker.test.tsx already uses — one idiom in this folder, not two. FormRuntime
 // itself now calls these to resolve seeded reference answers on load.
@@ -6,8 +7,9 @@ vi.mock('@/api', () => ({
   referenceSearch: vi.fn(),
   referenceSearchPreview: vi.fn(),
   catalogSpecimensFor: vi.fn(),
+  browseTestCatalog: vi.fn(),
 }));
-import { catalogSpecimensFor, referenceSearch, referenceSearchPreview } from '@/api';
+import { browseTestCatalog, catalogSpecimensFor, referenceSearch, referenceSearchPreview } from '@/api';
 import { FormRuntime } from './FormRuntime';
 import type { FormSchema } from './types';
 
@@ -15,6 +17,7 @@ beforeEach(() => {
   vi.mocked(referenceSearch).mockReset();
   vi.mocked(referenceSearchPreview).mockReset();
   vi.mocked(catalogSpecimensFor).mockReset();
+  vi.mocked(browseTestCatalog).mockReset();
 });
 
 // New flat-model schema: required text field, a boolean, and a conditional text field.
@@ -198,6 +201,23 @@ const sectionedSchema: FormSchema = {
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
+
+// A Lab order in miniature: the specimen field depends on the tests field.
+const orderSchema = {
+  ...schema,
+  fields: [
+    {
+      id: 'tests', fhirPath: 'ServiceRequest.code', displayLabel: 'Tests', description: null, fieldType: 'reference',
+      required: true, enabled: true, order: 1, cardinality: { min: 1, max: '*' }, referenceMultiple: true,
+      valueSetUrl: 'urn:openldr:valueset:lab-tests',
+    },
+    {
+      id: 'specimen', fhirPath: 'Specimen.type', displayLabel: 'Specimen Type', description: null, fieldType: 'reference',
+      required: true, enabled: true, order: 2, cardinality: { min: 1, max: '1' },
+      valueSetUrl: 'urn:openldr:valueset:specimen-type', referenceDependsOn: 'tests',
+    },
+  ],
+} as FormSchema;
 
 describe('FormRuntime', () => {
   it('required validation blocks submit and shows error', async () => {
@@ -662,25 +682,49 @@ describe('FormRuntime', () => {
 
   it('hands a depends-on field the answer it depends on, so its picker can narrow', async () => {
     vi.mocked(catalogSpecimensFor).mockResolvedValue([]);
-    const orderSchema = {
-      ...schema,
-      fields: [
-        {
-          id: 'tests', fhirPath: 'ServiceRequest.code', displayLabel: 'Tests', description: null, fieldType: 'reference',
-          required: true, enabled: true, order: 1, cardinality: { min: 1, max: '*' }, referenceMultiple: true,
-          valueSetUrl: 'urn:openldr:valueset:lab-tests',
-        },
-        {
-          id: 'specimen', fhirPath: 'Specimen.type', displayLabel: 'Specimen Type', description: null, fieldType: 'reference',
-          required: true, enabled: true, order: 2, cardinality: { min: 1, max: '1' },
-          valueSetUrl: 'urn:openldr:valueset:specimen-type', referenceDependsOn: 'tests',
-        },
-      ],
-    } as FormSchema;
     const chosen = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' }];
     render(<FormRuntime schema={orderSchema} formDefinitionId="f1" initialAnswers={{ tests: chosen }} onSubmit={() => {}} />);
     await waitFor(() => expect(catalogSpecimensFor).toHaveBeenCalledWith([{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' }]));
     expect(catalogSpecimensFor).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers Browse all tests on a field another field depends on', async () => {
+    const user = userEvent.setup();
+    render(<FormRuntime schema={orderSchema} formDefinitionId="f1" onSubmit={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /tests actions/i }));
+    expect(await screen.findByText(/browse all tests/i)).toBeInTheDocument();
+  });
+
+  it('takes the menu copy from the caller, since the runtime has no i18n', async () => {
+    const user = userEvent.setup();
+    render(<FormRuntime schema={orderSchema} formDefinitionId="f1" onSubmit={() => {}} browseCopy={{ actions: 'Actions pour {label}', title: 'Parcourir tous les examens' }} />);
+    await user.click(screen.getByRole('button', { name: 'Actions pour Tests' }));
+    expect(await screen.findByText('Parcourir tous les examens')).toBeInTheDocument();
+  });
+
+  it('offers no such menu on an ordinary reference field', () => {
+    // The tests field alone: still a reference field, but nothing depends on it.
+    const refSchema = { ...orderSchema, fields: [orderSchema.fields[0]] } as FormSchema;
+    render(<FormRuntime schema={refSchema} formDefinitionId="f1" onSubmit={() => {}} />);
+    expect(screen.queryByRole('button', { name: /actions/i })).toBeNull();
+  });
+
+  it('adds the browsed test to the answer, beside what is already chosen', async () => {
+    vi.mocked(catalogSpecimensFor).mockResolvedValue([]);
+    vi.mocked(browseTestCatalog).mockResolvedValue({
+      rows: [{ code: 'HIVVL', display: 'HIV viral load', category: 'MOL', enabled: true }],
+      total: 1,
+      system: 'urn:openldr:codesystem:test-catalog',
+    });
+    const user = userEvent.setup();
+    const onAnswersChange = vi.fn();
+    render(<FormRuntime schema={orderSchema} formDefinitionId="f1" onSubmit={() => {}} onAnswersChange={onAnswersChange} />);
+    await user.click(screen.getByRole('button', { name: /tests actions/i }));
+    await user.click(await screen.findByText(/browse all tests/i));
+    await user.click(await screen.findByText('HIV viral load'));
+    await waitFor(() => expect(onAnswersChange).toHaveBeenCalledWith(expect.objectContaining({
+      tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'HIV viral load' }],
+    })));
   });
 });
 

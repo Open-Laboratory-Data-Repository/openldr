@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   catalogChangeAction, catalogImportAudit, catalogImportInputSchema, parseCatalogListQuery, readCatalogImportFile,
-  CATALOG_IMPORT_MAX_BYTES, TestCatalogError, type AppContext,
+  CATALOG_IMPORT_MAX_BYTES, TEST_CATALOG_SYSTEM, TestCatalogError, type AppContext,
 } from '@openldr/bootstrap';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
@@ -263,6 +263,21 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     const parsed = specimensInput.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
     return reply.send({ specimens: await ctx.testCatalog.specimensFor(parsed.data.tests) });
+  });
+
+  // Browsing the catalog from a Lab order (docs/superpowers/specs/2026-09-16-browse-tests-design.md).
+  // Gated on forms.view, and narrowed: a data-entry surface sees what a test is and whether this lab
+  // runs it, never the management data GET /api/test-catalog answers. The coding system travels with
+  // the answer, so a pick into an empty Tests answer has one and the studio names none.
+  app.get('/api/test-catalog/browse', FORMS_VIEW, async (req, reply) => {
+    const parsed = parseCatalogListQuery(req.query as Record<string, unknown>);
+    if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
+    const result = await ctx.testCatalog.list(parsed.query);
+    return reply.send({
+      rows: result.rows.map((t) => ({ code: t.code, display: t.display, category: t.category, enabled: t.lab.enabled })),
+      total: result.total,
+      system: TEST_CATALOG_SYSTEM,
+    });
   });
 
   // Bench result entry: the parameters each chosen test yields, with the band that fits the patient,
