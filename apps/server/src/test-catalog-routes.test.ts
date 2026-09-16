@@ -8,7 +8,7 @@ import './auth-plugin';
 
 const TEST: CatalogTest = {
   code: 'HIVVL', display: 'HIV viral load', shortName: 'VL', category: 'MOL',
-  specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }], loinc: '25836-8', active: true,
+  specimenTypes: [{ system: 'urn:openldr:cs:local', code: 'BLD' }], resultParams: [], loinc: '25836-8', active: true,
   lab: { enabled: false, specimenTypes: null, localDisplay: null },
 };
 
@@ -26,7 +26,7 @@ const REPORT: CatalogImportReport = {
 type Impl = (...args: any[]) => Promise<unknown>;
 
 type Method = 'list' | 'get' | 'create' | 'update' | 'setLabSettings' | 'options' | 'setEnabled' | 'setActive'
-  | 'importPreview' | 'importApply' | 'exportCsv' | 'specimensFor';
+  | 'importPreview' | 'importApply' | 'exportCsv' | 'specimensFor' | 'resultParamsFor';
 
 function fakeCtx(over: Partial<Record<Method, Impl>> = {}) {
   const calls: Array<{ method: string; args: unknown[] }> = [];
@@ -48,11 +48,27 @@ function fakeCtx(over: Partial<Record<Method, Impl>> = {}) {
     importApply: spy('importApply', over.importApply ?? (async () => REPORT)),
     exportCsv: spy('exportCsv', over.exportCsv ?? (async () => 'code,name\nHIVVL,HIV viral load\n')),
     specimensFor: spy('specimensFor', over.specimensFor ?? (async () => [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }])),
+    resultParamsFor: spy('resultParamsFor', over.resultParamsFor ?? (async () => [
+      { test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
+        params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [], unit: 'g/dL', display: 'Haemoglobin', band: null }] },
+    ])),
   };
   const ctx = {
     testCatalog,
     audit: { record: async (e: Record<string, unknown>) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
+    fhirStore: { get: async () => ({ resourceType: 'Patient', id: 'p1', gender: 'female', birthDate: '1990-01-01' }) },
+    terminology: {
+      ops: {
+        expand: async (url: string) => ({
+          expansion: {
+            contains: url.includes('order')
+              ? [{ system: 'urn:openldr:cs:reject-order', code: 'WRONGPT', display: 'Wrong patient' }]
+              : [{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }],
+          },
+        }),
+      },
+    },
   } as unknown as AppContext;
   return { ctx, calls, audit };
 }
@@ -337,6 +353,63 @@ describe('test catalog routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ specimens: [{ system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }] });
     expect(calls).toEqual([{ method: 'specimensFor', args: [tests] }]);
+  });
+
+  it('POST /result-params answers each test its parameters, to anyone who can use forms', async () => {
+    const { ctx, calls } = fakeCtx();
+    const tests = [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }];
+    const res = await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests, patient: { reference: 'Patient/p1' } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().tests[0].params[0]).toMatchObject({ code: 'HGB', unit: 'g/dL' });
+    expect(calls[0].method).toBe('resultParamsFor');
+    expect(calls[0].args[0]).toEqual(tests);
+  });
+
+  it('resolves the patient itself, and passes sex and age to the catalog', async () => {
+    const { ctx, calls } = fakeCtx();
+    await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }], patient: { reference: 'Patient/p1' } },
+    });
+    const patient = calls[0].args[1] as { sex: string | null; ageYears: number | null };
+    expect(patient.sex).toBe('female');
+    expect(patient.ageYears).toBeGreaterThan(30);
+  });
+
+  it('asks with no patient when the order names none, rather than refusing', async () => {
+    const { ctx, calls } = fakeCtx();
+    const res = await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(calls[0].args[1]).toEqual({ sex: null, ageYears: null });
+  });
+
+  it('answers the rejection reasons for both levels, so the studio names no value set', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx, ['forms.view']).inject({
+      method: 'POST', url: '/api/test-catalog/result-params',
+      payload: { tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }] },
+    });
+    expect(res.json().rejectReasons).toEqual({
+      order: [{ system: 'urn:openldr:cs:reject-order', code: 'WRONGPT', display: 'Wrong patient' }],
+      test: [{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }],
+    });
+  });
+
+  it('POST /result-params needs forms.view, and refuses a body that is not a list of codings', async () => {
+    const { ctx, calls } = fakeCtx();
+    const terminologyOnly = await appWith(ctx, ['terminology.view', 'terminology.manage'])
+      .inject({ method: 'POST', url: '/api/test-catalog/result-params', payload: { tests: [] } });
+    expect(terminologyOnly.statusCode).toBe(403);
+    const bad = await appWith(ctx, ['forms.view'])
+      .inject({ method: 'POST', url: '/api/test-catalog/result-params', payload: { tests: 'FBC' } });
+    expect(bad.statusCode).toBe(400);
+    expect(calls).toEqual([]);
   });
 
   it('POST /specimens needs forms.view, and refuses a body that is not a list of codings', async () => {

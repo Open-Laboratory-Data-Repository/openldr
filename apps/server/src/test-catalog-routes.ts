@@ -17,6 +17,9 @@ const IMPORT_STEP = { ...MANAGE, bodyLimit: 16 * 1024 * 1024 };
 // holds forms.view and forms.submit only (packages/rbac/src/presets.ts:52). So that route takes the gate
 // reference search takes (reference-search-routes.ts:9), not terminology.view.
 const FORMS_VIEW = { preHandler: requireCapability('forms.view') };
+// Must equal the urls migration 106 seeds.
+const ORDER_REJECT_VALUE_SET = 'urn:openldr:valueset:order-reject-reason';
+const TEST_REJECT_VALUE_SET = 'urn:openldr:valueset:test-reject-reason';
 const importFormat = z.enum(['csv', 'xlsx']);
 
 const coding = z.object({ system: z.string().min(1), code: z.string().min(1) });
@@ -37,6 +40,35 @@ const labInput = z.object({
 const enabledInput = z.object({ enabled: z.boolean() });
 const activeInput = z.object({ active: z.boolean() });
 const specimensInput = z.object({ tests: z.array(coding) });
+const resultParamsInput = z.object({
+  tests: z.array(coding),
+  patient: z.object({ reference: z.string().min(1) }).optional(),
+});
+
+/**
+ * The patient's sex and whole years of age, read from the stored Patient. The studio sends a
+ * reference only, so no date arithmetic happens in the browser and no birth date travels with a
+ * picker answer. A patient that cannot be read gives nulls, and the catalog then answers the
+ * catch-all band (bench result entry, spec 7).
+ */
+async function patientBandKey(ctx: AppContext, reference: string | undefined): Promise<{ sex: string | null; ageYears: number | null }> {
+  const id = reference?.split('/')[1];
+  if (!id) return { sex: null, ageYears: null };
+  const patient = (await ctx.fhirStore.get('Patient', id).catch(() => null)) as { gender?: string; birthDate?: string } | null;
+  if (!patient) return { sex: null, ageYears: null };
+  const born = patient.birthDate ? new Date(patient.birthDate) : null;
+  const ageYears = born && !Number.isNaN(born.getTime())
+    ? Math.floor((Date.now() - born.getTime()) / (365.2425 * 24 * 60 * 60 * 1000))
+    : null;
+  return { sex: patient.gender ?? null, ageYears };
+}
+
+/** The reasons one value set offers, as plain codings. An unreadable set answers none, so a reject
+ *  sheet opens empty rather than the page failing. */
+async function expandReasons(ctx: AppContext, url: string): Promise<Array<{ system: string; code: string; display: string | null }>> {
+  const vs = await ctx.terminology.ops.expand(url, { count: 500 }).catch(() => null);
+  return (vs?.expansion?.contains ?? []).map((c) => ({ system: c.system ?? '', code: c.code ?? '', display: c.display ?? null }));
+}
 
 // A catalog refusal keeps its words and says which kind it is. Anything else goes to the shared
 // error handler.
@@ -207,5 +239,20 @@ export function registerTestCatalogRoutes(app: FastifyInstance<any, any, any, an
     const parsed = specimensInput.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
     return reply.send({ specimens: await ctx.testCatalog.specimensFor(parsed.data.tests) });
+  });
+
+  // Bench result entry: the parameters each chosen test yields, with the band that fits the patient,
+  // and the rejection reasons for both levels. The reasons are expanded here because the studio must
+  // never name a clinical value set (AGENTS.md section 8).
+  app.post('/api/test-catalog/result-params', FORMS_VIEW, async (req, reply) => {
+    const parsed = resultParamsInput.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });
+    const patient = await patientBandKey(ctx, parsed.data.patient?.reference);
+    const [tests, order, test] = await Promise.all([
+      ctx.testCatalog.resultParamsFor(parsed.data.tests, patient),
+      expandReasons(ctx, ORDER_REJECT_VALUE_SET),
+      expandReasons(ctx, TEST_REJECT_VALUE_SET),
+    ]);
+    return reply.send({ tests, rejectReasons: { order, test } });
   });
 }
