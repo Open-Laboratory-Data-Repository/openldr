@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandFit, bandInCatalog, matchBand, parseResultParams, SEX_OPTIONS, type ResultBand } from './result-params';
+import { bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams, SEX_OPTIONS, type ResultBand } from './result-params';
 
 const band = (b: Partial<ResultBand>): ResultBand => ({ name: null, low: null, high: null, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null, ...b });
 
@@ -114,5 +114,20 @@ describe('result parameters: a submitted range against the catalog', () => {
   it('refuses a range the catalog does not hold', () => {
     expect(bandInCatalog({ name: 'Highland women', low: 5, high: 30, unit: 'g/dL', sex: 'female', ageLow: 15, ageHigh: null }, stored)).toBe(false);
     expect(bandInCatalog('not a range', stored)).toBe(false);
+  });
+
+  it('finds the matched catalog band, not just whether one matched', () => {
+    expect(findCatalogBand({ low: 11, high: 16, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }, stored))
+      .toEqual(band({ low: 11, high: 16 }));
+    expect(findCatalogBand({ low: 5, high: 30, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }, stored)).toBeNull();
+  });
+
+  it('refuses a band whose field has the wrong type rather than coercing it to null', () => {
+    const catalog = [band({ low: null, high: 15 })];
+    // A number field sent as a string must not be coerced to null and match a catalog null.
+    expect(findCatalogBand({ low: '5', high: 15, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }, catalog)).toBeNull();
+    // Same for a string field sent as a number.
+    const namedCatalog = [band({ name: null, low: 10, high: 15 })];
+    expect(findCatalogBand({ name: 123, low: 10, high: 15, unit: 'g/dL', sex: null, ageLow: null, ageHigh: null }, namedCatalog)).toBeNull();
   });
 });

@@ -1754,7 +1754,7 @@ export {
   type CatalogUnmatchedValue,
 } from './test-catalog';
 export {
-  RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, matchBand, parseResultParams,
+  RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams,
   type BandFit, type SexOption, type TestResultParam, type ResultBand, type ResultType,
 } from './result-params';
 export {

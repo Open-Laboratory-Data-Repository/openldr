@@ -129,13 +129,45 @@ const SEX_LABELS: Record<string, Record<string, string>> = {
 export const SEX_OPTIONS: SexOption[] = Patient.shape.gender.unwrap().options
   .map((code) => ({ code, labels: SEX_LABELS[code] ?? { en: code } }));
 
+const NUMBER_FIELDS = ['low', 'high', 'ageLow', 'ageHigh'] as const;
+const STRING_FIELDS = ['name', 'unit', 'sex'] as const;
+
+/**
+ * False when a raw submitted field is neither the field's proper type nor null/absent. `toBand`
+ * coerces a wrong-typed value (a string where a number belongs, say) to null, which would let a
+ * malformed band match a catalog band that has null there. Checking the raw types first stops that.
+ */
+function bandFieldTypesOk(raw: Record<string, unknown>): boolean {
+  for (const f of NUMBER_FIELDS) {
+    const v = raw[f];
+    if (v !== null && v !== undefined && typeof v !== 'number') return false;
+  }
+  for (const f of STRING_FIELDS) {
+    const v = raw[f];
+    if (v !== null && v !== undefined && typeof v !== 'string') return false;
+  }
+  return true;
+}
+
+/**
+ * The catalog range a submitted band matches, field for field, name included. A missing name reads
+ * as none, so a range saved before names existed still matches an unnamed one. Null when the value
+ * is not band-shaped, a field carries the wrong type, or no catalog range matches.
+ */
+export function findCatalogBand(band: unknown, bands: ResultBand[]): ResultBand | null {
+  if (!band || typeof band !== 'object') return null;
+  const raw = band as Record<string, unknown>;
+  if (!bandFieldTypesOk(raw)) return null;
+  const b = toBand(raw);
+  if (!b) return null;
+  return bands.find((c) => c.name === b.name && c.low === b.low && c.high === b.high && c.unit === b.unit
+    && c.sex === b.sex && c.ageLow === b.ageLow && c.ageHigh === b.ageHigh) ?? null;
+}
+
 /**
  * True when a range an answer carried is one of the catalog's ranges, field for field. A missing name
  * reads as none, so a range saved before names existed still matches an unnamed one.
  */
 export function bandInCatalog(band: unknown, bands: ResultBand[]): boolean {
-  const b = toBand(band);
-  if (!b) return false;
-  return bands.some((c) => c.name === b.name && c.low === b.low && c.high === b.high && c.unit === b.unit
-    && c.sex === b.sex && c.ageLow === b.ageLow && c.ageHigh === b.ageHigh);
+  return findCatalogBand(band, bands) !== null;
 }
