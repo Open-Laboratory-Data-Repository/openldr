@@ -58,8 +58,8 @@ its sex and age, such as "Women 15+", "Men", "Under 5" or "Anyone". Ranges saved
 keep working without edits.
 
 **The editor.** Each range row holds name, low, high, unit, sex, age from and age to. The sex choice
-offers the four codes from the Patient schema, sent by `GET /api/test-catalog/options` as `sexes`, so
-the studio names none. Blank means any.
+offers the four codes from the Patient schema. `GET /api/test-catalog/options` sends them as `sexes`,
+each with its label in en, fr and pt, so the studio names none. Blank means any.
 
 Per AGENTS.md section 5, the row's actions go in a `⋯` menu: move up, move down, remove. Add range
 moves into the parameter's `⋯` menu. This replaces the standalone Add band and Remove buttons.
@@ -76,6 +76,10 @@ not exceed `high`. Each refusal names the parameter and the range.
 every range by name or label. It starts on the first range that fits the patient, the same rule as
 `matchBand`. When none fits, it starts empty, and a result submitted with no range stores no
 `referenceRange`, as today.
+
+**Labels.** A range with no name is labelled from its sex label and its age, such as "Female 15+".
+`POST /api/test-catalog/result-params` also answers `sexes`, because a Lab Technician holds
+`forms.view` only and cannot read the options route.
 
 **Fit, worked out on the server.** For each range, `resultParamsFor` answers `fits` as `yes`, `no` or
 `unknown`. `unknown` means the range names a sex or age and the patient's record lacks it. The browser
@@ -110,9 +114,10 @@ lost.
 ## 7. The five places
 
 1. **UI.** The range editor (section 4) and the results sheet picker (section 5), in `apps/studio`.
-2. **CLI.** None. The CLI has no command that edits a test's ranges today, and picking is data entry,
-   which AGENTS.md section 6 item 2 leaves out. The CSV import and export carry no ranges and do not
-   change.
+2. **CLI.** `openldr test-catalog params <code> --set <file>` already replaces a test's parameters from
+   JSON through `parseResultParams` (`packages/cli/src/test-catalog.ts:67-91`), so a range name rides
+   through once `toBand` keeps it. A CLI test pins that. Picking is data entry, which AGENTS.md
+   section 6 item 2 leaves out. The CSV import and export carry no ranges and do not change.
 3. **Docs.** The Test catalog and Forms guides, in-app and web, in en, fr and pt.
 4. **Mobile.** A range row holds seven inputs, so it wraps at 375px. The picker sits under the input
    on a narrow screen. Only a real phone can confirm the sheet's bottom edge.
@@ -158,9 +163,8 @@ No migration and no seeding.
 - **A managed list of range names.** Decision 5.
 - **Choosing once per order or per test.** Decision 4.
 
-## 11. Open for the operator
+## 11. Settled after review, 2026-09-16
 
-- **Sex labels.** The server sends the four codes. Showing "Female" rather than `female` in en, fr and
-  pt needs translated labels. Either the studio holds one i18n key per code, which names the codes in
-  the studio's translation files, or the server sends labels in each language. The plan should not
-  pick one without the operator.
+- **The server sends the sex labels.** The codes come from the FHIR Patient schema. The words for them
+  in en, fr and pt live in `@openldr/bootstrap` beside those codes, because no stored data holds them:
+  the Patient form's Sex options carry English only.
