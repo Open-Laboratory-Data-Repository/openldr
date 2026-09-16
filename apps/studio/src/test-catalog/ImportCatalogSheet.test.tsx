@@ -16,6 +16,7 @@ const LOCAL = 'urn:openldr:cs:local';
 const OPTIONS: api.TestCatalogOptions = {
   categories: [{ code: 'CHEM', display: 'Chemistry' }, { code: 'MOL', display: 'Molecular' }],
   specimenTypes: [{ system: LOCAL, code: 'BLD', display: 'Blood' }, { system: LOCAL, code: 'UR', display: 'Urine' }],
+  resultParams: [],
   loinc: null,
 };
 const FILE: api.CatalogImportFile = {

@@ -127,6 +127,8 @@ export interface CatalogSpecimenOption {
 export interface CatalogOptions {
   categories: CatalogCategoryOption[];
   specimenTypes: CatalogSpecimenOption[];
+  /** The result parameters a test may name, from the ValueSet migration 069 seeds. */
+  resultParams: CatalogSpecimenOption[];
   /** The LOINC code system when LOINC is loaded here, so the sheet can search it. Null otherwise. */
   loinc: { systemId: string; system: string } | null;
 }
@@ -700,9 +702,10 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   }
 
   async function options(): Promise<CatalogOptions> {
-    const [categories, specimenTypes] = await Promise.all([
+    const [categories, specimenTypes, resultParams] = await Promise.all([
       expandEntries(TEST_CATEGORY_VALUE_SET),
       expandEntries(SPECIMEN_TYPE_VALUE_SET),
+      expandEntries(RESULT_PARAM_VALUE_SET),
     ]);
     let loinc: CatalogOptions['loinc'] = null;
     if (await loincLoaded()) {
@@ -712,6 +715,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     return {
       categories: categories.map(({ code, display }) => ({ code, display })).sort(byLabel),
       specimenTypes: specimenTypes.sort(byLabel),
+      resultParams: resultParams.sort(byLabel),
       loinc,
     };
   }
