@@ -32,4 +32,5 @@ export * from './store';
 export * from './starter-pack-store';
 export * from './validate-answers';
 export * from './reference-source';
+export * from './test-details';
 export * from './validate-references';

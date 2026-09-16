@@ -17,6 +17,7 @@ export * from './diff';
 export * from './page-targets';
 export * from './validate-answers';
 export * from './reference-source';
+export * from './test-details';
 export * from './routing';
 export * from './starter-pack';
 export * from './samples/starter-packs';

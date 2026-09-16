@@ -1,6 +1,7 @@
 import type { FormField, FormSchema } from './schema/form-schema'
 import type { QuestionnaireResponse, QuestionnaireResponseItem, QuestionnaireResponseItemAnswer } from 'fhir/r4'
 import { toAnswer, type AnswerState } from './answer-value'
+import { parseTestDetails, testDetailItems } from './test-details'
 import { isMultiValued } from './reference-source'
 
 /** Coerce a stored value into instance-array form (mirrors renderer formRepeat.asInstances). */
@@ -35,6 +36,12 @@ function itemsForField(
   source: Record<string, unknown>,
   childrenByGroup: Map<string, FormField[]>,
 ): QuestionnaireResponseItem[] {
+  // Bench result entry: a testDetails answer is an object keyed by test, so it writes its own nested
+  // items, one per test and one per result. toAnswer would String() the whole object.
+  if (field.fieldType === 'testDetails') {
+    const items = testDetailItems(parseTestDetails(source[field.id]))
+    return items.length ? [{ linkId: field.id, item: items }] : []
+  }
   if (field.fieldType !== 'group') return scalarItems(field, source)
 
   const children = (childrenByGroup.get(field.id) ?? []).slice().sort(byOrder)

@@ -5,6 +5,8 @@ export const FieldType = z.enum([
   'select', 'multiselect', 'suggest', 'phone', 'email', 'address',
   'identifier', 'attachment', 'organism', 'antibiogram',
   'reference', 'facility', 'group',
+  // Bench result entry: the specimen, rejection and result values for each test chosen on an order.
+  'testDetails',
 ]);
 export type FieldType = z.infer<typeof FieldType>;
 
