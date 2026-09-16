@@ -97,6 +97,13 @@ describe('test-catalog params', () => {
       .toEqual([{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, bands: [] }]);
   });
 
+  it('keeps a range name from a set file', () => {
+    const [param] = readResultParamsFile(JSON.stringify([
+      { system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', bands: [{ name: 'Highland women', low: 12, high: 16 }] },
+    ]));
+    expect(param.bands[0].name).toBe('Highland women');
+  });
+
   it('refuses a set file that is not a list', () => {
     expect(() => readResultParamsFile('{"code":"HGB"}')).toThrow(/list of result parameters/);
   });

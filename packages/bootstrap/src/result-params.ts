@@ -6,6 +6,8 @@
 // what the authoring picker offers. This module is the shape of that link plus the band rules, kept
 // free of the database so both the service and its tests can use it directly.
 
+import { Patient } from '@openldr/fhir';
+
 /** Parameters whose result_role is 'result', seeded by migration 069. The picker offers these. */
 export const RESULT_PARAM_VALUE_SET = 'urn:openldr:valueset:reportable-result';
 
@@ -13,6 +15,8 @@ export type ResultType = 'numeric' | 'coded' | 'text';
 
 /** One reference band. A band naming neither sex nor an age window is the catch-all. */
 export interface ResultBand {
+  /** Typed by whoever edits the test, such as "Highland women". Null when the range has no name. */
+  name: string | null;
   low: number | null;
   high: number | null;
   unit: string | null;
@@ -45,7 +49,7 @@ function toBand(value: unknown): ResultBand | null {
   if (!value || typeof value !== 'object') return null;
   const b = value as Record<string, unknown>;
   return {
-    low: num(b.low), high: num(b.high), unit: str(b.unit),
+    name: str(b.name), low: num(b.low), high: num(b.high), unit: str(b.unit),
     sex: str(b.sex), ageLow: num(b.ageLow), ageHigh: num(b.ageHigh),
   };
 }
@@ -86,4 +90,52 @@ export function matchBand(bands: ResultBand[], patient: { sex?: string | null; a
     return band;
   }
   return null;
+}
+
+/** Whether a range fits one patient. Unknown means the range names a sex or an age the record lacks. */
+export type BandFit = 'yes' | 'no' | 'unknown';
+
+export function bandFit(band: ResultBand, patient: { sex?: string | null; ageYears?: number | null }): BandFit {
+  const sex = patient.sex ?? null;
+  const age = patient.ageYears ?? null;
+  let unknown = false;
+  if (band.sex !== null) {
+    if (sex === null) unknown = true;
+    else if (band.sex !== sex) return 'no';
+  }
+  if (band.ageLow !== null || band.ageHigh !== null) {
+    if (age === null) unknown = true;
+    else if ((band.ageLow !== null && age < band.ageLow) || (band.ageHigh !== null && age > band.ageHigh)) return 'no';
+  }
+  return unknown ? 'unknown' : 'yes';
+}
+
+/** A sex a range can name, with its label in each language the studio ships. */
+export interface SexOption {
+  code: string;
+  labels: Record<string, string>;
+}
+
+// The codes come from the FHIR Patient schema. Only the words for them live here: the operator chose
+// to have the server send labels (named reference ranges spec, 11), and no stored data holds them in
+// French or Portuguese.
+const SEX_LABELS: Record<string, Record<string, string>> = {
+  male: { en: 'Male', fr: 'Homme', pt: 'Masculino' },
+  female: { en: 'Female', fr: 'Femme', pt: 'Feminino' },
+  other: { en: 'Other', fr: 'Autre', pt: 'Outro' },
+  unknown: { en: 'Unknown', fr: 'Inconnu', pt: 'Desconhecido' },
+};
+
+export const SEX_OPTIONS: SexOption[] = Patient.shape.gender.unwrap().options
+  .map((code) => ({ code, labels: SEX_LABELS[code] ?? { en: code } }));
+
+/**
+ * True when a range an answer carried is one of the catalog's ranges, field for field. A missing name
+ * reads as none, so a range saved before names existed still matches an unnamed one.
+ */
+export function bandInCatalog(band: unknown, bands: ResultBand[]): boolean {
+  const b = toBand(band);
+  if (!b) return false;
+  return bands.some((c) => c.name === b.name && c.low === b.low && c.high === b.high && c.unit === b.unit
+    && c.sex === b.sex && c.ageLow === b.ageLow && c.ageHigh === b.ageHigh);
 }
