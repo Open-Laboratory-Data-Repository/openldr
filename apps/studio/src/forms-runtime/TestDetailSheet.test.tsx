@@ -37,6 +37,24 @@ describe('TestDetailSheet', () => {
     expect(screen.getByLabelText('Note')).toBeInTheDocument();
   });
 
+  // Each parameter used to be its own grid, so each label column took that label's width and the
+  // inputs started at a different place on every row. Found on the live sheet 2026-09-16.
+  it('puts every label in one column, so the inputs line up', async () => {
+    render(<TestDetailSheet test={test} params={[numeric, coded, text]} detail={detail} onChange={() => {}} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByLabelText('Haemoglobin')).toBeInTheDocument());
+    const grid = screen.getByText('Specimen type').parentElement;
+    for (const name of ['Haemoglobin', 'Malaria RDT', 'Note']) {
+      expect(screen.getByText(name, { selector: 'label' }).parentElement).toBe(grid);
+    }
+  });
+
+  // The studio has no CSS reset, so a <p> keeps a 1em bottom margin and pushes the next row down.
+  it('draws the range line without a paragraph margin', async () => {
+    render(<TestDetailSheet test={test} params={[numeric]} detail={detail} onChange={() => {}} onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText('12 to 15 g/dL')).toBeInTheDocument());
+    expect(screen.getByText('12 to 15 g/dL').tagName).not.toBe('P');
+  });
+
   it('shows the matched band as text, and the unit beside the input', async () => {
     render(<TestDetailSheet test={test} params={[numeric]} detail={detail} onChange={() => {}} onClose={() => {}} />);
     await waitFor(() => expect(screen.getByText('12 to 15 g/dL')).toBeInTheDocument());
