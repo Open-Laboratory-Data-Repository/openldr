@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "dbf8242b",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Browse the catalog from the Tests field"
+        },
+        {
+          "hash": "c88ef3fc",
+          "type": "feat",
+          "scope": "studio",
+          "title": "A sheet for browsing the whole test catalog"
+        },
+        {
+          "hash": "dd856336",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Read the catalog for browsing"
+        },
+        {
+          "hash": "d2966e5c",
+          "type": "feat",
+          "scope": "server",
+          "title": "List the catalog for a Lab order to browse"
+        },
+        {
           "hash": "43851697",
           "type": "feat",
           "scope": "forms",
