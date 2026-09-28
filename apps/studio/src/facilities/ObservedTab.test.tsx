@@ -15,6 +15,8 @@ vi.mock('@/api', async (orig) => {
     listTermMappings: vi.fn(),
     createTermMapping: vi.fn(),
     deleteTermMapping: vi.fn(),
+    listFacilityImportSources: vi.fn(),
+    linkMatchingFacilityCodes: vi.fn(),
   };
 });
 
@@ -26,7 +28,7 @@ vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
 import {
   listObservedFacilities, scanObservedFacilities, publishFacilities, listCodingSystems, listTermMappings,
-  createTermMapping, deleteTermMapping,
+  createTermMapping, deleteTermMapping, listFacilityImportSources,
   type ObservedFacility, type CodingSystem, type TermMapping,
 } from '@/api';
 import { ObservedTab } from './ObservedTab';
@@ -253,6 +255,19 @@ describe('ObservedTab', () => {
     show();
     await screen.findByText('Dodoma');
     expect(screen.queryByRole('button', { name: /actions/i })).not.toBeInTheDocument();
+  });
+
+  it('offers Link matching codes in the header dots menu for a manage-capable actor', async () => {
+    (listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    show();
+    await screen.findByText('Dodoma');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /link matching codes/i })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: /link matching codes/i }));
+
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/link matching codes/i);
   });
 
   it('shows a plain "not mapped" message for an unmapped row, distinct from the raw code', async () => {

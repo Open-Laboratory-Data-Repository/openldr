@@ -5,6 +5,9 @@ import { loadConfig } from '@openldr/config';
 import {
   createAppContext, importFacilities, recordAuditEvent, scanObservedFacilities, publishFacilityMap,
   listFacilityMappingConflicts, facilityHealth,
+  // Task 4: the SAME `POST /api/facilities/link-matching` route calls (apps/server/src/facilities-
+  // routes.ts). Links each observed facility code to the row in one register with the same code.
+  linkMatchingFacilityCodes, type LinkMatchingResult,
   // Task 9: the offline suggestion engine (Task 2) and the value-mapping writer (Task 5) — the SAME
   // `@openldr/bootstrap` functions the HTTP routes call (Task 4/6, apps/server/src/facilities-routes.ts).
   // Reused verbatim below; nothing here re-implements ranking or validation.
@@ -1473,6 +1476,72 @@ function formatPublishHuman(result: PublishResult, opts: FacilitiesPublishOpts):
   return opts.apply
     ? `applied: ${counts}`
     : `DRY RUN — nothing written. Rerun with --apply to write.\n${counts}`;
+}
+
+export interface FacilitiesLinkMatchingOpts {
+  /** The register's canonical URI. */
+  register: string;
+  /** The caller opts IN to writing. Omitted or false means a dry run. */
+  apply?: boolean;
+  json: boolean;
+}
+
+/**
+ * `openldr facilities link-matching --register <url> [--apply] [--json]`
+ *
+ * Links each observed facility code to the row in one register that has exactly the same code.
+ * The same `@openldr/bootstrap` function `POST /api/facilities/link-matching` calls. Dry run by
+ * default.
+ */
+export async function runFacilitiesLinkMatching(opts: FacilitiesLinkMatchingOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const outcome = await linkMatchingFacilityCodes(reconcileDeps(ctx), { registerUrl: opts.register, apply: !!opts.apply });
+    if (!outcome.ok) {
+      if (opts.json) process.stdout.write(JSON.stringify({ error: outcome.error }) + '\n');
+      else process.stderr.write(`facilities link-matching refused: ${outcome.error}\n`);
+      return 1;
+    }
+    const result = outcome.result;
+
+    if (result.applied && result.counts.linked > 0) {
+      try {
+        await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'cli' });
+      } catch (err) {
+        process.stderr.write(`warning: the mappings were written, but queueing the facility map rebuild failed: ${redactError(err)}. Run: openldr facilities publish --apply\n`);
+      }
+    }
+
+    if (result.applied) {
+      await recordAuditEvent(ctx, cliActor(), {
+        action: 'facility.link-matching',
+        entityType: 'facility',
+        entityId: `facility-register:${opts.register}`,
+        before: null,
+        after: null,
+        metadata: { registerUrl: opts.register, counts: result.counts },
+      });
+    }
+
+    if (opts.json) process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    else process.stdout.write(formatLinkMatchingHuman(result) + '\n');
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities link-matching failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatLinkMatchingHuman(result: LinkMatchingResult): string {
+  const c = result.counts;
+  const rest = `${c['already-linked']} already linked, ${c.kept} kept, ${c['no-match']} with no match`;
+  return result.applied
+    ? `linked ${c.linked}, ${rest}.`
+    : `dry run: ${c.linked} would link, ${rest}. Nothing written. Pass --apply to write.`;
 }
 
 // ── Task 13: the mapping-conflict review queue ─────────────────────────────────────────────────

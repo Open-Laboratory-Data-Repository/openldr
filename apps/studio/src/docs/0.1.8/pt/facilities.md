@@ -338,6 +338,66 @@ ordem diferente. Comparam maiúsculas/minúsculas e letras acentuadas segundo re
 um relatório depender de uma ordem específica, aplique uma ordenação explícita em vez de confiar
 na vista predefinida.
 
+## Ligar códigos observados a um registo numa só etapa
+
+Algumas listas de unidades usam os mesmos códigos que o seu LIS envia. Um dicionário de unidades
+OpenLDR v1 é um deles: está indexado pelos códigos de unidade DISA. Depois de importar essa lista,
+não precisa de associar cada código observado à mão.
+
+1. Abra Unidades, depois Observadas.
+2. Abra o menu `⋯` e escolha **Ligar códigos correspondentes**.
+3. Escolha o registo. O painel mostra o que aconteceria, e ainda não escreve nada.
+4. Abra o menu `⋯` do painel e escolha **Ligar N códigos**.
+
+Cada código cai num destes quatro grupos:
+
+- **A ligar.** O registo tem exatamente este código, e nada o associa ainda.
+- **Já ligado.** O código já resolve para essa unidade.
+- **Mantido.** O código já tem uma associação. Fica como está. Corrija-a à mão se estiver errada.
+- **Sem correspondência.** O registo não tem nenhuma linha com este código.
+
+A correspondência é exata. `MICAN` não corresponde a `mican` nem a `MICAN ` com um espaço no fim.
+Todas as ligações são escritas em conjunto, ou nenhuma. Os relatórios refletem as novas ligações
+depois da reconstrução da dimensão de unidades que a ação agenda.
+
+Na linha de comandos:
+
+    openldr facilities link-matching --register <URL do registo>
+    openldr facilities link-matching --register <URL do registo> --apply
+
+### Exemplo: um dicionário de unidades v1 (Moçambique)
+
+Exporte a lista de unidades da base de dados do dicionário v1. A cláusula `WHERE` exclui províncias
+e distritos, que a tabela guarda como linhas sem tipo de unidade.
+
+```sql
+SELECT FacilityCode, Description, FacilityType, HFStatus, FacilityNationalCode,
+       CountryName, ProvinceName, DistrictName
+FROM dbo.viewFacilities
+WHERE ISNULL(FacilityType, '') <> ''
+```
+
+Guarde o resultado como CSV com cada coluna em texto. O Excel transforma códigos como `01` em `1`;
+não faça o ficheiro passar pelo Excel.
+
+Crie um registo para esta lista, por exemplo "Códigos de unidade DISA de Moçambique". Depois
+importe o CSV com este mapeamento de colunas:
+
+| Coluna do ficheiro | Campo |
+|---|---|
+| FacilityCode | `national_code` |
+| Description | `name` |
+| ProvinceName | `region` |
+| DistrictName | `district` |
+| CountryName | `country` |
+| FacilityType | `level` |
+| HFStatus | `status` |
+| FacilityNationalCode | Manter como dado extra |
+
+Associe a província a `region`, não a `zone`. Os relatórios leem a região, o distrito e o conselho.
+
+Depois execute **Ligar códigos correspondentes** sobre o novo registo.
+
 ## Linha de comandos: listar unidades
 
 `openldr facilities list` suporta a mesma gramática de filtro e ordenação que a barra de

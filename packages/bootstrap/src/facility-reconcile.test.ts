@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, internalMigrations, observedSystemForFeed } from '@openldr/db';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant } from './facility-reconcile';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant, registryConceptCodeById } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping, currentConceptCode, dropOneActiveFacilityResolutionIndex } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -2858,5 +2858,46 @@ describe('facility_map is keyed on the raw observed wire tuple (FAC-P0-07)', () 
     const rows = await deps.externalDb.selectFrom('facility_map')
       .select(['source_system', 'performer_system', 'source_code']).execute();
     expect(rows).toEqual([{ source_system: 'webhook-ingest', performer_system: '', source_code: 'NHL-01' }]);
+  });
+});
+
+describe('ResolvedFacility.observedSystem', () => {
+  it('is the wire performer_system when the wire sends one', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['APHLO', 2]], { sourceSystem: 'cdr-ingest', performerSystem: 'urn:openldr:default_fac' });
+
+    const rows = await resolveObservedFacilities(deps);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].observedSystem).toBe('urn:openldr:default_fac');
+  });
+
+  it('falls back to the feed system when the wire sends none', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['APHLO', 2]], { sourceSystem: 'cdr-ingest' });
+
+    const rows = await resolveObservedFacilities(deps);
+
+    expect(rows[0].observedSystem).toBe(observedSystemForFeed('cdr-ingest'));
+  });
+});
+
+describe('registryConceptCodeById', () => {
+  it('uses the facility code when it is unique across the registry', () => {
+    const codes = registryConceptCodeById([
+      { id: 'fac-a', name: 'CS Micane', facility_code: 'MICAN' },
+      { id: 'fac-b', name: 'CS Mumemo', facility_code: 'MUME' },
+    ]);
+    expect(codes.get('fac-a')).toBe('MICAN');
+    expect(codes.get('fac-b')).toBe('MUME');
+  });
+
+  it('falls back to the row id when two registers share a code', () => {
+    const codes = registryConceptCodeById([
+      { id: 'fac-a', name: 'A', facility_code: 'X' },
+      { id: 'fac-b', name: 'B', facility_code: 'X' },
+    ]);
+    expect(codes.get('fac-a')).toBe('fac-a');
+    expect(codes.get('fac-b')).toBe('fac-b');
   });
 });

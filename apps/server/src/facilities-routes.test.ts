@@ -7152,3 +7152,61 @@ describe('POST /api/facilities/import/runs/:id/revalidate', () => {
     expect((await app.inject({ method: 'POST', url: revalidateUrl(runId), payload: {} })).statusCode).toBe(409);
   });
 });
+
+describe('POST /api/facilities/link-matching', () => {
+  const MZ = 'urn:openldr:register:mz-disa';
+
+  async function setup() {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await createFacilityRegisterSourceStore(internalDb).create({ url: MZ, name: 'Mozambique DISA facility codes', code: 'MZDISA' });
+    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-mican', name: 'CS Micane', facilityCode: 'MICAN', facilitySystem: MZ, source: 'import' });
+    await seedObservedReports(externalDb, [['MICAN', 5], ['ZZZZZ', 2]]);
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    return { internalDb, ctx, app: await appWith(ctx) };
+  }
+
+  it('dry-runs by default: returns counts, writes nothing, does not audit', async () => {
+    const { internalDb, ctx, app } = await setup();
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/link-matching', payload: { registerUrl: MZ } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ registerUrl: MZ, applied: false, counts: { linked: 1, 'already-linked': 0, kept: 0, 'no-match': 1 } });
+    expect(res.json().pairs[0]).toMatchObject({ code: 'MICAN', outcome: 'linked', registryId: 'fac-mican', name: 'CS Micane' });
+    expect(await internalDb.selectFrom('term_mappings').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0);
+  });
+
+  it('apply writes the mapping, audits counts only, and queues a facility map rebuild', async () => {
+    const { internalDb, ctx, app } = await setup();
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/link-matching', payload: { registerUrl: MZ, apply: true } });
+    expect(res.statusCode).toBe(200);
+    const rows = await internalDb.selectFrom('term_mappings').selectAll().execute();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ from_code: 'MICAN', to_system: FACILITY_REGISTRY_SYSTEM, map_type: 'SAME-AS' });
+    expect(ctx.__audit).toHaveLength(1);
+    expect(ctx.__audit[0]).toMatchObject({ action: 'facility.link-matching', entityId: `facility-register:${MZ}` });
+    expect(ctx.__audit[0].metadata).toEqual({ registerUrl: MZ, counts: { linked: 1, 'already-linked': 0, kept: 0, 'no-match': 1 } });
+    expect(await ctx.facilityJobs.latest('facility-map-rebuild')).not.toBeNull();
+  });
+
+  it('answers 400 with the import gate message for an unknown register', async () => {
+    const { app } = await setup();
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/link-matching', payload: { registerUrl: 'urn:nope', apply: true } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/is not a known facility register/);
+  });
+
+  it('answers 400 without a registerUrl', async () => {
+    const { app } = await setup();
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/link-matching', payload: {} });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('is gated on facilities.manage', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb), ['facilities.view']);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/link-matching', payload: { registerUrl: MZ } });
+    expect(res.statusCode).toBe(403);
+  });
+});

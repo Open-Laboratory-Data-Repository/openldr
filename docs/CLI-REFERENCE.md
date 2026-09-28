@@ -172,6 +172,21 @@ Enroll a lab on central, then hand the printed credentials to the lab operator:
 ./openldr sync list --json
 ```
 
+## Facilities
+
+### openldr facilities link-matching
+
+Links each observed facility code to the row in one register that has exactly the same code. Use
+it after importing a facility list keyed on the codes your LIMS sends, such as a v1 facility
+dictionary keyed on DISA codes.
+
+    openldr facilities link-matching --register <url> [--apply] [--json]
+
+A dry run by default. It reports four counts: codes it would link, codes already linked, codes
+kept because they already have a mapping, and codes with no match. It never changes a code that
+already has a mapping. With `--apply` it writes every link in one transaction and queues a
+facility map rebuild. An unknown or deactivated register exits 1.
+
 ## Captured Terminal Output
 
 `docs/audit/2026-06-23/cli-help-output.md` is a captured terminal-output appendix dated 2026-06-23. It predates the `errors`, `ingest`, `report-def`, `report-design`, and `sync divergence/export/import` additions, and still shows the removed `dhis2` group. Treat it as a snapshot, not the current command list. Run `./openldr <group> --help` for the live help. It contains fenced `console` blocks with the prompt, command, real output, and `EXIT_CODE` for each command, including:

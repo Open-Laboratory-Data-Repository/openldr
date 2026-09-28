@@ -21,8 +21,9 @@ import {
   revalidateImportRun, readColumnValues, FacilityFileUnreadableError,
   addRegisterFacilityType, FacilityTypeCollisionError,
   facilityXlsxToCsv, facilityXlsxTooLarge, FacilityXlsxError, FACILITY_IMPORT_MAX_XLSX_BYTES,
+  linkMatchingFacilityCodes,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
-  type ValueMappingEntry, type FacilityXlsxCsv,
+  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult,
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
@@ -747,6 +748,11 @@ const PublishSchema = z.object({
   apply: z.boolean().optional(),
 });
 
+const LinkMatchingSchema = z.object({
+  registerUrl: z.string().min(1),
+  apply: z.boolean().optional(),
+});
+
 /** `ReconcileDeps` for the three routes below. `ctx.store.db` is the target/warehouse handle —
  *  same cast `createAppContext` itself uses (`packages/bootstrap/src/index.ts`'s
  *  `store.db as unknown as Kysely<ExternalSchema>`) — and `ctx.terminology.admin` is the SAME
@@ -1080,6 +1086,45 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         before: null,
         after: null,
         metadata: { result },
+      });
+    }
+    return result;
+  });
+
+  // Link every observed code to the row in ONE register that carries the same code (spec
+  // 2026-09-28-v1-facility-dictionary). Same dry-run-by-default contract as scan and publish.
+  app.post('/api/facilities/link-matching', MANAGE, async (req, reply) => {
+    const p = LinkMatchingSchema.safeParse(req.body ?? {});
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const outcome = await linkMatchingFacilityCodes(reconcileDeps(ctx), {
+      registerUrl: p.data.registerUrl,
+      apply: !!p.data.apply,
+    });
+    if (!outcome.ok) { reply.code(400); return { error: outcome.error }; }
+    const result: LinkMatchingResult = outcome.result;
+
+    // Same containment as the mapping routes (terminology-admin-routes.ts): the mappings are
+    // committed, so a lost enqueue must not turn this into a 500. Logged, because a lost enqueue
+    // leaves the report dimension stale.
+    if (result.applied && result.counts.linked > 0) {
+      try {
+        await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+      } catch (err) {
+        ctx.logger.error({ err, registerUrl: p.data.registerUrl }, 'failed to enqueue a facility-map-rebuild job after linking matching facility codes');
+      }
+    }
+
+    // Counts only. A national register can link thousands of codes, and each row is already
+    // captured one by one for sync by `saveExclusive`.
+    if (result.applied) {
+      await recordAudit(ctx, req, {
+        action: 'facility.link-matching',
+        entityType: 'facility',
+        entityId: `facility-register:${p.data.registerUrl}`,
+        before: null,
+        after: null,
+        metadata: { registerUrl: p.data.registerUrl, counts: result.counts },
       });
     }
     return result;

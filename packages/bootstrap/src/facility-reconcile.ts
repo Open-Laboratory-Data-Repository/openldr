@@ -293,6 +293,10 @@ export type ResolvedVia = 'registry' | 'national';
 export interface ResolvedFacility {
   sourceSystem: string;
   sourceCode: string;
+  /** The coding system this row's mappings are keyed on: the wire's `performer_system` when it sent
+   *  one, else the feed's own system (`observedSystemForFeed`). A mapping resolves this row only
+   *  when its `from_system` equals this value. */
+  observedSystem: string;
   /** `DiagnosticReport.performer[0].display` as observed on the wire (e.g. "Aga Khan") — the human
    *  name for `sourceCode`, distinct from `name` below (the RESOLVED registry facility's name).
    *  Lets the Observed tab show "BAMAA — Aga Khan" instead of a bare opaque code, without using the
@@ -448,6 +452,21 @@ export function assertResolvedFacilityInvariant(
       `(got resolvedVia=${JSON.stringify(row.resolvedVia)})`,
     );
   }
+}
+
+/**
+ * The concept code each registry row projects as, keyed by registry id. A registry-route mapping
+ * must target exactly this code or it will not resolve. Shared by `resolveObservedFacilities` and
+ * `linkMatchingFacilityCodes` so the two can never derive it differently. A code two rows share
+ * falls back to each row's own id (`registryConceptRows`).
+ */
+export function registryConceptCodeById(
+  registry: readonly { id: string; name: string; facility_code: string | null }[],
+): Map<string, string> {
+  const concepts = registryConceptRows(
+    registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, facilityCode: r.facility_code })),
+  );
+  return new Map(registry.map((r, i) => [r.id, concepts[i].code]));
 }
 
 /**
@@ -646,10 +665,8 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
   // mapping authored against the current projection would fail to resolve. A plain `byId` keyed on
   // the row's bare `id` was correct back when every concept's code WAS the id; it is retired here for
   // that reason, not merely renamed.
-  const registryConcepts = registryConceptRows(
-    registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, facilityCode: r.facility_code })),
-  );
-  const byRegistryCode = new Map(registry.map((r, i) => [registryConcepts[i].code, r]));
+  const codeById = registryConceptCodeById(registry);
+  const byRegistryCode = new Map(registry.map((r) => [codeById.get(r.id)!, r]));
   const byNational = new Map(
     registry
       .filter((r) => r.facility_system && r.facility_code)
@@ -746,6 +763,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     return {
       sourceSystem: r.sourceSystem,
       sourceCode: r.code,
+      observedSystem: r.system,
       sourceDisplay: r.sourceDisplay,
       observations: [...r.observations.values()],
       sourceRegion: location.region,
