@@ -1756,6 +1756,10 @@ export interface ObservedFacility {
   /** `diagnostic_reports.source_system` — the ingestion feed, e.g. `webhook-ingest`. Unrelated to
    *  the coding system mappings are authored against (see `resolvedVia` below). */
   sourceSystem: string;
+  /** The coding system this row's mappings are keyed on: the wire's `performer_system` when it sent
+   *  one, else the feed's own system (`observedSystemForFeed`). A mapping resolves this row only
+   *  when its `from_system` equals this value. */
+  observedSystem: string;
   /** The performer string EXACTLY as it arrived. Never normalised. */
   sourceCode: string;
   /** `DiagnosticReport.performer[0].display` as observed on the wire (e.g. "Aga Khan") — the human

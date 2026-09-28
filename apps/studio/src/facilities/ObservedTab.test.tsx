@@ -34,7 +34,7 @@ import {
 import { ObservedTab } from './ObservedTab';
 
 const dodoma: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 247,
+  sourceSystem: 'webhook-ingest', observedSystem: 'urn:openldr:default_fac', sourceCode: 'Dodoma', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 247,
   registryId: 'f1', facilityCode: 'DOD-REF', name: 'Dodoma Regional Referral Hospital', level: 'Hospital', status: null,
   region: 'Dodoma', district: 'Dodoma Urban', council: null, nationalSystem: null, nationalCode: null,
   resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false, ambiguous: false,
@@ -44,12 +44,12 @@ const dodoma: ObservedFacility = {
 // by accident (Minor finding: the old "Kibondo" fixture was alphabetical AND count-descending too,
 // so this fixture is deliberately renamed/reordered to break that coincidence).
 const arusha: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 148,
+  sourceSystem: 'webhook-ingest', observedSystem: 'urn:openldr:default_fac', sourceCode: 'Arusha', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 148,
   registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: false,
 };
 const oceanRoad: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
+  sourceSystem: 'webhook-ingest', observedSystem: 'urn:openldr:default_fac', sourceCode: 'Ocean Road Cancer Institute (O', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
   registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true, nonFacilityTarget: false, ambiguous: false,
 };
@@ -58,7 +58,7 @@ const oceanRoad: ObservedFacility = {
 // its name, so an operator sees "BAMAA — Aga Khan" rather than an opaque code indistinguishable
 // from the other four.
 const bamaa: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan', sourceRegion: null, sourceDistrict: null, reportCount: 12,
+  sourceSystem: 'webhook-ingest', observedSystem: 'urn:openldr:default_fac', sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan', sourceRegion: null, sourceDistrict: null, reportCount: 12,
   registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: false,
 };
@@ -71,7 +71,7 @@ const bbfaf: ObservedFacility = {
 // ⛔ THE bug report's exact scenario: BALAB mapped to ITSELF (DEFAULT_FAC|BALAB). Fix 1 files this
 // as `nonFacilityTarget`, not `targetMissing`.
 const balab: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'BALAB', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
+  sourceSystem: 'webhook-ingest', observedSystem: 'urn:openldr:default_fac', sourceCode: 'BALAB', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
   registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: true, ambiguous: false,
 };
@@ -81,6 +81,20 @@ const balab: ObservedFacility = {
 // is set — this fixture is the shape `resolveObservedFacilities` actually emits for that case.
 const conflicted: ObservedFacility = {
   ...balab, targetMissing: false, nonFacilityTarget: false, ambiguous: true,
+};
+
+// Finding 1 (final review): a lab and a clinic can share the same wire code under DIFFERENT
+// `observedSystem`s (labs arrive under `urn:openldr:default_lab`, clinics under
+// `urn:openldr:default_fac`). The row key and the mapping system must both key off
+// `row.observedSystem`, never a value re-derived from `sourceSystem`. The two rows below share
+// `sourceSystem` AND `sourceCode`, and differ ONLY in `observedSystem`.
+const labRow: ObservedFacility = {
+  sourceSystem: 'webhook-ingest', observedSystem: 'urn:openldr:default_lab', sourceCode: 'TDS', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 4,
+  registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: false,
+};
+const clinicRow: ObservedFacility = {
+  ...labRow, observedSystem: 'urn:openldr:default_fac', reportCount: 9,
 };
 
 const defaultFacSystem: CodingSystem = {
@@ -236,6 +250,34 @@ describe('ObservedTab', () => {
     show();
     const rows = await screen.findAllByRole('row');
     expect(within(rows[1]).getByText('Hospital · Dodoma Urban, Dodoma · via registry')).toBeInTheDocument();
+  });
+
+  // Finding 1 (final review): the row key was `${sourceSystem}|${sourceCode}`. A lab and a
+  // clinic sharing both fields collided into ONE React row, and Map opened under the feed's
+  // system (the clinic's `urn:openldr:default_fac`), never the lab's own `urn:openldr:default_lab`.
+  // Mapping the lab would then write a mapping the resolver never reads for it, and on a shared
+  // code could edit or delete the clinic's mapping instead.
+  it('renders a lab row and a clinic row with the same wire code as two separate rows, and maps the lab under its own observedSystem', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([clinicRow, labRow]);
+    show();
+
+    const rows = await screen.findAllByRole('row');
+    // Header row plus 2 data rows, no collision into one.
+    expect(rows).toHaveLength(3);
+    expect(within(rows[1]).getByText('9')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('4')).toBeInTheDocument();
+
+    // Both rows share `sourceCode` ('TDS'), so their ⋯ triggers share the same accessible name.
+    // Scope to the lab row (rows[2]) rather than `screen.getByRole`, which would find two.
+    const trigger = within(rows[2]).getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /^map$/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /^map$/i }));
+
+    // The lab row's own `observedSystem`, not the feed-derived clinic system.
+    await waitFor(() => expect(listTermMappings).toHaveBeenCalledWith('urn:openldr:default_lab', 'TDS'));
   });
 
   it('marks a mapping whose target was deleted', async () => {
@@ -420,7 +462,9 @@ describe('ObservedTab', () => {
       url: 'urn:openldr:fac_cdr_import', systemVersion: null, description: null, active: true,
       publisherId: 'pub-system', seeded: false,
     };
-    const cdrRow: ObservedFacility = { ...arusha, sourceSystem: 'cdr-import', sourceCode: 'NHL-01' };
+    const cdrRow: ObservedFacility = {
+      ...arusha, sourceSystem: 'cdr-import', observedSystem: 'urn:openldr:fac_cdr_import', sourceCode: 'NHL-01',
+    };
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([cdrRow]);
     (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, cdrSystem, registrySystem]);
     show();

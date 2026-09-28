@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreHorizontal, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db/facility-observed';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM } from '@openldr/db/facility-observed';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -190,12 +190,12 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
     setMappingLoading(true);
     setError(null);
     try {
-      // Each row belongs to its OWN ingest feed (`row.sourceSystem`), and Task 9b binds every feed
-      // to its own coding system — `observedSystemForFeed` derives it the same way the resolver
-      // does. Looking this up under the DEFAULT system unconditionally would author a non-default
-      // feed's mapping where the resolver can never find it (see the module banner on
-      // `observedSystemForFeed` for the full precedence story).
-      const system = observedSystemForFeed(row.sourceSystem);
+      // Each row carries the resolver's OWN verdict on which coding system its mappings are keyed
+      // on (`row.observedSystem`: the wire's `performer_system` when it sent one, else the feed's
+      // own system). Re-deriving this from `row.sourceSystem` here would collapse a lab and a
+      // clinic sharing one feed but different observed systems: mapping the lab would then write a
+      // mapping under the clinic's system, which the resolver never reads for the lab.
+      const system = row.observedSystem;
       // Look up any mapping ALREADY authored for this observed code (under ITS system) so the
       // dialog opens in edit mode against it, rather than creating a second candidate row alongside
       // it — `resolveObservedFacilities` has no tiebreak for two active mappings that name
@@ -222,13 +222,13 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
     }
   }, [mappingLoading]);
 
-  // The system the currently-open row's mapping is authored against — derived from ITS
-  // `sourceSystem`, not the default. Falls back to the default system's url before a row is picked
-  // (dialog closed), which is harmless since `mappingSystems.find` then simply returns undefined.
-  // Looks up the FULL `mappingSystems` list (not the target-restricted one) — the FROM term's own
-  // system is very often NOT a valid mapping target (an observed feed's system is never itself a
-  // facility register) but must still display its real code, not blank out.
-  const mappingSystemUrl = mappingRow ? observedSystemForFeed(mappingRow.sourceSystem) : DEFAULT_OBSERVED_FACILITY_SYSTEM;
+  // The system the currently-open row's mapping is authored against: the row's OWN
+  // `observedSystem`, not a re-derivation from `sourceSystem`. Falls back to the default system's
+  // url before a row is picked (dialog closed), which is harmless since `mappingSystems.find` then
+  // simply returns undefined. Looks up the FULL `mappingSystems` list (not the target-restricted
+  // one). The FROM term's own system is very often NOT a valid mapping target (an observed feed's
+  // system is never itself a facility register) but must still display its real code, not blank out.
+  const mappingSystemUrl = mappingRow ? mappingRow.observedSystem : DEFAULT_OBSERVED_FACILITY_SYSTEM;
   const mappingSystemCode = mappingSystems.find((s) => s.url === mappingSystemUrl)?.systemCode ?? '';
 
   // ── Remove mapping (row ⋯ menu → ConfirmDialog, no dialog reuse) ────────────
@@ -266,7 +266,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
     setRemovingRow(null);
     setError(null);
     try {
-      const system = observedSystemForFeed(row.sourceSystem);
+      const system = row.observedSystem;
       const { outgoing } = await listTermMappings(system, row.sourceCode);
       const activeIds = outgoing.filter((m) => m.isActive).map((m) => m.id);
       await Promise.all(activeIds.map((id) => deleteTermMapping(id)));
@@ -371,7 +371,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                 // `facilities` row — the common case today.
                 const sourceLocation = adminAreaLine(row.sourceDistrict, row.sourceRegion);
                 return (
-                <TableRow key={`${row.sourceSystem}|${row.sourceCode}`}>
+                <TableRow key={`${row.observedSystem}|${row.sourceCode}`}>
                   <TableCell
                     className="max-w-[220px] text-xs"
                     aria-label={
