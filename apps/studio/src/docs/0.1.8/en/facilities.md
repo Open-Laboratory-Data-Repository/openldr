@@ -315,6 +315,66 @@ The table's default order and an explicit sort by name can put names in a differ
 compare case and accented letters by different rules. If a report depends on a specific order,
 apply an explicit sort instead of relying on the default view.
 
+## Linking observed codes to a register in one step
+
+Some facility lists use the same codes your LIMS sends. An OpenLDR v1 facility dictionary is one:
+it is keyed on DISA facility codes. After you import such a list, you do not need to map each
+observed code by hand.
+
+1. Open Facilities, then Observed.
+2. Open the `⋯` menu and choose **Link matching codes**.
+3. Choose the register. The sheet shows what would happen, and writes nothing yet.
+4. Open the sheet's `⋯` menu and choose **Link N codes**.
+
+Every code falls into one of four groups:
+
+- **To link.** The register has exactly this code, and nothing maps the code yet.
+- **Already linked.** The code already resolves to that facility.
+- **Kept.** The code already has a mapping. It is left as it is. Change it by hand if it is wrong.
+- **No match.** The register has no row with this code.
+
+The match is exact. `MICAN` does not match `mican` or `MICAN ` with a trailing space. All links
+are written together, or none are. Reports pick up the new links after the facility map rebuild
+that the action queues.
+
+From the command line:
+
+    openldr facilities link-matching --register <register URL>
+    openldr facilities link-matching --register <register URL> --apply
+
+### Example: a v1 facility dictionary (Mozambique)
+
+Export the facility list from the v1 dictionary database. The `WHERE` leaves out provinces and
+districts, which the table stores as rows with no facility type.
+
+```sql
+SELECT FacilityCode, Description, FacilityType, HFStatus, FacilityNationalCode,
+       CountryName, ProvinceName, DistrictName
+FROM dbo.viewFacilities
+WHERE ISNULL(FacilityType, '') <> ''
+```
+
+Save the result as CSV with every column as text. Excel turns codes such as `01` into `1`, so do
+not round-trip the file through Excel.
+
+Create a register for it, for example "Mozambique DISA facility codes". Then import the CSV with
+this column map:
+
+| File column | Field |
+|---|---|
+| FacilityCode | `national_code` |
+| Description | `name` |
+| ProvinceName | `region` |
+| DistrictName | `district` |
+| CountryName | `country` |
+| FacilityType | `level` |
+| HFStatus | `status` |
+| FacilityNationalCode | Keep as extra data |
+
+Map the province to `region`, not `zone`. Reports read region, district and council.
+
+Then run **Link matching codes** against the new register.
+
 ## Command line: listing facilities
 
 `openldr facilities list` supports the same filter and sort grammar as the toolbar, so a script can

@@ -351,6 +351,68 @@ L'ordre par défaut du tableau et un tri explicite par nom peuvent classer les n
 Ils comparent la casse et les lettres accentuées selon des règles différentes. Si un rapport
 dépend d'un ordre précis, appliquez un tri explicite plutôt que de vous fier à la vue par défaut.
 
+## Lier les codes observés à un registre en une étape
+
+Certaines listes d'établissements utilisent les mêmes codes que votre LIS envoie. Un dictionnaire
+d'établissements OpenLDR v1 en est un : il est indexé sur les codes d'établissement DISA. Après
+avoir importé une telle liste, vous n'avez pas besoin d'associer chaque code observé à la main.
+
+1. Ouvrez Établissements, puis Observés.
+2. Ouvrez le menu `⋯` et choisissez **Lier les codes correspondants**.
+3. Choisissez le registre. Le panneau montre ce qui se passerait, et n'écrit encore rien.
+4. Ouvrez le menu `⋯` du panneau et choisissez **Lier N codes**.
+
+Chaque code entre dans l'un de ces quatre groupes :
+
+- **À lier.** Le registre porte exactement ce code, et rien ne l'associe encore.
+- **Déjà lié.** Le code résout déjà vers cet établissement.
+- **Conservé.** Le code a déjà une association. Elle reste telle quelle. Corrigez-la à la main si
+  elle est fausse.
+- **Sans correspondance.** Le registre n'a aucune ligne portant ce code.
+
+La correspondance est exacte. `MICAN` ne correspond ni à `mican` ni à `MICAN ` suivi d'un espace.
+Toutes les liaisons sont écrites ensemble, ou aucune. Les rapports reflètent les nouvelles liaisons
+après la reconstruction de la dimension des établissements que l'action programme.
+
+En ligne de commande :
+
+    openldr facilities link-matching --register <URL du registre>
+    openldr facilities link-matching --register <URL du registre> --apply
+
+### Exemple : un dictionnaire d'établissements v1 (Mozambique)
+
+Exportez la liste des établissements depuis la base du dictionnaire v1. La clause `WHERE` exclut
+les provinces et les districts, que la table stocke comme des lignes sans type d'établissement.
+
+```sql
+SELECT FacilityCode, Description, FacilityType, HFStatus, FacilityNationalCode,
+       CountryName, ProvinceName, DistrictName
+FROM dbo.viewFacilities
+WHERE ISNULL(FacilityType, '') <> ''
+```
+
+Enregistrez le résultat en CSV avec chaque colonne en texte. Excel transforme des codes comme `01`
+en `1` : ne faites pas passer le fichier par Excel.
+
+Créez un registre pour cette liste, par exemple « Codes d'établissement DISA du Mozambique ».
+Importez ensuite le CSV avec cette correspondance de colonnes :
+
+| Colonne du fichier | Champ |
+|---|---|
+| FacilityCode | `national_code` |
+| Description | `name` |
+| ProvinceName | `region` |
+| DistrictName | `district` |
+| CountryName | `country` |
+| FacilityType | `level` |
+| HFStatus | `status` |
+| FacilityNationalCode | Conserver en donnée supplémentaire |
+
+Associez la province à `region`, pas à `zone`. Les rapports lisent la région, le district et le
+conseil.
+
+Lancez ensuite **Lier les codes correspondants** sur le nouveau registre.
+
 ## Ligne de commande : lister les établissements
 
 `openldr facilities list` prend en charge la même grammaire de filtre et de tri que la barre
