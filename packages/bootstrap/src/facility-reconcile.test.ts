@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, internalMigrations, observedSystemForFeed } from '@openldr/db';
 import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant, registryConceptCodeById } from './facility-reconcile';
-import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping, currentConceptCode, dropOneActiveFacilityResolutionIndex } from './test-support/facility-reconcile-fixture';
+import { makeReconcileDeps, seedPerformers, seedRequesters, seedRegistry, seedMapping, currentConceptCode, dropOneActiveFacilityResolutionIndex } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
   it('discovers distinct performers and creates concepts', async () => {
@@ -2899,5 +2899,68 @@ describe('registryConceptCodeById', () => {
     ]);
     expect(codes.get('fac-a')).toBe('fac-a');
     expect(codes.get('fac-b')).toBe('fac-b');
+  });
+});
+
+describe('facility codes from both roles (slice B)', () => {
+  const LAB = 'urn:openldr:default_lab';
+  const FAC = 'urn:openldr:default_fac';
+
+  it('resolves lab codes from performer and clinic codes from requester', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['TDS', 5]], { performerSystem: LAB, performerDisplay: 'Dar DISA lab' });
+    await seedRequesters(deps, [['IBPAA', 3]], { requesterSystem: FAC, requesterDisplay: 'KCMC' });
+
+    const rows = await resolveObservedFacilities(deps);
+
+    expect(rows.map((r) => [r.observedSystem, r.sourceCode, r.sourceDisplay, r.reportCount]).sort()).toEqual([
+      [FAC, 'IBPAA', 'KCMC', 3],
+      [LAB, 'TDS', 'Dar DISA lab', 5],
+    ]);
+  });
+
+  it('keeps a lab and a clinic that share a code apart', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['PAN', 2]], { performerSystem: LAB });
+    await seedRequesters(deps, [['PAN', 4]], { requesterSystem: FAC });
+
+    const rows = await resolveObservedFacilities(deps);
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.observedSystem).sort()).toEqual([FAC, LAB]);
+  });
+
+  it('scan records clinic codes as concepts under their system', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRequesters(deps, [['IBPAA', 3]], { requesterSystem: FAC });
+
+    const result = await scanObservedFacilities(deps, { now: '2026-09-28T00:00:00.000Z', apply: true });
+
+    expect(result.discovered).toBe(1);
+    const { rows } = await deps.admin.terms.search(FAC, { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['IBPAA']);
+  });
+
+  it('captures a clinic code at ingest from a ServiceRequest', async () => {
+    const deps = await makeReconcileDeps();
+    await captureObservedFacilityFromProjection(deps, 'ServiceRequest', {
+      resourceType: 'ServiceRequest', id: 'sr-1', status: 'active', intent: 'order', subject: { reference: 'Patient/p1' },
+      contained: [{ resourceType: 'PractitionerRole', id: 'requester', organization: { identifier: { system: FAC, value: 'IBPAA' }, display: 'KCMC' } }],
+      requester: { reference: '#requester' },
+    }, 'webhook-ingest', '2026-09-28T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search(FAC, { limit: 10, offset: 0 });
+    expect(rows.map((r) => [r.code, r.display])).toEqual([['IBPAA', 'KCMC']]);
+  });
+
+  it('does not capture a ServiceRequest with only a free-text clinician', async () => {
+    const deps = await makeReconcileDeps();
+    await captureObservedFacilityFromProjection(deps, 'ServiceRequest', {
+      resourceType: 'ServiceRequest', id: 'sr-2', status: 'active', intent: 'order', subject: { reference: 'Patient/p1' },
+      requester: { display: 'Dr Mushi' },
+    }, 'webhook-ingest', '2026-09-28T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search(observedSystemForFeed('webhook-ingest'), { limit: 10, offset: 0 });
+    expect(rows).toHaveLength(0);
   });
 });
