@@ -46,6 +46,12 @@ Each stored report query can return up to 1,000 rows. Exactly 1,000 rows are acc
 
 ## Français
 
+### Ce que « Établissement » signifie dans les rapports intégrés
+
+Le sélecteur Établissement et les colonnes d'établissement des rapports intégrés désignent le
+**laboratoire d'analyse** : le laboratoire qui a réalisé le test. Ils ne regroupent pas par la
+clinique qui a envoyé l'échantillon.
+
 ### Planifier un rapport
 
 1. Sélectionnez un rapport, puis **⋯ → Planifications**. Votre rôle doit autoriser la gestion des rapports.
@@ -84,6 +90,12 @@ Une exécution échouée ne fournit pas de fichier. Sur ordinateur, survolez son
 Chaque requête enregistrée peut renvoyer jusqu'à 1 000 lignes. Un résultat de 1 000 lignes est accepté. Si une requête utilisée par un PDF dépasse cette limite, le PDF entier est refusé. Les exports CSV et XLSX refusent aussi les résultats trop volumineux. Réduisez la période ou les autres filtres, puis relancez le rapport. Une clause LIMIT écrite dans le SQL enregistré reste volontaire et est respectée. Les exécutions planifiées enregistrent un échec sans créer de fichier. La CLI signale l'erreur avant d'écrire le fichier. Les fichiers déjà enregistrés ne sont pas régénérés.
 
 ## Português
+
+### O que "Estabelecimento" significa nos relatórios integrados
+
+O seletor Estabelecimento e as colunas de estabelecimento nos relatórios integrados designam o
+**laboratório de análise**: o laboratório que fez o teste. Não agrupam pela clínica que enviou a
+amostra.
 
 ### Agendar um relatório
 
