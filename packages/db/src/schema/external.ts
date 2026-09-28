@@ -33,6 +33,12 @@ export interface LabRequestsTable extends ProvenanceColumns {
   status: string | null;
   priority: string | null;
   authored_at: string | null;
+  /** The requesting facility from `ServiceRequest.requester` (migration 018): a contained
+   *  `PractitionerRole`'s organization, or a direct facility reference. Null when the request names
+   *  no facility, including a free-text clinician. */
+  requester_code: string | null;
+  requester_system: string | null;
+  requester_display: string | null;
 }
 
 export interface LabResultsTable extends ProvenanceColumns {
@@ -206,7 +212,7 @@ export interface ExternalSchema {
  */
 export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   patients: ['id', 'patient_guid', 'surname', 'firstname', 'date_of_birth', 'sex', 'national_id', 'phone', 'email', 'managing_organization', 'active', 'replaced_by_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
-  lab_requests: ['id', 'request_id', 'patient_id', 'panel_code', 'panel_system', 'panel_desc', 'status', 'priority', 'authored_at', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  lab_requests: ['id', 'request_id', 'patient_id', 'panel_code', 'panel_system', 'panel_desc', 'status', 'priority', 'authored_at', 'requester_code', 'requester_system', 'requester_display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   lab_results: ['id', 'request_id', 'observation_code', 'observation_system', 'observation_desc', 'result_type', 'numeric_value', 'numeric_units', 'coded_value', 'text_value', 'abnormal_flag', 'result_timestamp', 'patient_id', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facilities: ['id', 'facility_code', 'facility_name', 'facility_type', 'source_resource', 'region', 'district', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'origin', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],

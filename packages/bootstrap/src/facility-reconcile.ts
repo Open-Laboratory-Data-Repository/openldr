@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ConceptRowInput, ExternalSchema, InternalSchema, MapType, RegistryRowForConcept, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, markTerminologyChanged, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, registryRowIdsWithSupersededIdConcept, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, markTerminologyChanged, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, registryRowIdsWithSupersededIdConcept, observedSystemForFeed, projectDiagnosticReport, projectServiceRequest } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -145,8 +145,46 @@ function parseProperties(raw: unknown): Record<string, unknown> | null {
   }
 }
 
+/** One observed facility code group, whichever role it came from. The lab side reads
+ *  `diagnostic_reports.performer*`; the clinic side reads `lab_requests.requester*` (migration 018,
+ *  slice B). Both are returned under the `performer*` names every caller already folds, so the
+ *  fold, the per-feed system rule and `facility_map` stay role-agnostic. A lab and a clinic sharing
+ *  a code stay apart because they arrive under different systems. */
+interface ObservedFacilityRow {
+  performer: string | null;
+  performer_display: string | null;
+  performer_system: string | null;
+  source_system: string | null;
+  n: number | string | bigint;
+}
+
+async function readObservedFacilityRows(externalDb: Kysely<ExternalSchema>): Promise<ObservedFacilityRow[]> {
+  const labs = await externalDb
+    .selectFrom('diagnostic_reports')
+    .select(({ fn }) => ['performer', 'performer_display', 'performer_system', 'source_system', fn.countAll<number>().as('n')])
+    .where('performer', 'is not', null)
+    .groupBy(['performer', 'performer_display', 'performer_system', 'source_system'])
+    .execute();
+  const clinics = await externalDb
+    .selectFrom('lab_requests')
+    .select(({ fn }) => [
+      'requester_code as performer',
+      'requester_display as performer_display',
+      'requester_system as performer_system',
+      'source_system',
+      fn.countAll<number>().as('n'),
+    ])
+    .where('requester_code', 'is not', null)
+    .groupBy(['requester_code', 'requester_display', 'requester_system', 'source_system'])
+    .execute();
+  return [...labs, ...clinics];
+}
+
 /**
  * Discover the distinct facility strings present in the warehouse and record them as concepts.
+ *
+ * Reads both roles: the lab side from `diagnostic_reports.performer*` and the clinic side from
+ * `lab_requests.requester*` (migration 018, slice B), via `readObservedFacilityRows`.
  *
  * Re-runnable by construction, which is a hard requirement: new performer values arrive with every
  * ingest. It is NOT redundant with the ingest hook — it does three things the hook structurally
@@ -172,12 +210,7 @@ function parseProperties(raw: unknown): Record<string, unknown> | null {
 export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOptions = {}): Promise<ScanResult> {
   const now = opts.now ?? new Date().toISOString();
 
-  const observed = await deps.externalDb
-    .selectFrom('diagnostic_reports')
-    .select(({ fn }) => ['performer', 'performer_display', 'performer_system', 'source_system', fn.countAll<number>().as('n')])
-    .where('performer', 'is not', null)
-    .groupBy(['performer', 'performer_display', 'performer_system', 'source_system'])
-    .execute();
+  const observed = await readObservedFacilityRows(deps.externalDb);
 
   // Fold the (performer, source_system) groups down to (system, code) totals — the level
   // `terminology_concepts` is actually keyed at. `Map<system, Map<code, count>>` rather than a
@@ -472,6 +505,9 @@ export function registryConceptCodeById(
 /**
  * Resolve every observed facility code through its mapping to a registry row.
  *
+ * Reads both roles: the lab side from `diagnostic_reports.performer*` and the clinic side from
+ * `lab_requests.requester*` (migration 018, slice B), via `readObservedFacilityRows`.
+ *
  * ⛔ Reads `term_mappings`, NOT `concept_map_elements`. `term_mappings` is the authoritative table
  * (`terminology-admin-store.ts:567-633` reads it and writes the concept_map_elements mirror
  * alongside), and only it carries `is_active` — an operator-deactivated mapping must not resolve.
@@ -499,12 +535,7 @@ export function registryConceptCodeById(
  * function body for why that dedupe exists and how the representative display is chosen.
  */
 export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<ResolvedFacility[]> {
-  const observed = await deps.externalDb
-    .selectFrom('diagnostic_reports')
-    .select(({ fn }) => ['performer', 'performer_display', 'performer_system', 'source_system', fn.countAll<number>().as('n')])
-    .where('performer', 'is not', null)
-    .groupBy(['performer', 'performer_display', 'performer_system', 'source_system'])
-    .execute();
+  const observed = await readObservedFacilityRows(deps.externalDb);
 
   // Whole-branch review finding (fix round 1): the SQL above groups by all FOUR of (performer,
   // performer_display, performer_system, source_system), but only ONE `ResolvedFacility` should ever
@@ -1985,11 +2016,12 @@ async function registerObservedSystem(
  * `createProjectionRunner({ onProjected: ... })` call is now a one-line delegate to this function —
  * see the wiring comment there for why the filter/guard/extraction shape looks the way it does.
  *
- * Filters to `DiagnosticReport` (the only resource type with a `performer` this slice cares about),
- * extracts `performer` via `projectDiagnosticReport` (the SAME extraction the relational writer
- * already applies to this resource, so the captured code cannot drift from the
- * `diagnostic_reports.performer` value `scanObservedFacilities` reads), and no-ops when there is no
- * performer (no facility string to capture).
+ * Handles both roles now (migration 018, slice B): the lab from `DiagnosticReport.performer` and
+ * the clinic from `ServiceRequest.requester`. Filters to those two resource types, extracts the
+ * facility code via `projectDiagnosticReport`/`projectServiceRequest` (the SAME extraction the
+ * relational writer already applies to this resource, so the captured code cannot drift from the
+ * `diagnostic_reports.performer`/`lab_requests.requester_code` value `scanObservedFacilities`
+ * reads), and no-ops when there is no facility code (nothing to capture).
  *
  * Task 9b fix round 1 (Gap 1): `sourceSystem` is the projected row's OWN provenance —
  * `packages/db/src/projection/cycle.ts`'s `applyProjection` reads it via `getWithProvenance`
@@ -2010,6 +2042,13 @@ export async function captureObservedFacilityFromProjection(
   sourceSystem: string | null,
   now: string,
 ): Promise<void> {
+  if (resourceType === 'ServiceRequest') {
+    const request = projectServiceRequest(resource, {});
+    if (!request.requester_code) return;
+    const system = resolvedObservedSystem(request.requester_system, sourceSystem);
+    await captureObservedFacility(deps, system, request.requester_code, now, request.requester_display);
+    return;
+  }
   if (resourceType !== 'DiagnosticReport') return;
   const projected = projectDiagnosticReport(resource, {});
   const performer = projected.performer;

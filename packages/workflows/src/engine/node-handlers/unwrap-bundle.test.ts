@@ -146,6 +146,24 @@ describe('bundleToResources', () => {
     ] };
     expect(() => bundleToResources(bundle)).toThrow(/resourceType/);
   });
+
+  it('leaves a #requester reference and its contained PractitionerRole alone', () => {
+    const srWithRequester = {
+      resourceType: 'ServiceRequest', id: 'obr1', status: 'active', intent: 'order',
+      contained: [{
+        resourceType: 'PractitionerRole', id: 'requester',
+        organization: { identifier: { system: 'urn:openldr:default_fac', value: 'IBPAA' }, display: 'KCMC' },
+      }],
+      requester: { reference: '#requester' },
+    };
+    const bundle = { resourceType: 'Bundle', type: 'transaction', entry: [
+      { fullUrl: 'ServiceRequest/obr1', resource: srWithRequester, request: { method: 'PUT', url: 'ServiceRequest/obr1' } },
+    ] };
+    const out = bundleToResources(bundle);
+    const serviceRequest = out.find((r) => r.resourceType === 'ServiceRequest') as any;
+    expect(serviceRequest.requester.reference).toBe('#requester');
+    expect(serviceRequest.contained).toEqual(srWithRequester.contained);
+  });
 });
 
 describe('unwrapBundleHandler', () => {

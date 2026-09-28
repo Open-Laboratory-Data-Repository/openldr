@@ -4,6 +4,12 @@ Este guia explica como agendar um relatório e recuperar seu arquivo.
 
 ![Relatório e resultados](reports-run-result.png)
 
+### O que "Estabelecimento" significa nos relatórios integrados
+
+O seletor Estabelecimento e as colunas de estabelecimento nos relatórios integrados designam o
+**laboratório de análise**: o laboratório que fez o teste. Não agrupam pela clínica que enviou a
+amostra.
+
 ## Agendar um relatório
 
 1. Selecione um relatório e abra **⋯ → Agendamentos**. Seu perfil precisa permitir a gestão de relatórios.

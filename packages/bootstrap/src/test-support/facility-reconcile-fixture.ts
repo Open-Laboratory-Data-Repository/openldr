@@ -111,6 +111,32 @@ export async function seedPerformers(
   }
 }
 
+/**
+ * Inserts `lab_requests` rows carrying a requesting facility, one per unit of count. The clinic
+ * side of the facility dimension (migration 018), mirroring `seedPerformers` for the lab side.
+ */
+export async function seedRequesters(
+  deps: ReconcileDeps,
+  pairs: [string, number][],
+  opts: { sourceSystem?: string; requesterDisplay?: string | null; requesterSystem?: string | null } = {},
+): Promise<void> {
+  const sourceSystem = opts.sourceSystem ?? 'webhook-ingest';
+  const rows: Record<string, unknown>[] = [];
+  for (const [code, count] of pairs) {
+    for (let i = 0; i < count; i += 1) {
+      rows.push({
+        id: `sr-${randomUUID()}`,
+        requester_code: code,
+        requester_display: opts.requesterDisplay ?? null,
+        requester_system: opts.requesterSystem ?? null,
+        source_system: sourceSystem,
+      });
+    }
+  }
+  if (rows.length === 0) return;
+  await deps.externalDb.insertInto('lab_requests').values(rows as never).execute();
+}
+
 export interface SeedRegistryInput {
   id: string;
   name: string;

@@ -332,6 +332,19 @@ A column map and a value map solve different problems, and behave differently wh
   contains a raw value your value set does not recognize, the row still imports with that raw
   text, and the value is reported so it can be mapped afterward — nothing blocks on it.
 
+### Labs and clinics in the Observed list
+
+The Observed list holds two kinds of code:
+
+- **Testing laboratories.** The lab that ran each test, from each report.
+- **Requesting facilities.** The clinic or hospital that sent the sample, from each order.
+
+A lab and a clinic can use the same code. They stay separate rows, because each arrives under its
+own coding system. Map each one to the right facility.
+
+Data pushed by an older cdr-toolchain put the requesting clinic where the lab now goes. Re-push that
+data to move each code to its correct role.
+
 ## Linking observed codes to a register in one step
 
 Some facility lists use the same codes your LIMS sends. An OpenLDR v1 facility dictionary is one:
