@@ -59,7 +59,7 @@ describe('LinkMatchingSheet', () => {
 
   it('clears a stale preview when the dry run for a new register fails', async () => {
     // Drives the real Select (click trigger, click the other option), the same way
-    // components/ui/select.test.tsx does — Radix Select fires plain click events, unlike the
+    // components/ui/select.test.tsx does. Radix Select fires plain click events, unlike the
     // DropdownMenu elsewhere in this file, so this is the real operator path, not a workaround.
     const OTHER = 'urn:openldr:register:other';
     (listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([
