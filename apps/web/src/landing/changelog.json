@@ -1,6 +1,42 @@
 {
-  "generatedAt": "2026-09-17",
+  "generatedAt": "2026-09-28",
   "days": [
+    {
+      "date": "2026-09-28",
+      "version": null,
+      "entries": [
+        {
+          "hash": "556905d9",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Clear a stale link preview when the register changes"
+        },
+        {
+          "hash": "6cb1d92b",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Link matching facility codes from the Observed tab"
+        },
+        {
+          "hash": "b57e8ca4",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr facilities link-matching"
+        },
+        {
+          "hash": "9cda0ba0",
+          "type": "feat",
+          "scope": "server",
+          "title": "Route to link observed codes to a register's matching codes"
+        },
+        {
+          "hash": "2ff4a5e7",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Link observed codes to a register's matching codes"
+        }
+      ]
+    },
     {
       "date": "2026-09-17",
       "version": null,
