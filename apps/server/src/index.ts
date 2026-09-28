@@ -4,6 +4,7 @@ import { createLogger, makeCrashHandler } from '@openldr/core';
 import { buildApp } from './app';
 import { createUpdateFetch } from './update-fetch';
 import { createShutdown } from './shutdown';
+import { registerEventHandlers } from './register-event-handlers';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
@@ -107,7 +108,8 @@ async function main(): Promise<void> {
 
   const app = await buildApp(ctx);
 
-  await ctx.reportScheduler.registerRunner(ingest.eventing);
+  // Every background handler goes on the bus this process drains (ingest.startWorker() below).
+  await registerEventHandlers(ctx, ingest.eventing);
   // Arming existing schedules is best-effort: a pending migration or transient DB
   // hiccup must not block server startup (the runner re-arms on the next firing).
   try {
@@ -120,14 +122,12 @@ async function main(): Promise<void> {
   // runner. The legacy host DHIS2 scheduler has been removed (SP-A2 Task 14); plugin
   // schedules live in `plugin_data` (migration 036 copied the host rows over), so this
   // runner is now the sole driver of DHIS2 (and any other plugin) schedules.
-  await ctx.pluginScheduleRunner.registerRunner(ingest.eventing);
   try {
     await ctx.pluginScheduleRunner.reconcile(ingest.eventing);
   } catch (err) {
     ctx.logger.warn({ err }, 'plugin schedule reconcile failed at startup (continuing)');
   }
 
-  await ctx.workflows.runner.registerRunner(ingest.eventing);
   // Best-effort like the report scheduler: rebuild the ingest-id set + webhook registry
   // and arm saved schedules. A bad migration or DB hiccup must not block startup.
   try {

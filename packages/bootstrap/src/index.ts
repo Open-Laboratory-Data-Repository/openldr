@@ -506,7 +506,9 @@ export interface AppContext {
   workflows: {
     store: WorkflowStore;
     runs: WorkflowRunStore;
-    receipts: WorkflowReceiptService;
+    /** `register` subscribes the dispatch handler. The server calls it with the bus it drains
+     *  (apps/server/src/register-event-handlers.ts), never this context's own bus. */
+    receipts: WorkflowReceiptService & { register(eventing: EventingPort): Promise<void> };
     schedules: WorkflowScheduleStore;
     webhooks: SharedWebhookResolver;
     runner: WorkflowTriggerRunner;
@@ -1173,7 +1175,9 @@ const reporting: ReportingApi = {
       loopMaxItems: cfg.WORKFLOW_LOOP_MAX_ITEMS,
     }, definition, { id: runId, workflowId, source: 'webhook', input, files }),
   });
-  await workflowReceipts.register(eventing);
+  // The dispatch handler is NOT registered here. This context's bus is never drained; the server
+  // registers it on the bus it drains (apps/server/src/register-event-handlers.ts). Registering it
+  // here left every workflow webhook `queued` forever.
   const workflowListeners = createWorkflowListenerManager({
     store: { list: () => workflowStore.list() },
     runAndRecord: (id, source, input, files) => workflowRunner.runAndRecord(id, source, input, files),
