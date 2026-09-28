@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   importFacilities: vi.fn(),
   scanObservedFacilities: vi.fn(),
   publishFacilityMap: vi.fn(),
+  linkMatchingFacilityCodes: vi.fn(),
   listFacilityMappingConflicts: vi.fn(),
   facilityHealth: vi.fn(),
   recordAuditEvent: vi.fn(),
@@ -94,6 +95,7 @@ vi.mock('@openldr/bootstrap', async () => {
     importFacilities: mocks.importFacilities,
     scanObservedFacilities: mocks.scanObservedFacilities,
     publishFacilityMap: mocks.publishFacilityMap,
+    linkMatchingFacilityCodes: mocks.linkMatchingFacilityCodes,
     listFacilityMappingConflicts: mocks.listFacilityMappingConflicts,
     facilityHealth: mocks.facilityHealth,
     recordAuditEvent: mocks.recordAuditEvent,
@@ -154,7 +156,7 @@ import {
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
   runFacilitiesImportSources,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList, runFacilitiesDelete,
-  runFacilitiesAddType,
+  runFacilitiesAddType, runFacilitiesLinkMatching,
 } from './facilities';
 // Task 9: real, PURE constant — see the `@openldr/bootstrap` mock factory above for why it is not
 // faked. Used to tell `mocks.ctx.terminology.admin.valueSets.getByUrl` which url each controlled
@@ -3156,5 +3158,81 @@ describe('add-type', () => {
     expect(code).toBe(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/at least one letter or digit/);
+  });
+});
+
+describe('facilities link-matching CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+  const MZ = 'urn:openldr:register:mz-disa';
+  const RESULT = (applied: boolean) => ({
+    registerUrl: MZ, applied,
+    counts: { linked: 12, 'already-linked': 3, kept: 1, 'no-match': 40 },
+    pairs: [],
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('dry-runs by default: prints counts, does not audit or enqueue', async () => {
+    mocks.linkMatchingFacilityCodes.mockResolvedValue({ ok: true, result: RESULT(false) });
+
+    const code = await runFacilitiesLinkMatching({ register: MZ, json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.linkMatchingFacilityCodes).toHaveBeenCalledWith(RECONCILE_DEPS, { registerUrl: MZ, apply: false });
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.ctx.facilityJobs.enqueue).not.toHaveBeenCalled();
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/dry run/i);
+    expect(human).toMatch(/12 would link/);
+    expect(human).toMatch(/--apply/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('--apply audits counts and queues a facility map rebuild', async () => {
+    mocks.linkMatchingFacilityCodes.mockResolvedValue({ ok: true, result: RESULT(true) });
+
+    const code = await runFacilitiesLinkMatching({ register: MZ, apply: true, json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.ctx.facilityJobs.enqueue).toHaveBeenCalledWith({ kind: 'facility-map-rebuild', requestedBy: 'cli' });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.ctx, expect.anything(), expect.objectContaining({
+      action: 'facility.link-matching',
+      entityId: `facility-register:${MZ}`,
+      metadata: { registerUrl: MZ, counts: RESULT(true).counts },
+    }));
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/linked 12/);
+  });
+
+  it('--json prints the result', async () => {
+    mocks.linkMatchingFacilityCodes.mockResolvedValue({ ok: true, result: RESULT(false) });
+
+    const code = await runFacilitiesLinkMatching({ register: MZ, json: true });
+
+    expect(code).toBe(0);
+    const printed = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(JSON.parse(printed)).toMatchObject({ registerUrl: MZ, counts: { linked: 12 } });
+  });
+
+  it('exits 1 with the gate message for a refused register', async () => {
+    mocks.linkMatchingFacilityCodes.mockResolvedValue({ ok: false, reason: 'unknown-register', error: '"urn:nope" is not a known facility register' });
+
+    const code = await runFacilitiesLinkMatching({ register: 'urn:nope', apply: true, json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/is not a known facility register/);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });

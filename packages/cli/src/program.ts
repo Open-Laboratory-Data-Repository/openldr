@@ -31,7 +31,7 @@ import {
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
   runFacilitiesImportSources,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
-  runFacilitiesDelete, runFacilitiesAddType,
+  runFacilitiesDelete, runFacilitiesAddType, runFacilitiesLinkMatching,
 } from './facilities';
 import {
   runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams,
@@ -537,6 +537,15 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (opts: { apply: boolean; json: boolean }) => {
       process.exitCode = await runFacilitiesPublish(opts);
+    });
+  facilities
+    .command('link-matching')
+    .description('Link observed facility codes to the rows in one register that have exactly the same code. Dry run by default. Pass --apply to write.')
+    .requiredOption('--register <url>', 'canonical URI of the facility register to match against')
+    .option('--apply', 'write the mappings (default: dry run, write nothing)', false)
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { register: string; apply: boolean; json: boolean }) => {
+      process.exitCode = await runFacilitiesLinkMatching(opts);
     });
   // CLI parity for POST /api/facilities/bulk-delete. Labs run headless, so the only way to undo a
   // bad import cannot be browser-only. Destructive: refuses without --force, and refuses an empty
