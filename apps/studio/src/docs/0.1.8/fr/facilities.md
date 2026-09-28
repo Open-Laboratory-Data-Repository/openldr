@@ -351,6 +351,21 @@ L'ordre par défaut du tableau et un tri explicite par nom peuvent classer les n
 Ils comparent la casse et les lettres accentuées selon des règles différentes. Si un rapport
 dépend d'un ordre précis, appliquez un tri explicite plutôt que de vous fier à la vue par défaut.
 
+### Laboratoires et cliniques dans la liste Observés
+
+La liste Observés contient deux sortes de codes :
+
+- **Laboratoires d'analyse.** Le laboratoire qui a réalisé chaque test, tiré de chaque rapport.
+- **Établissements demandeurs.** La clinique ou l'hôpital qui a envoyé l'échantillon, tiré de chaque
+  demande.
+
+Un laboratoire et une clinique peuvent partager le même code. Ils restent deux lignes distinctes,
+car chacun arrive sous son propre système de codage. Associez chacun au bon établissement.
+
+Les données envoyées par une ancienne version de la chaîne cdr-toolchain plaçaient l'établissement
+demandeur à la place du laboratoire. Renvoyez ces données pour remettre chaque code dans son bon
+rôle.
+
 ## Lier les codes observés à un registre en une étape
 
 Certaines listes d'établissements utilisent les mêmes codes que votre LIS envoie. Un dictionnaire

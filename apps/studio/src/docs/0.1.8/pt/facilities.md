@@ -338,6 +338,19 @@ ordem diferente. Comparam maiúsculas/minúsculas e letras acentuadas segundo re
 um relatório depender de uma ordem específica, aplique uma ordenação explícita em vez de confiar
 na vista predefinida.
 
+### Laboratórios e clínicas na lista Observadas
+
+A lista Observadas guarda dois tipos de código:
+
+- **Laboratórios de análise.** O laboratório que fez cada teste, tirado de cada relatório.
+- **Unidades solicitantes.** A clínica ou o hospital que enviou a amostra, tirado de cada pedido.
+
+Um laboratório e uma clínica podem usar o mesmo código. Ficam em linhas separadas, porque cada um
+chega sob o seu próprio sistema de codificação. Associe cada um à unidade correta.
+
+Dados enviados por uma versão antiga da cadeia cdr-toolchain colocavam a unidade solicitante no
+lugar do laboratório. Reenvie esses dados para pôr cada código no seu papel correto.
+
 ## Ligar códigos observados a um registo numa só etapa
 
 Algumas listas de unidades usam os mesmos códigos que o seu LIS envia. Um dicionário de unidades

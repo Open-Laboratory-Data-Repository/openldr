@@ -2,6 +2,11 @@
 
 ## English
 
+### What "Facility" means in the built-in reports
+
+The Facility picker and the facility columns in the built-in reports mean the **testing
+laboratory**: the lab that ran the test. They do not group by the clinic that sent the sample.
+
 ### Schedule a report
 
 1. Select a report, then open its **⋯ → Schedules** menu. Your role needs permission to manage reports.

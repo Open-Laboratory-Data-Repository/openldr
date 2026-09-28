@@ -4,6 +4,12 @@ Ce guide explique comment planifier un rapport et récupérer son fichier.
 
 ![Rapport et résultats](reports-run-result.png)
 
+### Ce que « Établissement » signifie dans les rapports intégrés
+
+Le sélecteur Établissement et les colonnes d'établissement des rapports intégrés désignent le
+**laboratoire d'analyse** : le laboratoire qui a réalisé le test. Ils ne regroupent pas par la
+clinique qui a envoyé l'échantillon.
+
 ## Planifier un rapport
 
 1. Sélectionnez un rapport, puis **⋯ → Planifications**. Votre rôle doit autoriser la gestion des rapports.

@@ -8,6 +8,11 @@ You can browse the report library by category, select a report, fill in filters 
 
 ![Report selected with spreadsheet results](reports-run-result.png)
 
+### What "Facility" means in the built-in reports
+
+The Facility picker and the facility columns in the built-in reports mean the **testing
+laboratory**: the lab that ran the test. They do not group by the clinic that sent the sample.
+
 ## Before you begin
 
 - Confirm the report you need has already been published. Reports are **not** created from this page — a Lab Admin or Lab Manager authors and publishes them from [Report Designer](/docs/report-designer).
