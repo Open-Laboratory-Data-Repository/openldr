@@ -13,7 +13,7 @@ import type { ReconcileDeps } from './facility-reconcile';
 //
 // This test exists BECAUSE pg-mem does not roll back a transaction when the callback inside it
 // throws: verified in isolation, with a bare pg-mem `Kysely` instance, one table, and
-// `db.transaction().execute(async (trx) => { insert; throw; })` — the insert survives the throw.
+// `db.transaction().execute(async (trx) => { insert; throw; })`. The insert survives the throw.
 // `linkMatchingFacilityCodes`'s atomicity claim ("one write fails, nothing lands") can only be
 // proven against real Postgres, where a transaction genuinely aborts on an unhandled throw.
 const url = process.env.TARGET_DATABASE_URL;
