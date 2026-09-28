@@ -57,6 +57,32 @@ describe('LinkMatchingSheet', () => {
     await waitFor(() => expect(onLinked).toHaveBeenCalledWith(expect.objectContaining({ applied: true })));
   });
 
+  it('clears a stale preview when the dry run for a new register fails', async () => {
+    // Drives the real Select (click trigger, click the other option), the same way
+    // components/ui/select.test.tsx does — Radix Select fires plain click events, unlike the
+    // DropdownMenu elsewhere in this file, so this is the real operator path, not a workaround.
+    const OTHER = 'urn:openldr:register:other';
+    (listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { url: MZ, name: 'Mozambique DISA facility codes' },
+      { url: OTHER, name: 'Other register' },
+    ]);
+    (linkMatchingFacilityCodes as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(preview)
+      .mockRejectedValueOnce(new Error('dry run failed'));
+    render(<LinkMatchingSheet open onOpenChange={() => {}} onLinked={() => {}} initialRegisterUrl={MZ} />);
+    expect(await screen.findByText('MICAN')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText(/register/i));
+    fireEvent.click(screen.getByText('Other register'));
+
+    await waitFor(() => expect(linkMatchingFacilityCodes).toHaveBeenLastCalledWith({ registerUrl: OTHER }));
+    await waitFor(() => expect(screen.getByText('dry run failed')).toBeInTheDocument());
+    expect(screen.queryByText('MICAN')).not.toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: 'Link actions' });
+    openMenu(trigger, /link 0 codes/i);
+    expect(screen.getByRole('menuitem', { name: /link 0 codes/i })).toHaveAttribute('data-disabled');
+  });
+
   it('shows the empty state and disables apply when nothing would link', async () => {
     (linkMatchingFacilityCodes as ReturnType<typeof vi.fn>).mockResolvedValue({ ...preview, counts: { linked: 0, 'already-linked': 2, kept: 0, 'no-match': 5 }, pairs: [] });
     render(<LinkMatchingSheet open onOpenChange={() => {}} onLinked={() => {}} initialRegisterUrl={MZ} />);

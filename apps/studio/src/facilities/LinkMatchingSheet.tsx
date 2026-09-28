@@ -47,6 +47,7 @@ export function LinkMatchingSheet({ open, onOpenChange, onLinked, initialRegiste
     if (!open || registerUrl === '') { setPreview(null); return; }
     let cancelled = false;
     setLoading(true);
+    setPreview(null);
     setError(null);
     setPage(0);
     linkMatchingFacilityCodes({ registerUrl })

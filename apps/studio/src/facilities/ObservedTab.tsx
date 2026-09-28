@@ -510,8 +510,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
         <LinkMatchingSheet
           open={linkOpen}
           onOpenChange={setLinkOpen}
-          onLinked={(result) => {
-            setActionResult(t('facilities.observed.linkMatchingDone', { count: result.counts.linked }));
+          onLinked={() => {
             setPage(0);
             void reload({ background: true });
           }}
