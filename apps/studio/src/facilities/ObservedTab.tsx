@@ -24,6 +24,7 @@ import {
   type TermMapping,
 } from '@/api';
 import { TermMappingDialog } from '@/terminology/TermMappingDialog';
+import { LinkMatchingSheet } from './LinkMatchingSheet';
 
 /** `district, region` (both known), or just whichever of the two is known, or `null` when
  *  neither is — never a stray leading/trailing/doubled separator. Shared by the resolved-facility
@@ -126,6 +127,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
   const [scanning, setScanning] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [actionResult, setActionResult] = useState<string | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
 
   const runScan = useCallback(async () => {
     setScanning(true);
@@ -297,6 +299,9 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
         </DropdownMenuItem>
         <DropdownMenuItem disabled={publishing} onSelect={() => void runPublish()}>
           {publishing ? t('facilities.observed.publishing') : t('facilities.observed.publish')}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setLinkOpen(true)}>
+          {t('facilities.observed.linkMatching')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -498,6 +503,18 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
           cancelLabel={t('common.cancel')}
           destructive
           onConfirm={() => void doRemoveMapping()}
+        />
+      )}
+
+      {canManage && (
+        <LinkMatchingSheet
+          open={linkOpen}
+          onOpenChange={setLinkOpen}
+          onLinked={(result) => {
+            setActionResult(t('facilities.observed.linkMatchingDone', { count: result.counts.linked }));
+            setPage(0);
+            void reload({ background: true });
+          }}
         />
       )}
     </div>

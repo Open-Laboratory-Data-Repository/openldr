@@ -1827,6 +1827,18 @@ export interface PublishFacilitiesResult {
 export const publishFacilities = (body: PublishFacilitiesRequest = {}): Promise<PublishFacilitiesResult> =>
   authFetch('/api/facilities/publish', jbody(body, 'POST')).then((r) => okJson<PublishFacilitiesResult>(r, 'publish facilities'));
 
+// Mirrors @openldr/bootstrap's LinkMatchingResult (packages/bootstrap/src/facility-link-matching.ts).
+export type LinkOutcome = 'linked' | 'already-linked' | 'kept' | 'no-match';
+export interface LinkMatchingPair {
+  observedSystem: string; code: string; sourceDisplay: string | null; reportCount: number;
+  registryId: string | null; name: string | null; outcome: LinkOutcome;
+}
+export interface LinkMatchingResult {
+  registerUrl: string; applied: boolean; counts: Record<LinkOutcome, number>; pairs: LinkMatchingPair[];
+}
+export const linkMatchingFacilityCodes = (body: { registerUrl: string; apply?: boolean }): Promise<LinkMatchingResult> =>
+  authFetch('/api/facilities/link-matching', jbody(body, 'POST')).then((r) => okJson<LinkMatchingResult>(r, 'link matching facility codes'));
+
 // Task 11: what the Facilities chip reads. Mirrors the server's FacilityHealth
 // (packages/bootstrap/src/facility-health.ts) 1:1, as returned verbatim by GET /api/facilities/health.
 export type FacilityDimensionState = 'current' | 'updating' | 'failed' | 'stale';
