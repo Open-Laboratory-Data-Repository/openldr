@@ -106,9 +106,16 @@ Sent on every report. One `Organization` per run for the lab, `id` derived from 
 ### 5.5 Checks in cdr-toolchain
 
 - The FHIR conformance tests (`FHIR_CONFORMANCE=1`) cover the new shape.
-- The compare gate's `testing_facility_code` field (`apps/cli/src/compare/v2-mapping.ts:154`) is
-  pointed at the lab code and compared with v1's `ReceivingFacilityCode`. It fails every lab today
-  by design; after this slice it should pass. That is the best evidence the lab code is right.
+- The compare gate's `testing_facility_code` field (`apps/cli/src/compare/v2-mapping.ts:154`)
+  already compares with v1's `TestingFacilityCode`. It stays as it is. v1's coverage guard records
+  `ReceivingFacilityCode` as a duplicate of `TestingFacilityCode` (`compare/v1-coverage.ts:207-211`),
+  so no second field is added. It fails every lab today because cdr-toolchain sends the clinic.
+  After this slice it should report zero mismatches: matching where v1 has a result, and v1-empty
+  where v1 has none (D4). That is the best evidence the lab code is right.
+- The lab is set through the V2 payload's existing `testing_facility_code`, which is what
+  `fhir-transform` already turns into `performer`. So the v2 push also gets the lab when a lab code
+  is configured. Without a lab code, `testing_facility_code` keeps today's value, so the v2 push
+  and the single-lab `export` and `compare-batch` commands are unchanged.
 
 ## 6. Design: CE
 
@@ -153,29 +160,37 @@ because it reads the resolver.
 
 ### 6.4 Reports
 
-Each of the 12 seeded queries that read `performer` is checked by hand:
+**Corrected during planning: no report SQL changes.** A read of all 12 seeded queries found that
+every one that reads `performer` was written to mean the testing laboratory. They were fed clinics
+because of the wire. Evidence, all in `packages/reporting/src/seed/report-seeds.ts`:
 
-- a query that groups or filters by where samples came from moves to the clinic, joining
-  `diagnostic_reports.based_on_id` to `lab_requests.id` and `facility_map` on the requester columns;
-- a query that means the lab stays on `performer`. The Clinical Microbiology header's "performing
-  laboratory" is one, and becomes correct.
+| Query | What its author wrote |
+|---|---|
+| `q-facilities` (the Facility picker) | "the same way `q-clinical-micro-header` resolves its `performing_lab`" (~L207) |
+| `q-amr-resistance`, `q-test-volume`, `q-turnaround-time`, `q-patient-demographics` | filter on the picker's value space; `q-test-volume`: "a patient may be served by more than one laboratory" (~L381) |
+| `q-amr-facility-summary` | resolved through the same `facility_map` join as `performing_lab` (~L769) |
+| `q-clinical-micro-header` | "THE PERFORMING LABORATORY" (~L1897), label "Performing lab" |
+| `q-transmission-*` (4 queries) | "One row per laboratory", alias `lab`, labels "Laboratories" |
+| `q-clinical-micro-ast` | does not read `performer` |
 
-Every changed query gets a test that pins which role it reads. The plan lists each query with its
-role before any change. SQL for other dialects moves with it where the seed carries them.
+So after this slice these reports become correct as they are. What changes for a user is the data:
+the Facility picker and the facility columns list labs, not clinics. The docs say so (6.5).
+Reports by requesting clinic, which Mozambique's views need, belong to slice D, reading the new
+`lab_requests.requester_*` columns.
 
 ### 6.5 Docs
 
 In-app docs in en, fr and pt, and web docs in English, for:
 
 - what the Observed tab now lists (labs and clinics);
-- which role each changed report groups by.
+- that the reports' Facility picker and facility columns mean the testing laboratory.
 
 `docs/HTTP-API.md` is unchanged, since no route changes. cdr-toolchain's push docs describe the two
 new settings.
 
 ## 7. Order of work
 
-1. CE: migration, projection, facility codes from both roles, reports. Safe to merge first: the new
+1. CE: migration, projection, facility codes from both roles, docs. Safe to merge first: the new
    columns stay empty until the wire changes.
 2. cdr-toolchain: settings, check, new wire shape.
 3. Re-push the dev data. Between steps 1 and 3, dev reports grouped by clinic are empty.
@@ -185,8 +200,8 @@ new settings.
 - cdr-toolchain: unit tests for the settings, the prefix check, `performer`, the contained
   `PractitionerRole` and each omission case; conformance tests; the compare gate on a sample.
 - CE: unit tests for `requesterFacility` covering all three cases; migration tests on the three
-  engines; resolver tests with lab and clinic codes, including one code used by both a lab and a
-  clinic; a test per changed report query.
+  engines (`pnpm mssql:accept`, `pnpm mysql:accept`); resolver tests with lab and clinic codes,
+  including one code used by both a lab and a clinic; `pnpm reports:accept` still green.
 - A test that CE's Bundle unwrap node leaves a `#requester` reference untouched.
 - Live: re-push a sample of TDS labs to the dev CE and check that `lab_requests.requester_code`
   holds the clinic, `diagnostic_reports.performer` holds `TDS`, and the reports group as intended.
@@ -203,3 +218,7 @@ re-push prove the rest.
 - Renaming `facility_map.performer_system`, which now holds lab and clinic systems.
 - Projecting the doctor into the warehouse (slice C).
 - A Moz lab register. Slice A's link-matching can link one later without code.
+- The Observed tab's location for a code comes from the `facilities` table, which has no system
+  column. If a lab and a clinic share a code, the lab can show the clinic's region and district
+  there. The lab `Organization` carries no address, so this only affects that display.
+- The `--lab-code` option on the single-lab `export` and `compare-batch` commands.
