@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "483f21ad",
+          "type": "fix",
+          "scope": "server",
+          "title": "Run workflow webhooks on the event bus the server drains"
+        },
+        {
+          "hash": "5f35b694",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Map an observed facility under its own coding system"
+        },
+        {
+          "hash": "58b79330",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Read observed codes from the lab and the requesting clinic"
+        },
+        {
+          "hash": "2744a237",
+          "type": "feat",
+          "scope": "db",
+          "title": "Project the requesting facility from ServiceRequest.requester"
+        },
+        {
+          "hash": "559132b5",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add the requesting facility to lab requests"
+        },
+        {
           "hash": "556905d9",
           "type": "fix",
           "scope": "studio",
