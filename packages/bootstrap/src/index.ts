@@ -1812,6 +1812,8 @@ export { revalidateImportRun, type RevalidateOutcome, type RevalidateInput } fro
 export type { ValueMappingEntry, SaveValueMappingsResult } from './facility-value-mappings';
 export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, registryConceptCodeById, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
 export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
+export { linkMatchingFacilityCodes } from './facility-link-matching';
+export type { LinkOutcome, LinkMatchingPair, LinkMatchingResult, LinkMatchingOutcome } from './facility-link-matching';
 // Task 10 (facility durable-updates): surfaces Task 9's dimension-state resolver to the HTTP route
 // and the CLI (apps/server/src/facilities-routes.ts's `GET /api/facilities/health`, packages/cli/
 // src/facilities.ts's `openldr facilities jobs`) — previously only reachable from inside this
