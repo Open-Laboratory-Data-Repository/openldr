@@ -115,10 +115,16 @@ observed code is stored exactly as it arrived, so a fuzzy match would link on a 
 |---|---|---|
 | `linked` | No facility-route mapping exists, and the code matches one row | a SAME-AS mapping |
 | `already-linked` | It already resolves to that same row | nothing |
-| `kept` | It already has any other facility-route mapping: resolved elsewhere, ambiguous, target missing, or mapped to a non-facility system | nothing |
+| `kept` | It already has any other active mapping of any type: resolved elsewhere, ambiguous, target missing, mapped to a non-facility system, or a non-SAME-AS mapping such as "unmapped from" | nothing |
 | `no-match` | Nothing in the register has that code | nothing |
 
 `kept` never overwrites a person's decision. The operator fixes those by hand in the Observed tab.
+A non-SAME-AS mapping never resolves a facility, so the resolver reads such a code as unmapped. It
+is still an operator's recorded decision ("this does not correspond"), so it counts as `kept`.
+
+`ResolvedFacility` does not carry the system its mappings are keyed on today. The fold key's
+system (`facility-reconcile.ts:536`) is exposed as a new field, `observedSystem`, so this action
+writes under exactly the system resolution reads.
 
 **The row written.** Through `termMappings.saveExclusive`, the same writer the manual dialog uses.
 `fromSystem` is the observed system and `fromCode` the observed code. `toSystem` is
@@ -166,7 +172,9 @@ Checked at 375x812.
 
 - In-app docs, en, fr and pt (`apps/studio/src/docs/<ver>/{en,fr,pt}/facilities.md`): the action,
   its four outcomes, the export query in 5.1, and the Moz column map as a worked example.
-- Web docs in the same three languages. `docs/CLI-REFERENCE.md` and `docs/HTTP-API.md`.
+- Web docs (`apps/web/src/docs/<ver>/facilities.md`), English only. The web site keeps one English
+  file per page, as the last facility slice did (`6ce9f0a5`). `docs/CLI-REFERENCE.md` and
+  `docs/HTTP-API.md`.
 - `pnpm make:changelog` after merge.
 
 ## 6. Testing
