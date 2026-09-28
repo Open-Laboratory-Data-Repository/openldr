@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import {
   createInternalDb, createMigrator, internalMigrations, createTerminologyAdminStore,
-  createFacilityRegisterSourceStore, createFacilityRegistryStore, type InternalDb,
+  createFacilityRegisterSourceStore, createFacilityRegistryStore, LOCAL_MAP_URL, type InternalDb,
 } from '@openldr/db';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
@@ -69,8 +69,17 @@ live('linkMatchingFacilityCodes against real Postgres', () => {
     });
 
     await expect(linkMatchingFacilityCodes(deps, { registerUrl: MZ, apply: true })).rejects.toThrow('boom');
+    expect(calls).toBe(2);
 
     const rows = await deps.internalDb.selectFrom('term_mappings').selectAll().where('is_active', '=', true).execute();
     expect(rows).toHaveLength(0);
+
+    // `saveExclusive` mirrors every mapping it writes into `concept_map_elements` under
+    // LOCAL_MAP_URL (see terminology-admin-store.ts:944, :980). The failure on the second call
+    // must roll back the FIRST call's mirror row too, not just its `term_mappings` row, or the
+    // ConceptMap copy would still show a mapping the operator was told never landed.
+    const mapRows = await deps.internalDb.selectFrom('concept_map_elements').selectAll()
+      .where('map_url', '=', LOCAL_MAP_URL).where('source_code', 'in', ['AAAAA', 'BBBBB']).execute();
+    expect(mapRows).toHaveLength(0);
   }, 120_000);
 });
