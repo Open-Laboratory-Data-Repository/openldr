@@ -220,5 +220,7 @@ re-push prove the rest.
 - A Moz lab register. Slice A's link-matching can link one later without code.
 - The Observed tab's location for a code comes from the `facilities` table, which has no system
   column. If a lab and a clinic share a code, the lab can show the clinic's region and district
-  there. The lab `Organization` carries no address, so this only affects that display.
+  there. The lab `Organization` carries no address, so this only affects that display. The same
+  lookup also reaches the Clinical Microbiology header's lab location (`q-clinical-micro-header`'s
+  `facility_loc`), when the lab is unmapped.
 - The `--lab-code` option on the single-lab `export` and `compare-batch` commands.
