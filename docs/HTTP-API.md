@@ -189,6 +189,27 @@ Read-only FHIR terminology operations plus the admin CRUD routes.
 | `GET/DELETE` | `/api/terminology/ontology/distributions` · `/api/terminology/ontology/distributions/:id` | Ontology distribution registry. |
 | `GET` | `/api/terminology/ontology/:id/*` | Ontology roots, children, node, search, path, panels, answers, specimens, build, and rebuild. |
 
+## Facilities
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/api/facilities/link-matching` | Link each observed facility code to the row in one register with exactly the same code. Needs `facilities.manage`. Dry run by default; body `{ registerUrl, apply? }`. |
+
+### POST /api/facilities/link-matching
+
+Links each observed facility code to the row in one register that has exactly the same code.
+Needs `facilities.manage`. A dry run by default.
+
+Body: `{ "registerUrl": "<register canonical URI>", "apply": false }`
+
+Returns `{ registerUrl, applied, counts, pairs }`. `counts` has four keys: `linked`,
+`already-linked`, `kept` (the code already has a mapping, which is left alone) and `no-match`.
+Each pair gives `observedSystem`, `code`, `sourceDisplay`, `reportCount`, `registryId`, `name` and
+`outcome`.
+
+An unknown or deactivated register answers 400 with `{ "error": "..." }`. An applied run that
+linked at least one code queues a facility map rebuild.
+
 ## Users & Audit
 
 | Method | Path | Purpose |
