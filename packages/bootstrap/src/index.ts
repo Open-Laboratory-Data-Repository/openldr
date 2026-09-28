@@ -1810,7 +1810,7 @@ export type {
 export { saveFacilityValueMappings, FACILITY_VALUE_MAP_TYPE } from './facility-value-mappings';
 export { revalidateImportRun, type RevalidateOutcome, type RevalidateInput } from './facility-revalidate';
 export type { ValueMappingEntry, SaveValueMappingsResult } from './facility-value-mappings';
-export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
+export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, registryConceptCodeById, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
 export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
 // Task 10 (facility durable-updates): surfaces Task 9's dimension-state resolver to the HTTP route
 // and the CLI (apps/server/src/facilities-routes.ts's `GET /api/facilities/health`, packages/cli/
