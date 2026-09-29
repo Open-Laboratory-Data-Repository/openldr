@@ -1,6 +1,42 @@
 {
-  "generatedAt": "2026-09-28",
+  "generatedAt": "2026-09-29",
   "days": [
+    {
+      "date": "2026-09-29",
+      "version": null,
+      "entries": [
+        {
+          "hash": "cf127547",
+          "type": "fix",
+          "scope": "db",
+          "title": "Keep a blank or oversized OBR set id empty, and pin the attributes table"
+        },
+        {
+          "hash": "e24b57a3",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "The request attribute vocabulary, and docs"
+        },
+        {
+          "hash": "09c638bd",
+          "type": "feat",
+          "scope": "db",
+          "title": "Project the v1 request facts and request attributes"
+        },
+        {
+          "hash": "f0990097",
+          "type": "feat",
+          "scope": "db",
+          "title": "Project rows a resource owns in other tables"
+        },
+        {
+          "hash": "4330644f",
+          "type": "feat",
+          "scope": "db",
+          "title": "V1 request facts and the request attributes table"
+        }
+      ]
+    },
     {
       "date": "2026-09-28",
       "version": null,
