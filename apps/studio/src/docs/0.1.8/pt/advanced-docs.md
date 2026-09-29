@@ -22,6 +22,25 @@ O sucesso remove a tentativa pendente. Os erros de captura auxiliar ficam nos re
 Após uma falha temporária, não é necessária intervenção.
 Para reconstruir todas as tabelas de leitura, use `openldr db reproject --force`.
 
+## Factos da requisição e atributos da requisição
+
+Cada requisição de laboratório traz, quando a origem os envia: o conjunto OBR, a hora da análise,
+o ponto de cuidado, o tipo de requisição, quem a registou e testou, o médico requisitante, a idade
+na requisição, a informação clínica, o analisador, e o código e o motivo de rejeição. Cada relatório
+traz a sua secção e quem o autorizou.
+
+Os factos mais raros são linhas em `lab_request_attributes`, uma linha por requisição e atributo.
+Os códigos de atributo formam o sistema de codificação `urn:openldr:cs:request-attribute`.
+Carregue-o uma vez com:
+
+    openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
+
+Um facto que a origem não envia fica vazio. Nada é preenchido no lugar.
+
+`clinical_info` e os valores de texto dos atributos ficam ocultos do construtor de painéis por
+predefinição, porque podem conter texto livre ou um identificador de doente pseudonimizado.
+Torne-os visíveis em Definições, depois Exposição de Dados.
+
 ## Guias relacionados
 
 - [Definições](/docs/settings)

@@ -22,6 +22,25 @@ Le succès supprime la tentative en attente. Les erreurs de capture auxiliaire s
 Après une panne temporaire, aucune intervention n'est nécessaire.
 Pour reconstruire toutes les tables de lecture, utilisez `openldr db reproject --force`.
 
+## Faits de la demande et attributs de la demande
+
+Chaque demande de laboratoire porte, quand la source les envoie : le jeu OBR, l'heure d'analyse,
+le point de soin, le type de demande, qui l'a enregistrée et testée, le médecin demandeur, l'âge à
+la demande, l'information clinique, l'analyseur, et le code et le motif de rejet. Chaque rapport
+porte sa section et qui l'a autorisé.
+
+Les faits plus rares sont des lignes dans `lab_request_attributes`, une ligne par demande et
+attribut. Les codes d'attribut forment le système de codage `urn:openldr:cs:request-attribute`.
+Chargez-le une fois avec :
+
+    openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
+
+Un fait que la source n'envoie pas reste vide. Rien n'est rempli à sa place.
+
+`clinical_info` et les valeurs texte des attributs sont masqués du générateur de tableaux de bord
+par défaut, car ils peuvent contenir du texte libre ou un identifiant patient pseudonymisé.
+Démasquez-les dans Paramètres, puis Exposition des données.
+
 ## Guides associés
 
 - [Paramètres](/docs/settings)

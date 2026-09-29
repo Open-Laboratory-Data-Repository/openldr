@@ -225,3 +225,21 @@ Ingested resources land in the internal FHIR store and are projected into the an
 warehouse that reports and dashboards read. If data ingests but does not show up in a report,
 confirm the target store is configured (see [Environment variables](/docs/environment)) and give
 the projection a moment to catch up.
+
+### Request facts and request attributes
+
+Each lab request carries, where the source sends them: the OBR set, analysis time, point of care,
+request type, who registered and tested it, the requesting doctor, age at the request, clinical
+information, analyser, and rejection code and reason. Each report carries its section and who
+authorised it.
+
+Rarer facts are rows in `lab_request_attributes`, one row per request and attribute. The attribute
+codes are the `urn:openldr:cs:request-attribute` coding system. Load it once with:
+
+    openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
+
+A fact the source does not send stays empty. Nothing is filled in.
+
+`clinical_info` and the attribute text values are hidden from the dashboard builder by default,
+because they can hold free text or a pseudonymous patient id. Unhide them in Settings, then Data
+Exposure.
