@@ -25,13 +25,35 @@ export function requesterFacility(r: Json): RequesterFacility {
   if (typeof requester !== 'object' || requester === null) return NONE;
   const ref = str((requester as Json)['reference']);
   if (ref !== null && ref.startsWith('#')) {
-    const id = ref.slice(1);
-    const contained = Array.isArray(r['contained']) ? (r['contained'] as unknown[]) : [];
-    const role = contained.find((c) => typeof c === 'object' && c !== null && (c as Json)['id'] === id) as Json | undefined;
-    if (!role || role['resourceType'] !== 'PractitionerRole') return NONE;
+    const role = containedRequesterRole(r);
+    if (!role) return NONE;
     return fromFacilityReference(role['organization']);
   }
   return fromFacilityReference(requester);
+}
+
+/** The requesting practitioner's display name, read from the same contained `PractitionerRole`
+ *  that `requesterFacility` follows, so both share the one `#`-reference lookup. Null when the
+ *  requester is not a `#` reference to a contained `PractitionerRole`, or that role names no
+ *  practitioner. */
+export function requesterPractitionerDisplay(r: Json): string | null {
+  const role = containedRequesterRole(r);
+  if (!role) return null;
+  const practitioner = role['practitioner'];
+  if (typeof practitioner !== 'object' || practitioner === null) return null;
+  return str((practitioner as Json)['display']);
+}
+
+function containedRequesterRole(r: Json): Json | null {
+  const requester = r['requester'];
+  if (typeof requester !== 'object' || requester === null) return null;
+  const ref = str((requester as Json)['reference']);
+  if (ref === null || !ref.startsWith('#')) return null;
+  const id = ref.slice(1);
+  const contained = Array.isArray(r['contained']) ? (r['contained'] as unknown[]) : [];
+  const role = contained.find((c) => typeof c === 'object' && c !== null && (c as Json)['id'] === id) as Json | undefined;
+  if (!role || role['resourceType'] !== 'PractitionerRole') return null;
+  return role;
 }
 
 function fromFacilityReference(v: unknown): RequesterFacility {

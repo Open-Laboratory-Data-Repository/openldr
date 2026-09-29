@@ -28,6 +28,27 @@ Docs section:
 You'll find all of these on the project website and in the source repository:
 <https://github.com/Open-Laboratory-Data-Repository/openldr>.
 
+## Request facts and request attributes
+
+Each lab request carries, where the source sends them: the OBR set, analysis time, point of care,
+request type, who registered and tested it, the requesting doctor, age at the request, clinical
+information, analyser, and rejection code and reason. Each report carries its section and who
+authorised it.
+
+Rarer facts are rows in `lab_request_attributes`, one row per request and attribute. The attribute
+codes are the `urn:openldr:cs:request-attribute` coding system. Load it once with:
+
+    openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
+
+Run this from a source checkout of the OpenLDR CE repository, where the file lives at that path.
+Without the import, attribute rows are still stored. Only the code display names are missing.
+
+A fact the source does not send stays empty. Nothing is filled in.
+
+`clinical_info` is hidden from the dashboard builder by default, because it can hold free text or
+a pseudonymous patient id. Unhide it in Settings, then Data Exposure. The `lab_request_attributes`
+table is not in the dashboard builder at all. Read it with custom queries.
+
 ## Related guides
 
 - [Start Here](/docs/start-here)
