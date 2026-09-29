@@ -125,8 +125,8 @@ hard-wired in its source.
 
 External migration `019`:
 
-- `lab_requests` gains `obr_set_id`, `analysis_at`, `point_of_care`, `section_code`,
-  `request_type`, `registered_by`, `tested_by`, `authorised_by`, `requester_practitioner`,
+- `lab_requests` gains `obr_set_id`, `analysis_at`, `point_of_care`,
+  `request_type`, `registered_by`, `tested_by`, `requester_practitioner`,
   `age_years`, `age_days`, `clinical_info`, `analyzer_code`, `rejection_code`,
   `rejection_reason`. Nullable, on all three engines.
 - New table `lab_request_attributes`: `id`, `lab_request_id`, `system`, `code`, `value_text`,
@@ -135,10 +135,10 @@ External migration `019`:
   key and index columns use `keyType`, not `textType` (memory: `textType` cannot be a key on SQL
   Server).
 
-`section_code` and `authorised_by` are carried on `lab_requests` although they arrive on the
-`DiagnosticReport`: the projection of the report writes them onto its request row. If that
-cross-resource write is not safe in the projection, the plan puts them on `diagnostic_reports`
-instead and says so.
+`section_code` and `authorised_by` go on `diagnostic_reports`, the resource they arrive on.
+Decided while planning: a report's projection must not write the row its `ServiceRequest` owns,
+because a later re-send of the order would overwrite it. So `lab_requests` gains the other 13
+facts, and `diagnostic_reports` gains these two.
 
 ### 7.2 Projection
 
