@@ -14,9 +14,11 @@ describe('EXTERNAL_TABLE_COLUMNS', () => {
   // ingest_events is included deliberately too: it is the durable per-arrival ledger (migration
   // 016), keyed on (resource_type, resource_id, version) rather than a synthetic id, and carries
   // no ProvenanceColumns -- see IngestEventsTable's doc comment in schema/external.ts for why.
-  it('covers the 7 canonical fact tables, the terminology dimension, the facility_map dimension, and the ingest_events ledger', () => {
+  //
+  // lab_request_attributes is included too: rows a ServiceRequest owns (migration 019).
+  it('covers the 7 canonical fact tables, the terminology dimension, the facility_map dimension, the ingest_events ledger, and the lab_request_attributes table', () => {
     expect(Object.keys(EXTERNAL_TABLE_COLUMNS).sort()).toEqual(
-      ['diagnostic_reports', 'facilities', 'facility_map', 'ingest_events', 'lab_requests', 'lab_results', 'patients', 'questionnaire_responses', 'specimens', 'terminology_codes'],
+      ['diagnostic_reports', 'facilities', 'facility_map', 'ingest_events', 'lab_request_attributes', 'lab_requests', 'lab_results', 'patients', 'questionnaire_responses', 'specimens', 'terminology_codes'],
     );
   });
   it('every table includes id + provenance columns', () => {

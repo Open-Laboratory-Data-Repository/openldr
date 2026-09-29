@@ -24,12 +24,18 @@ function subValue(ext: Json | undefined, url: string, key: string): unknown {
   return part?.[`value${key}`];
 }
 
+/** Matches a plain integer of up to 9 digits, after trimming. Anything else (blank,
+ *  whitespace, non-numeric, or a value too large to fit an int4 column) is not a set id. */
+const OBR_SET_ID_PATTERN = /^\d{1,9}$/;
+
 function obrSetId(r: Json): number | null {
   const identifiers = (r['identifier'] as Json[] | undefined) ?? [];
   const idn = identifiers.find((i) => i['system'] === 'urn:openldr:obr-set-id');
   if (idn === undefined) return null;
-  const n = Number(idn['value']);
-  return Number.isInteger(n) ? n : null;
+  const value = idn['value'];
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return OBR_SET_ID_PATTERN.test(trimmed) ? Number(trimmed) : null;
 }
 
 export type RequestFacts = Pick<

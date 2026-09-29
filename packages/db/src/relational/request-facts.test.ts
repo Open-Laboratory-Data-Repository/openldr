@@ -48,6 +48,25 @@ describe('requestFacts', () => {
     expect(facts.obr_set_id).toBeNull();
   });
 
+  const obrSetId = (value: string) =>
+    requestFacts({ ...fullRequest, identifier: [{ system: 'urn:openldr:obr-set-id', value }] }).obr_set_id;
+
+  it('gives NULL for a blank OBR set id instead of 0', () => {
+    expect(obrSetId('')).toBeNull();
+  });
+
+  it('gives NULL for a whitespace-only OBR set id instead of 0', () => {
+    expect(obrSetId(' ')).toBeNull();
+  });
+
+  it('gives NULL for an OBR set id above 9 digits instead of failing the insert', () => {
+    expect(obrSetId('9999999999')).toBeNull();
+  });
+
+  it('trims surrounding whitespace around an otherwise valid OBR set id', () => {
+    expect(obrSetId(' 3 ')).toBe(3);
+  });
+
   it('is part of the lab_requests row', () => {
     expect(projectServiceRequest(fullRequest, {})).toMatchObject({ analysis_at: '2018-06-01T10:00:00+03:00', obr_set_id: 2 });
   });

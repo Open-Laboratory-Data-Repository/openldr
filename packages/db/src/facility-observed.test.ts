@@ -307,7 +307,7 @@ describe('facility-observed.ts stays browser-safe', () => {
   // this asserts the invariant directly against the source text rather than trusting a comment.
   //
   // One value import is allowed: `./relational/row-id`, the shared `djb2Hex`. It stays safe only
-  // because THAT module carries no imports of its own — checked below, not assumed.
+  // because THAT module carries no imports of its own, checked below, not assumed.
   it('has no runtime (non type-only) imports beyond the browser-safe row-id helper', () => {
     const path = fileURLToPath(new URL('./facility-observed.ts', import.meta.url));
     const source = readFileSync(path, 'utf8');
