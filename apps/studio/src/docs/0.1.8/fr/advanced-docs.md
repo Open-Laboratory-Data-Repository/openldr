@@ -35,11 +35,16 @@ Chargez-le une fois avec :
 
     openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
 
+Exécutez cette commande depuis un dépôt source d'OpenLDR CE, où le fichier se trouve à ce chemin.
+Sans cet import, les lignes d'attribut sont quand même enregistrées. Seuls les noms d'affichage
+des codes manquent.
+
 Un fait que la source n'envoie pas reste vide. Rien n'est rempli à sa place.
 
-`clinical_info` et les valeurs texte des attributs sont masqués du générateur de tableaux de bord
-par défaut, car ils peuvent contenir du texte libre ou un identifiant patient pseudonymisé.
-Démasquez-les dans Paramètres, puis Exposition des données.
+`clinical_info` est masqué du générateur de tableaux de bord par défaut, car il peut contenir du
+texte libre ou un identifiant patient pseudonymisé. Démasquez-le dans Paramètres, puis Exposition
+des données. La table `lab_request_attributes` n'est pas dans le générateur de tableaux de bord
+du tout. Lisez-la avec des requêtes personnalisées.
 
 ## Guides associés
 

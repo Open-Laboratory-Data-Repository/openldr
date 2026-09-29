@@ -35,11 +35,16 @@ Carregue-o uma vez com:
 
     openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
 
+Execute isto a partir de um checkout de código-fonte do OpenLDR CE, onde o ficheiro está nesse
+caminho. Sem o import, as linhas de atributo continuam a ser guardadas. Só faltam os nomes de
+apresentação dos códigos.
+
 Um facto que a origem não envia fica vazio. Nada é preenchido no lugar.
 
-`clinical_info` e os valores de texto dos atributos ficam ocultos do construtor de painéis por
-predefinição, porque podem conter texto livre ou um identificador de doente pseudonimizado.
-Torne-os visíveis em Definições, depois Exposição de Dados.
+`clinical_info` fica oculto do construtor de painéis por predefinição, porque pode conter texto
+livre ou um identificador de doente pseudonimizado. Torne-o visível em Definições, depois
+Exposição de Dados. A tabela `lab_request_attributes` não está no construtor de painéis. Leia-a
+com consultas personalizadas.
 
 ## Guias relacionados
 
