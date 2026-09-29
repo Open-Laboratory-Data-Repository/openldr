@@ -1,7 +1,7 @@
 import type { Provenance } from '../provenance';
 import type { ExternalSchema } from '../schema/external';
 import { projectPatient } from './patient';
-import { projectServiceRequest } from './service-request';
+import { projectServiceRequest, projectServiceRequestAttributes } from './service-request';
 import { projectObservation } from './observation';
 import { projectFacility } from './facility';
 import { projectSpecimen } from './specimen';
@@ -49,6 +49,33 @@ export function projectResource(resource: unknown, prov: Provenance = {}): Relat
         scope: { column: 'value_set_id', value: String(r['id']) },
       };
     default: return null;
+  }
+}
+
+/**
+ * Rows a resource owns in tables OTHER than its own (`projectResource` gives its own row). Every
+ * result is scoped: the writer replaces the whole set for that resource on each new version, so a
+ * value the sender dropped does not linger. Keep in lockstep with `ownedTablesFor`.
+ */
+export function projectOwnedRows(resource: unknown, prov: Provenance = {}): RelationalResult[] {
+  if (typeof resource !== 'object' || resource === null) return [];
+  const r = resource as Record<string, unknown>;
+  switch (r['resourceType']) {
+    case 'ServiceRequest':
+      return [{
+        table: 'lab_request_attributes',
+        rows: projectServiceRequestAttributes(r, prov),
+        scope: { column: 'lab_request_id', value: String(r['id']) },
+      }];
+    default: return [];
+  }
+}
+
+/** The tables `projectOwnedRows` writes for a resource type, with the column that scopes them. */
+export function ownedTablesFor(resourceType: string): { table: keyof ExternalSchema; scopeColumn: string }[] {
+  switch (resourceType) {
+    case 'ServiceRequest': return [{ table: 'lab_request_attributes', scopeColumn: 'lab_request_id' }];
+    default: return [];
   }
 }
 

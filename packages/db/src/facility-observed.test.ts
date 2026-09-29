@@ -305,7 +305,10 @@ describe('facility-observed.ts stays browser-safe', () => {
   // rest of the server DB engine. A runtime (non type-only) import added here later — even an
   // innocuous-looking one — would silently break the studio Vite bundle rather than fail loudly, so
   // this asserts the invariant directly against the source text rather than trusting a comment.
-  it('has no runtime (non type-only) imports', () => {
+  //
+  // One value import is allowed: `./relational/row-id`, the shared `djb2Hex`. It stays safe only
+  // because THAT module carries no imports of its own — checked below, not assumed.
+  it('has no runtime (non type-only) imports beyond the browser-safe row-id helper', () => {
     const path = fileURLToPath(new URL('./facility-observed.ts', import.meta.url));
     const source = readFileSync(path, 'utf8');
     const importLines = source
@@ -314,7 +317,15 @@ describe('facility-observed.ts stays browser-safe', () => {
       .filter((line) => line.startsWith('import '));
 
     for (const line of importLines) {
-      expect(line.startsWith('import type '), `runtime import found: ${line}`).toBe(true);
+      const allowed = line.startsWith('import type ') || line.includes("from './relational/row-id'");
+      expect(allowed, `runtime import found: ${line}`).toBe(true);
     }
+  });
+
+  it('the row-id helper it imports has no imports of its own (stays browser-safe transitively)', () => {
+    const path = fileURLToPath(new URL('./relational/row-id.ts', import.meta.url));
+    const source = readFileSync(path, 'utf8');
+    const importLines = source.split('\n').map((line) => line.trim()).filter((line) => line.startsWith('import '));
+    expect(importLines).toEqual([]);
   });
 });

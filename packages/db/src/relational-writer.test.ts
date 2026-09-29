@@ -150,3 +150,73 @@ describe('scoped projection', () => {
     await db.destroy();
   });
 });
+
+const sr = (attrs: { code: string; value: string }[]) => ({
+  resourceType: 'ServiceRequest', id: 'sr-1', status: 'active', intent: 'order', subject: { reference: 'Patient/p1' },
+  extension: attrs.map((a) => ({
+    url: 'urn:openldr:ext:request-attribute',
+    extension: [
+      { url: 'code', valueCoding: { system: 'urn:openldr:cs:request-attribute', code: a.code } },
+      { url: 'value', valueString: a.value },
+    ],
+  })),
+});
+
+describe('rows a resource owns in other tables', () => {
+  it('writes a request row and its attribute rows', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    await w.write(sr([{ code: 'therapy', value: 'ART' }]), {});
+    expect(await db.selectFrom('lab_requests').select('id').execute()).toEqual([{ id: 'sr-1' }]);
+    expect(await db.selectFrom('lab_request_attributes').select(['lab_request_id', 'code', 'value_text']).execute())
+      .toEqual([{ lab_request_id: 'sr-1', code: 'therapy', value_text: 'ART' }]);
+    await db.destroy();
+  });
+
+  it('replaces the attribute set on a re-send, including down to none', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    await w.write(sr([{ code: 'therapy', value: 'ART' }, { code: 'vendor-code', value: 'DISA' }]), {});
+    await w.write(sr([{ code: 'therapy', value: 'ART2' }]), {});
+    expect(await db.selectFrom('lab_request_attributes').select(['code', 'value_text']).execute())
+      .toEqual([{ code: 'therapy', value_text: 'ART2' }]);
+    await w.write(sr([]), {});
+    expect(await db.selectFrom('lab_request_attributes').selectAll().execute()).toEqual([]);
+    await db.destroy();
+  });
+
+  it("writeMany keeps each request's attributes separate", async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    const a = sr([{ code: 'therapy', value: 'A' }]);
+    const b = { ...sr([{ code: 'therapy', value: 'B' }]), id: 'sr-2' };
+    await w.writeMany([{ resource: a, provenance: {} }, { resource: b, provenance: {} }]);
+    const rows = await db.selectFrom('lab_request_attributes').select(['lab_request_id', 'value_text']).orderBy('lab_request_id').execute();
+    expect(rows).toEqual([{ lab_request_id: 'sr-1', value_text: 'A' }, { lab_request_id: 'sr-2', value_text: 'B' }]);
+    await db.destroy();
+  });
+
+  // R2: two versions of the SAME ServiceRequest land in one writeMany batch. Version 1's dropped
+  // attribute (vendor-code) must not linger, and Postgres would error on two ON CONFLICT targets
+  // for the same id in one statement anyway. Keep only the LAST item's owned rows for that scope.
+  it('writeMany keeps only the last version\'s owned rows when a batch repeats an id', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    const v1 = sr([{ code: 'therapy', value: 'ART' }, { code: 'vendor-code', value: 'DISA' }]);
+    const v2 = sr([{ code: 'therapy', value: 'ART' }]);
+    await w.writeMany([{ resource: v1, provenance: {} }, { resource: v2, provenance: {} }]);
+    const rows = await db.selectFrom('lab_request_attributes').select(['code', 'value_text']).execute();
+    expect(rows).toEqual([{ code: 'therapy', value_text: 'ART' }]);
+    await db.destroy();
+  });
+
+  it('deleteById removes the request and its attributes', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    await w.write(sr([{ code: 'therapy', value: 'ART' }]), {});
+    await w.deleteById('ServiceRequest', 'sr-1');
+    expect(await db.selectFrom('lab_requests').selectAll().execute()).toEqual([]);
+    expect(await db.selectFrom('lab_request_attributes').selectAll().execute()).toEqual([]);
+    await db.destroy();
+  });
+});

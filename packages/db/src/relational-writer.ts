@@ -3,7 +3,10 @@ import type { ExternalSchema } from './schema/external';
 import type { Provenance } from './provenance';
 import type { TargetEngine } from './engine';
 import { insertBatchPg, mergeBatchMssql, insertBatchMysql, type WriteResult } from './batch-upsert';
-import { projectResource, tableForResourceType, scopeColumnFor, type RelationalResult } from './relational/index';
+import {
+  projectResource, tableForResourceType, scopeColumnFor, projectOwnedRows, ownedTablesFor,
+  type RelationalResult,
+} from './relational/index';
 import type { ArrivalEvent } from './projection/ledger';
 
 export type { WriteResult };
@@ -52,12 +55,19 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
       const p = projectResource(resource, provenance);
       if (!p) return 'skipped';
       await replaceScope(p);
+      for (const owned of projectOwnedRows(resource, provenance)) await replaceScope(owned);
       return 'written';
     },
     async writeMany(items) {
       const results: WriteResult[] = new Array(items.length).fill('skipped');
       const unscoped = new Map<string, Record<string, unknown>[]>();
       const scoped: RelationalResult[] = [];
+      // Owned rows, collected PER TABLE across the whole batch, keyed by scope value so a later
+      // item for the same id (a second version of the same ServiceRequest in one batch) replaces
+      // an earlier one instead of both surviving. Two rows for the same id in one INSERT would
+      // hit ON CONFLICT twice for that id, which Postgres rejects; keeping only the last also
+      // matches what a live re-send does, one write at a time.
+      const owned = new Map<string, { scopeColumn: string; scopeValues: unknown[]; rowsByScope: Map<unknown, Record<string, unknown>[]> }>();
       items.forEach((it, idx) => {
         const p = projectResource(it.resource, it.provenance);
         if (!p) return;
@@ -71,20 +81,43 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
         // (ValueSet -> terminology_codes) can produce hundreds of thousands in one write.
         for (const row of p.rows) list.push(row);
         unscoped.set(p.table, list);
+        for (const o of projectOwnedRows(it.resource, it.provenance)) {
+          if (!o.scope) continue;
+          const entry = owned.get(o.table)
+            ?? { scopeColumn: o.scope.column, scopeValues: [], rowsByScope: new Map<unknown, Record<string, unknown>[]>() };
+          if (!entry.rowsByScope.has(o.scope.value)) entry.scopeValues.push(o.scope.value);
+          entry.rowsByScope.set(o.scope.value, o.rows); // later item for the same scope REPLACES
+          owned.set(o.table, entry);
+        }
       });
       for (const [table, rows] of unscoped) await upsertOn(anyDb, table, rows);
       for (const p of scoped) await replaceScope(p);
+      // One transaction per owned table: every delete for the batch's scope values runs before
+      // any insert, so two requests sharing this batch cannot wipe each other's rows regardless
+      // of iteration order. Deletes are chunked at 500 values for SQL Server's parameter budget.
+      for (const [table, entry] of owned) {
+        const allRows: Record<string, unknown>[] = [];
+        for (const rows of entry.rowsByScope.values()) for (const row of rows) allRows.push(row);
+        await anyDb.transaction().execute(async (trx: Kysely<any>) => {
+          for (let i = 0; i < entry.scopeValues.length; i += 500) {
+            const chunk = entry.scopeValues.slice(i, i + 500);
+            await trx.deleteFrom(table).where(entry.scopeColumn as any, 'in', chunk as any).execute();
+          }
+          await upsertOn(trx, table, allRows);
+        });
+      }
       return results;
     },
     async deleteById(resourceType, id) {
       const table = tableForResourceType(resourceType);
-      if (!table) return;
-      const scopeColumn = scopeColumnFor(resourceType);
-      if (scopeColumn) {
-        await anyDb.deleteFrom(table).where(scopeColumn as any, '=', id).execute();
-        return;
+      if (table) {
+        const scopeColumn = scopeColumnFor(resourceType);
+        if (scopeColumn) await anyDb.deleteFrom(table).where(scopeColumn as any, '=', id).execute();
+        else await anyDb.deleteFrom(table).where('id', '=', id).execute();
       }
-      await anyDb.deleteFrom(table).where('id', '=', id).execute();
+      for (const owned of ownedTablesFor(resourceType)) {
+        await anyDb.deleteFrom(owned.table).where(owned.scopeColumn as any, '=', id).execute();
+      }
     },
     async writeIngestEvents(events) {
       // Idempotent by construction: the table's PK is (resource_type, resource_id, version), the

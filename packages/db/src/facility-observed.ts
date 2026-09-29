@@ -6,6 +6,8 @@
  * database layer into the browser bundle.
  */
 
+import { djb2Hex } from './relational/row-id';
+
 /**
  * The default coding system for facility strings observed in ingested data.
  *
@@ -329,11 +331,4 @@ export function facilityMapId(sourceSystem: string, performerSystem: string, sou
   const readable = `${sourceSystem}|${performerSystem}|${sourceCode}`;
   if (readable.length <= MAX_ID_LENGTH) return readable;
   return `fm-${djb2Hex(readable)}`;
-}
-
-/** A tiny, dependency-free stable hash — `node:crypto` would break this module's browser-safety. */
-function djb2Hex(s: string): string {
-  let h = 5381;
-  for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
-  return `${h.toString(16)}-${s.length.toString(16)}`;
 }
