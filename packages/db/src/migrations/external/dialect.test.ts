@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { textType, keyType, floatType, timestampType, nowExpr } from './dialect';
+import { textType, keyType, floatType, intType, timestampType, nowExpr } from './dialect';
 
 describe('dialect type map', () => {
   it('maps postgres types', () => {
@@ -26,5 +26,13 @@ describe('dialect types — mysql', () => {
   it('nowExpr for mysql compiles to CURRENT_TIMESTAMP', () => {
     expect(nowExpr('mysql')).toBeDefined();
     expect(nowExpr('mysql')).not.toBe(nowExpr('postgres'));
+  });
+});
+
+describe('intType', () => {
+  it('is a 32-bit integer on every engine', () => {
+    expect(intType('postgres')).toBe('integer');
+    expect(intType('mssql')).toBe('int');
+    expect(intType('mysql')).toBe('int');
   });
 });

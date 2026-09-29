@@ -17,9 +17,11 @@ export const HARDCODED_DENY_UNION: Record<string, string[]> = {
   patients: ['id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email',
              'date_of_birth', 'replaced_by_id', 'plugin_id', 'plugin_version', 'batch_id'],
   specimens: ['id', 'patient_id', 'accession', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'],
-  lab_requests: ['id', 'request_id', 'patient_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'],
+  lab_requests: ['id', 'request_id', 'patient_id', 'clinical_info', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'],
   facilities: ['plugin_id', 'plugin_version', 'batch_id'],
   diagnostic_reports: ['id', 'patient_id', 'plugin_id', 'plugin_version', 'batch_id'],
+  // value_text can hold a pseudonymous patient id and free text, so it is hidden until an operator decides.
+  lab_request_attributes: ['id', 'lab_request_id', 'value_text', 'plugin_id', 'plugin_version', 'batch_id'],
   // FAC-P1-17. facility_map is the warehouse reporting dimension (facility name, code and
   // administrative area) rebuilt from registry resolution. It had no entry here, so it was
   // exposed by omission rather than by decision. Decision: hide only the two internal surrogate
@@ -35,10 +37,11 @@ export const HARDCODED_DENY_UNION: Record<string, string[]> = {
  *  Display metadata — never an enforcement input. */
 export const PII_COLUMNS: Record<string, string[]> = {
   patients: ['patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email', 'date_of_birth'],
-  specimens: [], lab_requests: [], facilities: [], diagnostic_reports: [], lab_results: [],
+  specimens: [], lab_requests: ['clinical_info'], facilities: [], diagnostic_reports: [], lab_results: [],
   // facility_map holds facility names, codes and administrative areas — no patient data — so no
   // column gets the PII badge or the un-hide confirmation.
   facility_map: [],
+  lab_request_attributes: ['value_text'],
 };
 
 /** Hidden-column set for a table: the policy entry, else the hardcoded union fallback. */

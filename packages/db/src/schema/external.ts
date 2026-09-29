@@ -39,6 +39,21 @@ export interface LabRequestsTable extends ProvenanceColumns {
   requester_code: string | null;
   requester_system: string | null;
   requester_display: string | null;
+  /** v1 request facts (migration 019). One shared column set for every country; NULL where a
+   *  source does not send the fact. See docs/superpowers/specs/2026-09-29-v1-request-facts-design.md. */
+  analysis_at: string | null;
+  point_of_care: string | null;
+  request_type: string | null;
+  registered_by: string | null;
+  tested_by: string | null;
+  requester_practitioner: string | null;
+  obr_set_id: number | null;
+  age_years: number | null;
+  age_days: number | null;
+  clinical_info: string | null;
+  analyzer_code: string | null;
+  rejection_code: string | null;
+  rejection_reason: string | null;
 }
 
 export interface LabResultsTable extends ProvenanceColumns {
@@ -127,6 +142,10 @@ export interface DiagnosticReportsTable extends ProvenanceColumns {
   /** `DiagnosticReport.specimen[0]` — the key that ties a report to the AST results on the same
    *  specimen, without the patient-level fan-out. */
   specimen_id: string | null;
+  /** v1 request facts (migration 019). Sit on the report, not the request: a report projection
+   *  must not write the row its ServiceRequest owns. */
+  section_code: string | null;
+  authorised_by: string | null;
 }
 
 export interface QuestionnaireResponsesTable extends ProvenanceColumns {
@@ -191,6 +210,25 @@ export interface IngestEventsTable {
   recorded_at: Date;
 }
 
+/** Rare v1 request facts as rows (migration 019). One row per (request, code). `id` is derived from
+ *  the request id, system and code, so a re-send overwrites instead of duplicating. The writer
+ *  replaces a request's whole set on every new version of the ServiceRequest. */
+export interface LabRequestAttributesTable {
+  id: string;
+  lab_request_id: string;
+  system: string;
+  code: string;
+  value_text: string | null;
+  value_number: number | null;
+  value_datetime: string | null;
+  value_boolean: boolean | null;
+  source_system: string | null;
+  plugin_id: string | null;
+  plugin_version: string | null;
+  batch_id: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface ExternalSchema {
   patients: PatientsTable;
   lab_requests: LabRequestsTable;
@@ -202,6 +240,7 @@ export interface ExternalSchema {
   terminology_codes: TerminologyCodesTable;
   facility_map: FacilityMapTable;
   ingest_events: IngestEventsTable;
+  lab_request_attributes: LabRequestAttributesTable;
 }
 
 /**
@@ -212,13 +251,14 @@ export interface ExternalSchema {
  */
 export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   patients: ['id', 'patient_guid', 'surname', 'firstname', 'date_of_birth', 'sex', 'national_id', 'phone', 'email', 'managing_organization', 'active', 'replaced_by_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
-  lab_requests: ['id', 'request_id', 'patient_id', 'panel_code', 'panel_system', 'panel_desc', 'status', 'priority', 'authored_at', 'requester_code', 'requester_system', 'requester_display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  lab_requests: ['id', 'request_id', 'patient_id', 'panel_code', 'panel_system', 'panel_desc', 'status', 'priority', 'authored_at', 'requester_code', 'requester_system', 'requester_display', 'analysis_at', 'point_of_care', 'request_type', 'registered_by', 'tested_by', 'requester_practitioner', 'obr_set_id', 'age_years', 'age_days', 'clinical_info', 'analyzer_code', 'rejection_code', 'rejection_reason', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   lab_results: ['id', 'request_id', 'observation_code', 'observation_system', 'observation_desc', 'result_type', 'numeric_value', 'numeric_units', 'coded_value', 'text_value', 'abnormal_flag', 'result_timestamp', 'patient_id', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facilities: ['id', 'facility_code', 'facility_name', 'facility_type', 'source_resource', 'region', 'district', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'origin', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
-  diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'based_on_id', 'performer', 'performer_display', 'performer_system', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'based_on_id', 'performer', 'performer_display', 'performer_system', 'specimen_id', 'section_code', 'authorised_by', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   terminology_codes: ['id', 'value_set_id', 'value_set_url', 'system', 'code', 'display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facility_map: ['id', 'source_system', 'performer_system', 'source_code', 'registry_id', 'local_code', 'name', 'level', 'status', 'region', 'district', 'council', 'national_system', 'national_code', 'resolved_via', 'updated_at'],
   ingest_events: ['resource_type', 'resource_id', 'version', 'recorded_at'],
+  lab_request_attributes: ['id', 'lab_request_id', 'system', 'code', 'value_text', 'value_number', 'value_datetime', 'value_boolean', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
 };

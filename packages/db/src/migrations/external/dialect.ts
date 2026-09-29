@@ -30,6 +30,10 @@ export function floatType(engine: TargetEngine): string {
   if (engine === 'mysql') return 'double';
   return 'double precision';
 }
+/** A 32-bit integer. `int` on SQL Server and MySQL, `integer` on Postgres. */
+export function intType(engine: TargetEngine): string {
+  return engine === 'postgres' ? 'integer' : 'int';
+}
 export function timestampType(engine: TargetEngine): string {
   if (engine === 'mssql') return 'datetime2';
   if (engine === 'mysql') return 'datetime';
