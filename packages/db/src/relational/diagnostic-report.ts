@@ -2,6 +2,7 @@ import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
 import type { DiagnosticReportsTable } from '../schema/external';
 import { provColumns, codeable, referenceId, str } from './extract';
+import { reportFacts } from './request-facts';
 
 export function projectDiagnosticReport(r: Record<string, unknown>, prov: Provenance): Insertable<DiagnosticReportsTable> {
   const code = codeable(r['code']);
@@ -35,6 +36,7 @@ export function projectDiagnosticReport(r: Record<string, unknown>, prov: Proven
     // source has no system id).
     performer_system: str(performerIdentifier?.system),
     specimen_id: referenceId((r['specimen'] as unknown[] | undefined)?.[0]),
+    ...reportFacts(r),
     ...provColumns(prov),
   };
 }
