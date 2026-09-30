@@ -41,3 +41,30 @@ Por exemplo, se id for único na tabela, ORDER BY created_at, id desempata datas
 Num separador de consulta, acrescente essa ordem antes de Run. O editor não pode deduzir uma chave única para qualquer SQL.
 A consulta simples de uma tabela não garante uma ordem. Podem aparecer linhas repetidas ou faltar linhas sem uma ordem única, ou se os dados mudarem entre pedidos.
 SQL Server lê até ao deslocamento pedido, pelo que páginas distantes podem demorar mais. A paginação não cria uma cópia estável da base de dados.
+
+
+## Exportar e importar consultas
+
+Use o menu de ações no cabeçalho do Explorer. Escolha Exportar consultas ou Importar consultas.
+
+O ficheiro contém o nome, o SQL e os parâmetros de cada consulta. Não contém o id nem o conector.
+
+A importação segue estas regras:
+
+- Um nome novo é criado.
+- Um nome que já existe é ignorado, a menos que escolha substituí-lo.
+- Substituir mantém o id e o conector da consulta, por isso os relatórios que a usam continuam a funcionar.
+- Uma só consulta inválida pára o ficheiro inteiro. Nada é escrito.
+
+As consultas novas usam `Target Warehouse (Postgres)`, a menos que escolha outro conector.
+
+Na linha de comandos:
+
+```
+openldr query export --out queries.json [--name <name>...]
+openldr query import queries.json [--connector <name>] [--force]
+```
+
+`--out` substitui um ficheiro existente. `--force` substitui as consultas que já existem.
+
+O conteúdo escrito para um sistema de laboratório é partilhado como estes ficheiros. Ficam na pasta `packs/` do operador, não no CE.
