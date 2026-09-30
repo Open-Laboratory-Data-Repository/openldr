@@ -120,7 +120,9 @@ A new rule under section 8:
 > ORC, PID or SPM field). A fact from one system or country is a row in `lab_request_attributes`,
 > keyed by a code in `urn:openldr:cs:request-attribute`. Queries, value sets and registers written
 > for one system (for example DISA) are content: they ship as export files kept in `packs/`, never
-> in the repo. The operator decided this on 2026-09-30.
+> in the repo. One exception: `lab_requests.age_years` and `age_days` stay typed, because the
+> source's stored age is more reliable than one worked out from the date of birth. The operator
+> decided this on 2026-09-30.
 
 Checked against slice C's 13 `lab_requests` columns and 2 `diagnostic_reports` columns:
 
@@ -129,20 +131,21 @@ Checked against slice C's 13 `lab_requests` columns and 2 `diagnostic_reports` c
 | obr_set_id | HL7 v2 OBR-1 Set ID | yes |
 | analysis_at | OBX-19 Date/Time of the Analysis | yes |
 | point_of_care | PV1-3 Assigned Patient Location; FHIR `ServiceRequest.locationCode` | yes |
-| request_type | none found. v1's D/E (diagnostic or quality control) has no OBR/ORC field; the nearest, MSH-11 Processing ID, marks the message, not the request | **no** |
+| request_type | SPM-11 Specimen Role (P patient, Q control, O proficiency). DISA's D (diagnostic, 93,161 TDS requests) and E (quality or proficiency, 5,098) are DISA's own codes for that role | yes |
 | registered_by | ORC-10 Entered By | yes |
 | tested_by | OBX-16 Responsible Observer | yes |
 | requester_practitioner | OBR-16 Ordering Provider; FHIR `ServiceRequest.requester` | yes |
-| age_years, age_days | none direct. Derivable from PID-7 date of birth; age at request is usually an OBX with LOINC 30525-0 | **no, arguably** |
+| age_years, age_days | none direct; derivable from PID-7 date of birth | exception, kept (operator, 2026-09-30) |
 | clinical_info | OBR-13 Relevant Clinical Information | yes |
 | analyzer_code | OBX-18 Equipment Instance Identifier | yes |
 | rejection_code, rejection_reason | SPM-21 Specimen Reject Reason | yes |
 | section_code | OBR-24 Diagnostic Serv Sect ID | yes |
 | authorised_by | OBR-32 Principal Result Interpreter; FHIR `DiagnosticReport.resultsInterpreter` | yes |
 
-`request_type` and the two age columns do not pass as written. This spec changes neither. The
-operator decides at spec review whether they stay (with a noted exception) or move to attributes in
-a later slice.
+The two age columns are the one exception, kept as typed columns by the operator's decision on
+2026-09-30. DISA stores the age at registration, and it matches v1 on every Tanzania row, while an
+age worked out from the date of birth missed 82 of 136 sample rows (slice C findings). The rule text
+names this exception so it is not read as permission for other derived facts.
 
 ## 7. Design: the DISA VL pack (outside git)
 
@@ -205,5 +208,4 @@ a later slice.
 - The other 17 Mozambique views (later batches).
 - A single content-pack file and marketplace artifacts (D6, revisited after testing).
 - Porting the three missing functions.
-- Moving `request_type` or the age columns (section 6; the operator decides).
 - Exporting reports, designs, value sets or registers through the new export.
