@@ -376,3 +376,85 @@ describe('SQL Server continuation pages', () => {
     await app.close();
   });
 });
+
+describe('custom query export and import', () => {
+  let app: FastifyInstance;
+  let deps: QueryRouteDeps;
+  const file = (queries: { name: string; sql: string }[]) => ({
+    format: 'openldr.custom-queries', version: 1, exportedAt: '2026-01-01T00:00:00.000Z',
+    queries: queries.map((q) => ({ ...q, params: [] })),
+  });
+  beforeEach(async () => { auditRecord.mockClear(); deps = makeDeps(); app = await build(deps); });
+
+  it('exports queries sorted by name, without ids or connector', async () => {
+    await deps.customQueries.create({ id: 'a', name: 'Zed', connectorId: 'c1', sql: 'select 2', params: [] });
+    await deps.customQueries.create({ id: 'b', name: 'Alpha', connectorId: 'c1', sql: 'select 1', params: [] });
+    const res = await app.inject({ method: 'POST', url: '/api/custom-queries/export', payload: {} });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.format).toBe('openldr.custom-queries');
+    expect(body.queries).toEqual([
+      { name: 'Alpha', sql: 'select 1', params: [] },
+      { name: 'Zed', sql: 'select 2', params: [] },
+    ]);
+  });
+
+  it('exports only the requested ids', async () => {
+    await deps.customQueries.create({ id: 'a', name: 'Zed', connectorId: 'c1', sql: 'select 2', params: [] });
+    await deps.customQueries.create({ id: 'b', name: 'Alpha', connectorId: 'c1', sql: 'select 1', params: [] });
+    const res = await app.inject({ method: 'POST', url: '/api/custom-queries/export', payload: { ids: ['a'] } });
+    expect(res.json().queries.map((q: any) => q.name)).toEqual(['Zed']);
+  });
+
+  it('creates on import, then skips, then replaces, auditing each write', async () => {
+    const first = await app.inject({ method: 'POST', url: '/api/custom-queries/import',
+      payload: { file: file([{ name: 'Q1', sql: 'select 1' }]), connectorName: 'PG' } });
+    expect(first.statusCode).toBe(200);
+    expect(first.json().results).toEqual([expect.objectContaining({ name: 'Q1', outcome: 'created' })]);
+    const id = first.json().results[0].id;
+    expect(auditRecord).toHaveBeenCalledTimes(1);
+    expect(auditRecord).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'customQuery.create', entityId: id, before: null, after: expect.objectContaining({ id, sql: 'select 1' }),
+    }));
+
+    auditRecord.mockClear();
+    const second = await app.inject({ method: 'POST', url: '/api/custom-queries/import',
+      payload: { file: file([{ name: 'Q1', sql: 'select 2' }]), connectorName: 'PG' } });
+    expect(second.json().results[0].outcome).toBe('skipped');
+    expect(auditRecord).not.toHaveBeenCalled();
+
+    const third = await app.inject({ method: 'POST', url: '/api/custom-queries/import',
+      payload: { file: file([{ name: 'Q1', sql: 'select 2' }]), connectorName: 'PG', replace: true } });
+    expect(third.json().results[0].outcome).toBe('replaced');
+    expect(auditRecord).toHaveBeenCalledTimes(1);
+    expect(auditRecord).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'customQuery.update', entityId: id,
+      before: expect.objectContaining({ sql: 'select 1' }), after: expect.objectContaining({ sql: 'select 2' }),
+    }));
+  });
+
+  it('returns 400 naming the query for a non-select, and writes nothing', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/custom-queries/import',
+      payload: { file: file([{ name: 'Good', sql: 'select 1' }, { name: 'Bad', sql: 'delete from t' }]), connectorName: 'PG' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Bad');
+    expect(await deps.customQueries.list()).toEqual([]);
+    expect(auditRecord).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a file in the wrong format', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/custom-queries/import', payload: { file: { hello: 1 } } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses export and import without query.run', async () => {
+    const bare = Fastify();
+    bare.addHook('preHandler', async (req) => { (req as any).user = { sub: 'u2', roles: [], capabilities: [] }; });
+    registerQueryRoutes(bare, fakeCtx(), makeDeps());
+    await bare.ready();
+    const ex = await bare.inject({ method: 'POST', url: '/api/custom-queries/export', payload: {} });
+    const im = await bare.inject({ method: 'POST', url: '/api/custom-queries/import', payload: { file: file([]) } });
+    expect(ex.statusCode).toBe(403);
+    expect(im.statusCode).toBe(403);
+  });
+});
