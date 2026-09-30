@@ -54,6 +54,8 @@ L'importation suit ces règles :
 - Un nouveau nom est créé.
 - Un nom qui existe déjà est ignoré, sauf si vous choisissez de le remplacer.
 - Le remplacement conserve l'identifiant et le connecteur de la requête. Les rapports qui l'utilisent continuent donc de fonctionner.
+- Remplacer une requête intégrée livrée avec CE est annulé la prochaine fois que CE recharge ses requêtes intégrées.
+- Si une requête remplacée change l'identifiant d'un paramètre, les rapports qui définissent l'ancien paramètre le perdent.
 - Une seule requête invalide arrête tout le fichier. Rien n'est écrit.
 
 Les nouvelles requêtes utilisent `Target Warehouse (Postgres)`, sauf si vous choisissez un autre connecteur.

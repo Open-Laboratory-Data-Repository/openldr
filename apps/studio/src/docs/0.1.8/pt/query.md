@@ -54,6 +54,8 @@ A importação segue estas regras:
 - Um nome novo é criado.
 - Um nome que já existe é ignorado, a menos que escolha substituí-lo.
 - Substituir mantém o id e o conector da consulta, por isso os relatórios que a usam continuam a funcionar.
+- Substituir uma consulta integrada que vem com o CE é desfeito da próxima vez que o CE carregar as suas consultas integradas.
+- Se uma consulta substituída mudar o id de um parâmetro, os relatórios que definem o parâmetro antigo perdem-no.
 - Uma só consulta inválida pára o ficheiro inteiro. Nada é escrito.
 
 As consultas novas usam `Target Warehouse (Postgres)`, a menos que escolha outro conector.

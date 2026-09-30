@@ -70,8 +70,9 @@ No `id` and no `connectorId`: both are local to an install. `params` is the exis
 - The name is the key. A new name is created. An existing name is skipped and reported, unless the
   caller asks to replace it (CLI `--force`, UI toggle). Replacing overwrites `sql` and `params` and
   keeps the existing id, so reports that point at the query keep working.
-- Each query binds to one connector on the importing install. Default: the warehouse connector found
-  by the names in `seed.ts`. `--connector <name>` overrides it. No connector found is an error.
+- Each query binds to one connector on the importing install. Default: the connector named
+  `Target Warehouse (Postgres)` only, because custom queries run on Postgres. Another connector is
+  chosen with `--connector <name>` or the picker. No connector found is an error.
 - Each query passes `CustomQueryInputSchema`, and its SQL passes `validateSelectSql`, before any
   write. One bad query fails the whole file and nothing is written. The error names the query.
 - An unknown `format` or a `version` above 1 is refused.
@@ -103,7 +104,7 @@ the section 5.1 file. Queries come out sorted by name, so two exports of the sam
 - Import: a Sheet with a file picker, then a preview table marking each query `new`,
   `exists (skip)` or `exists (replace)`, with `TablePagination`. A replace switch and a connector
   picker sit in the form grid (label left, input right). Import runs from the sheet's `⋯` menu.
-  The result shows as a toast plus the updated preview.
+  The result is a toast with the counts, then the sheet closes and the saved-query list refreshes.
 - Mobile: both sheets checked at 375x812.
 
 ### 5.6 Docs

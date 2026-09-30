@@ -80,6 +80,8 @@ Import follows these rules:
 - A new name is created.
 - A name that already exists is skipped, unless you choose to replace it.
 - Replace keeps the query's id and connector, so reports that use it keep working.
+- Replacing a built-in query that ships with CE is undone the next time CE seeds its built-in queries.
+- If a replaced query changes a parameter's id, reports that set the old parameter lose it.
 - One bad query stops the whole file. Nothing is written.
 
 New queries use `Target Warehouse (Postgres)` unless you pick another connector.

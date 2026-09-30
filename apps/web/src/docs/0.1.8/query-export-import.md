@@ -11,6 +11,8 @@ Import follows these rules:
 - A new name is created.
 - A name that already exists is skipped, unless you choose to replace it.
 - Replace keeps the query's id and connector, so reports that use it keep working.
+- Replacing a built-in query that ships with CE is undone the next time CE seeds its built-in queries.
+- If a replaced query changes a parameter's id, reports that set the old parameter lose it.
 - One bad query stops the whole file. Nothing is written.
 
 New queries use `Target Warehouse (Postgres)` unless you pick another connector.
@@ -37,6 +39,8 @@ L'importation suit ces règles :
 - Un nouveau nom est créé.
 - Un nom qui existe déjà est ignoré, sauf si vous choisissez de le remplacer.
 - Le remplacement conserve l'identifiant et le connecteur de la requête. Les rapports qui l'utilisent continuent donc de fonctionner.
+- Remplacer une requête intégrée livrée avec CE est annulé la prochaine fois que CE recharge ses requêtes intégrées.
+- Si une requête remplacée change l'identifiant d'un paramètre, les rapports qui définissent l'ancien paramètre le perdent.
 - Une seule requête invalide arrête tout le fichier. Rien n'est écrit.
 
 Les nouvelles requêtes utilisent `Target Warehouse (Postgres)`, sauf si vous choisissez un autre connecteur.
@@ -63,6 +67,8 @@ A importação segue estas regras:
 - Um nome novo é criado.
 - Um nome que já existe é ignorado, a menos que escolha substituí-lo.
 - Substituir mantém o id e o conector da consulta, por isso os relatórios que a usam continuam a funcionar.
+- Substituir uma consulta integrada que vem com o CE é desfeito da próxima vez que o CE carregar as suas consultas integradas.
+- Se uma consulta substituída mudar o id de um parâmetro, os relatórios que definem o parâmetro antigo perdem-no.
 - Uma só consulta inválida pára o ficheiro inteiro. Nada é escrito.
 
 As consultas novas usam `Target Warehouse (Postgres)`, a menos que escolha outro conector.
