@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "c239f266",
+          "type": "feat",
+          "scope": "db",
+          "title": "Store the comparator of a numeric result"
+        },
+        {
           "hash": "8e3069b1",
           "type": "fix",
           "scope": "studio",
