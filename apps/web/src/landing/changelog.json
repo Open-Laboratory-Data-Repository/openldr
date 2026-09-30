@@ -1,6 +1,54 @@
 {
-  "generatedAt": "2026-09-29",
+  "generatedAt": "2026-09-30",
   "days": [
+    {
+      "date": "2026-09-30",
+      "version": null,
+      "entries": [
+        {
+          "hash": "8e3069b1",
+          "type": "fix",
+          "scope": "studio",
+          "title": "No silent connector pick, and clearer export load errors"
+        },
+        {
+          "hash": "844c46ab",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep a failed load warning visible after a file is chosen"
+        },
+        {
+          "hash": "7063599b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Query import and export empty states point the way"
+        },
+        {
+          "hash": "ba33a41e",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Export and import custom queries from the query page"
+        },
+        {
+          "hash": "e781dc03",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr query export and import"
+        },
+        {
+          "hash": "f03a4825",
+          "type": "feat",
+          "scope": "server",
+          "title": "Routes to export and import custom queries"
+        },
+        {
+          "hash": "ec5c6ff4",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Export and import custom queries as a file"
+        }
+      ]
+    },
     {
       "date": "2026-09-29",
       "version": null,
