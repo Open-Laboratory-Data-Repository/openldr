@@ -19,6 +19,7 @@ import * as m016 from './016_ingest_events';
 import * as m017 from './017_diagnostic_report_based_on_and_lab_results_index';
 import * as m018 from './018_lab_request_requester';
 import * as m019 from './019_v1_request_facts';
+import * as m020 from './020_lab_result_comparator';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -41,5 +42,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '017_diagnostic_report_based_on_and_lab_results_index': { up: (db) => m017.up(db, engine), down: (db) => m017.down(db, engine) },
     '018_lab_request_requester': { up: (db) => m018.up(db, engine), down: m018.down },
     '019_v1_request_facts': { up: (db) => m019.up(db, engine), down: m019.down },
+    '020_lab_result_comparator': { up: (db) => m020.up(db, engine), down: m020.down },
   };
 }
