@@ -41,6 +41,10 @@ apresentação dos códigos.
 
 Um facto que a origem não envia fica vazio. Nada é preenchido no lugar.
 
+Um resultado numérico fora do intervalo de medição do método do laboratório chega como o limite
+com um comparador, por exemplo `< 20`. `lab_results.numeric_comparator` guarda `<`, `<=`, `>=` ou `>`, e
+fica vazio para um número comum. `numeric_value` guarda o limite nesse caso.
+
 `clinical_info` fica oculto do construtor de painéis por predefinição, porque pode conter texto
 livre ou um identificador de doente pseudonimizado. Torne-o visível em Definições, depois
 Exposição de Dados. A tabela `lab_request_attributes` não está no construtor de painéis. Leia-a

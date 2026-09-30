@@ -41,6 +41,10 @@ des codes manquent.
 
 Un fait que la source n'envoie pas reste vide. Rien n'est rempli à sa place.
 
+Un résultat numérique hors de la plage de mesure de la méthode du laboratoire arrive sous la forme
+de la limite avec un comparateur, par exemple `< 20`. `lab_results.numeric_comparator` contient `<`, `<=`, `>=`
+ou `>`, et reste vide pour un nombre ordinaire. `numeric_value` contient alors la limite.
+
 `clinical_info` est masqué du générateur de tableaux de bord par défaut, car il peut contenir du
 texte libre ou un identifiant patient pseudonymisé. Démasquez-le dans Paramètres, puis Exposition
 des données. La table `lab_request_attributes` n'est pas dans le générateur de tableaux de bord

@@ -377,7 +377,7 @@ describe('createFacilityRegistryStore', () => {
     it('applies an operator the named params cannot express (like)', async () => {
       const s = await seedMany(25);
       // `q` searches five columns at once; the grammar can target ONE. 'Facility 01' matches
-      // 010..019 — ten rows — and nothing else in the fixture.
+      // 010..019, ten rows, and nothing else in the fixture.
       const r = await s.list({
         filters: [{ column: 'name', operator: 'like', value: 'Facility 01', combine: 'and' }],
         limit: 1000,

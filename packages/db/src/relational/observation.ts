@@ -3,11 +3,15 @@ import type { Insertable } from 'kysely';
 import type { LabResultsTable } from '../schema/external';
 import { provColumns, codeable, referenceId, str, num } from './extract';
 
+// FHIR Quantity.comparator has four values. Anything else is dropped, so a stray code cannot reach the warehouse.
+const COMPARATORS = new Set(['<', '<=', '>=', '>']);
+
 export function projectObservation(r: Record<string, unknown>, prov: Provenance): Insertable<LabResultsTable> {
   const code = codeable(r['code']);
   const valueCc = codeable(r['valueCodeableConcept']);
   const quantity = r['valueQuantity'] as Record<string, unknown> | undefined;
   const interpretation = codeable((r['interpretation'] as unknown[] | undefined)?.[0]);
+  const comparator = str(quantity?.['comparator']);
   const numericValue = num(quantity?.['value']);
   const textValue = valueCc.text ?? str(r['valueString']);
   const resultType = numericValue != null ? 'NM' : valueCc.code ? 'CE' : textValue ? 'ST' : null;
@@ -22,6 +26,7 @@ export function projectObservation(r: Record<string, unknown>, prov: Provenance)
     result_type: resultType,
     numeric_value: numericValue,
     numeric_units: str(quantity?.['unit']),
+    numeric_comparator: comparator !== null && COMPARATORS.has(comparator) ? comparator : null,
     coded_value: valueCc.code,
     text_value: textValue,
     abnormal_flag: interpretation.code,

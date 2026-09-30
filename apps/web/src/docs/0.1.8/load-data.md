@@ -243,6 +243,10 @@ Without the import, attribute rows are still stored. Only the code display names
 
 A fact the source does not send stays empty. Nothing is filled in.
 
+A numeric result outside the lab's reporting range arrives as the limit with a comparator, for
+example `< 20`. `lab_results.numeric_comparator` holds `<`, `<=`, `>=` or `>`, and is empty for an
+ordinary number. `numeric_value` holds the limit in that case.
+
 `clinical_info` is hidden from the dashboard builder by default, because it can hold free text or
 a pseudonymous patient id. Unhide it in Settings, then Data Exposure. The `lab_request_attributes`
 table is not in the dashboard builder at all. Read it with custom queries.
