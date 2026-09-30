@@ -105,4 +105,13 @@ describe('ImportQueriesSheet', () => {
     render(<ImportQueriesSheet open onOpenChange={() => {}} />);
     expect(await screen.findByText('Could not load existing queries or connectors: boom')).toBeInTheDocument();
   });
+
+  it('keeps the load-failure line after a file is chosen', async () => {
+    vi.mocked(queryApi.list).mockRejectedValue(new Error('boom'));
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    await screen.findByText('Could not load existing queries or connectors: boom');
+    await chooseFile(FILE);
+    expect(await screen.findByText('Fresh')).toBeInTheDocument();
+    expect(screen.getByText('Could not load existing queries or connectors: boom')).toBeInTheDocument();
+  });
 });

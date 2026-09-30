@@ -44,22 +44,26 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
   const [replace, setReplace] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Read t through a ref so a language change cannot re-run the load effect and reset the preview.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setFile(null); setFileName(''); setFileError(null); setError(null); setReplace(false); setPage(0);
+    setFile(null); setFileName(''); setFileError(null); setError(null); setLoadError(null); setReplace(false); setPage(0);
     void queryApi.list().then((rows) => { if (!cancelled) setExisting(new Set(rows.map((q) => q.name))); })
-      .catch((e: Error) => { if (!cancelled) setError(t('query.transfer.loadFailed', { error: e.message })); });
+      .catch((e: Error) => { if (!cancelled) setLoadError(tRef.current('query.transfer.loadFailed', { error: e.message })); });
     void queryApi.connectors().then((rows) => {
       if (cancelled) return;
       setConnectors(rows);
       setConnectorName((rows.find((c) => c.name === DEFAULT_CONNECTOR) ?? rows[0])?.name ?? '');
-    }).catch((e: Error) => { if (!cancelled) setError(t('query.transfer.loadFailed', { error: e.message })); });
+    }).catch((e: Error) => { if (!cancelled) setLoadError(tRef.current('query.transfer.loadFailed', { error: e.message })); });
     return () => { cancelled = true; };
-  }, [open, t]);
+  }, [open]);
 
   const rows = useMemo(() => (file?.queries ?? []).map((q) => ({
     name: q.name,
@@ -152,6 +156,7 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
         </div>
 
         {fileError && <div className="mx-6 mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{fileError}</div>}
+        {loadError && <div className="mx-6 mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{loadError}</div>}
         {error && <div className="mx-6 mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div>}
 
         <div className="flex min-h-[16rem] flex-col border-t border-border">
