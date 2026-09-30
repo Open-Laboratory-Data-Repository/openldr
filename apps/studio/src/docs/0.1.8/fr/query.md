@@ -45,16 +45,16 @@ SQL Server lit jusqu'au décalage demandé ; les pages éloignées peuvent prend
 
 ## Exporter et importer des requêtes
 
-Utilisez le menu d’actions dans l’en-tête de l’Explorer. Choisissez Exporter les requêtes ou Importer des requêtes.
+Utilisez le menu d'actions dans l'en-tête de l'Explorateur. Choisissez Exporter les requêtes ou Importer des requêtes.
 
-Le fichier contient le nom, le SQL et les paramètres de chaque requête. Il ne contient ni l’identifiant ni le connecteur.
+Le fichier contient le nom, le SQL et les paramètres de chaque requête. Il ne contient ni l'identifiant ni le connecteur.
 
-L’importation suit ces règles :
+L'importation suit ces règles :
 
 - Un nouveau nom est créé.
 - Un nom qui existe déjà est ignoré, sauf si vous choisissez de le remplacer.
-- Le remplacement conserve l’identifiant et le connecteur de la requête. Les rapports qui l’utilisent continuent donc de fonctionner.
-- Une seule requête invalide arrête tout le fichier. Rien n’est écrit.
+- Le remplacement conserve l'identifiant et le connecteur de la requête. Les rapports qui l'utilisent continuent donc de fonctionner.
+- Une seule requête invalide arrête tout le fichier. Rien n'est écrit.
 
 Les nouvelles requêtes utilisent `Target Warehouse (Postgres)`, sauf si vous choisissez un autre connecteur.
 
@@ -67,4 +67,4 @@ openldr query import queries.json [--connector <name>] [--force]
 
 `--out` écrase un fichier existant. `--force` remplace les requêtes qui existent déjà.
 
-Le contenu écrit pour un système de laboratoire est partagé sous forme de ces fichiers. Ils sont gardés dans le dossier `packs/` de l’opérateur, pas dans CE.
+Le contenu écrit pour un système de laboratoire est partagé sous forme de ces fichiers. Ils sont gardés dans le dossier `packs/` de l'opérateur, pas dans CE.

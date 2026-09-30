@@ -45,7 +45,7 @@ SQL Server lê até ao deslocamento pedido, pelo que páginas distantes podem de
 
 ## Exportar e importar consultas
 
-Use o menu de ações no cabeçalho do Explorer. Escolha Exportar consultas ou Importar consultas.
+Use o menu de ações no cabeçalho do Explorador. Escolha Exportar consultas ou Importar consultas.
 
 O ficheiro contém o nome, o SQL e os parâmetros de cada consulta. Não contém o id nem o conector.
 
