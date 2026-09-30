@@ -63,6 +63,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
 | `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see [Facilities](/docs/facilities)). |
 | `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
+| `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |
 | `provenance` | Provenance audit tooling. |
@@ -78,7 +79,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `target-store` | Test the target warehouse connection. |
 
 Mutating CLI commands (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,
-`settings … set`, `settings danger …`, `db reset`, `db reproject`, `terminology import/create`) record an audit
+`settings … set`, `settings danger …`, `db reset`, `db reproject`, `terminology import/create`, `query import`) record an audit
 event with actor type **`cli`** and actor name looked up **inside the container**, not the
 operator's own username. On a Docker install that name follows the host uid running the
 wrapper: uid 1000 resolves to `node`, and most other uids have no container username at all,

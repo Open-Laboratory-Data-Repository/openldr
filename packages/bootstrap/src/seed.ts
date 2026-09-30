@@ -46,7 +46,7 @@ const FHIR_PUBLISHER_ID = 'pub-hl7-fhir';
 const FHIR_CATALOG_URL_PREFIX = 'http://hl7.org/fhir/ValueSet/';
 
 /** Name used to dedup the default target-warehouse connector — idempotency key. */
-const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
+export const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
 
 /** Name of the seeded lab-order form the inbound ingestion workflow validates against. */
 const ORDER_FORM_NAME = 'Lab order';

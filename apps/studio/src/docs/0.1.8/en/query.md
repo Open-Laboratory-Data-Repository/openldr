@@ -67,3 +67,32 @@ For example, if id is unique in your table, ORDER BY created_at, id breaks times
 Write the corresponding order in a query tab before Run. The workbench cannot infer a unique key for arbitrary SQL.
 A plain table browse has no guaranteed order. Rows may repeat or be missed without a unique order, or if data changes between requests.
 SQL Server reads through the requested offset, so later pages can take longer. Paging does not create a database snapshot.
+
+
+## Export and import queries
+
+Use the actions menu in the Explorer header. Choose Export queries or Import queries.
+
+The file holds each query's name, SQL and parameters. It does not hold the id or the connector.
+
+Import follows these rules:
+
+- A new name is created.
+- A name that already exists is skipped, unless you choose to replace it.
+- Replace keeps the query's id and connector, so reports that use it keep working.
+- Replacing a built-in query that ships with CE is undone the next time CE seeds its built-in queries.
+- If a replaced query changes a parameter's id, reports that set the old parameter lose it.
+- One bad query stops the whole file. Nothing is written.
+
+New queries use `Target Warehouse (Postgres)` unless you pick another connector.
+
+From the command line:
+
+```
+openldr query export --out queries.json [--name <name>...]
+openldr query import queries.json [--connector <name>] [--force]
+```
+
+`--out` overwrites an existing file. `--force` replaces queries that already exist.
+
+Content written for one lab system is shared as these files. They live in the operator's `packs/` folder, not in CE itself.

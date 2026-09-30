@@ -4,6 +4,11 @@ import type { CustomQuery, CustomQueryInput, CustomQueryParam } from './custom-q
 
 export interface RunResult { columns: { key: string; label: string }[]; rows: Record<string, unknown>[]; rowCount: number; ms: number; total?: number; hasMore?: boolean }
 export interface ConnectorRef { id: string; name: string; type: string | null }
+export interface QueryTransferFile {
+  format: 'openldr.custom-queries'; version: number; exportedAt: string;
+  queries: { name: string; sql: string; params: CustomQueryParam[] }[];
+}
+export interface ImportResult { results: { name: string; outcome: 'created' | 'replaced' | 'skipped'; id: string }[] }
 export interface DatasetRef { id: string; name: string; rowCount: number }
 
 async function j<T>(res: Response): Promise<T> {
@@ -25,5 +30,9 @@ export const queryApi = {
   list: () => authFetch('/api/custom-queries').then(j<CustomQuery[]>),
   create: (input: CustomQueryInput) => authFetch('/api/custom-queries', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }).then(j<{ id: string }>),
   update: (id: string, input: Partial<CustomQueryInput>) => authFetch(`/api/custom-queries/${id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) }).then(j<{ ok: true }>),
+  exportQueries: (ids?: string[]) =>
+    authFetch('/api/custom-queries/export', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(ids ? { ids } : {}) }).then(j<QueryTransferFile>),
+  importQueries: (body: { file: unknown; connectorName?: string; replace?: boolean }) =>
+    authFetch('/api/custom-queries/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(j<ImportResult>),
   remove: (id: string) => authFetch(`/api/custom-queries/${id}`, { method: 'DELETE' }).then(j<{ ok: true }>),
 };

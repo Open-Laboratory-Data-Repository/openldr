@@ -51,6 +51,7 @@ export const TITLES: Record<string, string> = {
   'workflow-navigation': 'Workflow canvas navigation',
   'workflow-webhooks': 'Workflow webhooks',
   'query-naming': 'Query names',
+  'query-export-import': 'Export and import queries',
   dashboard: 'Create a dashboard',
   'dashboard-refresh': 'Dashboard refresh',
 
@@ -82,6 +83,7 @@ export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'workflow-navigation' },
   { slug: 'workflow-webhooks' },
   { slug: 'query-naming' },
+  { slug: 'query-export-import' },
   { slug: 'dashboard' },
   { slug: 'dashboard-refresh' },
 

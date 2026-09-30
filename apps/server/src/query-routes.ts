@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { AppContext } from '@openldr/bootstrap';
+import { exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
 import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
 import type { CustomQueryStore } from '@openldr/db';
 import { requireCapability } from './rbac';
@@ -77,6 +77,51 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
       action: 'customQuery.delete', entityType: 'customQuery', entityId: id, before, after: null,
     });
     return { ok: true };
+  });
+
+  // ---- Export and import ----
+  const ExportBody = z.object({ ids: z.array(z.string()).optional() });
+  app.post('/api/custom-queries/export', GUARD, async (req, reply) => {
+    const parsed = ExportBody.safeParse(req.body ?? {});
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    return exportCustomQueries(
+      { customQueries: deps.customQueries, connectors: deps.connectors },
+      parsed.data.ids ? { ids: parsed.data.ids } : undefined,
+    );
+  });
+
+  const ImportBody = z.object({
+    file: z.unknown(),
+    connectorName: z.string().min(1).optional(),
+    replace: z.boolean().optional(),
+  });
+  app.post('/api/custom-queries/import', GUARD, async (req, reply) => {
+    const parsed = ImportBody.safeParse(req.body ?? {});
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    // Read the current rows first, so a replace can be audited with its before state.
+    const beforeByName = new Map((await deps.customQueries.list()).map((q) => [q.name, q]));
+    try {
+      const result = await importCustomQueries(
+        { customQueries: deps.customQueries, connectors: deps.connectors },
+        parsed.data.file,
+        { connectorName: parsed.data.connectorName, replace: parsed.data.replace ?? false },
+      );
+      for (const r of result.results) {
+        if (r.outcome === 'skipped') continue;
+        const after = await deps.customQueries.get(r.id);
+        await recordAudit(ctx, req, {
+          action: r.outcome === 'created' ? 'customQuery.create' : 'customQuery.update',
+          entityType: 'customQuery',
+          entityId: r.id,
+          before: r.outcome === 'created' ? null : (beforeByName.get(r.name) ?? null),
+          after,
+        });
+      }
+      return result;
+    } catch (e) {
+      if (e instanceof CustomQueryTransferError) { reply.code(400); return { error: e.message }; }
+      throw e;
+    }
   });
 
   // ---- Read-only execution ----

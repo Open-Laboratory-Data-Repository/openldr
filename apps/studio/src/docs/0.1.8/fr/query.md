@@ -41,3 +41,32 @@ Par exemple, si id est unique dans votre table, ORDER BY created_at, id départa
 Dans un onglet de requête, ajoutez cet ordre avant Run. L'espace ne peut pas déduire une clé unique pour toute requête SQL.
 La consultation simple d'une table ne garantit aucun ordre. Des lignes peuvent se répéter ou manquer sans ordre unique, ou si les données changent entre les demandes.
 SQL Server lit jusqu'au décalage demandé ; les pages éloignées peuvent prendre plus de temps. La pagination ne crée pas d'instantané de la base.
+
+
+## Exporter et importer des requêtes
+
+Utilisez le menu d'actions dans l'en-tête de l'Explorateur. Choisissez Exporter les requêtes ou Importer des requêtes.
+
+Le fichier contient le nom, le SQL et les paramètres de chaque requête. Il ne contient ni l'identifiant ni le connecteur.
+
+L'importation suit ces règles :
+
+- Un nouveau nom est créé.
+- Un nom qui existe déjà est ignoré, sauf si vous choisissez de le remplacer.
+- Le remplacement conserve l'identifiant et le connecteur de la requête. Les rapports qui l'utilisent continuent donc de fonctionner.
+- Remplacer une requête intégrée livrée avec CE est annulé la prochaine fois que CE recharge ses requêtes intégrées.
+- Si une requête remplacée change l'identifiant d'un paramètre, les rapports qui définissent l'ancien paramètre le perdent.
+- Une seule requête invalide arrête tout le fichier. Rien n'est écrit.
+
+Les nouvelles requêtes utilisent `Target Warehouse (Postgres)`, sauf si vous choisissez un autre connecteur.
+
+En ligne de commande :
+
+```
+openldr query export --out queries.json [--name <name>...]
+openldr query import queries.json [--connector <name>] [--force]
+```
+
+`--out` écrase un fichier existant. `--force` remplace les requêtes qui existent déjà.
+
+Le contenu écrit pour un système de laboratoire est partagé sous forme de ces fichiers. Ils sont gardés dans le dossier `packs/` de l'opérateur, pas dans CE.
