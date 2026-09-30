@@ -34,3 +34,7 @@ packages/bootstrap/Python/
 .claude/*
 !.claude/launch.json
 !.claude/skills/
+
+# System and country content packs: only the README is tracked (see packs/README.md).
+packs/*
+!packs/README.md

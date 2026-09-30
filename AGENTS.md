@@ -222,6 +222,15 @@ Four more traps from that pass, all still live:
 Codes, organisms, statuses, and value sets come from the terminology service or config.
 Never inline them into source or SQL.
 
+**One shared warehouse model. No country or system columns.** A typed warehouse column is only
+for a fact any lab system can fill that has a standard slot (a FHIR element, or an HL7 v2 OBR,
+OBX, ORC, PID or SPM field). A fact from one system or country is a row in
+`lab_request_attributes`, keyed by a code in `urn:openldr:cs:request-attribute`. Queries, value
+sets and registers written for one system (for example DISA) are content: they ship as export
+files kept in `packs/`, never in the repo. One exception: `lab_requests.age_years` and `age_days`
+stay typed, because the source's stored age is more reliable than one worked out from the date of
+birth. The operator decided this on 2026-09-30.
+
 ---
 
 ## 9. Git
