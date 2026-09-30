@@ -37,6 +37,7 @@ import {
   runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams,
   type TestCatalogListOpts, type TestCatalogImportOpts,
 } from './test-catalog';
+import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -578,6 +579,26 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (opts: { retry?: string; json: boolean }) => {
       process.exitCode = await runFacilitiesJobs(opts);
+    });
+
+  const queryGroup = program.command('query').description('Custom queries (the SQL behind reports)');
+  queryGroup
+    .command('export')
+    .description('Write custom queries to a JSON file. Exports every query unless --name is given.')
+    .option('--name <name...>', 'export only the query with this name (repeat the flag for more)')
+    .requiredOption('--out <file>', 'file to write (overwritten if it exists)')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { name?: string[]; out: string; json: boolean }) => {
+      process.exitCode = await runQueryExport(opts);
+    });
+  queryGroup
+    .command('import <file>')
+    .description('Read custom queries from a JSON file. Queries whose name already exists are skipped.')
+    .option('--connector <name>', 'connector for new queries (default: the default connector)')
+    .option('--force', 'replace queries that already exist (overwrites their SQL and parameters)', false)
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (file: string, opts: { connector?: string; force: boolean; json: boolean }) => {
+      process.exitCode = await runQueryImport(file, opts);
     });
 
   const syncGroup = program.command('sync').description('lab⇄central sync status + control');
