@@ -8,6 +8,7 @@ vi.mock('../api', () => ({ queryApi: {
 } }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 
+import { toast } from 'sonner';
 import { queryApi } from '../api';
 import { ExportQueriesSheet } from './ExportQueriesSheet';
 
@@ -64,5 +65,11 @@ describe('ExportQueriesSheet', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
     expect(screen.getByRole('checkbox', { name: 'Alpha' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: 'Beta' })).toBeChecked();
+  });
+
+  it('says the list could not be loaded, not that the export failed', async () => {
+    vi.mocked(queryApi.list).mockRejectedValue(new Error('boom'));
+    render(<ExportQueriesSheet open onOpenChange={() => {}} />);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Could not load existing queries or connectors: boom'));
   });
 });

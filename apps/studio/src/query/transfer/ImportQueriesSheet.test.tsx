@@ -114,4 +114,13 @@ describe('ImportQueriesSheet', () => {
     expect(await screen.findByText('Fresh')).toBeInTheDocument();
     expect(screen.getByText('Could not load existing queries or connectors: boom')).toBeInTheDocument();
   });
+
+  it('leaves the connector empty and Import disabled when no connector has the default name', async () => {
+    vi.mocked(queryApi.connectors).mockResolvedValue([{ id: 'c1', name: 'Other', type: 'postgres' }]);
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    await chooseFile(FILE);
+    await screen.findByText('Fresh');
+    expect(await screen.findByText('Choose the connector these queries will run on.')).toBeInTheDocument();
+    expect(await menuItem('import-apply')).toHaveAttribute('aria-disabled', 'true');
+  });
 });

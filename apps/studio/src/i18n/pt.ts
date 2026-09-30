@@ -1439,6 +1439,7 @@ export const pt: EnShape = {
       noPreview: 'Escolha um ficheiro no menu ⋯ para ver o que contém.',
       emptyFile: 'Este ficheiro não contém consultas.',
       loadFailed: 'Não foi possível carregar as consultas ou conectores existentes: {{error}}',
+      chooseConnector: 'Escolha o conector em que estas consultas vão ser executadas.',
     },
   },
   dashboard: {

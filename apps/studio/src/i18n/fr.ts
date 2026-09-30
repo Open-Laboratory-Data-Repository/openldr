@@ -1439,6 +1439,7 @@ export const fr: EnShape = {
       noPreview: 'Choisissez un fichier dans le menu ⋯ pour voir son contenu.',
       emptyFile: 'Ce fichier ne contient aucune requête.',
       loadFailed: 'Impossible de charger les requêtes ou connecteurs existants : {{error}}',
+      chooseConnector: 'Choisissez le connecteur sur lequel ces requêtes s\'exécuteront.',
     },
   },
   dashboard: {

@@ -1547,6 +1547,7 @@ export const en = {
       noPreview: 'Choose a file from the ⋯ menu to see what it holds.',
       emptyFile: 'This file holds no queries.',
       loadFailed: 'Could not load existing queries or connectors: {{error}}',
+      chooseConnector: 'Choose the connector these queries will run on.',
     },
   },
   dashboard: {

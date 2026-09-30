@@ -60,7 +60,7 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
     void queryApi.connectors().then((rows) => {
       if (cancelled) return;
       setConnectors(rows);
-      setConnectorName((rows.find((c) => c.name === DEFAULT_CONNECTOR) ?? rows[0])?.name ?? '');
+      setConnectorName(rows.find((c) => c.name === DEFAULT_CONNECTOR)?.name ?? '');
     }).catch((e: Error) => { if (!cancelled) setLoadError(tRef.current('query.transfer.loadFailed', { error: e.message })); });
     return () => { cancelled = true; };
   }, [open]);
@@ -123,7 +123,7 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
               <DropdownMenuItem data-testid="import-choose" disabled={busy} onSelect={() => fileRef.current?.click()}>
                 {t('query.transfer.chooseFile')}
               </DropdownMenuItem>
-              <DropdownMenuItem data-testid="import-apply" disabled={busy || !file || rows.length === 0}
+              <DropdownMenuItem data-testid="import-apply" disabled={busy || !file || rows.length === 0 || !connectorName}
                 onSelect={() => { void doImport(); }}>
                 {t('query.transfer.importAction')}
               </DropdownMenuItem>
@@ -151,6 +151,9 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
               {connectors.map((c) => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
             </SelectContent>
           </Select>
+          {!connectorName && connectors.length > 0 && (
+            <p className="col-span-2 m-0 text-xs text-muted-foreground">{t('query.transfer.chooseConnector')}</p>
+          )}
           <Label>{t('query.transfer.replace')}</Label>
           <Switch checked={replace} onCheckedChange={setReplace} aria-label={t('query.transfer.replace')} />
         </div>

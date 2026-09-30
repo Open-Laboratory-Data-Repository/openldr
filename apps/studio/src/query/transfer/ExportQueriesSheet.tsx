@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -33,6 +33,9 @@ export function ExportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
   const [queries, setQueries] = useState<CustomQuery[] | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  // Read t through a ref so a language change cannot re-run the load effect and clear the ticked queries.
+  const tRef = useRef(t);
+  tRef.current = t;
 
   useEffect(() => {
     if (!open) return;
@@ -41,9 +44,9 @@ export function ExportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
     setChecked(new Set());
     void queryApi.list()
       .then((rows) => { if (!cancelled) setQueries(rows); })
-      .catch((e: Error) => { if (!cancelled) { setQueries([]); toast.error(t('query.transfer.exportFailed', { error: e.message })); } });
+      .catch((e: Error) => { if (!cancelled) { setQueries([]); toast.error(tRef.current('query.transfer.loadFailed', { error: e.message })); } });
     return () => { cancelled = true; };
-  }, [open, t]);
+  }, [open]);
 
   const all = queries != null && queries.length > 0 && checked.size === queries.length;
   const toggle = (id: string, on: boolean) => setChecked((prev) => {
