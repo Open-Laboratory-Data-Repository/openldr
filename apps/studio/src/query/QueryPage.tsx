@@ -1,7 +1,7 @@
 // apps/studio/src/query/QueryPage.tsx
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PanelLeftClose, PanelLeftOpen, Database, Table2 } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Database, Table2, MoreHorizontal } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
 import { isNarrowViewport } from '@/lib/viewport';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,11 @@ import { QueryTab } from './workspace/QueryTab';
 import { useQueryStore } from './store';
 import { EmptyState } from '@/components/ui/empty-state';
 import { queryApi } from './api';
+import { ExportQueriesSheet } from './transfer/ExportQueriesSheet';
+import { ImportQueriesSheet } from './transfer/ImportQueriesSheet';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
   const { t } = useTranslation();
@@ -48,6 +53,7 @@ export function QueryPage(): JSX.Element {
   );
   // Default true so the "+" isn't briefly disabled while the availability check is in flight.
   const [canQuery, setCanQuery] = useState(true);
+  const [transfer, setTransfer] = useState<'export' | 'import' | null>(null);
   // The query store is module-level (survives route changes); clear open tabs when leaving so
   // re-entering the page starts from a blank workspace rather than restoring the old session.
   const reset = useQueryStore((s) => s.reset);
@@ -76,11 +82,29 @@ export function QueryPage(): JSX.Element {
             {/* Match the tab-bar height + separator so the explorer header sits flush with the tabs. */}
             <div className="flex h-10 shrink-0 items-center justify-between border-b border-border bg-muted/40 px-3">
               <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{t('query.explorer')}</span>
-              <button onClick={() => setCollapsed(true)}
-                className="rounded p-1 text-muted-foreground hover:bg-accent"
-                aria-label={t('query.collapseExplorer')} title={t('query.collapseExplorer')}>
-                <PanelLeftClose className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0"
+                      data-testid="query-transfer-menu" aria-label={t('query.transfer.menu')}>
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem data-testid="query-export" onSelect={() => setTransfer('export')}>
+                      {t('query.transfer.export')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem data-testid="query-import" onSelect={() => setTransfer('import')}>
+                      {t('query.transfer.import')}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <button onClick={() => setCollapsed(true)}
+                  className="rounded p-1 text-muted-foreground hover:bg-accent"
+                  aria-label={t('query.collapseExplorer')} title={t('query.collapseExplorer')}>
+                  <PanelLeftClose className="h-4 w-4" />
+                </button>
+              </div>
             </div>
             <div className="min-h-0 flex-1">
               <ExplorerTree />
@@ -91,6 +115,8 @@ export function QueryPage(): JSX.Element {
           <Workspace canQuery={canQuery} />
         </div>
       </div>
+      <ExportQueriesSheet open={transfer === 'export'} onOpenChange={(o) => { if (!o) setTransfer(null); }} />
+      <ImportQueriesSheet open={transfer === 'import'} onOpenChange={(o) => { if (!o) setTransfer(null); }} />
     </AppShell>
   );
 }
