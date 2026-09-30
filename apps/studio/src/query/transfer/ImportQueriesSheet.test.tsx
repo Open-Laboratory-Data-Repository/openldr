@@ -92,4 +92,17 @@ describe('ImportQueriesSheet', () => {
     expect(await screen.findByText('Import failed: connector not found')).toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
+
+  it('points at the menu before a file is chosen, and says so when the file holds no queries', async () => {
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    expect(screen.getByText('Choose a file from the ⋯ menu to see what it holds.')).toBeInTheDocument();
+    await chooseFile({ ...FILE, queries: [] });
+    expect(await screen.findByText('This file holds no queries.')).toBeInTheDocument();
+  });
+
+  it('shows an error line when the saved-query list fails to load', async () => {
+    vi.mocked(queryApi.list).mockRejectedValue(new Error('boom'));
+    render(<ImportQueriesSheet open onOpenChange={() => {}} />);
+    expect(await screen.findByText('Could not load existing queries or connectors: boom')).toBeInTheDocument();
+  });
 });

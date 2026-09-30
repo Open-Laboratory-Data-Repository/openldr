@@ -91,9 +91,9 @@ export function ExportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
         </div>
 
         {queries === null ? (
-          <div className="min-h-[16rem]"><LoadingState /></div>
+          <LoadingState className="min-h-[16rem]" />
         ) : queries.length === 0 ? (
-          <div className="min-h-[16rem]"><StripedEmpty>{t('query.transfer.noQueries')}</StripedEmpty></div>
+          <StripedEmpty className="min-h-[16rem]">{t('query.transfer.noQueries')}</StripedEmpty>
         ) : (
           <div className="flex flex-col border-t border-border">
             <label className="flex items-center gap-3 border-b border-border px-6 py-2 text-sm">

@@ -1544,7 +1544,9 @@ export const en = {
       importAction: 'Import', importing: 'Importing…',
       importFailed: 'Import failed: {{error}}',
       importDone: '{{created}} created, {{replaced}} replaced, {{skipped}} skipped.',
-      noPreview: 'Choose a file to see what it holds.',
+      noPreview: 'Choose a file from the ⋯ menu to see what it holds.',
+      emptyFile: 'This file holds no queries.',
+      loadFailed: 'Could not load existing queries or connectors: {{error}}',
     },
   },
   dashboard: {

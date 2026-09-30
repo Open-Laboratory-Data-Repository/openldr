@@ -51,14 +51,15 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
     if (!open) return;
     let cancelled = false;
     setFile(null); setFileName(''); setFileError(null); setError(null); setReplace(false); setPage(0);
-    void queryApi.list().then((rows) => { if (!cancelled) setExisting(new Set(rows.map((q) => q.name))); }).catch(() => {});
+    void queryApi.list().then((rows) => { if (!cancelled) setExisting(new Set(rows.map((q) => q.name))); })
+      .catch((e: Error) => { if (!cancelled) setError(t('query.transfer.loadFailed', { error: e.message })); });
     void queryApi.connectors().then((rows) => {
       if (cancelled) return;
       setConnectors(rows);
       setConnectorName((rows.find((c) => c.name === DEFAULT_CONNECTOR) ?? rows[0])?.name ?? '');
-    }).catch(() => {});
+    }).catch((e: Error) => { if (!cancelled) setError(t('query.transfer.loadFailed', { error: e.message })); });
     return () => { cancelled = true; };
-  }, [open]);
+  }, [open, t]);
 
   const rows = useMemo(() => (file?.queries ?? []).map((q) => ({
     name: q.name,
@@ -157,7 +158,7 @@ export function ImportQueriesSheet({ open, onOpenChange }: { open: boolean; onOp
           {busy ? (
             <LoadingState label={t('query.transfer.importing')} className="min-h-[16rem]" />
           ) : rows.length === 0 ? (
-            <StripedEmpty className="min-h-[16rem]">{t('query.transfer.noPreview')}</StripedEmpty>
+            <StripedEmpty className="min-h-[16rem]">{file ? t('query.transfer.emptyFile') : t('query.transfer.noPreview')}</StripedEmpty>
           ) : (
             <>
               <Table>

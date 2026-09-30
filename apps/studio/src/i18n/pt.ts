@@ -1436,7 +1436,9 @@ export const pt: EnShape = {
       importAction: 'Importar', importing: 'A importar…',
       importFailed: 'Falha na importação: {{error}}',
       importDone: '{{created}} criada(s), {{replaced}} substituída(s), {{skipped}} ignorada(s).',
-      noPreview: 'Escolha um ficheiro para ver o que contém.',
+      noPreview: 'Escolha um ficheiro no menu ⋯ para ver o que contém.',
+      emptyFile: 'Este ficheiro não contém consultas.',
+      loadFailed: 'Não foi possível carregar as consultas ou conectores existentes: {{error}}',
     },
   },
   dashboard: {

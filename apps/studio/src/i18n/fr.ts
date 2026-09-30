@@ -1436,7 +1436,9 @@ export const fr: EnShape = {
       importAction: 'Importer', importing: 'Importation…',
       importFailed: 'Échec de l’importation : {{error}}',
       importDone: '{{created}} créée(s), {{replaced}} remplacée(s), {{skipped}} ignorée(s).',
-      noPreview: 'Choisissez un fichier pour voir son contenu.',
+      noPreview: 'Choisissez un fichier dans le menu ⋯ pour voir son contenu.',
+      emptyFile: 'Ce fichier ne contient aucune requête.',
+      loadFailed: 'Impossible de charger les requêtes ou connecteurs existants : {{error}}',
     },
   },
   dashboard: {
