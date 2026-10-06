@@ -40,6 +40,17 @@ async function finishRun(
   }
 }
 
+/** The reason a previewed file must not be applied, or null. Same refusals as the CLI. */
+function refusalOf(preview: FacilityImportResult): string | null {
+  if (preview.unknownColumns.length > 0) return `unrecognised column(s): ${preview.unknownColumns.join(', ')}`;
+  if (!preview.blocked) return null;
+  if (preview.blockedReason === 'duplicate-columns') return `duplicate column header(s): ${preview.duplicateColumns.join(', ')}`;
+  if (preview.blockedReason === 'column-map') {
+    return `column map error(s): ${preview.columnMapErrors.map((e) => JSON.stringify(e)).join('; ')}`;
+  }
+  return `${preview.quarantined.length} row(s) quarantined`;
+}
+
 /**
  * Import a facility register CSV for a content pack. Creates the register source when it is absent.
  *
@@ -57,19 +68,30 @@ export async function importFacilityRegisterCsv(
   const runs = createFacilityImportRunStore(deps.db);
   const existing = await sources.getByUrl(input.url);
 
-  // importFacilities never reads the register source table, so a preview works before the source
-  // exists. Only an apply creates it.
-  if (!existing && input.apply) {
+  // A register source that did not exist yet has no earlier rows, so nothing can be absent from it.
+  // `completeRelease` only switches on the absence count. With `onAbsent: 'report'` nothing is retired.
+  const importOptions = { nationalSystem: input.url, completeRelease: !!existing, onAbsent: 'report' as const };
+
+  if (existing) {
+    // Same gate as the CLI, and it runs on a preview too: a deactivated register is refused up front.
+    const gate = await resolveFacilityRegisterForImport(sources, input.url);
+    if (!gate.ok) return { ok: false, error: gate.error };
+  } else {
+    // importFacilities never reads the register source table, so a preview works before the source
+    // exists. Check every refusal first, so a refused file leaves no source row behind.
+    try {
+      const first = await importFacilities(deps, input.csv, { ...importOptions, runId: null, apply: undefined });
+      const refusal = refusalOf(first);
+      if (refusal) return { ok: false, error: refusal };
+      if (!input.apply) return { ok: true, result: first };
+    } catch (err) {
+      return { ok: false, error: message(err) };
+    }
     await sources.create({ url: input.url, name: input.name, code: input.code });
-  }
-  if (input.apply) {
     const gate = await resolveFacilityRegisterForImport(sources, input.url);
     if (!gate.ok) return { ok: false, error: gate.error };
   }
 
-  // `completeRelease` only switches on the absence count. With `onAbsent: 'report'` nothing is retired.
-  // A register source that did not exist yet has no earlier rows, so nothing can be absent from it.
-  const importOptions = { nationalSystem: input.url, completeRelease: !!existing, onAbsent: 'report' as const };
   let run: FacilityImportRun | null = null;
   try {
     if (input.apply) {
@@ -91,21 +113,11 @@ export async function importFacilityRegisterCsv(
     const runId = run?.id ?? null;
     const preview = await importFacilities(deps, input.csv, { ...importOptions, runId, apply: undefined });
 
-    if (preview.unknownColumns.length > 0) {
-      const error = `unrecognised column(s): ${preview.unknownColumns.join(', ')}`;
-      if (run) await finishRun(runs, run.id, 'failed', `refused: ${error}`);
-      return { ok: false, error };
+    const refusal = refusalOf(preview);
+    if (refusal) {
+      if (run) await finishRun(runs, run.id, 'failed', `refused: ${refusal}`);
+      return { ok: false, error: refusal };
     }
-    if (preview.blocked) {
-      const error = preview.blockedReason === 'duplicate-columns'
-        ? `duplicate column header(s): ${preview.duplicateColumns.join(', ')}`
-        : preview.blockedReason === 'column-map'
-          ? `column map error(s): ${preview.columnMapErrors.map((e) => JSON.stringify(e)).join('; ')}`
-          : `${preview.quarantined.length} row(s) quarantined`;
-      if (run) await finishRun(runs, run.id, 'failed', `refused: ${error}`);
-      return { ok: false, error };
-    }
-
     if (!input.apply) return { ok: true, result: preview };
 
     const result = await importFacilities(deps, input.csv, { ...importOptions, runId, apply: true });

@@ -73,13 +73,31 @@ describe('importFacilityRegisterCsv', () => {
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(3);
   });
 
-  it('an unknown column is refused and nothing is written', async () => {
+  it('an unknown column on a later apply is refused, writes nothing new, and fails the run', async () => {
+    const { db, deps } = await build();
+    await importFacilityRegisterCsv(deps, input(csv(THREE.slice(0, 1)), true));
+    const bad = [HEADER + ',mystery', ...THREE.map((r) => r + ',x')].join('\n') + '\n';
+    const out = await importFacilityRegisterCsv(deps, input(bad, true));
+    expect(out).toEqual({ ok: false, error: 'unrecognised column(s): mystery' });
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(1);
+    const runs = await createFacilityImportRunStore(db).list(URL);
+    expect(runs.map((r) => r.status).sort()).toEqual(['applied', 'failed']);
+  });
+
+  it('a deactivated source is refused on a preview too', async () => {
+    const { db, deps } = await build();
+    await createFacilityRegisterSourceStore(db).create({ url: URL, name: 'Test labs', code: 'TL' });
+    await db.updateTable('coding_systems').set({ active: false } as never).where('url', '=', URL).execute();
+    const out = await importFacilityRegisterCsv(deps, input(csv(THREE), false));
+    expect(out.ok).toBe(false);
+  });
+
+  it('a refused first apply leaves no source row and no run', async () => {
     const { db, deps } = await build();
     const bad = [HEADER + ',mystery', ...THREE.map((r) => r + ',x')].join('\n') + '\n';
     const out = await importFacilityRegisterCsv(deps, input(bad, true));
     expect(out).toEqual({ ok: false, error: 'unrecognised column(s): mystery' });
-    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
-    const runs = await createFacilityImportRunStore(db).list(URL);
-    expect(runs.map((r) => r.status)).toEqual(['failed']);
+    expect(await createFacilityRegisterSourceStore(db).getByUrl(URL)).toBeNull();
+    expect(await createFacilityImportRunStore(db).list(URL)).toHaveLength(0);
   });
 });
