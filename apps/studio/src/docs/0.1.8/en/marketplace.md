@@ -48,7 +48,7 @@ A content pack is a signed bundle of reference data. It installs, in this order,
 
 In **Browse**, filter by **Content pack**. A pack's detail lists its steps with counts. The install confirmation shows the same list. You need the marketplace manage permission, as for plugins.
 
-Install checks every step first. It checks the signature and the publisher key, the file hash, and the step list. It checks that every query is SELECT-only, that the register file previews cleanly, and that the register is not deactivated. If a check fails, nothing is written.
+Install checks every step first. A pack with no publisher signature is refused. It checks the signature and the publisher key, the file hash, and the step list. It checks that every query is SELECT-only, that the register file previews cleanly, and that the register is not deactivated. If a check fails, nothing is written.
 
 The first install from a publisher pins its key. A later pack signed with a different key is refused.
 
@@ -65,7 +65,7 @@ Rows dropped from a newer pack's register are reported. They are never retired.
 
 Choose **Detach** to forget the install record. It keeps everything the pack wrote. There is no uninstall.
 
-From the command line, `openldr market install <bundle-dir> --dry-run` runs the checks and prints the steps. It writes nothing.
+From the command line, `openldr market install <bundle-dir> --dry-run` runs the checks and prints the steps, with how many codes each link-matching step would link. It writes nothing.
 
 ## Troubleshooting
 

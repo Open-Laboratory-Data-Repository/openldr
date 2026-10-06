@@ -45,7 +45,7 @@ Un pack de contenu est un lot signé de données de référence. Il installe, da
 
 Dans **Parcourir**, filtrez sur **Pack de contenu**. Les détails d'un paquet listent ses étapes avec leurs nombres. La confirmation d'installation affiche la même liste. Il faut la permission de gérer le Marketplace, comme pour les extensions.
 
-L'installation vérifie d'abord chaque étape. Elle contrôle la signature et la clé de l'éditeur, l'empreinte du fichier et la liste des étapes. Elle contrôle aussi que chaque requête est en lecture seule (SELECT), que le fichier du registre s'aperçoit sans erreur et que le registre n'est pas désactivé. Si un contrôle échoue, rien n'est écrit.
+L'installation vérifie d'abord chaque étape. Un pack sans signature d'éditeur est refusé. Elle contrôle la signature et la clé de l'éditeur, l'empreinte du fichier et la liste des étapes. Elle contrôle aussi que chaque requête est en lecture seule (SELECT), que le fichier du registre s'aperçoit sans erreur et que le registre n'est pas désactivé. Si un contrôle échoue, rien n'est écrit.
 
 La première installation d'un éditeur épingle sa clé. Un paquet ultérieur signé avec une autre clé est refusé.
 
@@ -62,7 +62,7 @@ Les lignes absentes du registre d'un paquet plus récent sont signalées. Elles 
 
 Choisissez **Détacher** pour oublier l'enregistrement d'installation. Tout ce que le paquet a écrit est conservé. Il n'existe pas de désinstallation.
 
-Dans la ligne de commande, `openldr market install <bundle-dir> --dry-run` exécute les contrôles et affiche les étapes. Elle n'écrit rien.
+Dans la ligne de commande, `openldr market install <bundle-dir> --dry-run` exécute les contrôles et affiche les étapes, avec le nombre de codes que chaque étape de mise en correspondance des liens lierait. Elle n'écrit rien.
 
 ## Dépannage
 

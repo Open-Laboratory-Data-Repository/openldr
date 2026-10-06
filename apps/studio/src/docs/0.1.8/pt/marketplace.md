@@ -45,7 +45,7 @@ Um pacote de conteúdo é um conjunto assinado de dados de referência. Instala,
 
 Em **Explorar**, filtre por **Pacote de conteúdo**. Os detalhes de um pacote listam os seus passos com as contagens. A confirmação da instalação mostra a mesma lista. É necessária a permissão para gerir o Marketplace, como nos plugins.
 
-A instalação verifica primeiro cada passo. Verifica a assinatura e a chave do editor, o hash do ficheiro e a lista de passos. Verifica também que cada consulta é só de leitura (SELECT), que o ficheiro do registo é pré-visualizado sem erros e que o registo não está desativado. Se uma verificação falhar, nada é escrito.
+A instalação verifica primeiro cada passo. Um pacote sem assinatura de editor é recusado. Verifica a assinatura e a chave do editor, o hash do ficheiro e a lista de passos. Verifica também que cada consulta é só de leitura (SELECT), que o ficheiro do registo é pré-visualizado sem erros e que o registo não está desativado. Se uma verificação falhar, nada é escrito.
 
 A primeira instalação de um editor fixa a sua chave. Um pacote posterior assinado com outra chave é recusado.
 
@@ -62,7 +62,7 @@ As linhas que faltam no registo de um pacote mais recente são assinaladas. Nunc
 
 Escolha **Desanexar** para esquecer o registo de instalação. Tudo o que o pacote escreveu fica. Não existe desinstalação.
 
-Na linha de comandos, `openldr market install <bundle-dir> --dry-run` executa as verificações e mostra os passos. Não escreve nada.
+Na linha de comandos, `openldr market install <bundle-dir> --dry-run` executa as verificações e mostra os passos, com quantos códigos cada passo de correspondência de ligações ligaria. Não escreve nada.
 
 ## Resolver problemas
 
