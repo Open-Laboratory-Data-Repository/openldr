@@ -132,6 +132,8 @@ export async function saveFacilityValueMappings(
         url: fromSystem,
         systemVersion: null,
         publisherId: 'pub-system',
+        // Values read from an imported register file, so its source shows as imported.
+        origin: 'import',
       });
       upsertedSystems.add(entry.field);
     }
