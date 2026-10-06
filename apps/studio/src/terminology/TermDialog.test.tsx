@@ -12,7 +12,7 @@ const system: api.CodingSystem = {
   description: null,
   active: true,
   publisherId: 'p',
-  seeded: true,
+  seeded: true, source: 'core', sourceRef: null,
 };
 
 describe('TermDialog', () => {

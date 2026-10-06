@@ -2080,6 +2080,10 @@ export interface CodingSystem {
   id: string; systemCode: string; systemName: string; url: string | null;
   systemVersion: string | null; description: string | null; active: boolean;
   publisherId: string | null; seeded: boolean;
+  /** Where the system came from (see `CodingSystemSource` in @openldr/db). */
+  source: 'core' | 'ingest' | 'import' | 'pack' | 'register' | 'user';
+  /** The pack (`id@version`) when `source` is 'pack'. */
+  sourceRef: string | null;
 }
 export interface CodingSystemInput {
   systemCode: string; systemName: string; url?: string | null; systemVersion?: string | null;

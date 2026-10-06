@@ -184,6 +184,8 @@ export const pt: EnShape = {
     },
   },
   terminology: {
+    csColSource: 'Origem',
+    csSource: { core: 'OpenLDR', ingest: 'Dados recebidos', import: 'Importado', pack: 'Pacote de conteúdo', register: 'Registo de unidades', user: 'Criado aqui' },
     vsSearchPlaceholder: 'Pesquisar conjuntos de valores',
     vsNoMatch: 'Nenhum conjunto de valores corresponde aos filtros atuais.',
     vsColTitle: 'Título',

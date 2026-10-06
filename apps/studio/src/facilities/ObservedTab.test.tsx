@@ -100,20 +100,20 @@ const clinicRow: ObservedFacility = {
 const defaultFacSystem: CodingSystem = {
   id: 'cs-1', systemCode: 'DEFAULT_FAC', systemName: 'Observed facilities',
   url: 'urn:openldr:default_fac', systemVersion: null, description: null, active: true,
-  publisherId: 'pub-system', seeded: false,
+  publisherId: 'pub-system', seeded: false, source: 'core', sourceRef: null,
 };
 const registrySystem: CodingSystem = {
   id: 'cs-reg', systemCode: 'FACILITY-REGISTRY', systemName: 'OpenLDR facility registry',
   url: 'urn:openldr:cs:facility-registry', systemVersion: null, description: null, active: true,
-  publisherId: 'pub-system', seeded: false,
+  publisherId: 'pub-system', seeded: false, source: 'core', sourceRef: null,
 };
 const loincSystem: CodingSystem = {
   id: 'cs-loinc', systemCode: 'LOINC', systemName: 'LOINC', url: 'http://loinc.org',
-  systemVersion: null, description: null, active: true, publisherId: 'p', seeded: true,
+  systemVersion: null, description: null, active: true, publisherId: 'p', seeded: true, source: 'core', sourceRef: null,
 };
 const hfrSystem: CodingSystem = {
   id: 'cs-hfr', systemCode: 'HFR', systemName: 'Tanzania HFR', url: 'urn:tz:hfr',
-  systemVersion: null, description: null, active: true, publisherId: 'p', seeded: false,
+  systemVersion: null, description: null, active: true, publisherId: 'p', seeded: false, source: 'core', sourceRef: null,
 };
 
 const show = () => render(<ObservedTab />);
@@ -460,7 +460,7 @@ describe('ObservedTab', () => {
     const cdrSystem: CodingSystem = {
       id: 'cs-2', systemCode: 'FAC_CDR_IMPORT', systemName: 'Observed facilities',
       url: 'urn:openldr:fac_cdr_import', systemVersion: null, description: null, active: true,
-      publisherId: 'pub-system', seeded: false,
+      publisherId: 'pub-system', seeded: false, source: 'core', sourceRef: null,
     };
     const cdrRow: ObservedFacility = {
       ...arusha, sourceSystem: 'cdr-import', observedSystem: 'urn:openldr:fac_cdr_import', sourceCode: 'NHL-01',

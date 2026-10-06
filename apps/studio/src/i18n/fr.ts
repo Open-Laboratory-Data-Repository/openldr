@@ -184,6 +184,8 @@ export const fr: EnShape = {
     },
   },
   terminology: {
+    csColSource: 'Source',
+    csSource: { core: 'OpenLDR', ingest: 'Données reçues', import: 'Importé', pack: 'Pack de contenu', register: 'Registre des établissements', user: 'Créé ici' },
     vsSearchPlaceholder: 'Rechercher des jeux de valeurs',
     vsNoMatch: 'Aucun jeu de valeurs ne correspond aux filtres actuels.',
     vsColTitle: 'Titre',
