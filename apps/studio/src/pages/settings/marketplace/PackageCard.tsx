@@ -5,7 +5,9 @@ import { packFailureText, type CardEntry } from './util';
 
 export function PackageCard({ entry, onClick }: { entry: CardEntry; onClick: () => void }) {
   const { t } = useTranslation();
-  const stateBadge = entry.installed
+  // A failed pack shows its red failure line below, never a green Active badge beside it.
+  const failedPack = entry.type === 'content-pack' && entry.status === 'failed';
+  const stateBadge = failedPack ? null : entry.installed
     ? (entry.active
         ? <Badge variant="outline" className="border-emerald-500 text-emerald-700">{t('settings.marketplace.active')}</Badge>
         : <Badge variant="outline">{t('settings.marketplace.installed')}</Badge>)
