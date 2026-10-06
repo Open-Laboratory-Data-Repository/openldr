@@ -103,6 +103,7 @@ describe('createContentPackInstaller', () => {
     const res = await s.installer.install(bundle, { actor });
     expect(res).toMatchObject({ id: 'test-pack', version: '1.0.0', status: 'installed' });
     expect(s.calls.filter((c) => WRITES.includes(c))).toEqual(['loadResource', 'loadResource', 'register:true', 'linkMatching', 'importQueries']);
+    expect(s.deps.loadResource).toHaveBeenCalledWith(expect.anything(), 'test-pack@1.0.0');
     const row = s.installs.rows.get('test-pack');
     expect(row).toMatchObject({ kind: 'content-pack', status: 'installed', targetFormId: null, payloadSha256: bundle.payloadSha256 });
     expect(events(s.audit).map((e) => e.action)).toEqual([

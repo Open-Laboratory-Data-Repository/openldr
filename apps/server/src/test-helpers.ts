@@ -26,11 +26,11 @@ function buildFakeAdmin(): FakeAdmin {
   const publishers: PubRow[] = [
     { id: 'pub-loinc', name: 'LOINC', role: 'standard', icon: null, seeded: true, sortOrder: 1 },
   ];
-  const systems: Array<{ id: string; systemCode: string; systemName: string; url: string | null; systemVersion: string | null; description: string | null; active: boolean; publisherId: string | null; seeded: boolean }> = [
-    { id: 'sys1', systemCode: 'X', systemName: 'Test System', url: 'http://x', systemVersion: null, description: null, active: true, publisherId: null, seeded: false },
+  const systems: Array<{ id: string; systemCode: string; systemName: string; url: string | null; systemVersion: string | null; description: string | null; active: boolean; publisherId: string | null; seeded: boolean; source: 'core' | 'ingest' | 'import' | 'pack' | 'register' | 'user'; sourceRef: string | null }> = [
+    { id: 'sys1', systemCode: 'X', systemName: 'Test System', url: 'http://x', systemVersion: null, description: null, active: true, publisherId: null, seeded: false, source: 'user', sourceRef: null },
     // A facility register with facilities filed under it. `seeded: false`, exactly as the real
     // register writers mint one, so nothing but the facility count can refuse its delete.
-    { id: 'cs-freg-hfr', systemCode: 'HFR', systemName: 'Health Facility Registry', url: FACILITY_REGISTER_URL, systemVersion: null, description: null, active: true, publisherId: null, seeded: false },
+    { id: 'cs-freg-hfr', systemCode: 'HFR', systemName: 'Health Facility Registry', url: FACILITY_REGISTER_URL, systemVersion: null, description: null, active: true, publisherId: null, seeded: false, source: 'register', sourceRef: null },
   ];
   /** How many facilities are filed under each register url. The real store counts
    *  `facility_registry` rows; this fake holds the count directly so a route test can drive both
@@ -82,7 +82,7 @@ function buildFakeAdmin(): FakeAdmin {
     codingSystems: {
       async list(publisherId) { return publisherId ? systems.filter((s) => s.publisherId === publisherId) : [...systems]; },
       async create(input) {
-        const s = { id: `cs-test-${++sysSeq}`, systemCode: input.systemCode, systemName: input.systemName, url: input.url ?? null, systemVersion: input.systemVersion ?? null, description: input.description ?? null, active: input.active, publisherId: input.publisherId ?? null, seeded: false };
+        const s = { id: `cs-test-${++sysSeq}`, systemCode: input.systemCode, systemName: input.systemName, url: input.url ?? null, systemVersion: input.systemVersion ?? null, description: input.description ?? null, active: input.active, publisherId: input.publisherId ?? null, seeded: false, source: 'user' as const, sourceRef: null };
         systems.push(s);
         return s;
       },

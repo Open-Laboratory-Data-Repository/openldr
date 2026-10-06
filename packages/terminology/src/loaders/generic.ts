@@ -1,6 +1,6 @@
 import { validateResource } from '@openldr/fhir';
 import { OpenLdrError } from '@openldr/core';
-import type { ConceptRecord, MapElement } from '@openldr/db';
+import type { ConceptRecord, MapElement, CodingSystemOrigin } from '@openldr/db';
 
 export interface SavedRef { resourceType: string; id: string }
 
@@ -8,7 +8,7 @@ export interface LoaderStore {
   upsertConcepts(rows: ConceptRecord[]): Promise<void>;
   upsertMapElements(rows: MapElement[]): Promise<void>;
   saveResource(resource: unknown): Promise<SavedRef>;
-  saveSystem(url: string, version: string | null, kind: string, resourceId: string): Promise<void>;
+  saveSystem(url: string, version: string | null, kind: string, resourceId: string, meta?: SystemMeta): Promise<void>;
   /** Sync S3: signal that a code system's concepts finished importing. Loaders live outside @openldr/db
    *  and hold only a LoaderStore (no db handle), so they cannot call markTerminologyChanged directly;
    *  the bootstrap-built store wires this to markTerminologyChanged(db, systemUrl). Call ONCE per system
@@ -16,11 +16,25 @@ export interface LoaderStore {
   markSystemChanged(systemUrl: string): Promise<void>;
 }
 
+/** What the resource says about itself, and where the import came from. */
+export interface SystemMeta {
+  name?: string;
+  description?: string;
+  origin?: CodingSystemOrigin;
+  originRef?: string;
+}
+
+/** Who is importing: CE's own seed, an admin, or a content pack. */
+export interface ImportOrigin { origin: CodingSystemOrigin; originRef?: string }
+
 export interface LoadResult { system: string; conceptsLoaded: number; resourceUrl: string }
 
 type TerminologyResource = {
   resourceType: string;
   url?: string;
+  name?: string;
+  title?: string;
+  description?: string;
   concept?: { code: string; display?: string }[];
   group?: { source?: string; target?: string; element: { code: string; target?: { code: string; equivalence?: string }[] }[] }[];
 };
@@ -34,10 +48,18 @@ export function checkTerminologyResource(json: unknown): TerminologyResource & {
   return res as TerminologyResource & { url: string };
 }
 
-export async function importTerminologyResource(json: unknown, store: LoaderStore): Promise<LoadResult> {
+export async function importTerminologyResource(json: unknown, store: LoaderStore, from?: ImportOrigin): Promise<LoadResult> {
   const res = checkTerminologyResource(json);
   const ref = await store.saveResource(res);
-  await store.saveSystem(res.url, null, res.resourceType, ref.id);
+  const meta: SystemMeta = {};
+  const name = res.title ?? res.name;
+  if (name) meta.name = name;
+  if (res.description) meta.description = res.description;
+  if (from) {
+    meta.origin = from.origin;
+    if (from.originRef) meta.originRef = from.originRef;
+  }
+  await store.saveSystem(res.url, null, res.resourceType, ref.id, meta);
   let conceptsLoaded = 0;
   if (res.resourceType === 'CodeSystem' && res.concept) {
     const rows: ConceptRecord[] = res.concept.map((c) => ({

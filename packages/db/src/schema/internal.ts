@@ -424,6 +424,10 @@ export interface CodingSystemsTable {
   kind: string | null;
   jurisdiction: string | null;
   contact: string | null;
+  /** Where the row came from: core, ingest, import or pack (migration 109). Null on older rows. */
+  origin: string | null;
+  /** The pack id when origin is 'pack'. */
+  origin_ref: string | null;
 }
 
 export interface TermMappingsTable {

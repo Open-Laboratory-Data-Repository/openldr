@@ -10,6 +10,7 @@ import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
+import { codeSystemProjection } from './code-system-projection';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
@@ -93,7 +94,7 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type ImportOrigin, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 import { recordAuditEvent, type AuditDetails } from './record-audit';
@@ -495,7 +496,7 @@ export interface AppContext {
       amr(sqlitePath: string): Promise<LoadResult[]>;
       organisms(json: unknown): Promise<OrganismImportResult>;
       parameters(json: unknown): Promise<ResultParamImportResult>;
-      resource(json: unknown): Promise<LoadResult>;
+      resource(json: unknown, from?: ImportOrigin): Promise<LoadResult>;
     };
     ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
   };
@@ -923,17 +924,11 @@ const reporting: ReportingApi = {
     // Sync S3: loaders call this once at import completion; wire it to the bulk change signal.
     markSystemChanged: (url) => markTerminologyChanged(termDb, url),
     saveResource: (res) => termFhirStore.save(res as never),
-    saveSystem: async (url, version, kind, id) => {
+    saveSystem: async (url, version, kind, id, meta) => {
       await termStore.saveSystem(url, version, kind, id);
       if (kind === 'CodeSystem') {
         try {
-          await termAdmin.codingSystems.upsertByUrl({
-            url,
-            systemCode: deriveSystemCode(url),
-            systemName: deriveSystemCode(url),
-            systemVersion: version,
-            publisherId: resolveSeedPublisherId(url),
-          });
+          await termAdmin.codingSystems.upsertByUrl(codeSystemProjection(url, version, meta));
         } catch (e) {
           console.warn('[terminology] coding_systems projection failed:', redact(e instanceof Error ? e.message : String(e)));
         }
@@ -953,7 +948,8 @@ const reporting: ReportingApi = {
     loaders: {
       loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
       amr: (p) => loadWhonetAmr(p, loaderStore),
-      resource: (json) => importTerminologyResource(json, loaderStore),
+      // An admin import unless the caller says otherwise (CE's seed passes 'core', a pack 'pack').
+      resource: (json, from) => importTerminologyResource(json, loaderStore, from ?? { origin: 'import' }),
       organisms: (json) => importOrganismDictionary(json, loaderStore),
       // Task 4 (S2b): the intensional result-role ValueSets (Task 3's migration 069) are seeded with
       // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them
@@ -1080,7 +1076,7 @@ const reporting: ReportingApi = {
     audit,
     logger,
     // Reuse the id registered for the URL, so a reinstall replaces the resource and its codes.
-    loadResource: async (json) => terminology.loaders.resource(await withRegisteredResourceId(termDb, json)),
+    loadResource: async (json, packId) => terminology.loaders.resource(await withRegisteredResourceId(termDb, json), { origin: 'pack', originRef: packId }),
     checkResource: (json) => { checkTerminologyResource(json); },
     checkQueries: checkCustomQueryFile,
     importQueries: async (file) => {
