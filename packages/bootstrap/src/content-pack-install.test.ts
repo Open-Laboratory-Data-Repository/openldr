@@ -99,7 +99,7 @@ describe('createContentPackInstaller', () => {
     const row = s.installs.rows.get('test-pack');
     expect(row).toMatchObject({ kind: 'content-pack', status: 'installed', targetFormId: null, payloadSha256: bundle.payloadSha256 });
     expect(s.audit.record).toHaveBeenCalledOnce();
-    expect((s.audit.record.mock.calls[0] as any)[0]).toMatchObject({ action: 'marketplace.install', metadata: { type: 'content-pack' } });
+    expect((s.audit.record.mock.calls[0] as any)[0]).toMatchObject({ action: 'marketplace.install', metadata: { type: 'content-pack', steps: 5 } });
     expect(s.trust.store.pin).toHaveBeenCalledOnce();
     await cleanup();
   });
@@ -179,6 +179,7 @@ describe('createContentPackInstaller', () => {
     expect(s.calls.filter((c) => WRITES.includes(c))).toEqual(['loadResource', 'loadResource', 'register:true', 'linkMatching']);
     expect(s.installs.rows.get('test-pack')).toMatchObject({ status: 'failed', failedStep: 4, error: 'boom' });
     expect(s.audit.record).toHaveBeenCalledOnce();
+    expect((s.audit.record.mock.calls[0] as any)[0].metadata).toMatchObject({ type: 'content-pack', status: 'failed', steps: 5, failedStep: 4, error: 'boom' });
 
     linkMatching.mockImplementation(async () => { s.calls.push('linkMatching'); return { ok: true as const }; });
     const again = await s.installer.install(bundle, { actor });

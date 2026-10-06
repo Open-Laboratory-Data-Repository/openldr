@@ -157,7 +157,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     await audit.record({
       actorType: 'user', actorId: actor.id, actorName: actor.name,
       action: 'marketplace.install', entityType: 'marketplace.artifact', entityId: `${artifactId}@${version}`,
-      metadata: { type: 'content-pack', status, ...(failedStep !== undefined ? { failedStep, error } : {}) },
+      metadata: { type: 'content-pack', status, steps: pack.steps.length, ...(failedStep !== undefined ? { failedStep, error } : {}) },
     });
 
     return status === 'installed'

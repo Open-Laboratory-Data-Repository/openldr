@@ -1089,7 +1089,13 @@ const reporting: ReportingApi = {
         { internalDb: internal.db, externalDb, admin: termAdmin }, { registerUrl, apply: true });
       if (!out.ok) return { ok: false, error: out.error };
       if (out.result.applied && out.result.counts.linked > 0) {
-        await facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'content-pack' });
+        // The mappings are saved. A lost enqueue must not fail the step: a re-run would find every pair
+        // linked and enqueue nothing. Logged, because a lost enqueue leaves the report dimension stale.
+        try {
+          await facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'content-pack' });
+        } catch (err) {
+          logger.error({ err, registerUrl }, 'failed to enqueue a facility-map-rebuild job after a content pack linked facility codes');
+        }
       }
       return { ok: true };
     },
