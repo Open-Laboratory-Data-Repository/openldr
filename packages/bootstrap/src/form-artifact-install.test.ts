@@ -82,4 +82,11 @@ describe('createFormArtifactInstaller', () => {
     await expect(installer.install(bundle, { actor: { id: 'x', name: 'x' }, approval: { approvedBy: 'x', acknowledgedCapabilities: [] } })).rejects.toThrow();
     await cleanup();
   });
+
+  it('list() skips rows that are not form templates', async () => {
+    const forms = fakeForms(); const installs = fakeInstallStore();
+    installs.rows.set('pack-a', { artifactId: 'pack-a', version: '1.0.0', kind: 'content-pack', targetFormId: null, payloadSha256: 'a'.repeat(64) });
+    const installer = createFormArtifactInstaller({ forms: forms.store as never, installStore: installs.store as never, audit: { record: vi.fn() } as never });
+    expect(await installer.list()).toEqual([]);
+  });
 });
