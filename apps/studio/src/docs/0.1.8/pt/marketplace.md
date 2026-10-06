@@ -39,6 +39,31 @@ Em **Registos**, abra o menu e escolha **Adicionar registo**. Preencha o nome, o
 
 ![Lista e formulário dos registos](marketplace-registries.png)
 
+## Pacotes de conteúdo
+
+Um pacote de conteúdo é um conjunto assinado de dados de referência. Instala, por esta ordem, sistemas de códigos, conjuntos de valores, um registo de unidades, a correspondência de ligações e consultas personalizadas. Um pacote não declara capacidades.
+
+Em **Explorar**, filtre por **Pacote de conteúdo**. Os detalhes de um pacote listam os seus passos com as contagens. A confirmação da instalação mostra a mesma lista. É necessária a permissão para gerir o Marketplace, como nos plugins.
+
+A instalação verifica primeiro cada passo. Verifica a assinatura e a chave do editor, o hash do ficheiro e a lista de passos. Verifica também que cada consulta é só de leitura (SELECT), que o ficheiro do registo é pré-visualizado sem erros e que o registo não está desativado. Se uma verificação falhar, nada é escrito.
+
+A primeira instalação de um editor fixa a sua chave. Um pacote posterior assinado com outra chave é recusado.
+
+Depois, a instalação aplica os passos por ordem. Se um passo falhar, os passos anteriores ficam escritos. O pacote mostra **Falha no passo N** com o erro no cartão e nos detalhes. Escolha **Instalar novamente** no menu `⋯` para o concluir.
+
+Instalar duas vezes é seguro:
+
+- Os sistemas de códigos e os conjuntos de valores são substituídos pelo URL.
+- A origem do registo é reutilizada e as suas linhas são atualizadas pelo código.
+- A correspondência de ligações corre outra vez.
+- As consultas são substituídas pelo nome. Uma consulta editada por um administrador é substituída quando o pacote é instalado de novo.
+
+As linhas que faltam no registo de um pacote mais recente são assinaladas. Nunca são retiradas.
+
+Escolha **Desanexar** para esquecer o registo de instalação. Tudo o que o pacote escreveu fica. Não existe desinstalação.
+
+Na linha de comandos, `openldr market install <bundle-dir> --dry-run` executa as verificações e mostra os passos. Não escreve nada.
+
 ## Resolver problemas
 
 - Se a instalação falhar, verifique a compatibilidade, as permissões e a disponibilidade do registo.

@@ -433,3 +433,32 @@ Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "ne
 ```sh
 openldr test-catalog export --out catalog.csv
 ```
+
+## Install a content pack
+
+### English
+
+```sh
+openldr market install <bundle-dir> --dry-run
+openldr market install <bundle-dir>
+```
+
+`--dry-run` runs the checks and prints the steps. It writes nothing. Installing a pack that is already installed needs `--force`. `openldr market update` takes the same flags, and `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
+
+### Français
+
+```sh
+openldr market install <bundle-dir> --dry-run
+openldr market install <bundle-dir>
+```
+
+`--dry-run` exécute les contrôles et affiche les étapes. Elle n'écrit rien. Installer un pack déjà installé exige `--force`. `openldr market update` accepte les mêmes options, et `--json` donne une sortie lisible par machine. `openldr market list` affiche les packs avec leur statut. La CLI enregistre l'acteur `cli`.
+
+### Português
+
+```sh
+openldr market install <bundle-dir> --dry-run
+openldr market install <bundle-dir>
+```
+
+`--dry-run` executa as verificações e mostra os passos. Não escreve nada. Instalar um pacote já instalado exige `--force`. `openldr market update` aceita as mesmas opções, e `--json` produz saída legível por máquina. `openldr market list` mostra os pacotes com o seu estado. A CLI regista o ator como `cli`.
