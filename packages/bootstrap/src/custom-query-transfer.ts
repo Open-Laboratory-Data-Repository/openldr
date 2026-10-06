@@ -67,11 +67,10 @@ function parseFile(file: unknown): z.infer<typeof FileSchema> {
   return parsed.data;
 }
 
-export async function importCustomQueries(
-  deps: TransferDeps,
-  file: unknown,
-  opts: { connectorName?: string; replace: boolean },
-): Promise<ImportResult> {
+function validateFile(file: unknown): {
+  parsed: z.infer<typeof FileSchema>;
+  checked: { name: string; sql: string; params: CustomQueryParam[] }[];
+} {
   const parsed = parseFile(file);
 
   // Validate every query before any write.
@@ -93,6 +92,20 @@ export async function importCustomQueries(
       throw new CustomQueryTransferError(`query "${query.name}": ${e instanceof Error ? e.message : String(e)}`);
     }
   }
+  return { parsed, checked };
+}
+
+/** The checks `importCustomQueries` runs before it writes anything. Throws `CustomQueryTransferError`. */
+export function checkCustomQueryFile(file: unknown): void {
+  validateFile(file);
+}
+
+export async function importCustomQueries(
+  deps: TransferDeps,
+  file: unknown,
+  opts: { connectorName?: string; replace: boolean },
+): Promise<ImportResult> {
+  const { parsed, checked } = validateFile(file);
 
   // Look up which names exist, then resolve the connector only if something will be created.
   const existing = new Map<string, { id: string }>();

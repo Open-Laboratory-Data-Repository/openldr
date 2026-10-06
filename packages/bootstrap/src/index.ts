@@ -1915,3 +1915,4 @@ export type { DirectoryPage, DirectorySummary } from './user-directory';
 export { createWebhookReceiptService } from './workflow-receipts';
 export type { WorkflowReceipt, WorkflowReceiptService } from '@openldr/workflows';
 export * from './custom-query-transfer';
+export * from './facility-register-file';
