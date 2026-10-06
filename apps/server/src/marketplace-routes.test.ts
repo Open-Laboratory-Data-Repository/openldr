@@ -15,6 +15,7 @@ import { registerPluginUiRoutes } from './plugin-ui-routes';
 // ── A temp registry dir with one signed plugin bundle (built via packBundle). ──
 let registryDir: string;
 let formRegistryDir: string;
+let packRegistryDir: string;
 /** Registry dir containing a ui-bearing plugin bundle (ui.html included, signed). */
 let uiRegistryDir: string;
 beforeAll(async () => {
@@ -35,6 +36,15 @@ beforeAll(async () => {
     const formManifest = { schemaVersion: 1, type: 'form-template', id: 'demo-form', version: '1.0.0', publisher: { id: 'acme', name: 'Acme', keyFingerprint: '0'.repeat(64) }, compatibility: { ceVersion: '*' }, capabilities: [], payload: { kind: 'form-template', questionnaireSha256: '0'.repeat(64) } };
     const q = { resourceType: 'Questionnaire', status: 'active', title: 'Demo', item: [] };
     await packBundle({ manifest: formManifest, payload: new TextEncoder().encode(JSON.stringify(q)), outDir: join(formRegistryDir, 'demo-form-1'), privateKeyDer: fkp.privateKeyDer, publicKeyDer: fkp.publicKeyDer });
+  }
+
+  packRegistryDir = await mkdtemp(join(tmpdir(), 'mkt-pack-registry-'));
+  {
+    const pkp = generatePublisherKeypair();
+    const packBytes = new TextEncoder().encode(JSON.stringify({ steps: [] }));
+    const packSha = createHash('sha256').update(packBytes).digest('hex');
+    const packManifest = { schemaVersion: 1, type: 'content-pack', id: 'demo-pack', version: '1.0.0', publisher: { id: 'acme', name: 'Acme', keyFingerprint: '0'.repeat(64) }, compatibility: { ceVersion: '*' }, capabilities: [], payload: { kind: 'content-pack', packSha256: packSha, steps: [{ kind: 'query', label: 'Queries', count: 2 }] } };
+    await packBundle({ manifest: packManifest, payload: packBytes, outDir: join(packRegistryDir, 'demo-pack-1'), privateKeyDer: pkp.privateKeyDer, publicKeyDer: pkp.publicKeyDer });
   }
 
   // Build a ui-bearing bundle manually (packBundle doesn't handle payload.ui).
@@ -66,6 +76,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await rm(registryDir, { recursive: true, force: true });
   await rm(formRegistryDir, { recursive: true, force: true });
+  await rm(packRegistryDir, { recursive: true, force: true });
   await rm(uiRegistryDir, { recursive: true, force: true });
 });
 
@@ -84,12 +95,13 @@ function fakePlugins() {
   };
 }
 
-function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unknown, marketplaceForms?: unknown, audited?: unknown[]): AppContext {
+function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unknown, marketplaceForms?: unknown, audited?: unknown[], marketplacePacks?: unknown): AppContext {
   return {
     cfg, plugins, internalDb, logger: { error() {}, warn() {}, info() {}, debug() {} },
     audit: { record: async (e: unknown) => { audited?.push(e); } },
     numberSettings: { get: async () => 67_108_864, all: async () => [], set: async () => 0, invalidate: () => {} },
     marketplaceForms: marketplaceForms ?? { install: async () => ({ id: 'x', version: '1', targetFormId: 'form-1' }), detach: async () => {}, list: async () => [] },
+    marketplacePacks: marketplacePacks ?? { check: async () => ({ steps: [] }), install: async () => ({ id: 'x', version: '1', status: 'installed' }), detach: async () => {}, list: async () => [] },
   } as unknown as AppContext;
 }
 
@@ -100,9 +112,9 @@ type SeedRegistry = { id: string; name: string; kind: 'local' | 'http'; location
 async function appWith(
   cfg: Record<string, unknown>,
   plugins: unknown,
-  opts: { roles?: string[]; capabilities?: string[]; fetchImpl?: typeof fetch; marketplaceForms?: unknown; seed?: SeedRegistry[] } = {},
+  opts: { roles?: string[]; capabilities?: string[]; fetchImpl?: typeof fetch; marketplaceForms?: unknown; marketplacePacks?: unknown; seed?: SeedRegistry[] } = {},
 ) {
-  const { roles = ['lab_admin'], capabilities = ['marketplace.view', 'marketplace.manage'], fetchImpl, marketplaceForms, seed = [] } = opts;
+  const { roles = ['lab_admin'], capabilities = ['marketplace.view', 'marketplace.manage'], fetchImpl, marketplaceForms, marketplacePacks, seed = [] } = opts;
   const db = await makeMigratedDb();
   const store = createRegistryStore(db);
   for (const r of seed) await store.create(r);
@@ -111,13 +123,14 @@ async function appWith(
     req.user = { id: 'admin', username: 'admin', displayName: null, roles, capabilities } as never;
   });
   const audited: Array<{ action: string; entityType: string; entityId: string; metadata?: Record<string, unknown> }> = [];
-  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, db, marketplaceForms, audited), fetchImpl);
+  registerMarketplaceRoutes(app, fakeCtx(plugins, cfg, db, marketplaceForms, audited, marketplacePacks), fetchImpl);
   return { app, db, store, audited };
 }
 
 // The single-bundle local registry every "happy path" test uses.
 const REG: SeedRegistry = { id: 'reg-local', name: 'Local Bundles', kind: 'local', location: '' };
 function localReg(): SeedRegistry { return { ...REG, location: registryDir }; }
+function packReg(): SeedRegistry { return { id: 'reg-packs', name: 'Pack Bundles', kind: 'local', location: packRegistryDir }; }
 function formReg(): SeedRegistry { return { id: 'reg-forms', name: 'Form Bundles', kind: 'local', location: formRegistryDir }; }
 
 describe('marketplace routes', () => {
@@ -366,6 +379,70 @@ describe('marketplace routes', () => {
     const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo-form/detach' });
     expect(res.statusCode).toBe(200);
     expect(calls).toEqual(['demo-form']);
+  });
+
+  it('install dispatches a content-pack bundle to ctx.marketplacePacks', async () => {
+    const { runtime } = fakePlugins();
+    const installed: Array<{ b: any; o: unknown }> = [];
+    const marketplacePacks = { check: async () => ({ steps: [] }), install: async (b: any, o: unknown) => { installed.push({ b, o }); return { id: 'demo-pack', version: '1.0.0', status: 'installed' }; }, detach: async () => {}, list: async () => [] };
+    const { app } = await appWith({}, runtime, { marketplacePacks, seed: [packReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-packs::demo-pack-1' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    expect(installed).toHaveLength(1);
+    expect(installed[0].b.manifest.type).toBe('content-pack');
+    expect(installed[0].o).toMatchObject({ actor: { id: 'admin' }, sourceRef: 'demo-pack-1' });
+  });
+
+  it('a failed pack install returns 200 with status failed', async () => {
+    const { runtime } = fakePlugins();
+    const marketplacePacks = { check: async () => ({ steps: [] }), install: async () => ({ id: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 1, error: 'boom' }), detach: async () => {}, list: async () => [] };
+    const { app } = await appWith({}, runtime, { marketplacePacks, seed: [packReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-packs::demo-pack-1' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ id: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 1, error: 'boom' });
+  });
+
+  it('a pack install refusal (thrown) keeps the 400 behaviour', async () => {
+    const { runtime } = fakePlugins();
+    const marketplacePacks = { check: async () => ({ steps: [] }), install: async () => { throw new Error('not trusted'); }, detach: async () => {}, list: async () => [] };
+    const { app } = await appWith({}, runtime, { marketplacePacks, seed: [packReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/install', payload: { ref: 'reg-packs::demo-pack-1' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'not trusted' });
+  });
+
+  it('installed list carries a pack row with status', async () => {
+    const { runtime } = fakePlugins();
+    const marketplacePacks = { check: async () => ({ steps: [] }), install: async () => ({}), detach: async () => {}, list: async () => [{ artifactId: 'demo-pack', version: '1.0.0', kind: 'content-pack', targetFormId: null, publisherName: 'Acme', installedBy: 'admin', status: 'failed', failedStep: 2, error: 'boom' }] };
+    const { app } = await appWith({}, runtime, { marketplacePacks, seed: [localReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/installed' });
+    expect(res.json().find((a: any) => a.id === 'demo-pack')).toEqual({
+      id: 'demo-pack', version: '1.0.0', active: true, enabled: true, approvedBy: 'admin', type: 'content-pack',
+      publisher: { name: 'Acme' }, description: null, license: null, payload: null, capabilities: [], legacy: false,
+      status: 'failed', failedStep: 2, error: 'boom',
+    });
+  });
+
+  it('detach of a pack id calls ctx.marketplacePacks.detach, not the form installer', async () => {
+    const { runtime } = fakePlugins();
+    const packCalls: unknown[] = [];
+    const formCalls: string[] = [];
+    const marketplaceForms = { install: async () => ({}), detach: async (id: string) => { formCalls.push(id); }, list: async () => [] };
+    const marketplacePacks = { check: async () => ({ steps: [] }), install: async () => ({}), detach: async (id: string, o: unknown) => { packCalls.push({ id, o }); }, list: async () => [{ artifactId: 'demo-pack', version: '1.0.0', kind: 'content-pack', publisherName: null, installedBy: null, status: 'installed', failedStep: null, error: null }] };
+    const { app } = await appWith({}, runtime, { marketplaceForms, marketplacePacks, seed: [localReg()] });
+    const res = await app.inject({ method: 'POST', url: '/api/marketplace/demo-pack/detach' });
+    expect(res.statusCode).toBe(200);
+    expect(packCalls).toEqual([{ id: 'demo-pack', o: { actor: { id: 'admin', name: 'admin' } } }]);
+    expect(formCalls).toEqual([]);
+  });
+
+  it('available detail of a pack returns payload.steps', async () => {
+    const { runtime } = fakePlugins();
+    const { app } = await appWith({}, runtime, { seed: [packReg()] });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/' + encodeURIComponent('reg-packs::demo-pack-1') });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().payload.steps).toEqual([{ kind: 'query', label: 'Queries', count: 2 }]);
   });
 
   // ── Registries CRUD ──
