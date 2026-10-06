@@ -29,4 +29,22 @@ describe('PackageCard', () => {
     render(<PackageCard entry={base} onClick={() => {}} />);
     expect(screen.getByText(/Install/i)).toBeTruthy();
   });
+
+  it('shows a failed pack step and error, or Installed for a healthy pack', () => {
+    const pack: CardEntry = { ...base, ref: undefined, type: 'content-pack', installed: true, active: true };
+    const { rerender } = render(<PackageCard entry={{ ...pack, status: 'failed', failedStep: 2, error: 'boom' }} onClick={() => {}} />);
+    expect(screen.getByTestId('card-pack-status').textContent).toBe('Failed at step 2: boom');
+    rerender(<PackageCard entry={{ ...pack, status: 'failed', failedStep: null, error: 'boom' }} onClick={() => {}} />);
+    expect(screen.getByTestId('card-pack-status').textContent).toBe('Failed: boom');
+    rerender(<PackageCard entry={{ ...pack, status: 'installed' }} onClick={() => {}} />);
+    expect(screen.getByTestId('card-pack-status').textContent).toBe('Installed');
+  });
+
+  it('shows no Active badge on a failed pack, and keeps it on a healthy one', () => {
+    const pack: CardEntry = { ...base, ref: undefined, type: 'content-pack', installed: true, active: true };
+    const { rerender } = render(<PackageCard entry={{ ...pack, status: 'failed', failedStep: 2, error: 'boom' }} onClick={() => {}} />);
+    expect(screen.queryByText('Active')).toBeNull();
+    rerender(<PackageCard entry={{ ...pack, status: 'installed' }} onClick={() => {}} />);
+    expect(screen.getByText('Active')).toBeTruthy();
+  });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { CustomQuery, CustomQueryStore } from '@openldr/db';
 import {
-  exportCustomQueries, importCustomQueries, CustomQueryTransferError, CUSTOM_QUERY_FILE_FORMAT,
+  exportCustomQueries, importCustomQueries, checkCustomQueryFile, CustomQueryTransferError, CUSTOM_QUERY_FILE_FORMAT,
   type TransferDeps,
 } from './custom-query-transfer';
 import { DEFAULT_CONNECTOR_NAME } from './seed';
@@ -149,5 +149,17 @@ describe('importCustomQueries', () => {
     const again = await exportCustomQueries(deps(dst));
     expect(again.queries).toEqual(exported.queries);
     expect(again.queries.map((x) => x.name)).toEqual(['a', 'b']);
+  });
+});
+
+describe('checkCustomQueryFile', () => {
+  it('throws for a query that is not a SELECT', () => {
+    expect(() => checkCustomQueryFile(file([q('bad', 'delete from patients')]))).toThrow(/^query "bad": /);
+  });
+  it('throws for a duplicate name', () => {
+    expect(() => checkCustomQueryFile(file([q('a'), q('a')]))).toThrow(CustomQueryTransferError);
+  });
+  it('returns for a valid file', () => {
+    expect(() => checkCustomQueryFile(file([q('ok'), q('ok2')]))).not.toThrow();
   });
 });

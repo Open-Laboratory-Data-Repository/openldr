@@ -38,6 +38,12 @@ import { wipeInternalDatabase, clearAuditAndRunHistory } from './danger';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
+import { createTrustStore } from '@openldr/marketplace';
+import { createContentPackInstaller, type ContentPackInstaller, type PackQueryChange } from './content-pack-install';
+import { withRegisteredResourceId } from './content-pack-terminology';
+import { checkCustomQueryFile, importCustomQueries } from './custom-query-transfer';
+import { importFacilityRegisterCsv } from './facility-register-file';
+import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
@@ -87,7 +93,7 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 import { recordAuditEvent, type AuditDetails } from './record-audit';
@@ -476,6 +482,8 @@ export interface AppContext {
   /** Read-only starter packs for the form builder. Rewritten from source on every boot. */
   starterPacks: StarterPackStore;
   marketplaceForms: FormArtifactInstaller;
+  /** Content packs: signed bundles of terminology, a facility register, link-matching and custom queries. */
+  marketplacePacks: ContentPackInstaller;
   reporting: ReportingApi;
   health: HealthRegistry;
   terminology: {
@@ -1065,6 +1073,57 @@ const reporting: ReportingApi = {
   });
 
   const connectorStore = createConnectorStore(internal.db);
+  // Built here, not beside `marketplaceForms`: it needs the terminology loaders, `facilityJobs` and `connectorStore`.
+  const marketplacePacks = createContentPackInstaller({
+    installStore: marketplaceInstalls,
+    trustStore: createTrustStore(internal.db),
+    audit,
+    logger,
+    // Reuse the id registered for the URL, so a reinstall replaces the resource and its codes.
+    loadResource: async (json) => terminology.loaders.resource(await withRegisteredResourceId(termDb, json)),
+    checkResource: (json) => { checkTerminologyResource(json); },
+    checkQueries: checkCustomQueryFile,
+    importQueries: async (file) => {
+      const customQueries = createCustomQueryStore(internal.db);
+      // Read the rows first, so a replace can be audited with the SQL it overwrote.
+      const beforeByName = new Map((await customQueries.list()).map((q) => [q.name, q]));
+      const result = await importCustomQueries({ customQueries, connectors: connectorStore }, file, { replace: true });
+      const changes: PackQueryChange[] = [];
+      for (const r of result.results) {
+        if (r.outcome === 'skipped') continue;
+        changes.push({
+          id: r.id,
+          outcome: r.outcome === 'created' ? 'created' : 'replaced',
+          before: beforeByName.get(r.name) ?? null,
+          after: await customQueries.get(r.id),
+        });
+      }
+      return { changes };
+    },
+    register: (input) => importFacilityRegisterCsv(
+      { db: internal.db, capture: referenceCapture, admin: termAdmin, facilityJobs, audit, logger }, input),
+    previewLinkMatching: async (registerUrl) => {
+      const out = await linkMatchingFacilityCodes(
+        { internalDb: internal.db, externalDb, admin: termAdmin }, { registerUrl, apply: false });
+      if (!out.ok) return { ok: false, reason: out.reason, error: out.error };
+      return { ok: true, wouldLink: out.result.counts.linked };
+    },
+    linkMatching: async (registerUrl) => {
+      const out = await linkMatchingFacilityCodes(
+        { internalDb: internal.db, externalDb, admin: termAdmin }, { registerUrl, apply: true });
+      if (!out.ok) return { ok: false, error: out.error };
+      if (out.result.applied && out.result.counts.linked > 0) {
+        // The mappings are saved. A lost enqueue must not fail the step: a re-run would find every pair
+        // linked and enqueue nothing. Logged, because a lost enqueue leaves the report dimension stale.
+        try {
+          await facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'content-pack' });
+        } catch (err) {
+          logger.error({ err, registerUrl }, 'failed to enqueue a facility-map-rebuild job after a content pack linked facility codes');
+        }
+      }
+      return { ok: true, counts: out.result.counts };
+    },
+  });
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
@@ -1663,6 +1722,7 @@ const reporting: ReportingApi = {
     forms,
     starterPacks,
     marketplaceForms,
+    marketplacePacks,
     reporting,
     health,
     terminology,
@@ -1915,3 +1975,5 @@ export type { DirectoryPage, DirectorySummary } from './user-directory';
 export { createWebhookReceiptService } from './workflow-receipts';
 export type { WorkflowReceipt, WorkflowReceiptService } from '@openldr/workflows';
 export * from './custom-query-transfer';
+export * from './facility-register-file';
+export * from './content-pack-install';

@@ -13,7 +13,7 @@ import type { AvailableArtifact, InstalledArtifact } from '@/api';
 import { PackageCard } from './PackageCard';
 import { PackageDetail } from './PackageDetail';
 import { RegistriesTab } from './RegistriesTab';
-import { availableToEntry, installedToEntry, type CardEntry } from './util';
+import { availableToEntry, installedToEntry, withBrowseRef, type CardEntry } from './util';
 
 interface MarketplaceTabsProps {
   configured: boolean;
@@ -99,6 +99,7 @@ function FilterBar({ filter, setFilter, typeFilter, setTypeFilter }: {
           <SelectItem value="plugin">Plugin</SelectItem>
           <SelectItem value="form-template">Form template</SelectItem>
           <SelectItem value="report-template">Report</SelectItem>
+          <SelectItem value="content-pack">{t('settings.marketplace.typeContentPack')}</SelectItem>
         </SelectContent>
       </Select>
     </div>
@@ -133,7 +134,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       const typeMatch = typeFilter === 'all' || a.type === typeFilter;
       return textMatch && typeMatch;
     })
-    .map(installedToEntry), [props.installed, filter, typeFilter]);
+    .map((a) => withBrowseRef(installedToEntry(a), props.available)), [props.installed, props.available, filter, typeFilter]);
 
   if (selected) {
     return (

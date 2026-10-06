@@ -35,3 +35,11 @@ No Studio, abra Definições, Marketplace e os detalhes de um pacote.
 - **Nenhuma permissão especial solicitada** indica que os detalhes carregados confirmam uma lista vazia. Os pacotes instalados sem referência ao registo usam as permissões locais guardadas.
 
 Escolher outra versão repete a verificação. Confira as permissões dessa versão no pedido de aprovação antes de confirmar. Se os detalhes não carregarem, verifique a disponibilidade do registo e volte a abrir o pacote.
+
+## Content packs
+
+**English.** A content pack needs the same marketplace manage permission as a plugin. It declares no capabilities, so its install confirmation lists steps with counts instead of permissions. The first install from a publisher pins its key. A later pack signed with a different key is refused.
+
+**Français.** Un pack de contenu exige la même permission de gestion du Marketplace qu'une extension. Il ne déclare aucune capacité, donc sa confirmation d'installation liste des étapes avec leurs nombres, et non des permissions. La première installation d'un éditeur épingle sa clé. Un pack ultérieur signé avec une autre clé est refusé.
+
+**Português.** Um pacote de conteúdo exige a mesma permissão de gestão do Marketplace que um plugin. Não declara capacidades, por isso a confirmação da instalação lista passos com contagens, e não permissões. A primeira instalação de um editor fixa a sua chave. Um pacote posterior assinado com outra chave é recusado.

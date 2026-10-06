@@ -230,3 +230,15 @@ describe('artifact manifest workflowNodes', () => {
     expect(payload.workflowNodes![0].id).toBe('aggregate-push');
   });
 });
+
+describe('content-pack artifact manifest', () => {
+  const pack = { ...base, type: 'content-pack', payload: { kind: 'content-pack', packSha256: 'e'.repeat(64), steps: [{ kind: 'code-system', label: 'Colours', count: 1 }] } };
+  it('parses a content-pack manifest', () => {
+    const m = parseArtifactManifest(pack);
+    expect(m.type).toBe('content-pack');
+    expect(m.payload.kind).toBe('content-pack');
+  });
+  it('rejects a packSha256 that is not 64 hex', () => {
+    expect(() => parseArtifactManifest({ ...pack, payload: { ...pack.payload, packSha256: 'abc' } })).toThrow();
+  });
+});

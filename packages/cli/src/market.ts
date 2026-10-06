@@ -1,6 +1,7 @@
-import { createIngestContext } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, type AppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
-import { readBundle, verifyBundle } from '@openldr/marketplace';
+import { createInternalDb, createMarketplaceInstallStore } from '@openldr/db';
+import { readBundle, verifyBundle, type Bundle } from '@openldr/marketplace';
 import { redactError } from './redact-error';
 
 interface JsonOpt {
@@ -49,18 +50,33 @@ export async function runMarketVerify(dir: string, opts: JsonOpt): Promise<numbe
 
 export async function runMarketInstall(
   dir: string,
-  opts: JsonOpt & { approve?: boolean; approvedBy?: string },
+  opts: JsonOpt & { approve?: boolean; approvedBy?: string; dryRun?: boolean; force?: boolean },
 ): Promise<number> {
+  let bundle: Bundle;
+  try {
+    bundle = await readBundle(dir);
+  } catch (err) {
+    process.stderr.write(`market install failed: ${redactError(err)}\n`);
+    return 1;
+  }
+  const approval =
+    opts.approve
+      ? {
+          approvedBy: opts.approvedBy ?? 'cli',
+          acknowledgedCapabilities: bundle.manifest.capabilities,
+        }
+      : undefined;
+
+  if (bundle.manifest.type === 'content-pack') return installPack(bundle, opts);
+  if (bundle.manifest.type === 'form-template') return installForm(bundle, approval, opts);
+
   const ctx = await createIngestContext(loadConfig());
   try {
-    const bundle = await readBundle(dir);
-    const approval =
-      opts.approve
-        ? {
-            approvedBy: opts.approvedBy ?? 'cli',
-            acknowledgedCapabilities: bundle.manifest.capabilities,
-          }
-        : undefined;
+    if (opts.dryRun) {
+      const { id, version } = bundle.manifest;
+      emit(opts.json, { id, version, dryRun: true }, `dry run: would install ${id}@${version}`);
+      return 0;
+    }
     const installed = await ctx.plugins.install(bundle.wasm, bundle.raw, {
       publicKeyDer: bundle.publicKeyDer,
       actor: cliActor,
@@ -81,37 +97,131 @@ export async function runMarketInstall(
   }
 }
 
+async function installForm(
+  bundle: Bundle,
+  approval: Parameters<AppContext['marketplaceForms']['install']>[1]['approval'],
+  opts: JsonOpt & { dryRun?: boolean },
+): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const { id, version } = bundle.manifest;
+    if (opts.dryRun) {
+      emit(opts.json, { id, version, dryRun: true }, `dry run: would install ${id}@${version}`);
+      return 0;
+    }
+    const installed = await ctx.marketplaceForms.install(bundle, {
+      actor: cliActor,
+      approval,
+    });
+    emit(opts.json, { id: installed.id, version: installed.version }, `installed ${installed.id}@${installed.version}`);
+    return 0;
+  } catch (err) {
+    process.stderr.write(`market install failed: ${redactError(err)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+async function installPack(
+  bundle: Bundle,
+  opts: JsonOpt & { dryRun?: boolean; force?: boolean },
+): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const { id, version } = bundle.manifest;
+    if (opts.dryRun) {
+      const { steps, linkPreview = [] } = await ctx.marketplacePacks.check(bundle);
+      emit(
+        opts.json,
+        { id, version, dryRun: true, steps, linkPreview },
+        [
+          `dry run: ${id}@${version} would run ${steps.length} step(s)`,
+          ...steps.map((s, i) => `  ${i + 1}. ${s.kind.padEnd(18)} ${s.label} (${s.count})`),
+          ...linkPreview.map((p) => (p.wouldLink === null
+            ? `would link codes to ${p.registerUrl} once this pack loads its register (not counted yet)`
+            : `would link ${p.wouldLink} code(s) to ${p.registerUrl}`)),
+        ].join('\n'),
+      );
+      return 0;
+    }
+    // A failed row is finished by installing again, so only an installed row needs --force.
+    const existing = (await ctx.marketplacePacks.list()).find((r) => r.artifactId === id);
+    if (existing && existing.status !== 'failed' && !opts.force) {
+      process.stderr.write(`market install failed: ${id} is already installed; use --force to install again\n`);
+      return 1;
+    }
+    const result = await ctx.marketplacePacks.install(bundle, { actor: { id: null, name: 'cli' } });
+    if (result.status === 'failed') {
+      if (opts.json) emit(true, result, '');
+      else process.stderr.write(`failed at step ${result.failedStep}: ${redactError(result.error)}\n`);
+      return 1;
+    }
+    emit(opts.json, result, `installed ${result.id}@${result.version}`);
+    return 0;
+  } catch (err) {
+    process.stderr.write(`market install failed: ${redactError(err)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // list
 // ---------------------------------------------------------------------------
 
 export async function runMarketList(opts: JsonOpt): Promise<number> {
-  const ctx = await createIngestContext(loadConfig());
+  const cfg = loadConfig();
+  // The ingest context does not expose its internal database, so pack rows come
+  // from a small second connection. The app context is not opened: it seeds data.
+  const ctx = await createIngestContext(cfg);
+  const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   try {
     const rows = await ctx.plugins.list();
+    const packs = (await createMarketplaceInstallStore(internal.db).list()).filter(
+      (r) => r.kind === 'content-pack',
+    );
+    const lines = [
+      ...rows.map(
+        (r) =>
+          `  ${r.id.padEnd(22)} ${r.version.padEnd(10)} ${r.status.padEnd(12)} enabled=${r.enabled} active=${r.active}`,
+      ),
+      ...packs.map(
+        (p) =>
+          `  ${p.artifactId.padEnd(22)} ${p.version.padEnd(10)} ${p.status.padEnd(12)} content-pack` +
+          (p.status === 'failed' ? ` failed at step ${p.failedStep}: ${p.error}` : ''),
+      ),
+    ];
     emit(
       opts.json,
-      rows.map((r) => ({
-        id: r.id,
-        version: r.version,
-        status: r.status,
-        sha256: r.sha256,
-        enabled: r.enabled,
-        active: r.active,
-        approvedBy: r.approvedBy,
-      })),
-      rows
-        .map(
-          (r) =>
-            `  ${r.id.padEnd(22)} ${r.version.padEnd(10)} ${r.status.padEnd(12)} enabled=${r.enabled} active=${r.active}`,
-        )
-        .join('\n') || '  (no plugins)',
+      [
+        ...rows.map((r) => ({
+          id: r.id,
+          version: r.version,
+          status: r.status,
+          sha256: r.sha256,
+          enabled: r.enabled,
+          active: r.active,
+          approvedBy: r.approvedBy,
+        })),
+        ...packs.map((p) => ({
+          type: 'content-pack',
+          id: p.artifactId,
+          version: p.version,
+          status: p.status,
+          failedStep: p.failedStep,
+          error: p.error,
+        })),
+      ],
+      lines.join('\n') || '  (nothing installed)',
     );
     return 0;
   } catch (err) {
     process.stderr.write(`market list failed: ${redactError(err)}\n`);
     return 1;
   } finally {
+    await internal.close();
     await ctx.close();
   }
 }

@@ -12,7 +12,8 @@ import {
   type AvailableArtifact, type InstalledArtifact,
 } from '@/api';
 import { MarketplaceTabs } from './marketplace/MarketplaceTabs';
-import { capabilityLine, type CardEntry } from './marketplace/util';
+import { capabilityLine, packFailureText, type CardEntry } from './marketplace/util';
+import { PayloadPreview } from './marketplace/PayloadPreview';
 
 export function Marketplace() {
   const { t } = useTranslation();
@@ -50,8 +51,13 @@ export function Marketplace() {
     if (!consent || !consent.entry.ref || busy) return;
     setBusy(true);
     try {
-      await installArtifact(consent.entry.ref, consent.capabilities);
-      toast.success(t('settings.marketplace.installedToast', { id: consent.entry.id }));
+      const result = await installArtifact(consent.entry.ref, consent.capabilities);
+      // A content pack answers 200 even when a step failed, so read `status` before celebrating.
+      if (result.status === 'failed') {
+        toast.error(packFailureText(t, result.failedStep, result.error));
+      } else {
+        toast.success(t('settings.marketplace.installedToast', { id: consent.entry.id }));
+      }
       setConsent(null);
       await load();
     } catch (e) {
@@ -137,6 +143,9 @@ export function Marketplace() {
           {consent ? (
             <div className="grid gap-3 text-sm">
               <div><span className="font-medium">{t('settings.marketplace.version')}:</span> {consent.entry.version}</div>
+              {consent.entry.type === 'content-pack' ? (
+                <PayloadPreview payload={consent.entry.payload ?? null} />
+              ) : (
               <div>
                 <div className="mb-1 font-medium">{t('settings.marketplace.requestedCapabilities')}</div>
                 {consent.capabilities.length === 0 ? (
@@ -147,6 +156,7 @@ export function Marketplace() {
                   </ul>
                 )}
               </div>
+              )}
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" onClick={() => setConsent(null)}>{t('settings.marketplace.cancel')}</Button>
                 <Button data-testid="approve-install" disabled={busy} onClick={() => void doInstall()}>

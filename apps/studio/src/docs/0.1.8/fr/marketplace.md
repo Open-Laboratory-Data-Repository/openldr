@@ -39,6 +39,31 @@ Dans **Registres**, ouvrez le menu et choisissez **Ajouter un registre**. Rensei
 
 ![Liste et formulaire des registres](marketplace-registries.png)
 
+## Packs de contenu
+
+Un pack de contenu est un lot signé de données de référence. Il installe, dans cet ordre, des systèmes de codes, des jeux de valeurs, un registre d'établissements, la mise en correspondance des liens et des requêtes personnalisées. Un paquet ne déclare aucune capacité.
+
+Dans **Parcourir**, filtrez sur **Pack de contenu**. Les détails d'un paquet listent ses étapes avec leurs nombres. La confirmation d'installation affiche la même liste. Il faut la permission de gérer le Marketplace, comme pour les extensions.
+
+L'installation vérifie d'abord chaque étape. Un pack sans signature d'éditeur est refusé. Elle contrôle la signature et la clé de l'éditeur, l'empreinte du fichier et la liste des étapes. Elle contrôle aussi que chaque requête est en lecture seule (SELECT), que le fichier du registre s'aperçoit sans erreur et que le registre n'est pas désactivé. Si un contrôle échoue, rien n'est écrit.
+
+La première installation d'un éditeur épingle sa clé. Un paquet ultérieur signé avec une autre clé est refusé.
+
+Ensuite, l'installation applique les étapes dans l'ordre. Si une étape échoue, les étapes précédentes restent écrites. Le paquet affiche **Échec à l'étape N** avec l'erreur sur sa carte et dans ses détails. Choisissez **Installer à nouveau** dans le menu `⋯` pour la terminer.
+
+Installer deux fois est sans risque :
+
+- Les systèmes de codes et les jeux de valeurs sont remplacés selon leur URL.
+- La source du registre est réutilisée et ses lignes sont mises à jour selon leur code.
+- La mise en correspondance des liens est relancée.
+- Les requêtes sont remplacées selon leur nom. Une requête modifiée par un administrateur est écrasée à la nouvelle installation du paquet.
+
+Les lignes absentes du registre d'un paquet plus récent sont signalées. Elles ne sont jamais retirées.
+
+Choisissez **Détacher** pour oublier l'enregistrement d'installation. Tout ce que le paquet a écrit est conservé. Il n'existe pas de désinstallation.
+
+Dans la ligne de commande, `openldr market install <bundle-dir> --dry-run` exécute les contrôles et affiche les étapes, avec le nombre de codes que chaque étape de mise en correspondance des liens lierait. Elle n'écrit rien.
+
 ## Dépannage
 
 - Si l'installation échoue, vérifiez la compatibilité, les permissions et la disponibilité du registre.

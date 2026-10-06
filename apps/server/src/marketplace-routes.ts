@@ -92,7 +92,15 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       description: null, license: null, payload: null,
       capabilities: [], legacy: false, drifted: r.drifted, targetFormId: r.targetFormId,
     }));
-    return [...pluginRows, ...formRows];
+    const packRows = (await ctx.marketplacePacks.list()).map((r) => ({
+      id: r.artifactId, version: r.version, active: true, enabled: true,
+      approvedBy: r.installedBy ?? null, type: 'content-pack',
+      publisher: r.publisherName ? { name: r.publisherName } : null,
+      description: null, license: null, payload: null,
+      capabilities: [], legacy: false,
+      status: r.status, failedStep: r.failedStep, error: r.error,
+    }));
+    return [...pluginRows, ...formRows, ...packRows];
   });
 
   app.get('/api/marketplace/available', VIEW, async () => {
@@ -197,6 +205,9 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
       const b = await (await sourceFor(reg)).getBundle(ref);
       const a = actor(req);
       const acknowledgedCapabilities = (body.acknowledgedCapabilities as Capability[] | undefined) ?? b.manifest.capabilities;
+      if (b.manifest.type === 'content-pack') {
+        return await ctx.marketplacePacks.install(b, { actor: a, sourceRef: ref });
+      }
       if (b.manifest.type === 'form-template') {
         const installed = await ctx.marketplaceForms.install(b, {
           actor: a, sourceRef: ref,
@@ -366,7 +377,10 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   });
 
   app.post('/api/marketplace/:id/detach', MANAGE, async (req) => {
-    await ctx.marketplaceForms.detach((req.params as { id: string }).id, { actor: actor(req) });
+    const id = (req.params as { id: string }).id;
+    const isPack = (await ctx.marketplacePacks.list()).some((r) => r.artifactId === id);
+    if (isPack) await ctx.marketplacePacks.detach(id, { actor: actor(req) });
+    else await ctx.marketplaceForms.detach(id, { actor: actor(req) });
     return { ok: true };
   });
 

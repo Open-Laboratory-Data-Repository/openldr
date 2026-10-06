@@ -21,11 +21,13 @@ const PAYLOAD_FILE: Record<string, string> = {
   plugin: 'plugin.wasm',
   'form-template': 'questionnaire.json',
   'report-template': 'report.json',
+  'content-pack': 'pack.json',
 };
 const SHA_FIELD: Record<string, string> = {
   plugin: 'wasmSha256',
   'form-template': 'questionnaireSha256',
   'report-template': 'templateSha256',
+  'content-pack': 'packSha256',
 };
 
 export async function packBundle(input: PackInput): Promise<PackResult> {

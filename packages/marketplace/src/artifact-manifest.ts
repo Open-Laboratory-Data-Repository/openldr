@@ -52,10 +52,15 @@ const pluginPayload = z.object({
 });
 const formPayload = z.object({ kind: z.literal('form-template'), questionnaireSha256: z.string().regex(HEX64) });
 const reportPayload = z.object({ kind: z.literal('report-template'), templateSha256: z.string().regex(HEX64) });
+const contentPackPayload = z.object({
+  kind: z.literal('content-pack'),
+  packSha256: z.string().regex(HEX64),
+  steps: z.array(z.object({ kind: z.string().min(1), label: z.string(), count: z.number().int().nonnegative() })),
+});
 
 export const artifactManifestSchema = z.object({
   schemaVersion: z.literal(1),
-  type: z.enum(['plugin', 'form-template', 'report-template']),
+  type: z.enum(['plugin', 'form-template', 'report-template', 'content-pack']),
   id: z.string().min(1),
   version: z.string().regex(SEMVER, 'version must be semver'),
   description: z.string().default(''),
@@ -69,7 +74,7 @@ export const artifactManifestSchema = z.object({
   dependencies: z.array(z.object({ id: z.string().min(1), versionRange: z.string().min(1) })).default([]),
   capabilities: z.array(capabilitySchema).default([]),
   source: z.enum(['local-file', 'registry']).default('local-file'), // 'federated' reserved
-  payload: z.discriminatedUnion('kind', [pluginPayload, formPayload, reportPayload]),
+  payload: z.discriminatedUnion('kind', [pluginPayload, formPayload, reportPayload, contentPackPayload]),
   signature: z.string().regex(/^[0-9a-f]+$/).optional(),
 });
 

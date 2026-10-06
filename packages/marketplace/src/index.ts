@@ -13,3 +13,4 @@ export * from './index-json';
 export * from './registry-source';
 export * from './github-publish';
 export * from './workflow-node';
+export * from './content-pack';

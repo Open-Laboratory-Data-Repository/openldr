@@ -1034,11 +1034,13 @@ export function buildProgram(): Command {
     });
   market
     .command('install <dir>')
-    .description('Install a bundle from a directory into the plugin registry')
+    .description('Install a bundle (plugin, form template or content pack) from a directory')
     .option('--approve', 'approve the capability grant', false)
     .option('--approved-by <actor>', 'actor granting approval (default: cli)')
+    .option('--dry-run', 'check the bundle and list its steps without writing', false)
+    .option('--force', 'install a content pack that is already installed', false)
     .option('--json', 'emit JSON', false)
-    .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; json: boolean }) => {
+    .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; dryRun: boolean; force: boolean; json: boolean }) => {
       try { process.exitCode = await runMarketInstall(dir, opts); } catch (err) { process.stderr.write(`market install failed: ${String(err)}\n`); process.exitCode = 1; }
     });
   market
@@ -1046,13 +1048,15 @@ export function buildProgram(): Command {
     .description('Update (re-install) a bundle from a directory')
     .option('--approve', 'approve the capability grant', false)
     .option('--approved-by <actor>', 'actor granting approval (default: cli)')
+    .option('--dry-run', 'check the bundle and list its steps without writing', false)
+    .option('--force', 'install a content pack that is already installed', false)
     .option('--json', 'emit JSON', false)
-    .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; json: boolean }) => {
+    .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; dryRun: boolean; force: boolean; json: boolean }) => {
       try { process.exitCode = await runMarketInstall(dir, opts); } catch (err) { process.stderr.write(`market update failed: ${String(err)}\n`); process.exitCode = 1; }
     });
   market
     .command('list')
-    .description('List installed marketplace plugins')
+    .description('List installed marketplace plugins and content packs')
     .option('--json', 'emit JSON', false)
     .action(async (opts: { json: boolean }) => {
       try { process.exitCode = await runMarketList(opts); } catch (err) { process.stderr.write(`market list failed: ${String(err)}\n`); process.exitCode = 1; }

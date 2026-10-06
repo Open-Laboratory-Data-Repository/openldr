@@ -11,17 +11,39 @@ const mockPlugins = vi.hoisted(() => ({
   test: vi.fn(),
 }));
 
+const mockPacks = vi.hoisted(() => ({
+  check: vi.fn(),
+  install: vi.fn(),
+  list: vi.fn(),
+}));
+
+const mockForms = vi.hoisted(() => ({
+  install: vi.fn(),
+  list: vi.fn(),
+}));
+
 const mockCtx = vi.hoisted(() => ({
   close: vi.fn(),
   plugins: mockPlugins,
+  marketplacePacks: mockPacks,
+  marketplaceForms: mockForms,
 }));
 
 vi.mock('@openldr/config', () => ({
   loadConfig: vi.fn(() => ({ config: true })),
 }));
 
+const mockInstallList = vi.hoisted(() => vi.fn());
+const mockInternalClose = vi.hoisted(() => vi.fn());
+
+vi.mock('@openldr/db', () => ({
+  createInternalDb: vi.fn(() => ({ db: {}, close: mockInternalClose })),
+  createMarketplaceInstallStore: vi.fn(() => ({ list: mockInstallList })),
+}));
+
 vi.mock('@openldr/bootstrap', () => ({
   createIngestContext: vi.fn(async () => mockCtx),
+  createAppContext: vi.fn(async () => mockCtx),
 }));
 
 // Mock readBundle / verifyBundle from @openldr/marketplace
@@ -59,6 +81,10 @@ describe('market commands', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPacks.list.mockReset();
+    mockPacks.list.mockResolvedValue([]);
+    mockInstallList.mockReset();
+    mockInstallList.mockResolvedValue([]);
     writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
   });
 
@@ -204,5 +230,178 @@ describe('market commands', () => {
     mockPlugins.remove.mockResolvedValueOnce(undefined);
     await runMarketRemove('demo', '1.0.0', { json: false });
     expect(mockPlugins.remove).toHaveBeenCalledWith('demo', '1.0.0', expect.anything());
+  });
+
+  // ------------------------------------------------------------------
+  // content packs and form templates
+  // ------------------------------------------------------------------
+  const packBundle = {
+    ...mockBundle,
+    manifest: { ...mockBundle.manifest, id: 'demo-pack', type: 'content-pack', capabilities: [] },
+  };
+  const formBundle = {
+    ...mockBundle,
+    manifest: { ...mockBundle.manifest, id: 'demo-form', type: 'form-template' },
+  };
+
+  async function useBundle(b: unknown): Promise<void> {
+    const { readBundle } = await import('@openldr/marketplace');
+    (readBundle as ReturnType<typeof vi.fn>).mockResolvedValueOnce(b);
+  }
+
+  it('install pack: goes to the pack installer, not plugins.install', async () => {
+    await useBundle(packBundle);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    const code = await runMarketInstall('/some/dir', { json: false });
+    expect(code).toBe(0);
+    expect(mockPlugins.install).not.toHaveBeenCalled();
+    expect(mockPacks.install).toHaveBeenCalledTimes(1);
+    const [bundle, opts] = mockPacks.install.mock.calls[0];
+    expect(bundle).toBe(packBundle);
+    expect(opts.actor).toEqual({ id: null, name: 'cli' });
+    expect(mockCtx.close).toHaveBeenCalled();
+  });
+
+  it('install pack --dry-run: calls check only and prints the steps', async () => {
+    await useBundle(packBundle);
+    mockPacks.check.mockResolvedValueOnce({
+      steps: [{ kind: 'value-set', label: 'Specimen types', count: 1 }],
+    });
+    const code = await runMarketInstall('/some/dir', { json: false, dryRun: true });
+    expect(code).toBe(0);
+    expect(mockPacks.check).toHaveBeenCalledWith(packBundle);
+    expect(mockPacks.install).not.toHaveBeenCalled();
+    const text = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(text).toContain('Specimen types');
+  });
+
+  it('install pack --dry-run: prints what link-matching would link', async () => {
+    await useBundle(packBundle);
+    mockPacks.check.mockResolvedValueOnce({
+      steps: [{ kind: 'link-matching', label: 'Link codes', count: 1 }],
+      linkPreview: [{ registerUrl: 'urn:test:reg', wouldLink: 7 }, { registerUrl: 'urn:test:new', wouldLink: null }],
+    });
+    const code = await runMarketInstall('/some/dir', { json: false, dryRun: true });
+    expect(code).toBe(0);
+    const text = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(text).toContain('would link 7 code(s) to urn:test:reg');
+    expect(text).toContain('would link codes to urn:test:new once this pack loads its register (not counted yet)');
+  });
+
+  it('install pack: a failed row installs again without --force', async () => {
+    await useBundle(packBundle);
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 3 }]);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    const code = await runMarketInstall('/some/dir', { json: false });
+    expect(code).toBe(0);
+    expect(mockPacks.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('install pack: masks a secret in the failed step line', async () => {
+    await useBundle(packBundle);
+    mockPacks.install.mockResolvedValueOnce({
+      id: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 1, error: 'connect postgres://ops:hunter2@db/x failed',
+    });
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const code = await runMarketInstall('/some/dir', { json: false });
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    stderrSpy.mockRestore();
+    expect(code).toBe(1);
+    expect(err).toContain('failed at step 1: connect postgres://ops:***@db/x failed');
+    expect(err).not.toContain('hunter2');
+  });
+
+  it('install pack: refuses an installed pack without --force', async () => {
+    await useBundle(packBundle);
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }]);
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const code = await runMarketInstall('/some/dir', { json: false });
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    stderrSpy.mockRestore();
+    expect(code).toBe(1);
+    expect(err).toContain('already installed; use --force to install again');
+    expect(mockPacks.install).not.toHaveBeenCalled();
+  });
+
+  it('install pack --force: installs an installed pack again', async () => {
+    await useBundle(packBundle);
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }]);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    const code = await runMarketInstall('/some/dir', { json: false, force: true });
+    expect(code).toBe(0);
+    expect(mockPacks.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('install pack --dry-run: does not need --force for an installed pack', async () => {
+    await useBundle(packBundle);
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }]);
+    mockPacks.check.mockResolvedValueOnce({ steps: [] });
+    const code = await runMarketInstall('/some/dir', { json: false, dryRun: true });
+    expect(code).toBe(0);
+    expect(mockPacks.install).not.toHaveBeenCalled();
+  });
+
+  it('install pack: a failed step prints "failed at step N" and returns 1', async () => {
+    await useBundle(packBundle);
+    mockPacks.install.mockResolvedValueOnce({
+      id: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 2, error: 'bad csv',
+    });
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const code = await runMarketInstall('/some/dir', { json: false });
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    stderrSpy.mockRestore();
+    expect(code).toBe(1);
+    expect(err).toContain('failed at step 2: bad csv');
+  });
+
+  it('install pack --json: prints the failed result object', async () => {
+    await useBundle(packBundle);
+    mockPacks.install.mockResolvedValueOnce({
+      id: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 2, error: 'bad csv',
+    });
+    const code = await runMarketInstall('/some/dir', { json: true });
+    expect(code).toBe(1);
+    const parsed = JSON.parse(writeSpy.mock.calls[0][0] as string);
+    expect(parsed).toMatchObject({ status: 'failed', failedStep: 2, error: 'bad csv' });
+  });
+
+  it('install form template: goes to the form installer', async () => {
+    await useBundle(formBundle);
+    mockForms.install.mockResolvedValueOnce({ id: 'demo-form', version: '1.0.0' });
+    const code = await runMarketInstall('/some/dir', { json: false });
+    expect(code).toBe(0);
+    expect(mockPlugins.install).not.toHaveBeenCalled();
+    expect(mockForms.install).toHaveBeenCalledTimes(1);
+    const [, opts] = mockForms.install.mock.calls[0];
+    expect(opts.approval).toBeUndefined();
+  });
+
+  it('install form template --approve: passes the approval', async () => {
+    await useBundle(formBundle);
+    mockForms.install.mockResolvedValueOnce({ id: 'demo-form', version: '1.0.0' });
+    await runMarketInstall('/some/dir', { json: false, approve: true, approvedBy: 'admin' });
+    const [, opts] = mockForms.install.mock.calls[0];
+    expect(opts.approval).toEqual({
+      approvedBy: 'admin',
+      acknowledgedCapabilities: formBundle.manifest.capabilities,
+    });
+  });
+
+  it('list: includes content packs with their status', async () => {
+    mockPlugins.list.mockResolvedValueOnce([]);
+    mockInstallList.mockResolvedValueOnce([
+      { artifactId: 'demo-pack', kind: 'content-pack', version: '2.0.0', status: 'failed', failedStep: 3, error: 'boom' },
+      { artifactId: 'a-form', kind: 'form-template', version: '1.0.0', status: 'installed', failedStep: null, error: null },
+    ]);
+    const { createAppContext } = await import('@openldr/bootstrap');
+    const code = await runMarketList({ json: false });
+    expect(code).toBe(0);
+    expect(createAppContext).not.toHaveBeenCalled();
+    expect(mockInternalClose).toHaveBeenCalled();
+    expect(writeSpy.mock.calls.map((c) => String(c[0])).join('')).not.toContain('a-form');
+    const text = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(text).toContain('demo-pack');
+    expect(text).toContain('failed');
+    expect(text).toContain('content-pack');
   });
 });

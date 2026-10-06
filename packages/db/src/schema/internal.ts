@@ -683,11 +683,14 @@ export interface MarketplaceInstallsTable {
   artifact_id: string;
   version: string;
   kind: string;
-  target_form_id: string;
+  target_form_id: string | null;
   payload_sha256: string;
   publisher_name: string | null;
   source_ref: string | null;
   installed_by: string | null;
+  status: Generated<'installed' | 'failed'>;
+  failed_step: number | null;
+  error: string | null;
   installed_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

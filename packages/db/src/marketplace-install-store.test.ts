@@ -23,4 +23,15 @@ describe('MarketplaceInstallStore', () => {
     await store.remove('specimen-intake');
     expect(await store.get('specimen-intake')).toBeNull();
   });
+
+  it('records a failed install without a form, and a later upsert resets it', async () => {
+    const store = createMarketplaceInstallStore(db);
+    await store.upsert({ artifactId: 'pack-a', version: '1.0.0', kind: 'content-pack', targetFormId: null, payloadSha256: 'a'.repeat(64), status: 'failed', failedStep: 4, error: 'x' });
+    const failed = await store.get('pack-a');
+    expect(failed).toMatchObject({ targetFormId: null, status: 'failed', failedStep: 4, error: 'x' });
+
+    await store.upsert({ artifactId: 'pack-a', version: '1.0.0', kind: 'content-pack', targetFormId: null, payloadSha256: 'a'.repeat(64) });
+    const ok = await store.get('pack-a');
+    expect(ok).toMatchObject({ status: 'installed', failedStep: null, error: null });
+  });
 });

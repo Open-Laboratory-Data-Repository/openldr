@@ -56,7 +56,7 @@ export function createFormArtifactInstaller(deps: { forms: FormStore; installSto
       fhirProfileUrl: s.fhirProfileUrl ?? null, targetPages: s.targetPages ?? null, status: 'draft',
     };
     let targetFormId: string;
-    if (existing) {
+    if (existing?.targetFormId) {
       await forms.update(existing.targetFormId, formInput as never);
       await forms.publish(existing.targetFormId, { versionLabel: version, actorId: opts.actor.id ?? null });
       targetFormId = existing.targetFormId;
@@ -96,6 +96,7 @@ export function createFormArtifactInstaller(deps: { forms: FormStore; installSto
   }
 
   async function drift(row: MarketplaceInstallRow): Promise<{ drifted: boolean }> {
+    if (!row.targetFormId) return { drifted: false };
     try {
       const published = await publishedQuestionnaire(row.targetFormId);
       if (published === null) return { drifted: false };
@@ -108,7 +109,7 @@ export function createFormArtifactInstaller(deps: { forms: FormStore; installSto
   async function list(): Promise<(MarketplaceInstallRow & { drifted: boolean })[]> {
     const rows = await installStore.list();
     const out: (MarketplaceInstallRow & { drifted: boolean })[] = [];
-    for (const r of rows) out.push({ ...r, drifted: (await drift(r)).drifted });
+    for (const r of rows.filter((x) => x.kind === 'form-template')) out.push({ ...r, drifted: (await drift(r)).drifted });
     return out;
   }
 
