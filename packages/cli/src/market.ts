@@ -1,5 +1,6 @@
 import { createAppContext, createIngestContext, type AppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { createInternalDb, createMarketplaceInstallStore } from '@openldr/db';
 import { readBundle, verifyBundle, type Bundle } from '@openldr/marketplace';
 import { redactError } from './redact-error';
 
@@ -167,10 +168,16 @@ async function installPack(
 // ---------------------------------------------------------------------------
 
 export async function runMarketList(opts: JsonOpt): Promise<number> {
-  const ctx = await createAppContext(loadConfig());
+  const cfg = loadConfig();
+  // The ingest context does not expose its internal database, so pack rows come
+  // from a small second connection. The app context is not opened: it seeds data.
+  const ctx = await createIngestContext(cfg);
+  const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   try {
     const rows = await ctx.plugins.list();
-    const packs = await ctx.marketplacePacks.list();
+    const packs = (await createMarketplaceInstallStore(internal.db).list()).filter(
+      (r) => r.kind === 'content-pack',
+    );
     const lines = [
       ...rows.map(
         (r) =>
@@ -210,6 +217,7 @@ export async function runMarketList(opts: JsonOpt): Promise<number> {
     process.stderr.write(`market list failed: ${redactError(err)}\n`);
     return 1;
   } finally {
+    await internal.close();
     await ctx.close();
   }
 }

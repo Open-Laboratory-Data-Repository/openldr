@@ -33,6 +33,14 @@ vi.mock('@openldr/config', () => ({
   loadConfig: vi.fn(() => ({ config: true })),
 }));
 
+const mockInstallList = vi.hoisted(() => vi.fn());
+const mockInternalClose = vi.hoisted(() => vi.fn());
+
+vi.mock('@openldr/db', () => ({
+  createInternalDb: vi.fn(() => ({ db: {}, close: mockInternalClose })),
+  createMarketplaceInstallStore: vi.fn(() => ({ list: mockInstallList })),
+}));
+
 vi.mock('@openldr/bootstrap', () => ({
   createIngestContext: vi.fn(async () => mockCtx),
   createAppContext: vi.fn(async () => mockCtx),
@@ -75,6 +83,8 @@ describe('market commands', () => {
     vi.clearAllMocks();
     mockPacks.list.mockReset();
     mockPacks.list.mockResolvedValue([]);
+    mockInstallList.mockReset();
+    mockInstallList.mockResolvedValue([]);
     writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
   });
 
@@ -343,11 +353,16 @@ describe('market commands', () => {
 
   it('list: includes content packs with their status', async () => {
     mockPlugins.list.mockResolvedValueOnce([]);
-    mockPacks.list.mockResolvedValueOnce([
-      { artifactId: 'demo-pack', version: '2.0.0', status: 'failed', failedStep: 3, error: 'boom' },
+    mockInstallList.mockResolvedValueOnce([
+      { artifactId: 'demo-pack', kind: 'content-pack', version: '2.0.0', status: 'failed', failedStep: 3, error: 'boom' },
+      { artifactId: 'a-form', kind: 'form-template', version: '1.0.0', status: 'installed', failedStep: null, error: null },
     ]);
+    const { createAppContext } = await import('@openldr/bootstrap');
     const code = await runMarketList({ json: false });
     expect(code).toBe(0);
+    expect(createAppContext).not.toHaveBeenCalled();
+    expect(mockInternalClose).toHaveBeenCalled();
+    expect(writeSpy.mock.calls.map((c) => String(c[0])).join('')).not.toContain('a-form');
     const text = writeSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(text).toContain('demo-pack');
     expect(text).toContain('failed');

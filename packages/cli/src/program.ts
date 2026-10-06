@@ -1048,8 +1048,10 @@ export function buildProgram(): Command {
     .description('Update (re-install) a bundle from a directory')
     .option('--approve', 'approve the capability grant', false)
     .option('--approved-by <actor>', 'actor granting approval (default: cli)')
+    .option('--dry-run', 'check the bundle and list its steps without writing', false)
+    .option('--force', 'install a content pack that is already installed', false)
     .option('--json', 'emit JSON', false)
-    .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; json: boolean }) => {
+    .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; dryRun: boolean; force: boolean; json: boolean }) => {
       try { process.exitCode = await runMarketInstall(dir, opts); } catch (err) { process.stderr.write(`market update failed: ${String(err)}\n`); process.exitCode = 1; }
     });
   market
