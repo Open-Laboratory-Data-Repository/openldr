@@ -19,6 +19,7 @@ const PAYLOAD_FILE: Record<string, string> = {
   plugin: 'plugin.wasm',
   'form-template': 'questionnaire.json',
   'report-template': 'report.json',
+  'content-pack': 'pack.json',
 };
 
 /** The payload filename for a manifest's payload.kind (defaults to plugin.wasm). */
@@ -42,6 +43,7 @@ const SHA_FIELD: Record<string, string> = {
   plugin: 'wasmSha256',
   'form-template': 'questionnaireSha256',
   'report-template': 'templateSha256',
+  'content-pack': 'packSha256',
 };
 
 /**

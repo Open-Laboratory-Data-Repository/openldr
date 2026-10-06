@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const indexEntrySchema = z.object({
   id: z.string().min(1),
-  kind: z.enum(['plugin', 'form-template', 'report-template', 'form', 'report', 'test-definition']),
+  kind: z.enum(['plugin', 'form-template', 'report-template', 'content-pack', 'form', 'report', 'test-definition']),
   latestVersion: z.string().min(1),
   publisher: z.string().default(''),
   summary: z.string().default(''),

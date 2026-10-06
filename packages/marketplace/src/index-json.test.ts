@@ -38,3 +38,10 @@ describe('index-json', () => {
     expect(seeded.schemaVersion).toBe(1);
   });
 });
+
+describe('index-json content-pack kind', () => {
+  it('parses a content-pack entry', () => {
+    const idx = parseIndex({ schemaVersion: 1, name: 'M', updatedAt: '2026-01-01T00:00:00Z', packages: [entry({ kind: 'content-pack' })] });
+    expect(idx.packages[0].kind).toBe('content-pack');
+  });
+});
