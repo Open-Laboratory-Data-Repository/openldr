@@ -2660,8 +2660,12 @@ export interface ArtifactPayloadMeta {
   wasmSha256?: string;
   wasi?: boolean;
   limits?: { memoryMb: number; timeoutMs: number };
+  /** content-pack variant: the signed step list. */
+  packSha256?: string;
+  steps?: PackStep[];
   [k: string]: unknown;
 }
+export interface PackStep { kind: string; label: string; count: number }
 export interface AvailableArtifactDetail extends AvailableArtifact {
   compatible: boolean;
   ceVersion: string;
@@ -2683,6 +2687,10 @@ export interface InstalledArtifact {
   legacy: boolean;
   drifted?: boolean;
   targetFormId?: string;
+  /** content-pack rows only. */
+  status?: 'installed' | 'failed';
+  failedStep?: number | null;
+  error?: string | null;
 }
 
 export const listInstalledArtifacts = (): Promise<InstalledArtifact[]> =>
@@ -2721,8 +2729,10 @@ export interface InstalledArtifactDetail {
 export const getInstalledArtifact = (id: string): Promise<InstalledArtifactDetail> =>
   apiGet(`/api/marketplace/installed/${encodeURIComponent(id)}`, 'get installed artifact');
 
-export const installArtifact = (ref: string, acknowledgedCapabilities: unknown[]): Promise<{ id: string; version: string }> =>
-  authFetch('/api/marketplace/install', jbody({ ref, acknowledgedCapabilities }, 'POST')).then((r) => okJson<{ id: string; version: string }>(r, 'install artifact'));
+/** A content pack install answers 200 even when a step failed: check `status`. */
+export interface InstallArtifactResult { id: string; version: string; status?: 'installed' | 'failed'; failedStep?: number; error?: string }
+export const installArtifact = (ref: string, acknowledgedCapabilities: unknown[]): Promise<InstallArtifactResult> =>
+  authFetch('/api/marketplace/install', jbody({ ref, acknowledgedCapabilities }, 'POST')).then((r) => okJson<InstallArtifactResult>(r, 'install artifact'));
 
 export const getPublishStatus = (): Promise<{ configured: boolean; repo: string | null }> =>
   apiGet('/api/marketplace/publish/status', 'get publish status');

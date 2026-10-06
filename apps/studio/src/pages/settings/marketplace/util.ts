@@ -20,6 +20,9 @@ export interface CardEntry {
   targetFormId?: string; // installed form-template's local form id
   versions?: { version: string; ref: string }[];
   registryName?: string; // Browse only: source registry label
+  status?: 'installed' | 'failed'; // content-pack only
+  failedStep?: number | null;
+  error?: string | null;
 }
 
 /** Render one capability as a human-readable line for the Permissions list. */
@@ -43,8 +46,17 @@ export function availableToEntry(b: AvailableArtifact, installed: Map<string, In
     publisher: b.publisher, description: b.description, license: b.license,
     capabilities: b.capabilities ?? [], valid: b.valid, invalidReason: b.invalidReason,
     installed: Boolean(inst), enabled: inst?.enabled, active: inst?.active,
+    status: inst?.status, failedStep: inst?.failedStep, error: inst?.error,
     versions: b.versions ?? [], registryName: b.registryName,
   };
+}
+
+/** An installed row has no registry-qualified ref. For a content pack, borrow the ref of the Browse
+ *  entry with the same id so "Install again" has something to install. No match means no ref. */
+export function withBrowseRef(entry: CardEntry, available: AvailableArtifact[]): CardEntry {
+  if (entry.type !== 'content-pack' || entry.ref) return entry;
+  const match = available.find((b) => b.id === entry.id && b.type === 'content-pack');
+  return match ? { ...entry, ref: match.ref } : entry;
 }
 
 export function installedToEntry(a: InstalledArtifact): CardEntry {
@@ -57,5 +69,6 @@ export function installedToEntry(a: InstalledArtifact): CardEntry {
     description: a.description, license: a.license, payload: a.payload,
     capabilities: a.capabilities, installed: true, active: a.active,
     enabled: a.enabled, drifted: a.drifted, targetFormId: a.targetFormId,
+    status: a.status, failedStep: a.failedStep, error: a.error,
   };
 }

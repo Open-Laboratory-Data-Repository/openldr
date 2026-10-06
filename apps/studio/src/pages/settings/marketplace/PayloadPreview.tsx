@@ -31,6 +31,26 @@ export function PayloadPreview({ payload }: { payload: ArtifactPayloadMeta | nul
       </dl>
     );
   }
+  if (payload.kind === 'content-pack') {
+    const steps = Array.isArray(payload.steps) ? payload.steps : [];
+    return (
+      <section data-testid="pack-steps">
+        <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.packSteps')}</p>
+        <ol className="space-y-1 rounded-md border border-border p-3 text-[13px]">
+          {steps.map((s, i) => (
+            <li key={`${i}-${s.kind}`} data-testid="pack-step" className="flex justify-between gap-3">
+              <span className="min-w-0">
+                <span className="font-medium text-foreground">{t(`settings.marketplace.packStep.${s.kind}`, { defaultValue: s.kind })}</span>
+                <span className="text-muted-foreground" aria-hidden="true"> · </span>
+                <span className="text-muted-foreground">{s.label}</span>
+              </span>
+              <span className="shrink-0 font-mono text-[12px] text-foreground/90">{s.count}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+    );
+  }
   // Non-plugin kinds (form/report/test-definition) — fleshed out in sub-project C.
   return <p className="text-sm text-muted-foreground">{t('settings.marketplace.payloadUnavailable')}</p>;
 }

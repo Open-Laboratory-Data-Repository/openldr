@@ -68,7 +68,9 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
   const permissionsKnown = !entry.ref || Array.isArray(detail?.capabilities);
   const capabilities = (entry.ref ? detail?.capabilities ?? [] : detail?.capabilities ?? entry.capabilities) as unknown[];
   const publisher = detail?.publisher ?? entry.publisher;
-  const installableType = entry.type === 'plugin' || entry.type === 'form-template';
+  const installableType = entry.type === 'plugin' || entry.type === 'form-template' || entry.type === 'content-pack';
+  const isPack = entry.type === 'content-pack';
+  const packPayload = detail?.payload ?? entry.payload ?? null;
   // For registry items, detail must be loaded so the acknowledged capabilities are the real,
   // signed set. Installed/local items (no ref) carry their capabilities on the entry already.
   const detailReadyForInstall = entry.ref ? detail !== null && permissionsKnown : true;
@@ -122,7 +124,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                   <DropdownMenuItem
                     data-testid="detail-install"
                     disabled={detail ? !detail.compatible : false}
-                    onSelect={() => onInstall({ ...entry, ref: selectedRef, version: detail?.version ?? entry.version }, capabilities)}
+                    onSelect={() => onInstall({ ...entry, ref: selectedRef, version: detail?.version ?? entry.version, payload: packPayload }, capabilities)}
                   >
                     {t('settings.marketplace.install')}
                   </DropdownMenuItem>
@@ -138,7 +140,31 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                   </DropdownMenuItem>
                 ) : null}
                 {entry.installed ? (
-                  entry.type === 'form-template' ? (
+                  isPack ? (
+                    <>
+                      {entry.status === 'failed' ? (
+                        selectedRef ? (
+                          <DropdownMenuItem
+                            data-testid="detail-install-again"
+                            onSelect={() => onInstall({ ...entry, ref: selectedRef, version: detail?.version ?? entry.version, payload: packPayload }, [])}
+                          >
+                            {t('settings.marketplace.installAgain')}
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            data-testid="detail-install-again"
+                            disabled
+                            title={t('settings.marketplace.packNotListed')}
+                          >
+                            {t('settings.marketplace.installAgain')}
+                          </DropdownMenuItem>
+                        )
+                      ) : null}
+                      <DropdownMenuItem className="text-destructive" onSelect={() => onDetach?.(entry)}>
+                        {t('settings.marketplace.detach')}
+                      </DropdownMenuItem>
+                    </>
+                  ) : entry.type === 'form-template' ? (
                     <>
                       {entry.targetFormId ? (
                         <DropdownMenuItem onSelect={() => onOpenForm?.(entry.targetFormId!)}>
@@ -194,7 +220,17 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 <ReadmeMarkdown content={detail.readme} />
               </section>
             ) : null}
-            <PayloadPreview payload={detail?.payload ?? entry.payload ?? null} />
+            {isPack && entry.status ? (
+              <p
+                data-testid="pack-status"
+                className={entry.status === 'failed' ? 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive' : 'text-sm text-muted-foreground'}
+              >
+                {entry.status === 'failed'
+                  ? t('settings.marketplace.packFailedAt', { step: entry.failedStep ?? 0, error: entry.error ?? '' })
+                  : t('settings.marketplace.installed')}
+              </p>
+            ) : null}
+            {isPack && !packPayload ? null : <PayloadPreview payload={packPayload} />}
             {error ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
             ) : null}

@@ -97,6 +97,32 @@ describe('Marketplace', () => {
     await waitFor(() => expect(api.installArtifact).toHaveBeenCalledWith('demo-form-1', []));
   });
 
+  it('the install confirm for a content pack lists its steps, not capabilities', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [{ ref: 'reg/pack-1', id: 'pack-1', version: '1.0.0', type: 'content-pack', publisher: { id: 'p', name: 'P' }, valid: true }] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    (api.getAvailableArtifact as any).mockResolvedValue({ ref: 'reg/pack-1', id: 'pack-1', version: '1.0.0', type: 'content-pack', description: 'd', publisher: { id: 'p', name: 'P' }, capabilities: [], compatibility: { ceVersion: '*' }, compatible: true, ceVersion: '0.1.0', payload: { kind: 'content-pack', packSha256: 'a'.repeat(64), steps: [{ kind: 'value-set', label: 'Specimen types', count: 12 }] }, valid: true });
+    (api.installArtifact as any).mockResolvedValue({ id: 'pack-1', version: '1.0.0', status: 'failed', failedStep: 1, error: 'boom' });
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByTestId('card-reg/pack-1'));
+    await openDetailMenu();
+    fireEvent.click(await screen.findByTestId('detail-install'));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Specimen types');
+    expect(dialog.textContent).not.toContain('Requested permissions');
+    fireEvent.click(screen.getByTestId('approve-install'));
+    await waitFor(() => expect(api.installArtifact).toHaveBeenCalledWith('reg/pack-1', []));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Failed at step 1: boom')));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('the type filter offers Content pack', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('combobox', { name: /filter by type/i }));
+    expect(await screen.findByRole('option', { name: 'Content pack' })).toBeTruthy();
+  });
+
   it('shows the unconfigured empty state', async () => {
     (api.listAvailableArtifacts as any).mockResolvedValue({ configured: false, source: null, host: null, bundles: [] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);

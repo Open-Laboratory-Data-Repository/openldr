@@ -204,6 +204,65 @@ describe('PackageDetail', () => {
     expect(container.querySelector('h1')?.className, 'a UA margin no preflight will strip').toMatch(/(^|\s)m-0(\s|$)/);
   });
 
+  describe('content pack', () => {
+    const packEntry: CardEntry = {
+      ref: 'reg/pack-1', id: 'pack-1', version: '1.0.0', type: 'content-pack',
+      publisher: { id: 'p', name: 'Pub' }, capabilities: [], valid: true,
+    };
+    function mockPackDetail() {
+      (api.getAvailableArtifact as any).mockResolvedValue({
+        ref: 'reg/pack-1', id: 'pack-1', version: '1.0.0', type: 'content-pack',
+        description: 'A pack', publisher: { id: 'p', name: 'Pub' }, capabilities: [],
+        compatibility: { ceVersion: '*' }, compatible: true, ceVersion: '0.1.0',
+        payload: { kind: 'content-pack', packSha256: 'a'.repeat(64), steps: [{ kind: 'value-set', label: 'Specimen types', count: 12 }] },
+        valid: true,
+      });
+    }
+    async function openMenu() {
+      const trigger = await screen.findByTestId('detail-menu');
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByTestId('detail-back')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+
+    it('shows Install enabled once detail loads, and the steps', async () => {
+      mockPackDetail();
+      const onInstall = vi.fn();
+      render(<PackageDetail entry={packEntry} onBack={vi.fn()} onInstall={onInstall} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} />);
+      expect(await screen.findByText('Specimen types')).toBeTruthy();
+      await openMenu();
+      const install = await screen.findByTestId('detail-install');
+      expect(install).not.toHaveAttribute('data-disabled');
+      fireEvent.click(install);
+      expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'reg/pack-1' }), []);
+    });
+
+    it('a failed install shows the step and error, with Install again and Detach', async () => {
+      mockPackDetail();
+      const failed: CardEntry = { ...packEntry, installed: true, active: true, enabled: true, status: 'failed', failedStep: 2, error: 'boom' };
+      const onInstall = vi.fn();
+      const onDetach = vi.fn();
+      render(<PackageDetail entry={failed} onBack={vi.fn()} onInstall={onInstall} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} onDetach={onDetach} />);
+      expect(await screen.findByText('Failed at step 2: boom')).toBeTruthy();
+      await openMenu();
+      expect(screen.queryByTestId('detail-install')).toBeNull();
+      expect(screen.getByText('Detach')).toBeTruthy();
+      fireEvent.click(await screen.findByTestId('detail-install-again'));
+      expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'reg/pack-1' }), []);
+    });
+
+    it('disables Install again when no registry lists the pack', async () => {
+      const failed: CardEntry = { ...packEntry, ref: undefined, installed: true, status: 'failed', failedStep: 0, error: 'x' };
+      const onInstall = vi.fn();
+      render(<PackageDetail entry={failed} onBack={vi.fn()} onInstall={onInstall} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} onDetach={vi.fn()} />);
+      await openMenu();
+      const again = await screen.findByTestId('detail-install-again');
+      expect(again).toHaveAttribute('data-disabled');
+      expect(again.getAttribute('title')).toMatch(/not listed in any registry/i);
+      fireEvent.click(again);
+      expect(onInstall).not.toHaveBeenCalled();
+    });
+  });
+
   describe('mobile layout', () => {
     it('stacks the body into one column below md, instead of holding a 244px sidebar', async () => {
       mockDetail();
