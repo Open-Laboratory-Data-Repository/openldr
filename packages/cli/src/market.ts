@@ -131,26 +131,30 @@ async function installPack(
   try {
     const { id, version } = bundle.manifest;
     if (opts.dryRun) {
-      const { steps } = await ctx.marketplacePacks.check(bundle);
+      const { steps, linkPreview = [] } = await ctx.marketplacePacks.check(bundle);
       emit(
         opts.json,
-        { id, version, dryRun: true, steps },
+        { id, version, dryRun: true, steps, linkPreview },
         [
           `dry run: ${id}@${version} would run ${steps.length} step(s)`,
           ...steps.map((s, i) => `  ${i + 1}. ${s.kind.padEnd(18)} ${s.label} (${s.count})`),
+          ...linkPreview.map((p) => (p.wouldLink === null
+            ? `would link codes to ${p.registerUrl} once this pack loads its register (not counted yet)`
+            : `would link ${p.wouldLink} code(s) to ${p.registerUrl}`)),
         ].join('\n'),
       );
       return 0;
     }
+    // A failed row is finished by installing again, so only an installed row needs --force.
     const existing = (await ctx.marketplacePacks.list()).find((r) => r.artifactId === id);
-    if (existing && !opts.force) {
+    if (existing && existing.status !== 'failed' && !opts.force) {
       process.stderr.write(`market install failed: ${id} is already installed; use --force to install again\n`);
       return 1;
     }
     const result = await ctx.marketplacePacks.install(bundle, { actor: { id: null, name: 'cli' } });
     if (result.status === 'failed') {
       if (opts.json) emit(true, result, '');
-      else process.stderr.write(`failed at step ${result.failedStep}: ${result.error}\n`);
+      else process.stderr.write(`failed at step ${result.failedStep}: ${redactError(result.error)}\n`);
       return 1;
     }
     emit(opts.json, result, `installed ${result.id}@${result.version}`);

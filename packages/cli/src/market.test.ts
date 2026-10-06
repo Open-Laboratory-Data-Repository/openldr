@@ -275,6 +275,42 @@ describe('market commands', () => {
     expect(text).toContain('Specimen types');
   });
 
+  it('install pack --dry-run: prints what link-matching would link', async () => {
+    await useBundle(packBundle);
+    mockPacks.check.mockResolvedValueOnce({
+      steps: [{ kind: 'link-matching', label: 'Link codes', count: 1 }],
+      linkPreview: [{ registerUrl: 'urn:test:reg', wouldLink: 7 }, { registerUrl: 'urn:test:new', wouldLink: null }],
+    });
+    const code = await runMarketInstall('/some/dir', { json: false, dryRun: true });
+    expect(code).toBe(0);
+    const text = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(text).toContain('would link 7 code(s) to urn:test:reg');
+    expect(text).toContain('would link codes to urn:test:new once this pack loads its register (not counted yet)');
+  });
+
+  it('install pack: a failed row installs again without --force', async () => {
+    await useBundle(packBundle);
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 3 }]);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    const code = await runMarketInstall('/some/dir', { json: false });
+    expect(code).toBe(0);
+    expect(mockPacks.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('install pack: masks a secret in the failed step line', async () => {
+    await useBundle(packBundle);
+    mockPacks.install.mockResolvedValueOnce({
+      id: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 1, error: 'connect postgres://ops:hunter2@db/x failed',
+    });
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const code = await runMarketInstall('/some/dir', { json: false });
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    stderrSpy.mockRestore();
+    expect(code).toBe(1);
+    expect(err).toContain('failed at step 1: connect postgres://ops:***@db/x failed');
+    expect(err).not.toContain('hunter2');
+  });
+
   it('install pack: refuses an installed pack without --force', async () => {
     await useBundle(packBundle);
     mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }]);
