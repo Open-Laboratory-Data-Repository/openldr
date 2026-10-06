@@ -182,6 +182,8 @@ export const en = {
   // Only the value sets table is translated so far — the rest of the Terminology page is still
   // hardcoded English.
   terminology: {
+    csColSource: 'Source',
+    csSource: { core: 'OpenLDR', ingest: 'Received data', import: 'Imported', pack: 'Content pack', register: 'Facility register', user: 'Created here' },
     vsSearchPlaceholder: 'Search value sets',
     vsNoMatch: 'No value sets match the current filters.',
     vsColTitle: 'Title',

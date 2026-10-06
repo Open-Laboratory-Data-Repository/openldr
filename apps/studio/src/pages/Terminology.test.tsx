@@ -39,6 +39,8 @@ const sys = (id: string, code: string, pubId: string) => ({
   active: true,
   publisherId: pubId,
   seeded: true,
+  source: 'core',
+  sourceRef: null,
 });
 
 describe('Terminology page', () => {
@@ -76,6 +78,21 @@ describe('Terminology page', () => {
 
     // "LOINC" appears both as a rail publisher and a system code, so tolerate multiple.
     expect(screen.getAllByText('LOINC').length).toBeGreaterThan(0);
+  });
+
+  it('shows a code system description and where it came from', async () => {
+    vi.spyOn(api, 'listCodingSystems').mockResolvedValue([
+      { ...sys('cs1', 'LOINC', 'pub-loinc'), systemName: 'Test sites', description: 'Sites the test pack adds.', source: 'pack', sourceRef: 'test-pack@1.0.0' },
+    ] as never);
+    render(
+      <MemoryRouter>
+        <Terminology />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByText('Sites the test pack adds.')).toBeInTheDocument());
+    const cell = screen.getByTestId('cs-source');
+    expect(cell).toHaveTextContent('Content pack');
+    expect(cell).toHaveTextContent('test-pack@1.0.0');
   });
 
   it('toggles to value sets and opens one in the builder sheet', async () => {

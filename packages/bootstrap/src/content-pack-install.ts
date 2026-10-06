@@ -26,7 +26,8 @@ export interface ContentPackDeps {
   trustStore: TrustStore;
   audit: Pick<AuditStore, 'record'>;
   logger: Logger;
-  loadResource(json: unknown): Promise<{ resourceUrl: string }>;
+  /** Loads a terminology resource as installed by the pack `packId` (its source shows as that pack). */
+  loadResource(json: unknown, packId: string): Promise<{ resourceUrl: string }>;
   /** Throws when the resource would not load. Writes nothing. */
   checkResource(json: unknown): void;
   /** Throws when the query file would not import. Writes nothing. */
@@ -131,7 +132,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     switch (step.kind) {
       case 'code-system':
       case 'value-set': {
-        const result = await deps.loadResource(step.resource);
+        const result = await deps.loadResource(step.resource, at.pack);
         await record({
           ...who(actor), action: 'term.import', entityType: 'term', entityId: result.resourceUrl,
           metadata: { ...source, result },

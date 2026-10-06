@@ -30,7 +30,16 @@ export interface CodingSystem {
   active: boolean;
   publisherId: string | null;
   seeded: boolean;
+  /** Where the system came from. Stored as `origin`; rows written before migration 109 fall back
+   *  to 'register' (a facility register), 'core' (seeded) or 'user' (created by an admin). */
+  source: CodingSystemSource;
+  /** The pack id when `source` is 'pack'. */
+  sourceRef: string | null;
 }
+/** The values `coding_systems.origin` may hold. */
+export type CodingSystemOrigin = 'core' | 'ingest' | 'import' | 'pack';
+export type CodingSystemSource = CodingSystemOrigin | 'register' | 'user';
+const ORIGINS: readonly string[] = ['core', 'ingest', 'import', 'pack'];
 export interface CodingSystemInput {
   systemCode: string;
   systemName: string;
@@ -157,7 +166,13 @@ export interface TerminologyAdminStore {
      *  when a FEATURE conjured the system on an operator's behalf rather than an install seeding it,
      *  so the operator can delete it again. Only affects a fresh insert; the ON CONFLICT update
      *  never rewrites the flag on a row that already exists. */
-    upsertByUrl(input: { url: string; systemCode: string; systemName: string; systemVersion?: string | null; publisherId: string | null; seeded?: boolean }): Promise<void>;
+    upsertByUrl(input: {
+      url: string; systemCode: string; systemName: string; systemVersion?: string | null; publisherId: string | null; seeded?: boolean;
+      /** Written only when given, so a later caller that does not know it keeps the stored value. */
+      description?: string | null;
+      /** Written only when given, with `originRef`. */
+      origin?: CodingSystemOrigin; originRef?: string | null;
+    }): Promise<void>;
     getByUrl(url: string): Promise<CodingSystem | null>;
   };
   terms: {
@@ -250,9 +265,15 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
   const pubRow = (r: { id: string; name: string; role: string; icon: string | null; seeded: boolean; sort_order: number }): Publisher => ({
     id: r.id, name: r.name, role: r.role as PublisherRole, icon: r.icon, seeded: r.seeded, sortOrder: r.sort_order,
   });
-  const csRow = (r: { id: string; system_code: string; system_name: string; url: string | null; system_version: string | null; description: string | null; active: boolean; publisher_id: string | null; seeded: boolean }): CodingSystem => ({
+  const csSource = (r: { origin?: string | null; kind?: string | null; seeded: boolean }): CodingSystemSource => {
+    if (r.origin && ORIGINS.includes(r.origin)) return r.origin as CodingSystemOrigin;
+    if (r.kind === FACILITY_REGISTER_KIND) return 'register';
+    return r.seeded ? 'core' : 'user';
+  };
+  const csRow = (r: { id: string; system_code: string; system_name: string; url: string | null; system_version: string | null; description: string | null; active: boolean; publisher_id: string | null; seeded: boolean; origin?: string | null; origin_ref?: string | null; kind?: string | null }): CodingSystem => ({
     id: r.id, systemCode: r.system_code, systemName: r.system_name, url: r.url, systemVersion: r.system_version,
     description: r.description, active: r.active, publisherId: r.publisher_id, seeded: r.seeded,
+    source: csSource(r), sourceRef: r.origin_ref ?? null,
   });
 
   function packProps(i: TermInput): Record<string, unknown> | null {
@@ -749,8 +770,12 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             id: `cs-url-${input.systemCode}`, system_code: input.systemCode, system_name: input.systemName,
             url: input.url, system_version: input.systemVersion ?? null, active: true, publisher_id: input.publisherId,
             seeded: input.seeded ?? true,
+            description: input.description ?? null,
+            origin: input.origin ?? null, origin_ref: input.origin ? (input.originRef ?? null) : null,
           }).onConflict((oc) => oc.column('url').doUpdateSet({
             system_name: input.systemName, system_version: input.systemVersion ?? null, publisher_id: input.publisherId,
+            ...(input.description === undefined ? {} : { description: input.description }),
+            ...(input.origin === undefined ? {} : { origin: input.origin, origin_ref: input.originRef ?? null }),
             // ⛔ ONLY WHEN THE CALLER SAID SO. An omitted `seeded` leaves the stored flag untouched,
             // which is what keeps a genuine install seed protected from any caller that does not
             // mention it. An EXPLICIT one rewrites it, so a row an earlier version inserted as

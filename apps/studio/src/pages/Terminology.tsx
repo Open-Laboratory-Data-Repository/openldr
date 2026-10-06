@@ -822,6 +822,9 @@ export function Terminology(): JSX.Element {
                             <TableHead className="text-xs uppercase tracking-wide">
                               URL
                             </TableHead>
+                            <TableHead className="text-xs uppercase tracking-wide">
+                              {t('terminology.csColSource')}
+                            </TableHead>
                             <TableHead className="w-12" />
                           </TableRow>
                         </TableHeader>
@@ -838,10 +841,21 @@ export function Terminology(): JSX.Element {
                                 </span>
                               </TableCell>
                               <TableCell className="text-foreground">
-                                {s.systemName}
+                                <div>{s.systemName}</div>
+                                {s.description ? (
+                                  <div className="line-clamp-2 text-xs text-muted-foreground" title={s.description}>
+                                    {s.description}
+                                  </div>
+                                ) : null}
                               </TableCell>
                               <TableCell className="font-mono text-[11px] text-muted-foreground">
                                 {s.url ?? '—'}
+                              </TableCell>
+                              <TableCell className="text-xs text-muted-foreground" data-testid="cs-source">
+                                {t(`terminology.csSource.${s.source}`, { defaultValue: s.source })}
+                                {s.source === 'pack' && s.sourceRef ? (
+                                  <div className="font-mono text-[11px]">{s.sourceRef}</div>
+                                ) : null}
                               </TableCell>
                               <TableCell
                                 onClick={(e) => e.stopPropagation()}

@@ -36,6 +36,22 @@ You can browse publishers and code systems, search terms, inspect term details, 
 
 Terms are searchable, ValueSets are available for coded fields, and ontology indexes can be browsed when the source includes hierarchy data.
 
+## Where a code system came from
+
+The code systems table shows a description under each name, when the code system has one, and a
+**Source** column:
+
+- **OpenLDR**: CE installs and maintains it. It cannot be deleted.
+- **Received data**: CE made it while projecting data it received, for example the lab codes seen in
+  results.
+- **Imported**: an admin imported it, from this page or with `openldr terminology import resource`.
+- **Content pack**: a content pack installed it. The pack and version show under the label.
+- **Facility register**: a facility register. Its facilities are under Facilities.
+- **Created here**: an admin created it on this page.
+
+An imported code system takes its name and description from the resource's `title` (or `name`) and
+`description`. `openldr terminology system list` prints the same source in its last column.
+
 ## Test catalog and categories
 
 Every install has two code systems under the System publisher. **Test catalog** holds the national list of tests. **Test categories** holds the categories a test can belong to, starting with Chemistry, Haematology, Microbiology, Serology and Molecular. Add or rename categories here.

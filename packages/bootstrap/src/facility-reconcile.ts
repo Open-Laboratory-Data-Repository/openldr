@@ -1045,6 +1045,8 @@ async function ensureCodingSystemActive(
     systemCode: input.systemCode,
     systemName: input.systemName,
     publisherId: SYSTEM_PUBLISHER_ID,
+    // Made while projecting received data, so its source shows as ingest.
+    origin: 'ingest',
   });
   const cs = await deps.admin.codingSystems.getByUrl(input.url);
   if (cs && !cs.active) {

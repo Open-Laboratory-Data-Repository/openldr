@@ -1,8 +1,9 @@
 import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact, createLogger, type Logger } from '@openldr/core';
+import { codeSystemProjection } from './code-system-projection';
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, createTerminologyIngestJobStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, type TerminologyIngestJobStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, importOrganismDictionary, stalenessReason, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, type ImportOrigin, loadLoinc, loadWhonetAmr, importTerminologyResource, importOrganismDictionary, stalenessReason, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
 import { createBlobFromConfig } from './s3-config';
@@ -44,7 +45,7 @@ export interface TerminologyContext {
     amr(sqlitePath: string): Promise<LoadResult[]>;
     organisms(json: unknown): Promise<OrganismImportResult>;
     parameters(json: unknown): Promise<ResultParamImportResult>;
-    resource(json: unknown): Promise<LoadResult>;
+    resource(json: unknown, from?: ImportOrigin): Promise<LoadResult>;
   };
   ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
   audit: AuditStore;
@@ -96,19 +97,13 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     // Sync S3: loaders call this once at import completion; wire it to the bulk change signal.
     markSystemChanged: (url) => markTerminologyChanged(db, url),
     saveResource: (res) => fhirStore.save(res as never),
-    saveSystem: async (url, version, kind, id) => {
+    saveSystem: async (url, version, kind, id, meta) => {
       await store.saveSystem(url, version, kind, id);
       // Best-effort: project CodeSystems into coding_systems so they appear in the
       // admin UI under their resolved publisher. Never fail the import on this.
       if (kind === 'CodeSystem') {
         try {
-          await admin.codingSystems.upsertByUrl({
-            url,
-            systemCode: deriveSystemCode(url),
-            systemName: deriveSystemCode(url),
-            systemVersion: version,
-            publisherId: resolveSeedPublisherId(url),
-          });
+          await admin.codingSystems.upsertByUrl(codeSystemProjection(url, version, meta));
         } catch (e) {
           // Best-effort projection: the migration backfill also covers it on next
           // migrate. Log (redacted — the error may carry the DB connection string)
@@ -132,7 +127,8 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
     loaders: {
       loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
       amr: (p) => loadWhonetAmr(p, loaderStore),
-      resource: (json) => importTerminologyResource(json, loaderStore),
+      // An admin import unless the caller says otherwise (CE's seed passes 'core', a pack 'pack').
+      resource: (json, from) => importTerminologyResource(json, loaderStore, from ?? { origin: 'import' }),
       organisms: (json) => importOrganismDictionary(json, loaderStore),
       // Task 4 (S2b): the intensional result-role ValueSets (Task 3's migration 069) are seeded with
       // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them

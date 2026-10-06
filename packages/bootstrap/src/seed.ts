@@ -137,7 +137,7 @@ export interface FormSeedTarget extends EssentialSeedTarget {
   terminology: {
     ops: { lookup(system: string, code: string): Promise<{ found: boolean; display?: string | null }> };
     admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog' | 'save' | 'getByUrl'> };
-    loaders: { resource(json: unknown): Promise<{ conceptsLoaded: number }> };
+    loaders: { resource(json: unknown, from?: { origin: 'core' }): Promise<{ conceptsLoaded: number }> };
   };
   appSettings: Pick<AppSettingStore, 'get' | 'set'>;
   // `cfg` (warehouse URL/adapter/credentials) is inherited from EssentialSeedTarget.
@@ -464,7 +464,8 @@ async function seedBundledTerminology(app: FormSeedTarget): Promise<SeedResult['
       if (!ucum) {
         console.warn('[seed] UCUM CodeSystem fixture missing — skipping UCUM import');
       } else {
-        const r = await app.terminology.loaders.resource(ucum);
+        // CE's own seed: marked core, so it stays protected from deletion.
+        const r = await app.terminology.loaders.resource(ucum, { origin: 'core' });
         ucumConceptsImported = r.conceptsLoaded;
         if (r.conceptsLoaded) console.log(`[seed] imported ${r.conceptsLoaded} UCUM concept(s)`);
       }

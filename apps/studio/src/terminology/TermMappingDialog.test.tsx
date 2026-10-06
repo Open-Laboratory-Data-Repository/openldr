@@ -28,7 +28,7 @@ const system: api.CodingSystem = {
   description: null,
   active: true,
   publisherId: 'p',
-  seeded: true,
+  seeded: true, source: 'core', sourceRef: null,
 };
 
 const secondSystem: api.CodingSystem = {
@@ -40,7 +40,7 @@ const secondSystem: api.CodingSystem = {
   description: null,
   active: true,
   publisherId: 'p',
-  seeded: true,
+  seeded: true, source: 'core', sourceRef: null,
 };
 
 const registrySystem: api.CodingSystem = {
@@ -52,7 +52,7 @@ const registrySystem: api.CodingSystem = {
   description: null,
   active: true,
   publisherId: 'pub-system',
-  seeded: false,
+  seeded: false, source: 'core', sourceRef: null,
 };
 
 const fromTerm = {

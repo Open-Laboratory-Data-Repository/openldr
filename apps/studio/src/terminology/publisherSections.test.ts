@@ -3,7 +3,7 @@ import { publisherSections } from './publisherSections';
 import type { Publisher, CodingSystem, ValueSetSummary } from '../api';
 
 const pub = (id: string, name: string, seeded: boolean, sortOrder: number): Publisher => ({ id, name, role: 'standard', icon: null, seeded, sortOrder });
-const sys = (id: string, pubId: string): CodingSystem => ({ id, systemCode: id, systemName: id, url: null, systemVersion: null, description: null, active: true, publisherId: pubId, seeded: true });
+const sys = (id: string, pubId: string): CodingSystem => ({ id, systemCode: id, systemName: id, url: null, systemVersion: null, description: null, active: true, publisherId: pubId, seeded: true, source: 'core', sourceRef: null });
 
 describe('publisherSections', () => {
   it('returns ALL publishers sorted by sortOrder (seeded always visible, empty custom included)', () => {
@@ -21,7 +21,7 @@ describe('publisherSections', () => {
   });
 
   it('attaches value sets to their publisher section and keeps seeded publishers visible', () => {
-    const publishers = [{ id: 'pub-system', name: 'System', role: 'local', icon: null, seeded: true, sortOrder: 0 }];
+    const publishers = [{ id: 'pub-system', name: 'System', role: 'local', icon: null, seeded: true, source: 'core', sourceRef: null, sortOrder: 0 }];
     const systems: never[] = [];
     const valueSets: ValueSetSummary[] = [{ id: 'vs-1', url: 'urn:vs', name: null, title: 'YN', version: null, status: 'active', immutable: false, publisherId: 'pub-system', category: null, codeCount: 2, primarySystem: 'urn:cs' }];
     const sections = publisherSections(publishers as never, systems, valueSets);

@@ -107,6 +107,7 @@ import * as m105 from './105_lab_order_test_catalog';
 import * as m106 from './106_result_entry';
 import * as m107 from './107_lab_order_drop_specimen';
 import * as m108 from './108_marketplace_install_status';
+import * as m109 from './109_coding_system_origin';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -218,4 +219,5 @@ export const internalMigrations: Record<string, Migration> = {
   '106_result_entry': { up: m106.up, down: m106.down },
   '107_lab_order_drop_specimen': { up: m107.up, down: m107.down },
   '108_marketplace_install_status': { up: m108.up, down: m108.down },
+  '109_coding_system_origin': { up: m109.up, down: m109.down },
 };
