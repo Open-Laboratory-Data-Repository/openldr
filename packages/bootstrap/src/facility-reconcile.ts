@@ -296,6 +296,7 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
       url: system,
       systemCode: systemCodeFor(system),
       systemName: 'Observed facilities',
+      origin: 'ingest',
     });
   }
   result.systemRegistered = systems.length > 0;
@@ -1038,15 +1039,15 @@ export async function publishRegistryConcepts(
  */
 async function ensureCodingSystemActive(
   deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
-  input: { url: string; systemCode: string; systemName: string },
+  input: { url: string; systemCode: string; systemName: string; origin: 'core' | 'ingest' },
 ): Promise<void> {
   await deps.admin.codingSystems.upsertByUrl({
     url: input.url,
     systemCode: input.systemCode,
     systemName: input.systemName,
     publisherId: SYSTEM_PUBLISHER_ID,
-    // Made while projecting received data, so its source shows as ingest.
-    origin: 'ingest',
+    // The registry system is CE's own; an observed-facility system is made from received data.
+    origin: input.origin,
   });
   const cs = await deps.admin.codingSystems.getByUrl(input.url);
   if (cs && !cs.active) {
@@ -1139,6 +1140,7 @@ async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'i
     url: FACILITY_REGISTRY_SYSTEM,
     systemCode: FACILITY_REGISTRY_SYSTEM_CODE,
     systemName: FACILITY_REGISTRY_SYSTEM_NAME,
+    origin: 'core',
   });
 }
 
@@ -2002,6 +2004,7 @@ async function registerObservedSystem(
       url: system,
       systemCode: systemCodeFor(system),
       systemName: 'Observed facilities',
+      origin: 'ingest',
     });
   } catch (err) {
     // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
