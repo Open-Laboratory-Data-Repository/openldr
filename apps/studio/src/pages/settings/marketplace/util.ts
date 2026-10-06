@@ -72,3 +72,14 @@ export function installedToEntry(a: InstalledArtifact): CardEntry {
     status: a.status, failedStep: a.failedStep, error: a.error,
   };
 }
+
+/** "Failed at step N: error", or "Failed: error" when the server sent no step. */
+export function packFailureText(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  step: number | null | undefined, error: string | null | undefined,
+): string {
+  const e = error ?? '';
+  return typeof step === 'number'
+    ? t('settings.marketplace.packFailedAt', { step, error: e })
+    : t('settings.marketplace.packFailed', { error: e });
+}

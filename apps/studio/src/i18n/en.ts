@@ -665,6 +665,7 @@ export const en = {
       packSteps: 'Steps',
       packStep: { 'code-system': 'Code system', 'value-set': 'Value set', 'facility-register': 'Facility register', 'link-matching': 'Link matching', 'custom-queries': 'Custom queries' },
       packFailedAt: 'Failed at step {{step}}: {{error}}',
+      packFailed: "Failed: {{error}}",
       installAgain: 'Install again',
       packNotListed: 'This pack is not listed in any registry.',
       publish: 'Publish to GitHub',

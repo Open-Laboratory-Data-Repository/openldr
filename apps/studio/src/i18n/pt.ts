@@ -663,6 +663,7 @@ export const pt: EnShape = {
       packSteps: 'Passos',
       packStep: { 'code-system': 'Sistema de códigos', 'value-set': 'Conjunto de valores', 'facility-register': 'Registo de unidades', 'link-matching': 'Correspondência de ligações', 'custom-queries': 'Consultas personalizadas' },
       packFailedAt: 'Falha no passo {{step}}: {{error}}',
+      packFailed: "Falha: {{error}}",
       installAgain: 'Instalar novamente',
       packNotListed: 'Este pacote não consta em nenhum registo.',
       publish: 'Publicar no GitHub',

@@ -663,6 +663,7 @@ export const fr: EnShape = {
       packSteps: 'Étapes',
       packStep: { 'code-system': 'Système de codes', 'value-set': 'Ensemble de valeurs', 'facility-register': 'Registre des établissements', 'link-matching': 'Appariement de liens', 'custom-queries': 'Requêtes personnalisées' },
       packFailedAt: "Échec à l'étape {{step}} : {{error}}",
+      packFailed: "Échec : {{error}}",
       installAgain: 'Installer à nouveau',
       packNotListed: 'Ce pack ne figure dans aucun registre.',
       publish: 'Publier sur GitHub',

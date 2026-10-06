@@ -12,7 +12,7 @@ import {
   type AvailableArtifact, type InstalledArtifact,
 } from '@/api';
 import { MarketplaceTabs } from './marketplace/MarketplaceTabs';
-import { capabilityLine, type CardEntry } from './marketplace/util';
+import { capabilityLine, packFailureText, type CardEntry } from './marketplace/util';
 import { PayloadPreview } from './marketplace/PayloadPreview';
 
 export function Marketplace() {
@@ -54,7 +54,7 @@ export function Marketplace() {
       const result = await installArtifact(consent.entry.ref, consent.capabilities);
       // A content pack answers 200 even when a step failed, so read `status` before celebrating.
       if (result.status === 'failed') {
-        toast.error(t('settings.marketplace.packFailedAt', { step: result.failedStep ?? 0, error: result.error ?? '' }));
+        toast.error(packFailureText(t, result.failedStep, result.error));
       } else {
         toast.success(t('settings.marketplace.installedToast', { id: consent.entry.id }));
       }

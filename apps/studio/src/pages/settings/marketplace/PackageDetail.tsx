@@ -16,7 +16,7 @@ import { SignatureBadge } from './SignatureBadge';
 import { PayloadPreview } from './PayloadPreview';
 import { RequirementsChecklist } from './RequirementsChecklist';
 import { ReadmeMarkdown } from './ReadmeMarkdown';
-import { capabilityLine, type CardEntry } from './util';
+import { capabilityLine, packFailureText, type CardEntry } from './util';
 
 interface PackageDetailProps {
   entry: CardEntry;
@@ -142,7 +142,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 {entry.installed ? (
                   isPack ? (
                     <>
-                      {entry.status === 'failed' ? (
+                      {(
                         selectedRef ? (
                           <DropdownMenuItem
                             data-testid="detail-install-again"
@@ -159,7 +159,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                             {t('settings.marketplace.installAgain')}
                           </DropdownMenuItem>
                         )
-                      ) : null}
+                      )}
                       <DropdownMenuItem className="text-destructive" onSelect={() => onDetach?.(entry)}>
                         {t('settings.marketplace.detach')}
                       </DropdownMenuItem>
@@ -226,7 +226,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 className={entry.status === 'failed' ? 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive' : 'text-sm text-muted-foreground'}
               >
                 {entry.status === 'failed'
-                  ? t('settings.marketplace.packFailedAt', { step: entry.failedStep ?? 0, error: entry.error ?? '' })
+                  ? packFailureText(t, entry.failedStep, entry.error)
                   : t('settings.marketplace.installed')}
               </p>
             ) : null}

@@ -250,6 +250,19 @@ describe('PackageDetail', () => {
       expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'reg/pack-1' }), []);
     });
 
+    it('offers Install again on a healthy installed pack, and no step 0 without a step', async () => {
+      mockPackDetail();
+      const ok: CardEntry = { ...packEntry, installed: true, status: 'installed' };
+      const onInstall = vi.fn();
+      const { unmount } = render(<PackageDetail entry={ok} onBack={vi.fn()} onInstall={onInstall} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} onDetach={vi.fn()} />);
+      await openMenu();
+      fireEvent.click(await screen.findByTestId('detail-install-again'));
+      expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'reg/pack-1' }), []);
+      unmount();
+      render(<PackageDetail entry={{ ...packEntry, installed: true, status: 'failed', failedStep: null, error: 'boom' }} onBack={vi.fn()} onInstall={vi.fn()} onToggleEnabled={vi.fn()} onRollback={vi.fn()} onRemove={vi.fn()} />);
+      expect((await screen.findByTestId('pack-status')).textContent).toBe('Failed: boom');
+    });
+
     it('disables Install again when no registry lists the pack', async () => {
       const failed: CardEntry = { ...packEntry, ref: undefined, installed: true, status: 'failed', failedStep: 0, error: 'x' };
       const onInstall = vi.fn();
