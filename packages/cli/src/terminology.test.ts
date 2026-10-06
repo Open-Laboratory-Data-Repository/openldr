@@ -54,6 +54,7 @@ import {
   runTerminologyImport,
   runPublisherCreate,
   runSystemCreate,
+  runSystemList,
   runOntologyUnlink,
   runOntologyBuild,
   runTerminologyReproject,
@@ -280,5 +281,18 @@ describe('terminology reproject (deprecated alias)', () => {
 
     expect(code).toBe(1);
     expect(mocks.runDbReproject).toHaveBeenCalledWith({ json: false, force: false });
+  });
+
+  it('system list prints where each system came from', async () => {
+    mocks.createTerminologyContext.mockResolvedValue(mocks.termCtx);
+    mocks.termCtx.close.mockResolvedValue(undefined);
+    mocks.termCtx.admin.codingSystems.list.mockResolvedValueOnce([
+      { systemCode: 'A', systemName: 'Alpha', url: 'urn:a', source: 'pack', sourceRef: 'p@1.0.0' },
+      { systemCode: 'B', systemName: 'Beta', url: null, source: 'core', sourceRef: null },
+    ]);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await expect(runSystemList({})).resolves.toBe(0);
+    expect(log.mock.calls.map((c) => c[0])).toEqual(["A\tAlpha\turn:a\tpack (p@1.0.0)", "B\tBeta\t\u2014\tcore"]);
+    log.mockRestore();
   });
 });

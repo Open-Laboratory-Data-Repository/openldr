@@ -110,7 +110,7 @@ export async function runSystemList(opts: { publisher?: string; json?: boolean }
   try {
     const rows = await ctx.admin.codingSystems.list(opts.publisher);
     if (opts.json) console.log(JSON.stringify(rows, null, 2));
-    else for (const s of rows) console.log(`${s.systemCode}\t${s.systemName}\t${s.url ?? '—'}`);
+    else for (const s of rows) console.log(`${s.systemCode}\t${s.systemName}\t${s.url ?? '—'}\t${s.source}${s.sourceRef ? ` (${s.sourceRef})` : ''}`);
     return 0;
   } catch (err) { process.stderr.write(`terminology system list failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
