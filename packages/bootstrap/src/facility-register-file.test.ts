@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createAuditStore } from '@openldr/audit';
@@ -7,6 +7,25 @@ import {
   type InternalSchema,
 } from '@openldr/db';
 import { importFacilityRegisterCsv, type FacilityRegisterFileDeps } from './facility-register-file';
+
+// Lets one test make finishing the run fail. Every other test uses the real store unchanged.
+const finishFails = vi.hoisted(() => ({ on: false }));
+vi.mock('@openldr/db', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@openldr/db')>();
+  return {
+    ...real,
+    createFacilityImportRunStore: (db: Parameters<typeof real.createFacilityImportRunStore>[0]) => {
+      const store = real.createFacilityImportRunStore(db);
+      return {
+        ...store,
+        finishApply: (...args: Parameters<typeof store.finishApply>) => {
+          if (finishFails.on) return Promise.reject(new Error('finish failed'));
+          return store.finishApply(...args);
+        },
+      };
+    },
+  };
+});
 
 const URL = 'urn:test:labs';
 const HEADER = 'national_code,name,level,ownership,status,country,zone,region,district,council,ward,village,address,phone,latitude,longitude';
@@ -20,7 +39,7 @@ async function build() {
   const audit = createAuditStore(db);
   const deps: FacilityRegisterFileDeps = {
     db, capture: referenceCapture, admin: createTerminologyAdminStore(db), audit,
-    logger: { error: () => undefined } as never,
+    logger: { error: vi.fn(), warn: vi.fn() },
   };
   return { db, deps, audit };
 }
@@ -99,5 +118,28 @@ describe('importFacilityRegisterCsv', () => {
     expect(out).toEqual({ ok: false, error: 'unrecognised column(s): mystery' });
     expect(await createFacilityRegisterSourceStore(db).getByUrl(URL)).toBeNull();
     expect(await createFacilityImportRunStore(db).list(URL)).toHaveLength(0);
+  });
+
+  it('a run that will not finish is logged, and the import result still stands', async () => {
+    const { deps } = await build();
+    finishFails.on = true;
+    try {
+      const out = await importFacilityRegisterCsv(deps, input(csv(THREE), true));
+      expect(out.ok).toBe(true);
+      expect(deps.logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'applied' }), expect.stringContaining('failed to finish a facility import run'),
+      );
+    } finally {
+      finishFails.on = false;
+    }
+  });
+
+  it('a failing audit store does not fail an applied import', async () => {
+    const { db, deps } = await build();
+    const out = await importFacilityRegisterCsv(
+      { ...deps, audit: { record: async () => { throw new Error('audit down'); } } }, input(csv(THREE), true));
+    expect(out.ok).toBe(true);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(3);
+    expect(deps.logger.error).toHaveBeenCalled();
   });
 });

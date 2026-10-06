@@ -39,7 +39,8 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { createTrustStore } from '@openldr/marketplace';
-import { createContentPackInstaller, type ContentPackInstaller } from './content-pack-install';
+import { createContentPackInstaller, type ContentPackInstaller, type PackQueryChange } from './content-pack-install';
+import { withRegisteredResourceId } from './content-pack-terminology';
 import { checkCustomQueryFile, importCustomQueries } from './custom-query-transfer';
 import { importFacilityRegisterCsv } from './facility-register-file';
 import { linkMatchingFacilityCodes } from './facility-link-matching';
@@ -1077,13 +1078,36 @@ const reporting: ReportingApi = {
     installStore: marketplaceInstalls,
     trustStore: createTrustStore(internal.db),
     audit,
-    loadResource: (json) => terminology.loaders.resource(json),
+    logger,
+    // Reuse the id registered for the URL, so a reinstall replaces the resource and its codes.
+    loadResource: async (json) => terminology.loaders.resource(await withRegisteredResourceId(termDb, json)),
     checkResource: (json) => { checkTerminologyResource(json); },
     checkQueries: checkCustomQueryFile,
-    importQueries: (file) => importCustomQueries(
-      { customQueries: createCustomQueryStore(internal.db), connectors: connectorStore }, file, { replace: true }),
+    importQueries: async (file) => {
+      const customQueries = createCustomQueryStore(internal.db);
+      // Read the rows first, so a replace can be audited with the SQL it overwrote.
+      const beforeByName = new Map((await customQueries.list()).map((q) => [q.name, q]));
+      const result = await importCustomQueries({ customQueries, connectors: connectorStore }, file, { replace: true });
+      const changes: PackQueryChange[] = [];
+      for (const r of result.results) {
+        if (r.outcome === 'skipped') continue;
+        changes.push({
+          id: r.id,
+          outcome: r.outcome === 'created' ? 'created' : 'replaced',
+          before: beforeByName.get(r.name) ?? null,
+          after: await customQueries.get(r.id),
+        });
+      }
+      return { changes };
+    },
     register: (input) => importFacilityRegisterCsv(
       { db: internal.db, capture: referenceCapture, admin: termAdmin, facilityJobs, audit, logger }, input),
+    previewLinkMatching: async (registerUrl) => {
+      const out = await linkMatchingFacilityCodes(
+        { internalDb: internal.db, externalDb, admin: termAdmin }, { registerUrl, apply: false });
+      if (!out.ok) return { ok: false, reason: out.reason, error: out.error };
+      return { ok: true, wouldLink: out.result.counts.linked };
+    },
     linkMatching: async (registerUrl) => {
       const out = await linkMatchingFacilityCodes(
         { internalDb: internal.db, externalDb, admin: termAdmin }, { registerUrl, apply: true });
@@ -1097,7 +1121,7 @@ const reporting: ReportingApi = {
           logger.error({ err, registerUrl }, 'failed to enqueue a facility-map-rebuild job after a content pack linked facility codes');
         }
       }
-      return { ok: true };
+      return { ok: true, counts: out.result.counts };
     },
   });
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);

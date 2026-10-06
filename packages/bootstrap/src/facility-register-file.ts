@@ -4,6 +4,8 @@ import {
   createFacilityImportRunStore, createFacilityRegisterSourceStore, resolveFacilityRegisterForImport,
   type FacilityImportRun, type FacilityImportRunStore, type InternalSchema, type ReferenceCapture,
 } from '@openldr/db';
+import { safeRecord, type AuditStore } from '@openldr/audit';
+import type { Logger } from '@openldr/core';
 import { importFacilities, type FacilityImportDeps, type FacilityImportResult } from './facility-import';
 
 export type FacilityRegisterFileDeps = {
@@ -12,7 +14,7 @@ export type FacilityRegisterFileDeps = {
   admin: NonNullable<FacilityImportDeps['admin']>;
   facilityJobs?: FacilityImportDeps['facilityJobs'];
   audit: NonNullable<FacilityImportDeps['audit']>;
-  logger: NonNullable<FacilityImportDeps['logger']>;
+  logger: NonNullable<FacilityImportDeps['logger']> & { warn(obj: unknown, msg?: string): void };
 };
 
 export interface FacilityRegisterFileInput {
@@ -31,12 +33,15 @@ export type FacilityRegisterFileOutcome =
 const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
 async function finishRun(
-  runs: FacilityImportRunStore, id: string, status: 'applied' | 'failed', error: string | null, summary?: unknown,
+  runs: FacilityImportRunStore, logger: FacilityRegisterFileDeps['logger'],
+  id: string, status: 'applied' | 'failed', error: string | null, summary?: unknown,
 ): Promise<void> {
   try {
     await runs.finishApply(id, status, { error, ...(summary === undefined ? {} : { summary }) });
-  } catch {
-    // A second failure must not hide the first result. Nothing more to do here.
+  } catch (err) {
+    // A second failure must not hide the first result. Logged, because a run left open keeps its
+    // active key and blocks the next import of this register.
+    logger.warn({ err, runId: id, status }, 'failed to finish a facility import run for a content pack register');
   }
 }
 
@@ -115,21 +120,23 @@ export async function importFacilityRegisterCsv(
 
     const refusal = refusalOf(preview);
     if (refusal) {
-      if (run) await finishRun(runs, run.id, 'failed', `refused: ${refusal}`);
+      if (run) await finishRun(runs, deps.logger, run.id, 'failed', `refused: ${refusal}`);
       return { ok: false, error: refusal };
     }
     if (!input.apply) return { ok: true, result: preview };
 
     const result = await importFacilities(deps, input.csv, { ...importOptions, runId, apply: true });
-    await deps.audit.record({
+    // Best effort: the rows are written, so a failed audit write must not fail the step.
+    // safeRecord only calls `logger.error`, which this logger has.
+    await safeRecord(deps.audit as AuditStore, deps.logger as unknown as Logger, {
       actorType: 'user', actorId: input.actor.id, actorName: input.actor.name,
       action: 'facility.import', entityType: 'facility', entityId: input.url,
       metadata: { source: 'content-pack', result },
     });
-    if (run) await finishRun(runs, run.id, 'applied', null, result);
+    if (run) await finishRun(runs, deps.logger, run.id, 'applied', null, result);
     return { ok: true, result };
   } catch (err) {
-    if (run) await finishRun(runs, run.id, 'failed', message(err));
+    if (run) await finishRun(runs, deps.logger, run.id, 'failed', message(err));
     return { ok: false, error: message(err) };
   }
 }
