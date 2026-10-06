@@ -36,6 +36,7 @@ const PAYLOAD_FILE: Record<string, string> = {
   plugin: 'plugin.wasm',
   'form-template': 'questionnaire.json',
   'report-template': 'report.json',
+  'content-pack': 'pack.json',
 };
 
 // ---------------------------------------------------------------------------

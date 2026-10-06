@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readBundle, verifyBundle } from '@openldr/marketplace';
@@ -76,6 +77,35 @@ describe('artifact pack', () => {
       await runArtifactPack(proj, { key: join(dir, 'publisher.priv'), out, json: true }),
     ).toBe(0);
     expect(verifyBundle(await readBundle(out)).valid).toBe(true);
+    await rm(dir, { recursive: true, force: true });
+  });
+});
+
+describe('artifact pack content-pack', () => {
+  it('packs pack.json and records packSha256', async () => {
+    await runArtifactKeygen({ out: dir, json: true, force: false });
+    const proj = join(dir, 'cp');
+    await mkdir(proj, { recursive: true });
+    const packJson = JSON.stringify({ schemaVersion: 1, steps: [] });
+    await writeFile(join(proj, 'pack.json'), packJson);
+    await writeFile(
+      join(proj, 'manifest.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        type: 'content-pack',
+        id: 'demo-pack',
+        version: '1.0.0',
+        publisher: { id: 'acme', name: 'Acme', keyFingerprint: 'a'.repeat(64) },
+        compatibility: { ceVersion: '>=0.1.0 <0.2.0' },
+        capabilities: [],
+        payload: { kind: 'content-pack', steps: [] },
+      }),
+    );
+    const out = join(proj, 'dist');
+    expect(await runArtifactPack(proj, { key: join(dir, 'publisher.priv'), out, json: true })).toBe(0);
+    const bundle = await readBundle(out);
+    const payload = bundle.manifest.payload as { packSha256?: string };
+    expect(payload.packSha256).toBe(createHash('sha256').update(packJson).digest('hex'));
     await rm(dir, { recursive: true, force: true });
   });
 });
