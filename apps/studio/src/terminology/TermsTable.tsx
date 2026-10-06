@@ -164,19 +164,21 @@ export function TermsTable({
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+      {/* Below md (phones, small tablets) the row wraps: the search takes a full row, the rest wrap below.
+          As one unwrapped row there, the fixed-width controls squeezed the search to nothing. */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 md:flex-nowrap">
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search terms…"
-          className="h-8 max-w-md text-sm"
+          className="h-8 w-full min-w-0 text-sm md:max-w-md"
         />
 
         <Select
           value={status === '' ? ALL_STATUS : status}
           onValueChange={(v) => setStatus(v === ALL_STATUS ? '' : v)}
         >
-          <SelectTrigger className="h-8 w-40 text-xs">
+          <SelectTrigger className="h-8 w-40 shrink-0 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -188,7 +190,7 @@ export function TermsTable({
           </SelectContent>
         </Select>
 
-        <div className="flex-1" />
+        <div className="hidden flex-1 md:block" />
 
         {/* Hidden file input for source terminology imports */}
         <input
