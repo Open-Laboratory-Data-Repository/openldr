@@ -1,6 +1,96 @@
 {
-  "generatedAt": "2026-09-30",
+  "generatedAt": "2026-10-06",
   "days": [
+    {
+      "date": "2026-10-06",
+      "version": null,
+      "entries": [
+        {
+          "hash": "fdb6a0c2",
+          "type": "fix",
+          "scope": "studio",
+          "title": "No Active badge on a failed pack"
+        },
+        {
+          "hash": "dd1508b6",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Finish a failed pack without --force, print the link preview, redact the step error"
+        },
+        {
+          "hash": "5c46d0a8",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Replace terminology by URL on reinstall, audit every pack step, refuse unsigned packs"
+        },
+        {
+          "hash": "51c558dd",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show a pack's status on its card, and offer install again on every pack"
+        },
+        {
+          "hash": "4c35bdbd",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Browse, install and manage content packs"
+        },
+        {
+          "hash": "d5badcde",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Keep market list light, and let market update reinstall a pack"
+        },
+        {
+          "hash": "5d476bc4",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Install content packs from the command line"
+        },
+        {
+          "hash": "634af2d1",
+          "type": "feat",
+          "scope": "server",
+          "title": "Install, list and detach content packs"
+        },
+        {
+          "hash": "65fb8351",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Count pack steps in the audit, and keep a failed map rebuild from failing the install"
+        },
+        {
+          "hash": "465ca2a6",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Install a content pack"
+        },
+        {
+          "hash": "43284b5a",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Check the register before any write when importing a register file"
+        },
+        {
+          "hash": "4320ca2b",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Shared helpers for importing a register file and checking a query file"
+        },
+        {
+          "hash": "8734d82d",
+          "type": "feat",
+          "scope": "db",
+          "title": "Record the status of a marketplace install"
+        },
+        {
+          "hash": "71fc5e5e",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "A content-pack artifact type"
+        }
+      ]
+    },
     {
       "date": "2026-09-30",
       "version": null,
