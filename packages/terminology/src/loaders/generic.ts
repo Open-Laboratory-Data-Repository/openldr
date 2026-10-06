@@ -18,16 +18,24 @@ export interface LoaderStore {
 
 export interface LoadResult { system: string; conceptsLoaded: number; resourceUrl: string }
 
-export async function importTerminologyResource(json: unknown, store: LoaderStore): Promise<LoadResult> {
+type TerminologyResource = {
+  resourceType: string;
+  url?: string;
+  concept?: { code: string; display?: string }[];
+  group?: { source?: string; target?: string; element: { code: string; target?: { code: string; equivalence?: string }[] }[] }[];
+};
+
+/** The checks `importTerminologyResource` runs before it writes anything. Throws `OpenLdrError`. */
+export function checkTerminologyResource(json: unknown): TerminologyResource & { url: string } {
   const v = validateResource(json);
   if (!v.ok) throw new OpenLdrError('invalid terminology resource');
-  const res = v.resource as {
-    resourceType: string;
-    url?: string;
-    concept?: { code: string; display?: string }[];
-    group?: { source?: string; target?: string; element: { code: string; target?: { code: string; equivalence?: string }[] }[] }[];
-  };
+  const res = v.resource as TerminologyResource;
   if (!res.url) throw new OpenLdrError('terminology resource requires a url');
+  return res as TerminologyResource & { url: string };
+}
+
+export async function importTerminologyResource(json: unknown, store: LoaderStore): Promise<LoadResult> {
+  const res = checkTerminologyResource(json);
   const ref = await store.saveResource(res);
   await store.saveSystem(res.url, null, res.resourceType, ref.id);
   let conceptsLoaded = 0;

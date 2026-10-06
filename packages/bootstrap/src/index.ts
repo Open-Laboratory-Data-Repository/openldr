@@ -38,6 +38,11 @@ import { wipeInternalDatabase, clearAuditAndRunHistory } from './danger';
 import { createReportScheduler, type ReportScheduler } from './report-scheduler';
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
+import { createTrustStore } from '@openldr/marketplace';
+import { createContentPackInstaller, type ContentPackInstaller } from './content-pack-install';
+import { checkCustomQueryFile, importCustomQueries } from './custom-query-transfer';
+import { importFacilityRegisterCsv } from './facility-register-file';
+import { linkMatchingFacilityCodes } from './facility-link-matching';
 import { type PluginRuntime } from '@openldr/plugins';
 import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
@@ -87,7 +92,7 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 import { recordAuditEvent, type AuditDetails } from './record-audit';
@@ -476,6 +481,8 @@ export interface AppContext {
   /** Read-only starter packs for the form builder. Rewritten from source on every boot. */
   starterPacks: StarterPackStore;
   marketplaceForms: FormArtifactInstaller;
+  /** Content packs: signed bundles of terminology, a facility register, link-matching and custom queries. */
+  marketplacePacks: ContentPackInstaller;
   reporting: ReportingApi;
   health: HealthRegistry;
   terminology: {
@@ -1065,6 +1072,28 @@ const reporting: ReportingApi = {
   });
 
   const connectorStore = createConnectorStore(internal.db);
+  // Built here, not beside `marketplaceForms`: it needs the terminology loaders, `facilityJobs` and `connectorStore`.
+  const marketplacePacks = createContentPackInstaller({
+    installStore: marketplaceInstalls,
+    trustStore: createTrustStore(internal.db),
+    audit,
+    loadResource: (json) => terminology.loaders.resource(json),
+    checkResource: (json) => { checkTerminologyResource(json); },
+    checkQueries: checkCustomQueryFile,
+    importQueries: (file) => importCustomQueries(
+      { customQueries: createCustomQueryStore(internal.db), connectors: connectorStore }, file, { replace: true }),
+    register: (input) => importFacilityRegisterCsv(
+      { db: internal.db, capture: referenceCapture, admin: termAdmin, facilityJobs, audit, logger }, input),
+    linkMatching: async (registerUrl) => {
+      const out = await linkMatchingFacilityCodes(
+        { internalDb: internal.db, externalDb, admin: termAdmin }, { registerUrl, apply: true });
+      if (!out.ok) return { ok: false, error: out.error };
+      if (out.result.applied && out.result.counts.linked > 0) {
+        await facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'content-pack' });
+      }
+      return { ok: true };
+    },
+  });
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
@@ -1663,6 +1692,7 @@ const reporting: ReportingApi = {
     forms,
     starterPacks,
     marketplaceForms,
+    marketplacePacks,
     reporting,
     health,
     terminology,
@@ -1916,3 +1946,4 @@ export { createWebhookReceiptService } from './workflow-receipts';
 export type { WorkflowReceipt, WorkflowReceiptService } from '@openldr/workflows';
 export * from './custom-query-transfer';
 export * from './facility-register-file';
+export * from './content-pack-install';
