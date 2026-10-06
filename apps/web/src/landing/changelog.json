@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "18cef568",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "The facility registry system is core, observed systems are ingest, register-file values are imported"
+        },
+        {
+          "hash": "fbb1f4c2",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Show each code system's description and source"
+        },
+        {
+          "hash": "24942e6d",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Show where each code system came from in terminology system list"
+        },
+        {
+          "hash": "6614dc9a",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "Name imported code systems from the resource, and record where each came from"
+        },
+        {
           "hash": "fdb6a0c2",
           "type": "fix",
           "scope": "studio",
