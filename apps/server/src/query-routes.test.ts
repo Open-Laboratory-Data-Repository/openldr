@@ -140,6 +140,20 @@ describe('POST /api/query/run', () => {
     expect(seen).toContain("f = 'Ndola'");
   });
 
+  it('returns 200 when an optional date range is left out, binding from and to to empty strings', async () => {
+    const deps = makeDeps();
+    let seen = '';
+    deps.runConnectorSql = async ({ sql }) => { seen = sql; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/run', payload: {
+      connectorId: 'c1', sql: "select * from t where ({{param.from}} = '' or d >= {{param.from}}) and ({{param.to}} = '' or d <= {{param.to}})",
+      params: [{ id: 'period', label: 'Period', type: 'daterange', required: false }],
+      values: {},
+    } });
+    expect(res.statusCode).toBe(200);
+    expect(seen).toContain("('' = '' or d >= '') and ('' = '' or d <= '')");
+  });
+
   it('returns 200 when an optional param is left out, binding it to an empty string', async () => {
     const deps = makeDeps();
     let seen = '';

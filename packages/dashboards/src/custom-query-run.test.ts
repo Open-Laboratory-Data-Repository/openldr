@@ -75,3 +75,32 @@ describe('substituteParams: a blank optional parameter means no filter', () => {
     expect(() => substituteParams('select {{param.region}}', [text], {})).toThrow('unbound parameter: region');
   });
 });
+
+describe('substituteParams: a blank optional date range means no filter', () => {
+  const sql = "select 1 where ({{param.from}} = '' or d >= {{param.from}}) and ({{param.to}} = '' or d <= {{param.to}})";
+  const optional = { id: 'period', label: 'Period', type: 'daterange' as const, required: false };
+  const required = { ...optional, required: true };
+
+  it('binds both sides to the empty string when the range is unset', () => {
+    expect(substituteParams(sql, [optional], {})).toBe("select 1 where ('' = '' or d >= '') and ('' = '' or d <= '')");
+  });
+  it('binds a cleared side (empty string) to the empty string', () => {
+    expect(substituteParams(sql, [optional], { period: { from: '', to: '' } }))
+      .toBe("select 1 where ('' = '' or d >= '') and ('' = '' or d <= '')");
+  });
+  it('binds the given side and leaves the other blank', () => {
+    expect(substituteParams(sql, [optional], { period: { from: '2026-01-01' } }))
+      .toBe("select 1 where ('2026-01-01' = '' or d >= '2026-01-01') and ('' = '' or d <= '')");
+  });
+  it('still binds a full range', () => {
+    expect(substituteParams(sql, [optional], { period: { from: '2026-01-01', to: '2026-01-31' } }))
+      .toBe("select 1 where ('2026-01-01' = '' or d >= '2026-01-01') and ('2026-01-31' = '' or d <= '2026-01-31')");
+  });
+  it('still rejects a malformed date', () => {
+    expect(() => substituteParams(sql, [optional], { period: { from: '01/02/2026' } })).toThrow('invalid date: 01/02/2026');
+  });
+  it('reports a required range with a missing or cleared side as required, not as an invalid date', () => {
+    expect(() => substituteParams(sql, [required], {})).toThrow('required parameter: period');
+    expect(() => substituteParams(sql, [required], { period: { from: '2026-01-01', to: '' } })).toThrow('required parameter: period');
+  });
+});

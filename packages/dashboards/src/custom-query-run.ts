@@ -15,7 +15,8 @@ function assertDate(v: unknown): string {
 }
 
 /** Replace {{param.x}} tokens in `sql` using declared params + supplied values.
- *  - daterange param `p` provides {{param.from}} and {{param.to}} (value: { from, to }).
+ *  - daterange param `p` provides {{param.from}} and {{param.to}} (value: { from, to }); a blank
+ *    side of an optional range is ''.
  *  - text/select provide {{param.<id>}} as a quoted string literal; an unset optional one is ''.
  *  Read-only substitution only; caller has already run validateSelectSql. */
 export function substituteParams(
@@ -26,9 +27,12 @@ export function substituteParams(
     const v = values[p.id];
     if (p.type === 'daterange') {
       const dr = (v ?? {}) as { from?: unknown; to?: unknown };
-      if (p.required && (dr.from == null || dr.to == null)) throw new Error(`required parameter: ${p.id}`);
-      if (dr.from != null) replacements.set('from', sqlString(assertDate(dr.from)));
-      if (dr.to != null) replacements.set('to', sqlString(assertDate(dr.to)));
+      // A side is blank when it is missing or '' (a date box the user cleared). Same rule as a
+      // text param: a blank optional side binds to '', a blank required side is an error.
+      const blank = (x: unknown) => x == null || x === '';
+      if (p.required && (blank(dr.from) || blank(dr.to))) throw new Error(`required parameter: ${p.id}`);
+      replacements.set('from', blank(dr.from) ? sqlString('') : sqlString(assertDate(dr.from)));
+      replacements.set('to', blank(dr.to) ? sqlString('') : sqlString(assertDate(dr.to)));
     } else {
       if (p.required && (v == null || v === '')) throw new Error(`required parameter: ${p.id}`);
       // A blank optional param binds to '' so the SQL can read it as "no filter". Callers such as
