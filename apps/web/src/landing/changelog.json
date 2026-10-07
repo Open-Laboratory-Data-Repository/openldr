@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "6cb06af0",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "The facility job worker runs only in the API server and finishes its job before shutdown"
+        },
+        {
           "hash": "4b4e029c",
           "type": "feat",
           "scope": "marketplace",
