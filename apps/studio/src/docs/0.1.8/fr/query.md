@@ -14,6 +14,8 @@ L'espace Query permet d'écrire et d'enregistrer des requêtes SQL. Les rapports
 
 Au lancement, un paramètre facultatif laissé vide vaut une chaîne vide. Il ne filtre donc rien si le SQL teste `''`.
 
+Pour lire le registre des établissements, interrogez la table `facility_registry` de l'entrepôt. Voir [Établissements](/docs/facilities).
+
 ![Éditeur SQL avec une requête enregistrée et ses résultats](query-sql-editor.png)
 
 ## Renommer une requête

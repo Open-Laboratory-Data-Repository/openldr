@@ -41,6 +41,7 @@ The query runs against the chosen connector and returns rows in the results grid
 - **The query is rejected:** only `SELECT` statements are allowed — statements that modify data or schema are not permitted.
 - **No connectors listed in the Explorer:** create or enable a supported database connector — see [Connectors](/docs/connectors).
 - **You need a different query name:** select Rename from the query's actions menu. Save the new name in the sheet. The query keeps its id, so reports still reference it. A duplicate name leaves the sheet open with your draft intact. Choose another name and save again. Do not delete a query to rename it.
+- **Need the facility register in a query?** Read the warehouse table `facility_registry`. See [Facilities](/docs/facilities).
 
 ## Advanced web usage
 

@@ -14,6 +14,8 @@ O espaço Query permite escrever e guardar consultas SQL. Os relatórios podem u
 
 Ao executar, um parâmetro opcional deixado em branco vale uma cadeia vazia. Por isso não filtra nada se o SQL testar `''`.
 
+Para ler o registo de unidades, consulte a tabela `facility_registry` do armazém. Ver [Unidades](/docs/facilities).
+
 ![Editor SQL com uma consulta guardada e os seus resultados](query-sql-editor.png)
 
 ## Renomear uma consulta

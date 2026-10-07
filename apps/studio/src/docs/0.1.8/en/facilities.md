@@ -427,6 +427,23 @@ An unknown column, or an operator that column does not allow, is rejected with a
 what was wrong, the same validation the toolbar uses. A mistyped flag fails the same way a
 mistyped filter would in the browser.
 
+## Querying a register
+
+The warehouse holds a copy of every register in the table `facility_registry`. A custom query on
+the Query page can read it, even before any results arrive. It has one row per facility, from
+every register, with `facility_system` (the register's URL), `facility_code`, `name`, the area
+columns, `register_state` and `extras` (as JSON text).
+
+The copy is rebuilt with the facility map: after an import, an edit, a delete, a content pack, a
+link-matching run, and at startup. To rebuild it by hand, run `openldr facilities publish --apply`.
+
+For example, the Mozambique facility register:
+
+    select facility_code, name, region, district
+    from facility_registry
+    where facility_system = 'urn:openldr:mz:facilities'
+    order by facility_code
+
 ## Related guides
 
 - [Terminology](/docs/terminology)
