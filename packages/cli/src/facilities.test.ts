@@ -2378,7 +2378,7 @@ describe('facilities publish CLI', () => {
   });
 
   it('dry-runs by default: does not set apply, prints resolved/unmapped/targetMissing/written, does not audit', async () => {
-    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, nonFacilityTarget: 2, ambiguous: 1, written: 12 });
+    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, nonFacilityTarget: 2, ambiguous: 1, written: 12, registryRows: 3150 });
 
     const code = await runFacilitiesPublish({ json: false });
 
@@ -2396,11 +2396,12 @@ describe('facilities publish CLI', () => {
     expect(human).toMatch(/nonFacilityTarget 2/);
     expect(human).toMatch(/ambiguous 1/);
     expect(human).toMatch(/written 12/);
+    expect(human).toMatch(/registry rows 3150/);
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
   });
 
   it('--apply writes and audits facility.publish', async () => {
-    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, nonFacilityTarget: 2, ambiguous: 1, written: 12 });
+    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, nonFacilityTarget: 2, ambiguous: 1, written: 12, registryRows: 3150 });
 
     const code = await runFacilitiesPublish({ apply: true, json: false });
 
@@ -2413,6 +2414,7 @@ describe('facilities publish CLI', () => {
     );
     const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(human).toMatch(/written 12/);
+    expect(human).toMatch(/registry rows 3150/);
   });
 
   it('--json emits the whole machine-readable result', async () => {
