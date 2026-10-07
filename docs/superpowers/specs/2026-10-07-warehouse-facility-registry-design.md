@@ -61,7 +61,8 @@ every register, every `register_state`.
 - The same name as the internal table is deliberate: it is the same data. The two never meet in
   one query, since they are in different databases.
 
-`packages/db/src/schema/external.ts` gets a `FacilityRegistryTable` type, an entry in
+`packages/db/src/schema/external.ts` gets a `WarehouseFacilityRegistryTable` type (the internal
+schema already exports `FacilityRegistryTable`, and the db barrel re-exports both modules), an entry in
 `ExternalSchema`, and an entry in `EXTERNAL_TABLE_COLUMNS` (the type requires it).
 
 ## The refresh
@@ -76,7 +77,7 @@ every register, every `register_state`.
   batch (1,890 parameters).
 - One transaction with `facility_map`, so a reader never sees the copy empty or out of step with
   the dimension.
-- A dry run (`apply` false) reads and writes nothing for the copy.
+- A dry run (`apply` false) counts the register rows and writes nothing.
 - `PublishResult` gains `registryRows`: the number of rows copied. The CLI and the route print it.
 
 Every path that changes register rows already queues `facility-map-rebuild`:
@@ -98,7 +99,9 @@ Sync between nodes is not affected. `facility_registry` sync is suspended
 
 - The dashboard builder's model list (`packages/dashboards/src/models/registry.ts`) and Data
   Exposure governance (`dashboards-routes.ts:23`). The Query page needs neither. Both list tables
-  by hand, so the new table stays out of them until someone adds it.
+  by hand, so the new table stays out of them until someone adds it. The table carries no patient
+  data. `export-data.test.ts` pins the list of warehouse tables, and its comment records why this
+  one is there.
 - Warehouse CSV export (`packages/db/src/export-data.ts`). It lists tables by hand too.
 - Value-mapping Mozambique's facility type and `HFStatus`, and carrying the MISAU national code
   or province and district codes. Those are pack changes. Once a pack carries them in `extras`,
