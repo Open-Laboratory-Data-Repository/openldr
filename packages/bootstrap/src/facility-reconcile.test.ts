@@ -2999,6 +2999,19 @@ describe('publishFacilityMap copies the register into the warehouse', () => {
     expect(rows.map((r) => r.register_state)).toEqual(internal.map((r) => r.register_state));
   });
 
+  it('copies a register larger than one insert batch', async () => {
+    const deps = await makeReconcileDeps();
+    for (let i = 0; i < 91; i++) {
+      await seedRegistry(deps, { id: `bulk-${i}`, name: `Bulk ${i}`, nationalCode: `B${i}`, nationalSystem: 'urn:test:bulk' });
+    }
+
+    const result = await publishFacilityMap(deps, { apply: true });
+
+    expect(result.registryRows).toBe(91);
+    const count = await deps.externalDb.selectFrom('facility_registry').select('id').execute();
+    expect(count).toHaveLength(91);
+  });
+
   it('drops a row deleted from the register on the next apply', async () => {
     const deps = await makeReconcileDeps();
     await seedTwoRegisters(deps);
