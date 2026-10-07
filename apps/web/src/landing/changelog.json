@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "f778307b",
+          "type": "fix",
+          "scope": "query",
+          "title": "A blank optional date range means no filter"
+        },
+        {
           "hash": "6cb06af0",
           "type": "fix",
           "scope": "bootstrap",
