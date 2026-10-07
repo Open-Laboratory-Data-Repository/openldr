@@ -7,7 +7,7 @@ describe('createFacilityJobRunners', () => {
   it('runRebuild calls publishFacilityMap with apply: true, not a dry run', async () => {
     const deps = await makeReconcileDeps();
     const publishFacilityMap = vi.fn<typeof PublishFacilityMap>(async () => ({
-      resolved: 3, unmapped: 1, targetMissing: 0, nonFacilityTarget: 0, ambiguous: 0, written: 4,
+      resolved: 3, unmapped: 1, targetMissing: 0, nonFacilityTarget: 0, ambiguous: 0, written: 4, registryRows: 0,
     }));
     const projectRegistryRows = vi.fn<typeof ProjectRegistryRows>(async () => true);
     const runners = createFacilityJobRunners({ ...deps, publishFacilityMap, projectRegistryRows });
