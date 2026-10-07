@@ -2945,6 +2945,21 @@ describe('runFacilitiesDelete', () => {
     expect(mocks.ctx.facilityRegistry.removeMany).not.toHaveBeenCalled();
   });
 
+  it('queues the facility map rebuild after a delete', async () => {
+    mocks.ctx.facilityRegistry.idsMatching.mockResolvedValue([{ id: 'f1', facilityCode: 'A1' }]);
+    mocks.ctx.facilityRegistry.removeMany.mockResolvedValue(1);
+
+    await runFacilitiesDelete({ where: ['facilitySystem:eq:urn:zmb:mfl'], force: true, json: false });
+
+    expect(mocks.ctx.facilityJobs.enqueue).toHaveBeenCalledWith({ kind: 'facility-map-rebuild', requestedBy: 'cli' });
+  });
+
+  it('does not queue a rebuild when nothing matched', async () => {
+    mocks.ctx.facilityRegistry.idsMatching.mockResolvedValue([]);
+    await runFacilitiesDelete({ where: ['facilitySystem:eq:urn:none'], force: true, json: false });
+    expect(mocks.ctx.facilityJobs.enqueue).not.toHaveBeenCalled();
+  });
+
   it('audits as the CLI actor, with the count and the filter', async () => {
     mocks.ctx.facilityRegistry.idsMatching.mockResolvedValue([{ id: 'f1', facilityCode: 'A1' }]);
     mocks.ctx.facilityRegistry.removeMany.mockResolvedValue(1);

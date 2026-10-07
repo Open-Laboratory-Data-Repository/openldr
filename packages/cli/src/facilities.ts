@@ -1750,6 +1750,14 @@ export async function runFacilitiesDelete(opts: FacilitiesDeleteOpts): Promise<n
       await reprojectAfterRegistryDelete(deps, { id: row.id, facilityCode: row.facilityCode ?? null });
     }
 
+    // Refresh the warehouse copies, as the HTTP bulk delete does.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'cli' });
+    } catch (err) {
+      process.stderr.write(`warning: the facilities were deleted, but queueing the facility map rebuild failed: ${redactError(err)}. Run: openldr facilities publish --apply
+`);
+    }
+
     await recordAuditEvent(ctx, cliActor(), {
       action: 'facility.bulk_delete',
       entityType: 'facility',
