@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "36b89a4f",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Facilities delete refreshes the warehouse copies"
+        },
+        {
+          "hash": "ae162bb9",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A bulk delete refreshes the warehouse copies"
+        },
+        {
+          "hash": "19146f13",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Facilities publish prints the register rows copied"
+        },
+        {
+          "hash": "838f0005",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Copy the facility register into the warehouse on every rebuild"
+        },
+        {
+          "hash": "82ed91d6",
+          "type": "feat",
+          "scope": "db",
+          "title": "A warehouse copy of the facility register"
+        },
+        {
           "hash": "6c686db8",
           "type": "fix",
           "scope": "query",
