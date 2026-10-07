@@ -22,6 +22,8 @@ export interface FacilityRegisterFileInput {
   name: string;
   code: string;
   csv: string;
+  /** Headers to keep in `extras`. Matched without regard to case; `extras` keys are lowercase. */
+  extraColumns?: string[];
   apply: boolean;
   actor: { id: string | null; name: string };
 }
@@ -46,8 +48,9 @@ async function finishRun(
 }
 
 /** The reason a previewed file must not be applied, or null. Same refusals as the CLI. */
-function refusalOf(preview: FacilityImportResult): string | null {
-  if (preview.unknownColumns.length > 0) return `unrecognised column(s): ${preview.unknownColumns.join(', ')}`;
+function refusalOf(preview: FacilityImportResult, extraColumns: ReadonlySet<string>): string | null {
+  const unknown = preview.unknownColumns.filter((c) => !extraColumns.has(c.toLowerCase()));
+  if (unknown.length > 0) return `unrecognised column(s): ${unknown.join(', ')}`;
   if (!preview.blocked) return null;
   if (preview.blockedReason === 'duplicate-columns') return `duplicate column header(s): ${preview.duplicateColumns.join(', ')}`;
   if (preview.blockedReason === 'column-map') {
@@ -75,7 +78,13 @@ export async function importFacilityRegisterCsv(
 
   // A register source that did not exist yet has no earlier rows, so nothing can be absent from it.
   // `completeRelease` only switches on the absence count. With `onAbsent: 'report'` nothing is retired.
-  const importOptions = { nationalSystem: input.url, completeRelease: !!existing, onAbsent: 'report' as const };
+  // Listed extra columns are imported into `extras`. Every other unknown header is still refused
+  // below, so the parser is only told to allow unknown columns when there is a list to check against.
+  const extraColumns = new Set((input.extraColumns ?? []).map((c) => c.trim().toLowerCase()));
+  const importOptions = {
+    nationalSystem: input.url, completeRelease: !!existing, onAbsent: 'report' as const,
+    ...(extraColumns.size > 0 ? { allowUnknownColumns: true } : {}),
+  };
 
   if (existing) {
     // Same gate as the CLI, and it runs on a preview too: a deactivated register is refused up front.
@@ -86,7 +95,7 @@ export async function importFacilityRegisterCsv(
     // exists. Check every refusal first, so a refused file leaves no source row behind.
     try {
       const first = await importFacilities(deps, input.csv, { ...importOptions, runId: null, apply: undefined });
-      const refusal = refusalOf(first);
+      const refusal = refusalOf(first, extraColumns);
       if (refusal) return { ok: false, error: refusal };
       if (!input.apply) return { ok: true, result: first };
     } catch (err) {
@@ -118,7 +127,7 @@ export async function importFacilityRegisterCsv(
     const runId = run?.id ?? null;
     const preview = await importFacilities(deps, input.csv, { ...importOptions, runId, apply: undefined });
 
-    const refusal = refusalOf(preview);
+    const refusal = refusalOf(preview, extraColumns);
     if (refusal) {
       if (run) await finishRun(runs, deps.logger, run.id, 'failed', `refused: ${refusal}`);
       return { ok: false, error: refusal };

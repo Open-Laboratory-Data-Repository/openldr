@@ -26,6 +26,14 @@ describe('content pack', () => {
   it('rejects a malformed known step', () => {
     expect(() => parseContentPack({ formatVersion: 1, steps: [{ kind: 'link-matching' }] })).toThrow(/invalid pack/);
   });
+  it('keeps a register step\'s extraColumns', () => {
+    const reg = { kind: 'facility-register', url: 'urn:x:reg', name: 'Sites', code: 'sites', csv: 'national_code,name\n1,A\n', extraColumns: ['province_code', 'district_code'] };
+    expect(parseContentPack({ formatVersion: 1, steps: [reg] }).steps[0]).toMatchObject({ extraColumns: ['province_code', 'district_code'] });
+  });
+  it('rejects an empty name in extraColumns', () => {
+    const reg = { kind: 'facility-register', url: 'urn:x:reg', name: 'Sites', code: 'sites', csv: 'national_code,name\n1,A\n', extraColumns: [''] };
+    expect(() => parseContentPack({ formatVersion: 1, steps: [reg] })).toThrow(/invalid pack/);
+  });
   it('summarizes each step kind', () => {
     expect(summarizeContentPack(parseContentPack(full))).toEqual([
       { kind: 'code-system', label: 'Colours', count: 1 },

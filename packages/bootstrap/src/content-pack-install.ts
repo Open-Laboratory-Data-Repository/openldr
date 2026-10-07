@@ -34,7 +34,7 @@ export interface ContentPackDeps {
   checkQueries(file: unknown): void;
   /** Imports with replace. Returns each created or replaced query with its row before and after. */
   importQueries(file: unknown): Promise<{ changes: PackQueryChange[] }>;
-  register(input: { url: string; name: string; code: string; csv: string; apply: boolean; actor: Actor }): Promise<StepOutcome>;
+  register(input: { url: string; name: string; code: string; csv: string; extraColumns?: string[]; apply: boolean; actor: Actor }): Promise<StepOutcome>;
   linkMatching(registerUrl: string, actor: Actor): Promise<{ ok: true; counts: Record<string, number> } | { ok: false; error: string }>;
   /** Link-matching with `apply: false`. Writes nothing. */
   previewLinkMatching(registerUrl: string): Promise<
@@ -105,7 +105,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
           deps.checkQueries(step.file);
           break;
         case 'facility-register': {
-          const out = await deps.register({ url: step.url, name: step.name, code: step.code, csv: step.csv, apply: false, actor });
+          const out = await deps.register({ url: step.url, name: step.name, code: step.code, csv: step.csv, extraColumns: step.extraColumns, apply: false, actor });
           if (!out.ok) throw new Error(out.error);
           packRegisters.add(step.url);
           break;
@@ -141,7 +141,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       }
       case 'facility-register': {
         // The register helper writes its own `facility.import` audit.
-        const out = await deps.register({ url: step.url, name: step.name, code: step.code, csv: step.csv, apply: true, actor });
+        const out = await deps.register({ url: step.url, name: step.name, code: step.code, csv: step.csv, extraColumns: step.extraColumns, apply: true, actor });
         if (!out.ok) throw new Error(out.error);
         return;
       }

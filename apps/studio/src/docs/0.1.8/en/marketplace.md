@@ -63,6 +63,8 @@ Installing twice is safe:
 
 Rows dropped from a newer pack's register are reported. They are never retired.
 
+A register step can list extra columns. Their values go into each facility's `extras`, keyed by the column name in lowercase. Custom queries read them from the warehouse table `facility_registry`. Any other column the register does not know still refuses the pack. An older CE refuses a pack that lists extra columns, and writes nothing.
+
 Choose **Detach** to forget the install record. It keeps everything the pack wrote. There is no uninstall.
 
 From the command line, `openldr market install <bundle-dir> --dry-run` runs the checks and prints the steps, with how many codes each link-matching step would link. It writes nothing.
