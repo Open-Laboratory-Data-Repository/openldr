@@ -124,6 +124,20 @@ describe('createContentPackInstaller', () => {
     await cleanup();
   });
 
+  it('passes a register step\'s extraColumns to the check and the write', async () => {
+    const steps = PACK.steps.map((s) => (s.kind === 'facility-register' ? { ...s, extraColumns: ['province_code', 'district_code'] } : s));
+    const pack = { ...PACK, steps };
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+    await s.installer.install(bundle, { actor });
+    const calls = (s.deps.register as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(calls.map((c: any) => [c.apply, c.extraColumns])).toEqual([
+      [false, ['province_code', 'district_code']],
+      [true, ['province_code', 'district_code']],
+    ]);
+    await cleanup();
+  });
+
   it('a register preview that refuses fails before any write', async () => {
     const { bundle, cleanup } = await buildPack();
     const register = vi.fn(async (i: any) => (i.apply ? { ok: true as const } : { ok: false as const, error: 'unrecognised column(s): x' }));

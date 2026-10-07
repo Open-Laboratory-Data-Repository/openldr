@@ -103,6 +103,32 @@ describe('importFacilityRegisterCsv', () => {
     expect(runs.map((r) => r.status).sort()).toEqual(['applied', 'failed']);
   });
 
+  it('carries listed extra columns into extras, matched without regard to case', async () => {
+    const { db, deps } = await build();
+    const body = [HEADER + ',Province_Code,district_code', row('t1', 'Alpha Post') + ',01,U2', row('t2', 'Beta Post') + ',02,'].join('\n') + '\n';
+    const out = await importFacilityRegisterCsv(deps, { ...input(body, true), extraColumns: ['province_code', 'District_Code'] });
+    expect(out.ok).toBe(true);
+    const rows = await db.selectFrom('facility_registry').select(['facility_code', 'extras']).orderBy('facility_code').execute();
+    expect(rows[0]).toMatchObject({ facility_code: 't1', extras: { province_code: '01', district_code: 'U2' } });
+    expect((rows[1].extras as Record<string, unknown>).province_code).toBe('02');
+  });
+
+  it('still refuses an unknown column that extraColumns does not list', async () => {
+    const { db, deps } = await build();
+    const body = [HEADER + ',province_code,mystery', row('t1', 'Alpha Post') + ',01,x'].join('\n') + '\n';
+    const out = await importFacilityRegisterCsv(deps, { ...input(body, true), extraColumns: ['province_code'] });
+    expect(out).toEqual({ ok: false, error: 'unrecognised column(s): mystery' });
+    expect(await createFacilityRegisterSourceStore(db).getByUrl(URL)).toBeNull();
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('refuses a listed extra column when extraColumns is not given', async () => {
+    const { deps } = await build();
+    const body = [HEADER + ',province_code', row('t1', 'Alpha Post') + ',01'].join('\n') + '\n';
+    const out = await importFacilityRegisterCsv(deps, input(body, true));
+    expect(out).toEqual({ ok: false, error: 'unrecognised column(s): province_code' });
+  });
+
   it('a deactivated source is refused on a preview too', async () => {
     const { db, deps } = await build();
     await createFacilityRegisterSourceStore(db).create({ url: URL, name: 'Test labs', code: 'TL' });

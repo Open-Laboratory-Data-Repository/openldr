@@ -11,7 +11,12 @@ const fhir = (resourceType: 'CodeSystem' | 'ValueSet') =>
 const stepSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('code-system'), resource: fhir('CodeSystem') }),
   z.object({ kind: z.literal('value-set'), resource: fhir('ValueSet') }),
-  z.object({ kind: z.literal('facility-register'), url: z.string().min(1), name: z.string().min(1), code: z.string().min(1), csv: z.string().min(1) }),
+  // `extraColumns`: CSV headers the register import keeps in each row's `extras`. Any other unknown
+  // header is still refused. A CE without this field strips it and refuses those headers too.
+  z.object({
+    kind: z.literal('facility-register'), url: z.string().min(1), name: z.string().min(1), code: z.string().min(1), csv: z.string().min(1),
+    extraColumns: z.array(z.string().min(1)).optional(),
+  }),
   z.object({ kind: z.literal('link-matching'), registerUrl: z.string().min(1) }),
   z.object({ kind: z.literal('custom-queries'), file: z.object({ queries: z.array(z.object({ name: z.string() }).passthrough()) }).passthrough() }),
 ]);

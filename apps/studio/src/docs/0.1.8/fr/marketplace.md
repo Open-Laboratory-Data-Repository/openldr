@@ -60,6 +60,8 @@ Installer deux fois est sans risque :
 
 Les lignes absentes du registre d'un paquet plus récent sont signalées. Elles ne sont jamais retirées.
 
+Une étape de registre peut lister des colonnes supplémentaires. Leurs valeurs vont dans les `extras` de chaque établissement, sous le nom de la colonne en minuscules. Les requêtes personnalisées les lisent dans la table `facility_registry` de l'entrepôt. Toute autre colonne inconnue du registre fait toujours refuser le paquet. Une version plus ancienne de CE refuse un paquet qui liste des colonnes supplémentaires, et n'écrit rien.
+
 Choisissez **Détacher** pour oublier l'enregistrement d'installation. Tout ce que le paquet a écrit est conservé. Il n'existe pas de désinstallation.
 
 Dans la ligne de commande, `openldr market install <bundle-dir> --dry-run` exécute les contrôles et affiche les étapes, avec le nombre de codes que chaque étape de mise en correspondance des liens lierait. Elle n'écrit rien.
