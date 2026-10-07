@@ -469,6 +469,24 @@ Une colonne inconnue, ou un opérateur que cette colonne n'autorise pas, est rej
 qui nomme précisément l'erreur, la même validation qu'utilise la barre d'outils. Un indicateur mal
 saisi échoue de la même façon qu'un filtre mal saisi dans le navigateur.
 
+## Interroger un registre
+
+L'entrepôt garde une copie de chaque registre dans la table `facility_registry`. Une requête
+personnalisée de la page Query peut la lire, même avant l'arrivée de résultats. Elle contient une
+ligne par établissement, de chaque registre, avec `facility_system` (l'URL du registre),
+`facility_code`, `name`, les colonnes de zone, `register_state` et `extras` (en texte JSON).
+
+La copie est reconstruite avec la carte des établissements : après une importation, une
+modification, une suppression, un pack de contenu, une liaison des codes, et au démarrage. Pour la
+reconstruire à la main, lancez `openldr facilities publish --apply`.
+
+Par exemple, le registre des établissements du Mozambique :
+
+    select facility_code, name, region, district
+    from facility_registry
+    where facility_system = 'urn:openldr:mz:facilities'
+    order by facility_code
+
 ## Guides associés
 
 - [Terminologie](/docs/terminology)

@@ -1472,7 +1472,7 @@ export async function runFacilitiesPublish(opts: FacilitiesPublishOpts): Promise
 }
 
 function formatPublishHuman(result: PublishResult, opts: FacilitiesPublishOpts): string {
-  const counts = `resolved ${result.resolved}, unmapped ${result.unmapped}, targetMissing ${result.targetMissing}, nonFacilityTarget ${result.nonFacilityTarget}, ambiguous ${result.ambiguous}, written ${result.written}`;
+  const counts = `resolved ${result.resolved}, unmapped ${result.unmapped}, targetMissing ${result.targetMissing}, nonFacilityTarget ${result.nonFacilityTarget}, ambiguous ${result.ambiguous}, written ${result.written}, registry rows ${result.registryRows}`;
   return opts.apply
     ? `applied: ${counts}`
     : `DRY RUN — nothing written. Rerun with --apply to write.\n${counts}`;
@@ -1748,6 +1748,14 @@ export async function runFacilitiesDelete(opts: FacilitiesDeleteOpts): Promise<n
     const deleted = await ctx.facilityRegistry.removeMany(ids);
     for (const row of matched) {
       await reprojectAfterRegistryDelete(deps, { id: row.id, facilityCode: row.facilityCode ?? null });
+    }
+
+    // Refresh the warehouse copies, as the HTTP bulk delete does.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'cli' });
+    } catch (err) {
+      process.stderr.write(`warning: the facilities were deleted, but queueing the facility map rebuild failed: ${redactError(err)}. Run: openldr facilities publish --apply
+`);
     }
 
     await recordAuditEvent(ctx, cliActor(), {

@@ -451,6 +451,24 @@ Uma coluna desconhecida, ou um operador que essa coluna não permite, é rejeita
 que identifica exatamente o erro, a mesma validação que a barra de ferramentas usa. Um sinalizador
 mal escrito falha da mesma forma que um filtro mal escrito falharia no navegador.
 
+## Consultar um registo
+
+O armazém guarda uma cópia de cada registo na tabela `facility_registry`. Uma consulta
+personalizada na página Query pode lê-la, mesmo antes de chegarem resultados. Tem uma linha por
+unidade, de cada registo, com `facility_system` (o URL do registo), `facility_code`, `name`, as
+colunas de área, `register_state` e `extras` (em texto JSON).
+
+A cópia é reconstruída com o mapa de unidades: depois de uma importação, uma edição, uma
+eliminação, um pacote de conteúdo, uma ligação de códigos, e no arranque. Para a reconstruir à
+mão, execute `openldr facilities publish --apply`.
+
+Por exemplo, o registo de unidades de Moçambique:
+
+    select facility_code, name, region, district
+    from facility_registry
+    where facility_system = 'urn:openldr:mz:facilities'
+    order by facility_code
+
 ## Guias relacionados
 
 - [Terminologia](/docs/terminology)

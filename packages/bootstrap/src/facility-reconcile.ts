@@ -832,10 +832,39 @@ export interface PublishResult {
    *  when what they must actually do is remove one of the two they already have. */
   ambiguous: number;
   written: number;
+  /** Register rows in the warehouse copy, `facility_registry` (migration 021). On a dry run, the
+   *  number that would be copied. */
+  registryRows: number;
+}
+
+/** 21 columns, so 90 rows bind 1,890 parameters: under MSSQL's 2,100. */
+const REGISTRY_COPY_CHUNK = 90;
+
+/** One internal register row as its warehouse copy. `extras` becomes JSON text, NULL when empty,
+ *  because SQL Server and MySQL have no jsonb. */
+function toWarehouseRegistryRow(r: {
+  id: string; facility_system: string | null; facility_code: string; name: string;
+  level: string | null; ownership: string | null; status: string | null; register_state: string;
+  country: string | null; zone: string | null; region: string | null; district: string | null;
+  council: string | null; ward: string | null; village: string | null; address_text: string | null;
+  phone: string | null; latitude: number | null; longitude: number | null; extras: unknown; updated_at: unknown;
+}) {
+  const extras = typeof r.extras === 'string' ? JSON.parse(r.extras) as unknown : r.extras;
+  const hasExtras = extras !== null && typeof extras === 'object' && Object.keys(extras as object).length > 0;
+  return {
+    id: r.id, facility_system: r.facility_system, facility_code: r.facility_code, name: r.name,
+    level: r.level, ownership: r.ownership, status: r.status, register_state: r.register_state,
+    country: r.country, zone: r.zone, region: r.region, district: r.district, council: r.council,
+    ward: r.ward, village: r.village, address_text: r.address_text, phone: r.phone,
+    latitude: r.latitude, longitude: r.longitude,
+    extras: hasExtras ? JSON.stringify(extras) : null,
+    updated_at: new Date(r.updated_at as string),
+  };
 }
 
 /**
- * Rebuild `facility_map` from the current resolution.
+ * Rebuild `facility_map` from the current resolution, and the warehouse copy of the register
+ * (`facility_registry`) from the internal one.
  *
  * ⛔ DELETE-then-INSERT, never upsert-then-prune. All three dialect batch-upserts conflict on `id`
  * and MSSQL caps at ~2000 bound parameters, so a `where id not in (...)` prune is unimplementable
@@ -853,6 +882,13 @@ export async function publishFacilityMap(
 
   const resolved = await resolveObservedFacilities(deps);
 
+  // The whole register, for the warehouse copy. Read before the transaction, like `resolved`.
+  const registry = await deps.internalDb.selectFrom('facility_registry')
+    .select(['id', 'facility_system', 'facility_code', 'name', 'level', 'ownership', 'status', 'register_state',
+      'country', 'zone', 'region', 'district', 'council', 'ward', 'village', 'address_text', 'phone',
+      'latitude', 'longitude', 'extras', 'updated_at'])
+    .execute();
+
   const result: PublishResult = {
     resolved: resolved.filter((r) => r.resolvedVia !== null).length,
     // Fix 1: a `nonFacilityTarget` row must NOT fall into this bucket — it is not "never mapped",
@@ -863,6 +899,7 @@ export async function publishFacilityMap(
     nonFacilityTarget: resolved.filter((r) => r.nonFacilityTarget).length,
     ambiguous: resolved.filter((r) => r.ambiguous).length,
     written: resolved.length,
+    registryRows: registry.length,
   };
   if (!opts.apply) return result;
 
@@ -927,6 +964,14 @@ export async function publishFacilityMap(
     const chunk = 130;
     for (let i = 0; i < rows.length; i += chunk) {
       await trx.insertInto('facility_map').values(rows.slice(i, i + chunk) as never).execute();
+    }
+
+    // The warehouse copy of the register, in the same transaction so a reader never sees it out
+    // of step with facility_map. Delete then insert, for the reason in this function's doc comment.
+    await trx.deleteFrom('facility_registry').execute();
+    const copy = registry.map(toWarehouseRegistryRow);
+    for (let i = 0; i < copy.length; i += REGISTRY_COPY_CHUNK) {
+      await trx.insertInto('facility_registry').values(copy.slice(i, i + REGISTRY_COPY_CHUNK)).execute();
     }
   });
 

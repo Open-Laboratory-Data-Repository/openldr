@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, internalMigrations, observedSystemForFeed } from '@openldr/db';
+import { sql } from 'kysely';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTER_STATE_DROPPED, FACILITY_REGISTRY_SYSTEM, internalMigrations, observedSystemForFeed } from '@openldr/db';
 import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant, registryConceptCodeById } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRequesters, seedRegistry, seedMapping, currentConceptCode, dropOneActiveFacilityResolutionIndex } from './test-support/facility-reconcile-fixture';
 
@@ -2962,5 +2963,75 @@ describe('facility codes from both roles (slice B)', () => {
 
     const { rows } = await deps.admin.terms.search(observedSystemForFeed('webhook-ingest'), { limit: 10, offset: 0 });
     expect(rows).toHaveLength(0);
+  });
+});
+
+// Spec 2026-10-07-warehouse-facility-registry: the warehouse holds a copy of every register row,
+// so a custom query can list a register with no results present.
+describe('publishFacilityMap copies the register into the warehouse', () => {
+  async function seedTwoRegisters(deps: Awaited<ReturnType<typeof makeReconcileDeps>>) {
+    await seedRegistry(deps, { id: 'fac-1', name: 'HG Machava', nationalCode: 'PMC', nationalSystem: 'urn:test:facilities', region: 'Maputo Provincia', district: 'Matola' });
+    await seedRegistry(deps, { id: 'fac-2', name: 'Old clinic', nationalCode: 'OLD', nationalSystem: 'urn:test:facilities' });
+    await seedRegistry(deps, { id: 'lab-1', name: 'HG Machava lab', nationalCode: 'PMC', nationalSystem: 'urn:test:labs' });
+    await deps.internalDb.updateTable('facility_registry')
+      .set({ register_state: FACILITY_REGISTER_STATE_DROPPED, extras: sql`cast(${JSON.stringify({ HFStatus: '0' })} as jsonb)` } as never)
+      .where('id', '=', 'fac-2').execute();
+  }
+
+  it('copies every row of every register, a dropped one included', async () => {
+    const deps = await makeReconcileDeps();
+    await seedTwoRegisters(deps);
+
+    const result = await publishFacilityMap(deps, { apply: true });
+
+    expect(result.registryRows).toBe(3);
+    const rows = await deps.externalDb.selectFrom('facility_registry').selectAll().orderBy('id').execute();
+    expect(rows.map((r) => [r.id, r.facility_system, r.facility_code, r.name])).toEqual([
+      ['fac-1', 'urn:test:facilities', 'PMC', 'HG Machava'],
+      ['fac-2', 'urn:test:facilities', 'OLD', 'Old clinic'],
+      ['lab-1', 'urn:test:labs', 'PMC', 'HG Machava lab'],
+    ]);
+    expect(rows[0]).toMatchObject({ region: 'Maputo Provincia', district: 'Matola', extras: null });
+    expect(rows[1].register_state).toBe(FACILITY_REGISTER_STATE_DROPPED);
+    expect(JSON.parse(rows[1].extras!)).toEqual({ HFStatus: '0' });
+    // Every register_state comes across exactly as the internal row holds it.
+    const internal = await deps.internalDb.selectFrom('facility_registry').select(['id', 'register_state']).orderBy('id').execute();
+    expect(rows.map((r) => r.register_state)).toEqual(internal.map((r) => r.register_state));
+  });
+
+  it('copies a register larger than one insert batch', async () => {
+    const deps = await makeReconcileDeps();
+    for (let i = 0; i < 91; i++) {
+      await seedRegistry(deps, { id: `bulk-${i}`, name: `Bulk ${i}`, nationalCode: `B${i}`, nationalSystem: 'urn:test:bulk' });
+    }
+
+    const result = await publishFacilityMap(deps, { apply: true });
+
+    expect(result.registryRows).toBe(91);
+    const count = await deps.externalDb.selectFrom('facility_registry').select('id').execute();
+    expect(count).toHaveLength(91);
+  });
+
+  it('drops a row deleted from the register on the next apply', async () => {
+    const deps = await makeReconcileDeps();
+    await seedTwoRegisters(deps);
+    await publishFacilityMap(deps, { apply: true });
+    await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'lab-1').execute();
+
+    const result = await publishFacilityMap(deps, { apply: true });
+
+    expect(result.registryRows).toBe(2);
+    const ids = (await deps.externalDb.selectFrom('facility_registry').select('id').orderBy('id').execute()).map((r) => r.id);
+    expect(ids).toEqual(['fac-1', 'fac-2']);
+  });
+
+  it('counts the rows on a dry run and writes nothing', async () => {
+    const deps = await makeReconcileDeps();
+    await seedTwoRegisters(deps);
+
+    const result = await publishFacilityMap(deps, {});
+
+    expect(result.registryRows).toBe(3);
+    expect(await deps.externalDb.selectFrom('facility_registry').select('id').execute()).toEqual([]);
   });
 });
