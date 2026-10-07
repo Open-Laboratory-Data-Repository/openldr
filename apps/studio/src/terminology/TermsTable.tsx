@@ -201,37 +201,29 @@ export function TermsTable({
           onChange={(e) => void handleFileChange(e)}
         />
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 text-xs"
-          disabled={importBusy}
-          onClick={() => fileRef.current?.click()}
-        >
-          <Upload className="h-3.5 w-3.5" />
-          {importBusy ? 'Importing…' : 'Import'}
-        </Button>
-
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-1.5 text-xs"
-          asChild
-        >
-          <a href={termsTemplateUrl(systemId)} download>
-            <Download className="h-3.5 w-3.5" />
-            Template
-          </a>
-        </Button>
-
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 text-xs"
-          onClick={() => onOpenTerm(null)}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New term
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label="Term actions">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => onOpenTerm(null)}>
+              <Plus className="mr-2 h-3.5 w-3.5" />
+              New term
+            </DropdownMenuItem>
+            <DropdownMenuItem disabled={importBusy} onSelect={() => fileRef.current?.click()}>
+              <Upload className="mr-2 h-3.5 w-3.5" />
+              {importBusy ? 'Importing…' : 'Import terms'}
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <a href={termsTemplateUrl(systemId)} download className="text-inherit no-underline">
+                <Download className="mr-2 h-3.5 w-3.5" />
+                Download template
+              </a>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Action error banner */}

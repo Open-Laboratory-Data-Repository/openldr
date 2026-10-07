@@ -56,4 +56,23 @@ describe('TermsTable', () => {
       ),
     );
   });
+
+  it('puts import, template and new term in one actions menu, with no standalone buttons', async () => {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [], total: 0 });
+    const onOpenTerm = vi.fn();
+    render(<TermsTable systemId="sys1" onOpenTerm={onOpenTerm} />);
+
+    expect(screen.queryByRole('button', { name: /^import$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /new term/i })).not.toBeInTheDocument();
+
+    const trigger = screen.getByRole('button', { name: 'Term actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /new term/i })) fireEvent.keyDown(trigger, { key: 'Enter' });
+
+    expect(await screen.findByRole('menuitem', { name: /import terms/i })).toBeInTheDocument();
+    const template = screen.getByRole('menuitem', { name: /download template/i });
+    expect(template).toHaveAttribute('download');
+    fireEvent.click(screen.getByRole('menuitem', { name: /new term/i }));
+    expect(onOpenTerm).toHaveBeenCalledWith(null);
+  });
 });
