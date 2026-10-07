@@ -6884,6 +6884,21 @@ describe('POST /api/facilities/bulk-delete', () => {
     expect((await app.inject({ method: 'GET', url: '/api/facilities' })).json().total).toBe(0);
   });
 
+  it('queues a facility-map-rebuild, so the warehouse copies drop the deleted rows', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    // The create queued its own rebuild. Resolve it, so only the bulk delete can explain the job below.
+    ctx.facilityJobs.__resolveAll();
+    const before = (await app.inject({ method: 'GET', url: '/api/facilities' })).json().total;
+
+    const res = await app.inject({ method: 'POST', url: BULK, payload: { selection: {}, expectedCount: before } });
+
+    expect(res.statusCode).toBe(200);
+    const queued = await ctx.facilityJobs.listUnresolved();
+    expect(queued.map((j: any) => j.kind)).toContain('facility-map-rebuild');
+  });
+
   it('⛔ 409s on a stale count and deletes NOTHING', async () => {
     // The guard that makes "confirm 12, delete 12" true rather than hopeful: anything that changed
     // the set between the preview and the confirm — another operator, a running import, or a filter

@@ -1828,6 +1828,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       }
     }
 
+    // The warehouse copies (`facility_map`, `facility_registry`) still hold the deleted rows until
+    // a rebuild. Wrapped like the single-row delete: the rows are already gone, so a lost enqueue
+    // must not turn this into a 500. Logged, because a lost enqueue leaves the copies stale.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    } catch (err) {
+      ctx.logger.error({ err, count: deleted }, 'failed to enqueue a facility-map-rebuild job after a bulk delete');
+    }
+
     await recordAudit(ctx, req, {
       action: 'facility.bulk_delete',
       entityType: 'facility',
