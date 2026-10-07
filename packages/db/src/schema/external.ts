@@ -230,6 +230,34 @@ export interface LabRequestAttributesTable {
   created_at: Generated<Date>;
 }
 
+/** The warehouse copy of the internal facility register (migration 021). One row per internal
+ *  `facility_registry` row, rewritten by `publishFacilityMap`. Named apart from the internal
+ *  `FacilityRegistryTable` because the db barrel re-exports both schema modules. */
+export interface WarehouseFacilityRegistryTable {
+  id: string;
+  facility_system: string | null;
+  facility_code: string;
+  name: string;
+  level: string | null;
+  ownership: string | null;
+  status: string | null;
+  register_state: string | null;
+  country: string | null;
+  zone: string | null;
+  region: string | null;
+  district: string | null;
+  council: string | null;
+  ward: string | null;
+  village: string | null;
+  address_text: string | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** The internal `extras` as JSON text. NULL when the internal value is empty. */
+  extras: string | null;
+  updated_at: Generated<Date>;
+}
+
 export interface ExternalSchema {
   patients: PatientsTable;
   lab_requests: LabRequestsTable;
@@ -240,6 +268,7 @@ export interface ExternalSchema {
   questionnaire_responses: QuestionnaireResponsesTable;
   terminology_codes: TerminologyCodesTable;
   facility_map: FacilityMapTable;
+  facility_registry: WarehouseFacilityRegistryTable;
   ingest_events: IngestEventsTable;
   lab_request_attributes: LabRequestAttributesTable;
 }
@@ -260,6 +289,7 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   terminology_codes: ['id', 'value_set_id', 'value_set_url', 'system', 'code', 'display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facility_map: ['id', 'source_system', 'performer_system', 'source_code', 'registry_id', 'local_code', 'name', 'level', 'status', 'region', 'district', 'council', 'national_system', 'national_code', 'resolved_via', 'updated_at'],
+  facility_registry: ['id', 'facility_system', 'facility_code', 'name', 'level', 'ownership', 'status', 'register_state', 'country', 'zone', 'region', 'district', 'council', 'ward', 'village', 'address_text', 'phone', 'latitude', 'longitude', 'extras', 'updated_at'],
   ingest_events: ['resource_type', 'resource_id', 'version', 'recorded_at'],
   lab_request_attributes: ['id', 'lab_request_id', 'system', 'code', 'value_text', 'value_number', 'value_datetime', 'value_boolean', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
 };
