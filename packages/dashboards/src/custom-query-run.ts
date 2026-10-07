@@ -16,7 +16,7 @@ function assertDate(v: unknown): string {
 
 /** Replace {{param.x}} tokens in `sql` using declared params + supplied values.
  *  - daterange param `p` provides {{param.from}} and {{param.to}} (value: { from, to }).
- *  - text/select provide {{param.<id>}} as a quoted string literal.
+ *  - text/select provide {{param.<id>}} as a quoted string literal; an unset optional one is ''.
  *  Read-only substitution only; caller has already run validateSelectSql. */
 export function substituteParams(
   sql: string, params: DashboardCustomQueryParam[], values: Record<string, unknown>,
@@ -31,7 +31,9 @@ export function substituteParams(
       if (dr.to != null) replacements.set('to', sqlString(assertDate(dr.to)));
     } else {
       if (p.required && (v == null || v === '')) throw new Error(`required parameter: ${p.id}`);
-      if (v != null) replacements.set(p.id, sqlString(String(v)));
+      // A blank optional param binds to '' so the SQL can read it as "no filter". Callers such as
+      // the Query page send nothing for an untouched box.
+      replacements.set(p.id, sqlString(v == null ? '' : String(v)));
     }
   }
   return sql.replace(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g, (_m, key: string) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runStoredQuery } from './custom-query-run';
+import { runStoredQuery, substituteParams } from './custom-query-run';
 it('runs a stored query through substitute→validate→connector', async () => {
   const deps = {
     customQueries: { get: async () => ({ id: 'q', name: 'q', connectorId: 'c', sql: 'select 1 as a', params: [] }) },
@@ -49,4 +49,29 @@ it('respects an intentional SQL LIMIT inside the overflow probe', async () => {
   }, 'q', {});
   expect(result.rows).toHaveLength(1000);
   expect(result.rows[999]).toEqual({ a: 999 });
+});
+
+describe('substituteParams: a blank optional parameter means no filter', () => {
+  const sql = "select 1 where ({{param.facility}} = '' or code = {{param.facility}})";
+  const text = { id: 'facility', label: 'Facility', type: 'text' as const, required: false };
+  const select = { id: 'facility', label: 'Facility', type: 'select' as const, required: false };
+
+  it('binds an unset optional text param to the empty string', () => {
+    expect(substituteParams(sql, [text], {})).toBe("select 1 where ('' = '' or code = '')");
+  });
+  it('binds an unset optional select param to the empty string', () => {
+    expect(substituteParams(sql, [select], {})).toBe("select 1 where ('' = '' or code = '')");
+  });
+  it('binds a null optional param to the empty string', () => {
+    expect(substituteParams(sql, [text], { facility: null })).toBe("select 1 where ('' = '' or code = '')");
+  });
+  it('still throws for an unset required param', () => {
+    expect(() => substituteParams(sql, [{ ...text, required: true }], {})).toThrow('required parameter: facility');
+  });
+  it('still binds a given value', () => {
+    expect(substituteParams(sql, [text], { facility: "O'K" })).toBe("select 1 where ('O''K' = '' or code = 'O''K')");
+  });
+  it('still throws for a token with no declared param', () => {
+    expect(() => substituteParams('select {{param.region}}', [text], {})).toThrow('unbound parameter: region');
+  });
 });
