@@ -1,10 +1,28 @@
 {
-  "generatedAt": "2026-10-06",
+  "generatedAt": "2026-10-07",
   "days": [
+    {
+      "date": "2026-10-07",
+      "version": null,
+      "entries": [
+        {
+          "hash": "14ba0870",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Move the terms toolbar actions into the ⋯ menu"
+        }
+      ]
+    },
     {
       "date": "2026-10-06",
       "version": null,
       "entries": [
+        {
+          "hash": "dbc59ae0",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep the terms search usable on a phone"
+        },
         {
           "hash": "18cef568",
           "type": "fix",
