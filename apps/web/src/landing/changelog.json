@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "4b4e029c",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "A pack's facility register can carry named extra columns"
+        },
+        {
           "hash": "36b89a4f",
           "type": "fix",
           "scope": "cli",
