@@ -12,6 +12,8 @@ O espaço Query permite escrever e guardar consultas SQL. Os relatórios podem u
 4. Abra o menu de ações da consulta e escolha Guardar. Na primeira gravação, o painel pede um Nome único. Introduza-o e escolha Guardar no menu do painel.
 5. Reabra a consulta em **Custom Queries** no explorador. Ao guardar novamente, atualiza a mesma consulta.
 
+Ao executar, um parâmetro opcional deixado em branco vale uma cadeia vazia. Por isso não filtra nada se o SQL testar `''`.
+
 ![Editor SQL com uma consulta guardada e os seus resultados](query-sql-editor.png)
 
 ## Renomear uma consulta

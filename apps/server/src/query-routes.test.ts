@@ -140,6 +140,20 @@ describe('POST /api/query/run', () => {
     expect(seen).toContain("f = 'Ndola'");
   });
 
+  it('returns 200 when an optional param is left out, binding it to an empty string', async () => {
+    const deps = makeDeps();
+    let seen = '';
+    deps.runConnectorSql = async ({ sql }) => { seen = sql; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'POST', url: '/api/query/run', payload: {
+      connectorId: 'c1', sql: "select * from t where ({{param.facility}} = '' or f = {{param.facility}})",
+      params: [{ id: 'facility', label: 'Facility', type: 'text', required: false }],
+      values: {},
+    } });
+    expect(res.statusCode).toBe(200);
+    expect(seen).toContain("('' = '' or f = '')");
+  });
+
   it('delegates pagination to runConnectorSql via the inner sql plus rowCap/offset', async () => {
     const deps = makeDeps();
     const calls: { connectorId: string; sql: string; rowCap?: number; offset?: number }[] = [];
