@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "6c686db8",
+          "type": "fix",
+          "scope": "query",
+          "title": "A blank optional parameter means no filter"
+        },
+        {
           "hash": "14ba0870",
           "type": "fix",
           "scope": "studio",
