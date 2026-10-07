@@ -71,7 +71,7 @@ import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
-import { createFacilityJobWorker } from './facility-job-worker';
+import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
@@ -608,6 +608,13 @@ export interface AppContextOptions {
    *  could release a live server-side apply's `active_key` mid-write. See
    *  `createFacilityImportWorkerIfEnabled` for the full failure it closes. */
   runFacilityImportWorker?: boolean;
+  /** Does this process drain the facility job queue (map rebuilds, registry projections)?
+   *
+   *  ⛔ Only the API server sets it. In a CLI process the worker's crash recovery failed the
+   *  server's live rebuild, and the CLI's own worker could claim a rebuild and then close the DB
+   *  under it on exit, leaving the row `running` for good. It also gates the boot rebuild enqueue,
+   *  so a CLI command does not queue a full rebuild every time it runs. */
+  runFacilityJobWorker?: boolean;
 }
 
 export async function createAppContext(cfg: Config, opts: AppContextOptions = {}): Promise<AppContext> {
@@ -1003,7 +1010,8 @@ const reporting: ReportingApi = {
   // runner closures themselves live in `createFacilityJobRunners` (facility-job-runners.ts), not
   // inline here, so they are unit-testable independent of standing up this whole app context.
   const facilityJobs = createFacilityJobStore(internal.db);
-  const facilityJobWorker = createFacilityJobWorker({
+  // ⛔ Built only where it drains the queue. See `AppContextOptions.runFacilityJobWorker`.
+  const facilityJobWorker = createFacilityJobWorkerIfEnabled(opts.runFacilityJobWorker === true, {
     jobs: facilityJobs,
     ...createFacilityJobRunners({
       internalDb: internal.db, externalDb, admin: termAdmin,
@@ -1025,8 +1033,8 @@ const reporting: ReportingApi = {
   // ⛔ AND IT IS BUILT ONLY IN A PROCESS THAT DRAINS THE QUEUE. Constructing this worker sweeps
   // stale runs and arms a poll timer; every `openldr` CLI command builds an `AppContext`, so an
   // unconditional construction here put that sweep in every CLI process — against the same database
-  // a live server is mid-apply on. See `createFacilityImportWorkerIfEnabled`. The two workers built
-  // above are deliberately NOT gated: what a CLI process takes over there is a re-queueable job.
+  // a live server is mid-apply on. See `createFacilityImportWorkerIfEnabled`. The facility job
+  // worker above is gated the same way (`runFacilityJobWorker`); the terminology worker is not.
   const facilityImportRuns: FacilityImportRunStore = createFacilityImportRunStore(internal.db);
   const facilityImportWorker = createFacilityImportWorkerIfEnabled(opts.runFacilityImportWorker === true, {
     runs: facilityImportRuns,
@@ -1064,9 +1072,14 @@ const reporting: ReportingApi = {
   // from `facility_registry`/`term_mappings` mutation times, and a schema change touches neither —
   // so without this an upgraded install would read "Current" over a dimension of obsolete grain.
   // A pending rebuild makes it read "Updating", which is true.
-  await facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'boot' }).catch((err) => {
-    logger.warn({ err }, 'boot facility-map-rebuild enqueue failed');
-  });
+  //
+  // Server boot only: a CLI command is not an upgrade, and enqueueing here made every CLI
+  // invocation queue a full rebuild for the server to run.
+  if (opts.runFacilityJobWorker === true) {
+    await facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'boot' }).catch((err) => {
+      logger.warn({ err }, 'boot facility-map-rebuild enqueue failed');
+    });
+  }
 
   const connectorStore = createConnectorStore(internal.db);
   // Built here, not beside `marketplaceForms`: it needs the terminology loaders, `facilityJobs` and `connectorStore`.
@@ -1757,9 +1770,9 @@ const reporting: ReportingApi = {
         await syncRuntime.stop();
         await projectionWorker.stop();
         await terminologyIngestWorker.stop();
-        await facilityJobWorker.stop();
-        // Only processes that opted in own an import worker. See
-        // `AppContextOptions.runFacilityImportWorker`.
+        // Only processes that opted in own these two workers. See
+        // `AppContextOptions.runFacilityJobWorker` and `runFacilityImportWorker`.
+        await facilityJobWorker?.stop();
         await facilityImportWorker?.stop();
         if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
         await eventing.close();

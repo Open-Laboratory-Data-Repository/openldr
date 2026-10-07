@@ -67,7 +67,10 @@ async function main(): Promise<void> {
   // runs against the shared database (see `AppContextOptions.runFacilityImportWorker`). Uploading a
   // register through `POST /api/facilities/import/upload` mints a `queued` run that nothing else
   // will ever claim, so dropping this flag silently parks every background import forever.
-  const ctx = await createAppContext(cfg, { runFacilityImportWorker: true });
+  //
+  // ⛔ The same holds for the facility job queue (`runFacilityJobWorker`). Dropping it parks every
+  // facility-map rebuild and registry projection, and the Facilities chip reads "Updating" forever.
+  const ctx = await createAppContext(cfg, { runFacilityImportWorker: true, runFacilityJobWorker: true });
 
   // Ingest any crash markers left by a previous process-FATAL plugin crash into the audit
   // trail (action plugin.crash / system.crash). Best-effort: a drain failure must not block

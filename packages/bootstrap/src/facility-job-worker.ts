@@ -19,7 +19,9 @@ export function createFacilityJobWorker(deps: FacilityJobWorkerDeps): FacilityJo
   const intervalMs = deps.intervalMs ?? 3000;
   const maxAttempts = deps.maxAttempts ?? 5;
   let stopped = false;
-  let running = false;
+  /** The tick in progress, if any. stop() awaits it: closing the DB under a claimed job makes its
+   *  `finish()` throw, and the row then stays `running` with nothing left to finish it. */
+  let inFlight: Promise<void> | null = null;
 
   async function processJob(job: FacilityJob): Promise<void> {
     try {
@@ -42,17 +44,22 @@ export function createFacilityJobWorker(deps: FacilityJobWorkerDeps): FacilityJo
     }
   }
 
-  async function tickOnce(): Promise<void> {
-    if (running) return;
-    running = true;
+  async function runTick(): Promise<void> {
     try {
       const job = await deps.jobs.claimNext();
       if (job) await processJob(job);
     } catch (err) {
       deps.logger.error({ err }, 'facility job tick failed');
     } finally {
-      running = false;
+      inFlight = null;
     }
+  }
+
+  function tickOnce(): Promise<void> {
+    // A stopped worker claims nothing, so shutdown cannot start a job it will not see through.
+    if (stopped || inFlight) return Promise.resolve();
+    inFlight = runTick();
+    return inFlight;
   }
 
   // Crash recovery: a job still 'running' at startup was orphaned by a killed process. Best-effort
@@ -67,6 +74,25 @@ export function createFacilityJobWorker(deps: FacilityJobWorkerDeps): FacilityJo
 
   return {
     tickOnce,
-    async stop() { stopped = true; clearInterval(timer); await crashRecovery; },
+    async stop() {
+      stopped = true;
+      clearInterval(timer);
+      await crashRecovery;
+      // No timeout. A rebuild cut short by a hard kill stays `running` until the next server boot's
+      // crash recovery fails it, which is the same outcome a timeout here would produce.
+      await inFlight;
+    },
   };
+}
+
+/** Build the worker only in a process that drains the queue.
+ *
+ *  Every `openldr` CLI command builds an `AppContext`. Building this worker there runs crash
+ *  recovery, which fails EVERY `running` job, including a rebuild the API server is doing right
+ *  now. It also lets a short-lived CLI process claim a rebuild it will close the DB under. Jobs a
+ *  CLI command enqueues wait in `facility_jobs` for the server to run them. */
+export function createFacilityJobWorkerIfEnabled(
+  enabled: boolean, deps: FacilityJobWorkerDeps,
+): FacilityJobWorker | null {
+  return enabled ? createFacilityJobWorker(deps) : null;
 }

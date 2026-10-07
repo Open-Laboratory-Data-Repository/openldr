@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createFacilityJobStore } from '@openldr/db';
-import { createFacilityJobWorker } from './facility-job-worker';
+import { createFacilityJobWorker, createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 
 const fakeLogger = () => ({ info: vi.fn(), error: vi.fn() });
 
@@ -117,6 +117,84 @@ describe('createFacilityJobWorker', () => {
     });
     await worker.stop();
 
+    expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('failed');
+  });
+});
+
+// ── 2026-10-07: `openldr market install` lost its DB connection mid-job ─────────────────────────
+//
+// The CLI's own worker claimed the boot rebuild, then `close()` stopped the worker and destroyed the
+// DB while the rebuild was still running. `finish()` threw "driver has already been destroyed" and
+// the row stayed `running` for good, so the Facilities chip read "Updating" forever.
+describe('createFacilityJobWorker — shutdown and ownership', () => {
+  const deferred = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => { resolve = r; });
+    return { promise, resolve };
+  };
+
+  it('stop() waits for an in-flight job to finish before it resolves', async () => {
+    const jobs = createFacilityJobStore(await makeMigratedDb());
+    await jobs.enqueue({ kind: 'facility-map-rebuild' });
+    const order: string[] = [];
+    const recordingJobs: typeof jobs = {
+      ...jobs,
+      finish: async (...args) => { await jobs.finish(...args); order.push('finish'); },
+    };
+    const gate = deferred();
+    const started = deferred();
+    const worker = createFacilityJobWorker({
+      jobs: recordingJobs,
+      runRebuild: async () => { started.resolve(); await gate.promise; return { written: 7 }; },
+      runProjection: async () => {}, intervalMs: 10_000, logger: fakeLogger(),
+    });
+
+    const tick = worker.tickOnce();
+    await started.promise;                       // the rebuild is now in flight
+    const stopping = worker.stop().then(() => { order.push('stopped'); });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(order).toEqual([]);                   // stop() has NOT returned under a live job
+
+    gate.resolve();
+    await stopping;
+    await tick;
+
+    expect(order).toEqual(['finish', 'stopped']);
+    expect(await jobs.latest('facility-map-rebuild')).toMatchObject({ status: 'done', resultCount: 7 });
+  });
+
+  it('a tick after stop() claims nothing, so shutdown cannot start a new job', async () => {
+    const jobs = createFacilityJobStore(await makeMigratedDb());
+    await jobs.enqueue({ kind: 'facility-map-rebuild' });
+    const runRebuild = vi.fn(async () => ({ written: 0 }));
+    const worker = createFacilityJobWorker({
+      jobs, runRebuild, runProjection: async () => {}, intervalMs: 10_000, logger: fakeLogger(),
+    });
+
+    await worker.stop();
+    await worker.tickOnce();
+
+    expect(runRebuild).not.toHaveBeenCalled();
+    expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('queued');
+  });
+
+  it('a CLI-shaped construction (opt-in withheld) builds no worker and cannot fail a live job', async () => {
+    const jobs = createFacilityJobStore(await makeMigratedDb());
+    await jobs.enqueue({ kind: 'facility-map-rebuild' });
+    await jobs.claimNext();                      // the API server's live rebuild
+    const deps = {
+      jobs, runRebuild: async () => ({ written: 0 }), runProjection: async () => {},
+      intervalMs: 10_000, logger: fakeLogger(),
+    };
+
+    expect(createFacilityJobWorkerIfEnabled(false, deps)).toBeNull();
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('running');
+
+    // The server's shape over the SAME row does sweep it, so the assertion above is not vacuous.
+    const serving = createFacilityJobWorkerIfEnabled(true, deps);
+    expect(serving).not.toBeNull();
+    await serving!.stop();
     expect((await jobs.latest('facility-map-rebuild'))?.status).toBe('failed');
   });
 });
