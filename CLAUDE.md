@@ -56,9 +56,15 @@ Ask before fanning out on anything already going badly.
 
 ## Test gate
 
-- Full gate: `pnpm turbo run test --force` AND `pnpm turbo run typecheck --force`.
+- Full gate: `pnpm turbo run test --force --concurrency=2 --continue` AND
+  `pnpm turbo run typecheck --force --concurrency=2`.
   **Never pipe turbo through `tail`.** It truncates the failure list and hides which package
   failed.
+- **Keep `--concurrency=2` on both.** On 2026-10-08 the machine ran out of memory twice at
+  higher settings: a bootstrap test worker died at 3 (`VirtualAlloc failed`), and the
+  `@openldr/server` typecheck died at the default (`Zone Allocation failed`). Neither was a
+  real failure, and both passed when re-run at 2. Grep for `out of memory` and `VirtualAlloc`
+  before reading a failure as a regression.
 - **Force both halves, every time.** Forcing the tests beside a bare `turbo run typecheck`
   is half a check: the typecheck replays a cache and reports every package green whatever
   the tree actually says. A broken `@openldr/server` typecheck survived four pushes that way
