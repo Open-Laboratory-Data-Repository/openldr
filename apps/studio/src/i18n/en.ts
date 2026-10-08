@@ -1529,7 +1529,7 @@ export const en = {
     explorer: 'Explorer', connectors: 'Connectors', datasets: 'Datasets', customQueries: 'Custom Queries',
     newQuery: 'New query', run: 'Run', save: 'Save', parameters: 'Parameters',
     filterTables: 'Filter…', noConnectors: 'No database connectors', rows: 'rows',
-    runParameters: 'Run parameters', runWithValues: 'Run with these values',
+    runParameters: 'Run parameters', runWithValues: 'Run with these values', runActions: 'Run actions', anyValue: '(any)',
     savedToast: 'Saved custom query “{{name}}”',
     deleteQuery: 'Delete query', confirmDeleteQuery: 'Delete this custom query?',
     collapseExplorer: 'Collapse explorer', expandExplorer: 'Expand explorer',

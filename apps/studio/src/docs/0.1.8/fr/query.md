@@ -12,7 +12,7 @@ L'espace Query permet d'écrire et d'enregistrer des requêtes SQL. Les rapports
 4. Ouvrez le menu des actions de la requête et choisissez Enregistrer. Au premier enregistrement, le panneau demande un Nom unique. Saisissez-le, puis choisissez Enregistrer dans le menu du panneau.
 5. Rouvrez la requête depuis **Custom Queries** dans l'explorateur. Un nouvel enregistrement met à jour cette même requête.
 
-Au lancement, un paramètre facultatif laissé vide vaut une chaîne vide. Il ne filtre donc rien si le SQL teste `''`.
+Si la requête a des paramètres, un panneau les demande au lancement : choisissez Exécuter avec ces valeurs dans le menu d'actions du panneau. Un paramètre facultatif laissé vide vaut une chaîne vide. Il ne filtre donc rien si le SQL teste `''`.
 
 Pour lire le registre des établissements, interrogez la table `facility_registry` de l'entrepôt. Voir [Établissements](/docs/facilities).
 

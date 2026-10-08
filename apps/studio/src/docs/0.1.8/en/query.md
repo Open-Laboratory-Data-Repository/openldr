@@ -24,7 +24,7 @@ You can browse connectors, schemas, and tables in the Explorer, write and run a 
 4. Choose a connector for the query tab, then write a `SELECT` statement in the editor.
 5. Select the parameters icon to declare parameters: a **Variable ID**, **Label**, **Type** (Text, Select, or Date range), and whether it's **Required**. A Select parameter also takes an **Options SQL** whose first column populates the dropdown.
 6. Reference a declared parameter in your SQL as `{{ param.<id> }}` — a Date range parameter provides `{{ param.from }}` and `{{ param.to }}`.
-7. Select **Run**. If the query has parameters, a sheet asks you to fill in run values first; otherwise it runs immediately. A blank optional parameter runs as an empty string, which means no filter when the SQL tests for `''`. Results appear in the grid below, with paging.
+7. Select **Run**. If the query has parameters, a sheet asks you to fill in run values first; choose Run with these values from the sheet's actions menu. Otherwise it runs immediately. A blank optional parameter runs as an empty string, which means no filter when the SQL tests for `''`. Results appear in the grid below, with paging.
 8. Open the query's actions menu and select Save. On the first save, a sheet asks for a unique Name. Enter it, then choose Save from the sheet's actions menu. The query appears under Custom Queries in the Explorer. Later saves update the same query.
 
 ## Expected result

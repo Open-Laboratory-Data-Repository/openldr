@@ -2,6 +2,7 @@ import { createAppContext, createIngestContext, type AppContext } from '@openldr
 import { loadConfig } from '@openldr/config';
 import { createInternalDb, createMarketplaceInstallStore } from '@openldr/db';
 import { readBundle, verifyBundle, type Bundle } from '@openldr/marketplace';
+import { isNewerVersion } from '@openldr/core';
 import { redactError } from './redact-error';
 
 interface JsonOpt {
@@ -45,18 +46,27 @@ export async function runMarketVerify(dir: string, opts: JsonOpt): Promise<numbe
 }
 
 // ---------------------------------------------------------------------------
-// install / update  (identical logic — update is just re-install)
+// install / update. One path; `update` differs only for content packs, where it installs a newer
+// version without --force and refuses the same or an older one.
 // ---------------------------------------------------------------------------
 
-export async function runMarketInstall(
-  dir: string,
-  opts: JsonOpt & { approve?: boolean; approvedBy?: string; dryRun?: boolean; force?: boolean },
-): Promise<number> {
+type InstallOpts = JsonOpt & { approve?: boolean; approvedBy?: string; dryRun?: boolean; force?: boolean };
+type Mode = 'install' | 'update';
+
+export async function runMarketInstall(dir: string, opts: InstallOpts): Promise<number> {
+  return installOrUpdate(dir, opts, 'install');
+}
+
+export async function runMarketUpdate(dir: string, opts: InstallOpts): Promise<number> {
+  return installOrUpdate(dir, opts, 'update');
+}
+
+async function installOrUpdate(dir: string, opts: InstallOpts, mode: Mode): Promise<number> {
   let bundle: Bundle;
   try {
     bundle = await readBundle(dir);
   } catch (err) {
-    process.stderr.write(`market install failed: ${redactError(err)}\n`);
+    process.stderr.write(`market ${mode} failed: ${redactError(err)}\n`);
     return 1;
   }
   const approval =
@@ -67,8 +77,8 @@ export async function runMarketInstall(
         }
       : undefined;
 
-  if (bundle.manifest.type === 'content-pack') return installPack(bundle, opts);
-  if (bundle.manifest.type === 'form-template') return installForm(bundle, approval, opts);
+  if (bundle.manifest.type === 'content-pack') return installPack(bundle, opts, mode);
+  if (bundle.manifest.type === 'form-template') return installForm(bundle, approval, opts, mode);
 
   const ctx = await createIngestContext(loadConfig());
   try {
@@ -90,7 +100,7 @@ export async function runMarketInstall(
     );
     return 0;
   } catch (err) {
-    process.stderr.write(`market install failed: ${redactError(err)}\n`);
+    process.stderr.write(`market ${mode} failed: ${redactError(err)}\n`);
     return 1;
   } finally {
     await ctx.close();
@@ -101,6 +111,7 @@ async function installForm(
   bundle: Bundle,
   approval: Parameters<AppContext['marketplaceForms']['install']>[1]['approval'],
   opts: JsonOpt & { dryRun?: boolean },
+  mode: Mode,
 ): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
@@ -116,7 +127,7 @@ async function installForm(
     emit(opts.json, { id: installed.id, version: installed.version }, `installed ${installed.id}@${installed.version}`);
     return 0;
   } catch (err) {
-    process.stderr.write(`market install failed: ${redactError(err)}\n`);
+    process.stderr.write(`market ${mode} failed: ${redactError(err)}\n`);
     return 1;
   } finally {
     await ctx.close();
@@ -126,6 +137,7 @@ async function installForm(
 async function installPack(
   bundle: Bundle,
   opts: JsonOpt & { dryRun?: boolean; force?: boolean },
+  mode: Mode,
 ): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
@@ -147,9 +159,22 @@ async function installPack(
     }
     // A failed row is finished by installing again, so only an installed row needs --force.
     const existing = (await ctx.marketplacePacks.list()).find((r) => r.artifactId === id);
-    if (existing && existing.status !== 'failed' && !opts.force) {
-      process.stderr.write(`market install failed: ${id} is already installed; use --force to install again\n`);
+    if (mode === 'update' && !existing && !opts.force) {
+      process.stderr.write(`market update failed: ${id} is not installed; use market install\n`);
       return 1;
+    }
+    if (existing && existing.status !== 'failed' && !opts.force) {
+      if (mode === 'install') {
+        process.stderr.write(`market install failed: ${id} is already installed; use --force to install again, or market update for a newer version\n`);
+        return 1;
+      }
+      // An unreadable version is never treated as newer: refuse rather than guess.
+      if (!isNewerVersion(version, existing.version)) {
+        process.stderr.write(
+          `market update failed: ${id} ${existing.version} is installed and this bundle is ${version}, not newer; use --force to install it anyway\n`,
+        );
+        return 1;
+      }
     }
     const result = await ctx.marketplacePacks.install(bundle, { actor: { id: null, name: 'cli' } });
     if (result.status === 'failed') {
@@ -160,7 +185,7 @@ async function installPack(
     emit(opts.json, result, `installed ${result.id}@${result.version}`);
     return 0;
   } catch (err) {
-    process.stderr.write(`market install failed: ${redactError(err)}\n`);
+    process.stderr.write(`market ${mode} failed: ${redactError(err)}\n`);
     return 1;
   } finally {
     await ctx.close();

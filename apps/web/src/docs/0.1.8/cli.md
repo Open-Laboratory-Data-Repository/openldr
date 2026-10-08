@@ -443,7 +443,7 @@ openldr market install <bundle-dir> --dry-run
 openldr market install <bundle-dir>
 ```
 
-`--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags, and `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
+`--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
 
 ### Français
 
@@ -452,7 +452,7 @@ openldr market install <bundle-dir> --dry-run
 openldr market install <bundle-dir>
 ```
 
-`--dry-run` exécute les contrôles et affiche les étapes. Pour chaque étape de mise en correspondance des liens, elle affiche le nombre de codes qu'elle lierait. Elle n'écrit rien. Un pack de contenu doit être signé par un éditeur. Installer un pack déjà installé exige `--force`. Un pack dont la dernière installation a échoué s'installe de nouveau sans cette option. `openldr market update` accepte les mêmes options, et `--json` donne une sortie lisible par machine. `openldr market list` affiche les packs avec leur statut. La CLI enregistre l'acteur `cli`.
+`--dry-run` exécute les contrôles et affiche les étapes. Pour chaque étape de mise en correspondance des liens, elle affiche le nombre de codes qu'elle lierait. Elle n'écrit rien. Un pack de contenu doit être signé par un éditeur. Installer un pack déjà installé exige `--force`. Un pack dont la dernière installation a échoué s'installe de nouveau sans cette option. `openldr market update` accepte les mêmes options. Il installe une version plus récente d'un pack installé sans `--force`. Il refuse la même version ou une version plus ancienne, et un pack qui n'est pas installé, sauf avec `--force`. `--json` donne une sortie lisible par machine. `openldr market list` affiche les packs avec leur statut. La CLI enregistre l'acteur `cli`.
 
 ### Português
 
@@ -461,4 +461,4 @@ openldr market install <bundle-dir> --dry-run
 openldr market install <bundle-dir>
 ```
 
-`--dry-run` executa as verificações e mostra os passos. Para cada passo de correspondência de ligações, mostra quantos códigos ligaria. Não escreve nada. Um pacote de conteúdo tem de ser assinado por um editor. Instalar um pacote já instalado exige `--force`. Um pacote cuja última instalação falhou instala-se de novo sem esta opção. `openldr market update` aceita as mesmas opções, e `--json` produz saída legível por máquina. `openldr market list` mostra os pacotes com o seu estado. A CLI regista o ator como `cli`.
+`--dry-run` executa as verificações e mostra os passos. Para cada passo de correspondência de ligações, mostra quantos códigos ligaria. Não escreve nada. Um pacote de conteúdo tem de ser assinado por um editor. Instalar um pacote já instalado exige `--force`. Um pacote cuja última instalação falhou instala-se de novo sem esta opção. `openldr market update` aceita as mesmas opções. Instala uma versão mais recente de um pacote instalado sem `--force`. Recusa a mesma versão ou uma mais antiga, e um pacote que não está instalado, exceto com `--force`. `--json` produz saída legível por máquina. `openldr market list` mostra os pacotes com o seu estado. A CLI regista o ator como `cli`.

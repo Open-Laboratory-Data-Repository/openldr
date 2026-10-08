@@ -69,6 +69,7 @@ vi.mock('@openldr/marketplace', () => ({
 import {
   runMarketVerify,
   runMarketInstall,
+  runMarketUpdate,
   runMarketList,
   runMarketRollback,
   runMarketEnable,
@@ -330,6 +331,80 @@ describe('market commands', () => {
     const code = await runMarketInstall('/some/dir', { json: false, force: true });
     expect(code).toBe(0);
     expect(mockPacks.install).toHaveBeenCalledTimes(1);
+  });
+
+  // `market update` (spec: chat 2026-10-08). A newer version needs no --force; the same or an older
+  // version, or a pack that is not installed, is refused; errors say "market update".
+  function stderrOf(fn: () => Promise<number>): Promise<{ code: number; err: string }> {
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    return fn().then((code) => {
+      const err = spy.mock.calls.map((c) => String(c[0])).join('');
+      spy.mockRestore();
+      return { code, err };
+    });
+  }
+  const packAt = (version: string) => ({ ...packBundle, manifest: { ...packBundle.manifest, version } });
+
+  it('update pack: installs a newer version without --force', async () => {
+    await useBundle(packAt('1.0.1'));
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }]);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.1', status: 'installed' });
+    const code = await runMarketUpdate('/some/dir', { json: false });
+    expect(code).toBe(0);
+    expect(mockPacks.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('update pack: refuses the same version without --force, naming both versions', async () => {
+    await useBundle(packAt('1.0.0'));
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }]);
+    const { code, err } = await stderrOf(() => runMarketUpdate('/some/dir', { json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('market update failed: demo-pack 1.0.0 is installed and this bundle is 1.0.0, not newer; use --force to install it anyway');
+    expect(mockPacks.install).not.toHaveBeenCalled();
+  });
+
+  it('update pack: refuses an older version without --force', async () => {
+    await useBundle(packAt('0.9.0'));
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }]);
+    const { code, err } = await stderrOf(() => runMarketUpdate('/some/dir', { json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('this bundle is 0.9.0, not newer');
+    expect(mockPacks.install).not.toHaveBeenCalled();
+  });
+
+  it('update pack --force: installs the same version again', async () => {
+    await useBundle(packAt('1.0.0'));
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'installed' }]);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    const code = await runMarketUpdate('/some/dir', { json: false, force: true });
+    expect(code).toBe(0);
+    expect(mockPacks.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('update pack: refuses a pack that is not installed, pointing at market install', async () => {
+    await useBundle(packAt('1.0.0'));
+    mockPacks.list.mockResolvedValueOnce([]);
+    const { code, err } = await stderrOf(() => runMarketUpdate('/some/dir', { json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('market update failed: demo-pack is not installed; use market install');
+    expect(mockPacks.install).not.toHaveBeenCalled();
+  });
+
+  it('update pack: finishes a failed install of the same version without --force', async () => {
+    await useBundle(packAt('1.0.0'));
+    mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 3 }]);
+    mockPacks.install.mockResolvedValueOnce({ id: 'demo-pack', version: '1.0.0', status: 'installed' });
+    const code = await runMarketUpdate('/some/dir', { json: false });
+    expect(code).toBe(0);
+    expect(mockPacks.install).toHaveBeenCalledTimes(1);
+  });
+
+  it('update: an unreadable bundle reports "market update failed"', async () => {
+    const { readBundle } = await import('@openldr/marketplace');
+    (readBundle as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('no manifest'));
+    const { code, err } = await stderrOf(() => runMarketUpdate('/some/dir', { json: false }));
+    expect(code).toBe(1);
+    expect(err).toContain('market update failed: no manifest');
   });
 
   it('install pack --dry-run: does not need --force for an installed pack', async () => {
