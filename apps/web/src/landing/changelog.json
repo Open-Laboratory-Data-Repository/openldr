@@ -12,6 +12,18 @@
           "title": "Query tabs keep their results when you switch"
         },
         {
+          "hash": "24f803b7",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The query run parameters sheet follows the studio conventions"
+        },
+        {
+          "hash": "f863048f",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Market update installs a newer content pack without --force"
+        },
+        {
           "hash": "41e4c56f",
           "type": "fix",
           "scope": "studio",
