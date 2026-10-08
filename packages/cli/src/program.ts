@@ -18,7 +18,7 @@ import { runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCr
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runTerminologyReproject, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
-import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
+import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet, runSettingsLabShow, runSettingsLabSet } from './settings';
 import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelete, runRolesGrant, runRolesRevoke, runRolesDoctor, runUserAssignRole, runUserUnassignRole } from './roles';
@@ -1045,14 +1045,14 @@ export function buildProgram(): Command {
     });
   market
     .command('update <dir>')
-    .description('Update (re-install) a bundle from a directory')
+    .description('Update a bundle from a directory. A content pack installs only when the bundle is newer than the installed version')
     .option('--approve', 'approve the capability grant', false)
     .option('--approved-by <actor>', 'actor granting approval (default: cli)')
     .option('--dry-run', 'check the bundle and list its steps without writing', false)
-    .option('--force', 'install a content pack that is already installed', false)
+    .option('--force', 'install a content pack even when the bundle is not newer, or is not installed yet', false)
     .option('--json', 'emit JSON', false)
     .action(async (dir: string, opts: { approve: boolean; approvedBy?: string; dryRun: boolean; force: boolean; json: boolean }) => {
-      try { process.exitCode = await runMarketInstall(dir, opts); } catch (err) { process.stderr.write(`market update failed: ${String(err)}\n`); process.exitCode = 1; }
+      try { process.exitCode = await runMarketUpdate(dir, opts); } catch (err) { process.stderr.write(`market update failed: ${String(err)}\n`); process.exitCode = 1; }
     });
   market
     .command('list')
