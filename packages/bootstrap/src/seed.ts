@@ -289,6 +289,10 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   const patient = {
     resourceType: 'Patient',
     id: 'seed-pat',
+    // A name and an identifier, so a patient picker (which searches the warehouse by both) can
+    // find the sample patient on a Lab order.
+    identifier: [{ system: 'urn:openldr:seed:patient', value: 'SEED-0001' }],
+    name: [{ family: 'Sample', given: ['Seed'] }],
     gender: 'female',
     birthDate: '1990-01-01',
     managingOrganization: { reference: 'Organization/seed-org' },
