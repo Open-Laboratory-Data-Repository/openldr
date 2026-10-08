@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "bd271e9f",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The rebuild an import queues records who asked for it"
+        },
+        {
           "hash": "b2822032",
           "type": "fix",
           "scope": "bootstrap",
