@@ -36,11 +36,15 @@ function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
               body={t('query.noSources')}
               action={<Button onClick={() => navigate('/settings/connectors')}>{t('query.addConnector')}</Button>}
             />)}
-        {/* Key by tab id: SqlEditor builds its CodeMirror view once on mount, so a reused
-            instance would keep the previous tab's SQL and write edits into that tab. */}
-        {active?.kind === 'table' && <TableTab key={active.id} tab={active} />}
-        {active?.kind === 'dataset' && <TableTab key={active.id} tab={active} />}
-        {active?.kind === 'query' && <QueryTab key={active.id} tab={active} />}
+        {/* Every open tab stays mounted, keyed by id, so switching keeps its results, page and
+            editor. Inactive tabs get the hidden attribute and no display class: a `flex` class
+            would out-rank the UA `[hidden]` rule and the hidden tab would still take space. */}
+        {tabs.map((tab) => (
+          <div key={tab.id} hidden={tab.id !== activeId}
+            className={tab.id === activeId ? 'flex min-h-0 min-w-0 flex-1 flex-col' : undefined}>
+            {tab.kind === 'query' ? <QueryTab tab={tab} /> : <TableTab tab={tab} />}
+          </div>
+        ))}
       </div>
     </div>
   );
