@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ReportDesignerPage } from './ReportDesignerPage';
 import { createReportDesign, updateReportDesign, deleteReportDesign, listReportDesigns, publishReportDesign } from '../api';
@@ -449,5 +449,35 @@ describe('duplicate, copy and paste', () => {
     // Paste is one undo step: Ctrl+Z removes the clone again.
     fireEvent.click(screen.getByRole('button', { name: /undo/i }));
     expect(document.querySelectorAll('[data-testid^="el-"]:not([data-testid^="el-tag-"])').length).toBe(before);
+  });
+});
+
+// jsdom has no matchMedia; fake one whose width can change after render. It applies the
+// max-width in the query, so a page that passes its own breakpoint is checked against it.
+let viewportWidth = 1280;
+const viewportListeners = new Set<() => void>();
+function fakeMatchMedia(): void {
+  viewportWidth = 1280;
+  viewportListeners.clear();
+  window.matchMedia = ((query: string) => ({
+    get matches() { return viewportWidth <= Number(/max-width:\s*(\d+)px/.exec(query)?.[1] ?? Infinity); },
+    media: query,
+    addEventListener: (_: string, fn: () => void) => viewportListeners.add(fn),
+    removeEventListener: (_: string, fn: () => void) => viewportListeners.delete(fn),
+  })) as unknown as typeof window.matchMedia;
+}
+const resizeTo = (w: number) => act(() => { viewportWidth = w; viewportListeners.forEach((fn) => fn()); });
+
+describe('ReportDesignerPage narrow viewport', () => {
+  beforeEach(fakeMatchMedia);
+  afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
+
+  it('collapses the explorer when the viewport narrows below its 1024px breakpoint', async () => {
+    await renderPage();
+    expect(screen.getByRole('button', { name: /collapse explorer/i })).toBeInTheDocument();
+    resizeTo(1100);
+    expect(screen.getByRole('button', { name: /collapse explorer/i })).toBeInTheDocument();
+    resizeTo(1000);
+    expect(screen.getByRole('button', { name: /expand explorer/i })).toBeInTheDocument();
   });
 });

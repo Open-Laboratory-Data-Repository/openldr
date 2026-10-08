@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Frame, PanelLeftOpen } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
-import { isNarrowViewport } from '@/lib/viewport';
+import { isNarrowViewport, useIsNarrowViewport } from '@/lib/viewport';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
@@ -77,6 +77,10 @@ export function ReportDesignerPage(): JSX.Element {
   const [collapsed, setCollapsed] = useState(
     () => isNarrowViewport(1023),
   );
+  // Also collapse when the viewport narrows below lg later (rotation, resize). Only on the change,
+  // so the user can still expand it. Widening leaves it as the user set it.
+  const narrow = useIsNarrowViewport(1023);
+  useEffect(() => { if (narrow) setCollapsed(true); }, [narrow]);
   const [error, setError] = useState<string>();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);

@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import i18n from '@/i18n';
 import { Docs } from './Docs';
@@ -181,5 +181,33 @@ describe('DocsLayout locale derivation', () => {
     renderAt('/docs');
     expect(screen.getByText(/Shown in English/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Start Here' })).toBeInTheDocument();
+  });
+});
+
+// jsdom has no matchMedia; fake one whose width can change after render. It applies the
+// max-width in the query, so a page that passes its own breakpoint is checked against it.
+let viewportWidth = 1280;
+const viewportListeners = new Set<() => void>();
+function fakeMatchMedia(): void {
+  viewportWidth = 1280;
+  viewportListeners.clear();
+  window.matchMedia = ((query: string) => ({
+    get matches() { return viewportWidth <= Number(/max-width:\s*(\d+)px/.exec(query)?.[1] ?? Infinity); },
+    media: query,
+    addEventListener: (_: string, fn: () => void) => viewportListeners.add(fn),
+    removeEventListener: (_: string, fn: () => void) => viewportListeners.delete(fn),
+  })) as unknown as typeof window.matchMedia;
+}
+const resizeTo = (w: number) => act(() => { viewportWidth = w; viewportListeners.forEach((fn) => fn()); });
+
+describe('DocsLayout narrow viewport', () => {
+  beforeEach(fakeMatchMedia);
+  afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
+
+  it('collapses the sidebar when the viewport narrows after a wide load', () => {
+    renderAt('/docs');
+    expect(screen.getByRole('button', { name: 'Collapse documentation sidebar' })).toBeInTheDocument();
+    resizeTo(375);
+    expect(screen.getByRole('button', { name: 'Expand documentation sidebar' })).toBeInTheDocument();
   });
 });

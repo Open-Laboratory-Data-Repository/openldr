@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { AppShell } from '../shell/AppShell';
-import { isNarrowViewport } from '@/lib/viewport';
+import { isNarrowViewport, useIsNarrowViewport } from '@/lib/viewport';
 import { FileText } from 'lucide-react';
 import {
   fetchReports, fetchReport, fetchReportOptions, logReportRun, fetchLabIdentity,
@@ -49,6 +49,10 @@ export function Reports() {
   const [collapsed, setCollapsed] = useState(
     isNarrowViewport,
   );
+  // Also collapse when the viewport narrows later (rotation, resize). Only on the change, so the
+  // user can still expand it on a phone. Widening leaves it as the user set it.
+  const narrow = useIsNarrowViewport();
+  useEffect(() => { if (narrow) setCollapsed(true); }, [narrow]);
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [params, setParams] = useState<Record<string, string>>({});
   // Params snapshotted at the moment of the last Run, so both result tabs (document

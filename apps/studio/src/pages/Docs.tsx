@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '../shell/AppShell';
-import { isNarrowViewport } from '@/lib/viewport';
+import { isNarrowViewport, useIsNarrowViewport } from '@/lib/viewport';
 import {
   DOC_GROUPS,
   DOC_GUIDES,
@@ -89,6 +89,10 @@ export function Docs() {
   const [collapsed, setCollapsed] = useState(
     isNarrowViewport,
   );
+  // Also collapse when the viewport narrows later (rotation, resize). Only on the change, so the
+  // user can still expand it on a phone. Widening leaves it as the user set it.
+  const narrow = useIsNarrowViewport();
+  useEffect(() => { if (narrow) setCollapsed(true); }, [narrow]);
   const [lightbox, setLightbox] = useState<LightboxImage | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
