@@ -1421,7 +1421,7 @@ export const pt: EnShape = {
     explorer: 'Explorador', connectors: 'Conectores', datasets: 'Conjuntos de dados', customQueries: 'Consultas personalizadas',
     newQuery: 'Nova consulta', run: 'Executar', save: 'Guardar', parameters: 'Parâmetros',
     filterTables: 'Filtrar…', noConnectors: 'Nenhum conector de base de dados', rows: 'linhas',
-    runParameters: 'Parâmetros de execução', runWithValues: 'Executar com estes valores',
+    runParameters: 'Parâmetros de execução', runWithValues: 'Executar com estes valores', runActions: 'Ações de execução', anyValue: '(todos)',
     savedToast: 'Consulta personalizada “{{name}}” salva',
     deleteQuery: 'Eliminar consulta', confirmDeleteQuery: 'Eliminar esta consulta personalizada?',
     collapseExplorer: 'Recolher explorador', expandExplorer: 'Expandir explorador',
