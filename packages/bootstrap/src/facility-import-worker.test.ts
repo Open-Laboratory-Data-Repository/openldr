@@ -4,7 +4,7 @@ import { type Kysely, sql } from 'kysely';
 import type { AuditEventInput } from '@openldr/audit';
 import { makeMigratedDb } from '@openldr/db/testing';
 import {
-  createFacilityImportRunStore, referenceCapture, APPLY_PHASE,
+  createFacilityImportRunStore, createFacilityJobStore, referenceCapture, APPLY_PHASE,
   type InternalSchema, type FacilityImportRunStore,
 } from '@openldr/db';
 import { importFacilities } from './facility-import';
@@ -57,7 +57,8 @@ async function harness(
   const audited: AuditEventInput[] = [];
   const audit = { record: vi.fn(async (e: AuditEventInput) => { audited.push(e); return e as never; }) };
   const worker = createFacilityImportWorker({
-    runs, blob, importDeps: { db, capture: referenceCapture }, intervalMs: 10_000, logger, audit,
+    runs, blob, importDeps: { db, capture: referenceCapture, facilityJobs: createFacilityJobStore(db) },
+    intervalMs: 10_000, logger, audit,
     ...(opts?.maxBufferBytes === undefined ? {} : { maxBufferBytes: opts.maxBufferBytes }),
     ...(opts?.perRowProgressMinRows === undefined
       ? {} : { perRowProgressMinRows: opts.perRowProgressMinRows }),
@@ -471,6 +472,19 @@ describe('createFacilityImportWorker — apply phase', () => {
     // Terminal ⇒ the register is free for the next import.
     expect((await rowFor(h.db, runId)).active_key).toBeNull();
     expect(after?.phase).toBe('applied');
+  });
+
+  it('the rebuild an apply queues records who uploaded the register', async () => {
+    const h = await harness(CSV);
+    const run = await h.runs.startUpload({ ...upload(), requestedBy: 'op-1' });
+    await h.worker.tickOnce();
+    expect(await h.runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    expect((await h.runs.get(run.id))?.status).toBe('applied');
+    expect(await createFacilityJobStore(h.db).latest('facility-map-rebuild')).toMatchObject({ requestedBy: 'op-1' });
   });
 
   // ⛔ TASK 8b: `columnMap` (@openldr/terminology's `FacilityColumnMap`) HAS TO SURVIVE INTO BOTH

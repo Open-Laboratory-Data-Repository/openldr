@@ -534,7 +534,7 @@ export async function runFacilitiesImport(path: string, requested: FacilitiesImp
     // preview above verbatim: `apply` was already falsy on that call, so there is nothing left for a
     // second one to do.
     const result: FacilityImportResult = opts.apply
-      ? await importFacilities(deps, csv, { ...importOptions, apply: true })
+      ? await importFacilities(deps, csv, { ...importOptions, apply: true, requestedBy: 'cli' })
       : preview;
 
     // A dry run writes nothing, so it has nothing to audit — only an applied import is recorded.

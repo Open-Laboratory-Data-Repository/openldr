@@ -3,7 +3,7 @@ import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createAuditStore } from '@openldr/audit';
 import {
-  createTerminologyAdminStore, createFacilityImportRunStore, createFacilityRegisterSourceStore, referenceCapture,
+  createTerminologyAdminStore, createFacilityImportRunStore, createFacilityJobStore, createFacilityRegisterSourceStore, referenceCapture,
   type InternalSchema,
 } from '@openldr/db';
 import { importFacilityRegisterCsv, type FacilityRegisterFileDeps } from './facility-register-file';
@@ -39,6 +39,7 @@ async function build() {
   const audit = createAuditStore(db);
   const deps: FacilityRegisterFileDeps = {
     db, capture: referenceCapture, admin: createTerminologyAdminStore(db), audit,
+    facilityJobs: createFacilityJobStore(db),
     logger: { error: vi.fn(), warn: vi.fn() },
   };
   return { db, deps, audit };
@@ -69,6 +70,12 @@ describe('importFacilityRegisterCsv', () => {
     const runs = await createFacilityImportRunStore(db).list(URL);
     expect(runs).toHaveLength(1);
     expect(runs[0].status).toBe('applied');
+  });
+
+  it('the rebuild an apply queues records the installing actor', async () => {
+    const { db, deps } = await build();
+    await importFacilityRegisterCsv(deps, input(csv(THREE), true));
+    expect(await createFacilityJobStore(db).latest('facility-map-rebuild')).toMatchObject({ requestedBy: 'u1' });
   });
 
   it('a second apply reuses the source and leaves 3 rows', async () => {

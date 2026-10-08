@@ -391,7 +391,7 @@ describe('facilities import CLI', () => {
       {
         nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: true,
         format: undefined, completeRelease: undefined, onDeleted: undefined, onAbsent: undefined, onConflict: undefined,
-        runId: DEFAULT_RUN.id,
+        runId: DEFAULT_RUN.id, requestedBy: 'cli',
       },
     );
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
@@ -690,6 +690,16 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(0);
     expect(mocks.ctx.facilityJobs.enqueue).toHaveBeenCalledWith({ kind: 'facility-map-rebuild' });
+  });
+
+  it('an applied import names the CLI as the one who asked for the rebuild', async () => {
+    mocks.importFacilities.mockResolvedValue(CLEAN_RESULT);
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(mocks.importFacilities).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), expect.objectContaining({ apply: true, requestedBy: 'cli' }),
+    );
   });
 
   it('a dry run queues no rebuild — nothing was written for the dimension to catch up to', async () => {

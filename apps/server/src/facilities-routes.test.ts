@@ -2137,6 +2137,7 @@ describe('POST /api/facilities/import', () => {
     expect(res.statusCode).toBe(200);
     const queued = await ctx.facilityJobs.listUnresolved();
     expect(queued.map((j: any) => j.kind)).toEqual(['facility-map-rebuild']);
+    expect(queued[0].requestedBy).toBe('u1'); // `req.user.id` from `appWith`'s fake `onRequest` hook
   });
 
   it('the applied mutation is audited as facility.import', async () => {
