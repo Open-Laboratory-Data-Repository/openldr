@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-10-07",
+  "generatedAt": "2026-10-08",
   "days": [
+    {
+      "date": "2026-10-08",
+      "version": null,
+      "entries": [
+        {
+          "hash": "41e4c56f",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The query editor follows the active tab"
+        }
+      ]
+    },
     {
       "date": "2026-10-07",
       "version": null,
