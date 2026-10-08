@@ -190,6 +190,22 @@ describe('seedDatabase — default workflows', () => {
   });
 });
 
+// The patient pickers search the warehouse by name and identifier, so a seed patient without them
+// can never be chosen on a Lab order.
+describe('seedDatabase — sample patient', () => {
+  it('seeds a patient with a name and an identifier a picker can find', async () => {
+    const persisted: Record<string, unknown>[] = [];
+    const db = { persist: vi.fn(async (r: Record<string, unknown>) => { persisted.push(r); return { flattened: JSON.stringify(r) }; }) } as unknown as DbContext;
+    await seedDatabase(db, fakeApp().app);
+    const patient = persisted.find((r) => r.resourceType === 'Patient');
+    expect(patient).toMatchObject({
+      id: 'seed-pat',
+      name: [{ family: 'Sample', given: ['Seed'] }],
+      identifier: [{ system: 'urn:openldr:seed:patient', value: 'SEED-0001' }],
+    });
+  });
+});
+
 // Seeding is create-if-absent by id, so an install that already has the `wf-ingest` row keeps
 // whatever enabled state it has — and earlier versions shipped it DISABLED. Hand capture submits
 // through this workflow, so a disabled row means every form submission 409s on an upgrade.
