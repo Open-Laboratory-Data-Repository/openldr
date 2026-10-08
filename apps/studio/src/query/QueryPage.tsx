@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, Database, Table2, MoreHorizontal } from 'lucide-react';
 import { AppShell } from '../shell/AppShell';
-import { isNarrowViewport } from '@/lib/viewport';
+import { isNarrowViewport, useIsNarrowViewport } from '@/lib/viewport';
 import { Button } from '@/components/ui/button';
 import { useTranslation } from 'react-i18next';
 import { ExplorerTree } from './tree/ExplorerTree';
@@ -57,6 +57,10 @@ export function QueryPage(): JSX.Element {
   const [collapsed, setCollapsed] = useState(
     isNarrowViewport,
   );
+  // Also collapse when the viewport narrows later (rotation, resize). Only on the change, so the
+  // user can still expand it on a phone. Widening leaves it as the user set it.
+  const narrow = useIsNarrowViewport();
+  useEffect(() => { if (narrow) setCollapsed(true); }, [narrow]);
   // Default true so the "+" isn't briefly disabled while the availability check is in flight.
   const [canQuery, setCanQuery] = useState(true);
   const [transfer, setTransfer] = useState<'export' | 'import' | null>(null);
