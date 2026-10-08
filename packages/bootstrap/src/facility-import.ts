@@ -173,6 +173,10 @@ export interface FacilityImportOptions {
    *  keeps counting it regardless of which way this is set — the operator must still be told how
    *  many rows they overwrote, not have the count vanish the moment they choose to act on it. */
   onConflict?: 'skip' | 'overwrite';
+  /** Who asked for this import, written to `requested_by` on the facility-map rebuild an applied
+   *  import queues. Each caller passes its own actor: the route the user id, the CLI `'cli'`, the
+   *  background worker the run's uploader, a content pack its installing actor. Omitted means null. */
+  requestedBy?: string | null;
 }
 
 /** One row of a per-bucket sample, identifying the facility without shipping the whole record. */
@@ -1133,7 +1137,7 @@ export async function importFacilities(
   // silently — a lost enqueue leaves the dimension stale with nothing else recording it.
   if (deps.facilityJobs) {
     try {
-      await deps.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+      await deps.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: opts.requestedBy ?? null });
     } catch (err) {
       const msg = 'failed to enqueue a facility-map-rebuild job after an applied facility import';
       if (deps.logger) deps.logger.error({ err }, msg);

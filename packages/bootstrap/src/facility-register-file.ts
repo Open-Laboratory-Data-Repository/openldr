@@ -134,7 +134,9 @@ export async function importFacilityRegisterCsv(
     }
     if (!input.apply) return { ok: true, result: preview };
 
-    const result = await importFacilities(deps, input.csv, { ...importOptions, runId, apply: true });
+    const result = await importFacilities(deps, input.csv, {
+      ...importOptions, runId, apply: true, requestedBy: input.actor.id ?? input.actor.name,
+    });
     // Best effort: the rows are written, so a failed audit write must not fail the step.
     // safeRecord only calls `logger.error`, which this logger has.
     await safeRecord(deps.audit as AuditStore, deps.logger as unknown as Logger, {

@@ -299,6 +299,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       runId: run.id,
       apply: true,
       previewedAt: run.previewedAt === null ? null : new Date(run.previewedAt),
+      requestedBy: run.requestedBy,
     };
   }
 

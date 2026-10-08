@@ -2392,6 +2392,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       result = await importFacilities(deps, p.data.csv, {
         ...importOpts, apply: true, runId: run?.id ?? null,
         previewedAt: run?.previewedAt ? new Date(run.previewedAt) : null,
+        requestedBy: actorFromRequest(req).actorId,
       });
     } catch (err) {
       if (run) {

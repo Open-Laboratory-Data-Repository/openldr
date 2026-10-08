@@ -871,6 +871,15 @@ describe('importFacilities enqueues a facility-map-rebuild', () => {
     expect(rebuilds).toHaveLength(1);
   });
 
+  it('the rebuild it queues records who asked for the import', async () => {
+    const deps = await buildDepsWithJobs();
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true, requestedBy: 'op-1' });
+
+    expect(await deps.facilityJobs.latest('facility-map-rebuild')).toMatchObject({ requestedBy: 'op-1' });
+  });
+
   it('a dry run does not enqueue a rebuild — nothing changed for the dimension to catch up to', async () => {
     const deps = await buildDepsWithJobs();
     const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
