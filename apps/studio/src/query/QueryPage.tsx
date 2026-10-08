@@ -36,9 +36,11 @@ function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
               body={t('query.noSources')}
               action={<Button onClick={() => navigate('/settings/connectors')}>{t('query.addConnector')}</Button>}
             />)}
-        {active?.kind === 'table' && <TableTab tab={active} />}
-        {active?.kind === 'dataset' && <TableTab tab={active} />}
-        {active?.kind === 'query' && <QueryTab tab={active} />}
+        {/* Key by tab id: SqlEditor builds its CodeMirror view once on mount, so a reused
+            instance would keep the previous tab's SQL and write edits into that tab. */}
+        {active?.kind === 'table' && <TableTab key={active.id} tab={active} />}
+        {active?.kind === 'dataset' && <TableTab key={active.id} tab={active} />}
+        {active?.kind === 'query' && <QueryTab key={active.id} tab={active} />}
       </div>
     </div>
   );
