@@ -1,5 +1,5 @@
 // apps/studio/src/query/QueryPage.test.tsx
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, act, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { EditorView } from 'codemirror';
@@ -59,5 +59,39 @@ describe('QueryPage workspace', () => {
     act(() => useQueryStore.getState().setActive(facilities.id));
     expect(screen.getByText('0 rows · 1ms')).toBeVisible();
     expect(queryApi.run).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('QueryPage explorer', () => {
+  // jsdom has no matchMedia; fake one whose width can be changed after render.
+  let narrow = false;
+  const listeners = new Set<() => void>();
+  beforeEach(() => {
+    narrow = false;
+    listeners.clear();
+    useQueryStore.setState({ tabs: [], activeId: null });
+    window.matchMedia = ((query: string) => ({
+      get matches() { return narrow; }, media: query,
+      addEventListener: (_: string, fn: () => void) => listeners.add(fn),
+      removeEventListener: (_: string, fn: () => void) => listeners.delete(fn),
+    })) as unknown as typeof window.matchMedia;
+  });
+  afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
+
+  const resize = (toNarrow: boolean) => act(() => { narrow = toNarrow; listeners.forEach((fn) => fn()); });
+
+  it('collapses when the viewport narrows after a wide load', () => {
+    render(<MemoryRouter><QueryPage /></MemoryRouter>);
+    expect(screen.getByTestId('query-explorer')).toBeInTheDocument();
+    resize(true);
+    expect(screen.queryByTestId('query-explorer')).not.toBeInTheDocument();
+  });
+
+  it('stays open when expanded again on a narrow viewport', () => {
+    narrow = true;
+    render(<MemoryRouter><QueryPage /></MemoryRouter>);
+    expect(screen.queryByTestId('query-explorer')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Expand explorer' }));
+    expect(screen.getByTestId('query-explorer')).toBeInTheDocument();
   });
 });
