@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "b2822032",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "The seed patient has a name and an identifier"
+        },
+        {
+          "hash": "b9b33fba",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Openldr ingest waits for the batch to finish"
+        },
+        {
           "hash": "4636c369",
           "type": "fix",
           "scope": "studio",
