@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, Search, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { isNarrowViewport } from '@/lib/viewport';
+import { isNarrowViewport, useIsNarrowViewport } from '@/lib/viewport';
 import { nodeCategories, IMPLEMENTED_TEMPLATE_IDS } from '../constants';
 import type { NodeCategory, NodeTemplate } from '../lib/types';
 import type { NodeVariant } from './node-types/base-node';
@@ -145,6 +145,10 @@ export function Sidebar() {
   // Collapse the node library to a rail by default on phone-width screens so the canvas gets the
   // full width; desktop opens expanded as before.
   const [collapsed, setCollapsed] = useState(isNarrowViewport);
+  // Also collapse when the viewport narrows later (rotation, resize). Only on the change, so the
+  // user can still expand it on a phone. Widening leaves it as the user set it.
+  const narrow = useIsNarrowViewport();
+  useEffect(() => { if (narrow) setCollapsed(true); }, [narrow]);
   const [search, setSearch] = useState('');
   const [pluginCats, setPluginCats] = useState<NodeCategory[]>([]);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() =>

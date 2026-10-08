@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
@@ -240,5 +240,33 @@ describe('Reports page — the time zone can arrive after the report is picked',
     expect(screen.getByPlaceholderText('Time zone')).toHaveValue('');
     releaseIdentity();
     await waitFor(() => expect(screen.getByPlaceholderText('Time zone')).toHaveValue('Africa/Dar_es_Salaam'));
+  });
+});
+
+// jsdom has no matchMedia; fake one whose width can change after render. It applies the
+// max-width in the query, so a page that passes its own breakpoint is checked against it.
+let viewportWidth = 1280;
+const viewportListeners = new Set<() => void>();
+function fakeMatchMedia(): void {
+  viewportWidth = 1280;
+  viewportListeners.clear();
+  window.matchMedia = ((query: string) => ({
+    get matches() { return viewportWidth <= Number(/max-width:\s*(\d+)px/.exec(query)?.[1] ?? Infinity); },
+    media: query,
+    addEventListener: (_: string, fn: () => void) => viewportListeners.add(fn),
+    removeEventListener: (_: string, fn: () => void) => viewportListeners.delete(fn),
+  })) as unknown as typeof window.matchMedia;
+}
+const resizeTo = (w: number) => act(() => { viewportWidth = w; viewportListeners.forEach((fn) => fn()); });
+
+describe('Reports page — narrow viewport', () => {
+  beforeEach(fakeMatchMedia);
+  afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
+
+  it('collapses the library when the viewport narrows after a wide load', async () => {
+    render(<MemoryRouter><Reports /></MemoryRouter>);
+    expect(await screen.findByRole('button', { name: 'Collapse library' })).toBeInTheDocument();
+    resizeTo(375);
+    expect(screen.getByRole('button', { name: 'Expand library' })).toBeInTheDocument();
   });
 });
