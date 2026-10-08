@@ -60,6 +60,8 @@ Instalar duas vezes é seguro:
 
 As linhas que faltam no registo de um pacote mais recente são assinaladas. Nunca são retiradas.
 
+Um passo de registo pode listar colunas extra. Os seus valores vão para os `extras` de cada unidade, com o nome da coluna em minúsculas. As consultas personalizadas leem-nos na tabela `facility_registry` do armazém. Qualquer outra coluna que o registo não conheça continua a fazer recusar o pacote. Uma versão mais antiga do CE recusa um pacote que liste colunas extra, e não escreve nada.
+
 Escolha **Desanexar** para esquecer o registo de instalação. Tudo o que o pacote escreveu fica. Não existe desinstalação.
 
 Na linha de comandos, `openldr market install <bundle-dir> --dry-run` executa as verificações e mostra os passos, com quantos códigos cada passo de correspondência de ligações ligaria. Não escreve nada.
