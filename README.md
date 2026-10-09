@@ -82,7 +82,7 @@ flowchart LR
 | Port | Default adapter | Alternatives |
 |------|-----------------|--------------|
 | Auth (OIDC) | Keycloak | any OIDC provider |
-| Blob storage (S3 API) | MinIO | any S3-compatible store |
+| Blob storage (S3 API) | Garage | any S3-compatible store |
 | Eventing / orchestration | Postgres outbox + `pg_notify` | — |
 | Target data store | PostgreSQL | SQL Server, MySQL / MariaDB |
 
@@ -109,7 +109,7 @@ flowchart LR
 | PDF | PDFKit |
 | i18n | react-i18next (English · French · Portuguese) |
 | Auth | Keycloak 26 (OIDC), OpenLDR-branded login theme |
-| Blob storage | MinIO (S3-compatible) |
+| Blob storage | Garage (S3-compatible) |
 | Testing | Vitest (unit) · Playwright (E2E, UI capture, docs screenshots) |
 | Reverse proxy / TLS | nginx (single HTTPS port; Let's Encrypt via certbot) |
 
@@ -148,7 +148,7 @@ cd openldr
 pnpm install
 cp .env.example .env
 
-# Backing services only: Postgres (:5433), MinIO (:9010), Keycloak (:8180).
+# Backing services only: Postgres (:5433), S3 storage (:9010), Keycloak (:8180).
 # SQL Server and DHIS2 sit behind opt-in compose profiles and do NOT start here.
 docker compose up -d
 
@@ -222,7 +222,7 @@ openldr/
 │   ├── adapter-event-bus/      # Postgres outbox + pg_notify eventing
 │   ├── adapter-mssql-store/    # SQL Server target-store adapter
 │   ├── adapter-mysql-store/    # MySQL / MariaDB target-store adapter
-│   ├── adapter-s3-bucket/      # S3 / MinIO blob adapter
+│   ├── adapter-s3-bucket/      # S3 blob adapter
 │   ├── audit/                  # append-only audit store
 │   ├── bootstrap/              # application context wiring + first-run seeds
 │   ├── cli/                    # OpenLDR CLI
@@ -261,7 +261,7 @@ openldr/
 
 ## Deployment
 
-OpenLDR CE is designed to run behind a **single HTTPS port**. Production environments often allocate only one or two ports, so an nginx reverse proxy terminates TLS (via Let's Encrypt/Certbot) and path-routes the SPA, API, docs site, and auth callbacks under one origin. Only the gateway publishes host ports; Postgres, MinIO, Keycloak, api, studio, and web are reachable on the compose network only. All application code is proxy-relative — no hard-coded hosts or ports.
+OpenLDR CE is designed to run behind a **single HTTPS port**. Production environments often allocate only one or two ports, so an nginx reverse proxy terminates TLS (via Let's Encrypt/Certbot) and path-routes the SPA, API, docs site, and auth callbacks under one origin. Only the gateway publishes host ports; Postgres, the storage service, Keycloak, api, studio, and web are reachable on the compose network only. All application code is proxy-relative — no hard-coded hosts or ports.
 
 Five independently-versioned images are published to GHCR:
 

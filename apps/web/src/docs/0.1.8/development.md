@@ -2,7 +2,7 @@
 
 Run OpenLDR from source to develop against it. The repo is a pnpm + Turbo monorepo:
 the backend API (`apps/server`), the Studio app (`apps/studio`), this landing/docs site
-(`apps/web`), and shared packages. Backing services (Postgres, MinIO, Keycloak) run in
+(`apps/web`), and shared packages. Backing services (Postgres, Keycloak and the storage service, Garage) run in
 Docker; the apps run on your host with hot reload.
 
 ## Prerequisites
@@ -45,13 +45,15 @@ pnpm install
 cp .env.example .env
 printf '\nAUTH_DEV_BYPASS=true\n' >> .env   # required: the bypass is off unless you set it
 
-# backing services (Postgres :5433, MinIO :9010/:9011, Keycloak :8180)
+# backing services (Postgres :5433, S3 storage (Garage) :9010, Keycloak :8180)
 docker compose up -d
 
 # create the schema and seed the starter set (forms, workflows, terminology)
 pnpm openldr db reset
 pnpm openldr db seed
 ```
+
+If your `.env` predates 0.1.10, change `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` to the values in `.env.example`.
 
 > The database is **not** migrated automatically in dev (`MIGRATE_ON_START` is off), so
 > **after any pull that brings new migrations, run `pnpm openldr db migrate`**. It is

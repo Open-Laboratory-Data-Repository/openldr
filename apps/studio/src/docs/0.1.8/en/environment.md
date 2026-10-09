@@ -64,26 +64,31 @@ bundled containers. Change them only when pointing at external infrastructure.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AUTH_ADAPTER` | `keycloak` | Sign-in mode: `keycloak` or `oidc`. See [Authentication providers](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. |
+| `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. `minio` selects the S3 adapter, which also works with Garage. |
 | `EVENTING_ADAPTER` | `pg` | Event store used by workflow triggers. |
 | `TARGET_STORE_ADAPTER` | `pg` | Analytics warehouse engine: `pg`, `mssql`, or `mysql`. |
 
 An external reporting target is no longer an adapter chosen here. Create a connector under
 **Settings > Connectors** instead, and the sink plugin is resolved from that connector.
 
-## Object storage (S3 / MinIO)
+## Object storage (S3)
 
-The bundled MinIO container is S3-compatible. Point these at any S3 endpoint to use
-external storage instead.
+The bundled `storage` service runs Garage, an S3-compatible server. Point these at any S3
+endpoint to use another one.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `S3_ENDPOINT` | `http://minio:9000` | S3 endpoint URL. |
+| `S3_ENDPOINT` | `http://storage:3900` | S3 endpoint URL. |
 | `S3_REGION` | `us-east-1` | S3 region. |
 | `S3_ACCESS_KEY_ID` | generated | Access key. |
 | `S3_SECRET_ACCESS_KEY` | generated | Secret key. |
 | `S3_BUCKET` | `openldr` | Bucket that holds uploads and artifacts. |
-| `S3_FORCE_PATH_STYLE` | `true` | Path-style addressing (required by MinIO). |
+| `S3_FORCE_PATH_STYLE` | `true` | Path-style addressing (required by the bundled storage). |
+| `GARAGE_RPC_SECRET` | generated | Garage's internal secret, 64 hex characters. |
+| `GARAGE_ADMIN_TOKEN` | generated | Garage's admin API token, 64 hex characters. |
+
+Garage only accepts an access key ID of `GK` followed by 24 hex characters, and a 64-character
+hex secret. The installer generates both.
 
 ## Authentication (Keycloak / OIDC)
 

@@ -9,7 +9,7 @@ Schedule downtime for a Compose upgrade. Schema changes can prevent old and new 
 
 Work in the installed Compose project directory. Use the same project name, environment file and Compose overlays throughout. Record the current image tags and IDs with `docker compose images`. Keep the previous images and Compose files available. Read the target release notes and migration requirements.
 
-Save the current `.env` and configuration privately before editing them. Pin `OPENLDR_VERSION` to the chosen release in `.env`. Download only the application images needed by that release before downtime. Do not blindly pull every service: the storage services have separate versions, and MinIO may use `latest`. Preserve the current PostgreSQL, MinIO and external database versions.
+Save the current `.env` and configuration privately before editing them. Pin `OPENLDR_VERSION` to the chosen release in `.env`. Download only the application images needed by that release before downtime. Do not blindly pull every service: the storage services have separate versions. Preserve the current PostgreSQL, storage service and external database versions.
 
 Save this guide outside Studio before stopping services. Confirm who can restore backups and how senders queue or retry during downtime.
 
@@ -31,7 +31,7 @@ docker compose stop -t 300 api
 
 The example allows 300 seconds. Increase it when necessary. OpenLDR waits for active requests and workers during shutdown. Check container state and shutdown logs. A forced kill, timeout or exit code 137 does not prove work drained. Investigate before proceeding, including possible partial external effects.
 
-Stop Keycloak and MinIO after the API stops, and stop any other writers to their stores. Keep PostgreSQL running for logical backups. Keep all writers stopped through backup verification and migrations. Queued webhook receipts may remain for the new worker. Record their IDs and investigate running or interrupted work before resuming deliveries.
+Stop Keycloak and the storage service after the API stops, and stop any other writers to their stores. Keep PostgreSQL running for logical backups. Keep all writers stopped through backup verification and migrations. Queued webhook receipts may remain for the new worker. Record their IDs and investigate running or interrupted work before resuming deliveries.
 
 ### Back up one stopped-write state
 
@@ -46,7 +46,7 @@ For PostgreSQL, identify the real database names and account first. Run `pg_dump
 
 Save roles separately with `pg_dumpall --globals-only -f /tmp/globals.sql -U USER`, then copy that file out. Use the same container execution pattern. Protect these files because they can contain credentials. Using `-f` and `compose cp` avoids binary shell redirection in Windows PowerShell.
 
-For MySQL, SQL Server or externally managed stores, use the database administrator's native backup and restore procedure. PostgreSQL dumps do not cover those databases. For MinIO, use a tested bucket backup or copy its volume while MinIO is stopped. Do not copy a live PostgreSQL data volume as a logical backup. Never run `docker compose down -v` during an upgrade.
+For MySQL, SQL Server or externally managed stores, use the database administrator's native backup and restore procedure. PostgreSQL dumps do not cover those databases. For the storage service, use a tested bucket backup or copy its volume while the service is stopped. Do not copy a live PostgreSQL data volume as a logical backup. Never run `docker compose down -v` during an upgrade.
 
 ### Prove the backup restores
 
@@ -74,6 +74,42 @@ An HTTP 202 means the webhook was accepted, not completed. Poll outstanding rece
 
 Resume senders only after these checks pass. Keep the verified backup and previous images according to the site's retention policy.
 
+### Moving from MinIO to Garage (installs from before 0.1.10)
+
+MinIO removed its images from Docker Hub on 2026-09-11. From 0.1.10 the `storage` service runs Garage instead. An install that already holds files must copy them across once. A fresh install does not need this.
+
+1. Note the current MinIO key and secret from `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). Step 4 overwrites them.
+2. Back up `.env` and `docker-compose.yml`.
+3. Download the 0.1.10 `docker-compose.yml` and `config/garage.toml`. Add the old `minio` service back into `docker-compose.yml` from your backup, so MinIO keeps running beside Garage.
+4. Generate new values and write them to `.env`:
+   - `S3_ACCESS_KEY_ID`: `GK` followed by 24 hex characters (`echo GK$(openssl rand -hex 12)`)
+   - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`: 64 hex characters each (`openssl rand -hex 32`)
+   - `S3_ENDPOINT=http://storage:3900`
+5. Start the new services: `docker compose up -d storage api`.
+6. Copy the files:
+   `./openldr storage copy --from-endpoint http://minio:9000 --from-key <old key> --from-secret <old secret> --from-bucket openldr`
+   It prints object counts and bytes for both sides and exits non-zero if they differ. Run it again to resume after a failure. It skips objects already on Garage with the same size, so it does not replace an object whose size is unchanged but whose content differs. It never changes MinIO.
+7. When it reports `totals match`, open a few uploaded files in the studio.
+8. Remove the `minio` service from `docker-compose.yml` and run `docker compose up -d --remove-orphans`. Keep the `miniodata` volume until you are sure. Then delete it with `docker volume rm <project>_miniodata`.
+
+Without the `./openldr` wrapper, run `docker compose run --rm --no-deps api node /app/cli/dist/index.js storage copy` with the same flags.
+
+The `--from-secret` value shows in your shell history and in the process list while the command runs. Clear that history line afterwards, or run the command in a throwaway shell.
+
+If you run from source, the compose file (`docker-compose.prod.yml`) and `deploy/install/garage.toml` arrive with the new checkout, so skip the downloads in step 3 but still add the old `minio` service back. Your `.env.prod` came from an earlier `pnpm run init`, so its `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` are not in Garage's format. Replace both as in step 4 (`GK` plus `openssl rand -hex 12`, and `openssl rand -hex 32`), and add `GARAGE_RPC_SECRET` and `GARAGE_ADMIN_TOKEN`. Compose refuses to run until both exist.
+
+### When a third-party image disappears
+
+Every third-party image an install pulls comes from the OpenLDR copy on GHCR, pinned by digest. The list is `deploy/third-party-images.json`. If a vendor removes an image, existing installs and new installs keep working, because the copy stays. The one exception is SQL Server, whose image stays on Microsoft's registry.
+
+To replace a vendor:
+
+1. Pick a replacement that speaks the same protocol.
+2. Add it to `deploy/third-party-images.json` and run `pnpm images:mirror <name>`. It copies linux/amd64 and linux/arm64 only.
+3. Make the new GHCR package public in its settings page.
+4. Swap it in behind the same compose service name.
+5. If the data format differs, move the data. The MinIO to Garage section above is the worked example.
+
 ### References
 
 - [Docker Compose service shutdown grace](https://docs.docker.com/reference/compose-file/services/#stop_grace_period)
@@ -88,7 +124,7 @@ Prévoyez une interruption pour une mise à niveau Compose. Des changements de s
 
 Travaillez dans le répertoire du projet Compose installé. Gardez le même nom de projet, fichier d'environnement et fichiers Compose complémentaires. Relevez les étiquettes et identifiants des images avec `docker compose images`. Conservez les anciennes images et les fichiers Compose. Lisez les notes de la version cible et les exigences de migration.
 
-Sauvegardez les fichiers `.env` et de configuration actuels dans un emplacement privé avant toute modification. Fixez `OPENLDR_VERSION` à la version choisie dans `.env`. Téléchargez uniquement les images applicatives nécessaires avant l'interruption. Ne téléchargez pas toutes les nouvelles images sans contrôle. Les services de stockage ont leurs propres versions et MinIO peut utiliser `latest`. Conservez les versions actuelles de PostgreSQL, MinIO et des bases externes.
+Sauvegardez les fichiers `.env` et de configuration actuels dans un emplacement privé avant toute modification. Fixez `OPENLDR_VERSION` à la version choisie dans `.env`. Téléchargez uniquement les images applicatives nécessaires avant l'interruption. Ne téléchargez pas toutes les nouvelles images sans contrôle. Les services de stockage ont leurs propres versions. Conservez les versions actuelles de PostgreSQL, du service de stockage et des bases externes.
 
 Enregistrez ce guide hors de Studio avant l'arrêt. Identifiez la personne chargée de restaurer les sauvegardes. Vérifiez comment les émetteurs mettent leurs envois en attente ou les réessaient.
 
@@ -110,7 +146,7 @@ docker compose stop -t 300 api
 
 Cet exemple accorde 300 secondes. Augmentez ce délai si nécessaire. OpenLDR attend les requêtes et traitements actifs pendant l'arrêt. Consultez l'état du conteneur et les journaux. Un arrêt forcé, un délai dépassé ou le code 137 ne prouve pas leur achèvement. Examinez la situation avant de continuer, notamment les effets externes partiels.
 
-Arrêtez Keycloak et MinIO après l'API, ainsi que les autres processus écrivant dans leurs stockages. Gardez PostgreSQL actif pour les sauvegardes logiques. Maintenez toutes les écritures arrêtées pendant la vérification des sauvegardes et les migrations. Des reçus webhook en attente peuvent rester pour le nouveau traitement. Notez leurs identifiants. Examinez les travaux actifs ou interrompus avant de reprendre les envois.
+Arrêtez Keycloak et le service de stockage après l'API, ainsi que les autres processus écrivant dans leurs stockages. Gardez PostgreSQL actif pour les sauvegardes logiques. Maintenez toutes les écritures arrêtées pendant la vérification des sauvegardes et les migrations. Des reçus webhook en attente peuvent rester pour le nouveau traitement. Notez leurs identifiants. Examinez les travaux actifs ou interrompus avant de reprendre les envois.
 
 ### Sauvegarder un même état sans écritures
 
@@ -125,7 +161,7 @@ Pour PostgreSQL, identifiez d'abord les vrais noms des bases et le compte. Exéc
 
 Sauvegardez les rôles avec `pg_dumpall --globals-only -f /tmp/globals.sql -U USER`, puis copiez ce fichier. Utilisez le même mode d'exécution dans le conteneur. Protégez ces fichiers car ils peuvent contenir des identifiants. L'emploi de `-f` et `compose cp` évite la redirection binaire dans Windows PowerShell.
 
-Pour MySQL, SQL Server ou les stockages externes, suivez la procédure native de sauvegarde et restauration de l'administrateur. Les sauvegardes PostgreSQL ne couvrent pas ces bases. Pour MinIO, utilisez une sauvegarde de compartiments testée ou copiez son volume après son arrêt. Ne copiez pas un volume PostgreSQL actif comme sauvegarde logique. N'exécutez jamais `docker compose down -v` pendant une mise à niveau.
+Pour MySQL, SQL Server ou les stockages externes, suivez la procédure native de sauvegarde et restauration de l'administrateur. Les sauvegardes PostgreSQL ne couvrent pas ces bases. Pour le service de stockage, utilisez une sauvegarde de compartiments testée ou copiez son volume après son arrêt. Ne copiez pas un volume PostgreSQL actif comme sauvegarde logique. N'exécutez jamais `docker compose down -v` pendant une mise à niveau.
 
 ### Vérifier la restauration
 
@@ -153,6 +189,42 @@ HTTP 202 signifie que le webhook a été accepté, pas terminé. Consultez les r
 
 Reprenez les envois seulement après ces vérifications. Conservez la sauvegarde vérifiée et les anciennes images selon la politique du site.
 
+### Passer de MinIO à Garage (installations antérieures à 0.1.10)
+
+MinIO a retiré ses images de Docker Hub le 2026-09-11. Depuis 0.1.10, le service `storage` exécute Garage à la place. Une installation qui contient déjà des fichiers doit les copier une fois. Une nouvelle installation n'en a pas besoin.
+
+1. Notez la clé et le secret MinIO actuels dans `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). L'étape 4 les remplace.
+2. Sauvegardez `.env` et `docker-compose.yml`.
+3. Téléchargez le `docker-compose.yml` et le `config/garage.toml` de la version 0.1.10. Remettez l'ancien service `minio` dans `docker-compose.yml` à partir de votre sauvegarde, pour que MinIO reste actif à côté de Garage.
+4. Générez de nouvelles valeurs et écrivez-les dans `.env` :
+   - `S3_ACCESS_KEY_ID` : `GK` suivi de 24 caractères hexadécimaux (`echo GK$(openssl rand -hex 12)`)
+   - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` : 64 caractères hexadécimaux chacun (`openssl rand -hex 32`)
+   - `S3_ENDPOINT=http://storage:3900`
+5. Démarrez les nouveaux services : `docker compose up -d storage api`.
+6. Copiez les fichiers :
+   `./openldr storage copy --from-endpoint http://minio:9000 --from-key <ancienne clé> --from-secret <ancien secret> --from-bucket openldr`
+   La commande affiche le nombre d'objets et d'octets des deux côtés, et se termine avec un code non nul s'ils diffèrent. Relancez-la pour reprendre après un échec. Elle ignore les objets déjà présents dans Garage avec la même taille, donc elle ne remplace pas un objet de même taille mais de contenu différent. Elle ne modifie jamais MinIO.
+7. Quand elle affiche `totals match`, ouvrez quelques fichiers téléversés dans le studio.
+8. Retirez le service `minio` de `docker-compose.yml` et lancez `docker compose up -d --remove-orphans`. Gardez le volume `miniodata` tant que vous n'êtes pas sûr. Supprimez-le ensuite avec `docker volume rm <projet>_miniodata`.
+
+Sans le script `./openldr`, lancez `docker compose run --rm --no-deps api node /app/cli/dist/index.js storage copy` avec les mêmes options.
+
+La valeur de `--from-secret` apparaît dans l'historique du shell et dans la liste des processus pendant l'exécution. Effacez ensuite cette ligne de l'historique, ou lancez la commande dans un shell jetable.
+
+Si vous exécutez depuis les sources, le fichier Compose (`docker-compose.prod.yml`) et `deploy/install/garage.toml` arrivent avec la nouvelle copie du dépôt. Ignorez donc les téléchargements de l'étape 3, mais remettez quand même l'ancien service `minio`. Votre `.env.prod` vient d'un ancien `pnpm run init`, donc ses `S3_ACCESS_KEY_ID` et `S3_SECRET_ACCESS_KEY` n'ont pas le format de Garage. Remplacez-les comme à l'étape 4 (`GK` plus `openssl rand -hex 12`, et `openssl rand -hex 32`), puis ajoutez `GARAGE_RPC_SECRET` et `GARAGE_ADMIN_TOKEN`. Compose refuse de s'exécuter tant que ces deux valeurs manquent.
+
+### Quand une image tierce disparaît
+
+Chaque image tierce qu'une installation télécharge provient de la copie OpenLDR sur GHCR, fixée par son digest. La liste se trouve dans `deploy/third-party-images.json`. Si un éditeur retire une image, les installations existantes et nouvelles continuent de fonctionner, car la copie reste. La seule exception est SQL Server, dont l'image reste sur le registre de Microsoft.
+
+Pour remplacer un éditeur :
+
+1. Choisissez un remplaçant qui parle le même protocole.
+2. Ajoutez-le à `deploy/third-party-images.json` et lancez `pnpm images:mirror <nom>`. La commande copie seulement linux/amd64 et linux/arm64.
+3. Rendez le nouveau paquet GHCR public dans la page de ses paramètres.
+4. Branchez-le sous le même nom de service Compose.
+5. Si le format des données diffère, déplacez les données. La section sur le passage de MinIO à Garage, plus haut, en donne l'exemple détaillé.
+
 ### Références
 
 - [Délai d'arrêt des services Docker Compose](https://docs.docker.com/reference/compose-file/services/#stop_grace_period)
@@ -167,7 +239,7 @@ Reserve uma interrupção para atualizar uma instalação Compose. Alterações 
 
 Trabalhe no diretório do projeto Compose instalado. Use sempre o mesmo nome de projeto, ficheiro de ambiente e ficheiros Compose complementares. Registe as etiquetas e identificadores das imagens com `docker compose images`. Guarde as imagens anteriores e os ficheiros Compose. Leia as notas da versão pretendida e os requisitos de migração.
 
-Guarde os ficheiros `.env` e de configuração atuais num local privado antes de os alterar. Defina `OPENLDR_VERSION` com a versão escolhida em `.env`. Descarregue apenas as imagens aplicacionais necessárias antes da interrupção. Não atualize todas as imagens sem análise. Os serviços de armazenamento têm versões próprias e o MinIO pode usar `latest`. Mantenha as versões atuais de PostgreSQL, MinIO e bases externas.
+Guarde os ficheiros `.env` e de configuração atuais num local privado antes de os alterar. Defina `OPENLDR_VERSION` com a versão escolhida em `.env`. Descarregue apenas as imagens aplicacionais necessárias antes da interrupção. Não atualize todas as imagens sem análise. Os serviços de armazenamento têm versões próprias. Mantenha as versões atuais de PostgreSQL, do serviço de armazenamento e das bases externas.
 
 Guarde este guia fora do Studio antes de parar os serviços. Confirme quem pode restaurar as cópias de segurança. Verifique como os emissores guardam envios pendentes ou repetem pedidos durante a interrupção.
 
@@ -189,7 +261,7 @@ docker compose stop -t 300 api
 
 O exemplo permite 300 segundos. Aumente o prazo quando necessário. O OpenLDR aguarda pedidos e tarefas ativos durante a paragem. Consulte o estado do contentor e os registos. Uma terminação forçada, prazo excedido ou código 137 não prova que o trabalho terminou. Investigue antes de continuar, incluindo possíveis efeitos externos parciais.
 
-Pare o Keycloak e o MinIO após a API, assim como outros processos que escrevam nos seus armazenamentos. Mantenha o PostgreSQL ativo para cópias lógicas. Mantenha todas as escritas paradas durante a verificação das cópias e as migrações. Podem ficar recibos webhook em fila para o novo processo. Registe os identificadores. Investigue trabalhos ativos ou interrompidos antes de retomar os envios.
+Pare o Keycloak e o serviço de armazenamento após a API, assim como outros processos que escrevam nos seus armazenamentos. Mantenha o PostgreSQL ativo para cópias lógicas. Mantenha todas as escritas paradas durante a verificação das cópias e as migrações. Podem ficar recibos webhook em fila para o novo processo. Registe os identificadores. Investigue trabalhos ativos ou interrompidos antes de retomar os envios.
 
 ### Copiar um mesmo estado sem escritas
 
@@ -204,7 +276,7 @@ Para PostgreSQL, identifique primeiro os nomes reais das bases e a conta. Execut
 
 Guarde os papéis com `pg_dumpall --globals-only -f /tmp/globals.sql -U USER` e copie o ficheiro. Use o mesmo modo de execução no contentor. Proteja estes ficheiros porque podem conter credenciais. Usar `-f` e `compose cp` evita redirecionamento binário no Windows PowerShell.
 
-Para MySQL, SQL Server ou armazenamento externo, siga o procedimento nativo de cópia e restauro do administrador. As cópias PostgreSQL não incluem essas bases. Para MinIO, use uma cópia de buckets testada ou copie o volume enquanto o serviço está parado. Não copie um volume PostgreSQL ativo como cópia lógica. Nunca execute `docker compose down -v` durante uma atualização.
+Para MySQL, SQL Server ou armazenamento externo, siga o procedimento nativo de cópia e restauro do administrador. As cópias PostgreSQL não incluem essas bases. Para o serviço de armazenamento, use uma cópia de buckets testada ou copie o volume enquanto o serviço está parado. Não copie um volume PostgreSQL ativo como cópia lógica. Nunca execute `docker compose down -v` durante uma atualização.
 
 ### Verificar o restauro
 
@@ -231,6 +303,42 @@ Inicie primeiro os serviços existentes de armazenamento e identidade, depois os
 HTTP 202 significa que o webhook foi aceite, não concluído. Consulte os recibos pendentes. Investigue recibos interrompidos e efeitos externos antes de decidir submeter trabalho de substituição. Repita o mesmo pedido lógico com o `Idempotency-Key` e conteúdo originais. Não repita em massa pedidos interrompidos com novas chaves.
 
 Retome os emissores apenas após estas verificações. Guarde a cópia verificada e imagens anteriores conforme a política de retenção local.
+
+### Passar do MinIO para o Garage (instalações anteriores à 0.1.10)
+
+O MinIO retirou as suas imagens do Docker Hub em 2026-09-11. A partir da 0.1.10, o serviço `storage` executa o Garage. Uma instalação que já tem ficheiros tem de os copiar uma vez. Uma instalação nova não precisa disto.
+
+1. Anote a chave e o segredo atuais do MinIO em `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). O passo 4 substitui-os.
+2. Faça cópia de segurança de `.env` e `docker-compose.yml`.
+3. Descarregue o `docker-compose.yml` e o `config/garage.toml` da versão 0.1.10. Volte a juntar o antigo serviço `minio` ao `docker-compose.yml` a partir da sua cópia, para que o MinIO continue ativo ao lado do Garage.
+4. Gere novos valores e escreva-os em `.env`:
+   - `S3_ACCESS_KEY_ID`: `GK` seguido de 24 carateres hexadecimais (`echo GK$(openssl rand -hex 12)`)
+   - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`: 64 carateres hexadecimais cada (`openssl rand -hex 32`)
+   - `S3_ENDPOINT=http://storage:3900`
+5. Inicie os novos serviços: `docker compose up -d storage api`.
+6. Copie os ficheiros:
+   `./openldr storage copy --from-endpoint http://minio:9000 --from-key <chave antiga> --from-secret <segredo antigo> --from-bucket openldr`
+   O comando mostra o número de objetos e de bytes dos dois lados e termina com código diferente de zero se forem diferentes. Execute-o de novo para retomar após uma falha. Ignora os objetos que já estão no Garage com o mesmo tamanho, por isso não substitui um objeto com o mesmo tamanho mas conteúdo diferente. Nunca altera o MinIO.
+7. Quando mostrar `totals match`, abra alguns ficheiros carregados no studio.
+8. Retire o serviço `minio` do `docker-compose.yml` e execute `docker compose up -d --remove-orphans`. Mantenha o volume `miniodata` até ter a certeza. Depois elimine-o com `docker volume rm <projeto>_miniodata`.
+
+Sem o script `./openldr`, execute `docker compose run --rm --no-deps api node /app/cli/dist/index.js storage copy` com as mesmas opções.
+
+O valor de `--from-secret` fica visível no histórico da shell e na lista de processos enquanto o comando corre. Apague depois essa linha do histórico, ou execute o comando numa shell descartável.
+
+Se executa a partir do código-fonte, o ficheiro Compose (`docker-compose.prod.yml`) e o `deploy/install/garage.toml` chegam com a nova cópia do repositório. Dispense por isso os descarregamentos do passo 3, mas volte a juntar o antigo serviço `minio`. O seu `.env.prod` vem de um `pnpm run init` anterior, por isso o `S3_ACCESS_KEY_ID` e o `S3_SECRET_ACCESS_KEY` não têm o formato do Garage. Substitua ambos como no passo 4 (`GK` mais `openssl rand -hex 12`, e `openssl rand -hex 32`) e adicione `GARAGE_RPC_SECRET` e `GARAGE_ADMIN_TOKEN`. O Compose recusa-se a correr até existirem os dois.
+
+### Quando uma imagem de terceiros desaparece
+
+Cada imagem de terceiros que uma instalação descarrega vem da cópia do OpenLDR no GHCR, fixada pelo digest. A lista está em `deploy/third-party-images.json`. Se um fornecedor retirar uma imagem, as instalações existentes e as novas continuam a funcionar, porque a cópia fica. A única exceção é o SQL Server, cuja imagem fica no registo da Microsoft.
+
+Para substituir um fornecedor:
+
+1. Escolha um substituto que fale o mesmo protocolo.
+2. Adicione-o a `deploy/third-party-images.json` e execute `pnpm images:mirror <nome>`. O comando copia apenas linux/amd64 e linux/arm64.
+3. Torne público o novo pacote GHCR na página de definições do pacote.
+4. Ligue-o com o mesmo nome de serviço Compose.
+5. Se o formato dos dados for diferente, mova os dados. A secção sobre a passagem do MinIO para o Garage, acima, é o exemplo concreto.
 
 ### Referências
 

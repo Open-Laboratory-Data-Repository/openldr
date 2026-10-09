@@ -76,6 +76,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `sync` | Distributed (lab⇄central) sync: `status`, `now`, and central-side `enroll`, `list`, `rotate`, `revoke`. |
 | `errors` | List the error-code catalog. |
 | `update` | `check` whether a newer OpenLDR version has been published (exit 0 = up to date, 1 = an update is available, 2 = the check failed). |
+| `storage` | `copy` the objects of another S3 bucket into this install's storage. |
 | `target-store` | Test the target warehouse connection. |
 
 Mutating CLI commands (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,
@@ -176,6 +177,19 @@ Enroll a lab on the central server, then connect a lab to it:
 
 > Anything under `settings danger` is destructive (reset dashboards, clear audit,
 > factory reset). Those commands require `--force` and mirror the Studio danger zone.
+
+## Copy files between S3 stores
+
+`openldr storage copy` copies every object from another S3 bucket into this install's storage. Use it to move off MinIO, as the [upgrading guide](/docs/upgrading) describes. It reads the source and never changes it. It skips a key that is already on the target with the same size, so you can run it again to resume. A same-size object with different content is not copied again. It prints object counts and bytes for both sides and exits non-zero if they differ. The CLI records the actor as `cli`.
+
+| Flag | What it does |
+| --- | --- |
+| `--from-endpoint <url>` | Endpoint of the source store, for example `http://minio:9000`. |
+| `--from-key <key>` | Access key of the source store. |
+| `--from-secret <secret>` | Secret key of the source store. It shows in your shell history and the process list, so clear that history line afterwards. |
+| `--from-bucket <bucket>` | Bucket to copy from. |
+| `--from-region <region>` | Region of the source store. Default `us-east-1`. |
+| `--json` | Print the report as JSON. |
 
 ## Projection retries
 
