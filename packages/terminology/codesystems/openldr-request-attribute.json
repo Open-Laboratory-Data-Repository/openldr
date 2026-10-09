@@ -32,6 +32,8 @@
     { "code": "prereg-registration-facility", "display": "Pre-registration facility" },
     { "code": "work-units", "display": "Work units" },
     { "code": "target-time-days", "display": "Target time in days" },
-    { "code": "target-time-mins", "display": "Target time in minutes" }
+    { "code": "target-time-mins", "display": "Target time in minutes" },
+    { "code": "reference-numbers", "display": "Reference numbers" },
+    { "code": "unique-id", "display": "Unique ID" }
   ]
 }

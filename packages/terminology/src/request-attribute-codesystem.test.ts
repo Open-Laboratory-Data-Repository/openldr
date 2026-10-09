@@ -39,9 +39,9 @@ describe('the request attribute CodeSystem file', () => {
     expect(cs.url).toBe(REQUEST_ATTRIBUTE_SYSTEM);
   });
 
-  it('has 25 concepts, each with a lowercase-hyphen code and a display', () => {
+  it('has 27 concepts, each with a lowercase-hyphen code and a display', () => {
     const cs = readCodeSystem();
-    expect(cs.concept).toHaveLength(25);
+    expect(cs.concept).toHaveLength(27);
     for (const c of cs.concept) {
       expect(c.code).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
       expect(c.display).toBeTruthy();
@@ -54,19 +54,21 @@ describe('the request attribute CodeSystem file', () => {
     expect(new Set(codes).size).toBe(codes.length);
   });
 
-  it('imports 25 concepts through the loader openldr terminology import resource uses', async () => {
+  it('imports 27 concepts through the loader openldr terminology import resource uses', async () => {
     const { store, concepts, marks } = memoryStore();
     const cs = readCodeSystem();
     const result = await importTerminologyResource(cs, store);
 
     expect(result.system).toBe(REQUEST_ATTRIBUTE_SYSTEM);
-    expect(result.conceptsLoaded).toBe(25);
+    expect(result.conceptsLoaded).toBe(27);
     expect(marks).toEqual([REQUEST_ATTRIBUTE_SYSTEM]);
 
     const rows = concepts[0] as { system: string; code: string }[];
-    expect(rows).toHaveLength(25);
+    expect(rows).toHaveLength(27);
     expect(rows.every((r) => r.system === REQUEST_ATTRIBUTE_SYSTEM)).toBe(true);
     expect(rows.find((r) => r.code === 'therapy')).toBeTruthy();
     expect(rows.find((r) => r.code === 'target-time-mins')).toBeTruthy();
+    expect(rows.find((r) => r.code === 'reference-numbers')).toBeTruthy();
+    expect(rows.find((r) => r.code === 'unique-id')).toBeTruthy();
   });
 });
