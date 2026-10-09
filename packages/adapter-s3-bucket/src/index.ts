@@ -1,5 +1,5 @@
+import type { S3Client } from '@aws-sdk/client-s3';
 import {
-  S3Client,
   HeadBucketCommand,
   PutObjectCommand,
   GetObjectCommand,
@@ -11,29 +11,18 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { probe } from '@openldr/core';
 import type { BlobStoragePort } from '@openldr/ports';
 import type { Readable } from 'node:stream';
+import { createS3Client } from './client';
+import type { S3BucketConfig } from './client';
 
-export interface S3BucketConfig {
-  endpoint: string;
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  bucket: string;
-  forcePathStyle: boolean;
-}
+export type { S3BucketConfig } from './client';
+export { createS3Client } from './client';
 
 export interface S3BucketDeps {
   client?: S3Client;
 }
 
 export function createS3Bucket(cfg: S3BucketConfig, deps: S3BucketDeps = {}): BlobStoragePort {
-  const client =
-    deps.client ??
-    new S3Client({
-      endpoint: cfg.endpoint,
-      region: cfg.region,
-      forcePathStyle: cfg.forcePathStyle,
-      credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
-    });
+  const client = deps.client ?? createS3Client(cfg);
 
   return {
     async healthCheck() {
