@@ -26,11 +26,11 @@ export function pinnedRef(img: ThirdPartyImage): string {
 export function imageRefs(text: string, kind: 'compose' | 'dockerfile'): string[] {
   const refs: string[] = [];
   if (kind === 'compose') {
-    for (const m of text.matchAll(/^\s*image:\s*["']?([^"'\s#]+)["']?/gm)) refs.push(m[1]!);
+    for (const m of text.matchAll(/^\s*(?:-\s*)?image:\s*["']?([^"'\s#]+)["']?/gm)) refs.push(m[1]!);
     return refs;
   }
   const stages = new Set<string>();
-  for (const m of text.matchAll(/^FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/gim)) {
+  for (const m of text.matchAll(/^\s*FROM\s+(?:--\S+\s+)*(\S+)(?:\s+AS\s+(\S+))?/gim)) {
     const image = m[1]!;
     if (!stages.has(image.toLowerCase())) refs.push(image);
     if (m[2]) stages.add(m[2].toLowerCase());

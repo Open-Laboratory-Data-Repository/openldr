@@ -20,6 +20,14 @@ describe('imageRefs', () => {
   it('ignores a FROM that names an earlier stage', () => {
     expect(imageRefs('FROM node:22 AS build\nFROM build AS final\n', 'dockerfile')).toEqual(['node:22']);
   });
+  it('reads list-item image lines in compose', () => {
+    const text = 'services:\n  dbs:\n    - image: nginx:1.27\n    - image: postgres:16-alpine\n';
+    expect(imageRefs(text, 'compose')).toEqual(['nginx:1.27', 'postgres:16-alpine']);
+  });
+  it('reads indented FROM lines in Dockerfile', () => {
+    const text = '  FROM node:22 AS build\n  RUN x\n  FROM --platform=linux/amd64 nginx:1.27-alpine\n';
+    expect(imageRefs(text, 'dockerfile')).toEqual(['node:22', 'nginx:1.27-alpine']);
+  });
 });
 
 describe('badImageRefs', () => {
@@ -40,6 +48,13 @@ describe('badImageRefs', () => {
   });
   it('rejects a copy pinned to a stale digest', () => {
     expect(badImageRefs([`ghcr.io/open-laboratory-data-repository/postgres:16-alpine@${D2}`], list)).toHaveLength(1);
+  });
+  it('rejects a copy when that list entry has an empty digest', () => {
+    const listWithEmpty = parseThirdPartyList(JSON.stringify({
+      images: [{ name: 'nginx', upstream: 'nginx:1.27-alpine', copy: 'ghcr.io/open-laboratory-data-repository/nginx:1.27-alpine', digest: '' }],
+      exceptions: [],
+    }));
+    expect(badImageRefs(['ghcr.io/open-laboratory-data-repository/nginx:1.27-alpine'], listWithEmpty)).toHaveLength(1);
   });
 });
 
