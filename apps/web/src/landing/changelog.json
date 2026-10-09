@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-10-08",
+  "generatedAt": "2026-10-09",
   "days": [
+    {
+      "date": "2026-10-09",
+      "version": null,
+      "entries": [
+        {
+          "hash": "e347a028",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "Reference-numbers and unique-id request attributes"
+        }
+      ]
+    },
     {
       "date": "2026-10-08",
       "version": null,
