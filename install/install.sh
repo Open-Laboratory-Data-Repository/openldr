@@ -559,7 +559,7 @@ if [ ! -f "$DIR/config/nginx/certs/fullchain.pem" ]; then
     # treatment, and MSYS2_ARG_CONV_EXCL='*' would break the mount. Left as it was rather than
     # guessing — it is only reached without openssl on PATH, which no machine here has. The
     # error print below is what makes a failure here legible instead of silent.
-    CERT_ERR="$(docker run --rm -v "$CERT_DIR_ABS:/certs" alpine/openssl \
+    CERT_ERR="$(docker run --rm -v "$CERT_DIR_ABS:/certs" ghcr.io/open-laboratory-data-repository/openssl:3.5.9@sha256:96cd55d081ce5d7a13090c4afa70b4f09403c9abcd4862bc8b64b4b3118594aa \
       req -x509 -newkey rsa:2048 -nodes -days 825 \
       -keyout /certs/privkey.pem -out /certs/fullchain.pem \
       -subj "$SUBJ" -addext "$SAN" 2>&1)" || true

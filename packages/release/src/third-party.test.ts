@@ -30,6 +30,31 @@ describe('imageRefs', () => {
   });
 });
 
+describe('imageRefs from a shell or PowerShell script', () => {
+  it('reads the image after docker run, skipping flags and their values', () => {
+    const text = 'CERT_ERR="$(docker run --rm -v "$DIR:/certs" -e A=b --name x -p 80:80 -d alpine/openssl req -x509)"\n';
+    expect(imageRefs(text, 'script')).toEqual(['alpine/openssl']);
+  });
+  it('follows a shell line continuation', () => {
+    const text = 'docker run --rm -v "$D:/certs" \\\n  ghcr.io/x/openssl:3@sha256:abc \\\n  req -x509\n';
+    expect(imageRefs(text, 'script')).toEqual(['ghcr.io/x/openssl:3@sha256:abc']);
+  });
+  it('follows a PowerShell backtick continuation', () => {
+    const text = '$o = & docker run --rm -v "${mount}:/certs" `\n  alpine/openssl `\n  req -x509\n';
+    expect(imageRefs(text, 'script')).toEqual(['alpine/openssl']);
+  });
+  it('reads every docker run in the file', () => {
+    const text = 'docker run --rm a:1 x\ndocker run -it b:2\n';
+    expect(imageRefs(text, 'script')).toEqual(['a:1', 'b:2']);
+  });
+  it('ignores a comment that mentions docker run', () => {
+    expect(imageRefs('# docker run --rm bad:1\necho hi\n', 'script')).toEqual([]);
+  });
+  it('returns nothing for a script with no docker run', () => {
+    expect(imageRefs('docker compose up -d\n', 'script')).toEqual([]);
+  });
+});
+
 describe('badImageRefs', () => {
   it('accepts a pinned copy from the list', () => {
     expect(badImageRefs([pinnedRef(list.images[0]!)], list)).toEqual([]);

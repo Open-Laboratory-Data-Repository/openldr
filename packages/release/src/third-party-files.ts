@@ -10,4 +10,6 @@ export const POLICY_FILES = [
   'apps/web/Dockerfile',
   'deploy/nginx/Dockerfile',
   'deploy/keycloak/Dockerfile',
+  'install/install.sh',
+  'install/install.ps1',
 ] as const;

@@ -41,6 +41,12 @@
       "upstream": "quay.io/keycloak/keycloak:26.0",
       "copy": "ghcr.io/open-laboratory-data-repository/keycloak:26.0",
       "digest": "sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858"
+    },
+    {
+      "name": "openssl",
+      "upstream": "alpine/openssl:3.5.9",
+      "copy": "ghcr.io/open-laboratory-data-repository/openssl:3.5.9",
+      "digest": "sha256:96cd55d081ce5d7a13090c4afa70b4f09403c9abcd4862bc8b64b4b3118594aa"
     }
   ],
   "exceptions": [

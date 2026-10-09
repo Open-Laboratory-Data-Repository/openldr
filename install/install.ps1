@@ -483,7 +483,7 @@ if (-not (Test-Path $cert)) {
     } else {
       Write-Host "-> openssl not on PATH; generating cert via Docker (alpine/openssl)"
       $mount = $certDirAbs -replace '\\', '/'
-      $certOutput = & docker run --rm -v "${mount}:/certs" alpine/openssl `
+      $certOutput = & docker run --rm -v "${mount}:/certs" ghcr.io/open-laboratory-data-repository/openssl:3.5.9@sha256:96cd55d081ce5d7a13090c4afa70b4f09403c9abcd4862bc8b64b4b3118594aa `
         req -x509 -newkey rsa:2048 -nodes -days 825 `
         -keyout /certs/privkey.pem -out /certs/fullchain.pem -subj $subj -addext $san 2>&1
     }
