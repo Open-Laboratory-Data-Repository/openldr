@@ -104,15 +104,15 @@ O MinIO retirou as suas imagens do Docker Hub em 2026-09-11. A partir da 0.1.10,
 5. Inicie o MinIO e os novos serviços: `docker compose up -d minio storage api`.
 6. Copie os ficheiros:
    `./openldr storage copy --from-endpoint http://minio:9000 --from-key <chave antiga> --from-secret <segredo antigo> --from-bucket openldr`
-   O comando mostra o número de objetos e de bytes dos dois lados e termina com código diferente de zero se forem diferentes. Execute-o de novo para retomar após uma falha. Ignora os objetos que já estão no Garage com o mesmo tamanho. Não substitui um objeto com o mesmo tamanho mas conteúdo diferente. Nunca altera o MinIO.
-7. Quando mostrar `totals match`, abra alguns ficheiros carregados no studio.
+   O comando mostra o número de objetos e de bytes dos dois lados e depois verifica se cada objeto da origem está no Garage com o mesmo tamanho. Termina com código diferente de zero se faltar algum. Objetos a mais no Garage são normais enquanto a api corre, porque ela continua a escrever ficheiros novos lá. Não fazem a verificação falhar. Execute-o de novo para retomar após uma falha. Ignora os objetos que já estão no Garage com o mesmo tamanho. Não substitui um objeto com o mesmo tamanho mas conteúdo diferente. Nunca altera o MinIO.
+7. Quando mostrar `every source object is on the target`, abra alguns ficheiros carregados no studio.
 8. Retire o serviço `minio` do `docker-compose.yml` e execute `docker compose up -d --remove-orphans`. Mantenha o volume `miniodata` até ter a certeza. Depois elimine-o com `docker volume rm <projeto>_miniodata`.
 
 Sem o script `./openldr`, execute `docker compose run --rm --no-deps api node /app/cli/dist/index.js storage copy` com as mesmas opções.
 
 O valor de `--from-secret` fica visível no histórico da shell e na lista de processos enquanto o comando corre. Apague depois essa linha do histórico, ou execute o comando numa shell descartável.
 
-Se executa a partir do código-fonte, o ficheiro Compose (`docker-compose.prod.yml`) e o `deploy/install/garage.toml` chegam com a nova cópia do repositório. Dispense por isso os descarregamentos do passo 3, mas volte a juntar o antigo serviço `minio` com o seu login antigo. O seu `.env.prod` vem de um `pnpm run init` anterior. O `S3_ACCESS_KEY_ID` e o `S3_SECRET_ACCESS_KEY` não têm o formato do Garage. Substitua ambos como no passo 4 (`GK` mais `openssl rand -hex 12`, e `openssl rand -hex 32`). Depois adicione `GARAGE_RPC_SECRET` e `GARAGE_ADMIN_TOKEN`. O Compose recusa-se a correr até existirem os dois.
+Se executa a partir do código-fonte, o ficheiro Compose (`docker-compose.prod.yml`) e o `deploy/install/garage.toml` chegam com a nova cópia do repositório. Dispense por isso os descarregamentos do passo 3, mas volte a juntar o antigo serviço `minio` com o seu login antigo. O seu `.env.prod` vem de um `pnpm run init` anterior. O `S3_ACCESS_KEY_ID` e o `S3_SECRET_ACCESS_KEY` não têm o formato do Garage. Substitua ambos como no passo 4 (`GK` mais `openssl rand -hex 12`, e `openssl rand -hex 32`). Depois adicione `GARAGE_RPC_SECRET` e `GARAGE_ADMIN_TOKEN`. O Compose recusa-se a correr até existirem os dois. No passo 5, inicie os serviços com `docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr up -d --build minio storage api`. No passo 6, execute a cópia dentro do contentor api com `docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr exec api node /app/cli/dist/index.js storage copy` e as mesmas opções. No passo 8, use as mesmas opções `--env-file`, `-f` e `-p`.
 
 ## Quando uma imagem de terceiros desaparece
 
