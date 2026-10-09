@@ -130,7 +130,8 @@ because GitHub has no API to change package visibility (measured 2026-08-17).
 
 ### Runbook
 
-A new docs page covers what to do when a vendor image disappears:
+A new section of the upgrading page covers what to do when a vendor image disappears. A new
+page would need nav entries and titles in three languages for no gain.
 
 1. Existing installs keep working. Our copy is still there.
 2. Pick a replacement that speaks the same protocol.
@@ -183,6 +184,10 @@ and `docker-compose.yml` mount the same file from the repo.
 - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET` and `GARAGE_ADMIN_TOKEN` as 64 hex characters each
 
 `S3_ENDPOINT` becomes `http://storage:3900`. The other `S3_*` values stay as they are.
+
+`pnpm run init` (the source install) writes keys too, in `scripts/init/secrets.mjs`. It gets the
+same formats, and the dev values in `.env.example` and `.env.prod.example` change to Garage-format
+keys that it treats as weak defaults to replace.
 
 ### Adapter fix
 
