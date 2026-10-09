@@ -32,7 +32,7 @@ async function auditCopy(report: StorageCopyReport): Promise<void> {
 }
 
 /** Copy every object from another S3 bucket (MinIO on installs that predate Garage) into this
- *  install's storage. Read-only on the source. Exit 1 unless the target totals match. */
+ *  install's storage. Read-only on the source. Exit 1 unless every source object is on the target at the same size. */
 export async function runStorageCopy(
   opts: StorageCopyOpts,
   deps: {
@@ -66,11 +66,16 @@ export async function runStorageCopy(
     if (opts.json) {
       process.stdout.write(JSON.stringify(report, null, 2) + '\n');
     } else {
+      const verdict = report.matches
+        ? 'every source object is on the target\n'
+        : `${report.missing} source ${report.missing === 1 ? 'object is' : 'objects are'} missing on the target: do not switch yet\n`;
       process.stdout.write(
         `source: ${report.sourceObjects} objects, ${report.sourceBytes} bytes\n` +
           `target: ${report.targetObjects} objects, ${report.targetBytes} bytes\n` +
           `copied ${report.copied}, skipped ${report.skipped} already present\n` +
-          (report.matches ? 'totals match\n' : 'TOTALS DIFFER: do not switch to the new storage yet\n'),
+          `missing: ${report.missing}\n` +
+          `extra on target (written since the copy started, or left over): ${report.extraTargetObjects}\n` +
+          verdict,
       );
     }
     return report.matches ? 0 : 1;

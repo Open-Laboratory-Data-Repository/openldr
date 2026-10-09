@@ -24,7 +24,7 @@ describe('copyStorage', () => {
     const src = memorySide({ a: 'one', 'b/c': 'three' });
     const dst = memorySide();
     const r = await copyStorage(src, dst);
-    expect(r).toEqual({ sourceObjects: 2, sourceBytes: 8, copied: 2, skipped: 0, targetObjects: 2, targetBytes: 8, matches: true });
+    expect(r).toEqual({ sourceObjects: 2, sourceBytes: 8, copied: 2, skipped: 0, targetObjects: 2, targetBytes: 8, extraTargetObjects: 0, missing: 0, matches: true });
     expect(dst.objects.get('b/c')!.toString()).toBe('three');
   });
 
@@ -46,12 +46,45 @@ describe('copyStorage', () => {
     expect(dst.objects.get('a')!.toString()).toBe('one');
   });
 
-  it('reports a mismatch when the target holds extra objects', async () => {
+  it('does not fail the run when the target holds extra objects', async () => {
     const src = memorySide({ a: 'one' });
     const dst = memorySide({ stray: 'x' });
     const r = await copyStorage(src, dst);
-    expect(r.matches).toBe(false);
+    expect(r.matches).toBe(true);
+    expect(r.missing).toBe(0);
+    expect(r.extraTargetObjects).toBe(1);
     expect(r.targetObjects).toBe(2);
+    expect(r.targetBytes).toBe(4);
+  });
+
+  it('reports a missing object when a target write silently drops it', async () => {
+    const src = memorySide({ a: 'one', b: 'two' });
+    const dst = memorySide();
+    const realWrite = dst.write.bind(dst);
+    dst.write = async (key, body, contentType) => {
+      if (key === 'b') {
+        for await (const _ of body) { /* drain and drop */ }
+        return;
+      }
+      await realWrite(key, body, contentType);
+    };
+    const r = await copyStorage(src, dst);
+    expect(r.matches).toBe(false);
+    expect(r.missing).toBe(1);
+    expect(r.extraTargetObjects).toBe(0);
+    expect(r.targetObjects).toBe(1);
+  });
+
+  it('counts an object that landed at a different size as missing', async () => {
+    const src = memorySide({ a: 'one' });
+    const dst = memorySide();
+    dst.write = async (key, body) => {
+      for await (const _ of body) { /* drain */ }
+      dst.objects.set(key, Buffer.from('xx'));
+    };
+    const r = await copyStorage(src, dst);
+    expect(r.matches).toBe(false);
+    expect(r.missing).toBe(1);
   });
 
   it('never writes to the source', async () => {
