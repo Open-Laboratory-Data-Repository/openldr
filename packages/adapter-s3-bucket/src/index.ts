@@ -17,6 +17,8 @@ import type { S3BucketConfig } from './client';
 export type { S3BucketConfig } from './client';
 export { createS3Client } from './client';
 
+export { createS3CopySide, type CopySide, type StoredObject } from './copy';
+
 export interface S3BucketDeps {
   client?: S3Client;
 }
