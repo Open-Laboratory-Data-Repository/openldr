@@ -61,6 +61,19 @@ describe('ensureStackSecrets', () => {
     expect(envText).toContain(`KEYCLOAK_ADMIN_CLIENT_SECRET=${kcClientSecret}`);
   });
 
+  it('refuses an install that predates Garage, with a pointer to the upgrading guide', () => {
+    const oldKey = ['S3_ACCESS_KEY_ID=AKIAOLDMINIOKEY', 'S3_SECRET_ACCESS_KEY=oldminiosecret'].join('\n');
+    expect(() => ensureStackSecrets(oldKey, seqGen())).toThrow(/predates 0\.1\.10/);
+    expect(() => ensureStackSecrets(oldKey, seqGen())).toThrow(/Moving from MinIO to Garage/);
+    const oldEndpoint = ['S3_ENDPOINT=http://minio:9000', 'S3_ACCESS_KEY_ID=GK6f70656e6c64722d64657621'].join('\n');
+    expect(() => ensureStackSecrets(oldEndpoint, seqGen())).toThrow(/Moving from MinIO to Garage/);
+  });
+
+  it('accepts a Garage-format key and a storage endpoint', () => {
+    const ok = ['S3_ENDPOINT=http://storage:3900', 'S3_ACCESS_KEY_ID=GK0123456789abcdef01234567'].join('\n');
+    expect(() => ensureStackSecrets(ok, seqGen())).not.toThrow();
+  });
+
   it('replaces the dev storage values with keys in the format Garage requires', () => {
     const env = [
       'S3_ACCESS_KEY_ID=GK6f70656e6c64722d64657621',

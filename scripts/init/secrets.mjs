@@ -42,6 +42,27 @@ const WEAK_DEFAULTS = {
   KEYCLOAK_ADMIN_CLIENT_SECRET: ['', 'openldr-admin-dev-secret'],
 };
 
+const PRE_GARAGE_MESSAGE =
+  'This install predates 0.1.10: its storage settings are still MinIO. ' +
+  'Follow "Moving from MinIO to Garage" in the upgrading guide before you run init again. ' +
+  'Nothing was changed.';
+
+/** Throw when an existing .env.prod still describes MinIO. Garage rejects the old key format, and
+ *  init would otherwise carry on and start a stack that cannot reach its files. A weak default key
+ *  is fine: it is replaced with a Garage-format key below. */
+function assertNotPreGarage(text) {
+  const key = getEnv(text, 'S3_ACCESS_KEY_ID');
+  const endpoint = getEnv(text, 'S3_ENDPOINT');
+  const oldKey =
+    key !== undefined && !WEAK_DEFAULTS.S3_ACCESS_KEY_ID.includes(key) && !/^GK[0-9a-f]{24}$/.test(key);
+  const oldEndpoint = endpoint !== undefined && /^https?:\/\/minio:9000\/?$/i.test(endpoint.trim());
+  if (oldKey || oldEndpoint) {
+    const err = new Error(PRE_GARAGE_MESSAGE);
+    err.code = 'PRE_GARAGE_INSTALL';
+    throw err;
+  }
+}
+
 /**
  * Replace the committed weak default credentials in a .env.prod text with generated secrets, keeping
  * the two postgres:// URLs in sync with the (possibly regenerated) POSTGRES_PASSWORD, and mint a
@@ -54,6 +75,7 @@ const WEAK_DEFAULTS = {
  * `kcClientSecret` (openldr-admin service account) and `labAdminPassword` (the seeded labadmin user).
  */
 export function ensureStackSecrets(envText, gen = randomSecret) {
+  assertNotPreGarage(envText);
   let text = envText;
   for (const [key, weak] of Object.entries(WEAK_DEFAULTS)) {
     const cur = getEnv(text, key);

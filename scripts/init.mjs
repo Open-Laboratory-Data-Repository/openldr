@@ -106,4 +106,9 @@ async function main() {
   console.log(`\n  Initial lab admin sign-in: labadmin / ${secrets.labAdminPassword}  (you must change it on first login)`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  // A known operator-facing refusal prints its message only, not a stack trace.
+  if (e?.code === 'PRE_GARAGE_INSTALL') console.error(`\n${e.message}`);
+  else console.error(e);
+  process.exit(1);
+});
