@@ -129,3 +129,22 @@ export async function findPrivatePackages(
   }
   return bad;
 }
+
+/** Like findPrivatePackages, but a package that cannot be read is reported, not thrown. A
+ *  missing third-party copy must refuse the release with its name, not crash it. */
+export async function findUnavailablePackages(
+  fetchJson: FetchJson,
+  org: string,
+  images: readonly string[],
+): Promise<string[]> {
+  const bad: string[] = [];
+  for (const image of images) {
+    try {
+      const pkg = (await fetchJson(`orgs/${org}/packages/container/${image}`)) as { visibility?: unknown };
+      if (pkg?.visibility !== 'public') bad.push(`${image} (private)`);
+    } catch {
+      bad.push(`${image} (missing or unreadable)`);
+    }
+  }
+  return bad;
+}

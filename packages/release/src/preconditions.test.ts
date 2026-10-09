@@ -11,6 +11,7 @@ const clean: ReleaseFacts = {
   registryTagImages: [],
   changelogCommitted: true,
   gateGreen: true,
+  thirdPartyUnavailable: [],
 };
 
 describe('evaluatePreconditions', () => {
@@ -79,6 +80,13 @@ describe('evaluatePreconditions', () => {
 
   it('refuses when the test gate is red', () => {
     expect(evaluatePreconditions({ ...clean, gateGreen: false })[0]).toMatch(/test/i);
+  });
+
+  it('refuses when a third-party copy is missing or private', () => {
+    const r = evaluatePreconditions({ ...clean, thirdPartyUnavailable: ['garage (private)'] });
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatch(/garage \(private\)/);
+    expect(r[0]).toMatch(/third-party/);
   });
 
   it('reports every refusal at once, not just the first', () => {
