@@ -56,6 +56,8 @@ Use the preserved encryption keys to decrypt representative saved secrets in the
 
 ### Migrate before starting the new API
 
+An install from before 0.1.10 must do steps 1 to 4 of the section "Moving from MinIO to Garage" below first. The new compose file refuses to run without `GARAGE_RPC_SECRET` and `GARAGE_ADMIN_TOKEN`.
+
 Keep the databases available and every old writer stopped. Confirm the API image is the pinned new release. Run its bundled CLI once:
 
 ```sh
@@ -80,15 +82,32 @@ MinIO removed its images from Docker Hub on 2026-09-11. From 0.1.10 the `storage
 
 1. Note the current MinIO key and secret from `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). Step 4 overwrites them.
 2. Back up `.env` and `docker-compose.yml`.
-3. Download the 0.1.10 `docker-compose.yml` and `config/garage.toml`. Add the old `minio` service back into `docker-compose.yml` from your backup, so MinIO keeps running beside Garage.
+3. Download the 0.1.10 files:
+   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.10/deploy/install/docker-compose.yml`, saved as `docker-compose.yml`
+   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.10/deploy/install/garage.toml`, saved as `config/garage.toml`
+
+   Then add the old `minio` service back into `docker-compose.yml` from your backup. This keeps MinIO running beside Garage. Give it the old key and secret as literal values, not `${S3_...}`. Step 4 changes those variables, and MinIO would then reject the old login.
+
+   ```yaml
+     minio:
+       image: minio/minio:latest
+       command: server /data --console-address ':9001'
+       environment:
+         MINIO_ROOT_USER: <old key>
+         MINIO_ROOT_PASSWORD: <old secret>
+       volumes:
+         - miniodata:/data
+   ```
+
+   Add `miniodata:` under the top-level `volumes:` too. The MinIO image is still on the machine from the old install, so this works without Docker Hub.
 4. Generate new values and write them to `.env`:
    - `S3_ACCESS_KEY_ID`: `GK` followed by 24 hex characters (`echo GK$(openssl rand -hex 12)`)
    - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`: 64 hex characters each (`openssl rand -hex 32`)
    - `S3_ENDPOINT=http://storage:3900`
-5. Start the new services: `docker compose up -d storage api`.
+5. Start MinIO and the new services: `docker compose up -d minio storage api`.
 6. Copy the files:
    `./openldr storage copy --from-endpoint http://minio:9000 --from-key <old key> --from-secret <old secret> --from-bucket openldr`
-   It prints object counts and bytes for both sides and exits non-zero if they differ. Run it again to resume after a failure. It skips objects already on Garage with the same size, so it does not replace an object whose size is unchanged but whose content differs. It never changes MinIO.
+   It prints object counts and bytes for both sides and exits non-zero if they differ. Run it again to resume after a failure. It skips objects already on Garage with the same size. It does not replace an object whose size is unchanged but whose content differs. It never changes MinIO.
 7. When it reports `totals match`, open a few uploaded files in the studio.
 8. Remove the `minio` service from `docker-compose.yml` and run `docker compose up -d --remove-orphans`. Keep the `miniodata` volume until you are sure. Then delete it with `docker volume rm <project>_miniodata`.
 
@@ -96,7 +115,7 @@ Without the `./openldr` wrapper, run `docker compose run --rm --no-deps api node
 
 The `--from-secret` value shows in your shell history and in the process list while the command runs. Clear that history line afterwards, or run the command in a throwaway shell.
 
-If you run from source, the compose file (`docker-compose.prod.yml`) and `deploy/install/garage.toml` arrive with the new checkout, so skip the downloads in step 3 but still add the old `minio` service back. Your `.env.prod` came from an earlier `pnpm run init`, so its `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` are not in Garage's format. Replace both as in step 4 (`GK` plus `openssl rand -hex 12`, and `openssl rand -hex 32`), and add `GARAGE_RPC_SECRET` and `GARAGE_ADMIN_TOKEN`. Compose refuses to run until both exist.
+If you run from source, the compose file (`docker-compose.prod.yml`) and `deploy/install/garage.toml` arrive with the new checkout. Skip the downloads in step 3, but still add the old `minio` service back with its old login. Your `.env.prod` came from an earlier `pnpm run init`. Its `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` are not in Garage's format. Replace both as in step 4 (`GK` plus `openssl rand -hex 12`, and `openssl rand -hex 32`). Then add `GARAGE_RPC_SECRET` and `GARAGE_ADMIN_TOKEN`. Compose refuses to run until both exist.
 
 ### When a third-party image disappears
 
@@ -171,6 +190,8 @@ Utilisez les clés conservées pour déchiffrer des secrets enregistrés représ
 
 ### Migrer avant de démarrer la nouvelle API
 
+Une installation antérieure à 0.1.10 doit d'abord faire les étapes 1 à 4 de la section « Passer de MinIO à Garage » plus bas. Le nouveau fichier Compose refuse de s'exécuter sans `GARAGE_RPC_SECRET` et `GARAGE_ADMIN_TOKEN`.
+
 Gardez les bases disponibles et tous les anciens processus d'écriture arrêtés. Vérifiez que l'image API correspond à la version cible. Exécutez une fois sa CLI intégrée :
 
 ```sh
@@ -195,15 +216,32 @@ MinIO a retiré ses images de Docker Hub le 2026-09-11. Depuis 0.1.10, le servic
 
 1. Notez la clé et le secret MinIO actuels dans `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). L'étape 4 les remplace.
 2. Sauvegardez `.env` et `docker-compose.yml`.
-3. Téléchargez le `docker-compose.yml` et le `config/garage.toml` de la version 0.1.10. Remettez l'ancien service `minio` dans `docker-compose.yml` à partir de votre sauvegarde, pour que MinIO reste actif à côté de Garage.
+3. Téléchargez les fichiers de la version 0.1.10 :
+   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.10/deploy/install/docker-compose.yml`, à enregistrer sous `docker-compose.yml`
+   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.10/deploy/install/garage.toml`, à enregistrer sous `config/garage.toml`
+
+   Remettez ensuite l'ancien service `minio` dans `docker-compose.yml` à partir de votre sauvegarde. MinIO reste ainsi actif à côté de Garage. Donnez-lui l'ancienne clé et l'ancien secret en valeurs littérales, pas en `${S3_...}`. L'étape 4 modifie ces variables, et MinIO refuserait alors l'ancien identifiant.
+
+   ```yaml
+     minio:
+       image: minio/minio:latest
+       command: server /data --console-address ':9001'
+       environment:
+         MINIO_ROOT_USER: <ancienne clé>
+         MINIO_ROOT_PASSWORD: <ancien secret>
+       volumes:
+         - miniodata:/data
+   ```
+
+   Ajoutez aussi `miniodata:` sous le bloc `volumes:` de premier niveau. L'image MinIO est encore sur la machine depuis l'ancienne installation, donc cela fonctionne sans Docker Hub.
 4. Générez de nouvelles valeurs et écrivez-les dans `.env` :
    - `S3_ACCESS_KEY_ID` : `GK` suivi de 24 caractères hexadécimaux (`echo GK$(openssl rand -hex 12)`)
    - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` : 64 caractères hexadécimaux chacun (`openssl rand -hex 32`)
    - `S3_ENDPOINT=http://storage:3900`
-5. Démarrez les nouveaux services : `docker compose up -d storage api`.
+5. Démarrez MinIO et les nouveaux services : `docker compose up -d minio storage api`.
 6. Copiez les fichiers :
    `./openldr storage copy --from-endpoint http://minio:9000 --from-key <ancienne clé> --from-secret <ancien secret> --from-bucket openldr`
-   La commande affiche le nombre d'objets et d'octets des deux côtés, et se termine avec un code non nul s'ils diffèrent. Relancez-la pour reprendre après un échec. Elle ignore les objets déjà présents dans Garage avec la même taille, donc elle ne remplace pas un objet de même taille mais de contenu différent. Elle ne modifie jamais MinIO.
+   La commande affiche le nombre d'objets et d'octets des deux côtés, et se termine avec un code non nul s'ils diffèrent. Relancez-la pour reprendre après un échec. Elle ignore les objets déjà présents dans Garage avec la même taille. Elle ne remplace pas un objet de même taille mais de contenu différent. Elle ne modifie jamais MinIO.
 7. Quand elle affiche `totals match`, ouvrez quelques fichiers téléversés dans le studio.
 8. Retirez le service `minio` de `docker-compose.yml` et lancez `docker compose up -d --remove-orphans`. Gardez le volume `miniodata` tant que vous n'êtes pas sûr. Supprimez-le ensuite avec `docker volume rm <projet>_miniodata`.
 
@@ -211,7 +249,7 @@ Sans le script `./openldr`, lancez `docker compose run --rm --no-deps api node /
 
 La valeur de `--from-secret` apparaît dans l'historique du shell et dans la liste des processus pendant l'exécution. Effacez ensuite cette ligne de l'historique, ou lancez la commande dans un shell jetable.
 
-Si vous exécutez depuis les sources, le fichier Compose (`docker-compose.prod.yml`) et `deploy/install/garage.toml` arrivent avec la nouvelle copie du dépôt. Ignorez donc les téléchargements de l'étape 3, mais remettez quand même l'ancien service `minio`. Votre `.env.prod` vient d'un ancien `pnpm run init`, donc ses `S3_ACCESS_KEY_ID` et `S3_SECRET_ACCESS_KEY` n'ont pas le format de Garage. Remplacez-les comme à l'étape 4 (`GK` plus `openssl rand -hex 12`, et `openssl rand -hex 32`), puis ajoutez `GARAGE_RPC_SECRET` et `GARAGE_ADMIN_TOKEN`. Compose refuse de s'exécuter tant que ces deux valeurs manquent.
+Si vous exécutez depuis les sources, le fichier Compose (`docker-compose.prod.yml`) et `deploy/install/garage.toml` arrivent avec la nouvelle copie du dépôt. Ignorez donc les téléchargements de l'étape 3, mais remettez quand même l'ancien service `minio` avec son ancien identifiant. Votre `.env.prod` vient d'un ancien `pnpm run init`. Ses `S3_ACCESS_KEY_ID` et `S3_SECRET_ACCESS_KEY` n'ont pas le format de Garage. Remplacez-les comme à l'étape 4 (`GK` plus `openssl rand -hex 12`, et `openssl rand -hex 32`). Ajoutez ensuite `GARAGE_RPC_SECRET` et `GARAGE_ADMIN_TOKEN`. Compose refuse de s'exécuter tant que ces deux valeurs manquent.
 
 ### Quand une image tierce disparaît
 
@@ -286,6 +324,8 @@ Use as chaves preservadas para decifrar segredos guardados representativos no am
 
 ### Migrar antes de iniciar a nova API
 
+Uma instalação anterior à 0.1.10 deve primeiro fazer os passos 1 a 4 da secção "Passar do MinIO para o Garage" mais abaixo. O novo ficheiro Compose recusa-se a correr sem `GARAGE_RPC_SECRET` e `GARAGE_ADMIN_TOKEN`.
+
 Mantenha as bases disponíveis e todos os processos antigos de escrita parados. Confirme que a imagem API corresponde à versão escolhida. Execute uma vez a CLI incluída:
 
 ```sh
@@ -310,15 +350,32 @@ O MinIO retirou as suas imagens do Docker Hub em 2026-09-11. A partir da 0.1.10,
 
 1. Anote a chave e o segredo atuais do MinIO em `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). O passo 4 substitui-os.
 2. Faça cópia de segurança de `.env` e `docker-compose.yml`.
-3. Descarregue o `docker-compose.yml` e o `config/garage.toml` da versão 0.1.10. Volte a juntar o antigo serviço `minio` ao `docker-compose.yml` a partir da sua cópia, para que o MinIO continue ativo ao lado do Garage.
+3. Descarregue os ficheiros da versão 0.1.10:
+   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.10/deploy/install/docker-compose.yml`, guardado como `docker-compose.yml`
+   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.10/deploy/install/garage.toml`, guardado como `config/garage.toml`
+
+   Depois volte a juntar o antigo serviço `minio` ao `docker-compose.yml` a partir da sua cópia. Assim o MinIO continua ativo ao lado do Garage. Indique a chave e o segredo antigos como valores literais, não como `${S3_...}`. O passo 4 altera essas variáveis, e o MinIO passaria a recusar o login antigo.
+
+   ```yaml
+     minio:
+       image: minio/minio:latest
+       command: server /data --console-address ':9001'
+       environment:
+         MINIO_ROOT_USER: <chave antiga>
+         MINIO_ROOT_PASSWORD: <segredo antigo>
+       volumes:
+         - miniodata:/data
+   ```
+
+   Junte também `miniodata:` sob o bloco `volumes:` de nível superior. A imagem do MinIO ainda está na máquina desde a instalação antiga, por isso isto funciona sem o Docker Hub.
 4. Gere novos valores e escreva-os em `.env`:
    - `S3_ACCESS_KEY_ID`: `GK` seguido de 24 carateres hexadecimais (`echo GK$(openssl rand -hex 12)`)
    - `S3_SECRET_ACCESS_KEY`, `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN`: 64 carateres hexadecimais cada (`openssl rand -hex 32`)
    - `S3_ENDPOINT=http://storage:3900`
-5. Inicie os novos serviços: `docker compose up -d storage api`.
+5. Inicie o MinIO e os novos serviços: `docker compose up -d minio storage api`.
 6. Copie os ficheiros:
    `./openldr storage copy --from-endpoint http://minio:9000 --from-key <chave antiga> --from-secret <segredo antigo> --from-bucket openldr`
-   O comando mostra o número de objetos e de bytes dos dois lados e termina com código diferente de zero se forem diferentes. Execute-o de novo para retomar após uma falha. Ignora os objetos que já estão no Garage com o mesmo tamanho, por isso não substitui um objeto com o mesmo tamanho mas conteúdo diferente. Nunca altera o MinIO.
+   O comando mostra o número de objetos e de bytes dos dois lados e termina com código diferente de zero se forem diferentes. Execute-o de novo para retomar após uma falha. Ignora os objetos que já estão no Garage com o mesmo tamanho. Não substitui um objeto com o mesmo tamanho mas conteúdo diferente. Nunca altera o MinIO.
 7. Quando mostrar `totals match`, abra alguns ficheiros carregados no studio.
 8. Retire o serviço `minio` do `docker-compose.yml` e execute `docker compose up -d --remove-orphans`. Mantenha o volume `miniodata` até ter a certeza. Depois elimine-o com `docker volume rm <projeto>_miniodata`.
 
@@ -326,7 +383,7 @@ Sem o script `./openldr`, execute `docker compose run --rm --no-deps api node /a
 
 O valor de `--from-secret` fica visível no histórico da shell e na lista de processos enquanto o comando corre. Apague depois essa linha do histórico, ou execute o comando numa shell descartável.
 
-Se executa a partir do código-fonte, o ficheiro Compose (`docker-compose.prod.yml`) e o `deploy/install/garage.toml` chegam com a nova cópia do repositório. Dispense por isso os descarregamentos do passo 3, mas volte a juntar o antigo serviço `minio`. O seu `.env.prod` vem de um `pnpm run init` anterior, por isso o `S3_ACCESS_KEY_ID` e o `S3_SECRET_ACCESS_KEY` não têm o formato do Garage. Substitua ambos como no passo 4 (`GK` mais `openssl rand -hex 12`, e `openssl rand -hex 32`) e adicione `GARAGE_RPC_SECRET` e `GARAGE_ADMIN_TOKEN`. O Compose recusa-se a correr até existirem os dois.
+Se executa a partir do código-fonte, o ficheiro Compose (`docker-compose.prod.yml`) e o `deploy/install/garage.toml` chegam com a nova cópia do repositório. Dispense por isso os descarregamentos do passo 3, mas volte a juntar o antigo serviço `minio` com o seu login antigo. O seu `.env.prod` vem de um `pnpm run init` anterior. O `S3_ACCESS_KEY_ID` e o `S3_SECRET_ACCESS_KEY` não têm o formato do Garage. Substitua ambos como no passo 4 (`GK` mais `openssl rand -hex 12`, e `openssl rand -hex 32`). Depois adicione `GARAGE_RPC_SECRET` e `GARAGE_ADMIN_TOKEN`. O Compose recusa-se a correr até existirem os dois.
 
 ### Quando uma imagem de terceiros desaparece
 
