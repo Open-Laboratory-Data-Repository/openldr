@@ -786,6 +786,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@openldr/adapter-s3-bucket':
+        specifier: workspace:*
+        version: link:../adapter-s3-bucket
       '@openldr/bootstrap':
         specifier: workspace:*
         version: link:../bootstrap
