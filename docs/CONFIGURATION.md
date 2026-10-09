@@ -122,14 +122,14 @@ imports from the CLI as well as the app.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
-| `BLOB_ADAPTER` | `minio` | `minio` | Blob/S3 adapter. |
+| `BLOB_ADAPTER` | `minio` | `minio` | Blob/S3 adapter. `minio` is the only value and is a legacy name for the S3 adapter. It works with any S3 store, including Garage. |
 | `EVENTING_ADAPTER` | `pg` | `pg` | Event bus adapter. |
 | `S3_ENDPOINT` | URL | required | S3-compatible endpoint. |
 | `S3_REGION` | string | `us-east-1` | S3 region. |
 | `S3_ACCESS_KEY_ID` | string | required | S3 access key. |
 | `S3_SECRET_ACCESS_KEY` | string | required | S3 secret key. |
 | `S3_BUCKET` | string | required | Bucket for raw inputs and artifacts. |
-| `S3_FORCE_PATH_STYLE` | boolean string | `true` | Enables MinIO-compatible path-style URLs. |
+| `S3_FORCE_PATH_STYLE` | boolean string | `true` | Uses path-style URLs, which Garage needs. Keep it `true`. |
 
 ## SQL Server Target Store
 

@@ -15,7 +15,7 @@ Prerequisites:
 
 - Node.js 20 or newer.
 - pnpm 11.5.2 through the package-manager pin.
-- Docker and Docker Compose for local PostgreSQL, MinIO, Keycloak, and optional DHIS2/SQL Server services.
+- Docker and Docker Compose for local PostgreSQL, Garage (S3 storage), Keycloak, and optional DHIS2/SQL Server services.
 
 PowerShell:
 
