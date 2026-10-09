@@ -3,7 +3,8 @@
 # self-hosted MySQL/MariaDB (BYO).
 services:
   mysql:
-    image: mysql:8.4
+    # Third-party images come from our GHCR copies (deploy/third-party-images.json).
+    image: ghcr.io/open-laboratory-data-repository/mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
     command: ["--character-set-server=utf8mb4"]
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
@@ -19,7 +20,7 @@ services:
     restart: unless-stopped
 
   mysql-init:
-    image: mysql:8.4
+    image: ghcr.io/open-laboratory-data-repository/mysql:8.4@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242
     depends_on:
       mysql:
         condition: service_healthy

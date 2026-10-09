@@ -22,6 +22,7 @@
     "make:whonet-sample": "node scripts/make-whonet-sample.mjs",
     "make:docs-marketplace-bundle": "tsx scripts/make-docs-marketplace-bundle.ts",
     "make:changelog": "tsx scripts/make-changelog.ts",
+    "images:mirror": "tsx scripts/mirror-images.ts",
     "gen:fhir-paths": "tsx scripts/gen-fhir-paths.ts",
     "gen:fhir-bindings": "tsx scripts/gen-fhir-bindings.ts",
     "release": "tsx scripts/release.ts",

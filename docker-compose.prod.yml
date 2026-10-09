@@ -33,7 +33,8 @@ services:
     restart: unless-stopped
 
   gateway:
-    image: nginx:1.27-alpine
+    # Third-party images come from our GHCR copies (deploy/third-party-images.json).
+    image: ghcr.io/open-laboratory-data-repository/nginx:1.27-alpine@sha256:36bc127593b73913fa30b1776cbaa49bb1546fbc06f78a275d785dfd37864136
     environment:
       SERVER_NAME: ${SERVER_NAME:-localhost}
     ports:
@@ -57,7 +58,7 @@ services:
   # already serves on :80, copy the pems into deploy/nginx/certs (where nginx reads them), and
   # reload nginx. `letsencrypt` volume persists the ACME account + certs across runs (renewal).
   certbot:
-    image: certbot/certbot:latest
+    image: ghcr.io/open-laboratory-data-repository/certbot:v5.8.0@sha256:0780fe8a333d485f5931fbd2c7d58a6c6774365b6e91937ee4bc663b2df17104
     profiles: ["letsencrypt"]
     volumes:
       - letsencrypt:/etc/letsencrypt
@@ -65,7 +66,7 @@ services:
       - certbot-www:/var/www/certbot
 
   postgres:
-    image: postgres:16-alpine
+    image: ghcr.io/open-laboratory-data-repository/postgres:16-alpine@sha256:c32b2184365eb3594362023d00b676e8c2a242c3a4c910409444b0ba892eb92c
     environment:
       POSTGRES_USER: openldr
       # Fail closed: no weak compose-level fallback. `pnpm run init` generates this into .env.prod; a

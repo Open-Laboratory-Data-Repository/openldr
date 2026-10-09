@@ -60,7 +60,8 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:16-alpine
+    # Third-party images come from our GHCR copies (deploy/third-party-images.json).
+    image: ghcr.io/open-laboratory-data-repository/postgres:16-alpine@sha256:c32b2184365eb3594362023d00b676e8c2a242c3a4c910409444b0ba892eb92c
     environment:
       POSTGRES_USER: openldr
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-openldr}
@@ -133,7 +134,7 @@ services:
   # --letsencrypt flag and by renew-cert.sh (cron). Issued certs land in ./config/nginx/certs,
   # where the gateway reads them; the shared certbot-www volume carries the http-01 challenge.
   certbot:
-    image: certbot/certbot:latest
+    image: ghcr.io/open-laboratory-data-repository/certbot:v5.8.0@sha256:0780fe8a333d485f5931fbd2c7d58a6c6774365b6e91937ee4bc663b2df17104
     profiles: ["letsencrypt"]
     volumes:
       - letsencrypt:/etc/letsencrypt
