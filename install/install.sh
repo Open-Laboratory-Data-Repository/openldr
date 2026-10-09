@@ -330,6 +330,7 @@ fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
 fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.json"
 fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
 fetch "scripts/init-keycloak-db.sql" "$DIR/config/init-keycloak-db.sql"
+fetch "deploy/install/garage.toml" "$DIR/config/garage.toml"
 fetch "deploy/install/renew-cert.sh" "$DIR/renew-cert.sh"
 chmod +x "$DIR/renew-cert.sh" 2>/dev/null || true
 
@@ -403,6 +404,8 @@ fi
 # first 24 alnum chars with cut — cut consumes all of its input, so no early
 # pipe close can SIGPIPE an upstream reader even under `set -o pipefail`.
 rand() { head -c 3072 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24; }
+# Garage refuses any other format: key ID is GK + 24 hex, secrets are 64 hex.
+hex() { od -An -tx1 -N"$1" /dev/urandom | tr -d ' \n'; }
 
 # Pin the openldr-admin service-account secret in the realm import to a per-install value. The
 # committed realm ships a well-known dev secret ("openldr-admin-dev-secret") that a real deployment
@@ -430,7 +433,7 @@ fi
 sed "s|\"value\": \"labadmin\"|\"value\": \"$LABADMIN_PW\"|" "$REALM" > "$REALM.tmp" && mv "$REALM.tmp" "$REALM"
 
 if [ ! -f "$DIR/.env" ]; then
-  PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="$(rand)"; S3_SECRET="$(rand)"
+  PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="GK$(hex 12)"; S3_SECRET="$(hex 32)"; GARAGE_RPC="$(hex 32)"; GARAGE_ADMIN="$(hex 32)"
   if [ "$MSSQL_DEMO" -eq 1 ] && [ -z "$MSSQL_PASSWORD" ]; then MSSQL_PASSWORD="$(rand)Aa1!"; fi
   if [ "$MYSQL_DEMO" -eq 1 ] && [ -z "$MYSQL_PASSWORD" ]; then MYSQL_PASSWORD="$(rand)Aa1"; fi
   SECRETS_KEY="$(openssl rand -base64 32 2>/dev/null || head -c 32 /dev/urandom | base64 | tr -d '\n')"
@@ -495,12 +498,14 @@ TRUST_PROXY=1
 INTERNAL_DATABASE_URL=postgres://openldr:$PG_PW@postgres:5432/openldr
 $TARGET_DB_ENV_BLOCK
 POSTGRES_PASSWORD=$PG_PW
-S3_ENDPOINT=http://minio:9000
+S3_ENDPOINT=http://storage:3900
 S3_REGION=us-east-1
 S3_ACCESS_KEY_ID=$S3_KEY
 S3_SECRET_ACCESS_KEY=$S3_SECRET
 S3_BUCKET=openldr
 S3_FORCE_PATH_STYLE=true
+GARAGE_RPC_SECRET=$GARAGE_RPC
+GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN
 OIDC_ISSUER_URL=$ORIGIN/auth/realms/openldr
 OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
 OIDC_INTERNAL_ISSUER_URL=http://keycloak:8080/auth/realms/openldr

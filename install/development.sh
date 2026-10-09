@@ -82,8 +82,8 @@ fi
 if [ "$NO_SERVICES" -eq 1 ]; then
   echo "→ Skipping Docker services + DB (--no-services)"
 else
-  # 5. Backing services (dev docker-compose.yml: postgres, minio, keycloak)
-  echo "→ Starting backing services (postgres, minio, keycloak)"
+  # 5. Backing services (dev docker-compose.yml: postgres, storage, keycloak)
+  echo "→ Starting backing services (postgres, storage, keycloak)"
   docker compose up -d || err "docker compose up failed"
 
   # 6. DB init — only on a fresh setup so a re-run never wipes data; --reset-db forces it.
@@ -114,6 +114,6 @@ cat <<EOF
 Start the app in two terminals:
   1) pnpm -C apps/server dev      # API on http://localhost:3000
   2) pnpm -C apps/studio dev      # Studio UI on http://localhost:5173 (proxies /api → :3000)
-Backing services: Postgres :5433 · MinIO :9010/:9011 · Keycloak :8180
+Backing services: Postgres :5433 · S3 storage :9010 · Keycloak :8180
 Auth: AUTH_DEV_BYPASS is on (loads as a dev admin). Edit .env to use real Keycloak.
 EOF

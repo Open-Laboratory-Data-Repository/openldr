@@ -271,7 +271,7 @@ describe('build-and-push.sh overwrite guard — gh failure handling', () => {
  * Ports are deliberately high: install.sh refuses a fresh install when 80/443 are already
  * bound, and this test must not depend on what the machine is running.
  */
-function installSh(args: string[]): { code: number; out: string } {
+function installSh(args: string[]): { code: number; out: string; dir: string } {
   const bin = tempDir('openldr-fakebin-');
   const dir = join(tempDir('openldr-install-'), 'openldr');
 
@@ -333,10 +333,10 @@ function installSh(args: string[]): { code: number; out: string } {
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
-    return { code: 0, out };
+    return { code: 0, out, dir };
   } catch (err) {
     const e = err as { status?: number; stdout?: string; stderr?: string };
-    return { code: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
+    return { code: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}`, dir };
   }
 }
 
@@ -375,6 +375,19 @@ describe('install.sh readiness gate', () => {
     const r = installSh(['--require-ready', '--no-start']);
     expect(r.code).toBe(2);
     expect(r.out).toMatch(/--no-start/);
+  }, 60_000);
+});
+
+describe('install.sh storage keys', () => {
+  it('writes Garage-format storage keys and points S3 at the storage service', () => {
+    const r = installSh(['--no-start']);
+    expect(r.code).toBe(0);
+    const env = readFileSync(join(r.dir, '.env'), 'utf8');
+    expect(env).toMatch(/^S3_ENDPOINT=http:\/\/storage:3900$/m);
+    expect(env).toMatch(/^S3_ACCESS_KEY_ID=GK[0-9a-f]{24}$/m);
+    expect(env).toMatch(/^S3_SECRET_ACCESS_KEY=[0-9a-f]{64}$/m);
+    expect(env).toMatch(/^GARAGE_RPC_SECRET=[0-9a-f]{64}$/m);
+    expect(env).toMatch(/^GARAGE_ADMIN_TOKEN=[0-9a-f]{64}$/m);
   }, 60_000);
 });
 

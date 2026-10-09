@@ -1,6 +1,6 @@
 # Local dev stack for the OpenLDR CE skeleton (health acceptance).
 # Host ports avoid common sibling project defaults such as Postgres 5432,
-# Keycloak/app servers on 8080, MinIO 9000/9001, and SQL Server 1433.
+# Keycloak/app servers on 8080, S3 storage 9010, and SQL Server 1433.
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,25 +18,26 @@ services:
     volumes:
       - ./scripts/init-target-db.sql:/docker-entrypoint-initdb.d/10-init-target-db.sql:ro
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ':9001'
+  storage:
+    image: ghcr.io/open-laboratory-data-repository/garage:v2.4.1@sha256:4e9ce31018a28a6e5bfcff89077b44195f6b192965277d1ba129b2e5cb891e77
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      # Dev-only fixed values, in the formats Garage requires. Never used by an installer.
+      GARAGE_RPC_SECRET: 6465762d6f6e6c792d6761726167652d7270632d7365637265742d3030303031
+      GARAGE_ADMIN_TOKEN: 6465762d6f6e6c792d6761726167652d61646d696e2d746f6b656e2d30303031
+      GARAGE_DEFAULT_ACCESS_KEY: GK6f70656e6c64722d64657621
+      GARAGE_DEFAULT_SECRET_KEY: 6465762d6f6e6c792d6761726167652d7365637265742d6b65792d3030303031
+      GARAGE_DEFAULT_BUCKET: openldr
+    volumes:
+      - ./deploy/install/garage.toml:/etc/garage.toml:ro
+      - storagedata:/var/lib/garage
     ports:
-      - "9010:9000"
-      - "9011:9001"
-
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      - minio
-    entrypoint: >
-      /bin/sh -c "
-      until mc alias set local http://minio:9000 minioadmin minioadmin; do echo 'waiting for minio'; sleep 2; done &&
-      mc mb --ignore-existing local/openldr &&
-      echo 'bucket ready'"
+      - "9010:3900"
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -98,3 +99,6 @@ services:
       - ./scripts/dhis2.conf:/opt/dhis2/dhis.conf:ro
     ports:
       - "8085:8080"
+
+volumes:
+  storagedata:

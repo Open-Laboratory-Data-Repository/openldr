@@ -60,6 +60,22 @@ describe('ensureStackSecrets', () => {
     expect(kcClientSecret).toBeTruthy();
     expect(envText).toContain(`KEYCLOAK_ADMIN_CLIENT_SECRET=${kcClientSecret}`);
   });
+
+  it('replaces the dev storage values with keys in the format Garage requires', () => {
+    const env = [
+      'S3_ACCESS_KEY_ID=GK6f70656e6c64722d64657621',
+      'S3_SECRET_ACCESS_KEY=6465762d6f6e6c792d6761726167652d7365637265742d6b65792d3030303031',
+      'GARAGE_RPC_SECRET=6465762d6f6e6c792d6761726167652d7270632d7365637265742d3030303031',
+      'GARAGE_ADMIN_TOKEN=6465762d6f6e6c792d6761726167652d61646d696e2d746f6b656e2d30303031',
+    ].join('\n');
+    const { envText } = ensureStackSecrets(env);
+    expect(envText).toMatch(/^S3_ACCESS_KEY_ID=GK[0-9a-f]{24}$/m);
+    expect(envText).not.toMatch(/^S3_ACCESS_KEY_ID=GK6f70656e6c64722d64657621$/m);
+    expect(envText).toMatch(/^S3_SECRET_ACCESS_KEY=[0-9a-f]{64}$/m);
+    expect(envText).toMatch(/^GARAGE_RPC_SECRET=[0-9a-f]{64}$/m);
+    expect(envText).toMatch(/^GARAGE_ADMIN_TOKEN=[0-9a-f]{64}$/m);
+    expect(envText).not.toMatch(/6465762d6f6e6c79/);
+  });
 });
 
 describe('patchRealmSecrets', () => {
