@@ -102,11 +102,11 @@ every read.
 | nginx:1.27-alpine | studio, web, gateway Dockerfiles, prod compose | yes |
 | node:22-bookworm-slim | server, studio, web Dockerfiles | yes |
 | quay.io/keycloak/keycloak:26.0 | `deploy/keycloak/Dockerfile` | yes |
-| mcr.microsoft.com/mssql/server | `deploy/install/docker-compose.mssql.yml` | **no, see below** |
+| mcr.microsoft.com/mssql/server | `deploy/install/docker-compose.mssql.yml` | no, listed exception |
 | postgis, dhis2, version-variable mssql and mysql | `docker-compose.yml` (dev only) | no |
 
 SQL Server ships under Microsoft's licence, which may not allow us to host a copy. It stays on
-`mcr.microsoft.com` as a listed exception until the operator decides. The dev compose file is a
+`mcr.microsoft.com` as a listed exception (operator decision, 2026-10-09). The dev compose file is a
 developer convenience. Developers have the images cached, and its mssql and mysql tags come from
 variables, which a digest pin cannot cover. It gets the `storage` swap and nothing else.
 
@@ -256,8 +256,7 @@ One branch, `feat/garage-storage`, in `.claude/worktrees/garage-storage`.
 
 ## Open items
 
-- SQL Server image: keep it on `mcr.microsoft.com` as an exception, or check Microsoft's terms and
-  copy it.
-- The private GHCR `minio` and `mc` packages from the stopgap on 2026-10-09: keep or delete.
+- The private GHCR `minio` and `mc` stopgap packages are to be deleted (operator decision,
+  2026-10-09). The first attempt failed because the `gh` token lacks `delete:packages`.
 - Garage updates arrive only when someone runs `pnpm images:mirror`.
 - Our copies keep installs working after a vendor leaves. They do not solve a licence change.
