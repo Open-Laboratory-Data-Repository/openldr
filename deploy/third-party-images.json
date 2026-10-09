@@ -1,0 +1,14 @@
+{
+  "images": [
+    { "name": "garage", "upstream": "dxflrs/garage:v2.4.1", "copy": "ghcr.io/open-laboratory-data-repository/garage:v2.4.1", "digest": "" },
+    { "name": "postgres", "upstream": "postgres:16-alpine", "copy": "ghcr.io/open-laboratory-data-repository/postgres:16-alpine", "digest": "" },
+    { "name": "certbot", "upstream": "certbot/certbot:v5.8.0", "copy": "ghcr.io/open-laboratory-data-repository/certbot:v5.8.0", "digest": "" },
+    { "name": "mysql", "upstream": "mysql:8.4", "copy": "ghcr.io/open-laboratory-data-repository/mysql:8.4", "digest": "" },
+    { "name": "nginx", "upstream": "nginx:1.27-alpine", "copy": "ghcr.io/open-laboratory-data-repository/nginx:1.27-alpine", "digest": "" },
+    { "name": "node", "upstream": "node:22-bookworm-slim", "copy": "ghcr.io/open-laboratory-data-repository/node:22-bookworm-slim", "digest": "" },
+    { "name": "keycloak", "upstream": "quay.io/keycloak/keycloak:26.0", "copy": "ghcr.io/open-laboratory-data-repository/keycloak:26.0", "digest": "" }
+  ],
+  "exceptions": [
+    { "image": "mcr.microsoft.com/mssql/server:2022-latest", "reason": "Microsoft's licence may not allow us to host a copy. Operator decision, 2026-10-09." }
+  ]
+}
