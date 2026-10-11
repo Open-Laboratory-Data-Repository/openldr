@@ -6,6 +6,12 @@
       "version": "v0.1.11",
       "entries": [
         {
+          "hash": "f3f21d03",
+          "type": "fix",
+          "scope": "release",
+          "title": "The gate refuses when a test task never finished"
+        },
+        {
           "hash": "bf7ad76a",
           "type": "fix",
           "scope": "studio",
