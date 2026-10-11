@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { LOINC_SYSTEM, RESULT_PARAM_SYSTEM } from '@openldr/terminology';
 import { TEST_CATALOG_SYSTEM } from './test-catalog';
 import { isTestMapRelevantRecord, mappingTouchesTestMap, parseMapLevel } from './test-mapping';
-import { buildMapping, seedCatalogTest, seedMapping, seedParam, seedResultMapping } from './test-support/test-mapping-fixture';
+import { buildMapping, seedCatalogTest, seedMapping, seedParam, seedRequest, seedResult, seedResultMapping } from './test-support/test-mapping-fixture';
 
 const DISA = 'urn:openldr:disa';
 const PARAMS = RESULT_PARAM_SYSTEM;
@@ -104,5 +104,59 @@ describe('parseMapLevel', () => {
     expect(parseMapLevel('')).toEqual({ ok: true, level: 'test' });
     expect(parseMapLevel('result')).toEqual({ ok: true, level: 'result' });
     expect(parseMapLevel('panel')).toEqual({ ok: false, error: 'level must be test or result' });
+  });
+});
+
+describe('test mapping: observed lists per level', () => {
+  it('lists observed result codes with counts and status, leaving out the dictionary\'s own codes', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedParam(internalDb, 'VLC', 'HIV VL copies', { loinc: '20447-9' });
+    await seedResultMapping(internalDb, 'm1', DISA, 'HIVVL', 'VLC');
+    await seedResult(externalDb, 'o1', DISA, 'HIVVL', 'HIV VL', '2026-05-01T08:00:00Z');
+    await seedResult(externalDb, 'o2', DISA, 'HIVVL', 'HIV VL', '2026-05-03T08:00:00Z');
+    await seedResult(externalDb, 'o3', DISA, 'CD4', 'CD4 count', '2026-05-02T08:00:00Z');
+    await seedResult(externalDb, 'o4', PARAMS, 'VLC', 'entered at the bench', '2026-05-02T08:00:00Z');
+
+    const out = await mapping.observed({ status: 'all', q: '', limit: 25, offset: 0 }, 'result');
+
+    expect(out.total).toBe(2);
+    expect(out.rows.map((r) => [r.code, r.requests, r.status, r.catalog?.code ?? null, r.catalog?.loinc ?? null])).toEqual([
+      ['CD4', 1, 'unmapped', null, null],
+      ['HIVVL', 2, 'mapped', 'VLC', '20447-9'],
+    ]);
+    expect(out.rows[1].lastSeen?.startsWith('2026-05-03')).toBe(true);
+  });
+
+  it('leaves the catalog\'s own codes off the Tests list, because self rows map them', async () => {
+    const { externalDb, mapping } = await buildMapping();
+    await seedRequest(externalDb, 'q1', TEST_CATALOG_SYSTEM, 'VL', 'ordered in CE', '2026-05-01T08:00:00Z');
+    await seedRequest(externalDb, 'q2', DISA, 'HIVVL', null, '2026-05-01T08:00:00Z');
+    const out = await mapping.observed({ status: 'all', q: '', limit: 25, offset: 0 });
+    expect(out.rows.map((r) => r.code)).toEqual(['HIVVL']);
+  });
+
+  it('keeps one scan cache per level', async () => {
+    let clock = 1_000_000;
+    const { externalDb, mapping, counter } = await buildMapping({ now: () => clock });
+    await seedResult(externalDb, 'o1', DISA, 'HIVVL', null, '2026-05-01T08:00:00Z');
+    const query = { status: 'all' as const, q: '', limit: 25, offset: 0 };
+
+    await mapping.observed(query, 'result');
+    await mapping.observed(query, 'test');
+    expect([counter.resultGroupQueries, counter.groupQueries]).toEqual([1, 1]);
+
+    clock += 59_000;
+    await mapping.observed(query, 'result');
+    expect(counter.resultGroupQueries).toBe(1);
+  });
+
+  it('lists result fields as targets, sorted by code', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedParam(internalDb, 'VLC', 'HIV VL copies', { loinc: '20447-9' });
+    await seedParam(internalDb, 'CD4', 'CD4 count');
+    expect(await mapping.targets('result')).toEqual([
+      { code: 'CD4', name: 'CD4 count', loinc: null, retired: false },
+      { code: 'VLC', name: 'HIV VL copies', loinc: '20447-9', retired: false },
+    ]);
   });
 });

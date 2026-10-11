@@ -44,10 +44,12 @@ export interface ObservedTestCode {
   system: string;
   code: string;
   description: string | null;
-  /** Requests carrying this code in the warehouse. 0 for a code mapped before any data arrived. */
+  /** Rows carrying this code in the warehouse: requests at the test level, results at the result level.
+   *  0 for a code mapped before any data arrived. */
   requests: number;
   lastSeen: string | null;
   status: ObservedStatus;
+  /** The target: a catalog test at the test level, a result field at the result level. */
   catalog: { code: string; name: string | null; loinc: string | null } | null;
   /** Central sent this mapping down. A lab cannot change it. */
   centralManaged: boolean;
@@ -335,46 +337,69 @@ export function createTestMapping(deps: TestMappingDeps) {
   }
 
   type ObservedGroup = { system: string; code: string; description: string | null; requests: number; lastSeen: string | null };
-  // The group-by over lab_requests is the costly read behind the Observed list. Cache it for a minute.
-  // A rebuild does not clear it: a rebuild does not change lab_requests. Mappings and the catalog are
-  // never cached. A failed scan is not kept.
-  let observedCache: { at: number; groups: Promise<ObservedGroup[]> } | null = null;
+  // The group-by over lab_requests or lab_results is the costly read behind the Observed list. Cache it
+  // for a minute, one entry per level. A rebuild does not clear it: a rebuild changes neither table.
+  // Mappings, the catalog and the dictionary are never cached. A failed scan is not kept.
+  const observedCache: Record<MapLevel, { at: number; groups: Promise<ObservedGroup[]> } | null> = { test: null, result: null };
 
-  function readObservedGroups(): Promise<ObservedGroup[]> {
-    if (observedCache && now() - observedCache.at < OBSERVED_CACHE_MS) return observedCache.groups;
-    const entry = { at: now(), groups: scanObservedGroups() };
-    observedCache = entry;
-    entry.groups.catch(() => { if (observedCache === entry) observedCache = null; });
+  function readObservedGroups(level: MapLevel = 'test'): Promise<ObservedGroup[]> {
+    const cached = observedCache[level];
+    if (cached && now() - cached.at < OBSERVED_CACHE_MS) return cached.groups;
+    const entry = { at: now(), groups: level === 'test' ? scanRequestGroups() : scanResultGroups() };
+    observedCache[level] = entry;
+    entry.groups.catch(() => { if (observedCache[level] === entry) observedCache[level] = null; });
     return entry.groups;
   }
 
-  async function scanObservedGroups(): Promise<ObservedGroup[]> {
+  function toGroup(r: { system: unknown; code: unknown; description: unknown; requests: unknown; last_seen: unknown }): ObservedGroup {
+    const last = r.last_seen;
+    return {
+      system: r.system as string, code: r.code as string,
+      description: (r.description as string | null) ?? null,
+      requests: Number(r.requests),
+      lastSeen: last === null || last === undefined ? null : last instanceof Date ? last.toISOString() : String(last),
+    };
+  }
+
+  async function scanRequestGroups(): Promise<ObservedGroup[]> {
     const rows = await externalDb.selectFrom('lab_requests')
       .select((eb) => [
-        'panel_system', 'panel_code',
+        'panel_system as system', 'panel_code as code',
         eb.fn.max('panel_desc').as('description'),
         eb.fn.countAll().as('requests'),
         eb.fn.max('authored_at').as('last_seen'),
       ])
       .where('panel_system', 'is not', null)
       .where('panel_code', 'is not', null)
+      // CE's own orders carry catalog codes, which self rows map already.
+      .where('panel_system', '!=', TEST_CATALOG_SYSTEM)
       .groupBy(['panel_system', 'panel_code'])
       .execute();
-    return rows.map((r) => {
-      const last = r.last_seen as unknown;
-      return {
-        system: r.panel_system as string, code: r.panel_code as string,
-        description: (r.description as string | null) ?? null,
-        requests: Number(r.requests),
-        lastSeen: last === null || last === undefined ? null : last instanceof Date ? last.toISOString() : String(last),
-      };
-    });
+    return rows.map(toGroup);
   }
 
-  async function observedAll(): Promise<ObservedTestCode[]> {
-    const catalog = await readCatalog();
-    const resolved = resolveAll(await readMappings(), catalog);
-    const seen = new Map((await readObservedGroups()).map((g) => [sourceKey(g.system, g.code), g]));
+  async function scanResultGroups(): Promise<ObservedGroup[]> {
+    const rows = await externalDb.selectFrom('lab_results')
+      .select((eb) => [
+        'observation_system as system', 'observation_code as code',
+        eb.fn.max('observation_desc').as('description'),
+        eb.fn.countAll().as('requests'),
+        // When the row reached the warehouse. cdr sends no result time of its own.
+        eb.fn.max('created_at').as('last_seen'),
+      ])
+      .where('observation_system', 'is not', null)
+      .where('observation_code', 'is not', null)
+      // CE's own results carry dictionary codes, which self rows map already.
+      .where('observation_system', '!=', RESULT_PARAM_SYSTEM)
+      .groupBy(['observation_system', 'observation_code'])
+      .execute();
+    return rows.map(toGroup);
+  }
+
+  async function observedAll(level: MapLevel = 'test'): Promise<ObservedTestCode[]> {
+    const targetsByCode = await readTargets(level);
+    const resolved = resolveAll(await readMappings(level), targetsByCode);
+    const seen = new Map((await readObservedGroups(level)).map((g) => [sourceKey(g.system, g.code), g]));
     // A code mapped before any data arrived is still listed, so a CLI-made mapping is never invisible.
     for (const [k, r] of resolved) {
       if (!seen.has(k)) seen.set(k, { system: r.system, code: r.code, description: null, requests: 0, lastSeen: null });
@@ -382,21 +407,21 @@ export function createTestMapping(deps: TestMappingDeps) {
     const rows = [...seen.entries()].map(([k, g]): ObservedTestCode => {
       const r = resolved.get(k);
       const kind = r?.resolved.kind;
-      const catalogCode = kind === 'mapped' ? (r!.resolved as { catalogCode: string }).catalogCode : null;
-      const entry = catalogCode ? catalog.get(catalogCode)! : null;
+      const targetCode = kind === 'mapped' ? (r!.resolved as { catalogCode: string }).catalogCode : null;
+      const entry = targetCode ? targetsByCode.get(targetCode)! : null;
       return {
         ...g,
         status: kind === 'mapped' ? 'mapped' : kind === 'ambiguous' ? 'ambiguous' : 'unmapped',
-        catalog: catalogCode ? { code: catalogCode, name: entry!.name, loinc: entry!.loinc } : null,
+        catalog: targetCode ? { code: targetCode, name: entry!.name, loinc: entry!.loinc } : null,
         centralManaged: r?.central ?? false,
       };
     });
     return rows.sort((a, b) => compare(a.system, b.system) || compare(a.code, b.code));
   }
 
-  async function observed(query: ObservedQuery): Promise<ObservedResult> {
+  async function observed(query: ObservedQuery, level: MapLevel = 'test'): Promise<ObservedResult> {
     const needle = query.q.toLowerCase();
-    const matched = (await observedAll()).filter((r) => (query.status === 'all' || r.status === query.status)
+    const matched = (await observedAll(level)).filter((r) => (query.status === 'all' || r.status === query.status)
       && (needle === '' || [r.code, r.description, r.catalog?.name].some((v) => (v ?? '').toLowerCase().includes(needle))));
     return {
       rows: matched.slice(query.offset, query.offset + query.limit),
@@ -405,8 +430,8 @@ export function createTestMapping(deps: TestMappingDeps) {
     };
   }
 
-  async function targets(): Promise<CatalogTarget[]> {
-    return [...(await readCatalog()).entries()]
+  async function targets(level: MapLevel = 'test'): Promise<CatalogTarget[]> {
+    return [...(await readTargets(level)).entries()]
       .map(([code, e]) => ({ code, name: e.name, loinc: e.loinc, retired: e.retired }))
       .sort((a, b) => compare(a.code, b.code));
   }
