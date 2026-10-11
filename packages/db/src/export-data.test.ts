@@ -20,9 +20,12 @@ describe('EXTERNAL_TABLE_COLUMNS', () => {
   // facility_registry is included deliberately: the warehouse copy of the facility register
   // (migration 021), rebuilt by publishFacilityMap. It carries no patient data. It is in no
   // query model and no Data Exposure policy, so only custom SQL reaches it.
-  it('covers the 7 canonical fact tables, the terminology dimension, the facility_map dimension, the facility_registry copy, the ingest_events ledger, and the lab_request_attributes table', () => {
+  //
+  // test_map is included deliberately: the warehouse copy of the test mappings (migration 023). It
+  // holds lab codes and catalog names, no patient data, and it is governed in Data Exposure.
+  it('covers the 7 canonical fact tables, the terminology dimension, the facility_map dimension, the facility_registry copy, the test_map copy, the ingest_events ledger, and the lab_request_attributes table', () => {
     expect(Object.keys(EXTERNAL_TABLE_COLUMNS).sort()).toEqual(
-      ['diagnostic_reports', 'facilities', 'facility_map', 'facility_registry', 'ingest_events', 'lab_request_attributes', 'lab_requests', 'lab_results', 'patients', 'questionnaire_responses', 'specimens', 'terminology_codes'],
+      ['diagnostic_reports', 'facilities', 'facility_map', 'facility_registry', 'ingest_events', 'lab_request_attributes', 'lab_requests', 'lab_results', 'patients', 'questionnaire_responses', 'specimens', 'terminology_codes', 'test_map'],
     );
   });
   it('every table includes id + provenance columns', () => {
@@ -44,7 +47,8 @@ describe('EXTERNAL_TABLE_COLUMNS', () => {
       if (table === 'facility_registry') { expect(cols).toContain('id'); continue; }
       expect(cols).toContain('id');
       expect(cols).toContain('source_system');
-      if (table === 'facility_map') continue;
+      // test_map is a rebuilt projection like facility_map: no batch produced it. Named explicitly.
+      if (table === 'facility_map' || table === 'test_map') continue;
       expect(cols).toContain('batch_id');
     }
   });

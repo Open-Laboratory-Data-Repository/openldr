@@ -384,6 +384,27 @@ A category answer is `"kind": "existing"` with a `code`, or `"kind": "new"` with
 openldr test-catalog export --out catalog.csv
 ```
 
+Map lab test codes to catalog tests. See **Mapping lab test codes** in the in-app Test catalog guide. The system is a URN, as shown in the System column of the Observed tab. For DISA data it is `urn:openldr:disa`:
+
+```sh
+openldr test-catalog map list --status unmapped --json
+openldr test-catalog map set urn:openldr:disa POCVR HIVVL
+openldr test-catalog map clear urn:openldr:disa POCVR --force
+openldr test-catalog map export --out mappings.csv
+openldr test-catalog map import mappings.csv
+openldr test-catalog map import mappings.csv --apply --force
+openldr test-catalog map rebuild --apply
+```
+
+- `map list` lists the lab test codes in the warehouse with their catalog mapping. `--status` takes `unmapped`, `mapped`, `ambiguous` or `all`. `--search`, `--limit` (1 to 200, 25 by default) and `--offset` narrow and page the list.
+- `map set <system> <code> <catalog-code>` maps one code to a catalog test.
+- `map clear <system> <code>` removes a mapping. It refuses without `--force`.
+- `map export` writes every observed code and its mapping as CSV, in the layout `map import` reads. `--out` names a file. Without it the CSV goes to standard output.
+- `map import <file>` shows what would change and writes nothing. `--apply --force` writes it. It refuses without both.
+- `map rebuild` shows what the warehouse copy `test_map` would hold. `--apply` writes it.
+
+Each change is recorded in the audit log as the CLI user.
+
 ### Français
 
 Le catalogue des examens est la liste nationale des examens. C'est un système de codes de la page Terminologie, **Test catalog**. Ses catégories forment un second système de codes, **Test categories**, avec cinq catégories au départ : Chemistry, Haematology, Microbiology, Serology et Molecular. Modifiez les catégories sur la page Terminologie.
@@ -428,6 +449,27 @@ Une réponse de catégorie est `"kind": "existing"` avec un `code`, ou `"kind": 
 ```sh
 openldr test-catalog export --out catalog.csv
 ```
+
+Associer des codes de test de laboratoire à des tests du catalogue. Voir **Associer les codes de test du laboratoire** dans le guide Catalogue des examens de l'application. Le système est un URN, comme dans la colonne Système de l'onglet Observés. Pour les données DISA, c'est `urn:openldr:disa` :
+
+```sh
+openldr test-catalog map list --status unmapped --json
+openldr test-catalog map set urn:openldr:disa POCVR HIVVL
+openldr test-catalog map clear urn:openldr:disa POCVR --force
+openldr test-catalog map export --out mappings.csv
+openldr test-catalog map import mappings.csv
+openldr test-catalog map import mappings.csv --apply --force
+openldr test-catalog map rebuild --apply
+```
+
+- `map list` liste les codes de test de laboratoire de l'entrepôt avec leur correspondance. `--status` accepte `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (de 1 à 200, 25 par défaut) et `--offset` filtrent et paginent la liste.
+- `map set <system> <code> <catalog-code>` associe un code à un test du catalogue.
+- `map clear <system> <code>` supprime une correspondance. Elle refuse sans `--force`.
+- `map export` écrit tous les codes observés et leur correspondance en CSV, dans la disposition que lit `map import`. `--out` nomme un fichier. Sans lui, le CSV va sur la sortie standard.
+- `map import <file>` montre ce qui changerait et n'écrit rien. `--apply --force` l'écrit. Elle refuse sans les deux.
+- `map rebuild` montre ce que contiendrait la copie d'entrepôt `test_map`. `--apply` l'écrit.
+
+Chaque changement est inscrit au journal d'audit au nom de l'utilisateur de la CLI.
 
 ### Português
 
@@ -474,6 +516,27 @@ Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "ne
 openldr test-catalog export --out catalog.csv
 ```
 
+Associar códigos de teste do laboratório a testes do catálogo. Veja **Associar códigos de teste do laboratório** no guia Catálogo de exames da aplicação. O sistema é um URN, como na coluna Sistema do separador Observados. Para dados DISA, é `urn:openldr:disa`:
+
+```sh
+openldr test-catalog map list --status unmapped --json
+openldr test-catalog map set urn:openldr:disa POCVR HIVVL
+openldr test-catalog map clear urn:openldr:disa POCVR --force
+openldr test-catalog map export --out mappings.csv
+openldr test-catalog map import mappings.csv
+openldr test-catalog map import mappings.csv --apply --force
+openldr test-catalog map rebuild --apply
+```
+
+- `map list` lista os códigos de teste do laboratório no armazém com a sua correspondência. `--status` aceita `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (de 1 a 200, 25 por omissão) e `--offset` filtram e paginam a lista.
+- `map set <system> <code> <catalog-code>` associa um código a um teste do catálogo.
+- `map clear <system> <code>` remove uma correspondência. Recusa sem `--force`.
+- `map export` escreve todos os códigos observados e a sua correspondência em CSV, no formato que `map import` lê. `--out` indica um ficheiro. Sem ele, o CSV vai para a saída padrão.
+- `map import <file>` mostra o que mudaria e não escreve nada. `--apply --force` escreve-o. Recusa sem ambos.
+- `map rebuild` mostra o que a cópia do armazém `test_map` teria. `--apply` escreve-a.
+
+Cada alteração fica no registo de auditoria em nome do utilizador da CLI.
+
 ## Install a content pack
 
 ### English
@@ -483,7 +546,7 @@ openldr market install <bundle-dir> --dry-run
 openldr market install <bundle-dir>
 ```
 
-`--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
+`--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. For each test-mappings step it lists the test mappings it would map, keep and skip. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
 
 ### Français
 
@@ -492,7 +555,7 @@ openldr market install <bundle-dir> --dry-run
 openldr market install <bundle-dir>
 ```
 
-`--dry-run` exécute les contrôles et affiche les étapes. Pour chaque étape de mise en correspondance des liens, elle affiche le nombre de codes qu'elle lierait. Elle n'écrit rien. Un pack de contenu doit être signé par un éditeur. Installer un pack déjà installé exige `--force`. Un pack dont la dernière installation a échoué s'installe de nouveau sans cette option. `openldr market update` accepte les mêmes options. Il installe une version plus récente d'un pack installé sans `--force`. Il refuse la même version ou une version plus ancienne, et un pack qui n'est pas installé, sauf avec `--force`. `--json` donne une sortie lisible par machine. `openldr market list` affiche les packs avec leur statut. La CLI enregistre l'acteur `cli`.
+`--dry-run` exécute les contrôles et affiche les étapes. Pour chaque étape de mise en correspondance des liens, elle affiche le nombre de codes qu'elle lierait. Pour chaque étape de correspondances de tests, elle liste les correspondances de tests qu'elle créerait, conserverait et ignorerait. Elle n'écrit rien. Un pack de contenu doit être signé par un éditeur. Installer un pack déjà installé exige `--force`. Un pack dont la dernière installation a échoué s'installe de nouveau sans cette option. `openldr market update` accepte les mêmes options. Il installe une version plus récente d'un pack installé sans `--force`. Il refuse la même version ou une version plus ancienne, et un pack qui n'est pas installé, sauf avec `--force`. `--json` donne une sortie lisible par machine. `openldr market list` affiche les packs avec leur statut. La CLI enregistre l'acteur `cli`.
 
 ### Português
 
@@ -501,4 +564,4 @@ openldr market install <bundle-dir> --dry-run
 openldr market install <bundle-dir>
 ```
 
-`--dry-run` executa as verificações e mostra os passos. Para cada passo de correspondência de ligações, mostra quantos códigos ligaria. Não escreve nada. Um pacote de conteúdo tem de ser assinado por um editor. Instalar um pacote já instalado exige `--force`. Um pacote cuja última instalação falhou instala-se de novo sem esta opção. `openldr market update` aceita as mesmas opções. Instala uma versão mais recente de um pacote instalado sem `--force`. Recusa a mesma versão ou uma mais antiga, e um pacote que não está instalado, exceto com `--force`. `--json` produz saída legível por máquina. `openldr market list` mostra os pacotes com o seu estado. A CLI regista o ator como `cli`.
+`--dry-run` executa as verificações e mostra os passos. Para cada passo de correspondência de ligações, mostra quantos códigos ligaria. Para cada passo de correspondências de testes, lista as correspondências de testes que criaria, manteria e ignoraria. Não escreve nada. Um pacote de conteúdo tem de ser assinado por um editor. Instalar um pacote já instalado exige `--force`. Um pacote cuja última instalação falhou instala-se de novo sem esta opção. `openldr market update` aceita as mesmas opções. Instala uma versão mais recente de um pacote instalado sem `--force`. Recusa a mesma versão ou uma mais antiga, e um pacote que não está instalado, exceto com `--force`. `--json` produz saída legível por máquina. `openldr market list` mostra os pacotes com o seu estado. A CLI regista o ator como `cli`.

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { makeMigratedDb } from '@openldr/db/testing';
@@ -36,6 +36,7 @@ function fakeCtx() {
     terminology: { admin, ontology: { unlink: async (id: string) => { ctxState.unlinked.push(id); } } },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
+    testMapping: { requestRebuild: async () => {} },
     terminologyJobs: {
       hasActive: async () => ctxState.active,
       enqueue: async (input: any) => { ctxState.enqueued.push(input); return { id: 'tij_1', status: 'queued', ...input }; },
@@ -645,5 +646,88 @@ describe('facility mapping mutations enqueue a facility-map-rebuild (Task 6)', (
     const res = await app.inject({ method: 'DELETE', url: `/api/terminology/mappings/${id}` });
     expect(res.statusCode).toBe(204);
     expect(await rebuildKinds(facilityJobs)).toContain('facility-map-rebuild');
+  });
+});
+
+// Test mapping spec 4.3: a mapping into (or out of) the test catalog changes the warehouse copy
+// test_map, so these routes ask for a rebuild. A mapping elsewhere must not.
+describe('test mapping: mapping mutations ask for a test_map rebuild', () => {
+  const CATALOG = 'urn:openldr:codesystem:test-catalog';
+  const body = (over: Record<string, unknown> = {}) => ({
+    toSystem: CATALOG, toCode: 'VL', toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true, ...over,
+  });
+
+  async function realApp() {
+    const internalDb = await makeMigratedDb();
+    const requestRebuild = vi.fn(async () => {});
+    const ctx = {
+      terminology: { admin: createTerminologyAdminStore(internalDb) },
+      audit: { record: async () => {} },
+      logger: { error() {}, warn() {}, info() {} },
+      internalDb,
+      facilityJobs: createFacilityJobStore(internalDb),
+      testMapping: { requestRebuild },
+    } as unknown as AppContext;
+    const app = Fastify();
+    registerErrorHandler(app);
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['terminology.manage'] };
+    });
+    registerTerminologyAdminRoutes(app, ctx);
+    return { app, requestRebuild };
+  }
+
+  const from = { fromSystem: 'urn:openldr:disa', fromCode: 'HIVVL' };
+  const post = (app: any, payload: Record<string, unknown>) => app.inject({
+    method: 'POST',
+    url: `/api/terminology/terms/${encodeURIComponent('urn:openldr:disa')}/${encodeURIComponent('HIVVL')}/mappings`,
+    payload,
+  });
+
+  it('asks for a test_map rebuild when a mapping into the test catalog is created', async () => {
+    const { app, requestRebuild } = await realApp();
+    const res = await post(app, body());
+    expect(res.statusCode).toBe(201);
+    expect(requestRebuild).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not ask for a rebuild for a mapping that has nothing to do with the catalog', async () => {
+    const { app, requestRebuild } = await realApp();
+    const res = await post(app, body({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }));
+    expect(res.statusCode).toBe(201);
+    expect(requestRebuild).not.toHaveBeenCalled();
+  });
+
+  it('asks for a rebuild when a catalog mapping is updated and when it is deleted', async () => {
+    const { app, requestRebuild } = await realApp();
+    const id = (await post(app, body())).json().mapping.id;
+    requestRebuild.mockClear();
+    const put = await app.inject({ method: 'PUT', url: `/api/terminology/mappings/${id}`, payload: { ...body({ toCode: 'VL2' }), ...from } });
+    expect(put.statusCode).toBe(200);
+    expect(requestRebuild).toHaveBeenCalledTimes(1);
+    const del = await app.inject({ method: 'DELETE', url: `/api/terminology/mappings/${id}` });
+    expect(del.statusCode).toBe(204);
+    expect(requestRebuild).toHaveBeenCalledTimes(2);
+  });
+
+  it('asks for a rebuild when a PUT moves the mapping source onto the catalog', async () => {
+    const { app, requestRebuild } = await realApp();
+    const id = (await post(app, body({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }))).json().mapping.id;
+    expect(requestRebuild).not.toHaveBeenCalled();
+    const put = await app.inject({
+      method: 'PUT', url: `/api/terminology/mappings/${id}`,
+      payload: { ...body({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }), fromSystem: CATALOG, fromCode: 'VL' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(requestRebuild).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks for a rebuild when a catalog mapping is retargeted away from the catalog', async () => {
+    const { app, requestRebuild } = await realApp();
+    const id = (await post(app, body())).json().mapping.id;
+    requestRebuild.mockClear();
+    const put = await app.inject({ method: 'PUT', url: `/api/terminology/mappings/${id}`, payload: { ...body({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }), ...from } });
+    expect(put.statusCode).toBe(200);
+    expect(requestRebuild).toHaveBeenCalledTimes(1);
   });
 });

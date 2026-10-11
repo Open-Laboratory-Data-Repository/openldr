@@ -31,6 +31,9 @@ export const HARDCODED_DENY_UNION: Record<string, string[]> = {
   // `source_system`, `performer_system` and `source_code` are deliberately NOT hidden: the
   // seeded reports join facility_map on those three (packages/reporting/src/seed/report-seeds.ts).
   facility_map: ['id', 'registry_id'],
+  // test_map holds lab codes and catalog names, no patient data. Hide only the surrogate id; report
+  // SQL joins on level, source_system and source_code.
+  test_map: ['id'],
 };
 
 /** Columns classified as PII for the Data Exposure UI badge + un-hide confirmation ONLY.
@@ -41,6 +44,7 @@ export const PII_COLUMNS: Record<string, string[]> = {
   // facility_map holds facility names, codes and administrative areas — no patient data — so no
   // column gets the PII badge or the un-hide confirmation.
   facility_map: [],
+  test_map: [],
   lab_request_attributes: ['value_text'],
 };
 

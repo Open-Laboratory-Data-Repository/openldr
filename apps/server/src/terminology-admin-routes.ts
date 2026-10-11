@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { gunzipSync } from 'node:zlib';
-import { resolveCodingSystemId, type AppContext } from '@openldr/bootstrap';
+import { resolveCodingSystemId, mappingTouchesTestMap, type AppContext } from '@openldr/bootstrap';
 import { appError, redact } from '@openldr/core';
 import { FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import { z } from 'zod';
@@ -265,6 +265,8 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
           ctx.logger.error({ err, mappingId: created.mapping.id }, 'failed to enqueue a facility-map-rebuild job after saving a facility mapping');
         }
       }
+      // Test mapping spec 4.3: a mapping into the catalog, or a catalog test's LOINC link, changes test_map.
+      if (mappingTouchesTestMap(system, parsed.data.toSystem)) void ctx.testMapping.requestRebuild();
       await recordAudit(ctx, req, { action: 'term_mapping.create', entityType: 'term_mapping', entityId: created.mapping.id, before: null, after: created.mapping, metadata: { draftCreated: created.draftCreated, superseded: created.superseded } });
       reply.code(201);
       // The response shape is unchanged (`{ mapping, draftCreated }`, what studio's
@@ -286,7 +288,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       // facility resolution, so the dimension is stale, yet `isFacilityTarget(parsed.data)` is false
       // and nothing would be queued. The UI would say the row is no longer a facility mapping while
       // reports kept resolving that observed string to the old facility, indefinitely.
-      const previous = await ctx.internalDb.selectFrom('term_mappings').select(['to_system']).where('id', '=', id).executeTakeFirst();
+      const previous = await ctx.internalDb.selectFrom('term_mappings').select(['to_system', 'from_system']).where('id', '=', id).executeTakeFirst();
       // A PUT retargets one existing row, so it cannot ADD a competing active mapping — but it can
       // re-activate a superseded one while another is active, which is the same violation by a
       // different route. `saveExclusive` with this row's id covers both.
@@ -304,6 +306,10 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
           ctx.logger.error({ err, mappingId: id }, 'failed to enqueue a facility-map-rebuild job after updating a facility mapping');
         }
       }
+      if (mappingTouchesTestMap(parsed.data.fromSystem ?? previous?.from_system, parsed.data.toSystem)
+        || (previous && mappingTouchesTestMap(previous.from_system, previous.to_system))) {
+        void ctx.testMapping.requestRebuild();
+      }
       // A PUT supersedes too, so it owes the same accountability record the POST above writes —
       // otherwise a deactivation reached through PUT is invisible in the audit log while the
       // identical one reached through POST is not. The response shape is unchanged.
@@ -317,7 +323,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     try {
       // Task 6: the target system decides whether this delete is a facility-dimension event, and it
       // only lives on the row being removed — read it BEFORE the delete, since it is gone after.
-      const row = await ctx.internalDb.selectFrom('term_mappings').select(['to_system']).where('id', '=', id).executeTakeFirst();
+      const row = await ctx.internalDb.selectFrom('term_mappings').select(['to_system', 'from_system']).where('id', '=', id).executeTakeFirst();
       await admin.termMappings.delete(id);
       // Same reasoning as POST/PUT above: removing a facility mapping makes the report-facing
       // dimension stale too, so it gets the same scoped, contained enqueue.
@@ -328,6 +334,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
           ctx.logger.error({ err, mappingId: id }, 'failed to enqueue a facility-map-rebuild job after deleting a facility mapping');
         }
       }
+      if (row && mappingTouchesTestMap(row.from_system, row.to_system)) void ctx.testMapping.requestRebuild();
       await recordAudit(ctx, req, { action: 'term_mapping.delete', entityType: 'term_mapping', entityId: id, before: null, after: null });
       reply.code(204); return null;
     }

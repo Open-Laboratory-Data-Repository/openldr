@@ -9,6 +9,7 @@ import { StripedEmpty } from '@/components/ui/striped-empty';
 import { LoadingState } from '@/components/ui/spinner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -21,6 +22,7 @@ import {
 import { translateFilters } from '@/test-catalog/catalogFilters';
 import { TestSheet, type TestSheetTarget } from '@/test-catalog/TestSheet';
 import { ImportCatalogSheet } from '@/test-catalog/ImportCatalogSheet';
+import { ObservedCodesTab } from '@/test-catalog/ObservedCodesTab';
 
 // Test catalog S2 (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.3). Server-paged with
 // named filters, as Notifications.tsx is. The toolbar menu, row menu and empty state copy
@@ -186,158 +188,171 @@ export function TestCatalog() {
 
   return (
     <AppShell title={t('testCatalog.title')} fullBleed>
-      <div className="flex min-h-0 flex-1 flex-col" data-testid="test-catalog-page">
-        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:gap-2 sm:py-2">
-          <DataTableToolbar
-            columns={columns}
-            filters={table.filters}
-            onFiltersChange={table.setFilters}
-            sorts={table.sorts}
-            onSortsChange={table.setSorts}
-            visibleIds={table.visibleIds}
-            onVisibleIdsChange={table.setVisibleIds}
-            onResetColumns={table.resetColumns}
-            onResetAll={() => { table.resetAll(); setSearch(''); }}
-            searchValue={search}
-            onSearchChange={setSearch}
-            searchPlaceholder={t('testCatalog.searchPlaceholder')}
-            actions={canManage ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost" size="icon" className="h-8 w-8"
-                    data-testid="test-catalog-menu-trigger" aria-label={t('testCatalog.menuLabel')}
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {ownedHere && (
-                    <DropdownMenuItem data-testid="add-test" onSelect={() => setSheet({ kind: 'create' })}>
-                      {t('testCatalog.add')}
-                    </DropdownMenuItem>
-                  )}
-                  {ownedHere && (
-                    <DropdownMenuItem data-testid="import-tests" onSelect={() => setImporting(true)}>
-                      {t('testCatalog.importAction')}
-                    </DropdownMenuItem>
-                  )}
-                  {/* Any install can export, a lab that receives central's catalog included. */}
-                  <DropdownMenuItem
-                    data-testid="export-tests"
-                    onSelect={() => {
-                      downloadTestCatalogCsv().catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
-                    }}
-                  >
-                    {t('testCatalog.exportAction')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : undefined}
-          />
-          <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
-          {!ownedHere && <div className="text-xs text-muted-foreground">{t('testCatalog.fromCentral')}</div>}
+      <Tabs defaultValue="tests" className="flex min-h-0 flex-1 flex-col">
+        <div className="border-b border-border px-4">
+          <TabsList className="border-b-0">
+            <TabsTrigger value="tests" data-testid="test-catalog-tab-tests">{t('testCatalog.tabs.tests')}</TabsTrigger>
+            <TabsTrigger value="observed" data-testid="test-catalog-tab-observed">{t('testCatalog.tabs.observed')}</TabsTrigger>
+          </TabsList>
         </div>
+        <TabsContent value="tests" className="flex min-h-0 flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col" data-testid="test-catalog-page">
+            <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:gap-2 sm:py-2">
+              <DataTableToolbar
+                columns={columns}
+                filters={table.filters}
+                onFiltersChange={table.setFilters}
+                sorts={table.sorts}
+                onSortsChange={table.setSorts}
+                visibleIds={table.visibleIds}
+                onVisibleIdsChange={table.setVisibleIds}
+                onResetColumns={table.resetColumns}
+                onResetAll={() => { table.resetAll(); setSearch(''); }}
+                searchValue={search}
+                onSearchChange={setSearch}
+                searchPlaceholder={t('testCatalog.searchPlaceholder')}
+                actions={canManage ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost" size="icon" className="h-8 w-8"
+                        data-testid="test-catalog-menu-trigger" aria-label={t('testCatalog.menuLabel')}
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {ownedHere && (
+                        <DropdownMenuItem data-testid="add-test" onSelect={() => setSheet({ kind: 'create' })}>
+                          {t('testCatalog.add')}
+                        </DropdownMenuItem>
+                      )}
+                      {ownedHere && (
+                        <DropdownMenuItem data-testid="import-tests" onSelect={() => setImporting(true)}>
+                          {t('testCatalog.importAction')}
+                        </DropdownMenuItem>
+                      )}
+                      {/* Any install can export, a lab that receives central's catalog included. */}
+                      <DropdownMenuItem
+                        data-testid="export-tests"
+                        onSelect={() => {
+                          downloadTestCatalogCsv().catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
+                        }}
+                      >
+                        {t('testCatalog.exportAction')}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : undefined}
+              />
+              <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
+              {!ownedHere && <div className="text-xs text-muted-foreground">{t('testCatalog.fromCentral')}</div>}
+            </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {loading && <LoadingState className="min-h-[16rem] flex-1" label={t('common.loading')} />}
-          {!loading && error && (
-            <div className="flex min-h-[16rem] flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>
-          )}
-          {!loading && !error && rows.length === 0 && (
-            <StripedEmpty className="min-h-[16rem] flex-1">
-              {hasFilters ? t('testCatalog.noMatch') : t('testCatalog.empty')}
-            </StripedEmpty>
-          )}
-          {/* Rendered only when populated: an empty table's header cells force intrinsic width and
-              scroll the pane sideways on a phone (AGENTS.md section 6). The table's own wrapper
-              scrolls sideways when the columns do not fit. */}
-          {!loading && !error && rows.length > 0 && (
-            <Table wrapperClassName="min-h-0 flex-1">
-              <TableHeader className="sticky top-0 z-10 bg-background">
-                <TableRow>
-                  {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
-                  {canManage && (
-                    <TableHead className="w-12"><span className="sr-only">{t('testCatalog.rowActions')}</span></TableHead>
-                  )}
-                </TableRow>
-              </TableHeader>
-              <TableBody className="[&_tr:last-child]:border-b">
-                {rows.map((r) => (
-                  <TableRow key={r.code} data-testid={`test-row-${r.code}`}>
-                    {table.visibleColumns.map((c) => <TableCell key={c.id} className={c.cellClassName}>{c.accessor(r)}</TableCell>)}
-                    {canManage && (
-                      <TableCell>
-                        <div className="flex items-center justify-end">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost" size="icon" className="h-8 w-8 shrink-0"
-                                data-testid={`test-actions-${r.code}`}
-                                aria-label={t('testCatalog.actionsFor', { code: r.code })}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem data-testid={`test-edit-${r.code}`} onSelect={() => setSheet({ kind: 'edit', test: r })}>
-                                {t('testCatalog.edit')}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                data-testid={`test-switch-${r.code}`}
-                                onSelect={() => void runRowAction(
-                                  () => setCatalogTestEnabled(r.code, !r.lab.enabled),
-                                  t(r.lab.enabled ? 'testCatalog.switchedOff' : 'testCatalog.switchedOn', { code: r.code }),
-                                )}
-                              >
-                                {r.lab.enabled ? t('testCatalog.switchOff') : t('testCatalog.switchOn')}
-                              </DropdownMenuItem>
-                              {ownedHere && (
-                                <DropdownMenuItem
-                                  data-testid={`test-retire-${r.code}`}
-                                  onSelect={() => void runRowAction(
-                                    () => setCatalogTestActive(r.code, !r.active),
-                                    t(r.active ? 'testCatalog.retiredToast' : 'testCatalog.restoredToast', { code: r.code }),
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {loading && <LoadingState className="min-h-[16rem] flex-1" label={t('common.loading')} />}
+              {!loading && error && (
+                <div className="flex min-h-[16rem] flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>
+              )}
+              {!loading && !error && rows.length === 0 && (
+                <StripedEmpty className="min-h-[16rem] flex-1">
+                  {hasFilters ? t('testCatalog.noMatch') : t('testCatalog.empty')}
+                </StripedEmpty>
+              )}
+              {/* Rendered only when populated: an empty table's header cells force intrinsic width and
+                  scroll the pane sideways on a phone (AGENTS.md section 6). The table's own wrapper
+                  scrolls sideways when the columns do not fit. */}
+              {!loading && !error && rows.length > 0 && (
+                <Table wrapperClassName="min-h-0 flex-1">
+                  <TableHeader className="sticky top-0 z-10 bg-background">
+                    <TableRow>
+                      {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
+                      {canManage && (
+                        <TableHead className="w-12"><span className="sr-only">{t('testCatalog.rowActions')}</span></TableHead>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="[&_tr:last-child]:border-b">
+                    {rows.map((r) => (
+                      <TableRow key={r.code} data-testid={`test-row-${r.code}`}>
+                        {table.visibleColumns.map((c) => <TableCell key={c.id} className={c.cellClassName}>{c.accessor(r)}</TableCell>)}
+                        {canManage && (
+                          <TableCell>
+                            <div className="flex items-center justify-end">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                                    data-testid={`test-actions-${r.code}`}
+                                    aria-label={t('testCatalog.actionsFor', { code: r.code })}
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem data-testid={`test-edit-${r.code}`} onSelect={() => setSheet({ kind: 'edit', test: r })}>
+                                    {t('testCatalog.edit')}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    data-testid={`test-switch-${r.code}`}
+                                    onSelect={() => void runRowAction(
+                                      () => setCatalogTestEnabled(r.code, !r.lab.enabled),
+                                      t(r.lab.enabled ? 'testCatalog.switchedOff' : 'testCatalog.switchedOn', { code: r.code }),
+                                    )}
+                                  >
+                                    {r.lab.enabled ? t('testCatalog.switchOff') : t('testCatalog.switchOn')}
+                                  </DropdownMenuItem>
+                                  {ownedHere && (
+                                    <DropdownMenuItem
+                                      data-testid={`test-retire-${r.code}`}
+                                      onSelect={() => void runRowAction(
+                                        () => setCatalogTestActive(r.code, !r.active),
+                                        t(r.active ? 'testCatalog.retiredToast' : 'testCatalog.restoredToast', { code: r.code }),
+                                      )}
+                                    >
+                                      {r.active ? t('testCatalog.retire') : t('testCatalog.restore')}
+                                    </DropdownMenuItem>
                                   )}
-                                >
-                                  {r.active ? t('testCatalog.retire') : t('testCatalog.restore')}
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
 
-        <TablePagination
-          page={table.page}
-          pageSize={table.pageSize}
-          total={total}
-          onPageChange={table.setPage}
-          onPageSizeChange={table.setPageSize}
-          leftSlot={<span className="text-muted-foreground">{t('testCatalog.count', { count: total })}</span>}
-        />
+            <TablePagination
+              page={table.page}
+              pageSize={table.pageSize}
+              total={total}
+              onPageChange={table.setPage}
+              onPageSizeChange={table.setPageSize}
+              leftSlot={<span className="text-muted-foreground">{t('testCatalog.count', { count: total })}</span>}
+            />
 
-        <TestSheet
-          target={sheet}
-          options={options}
-          ownedHere={ownedHere}
-          onClose={() => setSheet(null)}
-          onSaved={() => { void load(); }}
-        />
-        <ImportCatalogSheet
-          open={importing}
-          options={options}
-          onClose={() => setImporting(false)}
-          onImported={() => { void load(); loadOptions(); }}
-        />
-      </div>
+            <TestSheet
+              target={sheet}
+              options={options}
+              ownedHere={ownedHere}
+              onClose={() => setSheet(null)}
+              onSaved={() => { void load(); }}
+            />
+            <ImportCatalogSheet
+              open={importing}
+              options={options}
+              onClose={() => setImporting(false)}
+              onImported={() => { void load(); loadOptions(); }}
+            />
+          </div>
+        </TabsContent>
+        <TabsContent value="observed" className="flex min-h-0 flex-1 flex-col">
+          <ObservedCodesTab canManage={canManage} />
+        </TabsContent>
+      </Tabs>
     </AppShell>
   );
 }

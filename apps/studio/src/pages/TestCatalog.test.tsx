@@ -21,6 +21,7 @@ vi.mock('@/api', async (orig) => {
     setCatalogTestEnabled: vi.fn(),
     setCatalogTestActive: vi.fn(),
     downloadTestCatalogCsv: vi.fn(),
+    listObservedTestCodes: vi.fn(async () => ({ rows: [], total: 0, warehouse: { stale: false, error: null } })),
     // AppShell's notification bell and plugin menu call these on mount (see Notifications.test.tsx).
     listNotifications: vi.fn(async () => ({ notifications: [], unreadCount: 0, total: 0 })),
     listPluginUis: vi.fn(async () => []),
@@ -231,5 +232,13 @@ describe('Test catalog page', () => {
     openMenu('test-catalog-menu-trigger');
     fireEvent.click(await screen.findByTestId('import-tests'));
     expect(await screen.findByRole('heading', { name: 'Import tests' })).toBeInTheDocument();
+  });
+
+  it('switches to the Observed tab', async () => {
+    renderPage();
+    // Radix Tabs switch on mouseDown, not click.
+    fireEvent.mouseDown(await screen.findByTestId('test-catalog-tab-observed'), { button: 0, ctrlKey: false });
+    expect(await screen.findByTestId('observed-codes-tab')).toBeInTheDocument();
+    expect(api.listObservedTestCodes).toHaveBeenCalled();
   });
 });

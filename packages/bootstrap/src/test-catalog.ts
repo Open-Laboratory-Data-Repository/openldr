@@ -249,6 +249,9 @@ export interface TestCatalogDeps {
   db: Kysely<InternalSchema>;
   admin: TerminologyAdminStore;
   ops: Operations;
+  /** Called after a change that alters a test's name, category, LOINC link or status. Test mapping
+   *  rebuilds test_map from it (docs/superpowers/specs/2026-10-11-test-mapping-design.md, 4.3). */
+  onChanged?: () => void;
 }
 
 /**
@@ -441,6 +444,7 @@ export function withLabTestsList(
 
 export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   const { db } = deps;
+  const changed = (): void => { deps.onChanged?.(); };
 
   async function ownedHere(): Promise<boolean> {
     // A lab that has pulled central's catalog has this row stamped 'central' by its terminology drain
@@ -684,6 +688,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     // saved without it, and saving again links it.
     await writeConcept(code, t, null);
     await writeLoincLink(code, t.loinc);
+    changed();
     return saved(code);
   }
 
@@ -696,6 +701,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     const t = await validate(input);
     await writeConcept(code, t, stored.properties);
     await writeLoincLink(code, t.loinc);
+    changed();
     return saved(code);
   }
 
@@ -766,6 +772,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
       .where('system', '=', TEST_CATALOG_SYSTEM).where('code', '=', code)
       .execute();
     await markTerminologyChanged(db, TEST_CATALOG_SYSTEM);
+    changed();
     return saved(code);
   }
 
@@ -967,6 +974,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
     // as the loaders send them (packages/db/src/terminology-sync.ts). A failed import sends none.
     await markTerminologyChanged(db, TEST_CATALOG_SYSTEM);
     if (report.categoriesToAdd.length) await markTerminologyChanged(db, TEST_CATEGORY_SYSTEM);
+    changed();
     return report;
   }
 

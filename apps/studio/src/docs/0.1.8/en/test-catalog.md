@@ -67,3 +67,37 @@ A test can name the result parameters it yields: haemoglobin, a CD4 count, a mal
 A numeric parameter can carry reference ranges. Each range has a low, a high, a unit, and an optional name such as Highland women. It may also name a sex and an age window. A range row's ⋯ menu moves it up, moves it down or removes it, and the parameter's ⋯ menu adds one. Order decides which range starts selected at the bench. Two ranges on one parameter cannot share a name. A test that names no parameters still works: its sheet asks only for a specimen.
 
 From the command line, `openldr test-catalog params <code>` prints a test's parameters, and `--set <file>` replaces them from a JSON file.
+
+## Mapping lab test codes
+
+Each lab system names its tests its own way. DISA calls viral load `HIVVL`, `POCVR` or `POHVL`. Map each of those codes to the catalog test it means, and reports can count the catalog test whatever the lab called it.
+
+Open the **Observed** tab. It lists every test code in the warehouse, with its description, the number of requests and the date last seen. A code you mapped before any data arrived shows with 0 requests. Filter by **Unmapped**, **Mapped** or **Ambiguous**.
+
+To map a code, open its row's ⋯ menu and choose **Map to catalog test**. Pick the test, then choose **Save** from the sheet's ⋯ menu. **Clear mapping** in the same menu removes it.
+
+Codes match the way the warehouse database compares text. On Postgres that is exact, so `HIVVL` and `HIVVL ` (with a trailing space) are two codes. On MSSQL and MySQL with their default settings, upper and lower case count as the same, and MSSQL also ignores trailing spaces. On MSSQL and MySQL, two mappings whose codes differ only by case (`HIVVL` and `hivvl`) collide in `test_map`, and every rebuild fails until one is cleared. Map only one of them.
+
+A code is **Ambiguous** when it has two catalog mappings, for example one made on the Terminology page and one here. Reports leave it out until you map it again. When central has mapped a code, central's mapping is the one reports use, and a lab's own mapping for that code is ignored.
+
+A lab cannot change a mapping central sent down. Its row says **From central**.
+
+### Mapping many codes at once
+
+**Export CSV** from the tab's ⋯ menu writes every observed code. Fill in `catalog_code`, or `loinc` when you know only the LOINC code, then **Import CSV**. The import shows new, changed, unchanged and refused rows before it writes anything. A row with both columns blank is left as it is. A row is refused when the warehouse holds that code only with surrounding spaces, because the file reader trims cells. Map such a code on the Observed tab or with `openldr test-catalog map set`. On a lab, a row whose code central has mapped is refused unless it asks for the mapping central already has.
+
+### Reports
+
+Mappings are copied to the warehouse table `test_map`. A report joins it like this:
+
+```sql
+select tm.catalog_name, count(*)
+from lab_requests lr
+join test_map tm on tm.level = 'test'
+  and tm.source_system = lr.panel_system
+  and tm.source_code = lr.panel_code
+where tm.loinc = '25836-8'
+group by tm.catalog_name
+```
+
+The copy updates when a mapping or a catalog test changes, and at start-up. If an update fails, the tab says so. Choose **Rebuild warehouse copy** from its ⋯ menu.

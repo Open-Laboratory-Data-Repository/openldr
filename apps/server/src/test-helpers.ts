@@ -554,6 +554,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     facilityRegistry: {} as never,
     // No route test reaches it through this context. test-catalog-routes.test.ts builds its own fake.
     testCatalog: {} as never,
+    testMapping: {} as never,
     // Same shape as `facilityRegistry` above: a bare `{}` has no `enqueue`, so any route this fake
     // context reaches that calls `ctx.facilityJobs.enqueue(...)` fails with a bare
     // `TypeError: enqueue is not a function` rather than a helpful message. `facilityRegistry`'s

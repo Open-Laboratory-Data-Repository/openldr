@@ -27,7 +27,10 @@ export function Combobox({
   }, [options, query]);
 
   return (
-    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQuery(''); }}>
+    // `modal`: inside a Sheet, react-remove-scroll only lets the Sheet's own subtree scroll, so the
+    // portalled list would not take the wheel or touch scroll. A modal popover brings its own scroll
+    // allowance (AGENTS.md section 6). Only a real browser can confirm it; jsdom cannot scroll.
+    <Popover modal open={open} onOpenChange={(o) => { setOpen(o); if (!o) setQuery(''); }}>
       <PopoverTrigger asChild>
         <Button variant="outline" disabled={disabled} className="w-full justify-between font-normal" aria-label={selected ? selected.label : placeholder}>
           <TruncatedText text={selected ? selected.label : placeholder} className={cn('min-w-0', !selected && 'text-muted-foreground')} />

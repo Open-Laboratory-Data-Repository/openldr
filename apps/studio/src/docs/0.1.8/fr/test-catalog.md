@@ -67,3 +67,37 @@ Un examen peut nommer les paramètres de résultat qu'il produit : hémoglobine,
 Un paramètre numérique peut porter des intervalles de référence. Chaque intervalle a une borne basse, une borne haute, une unité, et un nom facultatif, par exemple Femmes des hauts plateaux. Il peut aussi nommer un sexe et une tranche d'âge. Le menu ⋯ de la ligne d'un intervalle le monte, le descend ou le supprime, et le menu ⋯ du paramètre en ajoute un. L'ordre décide quel intervalle est sélectionné au départ à la paillasse. Deux intervalles d'un même paramètre ne peuvent pas porter le même nom. Un examen sans paramètre fonctionne toujours : son panneau ne demande qu'un prélèvement.
 
 En ligne de commande, `openldr test-catalog params <code>` affiche les paramètres d'un examen, et `--set <fichier>` les remplace depuis un fichier JSON.
+
+## Associer les codes de test du laboratoire
+
+Chaque système de laboratoire nomme ses tests à sa façon. DISA appelle la charge virale `HIVVL`, `POCVR` ou `POHVL`. Associez chacun de ces codes au test du catalogue qu'il désigne, et les rapports peuvent compter le test du catalogue quel que soit le nom donné par le laboratoire.
+
+Ouvrez l'onglet **Observés**. Il liste tous les codes de test de l'entrepôt, avec leur description, le nombre de demandes et la date où ils ont été vus pour la dernière fois. Un code associé avant l'arrivée des données s'affiche avec 0 demande. Filtrez par **Sans correspondance**, **Avec correspondance** ou **Ambigu**.
+
+Pour associer un code, ouvrez le menu ⋯ de sa ligne et choisissez **Associer à un test du catalogue**. Choisissez le test, puis **Enregistrer** dans le menu ⋯ du panneau. **Supprimer la correspondance**, dans le même menu, l'enlève.
+
+Les codes sont comparés comme le fait la base de données de l'entrepôt. Sur Postgres, la comparaison est exacte : `HIVVL` et `HIVVL ` (avec une espace à la fin) sont deux codes. Sur MSSQL et MySQL avec leurs réglages par défaut, majuscules et minuscules comptent pour pareil, et MSSQL ignore aussi les espaces à la fin. Sur MSSQL et MySQL, deux correspondances dont les codes ne diffèrent que par la casse (`HIVVL` et `hivvl`) entrent en conflit dans `test_map`, et chaque reconstruction échoue tant que l'une n'est pas supprimée. N'associez qu'une seule des deux.
+
+Un code est **Ambigu** quand il a deux correspondances avec le catalogue, par exemple une faite sur la page Terminologie et une faite ici. Les rapports l'ignorent tant que vous ne l'avez pas associé de nouveau. Quand le central a associé un code, c'est la correspondance du central que les rapports utilisent, et celle du laboratoire pour ce code est ignorée.
+
+Un laboratoire ne peut pas modifier une correspondance envoyée par le central. Sa ligne indique **Du central**.
+
+### Associer plusieurs codes à la fois
+
+**Exporter en CSV**, dans le menu ⋯ de l'onglet, écrit tous les codes observés. Remplissez `catalog_code`, ou `loinc` quand vous ne connaissez que le code LOINC, puis **Importer un CSV**. L'import montre les lignes nouvelles, modifiées, inchangées et refusées avant d'écrire quoi que ce soit. Une ligne où les deux colonnes sont vides reste inchangée. Une ligne est refusée quand l'entrepôt ne contient ce code qu'avec des espaces autour, car le lecteur de fichier supprime les espaces des cellules. Associez ce code dans l'onglet Observés ou avec `openldr test-catalog map set`. Dans un laboratoire, une ligne dont le code est associé par le central est refusée, sauf si elle demande la correspondance que le central a déjà.
+
+### Rapports
+
+Les correspondances sont copiées dans la table d'entrepôt `test_map`. Un rapport la joint ainsi :
+
+```sql
+select tm.catalog_name, count(*)
+from lab_requests lr
+join test_map tm on tm.level = 'test'
+  and tm.source_system = lr.panel_system
+  and tm.source_code = lr.panel_code
+where tm.loinc = '25836-8'
+group by tm.catalog_name
+```
+
+La copie se met à jour quand une correspondance ou un test du catalogue change, et au démarrage. Si une mise à jour échoue, l'onglet l'indique. Choisissez **Reconstruire la copie de l’entrepôt** dans son menu ⋯.

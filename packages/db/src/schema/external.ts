@@ -201,6 +201,21 @@ export interface FacilityMapTable {
   updated_at: Generated<Date>;
 }
 
+/** The warehouse copy of the test mappings (migration 023). One row per mapped lab code. */
+export interface TestMapTable {
+  id: string;
+  /** 'test' for a lab test (panel) code. The result-field slice adds 'result'. */
+  level: string;
+  source_system: string;
+  source_code: string;
+  catalog_code: string | null;
+  catalog_name: string | null;
+  category: string | null;
+  /** The catalog test's LOINC link. Portable pack SQL filters on it. */
+  loinc: string | null;
+  updated_at: Generated<Date>;
+}
+
 /** One row per arrival of a clinical resource — the warehouse mirror of `fhir.resource_history`.
  *  Deliberately NOT ProvenanceColumns: resource_history carries no provenance, and fhir_resources'
  *  provenance describes the current version, not the one that arrived. */
@@ -269,6 +284,7 @@ export interface ExternalSchema {
   terminology_codes: TerminologyCodesTable;
   facility_map: FacilityMapTable;
   facility_registry: WarehouseFacilityRegistryTable;
+  test_map: TestMapTable;
   ingest_events: IngestEventsTable;
   lab_request_attributes: LabRequestAttributesTable;
 }
@@ -290,6 +306,7 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   terminology_codes: ['id', 'value_set_id', 'value_set_url', 'system', 'code', 'display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facility_map: ['id', 'source_system', 'performer_system', 'source_code', 'registry_id', 'local_code', 'name', 'level', 'status', 'region', 'district', 'council', 'national_system', 'national_code', 'resolved_via', 'updated_at'],
   facility_registry: ['id', 'facility_system', 'facility_code', 'name', 'level', 'ownership', 'status', 'register_state', 'country', 'zone', 'region', 'district', 'council', 'ward', 'village', 'address_text', 'phone', 'latitude', 'longitude', 'extras', 'updated_at'],
+  test_map: ['id', 'level', 'source_system', 'source_code', 'catalog_code', 'catalog_name', 'category', 'loinc', 'updated_at'],
   ingest_events: ['resource_type', 'resource_id', 'version', 'recorded_at'],
   lab_request_attributes: ['id', 'lab_request_id', 'system', 'code', 'value_text', 'value_number', 'value_datetime', 'value_boolean', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
 };

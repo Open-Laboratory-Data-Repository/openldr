@@ -74,6 +74,8 @@ function setup(over: Record<string, unknown> = {}) {
     register: vi.fn(async (i: any) => { calls.push(`register:${i.apply}`); return { ok: true as const }; }),
     linkMatching: vi.fn(async () => { calls.push('linkMatching'); return { ok: true as const, counts: { linked: 2 } }; }),
     previewLinkMatching: vi.fn(async () => { calls.push('previewLinkMatching'); return { ok: true as const, wouldLink: 2 }; }),
+    planTestMappings: vi.fn(async (m: any[]) => { calls.push('planTestMappings'); return { mapped: m.slice(0, 1).map((x) => ({ ...x, catalogCode: 'VL' })), kept: [], skipped: m.slice(1).map((x) => ({ system: x.system, code: x.code, reason: 'no catalog test is linked to LOINC 9999-9' })) }; }),
+    applyTestMappings: vi.fn(async (m: any[]) => { calls.push('applyTestMappings'); return { mapped: m.slice(0, 1).map((x) => ({ ...x, catalogCode: 'VL' })), kept: [], skipped: m.slice(1).map((x) => ({ system: x.system, code: x.code, reason: 'no catalog test is linked to LOINC 9999-9' })) }; }),
     ...over,
   };
   const installer = createContentPackInstaller(deps as never);
@@ -83,7 +85,7 @@ function setup(over: Record<string, unknown> = {}) {
 const events = (audit: { record: { mock: { calls: unknown[][] } } }) => audit.record.mock.calls.map((c) => c[0] as any);
 
 const actor = { id: 'admin', name: 'admin' };
-const WRITES = ['loadResource', 'register:true', 'linkMatching', 'importQueries'];
+const WRITES = ['loadResource', 'register:true', 'linkMatching', 'importQueries', 'applyTestMappings'];
 
 describe('createContentPackInstaller', () => {
   it('check returns the summary and calls no write dep', async () => {
@@ -336,6 +338,34 @@ describe('createContentPackInstaller', () => {
     const s = setup({ previewLinkMatching: vi.fn(async () => ({ ok: false, reason: 'unknown-register', error: 'unknown register' })) });
     const out = await s.installer.check(bundle);
     expect(out.linkPreview).toEqual([{ registerUrl: 'urn:test:reg', wouldLink: null }]);
+    await cleanup();
+  });
+
+  it('a test-mappings step plans in check, writes in install, and audits the counts', async () => {
+    const pack = { formatVersion: 1, steps: [{ kind: 'test-mappings', mappings: [
+      { system: 'urn:openldr:disa', code: 'HIVVL', loinc: '25836-8' },
+      { system: 'urn:openldr:disa', code: 'WW', loinc: '9999-9' },
+    ] }] };
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+
+    const checked = await s.installer.check(bundle);
+    expect(checked.testMapPreview).toEqual([{
+      mapped: [{ system: 'urn:openldr:disa', code: 'HIVVL', loinc: '25836-8', catalogCode: 'VL' }],
+      kept: [],
+      skipped: [{ system: 'urn:openldr:disa', code: 'WW', reason: 'no catalog test is linked to LOINC 9999-9' }],
+    }]);
+    expect(s.calls.filter((c) => WRITES.includes(c))).toEqual([]);
+
+    const res = await s.installer.install(bundle, { actor });
+    expect(res.status).toBe('installed');
+    expect(events(s.audit).find((e) => e.action === 'test_mapping.pack')).toMatchObject({
+      entityType: 'test_mapping',
+      metadata: {
+        mapped: [{ system: 'urn:openldr:disa', code: 'HIVVL', catalogCode: 'VL' }], kept: [], skipped: [{ code: 'WW' }],
+        mappedCount: 1, keptCount: 0, skippedCount: 1,
+      },
+    });
     await cleanup();
   });
 

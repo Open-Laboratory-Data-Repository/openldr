@@ -44,3 +44,17 @@ describe('content pack', () => {
     ]);
   });
 });
+
+describe('test-mappings step', () => {
+  const step = { kind: 'test-mappings', mappings: [{ system: 'urn:openldr:disa', code: 'HIVVL', loinc: '25836-8' }, { system: 'urn:openldr:disa', code: 'POCVR', loinc: '25836-8' }] };
+
+  it('parses and summarises as "Test mappings" with the count', () => {
+    const pack = parseContentPack({ formatVersion: 1, steps: [step] });
+    expect(summarizeContentPack(pack)).toEqual([{ kind: 'test-mappings', label: 'Test mappings', count: 2 }]);
+  });
+
+  it('refuses a malformed LOINC code and an empty list', () => {
+    expect(() => parseContentPack({ formatVersion: 1, steps: [{ ...step, mappings: [{ system: 'x', code: 'y', loinc: 'abc' }] }] })).toThrow(/invalid pack/);
+    expect(() => parseContentPack({ formatVersion: 1, steps: [{ ...step, mappings: [] }] })).toThrow(/invalid pack/);
+  });
+});

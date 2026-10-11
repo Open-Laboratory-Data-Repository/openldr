@@ -65,6 +65,8 @@ Rows dropped from a newer pack's register are reported. They are never retired.
 
 A register step can list extra columns. Their values go into each facility's `extras`, keyed by the column name in lowercase. Custom queries read them from the warehouse table `facility_registry`. Any other column the register does not know still refuses the pack. An older CE refuses a pack that lists extra columns, and writes nothing.
 
+A pack can map lab test codes to catalog tests (**Test mappings**). It names each code's LOINC code, and CE maps it to the catalog test linked to that LOINC. A code the pack cannot resolve is skipped and listed: no catalog test has that LOINC, or two do. A code already mapped here is kept. The CLI dry run (`openldr market install <dir> --dry-run`) lists what it would map, keep and skip.
+
 Choose **Detach** to forget the install record. It keeps everything the pack wrote. There is no uninstall.
 
 From the command line, `openldr market install <bundle-dir> --dry-run` runs the checks and prints the steps, with how many codes each link-matching step would link. It writes nothing.

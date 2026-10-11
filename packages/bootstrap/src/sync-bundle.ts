@@ -22,6 +22,7 @@ import {
 import { readSigningKeys } from './sync-settings';
 import { ensureCentralKeypair, SiteNotFoundError } from './enrollment';
 import { servePull, drainConcepts, drainMapElements } from './sync-serve';
+import { isTestMapRelevantRecord } from './test-mapping';
 import type { AppContext } from './index';
 
 // Sync S5 — the offline store-and-forward orchestrations: the bundle equivalents of the S1 push +
@@ -326,12 +327,17 @@ export async function importPullBundle(
       if (rec.entityType === 'terminology_system') {
         await bundleTerminologyBulk(ctx, rec).syncSystem(rec.entityId, rec.body);
         applied++;
+        // Same rule as the pull worker's applyRecord in index.ts: the catalog's tests feed test_map.
+        if (isTestMapRelevantRecord(rec)) void ctx.testMapping.requestRebuild();
       } else if (rec.entityType === 'concept_map') {
         await bundleTerminologyBulk(ctx, rec).syncConceptMap(rec.entityId, rec.body);
         applied++;
       } else {
         const result = await applyReferenceChange(rec as PullRecord);
-        if (result === 'applied') applied++;
+        if (result === 'applied') {
+          applied++;
+          if (isTestMapRelevantRecord(rec)) void ctx.testMapping.requestRebuild();
+        }
       }
     } catch (e) {
       ctx.logger.warn(

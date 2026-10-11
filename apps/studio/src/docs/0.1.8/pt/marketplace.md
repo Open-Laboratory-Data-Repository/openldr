@@ -62,6 +62,8 @@ As linhas que faltam no registo de um pacote mais recente são assinaladas. Nunc
 
 Um passo de registo pode listar colunas extra. Os seus valores vão para os `extras` de cada unidade, com o nome da coluna em minúsculas. As consultas personalizadas leem-nos na tabela `facility_registry` do armazém. Qualquer outra coluna que o registo não conheça continua a fazer recusar o pacote. Uma versão mais antiga do CE recusa um pacote que liste colunas extra, e não escreve nada.
 
+Um pacote pode associar códigos de teste do laboratório a testes do catálogo (**Correspondências de testes**). Indica o código LOINC de cada código, e o CE associa-o ao teste do catálogo ligado a esse LOINC. Um código que o pacote não consegue resolver é ignorado e listado: nenhum teste do catálogo tem esse LOINC, ou dois têm. Um código já associado aqui é mantido. A simulação na linha de comandos (`openldr market install <dir> --dry-run`) lista o que associaria, manteria e ignoraria.
+
 Escolha **Desanexar** para esquecer o registo de instalação. Tudo o que o pacote escreveu fica. Não existe desinstalação.
 
 Na linha de comandos, `openldr market install <bundle-dir> --dry-run` executa as verificações e mostra os passos, com quantos códigos cada passo de correspondência de ligações ligaria. Não escreve nada.
