@@ -294,3 +294,6 @@ Each came from a task review.
 4. On a lab, a CSV row that asks for the mapping central already has counts as unchanged. Only a row that would change it is refused.
 5. The file reader trims every cell, so a CSV row is refused when the warehouse holds its code only with surrounding spaces. Such a code is mapped on the Observed tab or with `map set`.
 6. Codes match the way the warehouse database compares text: exact on Postgres; MSSQL and MySQL default collations ignore case, and MSSQL ignores trailing spaces. The docs say so.
+7. When central has mapped a code, central's mapping is the one reports use. A lab's own row for that code is ignored. Only rows of the same origin naming different targets make a code ambiguous.
+8. The Observed list caches the warehouse scan for 60 seconds. A newly ingested code can take up to a minute to appear.
+9. The pack step's audit row lists the codes it mapped, kept and skipped. The install result does not carry the counts; the CLI dry run and the audit do.

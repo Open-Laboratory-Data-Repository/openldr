@@ -76,9 +76,9 @@ Ouvrez l'onglet **Observés**. Il liste tous les codes de test de l'entrepôt, a
 
 Pour associer un code, ouvrez le menu ⋯ de sa ligne et choisissez **Associer à un test du catalogue**. Choisissez le test, puis **Enregistrer** dans le menu ⋯ du panneau. **Supprimer la correspondance**, dans le même menu, l'enlève.
 
-Les codes sont comparés comme le fait la base de données de l'entrepôt. Sur Postgres, la comparaison est exacte : `HIVVL` et `HIVVL ` (avec une espace à la fin) sont deux codes. Sur MSSQL et MySQL avec leurs réglages par défaut, majuscules et minuscules comptent pour pareil, et MSSQL ignore aussi les espaces à la fin.
+Les codes sont comparés comme le fait la base de données de l'entrepôt. Sur Postgres, la comparaison est exacte : `HIVVL` et `HIVVL ` (avec une espace à la fin) sont deux codes. Sur MSSQL et MySQL avec leurs réglages par défaut, majuscules et minuscules comptent pour pareil, et MSSQL ignore aussi les espaces à la fin. Sur MSSQL et MySQL, deux correspondances dont les codes ne diffèrent que par la casse (`HIVVL` et `hivvl`) entrent en conflit dans `test_map`, et chaque reconstruction échoue tant que l'une n'est pas supprimée. N'associez qu'une seule des deux.
 
-Un code est **Ambigu** quand il a deux correspondances avec le catalogue, par exemple une faite sur la page Terminologie et une faite ici. Les rapports l'ignorent tant que vous ne l'avez pas associé de nouveau.
+Un code est **Ambigu** quand il a deux correspondances avec le catalogue, par exemple une faite sur la page Terminologie et une faite ici. Les rapports l'ignorent tant que vous ne l'avez pas associé de nouveau. Quand le central a associé un code, c'est la correspondance du central que les rapports utilisent, et celle du laboratoire pour ce code est ignorée.
 
 Un laboratoire ne peut pas modifier une correspondance envoyée par le central. Sa ligne indique **Du central**.
 

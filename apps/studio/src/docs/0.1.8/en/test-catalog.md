@@ -76,9 +76,9 @@ Open the **Observed** tab. It lists every test code in the warehouse, with its d
 
 To map a code, open its row's ⋯ menu and choose **Map to catalog test**. Pick the test, then choose **Save** from the sheet's ⋯ menu. **Clear mapping** in the same menu removes it.
 
-Codes match the way the warehouse database compares text. On Postgres that is exact, so `HIVVL` and `HIVVL ` (with a trailing space) are two codes. On MSSQL and MySQL with their default settings, upper and lower case count as the same, and MSSQL also ignores trailing spaces.
+Codes match the way the warehouse database compares text. On Postgres that is exact, so `HIVVL` and `HIVVL ` (with a trailing space) are two codes. On MSSQL and MySQL with their default settings, upper and lower case count as the same, and MSSQL also ignores trailing spaces. On MSSQL and MySQL, two mappings whose codes differ only by case (`HIVVL` and `hivvl`) collide in `test_map`, and every rebuild fails until one is cleared. Map only one of them.
 
-A code is **Ambiguous** when it has two catalog mappings, for example one made on the Terminology page and one here. Reports leave it out until you map it again.
+A code is **Ambiguous** when it has two catalog mappings, for example one made on the Terminology page and one here. Reports leave it out until you map it again. When central has mapped a code, central's mapping is the one reports use, and a lab's own mapping for that code is ignored.
 
 A lab cannot change a mapping central sent down. Its row says **From central**.
 

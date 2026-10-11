@@ -76,9 +76,9 @@ Abra o separador **Observados**. Lista todos os códigos de teste do armazém, c
 
 Para associar um código, abra o menu ⋯ da sua linha e escolha **Associar a um teste do catálogo**. Escolha o teste e depois **Guardar** no menu ⋯ do painel. **Remover correspondência**, no mesmo menu, retira-a.
 
-Os códigos são comparados como a base de dados do armazém compara texto. No Postgres a comparação é exata: `HIVVL` e `HIVVL ` (com um espaço no fim) são dois códigos. No MSSQL e no MySQL com as definições por omissão, maiúsculas e minúsculas contam como iguais, e o MSSQL ignora também os espaços no fim.
+Os códigos são comparados como a base de dados do armazém compara texto. No Postgres a comparação é exata: `HIVVL` e `HIVVL ` (com um espaço no fim) são dois códigos. No MSSQL e no MySQL com as definições por omissão, maiúsculas e minúsculas contam como iguais, e o MSSQL ignora também os espaços no fim. No MSSQL e no MySQL, duas correspondências cujos códigos diferem apenas na capitalização (`HIVVL` e `hivvl`) entram em conflito em `test_map`, e cada reconstrução falha até uma delas ser removida. Associe só uma delas.
 
-Um código é **Ambíguo** quando tem duas correspondências com o catálogo, por exemplo uma feita na página Terminologia e outra feita aqui. Os relatórios deixam-no de fora até o associar de novo.
+Um código é **Ambíguo** quando tem duas correspondências com o catálogo, por exemplo uma feita na página Terminologia e outra feita aqui. Os relatórios deixam-no de fora até o associar de novo. Quando o central associou um código, é a correspondência do central que os relatórios usam, e a do laboratório para esse código é ignorada.
 
 Um laboratório não pode alterar uma correspondência enviada pelo central. A sua linha indica **Do central**.
 
