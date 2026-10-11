@@ -5,7 +5,7 @@ import '@/i18n';
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, listObservedTestCodes: vi.fn(), getMappingTargets: vi.fn(async () => []), rebuildTestMap: vi.fn(), downloadTestMappingsCsv: vi.fn() };
+  return { ...actual, listObservedTestCodes: vi.fn(), getMappingTargets: vi.fn(async () => []), rebuildTestMap: vi.fn(), downloadTestMappingsCsv: vi.fn(), getObservedSystems: vi.fn(async () => []) };
 });
 
 import * as api from '@/api';
@@ -17,6 +17,13 @@ const ROW: api.ObservedTestCode = {
   status: 'mapped', catalog: { code: 'VL', name: 'HIV viral load', loinc: '25836-8' }, centralManaged: false,
 };
 
+// Radix menus open on pointerDown in jsdom, with Enter as the fallback (as in ImportMappingsSheet.test.tsx).
+function openMenu(testId: string) {
+  const trigger = screen.getByTestId(testId);
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+}
+
 beforeEach(() => { vi.mocked(api.listObservedTestCodes).mockReset(); });
 
 describe('ObservedCodesTab', () => {
@@ -27,7 +34,7 @@ describe('ObservedCodesTab', () => {
     expect(await screen.findByTestId('observed-row-HIVVL')).toBeTruthy();
     expect(screen.getByText('HIV viral load')).toBeTruthy();
     expect(screen.getByText(/25836-8/)).toBeTruthy();
-    expect(vi.mocked(api.listObservedTestCodes)).toHaveBeenCalledWith({ status: 'all', q: undefined, limit: 25, offset: 0 });
+    expect(vi.mocked(api.listObservedTestCodes)).toHaveBeenCalledWith({ level: 'test', status: 'all', q: undefined, limit: 25, offset: 0 });
   });
 
   it('shows the striped empty state when there are no codes, and no table', async () => {
@@ -66,7 +73,7 @@ describe('ObservedCodesTab', () => {
     render(<ObservedCodesTab canManage />);
     await screen.findByTestId('observed-row-HIVVL');
     fireEvent.click(screen.getByTestId('observed-status-unmapped'));
-    await waitFor(() => expect(vi.mocked(api.listObservedTestCodes)).toHaveBeenLastCalledWith({ status: 'unmapped', q: undefined, limit: 25, offset: 0 }));
+    await waitFor(() => expect(vi.mocked(api.listObservedTestCodes)).toHaveBeenLastCalledWith({ level: 'test', status: 'unmapped', q: undefined, limit: 25, offset: 0 }));
   });
   it('ignores a slower earlier response that arrives after a newer one', async () => {
     type Result = Awaited<ReturnType<typeof api.listObservedTestCodes>>;
@@ -81,5 +88,26 @@ describe('ObservedCodesTab', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(screen.queryByTestId('observed-row-HIVVL')).toBeNull();
     expect(screen.getByTestId('observed-row-CD4')).toBeTruthy();
+  });
+
+  it('switches to result codes, with their own column names and the match action', async () => {
+    vi.mocked(api.listObservedTestCodes).mockResolvedValue({ rows: [ROW], total: 1, warehouse: { stale: false, error: null } });
+    render(<ObservedCodesTab canManage />);
+    await screen.findByTestId('observed-row-HIVVL');
+    fireEvent.click(screen.getByTestId('observed-level-result'));
+    await waitFor(() => expect(vi.mocked(api.listObservedTestCodes)).toHaveBeenLastCalledWith({ level: 'result', status: 'all', q: undefined, limit: 25, offset: 0 }));
+    await screen.findByTestId('observed-row-HIVVL');
+    expect(screen.getByText('Result field')).toBeTruthy();
+    openMenu('observed-menu-trigger');
+    expect(await screen.findByTestId('observed-match')).toBeTruthy();
+  });
+
+  it('hides the match action at the test level', async () => {
+    vi.mocked(api.listObservedTestCodes).mockResolvedValue({ rows: [ROW], total: 1, warehouse: { stale: false, error: null } });
+    render(<ObservedCodesTab canManage />);
+    await screen.findByTestId('observed-row-HIVVL');
+    openMenu('observed-menu-trigger');
+    await screen.findByTestId('observed-export');
+    expect(screen.queryByTestId('observed-match')).toBeNull();
   });
 });
