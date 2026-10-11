@@ -38,6 +38,10 @@ import {
   runTestCatalogList, runTestCatalogChange, runTestCatalogImport, runTestCatalogExport, runTestCatalogParams,
   type TestCatalogListOpts, type TestCatalogImportOpts,
 } from './test-catalog';
+import {
+  runTestMappingList, runTestMappingSet, runTestMappingClear, runTestMappingExport, runTestMappingImport,
+  runTestMappingRebuild, type TestMappingListOpts,
+} from './test-mapping';
 import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
 
@@ -392,6 +396,47 @@ export function buildProgram(): Command {
     .action(async (code: string, opts: { set?: string; json: boolean }) => {
       process.exitCode = await runTestCatalogParams(code, opts);
     });
+
+  // Test mapping spec 4.6: lab test codes mapped to catalog tests. Clear and an applied import take --force.
+  const testMap = testCatalog.command('map').description('Map lab test codes to catalog tests');
+  testMap.command('list')
+    .description('List the lab test codes seen in the warehouse, with their catalog mapping')
+    .option('--status <unmapped|mapped|ambiguous|all>', 'which codes to list (default: all)')
+    .option('--search <text>', 'match code, description or catalog name')
+    .option('--limit <n>', 'rows per page, 1 to 200 (default: 25)')
+    .option('--offset <n>', 'rows to skip (default: 0)')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: TestMappingListOpts) => { process.exitCode = await runTestMappingList(opts); });
+  testMap.command('set <system> <code> <catalog-code>')
+    .description('Map a lab test code to a catalog test')
+    .option('--json', 'emit JSON', false)
+    .action(async (system: string, code: string, catalogCode: string, opts: { json: boolean }) => {
+      process.exitCode = await runTestMappingSet(system, code, catalogCode, opts);
+    });
+  testMap.command('clear <system> <code>')
+    .description('Remove a lab test code\'s catalog mapping')
+    .option('--force', 'confirm the removal', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (system: string, code: string, opts: { force: boolean; json: boolean }) => {
+      process.exitCode = await runTestMappingClear(system, code, opts);
+    });
+  testMap.command('export')
+    .description('Write every observed code and its mapping as CSV, in the layout import reads')
+    .option('--out <file>', 'write to this file instead of standard output')
+    .action(async (opts: { out?: string }) => { process.exitCode = await runTestMappingExport(opts); });
+  testMap.command('import <file>')
+    .description('Import mappings from CSV. Shows what would change unless --apply --force is given.')
+    .option('--apply', 'write the changes', false)
+    .option('--force', 'confirm the write', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (file: string, opts: { apply: boolean; force: boolean; json: boolean }) => {
+      process.exitCode = await runTestMappingImport(file, opts);
+    });
+  testMap.command('rebuild')
+    .description('Rebuild the warehouse copy test_map. Shows what it would write unless --apply is given.')
+    .option('--apply', 'write test_map', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { apply: boolean; json: boolean }) => { process.exitCode = await runTestMappingRebuild(opts); });
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');
   // Task 4: CLI parity for Task 3's `GET /api/facilities` — the same `parseWhereFlags`/
