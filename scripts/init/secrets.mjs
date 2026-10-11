@@ -19,16 +19,49 @@ function setEnv(text, key, val) {
   return `${text.replace(/\n*$/, '')}\n${key}=${val}\n`;
 }
 
+const hex = (bytes) => randomBytes(bytes).toString('hex');
+
+// Garage refuses any other format: key ID is GK + 24 hex, secrets are 64 hex.
+const GENERATORS = {
+  S3_ACCESS_KEY_ID: () => `GK${hex(12)}`,
+  S3_SECRET_ACCESS_KEY: () => hex(32),
+  GARAGE_RPC_SECRET: () => hex(32),
+  GARAGE_ADMIN_TOKEN: () => hex(32),
+};
+
 // The committed dev/example values a real deployment must NOT keep. A key holding one of these (or
 // empty) is upgraded to a generated secret on first init; a key already holding a non-default value is
 // left untouched, so re-running init never rotates a live secret.
 const WEAK_DEFAULTS = {
   POSTGRES_PASSWORD: ['', 'openldr'],
-  S3_ACCESS_KEY_ID: ['', 'minioadmin'],
-  S3_SECRET_ACCESS_KEY: ['', 'minioadmin'],
+  S3_ACCESS_KEY_ID: ['', 'minioadmin', 'GK6f70656e6c64722d64657621'],
+  S3_SECRET_ACCESS_KEY: ['', 'minioadmin', '6465762d6f6e6c792d6761726167652d7365637265742d6b65792d3030303031'],
+  GARAGE_RPC_SECRET: ['', '6465762d6f6e6c792d6761726167652d7270632d7365637265742d3030303031'],
+  GARAGE_ADMIN_TOKEN: ['', '6465762d6f6e6c792d6761726167652d61646d696e2d746f6b656e2d30303031'],
   KEYCLOAK_ADMIN_PASSWORD: ['', 'admin'],
   KEYCLOAK_ADMIN_CLIENT_SECRET: ['', 'openldr-admin-dev-secret'],
 };
+
+const PRE_GARAGE_MESSAGE =
+  'This install predates 0.1.11: its storage settings are still MinIO. ' +
+  'Follow "Moving from MinIO to Garage" in the upgrading guide before you run init again. ' +
+  'Nothing was changed.';
+
+/** Throw when an existing .env.prod still describes MinIO. Garage rejects the old key format, and
+ *  init would otherwise carry on and start a stack that cannot reach its files. A weak default key
+ *  is fine: it is replaced with a Garage-format key below. */
+function assertNotPreGarage(text) {
+  const key = getEnv(text, 'S3_ACCESS_KEY_ID');
+  const endpoint = getEnv(text, 'S3_ENDPOINT');
+  const oldKey =
+    key !== undefined && !WEAK_DEFAULTS.S3_ACCESS_KEY_ID.includes(key) && !/^GK[0-9a-f]{24}$/.test(key);
+  const oldEndpoint = endpoint !== undefined && /^https?:\/\/minio:9000\/?$/i.test(endpoint.trim());
+  if (oldKey || oldEndpoint) {
+    const err = new Error(PRE_GARAGE_MESSAGE);
+    err.code = 'PRE_GARAGE_INSTALL';
+    throw err;
+  }
+}
 
 /**
  * Replace the committed weak default credentials in a .env.prod text with generated secrets, keeping
@@ -42,10 +75,11 @@ const WEAK_DEFAULTS = {
  * `kcClientSecret` (openldr-admin service account) and `labAdminPassword` (the seeded labadmin user).
  */
 export function ensureStackSecrets(envText, gen = randomSecret) {
+  assertNotPreGarage(envText);
   let text = envText;
   for (const [key, weak] of Object.entries(WEAK_DEFAULTS)) {
     const cur = getEnv(text, key);
-    if (cur === undefined || weak.includes(cur)) text = setEnv(text, key, gen());
+    if (cur === undefined || weak.includes(cur)) text = setEnv(text, key, (GENERATORS[key] ?? gen)());
   }
   // Keep the DB URLs' embedded password aligned with POSTGRES_PASSWORD (the source of truth), so a
   // regenerated password does not silently break the app's connection string.

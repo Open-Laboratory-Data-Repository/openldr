@@ -64,7 +64,7 @@ correspondem aos contentores incluídos. Altere-os apenas para usar infraestrutu
 | Variável | Omissão | Finalidade |
 | --- | --- | --- |
 | `AUTH_ADAPTER` | `keycloak` | Modo de início de sessão: `keycloak` ou `oidc`. Consulte [Fornecedores de autenticação](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Armazenamento de objetos para carregamentos e artefactos. |
+| `BLOB_ADAPTER` | `minio` | Armazenamento de objetos para carregamentos e artefactos. `minio` seleciona o adaptador S3, que também funciona com o Garage. |
 | `EVENTING_ADAPTER` | `pg` | Armazém de eventos usado pelos acionadores de workflow. |
 | `TARGET_STORE_ADAPTER` | `pg` | Motor do armazém analítico: `pg`, `mssql` ou `mysql`. |
 
@@ -72,19 +72,24 @@ Um destino de relatórios externo já não se escolhe aqui por adaptador. Crie a
 conector em **Definições > Conectores**. O plugin de destino é determinado a partir desse
 conector.
 
-## Armazenamento de objetos (S3 / MinIO)
+## Armazenamento de objetos (S3)
 
-O contentor MinIO incluído é compatível com S3. Aponte estas variáveis para qualquer
-endpoint S3 para usar armazenamento externo.
+O serviço `storage` incluído executa o Garage, um servidor compatível com S3. Aponte estas
+variáveis para qualquer endpoint S3 para usar outro.
 
 | Variável | Omissão | Finalidade |
 | --- | --- | --- |
-| `S3_ENDPOINT` | `http://minio:9000` | URL do endpoint S3. |
+| `S3_ENDPOINT` | `http://storage:3900` | URL do endpoint S3. |
 | `S3_REGION` | `us-east-1` | Região S3. |
 | `S3_ACCESS_KEY_ID` | gerada | Chave de acesso. |
 | `S3_SECRET_ACCESS_KEY` | gerada | Chave secreta. |
 | `S3_BUCKET` | `openldr` | Bucket que guarda carregamentos e artefactos. |
-| `S3_FORCE_PATH_STYLE` | `true` | Endereçamento por caminho (exigido pelo MinIO). |
+| `S3_FORCE_PATH_STYLE` | `true` | Endereçamento por caminho (exigido pelo armazenamento incluído). |
+| `GARAGE_RPC_SECRET` | gerada | Segredo interno do Garage, 64 carateres hexadecimais. |
+| `GARAGE_ADMIN_TOKEN` | gerada | Token da API de administração do Garage, 64 carateres hexadecimais. |
+
+O Garage só aceita um identificador de chave de acesso formado por `GK` seguido de 24
+carateres hexadecimais, e um segredo hexadecimal de 64 carateres. O instalador gera ambos.
 
 ## Autenticação (Keycloak / OIDC)
 

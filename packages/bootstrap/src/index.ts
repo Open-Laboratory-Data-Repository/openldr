@@ -1930,6 +1930,8 @@ export * from './policy';
 export { wipeInternalDatabase, clearAuditAndRunHistory, listInternalDataTables, buildTruncateSql } from './danger';
 export { recordAuditEvent } from './record-audit';
 export type { AuditActor, AuditDetails } from './record-audit';
+export { copyStorage } from './storage-copy';
+export type { StorageCopyReport } from './storage-copy';
 export {
   listNotifications, markNotificationsRead, markAllNotificationsRead,
   getNotificationPrefs, saveNotificationPrefs,

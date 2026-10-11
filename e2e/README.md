@@ -27,7 +27,7 @@ Uint8Array hex/base64 polyfill — a separate concern that stays.)
 
 ## Bring up + seed the stack
 
-    docker compose up -d        # Postgres / MinIO / Keycloak (git-ignored override ports)
+    docker compose up -d        # Postgres / storage (Garage) / Keycloak (git-ignored override ports)
     pnpm e2e:seed               # make sample -> build plugin -> db reset -> install plugin -> ingest WHONET
 
 `pnpm e2e:seed` needs Docker up and the Rust/wasi toolchain (for `build:plugins`).

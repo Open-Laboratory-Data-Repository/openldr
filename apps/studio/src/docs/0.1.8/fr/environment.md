@@ -66,7 +66,7 @@ infrastructure externe.
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
 | `AUTH_ADAPTER` | `keycloak` | Mode de connexion : `keycloak` ou `oidc`. Voir [Fournisseurs d'authentification](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Stockage objet des téléversements et des artefacts. |
+| `BLOB_ADAPTER` | `minio` | Stockage objet des téléversements et des artefacts. `minio` sélectionne l'adaptateur S3, qui fonctionne aussi avec Garage. |
 | `EVENTING_ADAPTER` | `pg` | Magasin d'événements utilisé par les déclencheurs de workflow. |
 | `TARGET_STORE_ADAPTER` | `pg` | Moteur de l'entrepôt analytique : `pg`, `mssql` ou `mysql`. |
 
@@ -74,19 +74,24 @@ Une cible de rapport externe ne se choisit plus ici par un adaptateur. Créez pl
 connecteur dans **Paramètres > Connecteurs**. Le plugin de destination est déterminé à
 partir de ce connecteur.
 
-## Stockage objet (S3 / MinIO)
+## Stockage objet (S3)
 
-Le conteneur MinIO fourni est compatible S3. Pointez ces variables vers n'importe quel
-point d'accès S3 pour utiliser un stockage externe.
+Le service `storage` fourni exécute Garage, un serveur compatible S3. Pointez ces variables
+vers n'importe quel point d'accès S3 pour en utiliser un autre.
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
-| `S3_ENDPOINT` | `http://minio:9000` | URL du point d'accès S3. |
+| `S3_ENDPOINT` | `http://storage:3900` | URL du point d'accès S3. |
 | `S3_REGION` | `us-east-1` | Région S3. |
 | `S3_ACCESS_KEY_ID` | générée | Clé d'accès. |
 | `S3_SECRET_ACCESS_KEY` | générée | Clé secrète. |
 | `S3_BUCKET` | `openldr` | Bucket qui contient les téléversements et les artefacts. |
-| `S3_FORCE_PATH_STYLE` | `true` | Adressage par chemin (requis par MinIO). |
+| `S3_FORCE_PATH_STYLE` | `true` | Adressage par chemin (requis par le stockage fourni). |
+| `GARAGE_RPC_SECRET` | générée | Secret interne de Garage, 64 caractères hexadécimaux. |
+| `GARAGE_ADMIN_TOKEN` | générée | Jeton de l'API d'administration de Garage, 64 caractères hexadécimaux. |
+
+Garage n'accepte qu'un identifiant de clé d'accès formé de `GK` suivi de 24 caractères
+hexadécimaux, et un secret hexadécimal de 64 caractères. L'installateur génère les deux.
 
 ## Authentification (Keycloak / OIDC)
 

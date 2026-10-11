@@ -10,10 +10,10 @@ path-routes every request from a single origin:
                                     ├── /api      ──▶ api       (fastify: REST API)
                                     ├── /health   ──▶ api
                                     └── /auth     ──▶ keycloak  (OIDC issuer, /auth base path)
-                                              api also talks to: postgres, minio (blob)
+                                              api also talks to: postgres, storage (blob)
 ```
 
-**Only the gateway publishes host ports (80/443).** postgres, minio, keycloak, web, studio, and api
+**Only the gateway publishes host ports (80/443).** postgres, storage, keycloak, web, studio, and api
 are reachable only on the compose network. Auth uses a split front/back channel: the browser hits the
 public issuer `https://<host>/auth/realms/openldr`, while the api validates tokens over the internal
 JWKS URL (`http://keycloak:8080/auth/...`) so it never depends on the gateway's cert.
@@ -30,7 +30,7 @@ OpenLDR CE ships five independently-versioned images on GHCR (GitHub Container R
 | `ghcr.io/open-laboratory-data-repository/openldr-gateway` | nginx reverse proxy (routes `/`→web, `/studio`→studio, `/api`+`/health`→api, `/auth`→keycloak) |
 | `ghcr.io/open-laboratory-data-repository/openldr-keycloak` | Keycloak 26 with the OpenLDR-branded login theme baked in |
 
-Postgres and MinIO use their stock upstream images.
+Postgres and the storage service (Garage) use OpenLDR copies of their upstream images on GHCR, pinned by digest.
 
 > **Upgrading an existing deployment:** the login theme is selected by the realm's `loginTheme`, which
 > Keycloak only applies when it **imports** the realm (`--import-realm` skips an already-imported realm).
@@ -274,7 +274,7 @@ Select the external database at install time with `--target-db` (default `postgr
 ## Environment
 
 All configuration is environment-driven — see **`.env.prod.example`** for the full, annotated set.
-Service hostnames (`postgres` / `minio` / `keycloak`) resolve on the compose network. For a **local
+Service hostnames (`postgres` / `storage` / `keycloak`) resolve on the compose network. For a **local
 demo without real login**, set `NODE_ENV=development` + `AUTH_DEV_BYPASS=true` in `.env.prod`
 (`AUTH_DEV_BYPASS` is rejected under `NODE_ENV=production`).
 

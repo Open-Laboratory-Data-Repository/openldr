@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { tagExistsInRegistry, imagesWithTag, findPrivatePackages, parseGhPages, IMAGE_NAMES } from './registry';
+import { tagExistsInRegistry, imagesWithTag, findPrivatePackages, findUnavailablePackages, parseGhPages, IMAGE_NAMES } from './registry';
 
 function fakeFetch(routes: Record<string, unknown>) {
   return vi.fn(async (path: string) => {
@@ -181,6 +181,18 @@ describe('findPrivatePackages', () => {
   it('reports a package whose visibility cannot be read', async () => {
     const f = fakeFetch({ 'orgs/acme/packages/container/a': { notVisibility: true } });
     expect(await findPrivatePackages(f, 'acme', ['a'])).toEqual(['a']);
+  });
+});
+
+describe('findUnavailablePackages', () => {
+  it('names private and unreadable packages and never throws', async () => {
+    const fetchJson = async (path: string) => {
+      if (path.endsWith('/garage')) return { visibility: 'public' };
+      if (path.endsWith('/node')) return { visibility: 'private' };
+      throw new Error('HTTP 404');
+    };
+    expect(await findUnavailablePackages(fetchJson, 'o', ['garage', 'node', 'mysql']))
+      .toEqual(['node (private)', 'mysql (missing or unreadable)']);
   });
 });
 

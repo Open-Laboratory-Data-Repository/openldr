@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 # openldr-api — the backend/API image (no SPA; the studio image serves the UI).
 # ---- build: install, build the server, produce a standalone deploy ----
-FROM node:22-bookworm-slim AS build
+# Third-party images come from our GHCR copies (deploy/third-party-images.json).
+FROM ghcr.io/open-laboratory-data-repository/node:22-bookworm-slim@sha256:0e2e23be93fe1467322fb0f91add6c27aeb6329fadcf17e9dd6c50daa6fd62a9 AS build
 RUN corepack enable
 WORKDIR /repo
 COPY . .
@@ -26,7 +27,7 @@ RUN mkdir -p /deploy/fixtures/fhir && cp packages/db/fixtures/fhir/*.gz /deploy/
 RUN mkdir -p /deploy-cli/fixtures/fhir && cp packages/db/fixtures/fhir/*.gz /deploy-cli/fixtures/fhir/
 
 # ---- runtime: slim node, non-root, API-only (no SPA — WEB_DIST_DIR unset) ----
-FROM node:22-bookworm-slim AS runtime
+FROM ghcr.io/open-laboratory-data-repository/node:22-bookworm-slim@sha256:0e2e23be93fe1467322fb0f91add6c27aeb6329fadcf17e9dd6c50daa6fd62a9 AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Open-Laboratory-Data-Repository/openldr"
 ENV NODE_ENV=production
 ENV PORT=3000

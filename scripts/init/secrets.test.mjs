@@ -60,6 +60,35 @@ describe('ensureStackSecrets', () => {
     expect(kcClientSecret).toBeTruthy();
     expect(envText).toContain(`KEYCLOAK_ADMIN_CLIENT_SECRET=${kcClientSecret}`);
   });
+
+  it('refuses an install that predates Garage, with a pointer to the upgrading guide', () => {
+    const oldKey = ['S3_ACCESS_KEY_ID=AKIAOLDMINIOKEY', 'S3_SECRET_ACCESS_KEY=oldminiosecret'].join('\n');
+    expect(() => ensureStackSecrets(oldKey, seqGen())).toThrow(/predates 0\.1\.10/);
+    expect(() => ensureStackSecrets(oldKey, seqGen())).toThrow(/Moving from MinIO to Garage/);
+    const oldEndpoint = ['S3_ENDPOINT=http://minio:9000', 'S3_ACCESS_KEY_ID=GK6f70656e6c64722d64657621'].join('\n');
+    expect(() => ensureStackSecrets(oldEndpoint, seqGen())).toThrow(/Moving from MinIO to Garage/);
+  });
+
+  it('accepts a Garage-format key and a storage endpoint', () => {
+    const ok = ['S3_ENDPOINT=http://storage:3900', 'S3_ACCESS_KEY_ID=GK0123456789abcdef01234567'].join('\n');
+    expect(() => ensureStackSecrets(ok, seqGen())).not.toThrow();
+  });
+
+  it('replaces the dev storage values with keys in the format Garage requires', () => {
+    const env = [
+      'S3_ACCESS_KEY_ID=GK6f70656e6c64722d64657621',
+      'S3_SECRET_ACCESS_KEY=6465762d6f6e6c792d6761726167652d7365637265742d6b65792d3030303031',
+      'GARAGE_RPC_SECRET=6465762d6f6e6c792d6761726167652d7270632d7365637265742d3030303031',
+      'GARAGE_ADMIN_TOKEN=6465762d6f6e6c792d6761726167652d61646d696e2d746f6b656e2d30303031',
+    ].join('\n');
+    const { envText } = ensureStackSecrets(env);
+    expect(envText).toMatch(/^S3_ACCESS_KEY_ID=GK[0-9a-f]{24}$/m);
+    expect(envText).not.toMatch(/^S3_ACCESS_KEY_ID=GK6f70656e6c64722d64657621$/m);
+    expect(envText).toMatch(/^S3_SECRET_ACCESS_KEY=[0-9a-f]{64}$/m);
+    expect(envText).toMatch(/^GARAGE_RPC_SECRET=[0-9a-f]{64}$/m);
+    expect(envText).toMatch(/^GARAGE_ADMIN_TOKEN=[0-9a-f]{64}$/m);
+    expect(envText).not.toMatch(/6465762d6f6e6c79/);
+  });
 });
 
 describe('patchRealmSecrets', () => {

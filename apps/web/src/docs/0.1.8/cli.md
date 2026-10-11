@@ -76,6 +76,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `sync` | Distributed (lab⇄central) sync: `status`, `now`, and central-side `enroll`, `list`, `rotate`, `revoke`. |
 | `errors` | List the error-code catalog. |
 | `update` | `check` whether a newer OpenLDR version has been published (exit 0 = up to date, 1 = an update is available, 2 = the check failed). |
+| `storage` | `copy` the objects of another S3 bucket into this install's storage. |
 | `target-store` | Test the target warehouse connection. |
 
 Mutating CLI commands (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,
@@ -176,6 +177,45 @@ Enroll a lab on the central server, then connect a lab to it:
 
 > Anything under `settings danger` is destructive (reset dashboards, clear audit,
 > factory reset). Those commands require `--force` and mirror the Studio danger zone.
+
+## Copy files between S3 stores
+
+`openldr storage copy` copies every object from another S3 bucket into this install's storage. Use it to move off MinIO, as the [upgrading guide](/docs/upgrading) describes. It reads the source and never changes it. It skips a key that is already on the target with the same size, so you can run it again to resume. A same-size object with different content is not copied again. It prints object counts and bytes for both sides, then checks that every source object is on the target at the same size. It exits non-zero if any is missing. Extra objects on the target are expected while the api runs, because it keeps writing new files there. They do not fail the check. The CLI records the actor as `cli`.
+
+| Flag | What it does |
+| --- | --- |
+| `--from-endpoint <url>` | Endpoint of the source store, for example `http://minio:9000`. |
+| `--from-key <key>` | Access key of the source store. |
+| `--from-secret <secret>` | Secret key of the source store. It shows in your shell history and the process list, so clear that history line afterwards. |
+| `--from-bucket <bucket>` | Bucket to copy from. |
+| `--from-region <region>` | Region of the source store. Default `us-east-1`. |
+| `--json` | Print the report as JSON. |
+
+## Copier des fichiers entre stockages S3
+
+`openldr storage copy` copie chaque objet d'un autre bucket S3 vers le stockage de cette installation. Servez-vous-en pour quitter MinIO, comme le décrit le [guide de mise à niveau](/docs/upgrading). La commande lit la source et ne la modifie jamais. Elle ignore une clé déjà présente dans la cible avec la même taille, donc vous pouvez la relancer pour reprendre. Un objet de même taille mais de contenu différent n'est pas recopié. Elle affiche le nombre d'objets et d'octets des deux côtés, puis vérifie que chaque objet de la source est dans la cible avec la même taille. Elle se termine avec un code non nul s'il en manque un. Des objets en plus dans la cible sont normaux tant que l'api tourne, car elle y écrit de nouveaux fichiers. Ils ne font pas échouer la vérification. Le CLI enregistre l'acteur sous le nom `cli`.
+
+| Option | Effet |
+| --- | --- |
+| `--from-endpoint <url>` | Point d'accès du stockage source, par exemple `http://minio:9000`. |
+| `--from-key <key>` | Clé d'accès du stockage source. |
+| `--from-secret <secret>` | Clé secrète du stockage source. Elle apparaît dans l'historique du shell et dans la liste des processus, donc effacez ensuite cette ligne de l'historique. |
+| `--from-bucket <bucket>` | Bucket à copier. |
+| `--from-region <region>` | Région du stockage source. `us-east-1` par défaut. |
+| `--json` | Affiche le rapport en JSON. |
+
+## Copiar ficheiros entre armazenamentos S3
+
+`openldr storage copy` copia cada objeto de outro bucket S3 para o armazenamento desta instalação. Use-o para sair do MinIO, como descreve o [guia de atualização](/docs/upgrading). O comando lê a origem e nunca a altera. Ignora uma chave que já esteja no destino com o mesmo tamanho, por isso pode executá-lo de novo para retomar. Um objeto com o mesmo tamanho mas conteúdo diferente não é copiado outra vez. Mostra o número de objetos e de bytes dos dois lados e depois verifica se cada objeto da origem está no destino com o mesmo tamanho. Termina com código diferente de zero se faltar algum. Objetos a mais no destino são normais enquanto a api corre, porque ela continua a escrever ficheiros novos lá. Não fazem a verificação falhar. O CLI regista o ator como `cli`.
+
+| Opção | O que faz |
+| --- | --- |
+| `--from-endpoint <url>` | Endereço do armazenamento de origem, por exemplo `http://minio:9000`. |
+| `--from-key <key>` | Chave de acesso do armazenamento de origem. |
+| `--from-secret <secret>` | Chave secreta do armazenamento de origem. Fica visível no histórico da shell e na lista de processos, por isso apague depois essa linha do histórico. |
+| `--from-bucket <bucket>` | Bucket a copiar. |
+| `--from-region <region>` | Região do armazenamento de origem. Por omissão `us-east-1`. |
+| `--json` | Mostra o relatório em JSON. |
 
 ## Projection retries
 

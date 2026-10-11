@@ -1,0 +1,58 @@
+{
+  "images": [
+    {
+      "name": "garage",
+      "upstream": "dxflrs/garage:v2.4.1",
+      "copy": "ghcr.io/open-laboratory-data-repository/garage:v2.4.1",
+      "digest": "sha256:4e9ce31018a28a6e5bfcff89077b44195f6b192965277d1ba129b2e5cb891e77"
+    },
+    {
+      "name": "postgres",
+      "upstream": "postgres:16-alpine",
+      "copy": "ghcr.io/open-laboratory-data-repository/postgres:16-alpine",
+      "digest": "sha256:c32b2184365eb3594362023d00b676e8c2a242c3a4c910409444b0ba892eb92c"
+    },
+    {
+      "name": "certbot",
+      "upstream": "certbot/certbot:v5.8.0",
+      "copy": "ghcr.io/open-laboratory-data-repository/certbot:v5.8.0",
+      "digest": "sha256:0780fe8a333d485f5931fbd2c7d58a6c6774365b6e91937ee4bc663b2df17104"
+    },
+    {
+      "name": "mysql",
+      "upstream": "mysql:8.4",
+      "copy": "ghcr.io/open-laboratory-data-repository/mysql:8.4",
+      "digest": "sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242"
+    },
+    {
+      "name": "nginx",
+      "upstream": "nginx:1.27-alpine",
+      "copy": "ghcr.io/open-laboratory-data-repository/nginx:1.27-alpine",
+      "digest": "sha256:36bc127593b73913fa30b1776cbaa49bb1546fbc06f78a275d785dfd37864136"
+    },
+    {
+      "name": "node",
+      "upstream": "node:22-bookworm-slim",
+      "copy": "ghcr.io/open-laboratory-data-repository/node:22-bookworm-slim",
+      "digest": "sha256:0e2e23be93fe1467322fb0f91add6c27aeb6329fadcf17e9dd6c50daa6fd62a9"
+    },
+    {
+      "name": "keycloak",
+      "upstream": "quay.io/keycloak/keycloak:26.0",
+      "copy": "ghcr.io/open-laboratory-data-repository/keycloak:26.0",
+      "digest": "sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858"
+    },
+    {
+      "name": "openssl",
+      "upstream": "alpine/openssl:3.5.9",
+      "copy": "ghcr.io/open-laboratory-data-repository/openssl:3.5.9",
+      "digest": "sha256:96cd55d081ce5d7a13090c4afa70b4f09403c9abcd4862bc8b64b4b3118594aa"
+    }
+  ],
+  "exceptions": [
+    {
+      "image": "mcr.microsoft.com/mssql/server:2022-latest",
+      "reason": "Microsoft's licence may not allow us to host a copy. Operator decision, 2026-10-09."
+    }
+  ]
+}

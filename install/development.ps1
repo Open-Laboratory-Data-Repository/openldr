@@ -76,8 +76,8 @@ if (-not (Test-Path .env)) {
 if ($NoServices) {
   Write-Host "-> Skipping Docker services + DB (-NoServices)"
 } else {
-  # 5. Backing services (dev docker-compose.yml: postgres, minio, keycloak)
-  Write-Host "-> Starting backing services (postgres, minio, keycloak)"
+  # 5. Backing services (dev docker-compose.yml: postgres, storage, keycloak)
+  Write-Host "-> Starting backing services (postgres, storage, keycloak)"
   docker compose up -d
   if ($LASTEXITCODE -ne 0) { Die "docker compose up failed" }
 
@@ -111,5 +111,5 @@ Write-Host "OK Dev environment ready in $repoDir"
 Write-Host "Start the app in two terminals:"
 Write-Host "  1) pnpm -C apps/server dev      # API on http://localhost:3000"
 Write-Host "  2) pnpm -C apps/studio dev      # Studio UI on http://localhost:5173 (proxies /api)"
-Write-Host "Backing services: Postgres :5433, MinIO :9010/:9011, Keycloak :8180"
+Write-Host "Backing services: Postgres :5433, S3 storage :9010, Keycloak :8180"
 Write-Host "Auth: AUTH_DEV_BYPASS is on (loads as a dev admin). Edit .env to use real Keycloak."

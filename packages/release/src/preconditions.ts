@@ -16,6 +16,9 @@ export interface ReleaseFacts {
   registryTagImages: string[];
   changelogCommitted: boolean;
   gateGreen: boolean;
+  /** Third-party GHCR copies an install pulls that are missing or private. One 401 aborts the
+   *  whole `docker compose pull`. */
+  thirdPartyUnavailable: string[];
 }
 
 /** Every reason this release must not proceed. Empty means clear to publish.
@@ -52,6 +55,12 @@ export function evaluatePreconditions(f: ReleaseFacts): string[] {
     refusals.push(
       `image tag ${f.version} is already in the registry for ${f.registryTagImages.join(', ')} — ` +
         `overwriting it would change what that version means for every install already running it`,
+    );
+  }
+  if (f.thirdPartyUnavailable.length > 0) {
+    refusals.push(
+      `third-party image copies not pullable: ${f.thirdPartyUnavailable.join(', ')}. ` +
+        'Make each public in the GitHub package settings, or run pnpm images:mirror',
     );
   }
   if (!f.changelogCommitted) {

@@ -13,6 +13,7 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
+    "@openldr/adapter-s3-bucket": "workspace:*",
     "@openldr/bootstrap": "workspace:*",
     "@openldr/marketplace": "workspace:*",
     "@openldr/plugins": "workspace:*",

@@ -267,6 +267,7 @@ Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
 Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json"
 Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
 Fetch "scripts/init-keycloak-db.sql" "$Dir/config/init-keycloak-db.sql"
+Fetch "deploy/install/garage.toml" "$Dir/config/garage.toml"
 
 # The `openldr` operator CLI wrapper — see the matching block in install/install.sh.
 # Single-quoted here-string so $args and $LASTEXITCODE are written literally, not expanded at
@@ -313,6 +314,13 @@ function Rand {
   $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
   -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
 }
+# Garage refuses any other format: key ID is GK + 24 hex, secrets are 64 hex.
+function Hex([int]$n) {
+  $bytes = New-Object 'System.Byte[]' $n
+  $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::new()
+  try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+  -join ($bytes | ForEach-Object { $_.ToString('x2') })
+}
 
 # Pin the openldr-admin service-account secret in the realm import to a per-install value. The
 # committed realm ships a well-known dev secret ("openldr-admin-dev-secret") that a real deployment
@@ -344,7 +352,7 @@ $realmLabContent = (Get-Content $realmPath -Raw) -replace '"value": "labadmin"',
 Set-Content -Path $realmPath -Value $realmLabContent -Encoding ascii
 
 if (-not $envExists) {
-  $pg = Rand; $kc = Rand; $s3k = Rand; $s3s = Rand
+  $pg = Rand; $kc = Rand; $s3k = "GK$(Hex 12)"; $s3s = Hex 32; $garageRpc = Hex 32; $garageAdmin = Hex 32
   if ($MssqlDemo -and [string]::IsNullOrEmpty($MssqlPassword)) { $MssqlPassword = "$(Rand)Aa1!" }
   if ($MysqlDemo -and [string]::IsNullOrEmpty($MysqlPassword)) { $MysqlPassword = "$(Rand)Aa1" }
   $secretBytes = New-Object 'System.Byte[]' 32
@@ -414,12 +422,14 @@ TRUST_PROXY=1
 INTERNAL_DATABASE_URL=postgres://openldr:$pg@postgres:5432/openldr
 $targetDbEnvBlock
 POSTGRES_PASSWORD=$pg
-S3_ENDPOINT=http://minio:9000
+S3_ENDPOINT=http://storage:3900
 S3_REGION=us-east-1
 S3_ACCESS_KEY_ID=$s3k
 S3_SECRET_ACCESS_KEY=$s3s
 S3_BUCKET=openldr
 S3_FORCE_PATH_STYLE=true
+GARAGE_RPC_SECRET=$garageRpc
+GARAGE_ADMIN_TOKEN=$garageAdmin
 OIDC_ISSUER_URL=$Origin/auth/realms/openldr
 OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
 OIDC_INTERNAL_ISSUER_URL=http://keycloak:8080/auth/realms/openldr
@@ -473,7 +483,7 @@ if (-not (Test-Path $cert)) {
     } else {
       Write-Host "-> openssl not on PATH; generating cert via Docker (alpine/openssl)"
       $mount = $certDirAbs -replace '\\', '/'
-      $certOutput = & docker run --rm -v "${mount}:/certs" alpine/openssl `
+      $certOutput = & docker run --rm -v "${mount}:/certs" ghcr.io/open-laboratory-data-repository/openssl:3.5.9@sha256:96cd55d081ce5d7a13090c4afa70b4f09403c9abcd4862bc8b64b4b3118594aa `
         req -x509 -newkey rsa:2048 -nodes -days 825 `
         -keyout /certs/privkey.pem -out /certs/fullchain.pem -subj $subj -addext $san 2>&1
     }

@@ -17,6 +17,7 @@ import { runWorkflowReceiptsList, runWorkflowReceiptShow } from './workflows';
 import { runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
+import { runStorageCopy } from './storage';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runTerminologyReproject, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
@@ -690,6 +691,20 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (opts: { engine?: string; json: boolean }) => {
       process.exitCode = await runTargetStoreTest(opts);
+    });
+
+  const storage = program.command('storage').description('Object storage tools');
+  storage
+    .command('copy')
+    .description('Copy every object from another S3 bucket into this install\'s storage (read-only on the source; skips keys already present with the same size)')
+    .option('--from-endpoint <url>', 'source S3 endpoint, e.g. http://minio:9000')
+    .option('--from-key <key>', 'source access key ID')
+    .option('--from-secret <secret>', 'source secret access key')
+    .option('--from-bucket <bucket>', 'source bucket name')
+    .option('--from-region <region>', 'source region', 'us-east-1')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { fromEndpoint?: string; fromKey?: string; fromSecret?: string; fromBucket?: string; fromRegion: string; json: boolean }) => {
+      process.exitCode = await runStorageCopy(opts);
     });
 
   const term = program.command('terminology').description('Terminology service (CodeSystem/ValueSet/ConceptMap)');

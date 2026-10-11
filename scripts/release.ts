@@ -28,11 +28,13 @@ import { evaluatePreconditions, type ReleaseFacts } from '../packages/release/sr
 import {
   imagesWithTag,
   findPrivatePackages,
+  findUnavailablePackages,
   parseGhPages,
   IMAGE_NAMES,
   type FetchJson,
 } from '../packages/release/src/registry';
 import { parseFailedTasks, formatFailedTask } from '../packages/release/src/gate';
+import { parseThirdPartyList } from '../packages/release/src/third-party';
 
 const OWNER = 'Open-Laboratory-Data-Repository';
 const REPO = 'openldr';
@@ -301,6 +303,10 @@ async function main(): Promise<void> {
     registryTagImages: await imagesWithTag(ghJson, OWNER, IMAGE_NAMES, version),
     changelogCommitted: sh('git', ['status', '--porcelain', 'apps/web/src/landing/changelog.json']) === '',
     gateGreen: await gateGreen(),
+    thirdPartyUnavailable: await findUnavailablePackages(
+      ghJson, OWNER,
+      parseThirdPartyList(readFileSync(join(repoRoot, 'deploy/third-party-images.json'), 'utf8')).images.map((i) => i.name),
+    ),
   };
 
   const refusals = evaluatePreconditions(facts);
