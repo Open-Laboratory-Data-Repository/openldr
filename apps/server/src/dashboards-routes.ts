@@ -30,6 +30,8 @@ const GOVERNED: Array<{ table: keyof typeof EXTERNAL_TABLE_COLUMNS; label: strin
   // administrative area). It was in EXTERNAL_TABLE_COLUMNS but in no policy, so its columns were
   // exposed by omission. Its defaults live in HARDCODED_DENY_UNION/PII_COLUMNS.facility_map.
   { table: 'facility_map', label: 'Facility Map' },
+  // Test mapping spec 4.2: governed from the start, so no column is exposed by omission (FAC-P1-17).
+  { table: 'test_map', label: 'Test Map' },
 ];
 
 // Collect the set of already-vetted SQL templates (trimmed) from a persisted dashboard. On
