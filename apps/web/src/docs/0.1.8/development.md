@@ -53,7 +53,7 @@ pnpm openldr db reset
 pnpm openldr db seed
 ```
 
-If your `.env` predates 0.1.10, change `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` to the values in `.env.example`.
+If your `.env` predates 0.1.11, change `S3_ACCESS_KEY_ID` and `S3_SECRET_ACCESS_KEY` to the values in `.env.example`.
 
 > The database is **not** migrated automatically in dev (`MIGRATE_ON_START` is off), so
 > **after any pull that brings new migrations, run `pnpm openldr db migrate`**. It is

@@ -43,7 +43,7 @@ const WEAK_DEFAULTS = {
 };
 
 const PRE_GARAGE_MESSAGE =
-  'This install predates 0.1.10: its storage settings are still MinIO. ' +
+  'This install predates 0.1.11: its storage settings are still MinIO. ' +
   'Follow "Moving from MinIO to Garage" in the upgrading guide before you run init again. ' +
   'Nothing was changed.';
 

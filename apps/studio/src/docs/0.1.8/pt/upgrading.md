@@ -53,7 +53,7 @@ Use as chaves preservadas para decifrar segredos guardados representativos no am
 
 ## Migrar antes de iniciar a nova API
 
-Uma instalação anterior à 0.1.10 deve primeiro fazer os passos 1 a 4 da secção "Passar do MinIO para o Garage" mais abaixo. O novo ficheiro Compose recusa-se a correr sem `GARAGE_RPC_SECRET` e `GARAGE_ADMIN_TOKEN`.
+Uma instalação anterior à 0.1.11 deve primeiro fazer os passos 1 a 4 da secção "Passar do MinIO para o Garage" mais abaixo. O novo ficheiro Compose recusa-se a correr sem `GARAGE_RPC_SECRET` e `GARAGE_ADMIN_TOKEN`.
 
 Mantenha as bases disponíveis e todos os processos antigos de escrita parados. Confirme que a imagem API corresponde à versão escolhida. Execute uma vez a CLI incluída:
 
@@ -73,15 +73,15 @@ HTTP 202 significa que o webhook foi aceite, não concluído. Consulte os recibo
 
 Retome os emissores apenas após estas verificações. Guarde a cópia verificada e imagens anteriores conforme a política de retenção local.
 
-## Passar do MinIO para o Garage (instalações anteriores à 0.1.10)
+## Passar do MinIO para o Garage (instalações anteriores à 0.1.11)
 
-O MinIO retirou as suas imagens do Docker Hub em 2026-09-11. A partir da 0.1.10, o serviço `storage` executa o Garage. Uma instalação que já tem ficheiros tem de os copiar uma vez. Uma instalação nova não precisa disto.
+O MinIO retirou as suas imagens do Docker Hub em 2026-09-11. A partir da 0.1.11, o serviço `storage` executa o Garage. Uma instalação que já tem ficheiros tem de os copiar uma vez. Uma instalação nova não precisa disto.
 
 1. Anote a chave e o segredo atuais do MinIO em `.env` (`S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`). O passo 4 substitui-os.
 2. Faça cópia de segurança de `.env` e `docker-compose.yml`.
-3. Descarregue os ficheiros da versão 0.1.10:
-   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.10/deploy/install/docker-compose.yml`, guardado como `docker-compose.yml`
-   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.10/deploy/install/garage.toml`, guardado como `config/garage.toml`
+3. Descarregue os ficheiros da versão 0.1.11:
+   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.11/deploy/install/docker-compose.yml`, guardado como `docker-compose.yml`
+   - `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/v0.1.11/deploy/install/garage.toml`, guardado como `config/garage.toml`
 
    Depois volte a juntar o antigo serviço `minio` ao `docker-compose.yml` a partir da sua cópia. Assim o MinIO continua ativo ao lado do Garage. Indique a chave e o segredo antigos como valores literais, não como `${S3_...}`. O passo 4 altera essas variáveis, e o MinIO passaria a recusar o login antigo.
 
