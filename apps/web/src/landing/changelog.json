@@ -24,10 +24,82 @@
       "version": null,
       "entries": [
         {
+          "hash": "531227e2",
+          "type": "fix",
+          "scope": "install",
+          "title": "Installers pull the openssl image from our GHCR copy"
+        },
+        {
           "hash": "e347a028",
           "type": "feat",
           "scope": "terminology",
           "title": "Reference-numbers and unique-id request attributes"
+        },
+        {
+          "hash": "c421df9e",
+          "type": "fix",
+          "scope": "init",
+          "title": "Refuse a .env.prod that still holds MinIO storage settings"
+        },
+        {
+          "hash": "099ce222",
+          "type": "fix",
+          "scope": "storage",
+          "title": "Storage copy passes when every source object is on the target"
+        },
+        {
+          "hash": "51d17273",
+          "type": "feat",
+          "scope": "release",
+          "title": "Refuse when a third-party image copy is missing or private"
+        },
+        {
+          "hash": "d03f40ce",
+          "type": "feat",
+          "scope": "deploy",
+          "title": "Replace MinIO with a Garage storage service"
+        },
+        {
+          "hash": "a33a36e7",
+          "type": "feat",
+          "scope": "deploy",
+          "title": "Pull third-party images from our GHCR copies, pinned by digest"
+        },
+        {
+          "hash": "5d2f2d89",
+          "type": "fix",
+          "scope": "release",
+          "title": "Catch list-item image lines and indented FROM lines"
+        },
+        {
+          "hash": "649d0ed4",
+          "type": "feat",
+          "scope": "release",
+          "title": "List third-party images and check references against it"
+        },
+        {
+          "hash": "b527ce52",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr storage copy moves objects from MinIO into Garage"
+        },
+        {
+          "hash": "369f7eed",
+          "type": "feat",
+          "scope": "storage",
+          "title": "Copy every object between two buckets and compare totals"
+        },
+        {
+          "hash": "bef796b4",
+          "type": "feat",
+          "scope": "storage",
+          "title": "List, size, read and write over one bucket for copying"
+        },
+        {
+          "hash": "27187715",
+          "type": "fix",
+          "scope": "storage",
+          "title": "Read multipart objects back from Garage without a checksum error"
         }
       ]
     },
