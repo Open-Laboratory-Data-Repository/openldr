@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { TEST_CATALOG_SYSTEM } from './test-catalog';
 import { buildMapping, seedCatalogTest, seedMapping, seedRequest } from './test-support/test-mapping-fixture';
 
@@ -73,6 +73,25 @@ describe('test mapping: CSV', () => {
     expect(await externalDb.selectFrom('test_map').select('source_code').execute()).toEqual([{ source_code: 'HIVVL' }]);
   });
 
+  it('apply still rebuilds when a write fails partway, then rethrows the failure', async () => {
+    const { internalDb, externalDb, admin, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    const real = admin.termMappings.saveExclusive.bind(admin.termMappings);
+    let calls = 0;
+    vi.spyOn(admin.termMappings, 'saveExclusive').mockImplementation(async (input) => {
+      calls += 1;
+      if (calls === 2) throw new Error('disk full');
+      return real(input);
+    });
+
+    await expect(mapping.importApply(csv(`system,code,catalog_code
+${DISA},A1,VL
+${DISA},B2,VL
+`))).rejects.toThrow('disk full');
+
+    expect(await externalDb.selectFrom('test_map').select('source_code').execute()).toEqual([{ source_code: 'A1' }]);
+  });
+
   // Review focus 4.
   it('reads a file Excel saved: BOM, CRLF and a quoted comma', async () => {
     const { internalDb, mapping } = await buildMapping();
@@ -116,6 +135,23 @@ ${DISA},NEVERSEEN,VL
     expect(report.refused).toEqual([
       { line: 2, system: DISA, code: 'HIVVL', reason: 'the warehouse holds this code with surrounding spaces; map it on the Observed tab or with map set' },
     ]);
+  });
+
+  it('reads back a code the export guarded against spreadsheet formulas', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedMapping(internalDb, 'm1', DISA, '+X', 'VL');
+    await seedRequest(externalDb, 'r1', DISA, '+X', null, '2026-05-01T08:00:00Z');
+    const exported = await mapping.exportCsv();
+    expect(exported).toContain("'+X");
+
+    const report = await mapping.importPreview(csv(exported));
+    expect(report.counts).toEqual({ new: 0, changed: 0, unchanged: 1, refused: 0 });
+
+    // The same file against an unmapped code writes +X, not '+X.
+    await internalDb.deleteFrom('term_mappings').execute();
+    await mapping.importApply(csv(exported));
+    expect((await externalDb.selectFrom('test_map').select('source_code').execute()).map((r) => r.source_code)).toEqual(['+X']);
   });
 
   it('refuses a file without the system and code columns, or without catalog_code and loinc', async () => {

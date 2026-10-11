@@ -447,6 +447,9 @@ export function createTestMapping(deps: TestMappingDeps) {
     if (col('system') < 0 || col('code') < 0) throw new TestCatalogError('the file needs a system column and a code column', 'invalid');
     if (col('catalog_code') < 0 && col('loinc') < 0) throw new TestCatalogError('the file needs a catalog_code column or a loinc column', 'invalid');
     const cell = (row: string[], name: string): string => (col(name) < 0 ? '' : (row[col(name)] ?? '').trim());
+    // The export puts an apostrophe before a cell that starts with = @ + - so a spreadsheet does not run
+    // it as a formula (reporting toCsv). Take that one apostrophe off the system and code cells.
+    const unguard = (v: string): string => (/^'[=@+-]/.test(v) ? v.slice(1) : v);
 
     const catalog = await readCatalog();
     // One warehouse read per import. A code the warehouse holds with surrounding spaces is a different
@@ -476,8 +479,8 @@ export function createTestMapping(deps: TestMappingDeps) {
       // readTableFile and cell() trim the cell, so a code cannot keep surrounding spaces here. A file
       // cell is read as the trimmed code. Codes match exactly, so heldWithSpaces refuses the row when
       // the warehouse holds only the padded form, rather than writing a mapping that never joins.
-      const system = cell(table.rows[i], 'system');
-      const code = cell(table.rows[i], 'code');
+      const system = unguard(cell(table.rows[i], 'system'));
+      const code = unguard(cell(table.rows[i], 'code'));
       if (system === '' || code === '') { refuse(line, system, code, 'system and code are required'); continue; }
       const key = sourceKey(system, code);
       if (seen.has(key)) { refuse(line, system, code, 'listed twice in the file'); continue; }
@@ -520,7 +523,13 @@ export function createTestMapping(deps: TestMappingDeps) {
 
   async function importApply(bytes: Uint8Array): Promise<MappingImportReport> {
     const { report, writes } = await planImport(bytes);
-    for (const w of writes) await writeMapping(w.system, w.code, w.catalogCode, w.name);
+    try {
+      for (const w of writes) await writeMapping(w.system, w.code, w.catalogCode, w.name);
+    } catch (err) {
+      // Writes already made stay made, so test_map must still catch up with them before the failure goes up.
+      await rebuildNow();
+      throw err;
+    }
     return { ...report, rebuild: await rebuildNow() };
   }
 
