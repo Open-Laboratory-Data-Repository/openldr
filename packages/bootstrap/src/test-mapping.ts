@@ -205,6 +205,13 @@ export interface PackMappingPlan {
   skipped: Array<{ system: string; code: string; reason: string }>;
 }
 
+/** Map matching codes (result field mapping spec 4.5): the unmapped result codes of one lab system that
+ *  equal a dictionary code. On a DISA site the dictionary is DISA's own list, so most codes match. */
+export interface MatchPlan {
+  system: string;
+  matches: Array<{ code: string; display: string | null; results: number }>;
+}
+
 export function createTestMapping(deps: TestMappingDeps) {
   const { internalDb, externalDb } = deps;
   let lastRebuild: { ok: boolean; error: string | null } = { ok: true, error: null };
@@ -640,32 +647,61 @@ export function createTestMapping(deps: TestMappingDeps) {
     return { ...report, rebuild: await rebuildNow() };
   }
 
-  async function planPack(mappings: PackMappingInput[]): Promise<PackMappingPlan> {
+  async function observedSystems(level: MapLevel = 'test'): Promise<string[]> {
+    return [...new Set((await observedAll(level)).map((r) => r.system))].sort(compare);
+  }
+
+  async function planMatch(system: string): Promise<MatchPlan> {
+    if (system.trim() === '') throw new TestCatalogError('system is required', 'invalid');
+    const self = selfSystemReason(system, 'result');
+    if (self) throw new TestCatalogError(self, 'invalid');
+    const params = await readTargets('result');
+    // Only unmapped codes. A code central has mapped counts as mapped, and an ambiguous one needs a person.
+    const rows = (await observedAll('result')).filter((r) => r.system === system && r.status === 'unmapped' && params.has(r.code));
+    return { system, matches: rows.map((r) => ({ code: r.code, display: params.get(r.code)!.name, results: r.requests })) };
+  }
+
+  async function applyMatch(system: string): Promise<MatchPlan & { rebuild: RebuildOutcome }> {
+    const plan = await planMatch(system);
+    try {
+      for (const m of plan.matches) await writeMapping(system, m.code, m.code, m.display, 'result');
+    } catch (err) {
+      // As importApply: writes already made stay made, so test_map catches up before the failure goes up.
+      await rebuildNow();
+      throw err;
+    }
+    return { ...plan, rebuild: await rebuildNow() };
+  }
+
+  async function planPack(mappings: PackMappingInput[], level: MapLevel = 'test'): Promise<PackMappingPlan> {
     const plan: PackMappingPlan = { mapped: [], kept: [], skipped: [] };
+    const noun = TARGET_NOUN[level];
     const seen = new Set<string>();
     for (const m of mappings) {
       const key = sourceKey(m.system, m.code);
       if (seen.has(key)) { plan.skipped.push({ system: m.system, code: m.code, reason: 'listed twice in this pack' }); continue; }
       seen.add(key);
-      if ((await activeFor(m.system, m.code)).length > 0) { plan.kept.push({ system: m.system, code: m.code }); continue; }
-      const codes = await catalogCodesForLoinc(m.loinc);
-      if (codes.length === 0) { plan.skipped.push({ system: m.system, code: m.code, reason: `no catalog test is linked to LOINC ${m.loinc}` }); continue; }
-      if (codes.length > 1) { plan.skipped.push({ system: m.system, code: m.code, reason: `${codes.length} catalog tests are linked to LOINC ${m.loinc}` }); continue; }
+      const self = selfSystemReason(m.system, level);
+      if (self) { plan.skipped.push({ system: m.system, code: m.code, reason: self }); continue; }
+      if ((await activeFor(m.system, m.code, level)).length > 0) { plan.kept.push({ system: m.system, code: m.code }); continue; }
+      const codes = await catalogCodesForLoinc(m.loinc, level);
+      if (codes.length === 0) { plan.skipped.push({ system: m.system, code: m.code, reason: `no ${noun} is linked to LOINC ${m.loinc}` }); continue; }
+      if (codes.length > 1) { plan.skipped.push({ system: m.system, code: m.code, reason: `${codes.length} ${noun}s are linked to LOINC ${m.loinc}` }); continue; }
       plan.mapped.push({ system: m.system, code: m.code, catalogCode: codes[0] });
     }
     return plan;
   }
 
-  async function applyPack(mappings: PackMappingInput[]): Promise<PackMappingPlan & { rebuild: RebuildOutcome }> {
-    const plan = await planPack(mappings);
-    const catalog = await readCatalog();
-    for (const m of plan.mapped) await writeMapping(m.system, m.code, m.catalogCode, catalog.get(m.catalogCode)?.name ?? null);
+  async function applyPack(mappings: PackMappingInput[], level: MapLevel = 'test'): Promise<PackMappingPlan & { rebuild: RebuildOutcome }> {
+    const plan = await planPack(mappings, level);
+    const targetsByCode = await readTargets(level);
+    for (const m of plan.mapped) await writeMapping(m.system, m.code, m.catalogCode, targetsByCode.get(m.catalogCode)?.name ?? null, level);
     return { ...plan, rebuild: await rebuildNow() };
   }
 
   return {
     observed, observedAll, targets, publish, rebuildNow, requestRebuild, settled, set, clear, writeMapping, activeFor, readCatalog, readMappings, readTargets,
-    exportCsv, importPreview, importApply, catalogCodesForLoinc, planPack, applyPack,
+    exportCsv, importPreview, importApply, catalogCodesForLoinc, planPack, applyPack, observedSystems, planMatch, applyMatch,
   };
 }
 

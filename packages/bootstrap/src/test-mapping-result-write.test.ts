@@ -113,3 +113,86 @@ describe('test mapping: result level CSV', () => {
     expect((await mapping.activeFor(DISA, 'POCVC', 'result')).map((r) => r.to_code)).toEqual(['VLC']);
   });
 });
+
+describe('map matching codes', () => {
+  async function seeded() {
+    const built = await buildMapping();
+    const { internalDb, externalDb } = built;
+    await seedParam(internalDb, 'HIVVL', 'HIV VL');
+    await seedParam(internalDb, 'CD4', 'CD4 count');
+    await seedParam(internalDb, 'TBHIV', 'TB HIV status');
+    await seedResult(externalDb, 'o1', DISA, 'HIVVL', null, '2026-05-01T08:00:00Z');
+    await seedResult(externalDb, 'o2', DISA, 'HIVVL', null, '2026-05-01T08:00:00Z');
+    await seedResult(externalDb, 'o3', DISA, 'CD4', null, '2026-05-01T08:00:00Z');
+    await seedResult(externalDb, 'o4', DISA, 'TBHIV', null, '2026-05-01T08:00:00Z');
+    await seedResult(externalDb, 'o5', DISA, 'ZZZ', null, '2026-05-01T08:00:00Z');
+    await seedResult(externalDb, 'o6', 'urn:openldr:other', 'HIVVL', null, '2026-05-01T08:00:00Z');
+    // CD4 is mapped by central. TBHIV is ambiguous: two lab rows name different fields.
+    await seedResultMapping(internalDb, 'c1', DISA, 'CD4', 'CD4', { central: true });
+    await seedResultMapping(internalDb, 'a1', DISA, 'TBHIV', 'TBHIV');
+    await seedResultMapping(internalDb, 'a2', DISA, 'TBHIV', 'CD4', { mapType: 'NARROWER-THAN' });
+    return built;
+  }
+
+  // Review focus 3.
+  it('lists only unmapped codes in that system that equal a field', async () => {
+    const { mapping } = await seeded();
+    expect(await mapping.planMatch(DISA)).toEqual({ system: DISA, matches: [{ code: 'HIVVL', display: 'HIV VL', results: 2 }] });
+  });
+
+  it('applies the matches as ordinary mappings and rebuilds once', async () => {
+    const { externalDb, mapping } = await seeded();
+
+    const out = await mapping.applyMatch(DISA);
+
+    expect([out.matches.length, out.rebuild.ok]).toEqual([1, true]);
+    expect(await externalDb.selectFrom('test_map').select('catalog_code').where('id', '=', `result|${DISA}|HIVVL`).execute()).toEqual([{ catalog_code: 'HIVVL' }]);
+    expect((await mapping.planMatch(DISA)).matches).toEqual([]);
+  });
+
+  it('refuses the dictionary system, and lists the observed systems', async () => {
+    const { mapping } = await seeded();
+    await expect(mapping.planMatch(PARAMS)).rejects.toMatchObject({ kind: 'invalid' });
+    expect(await mapping.observedSystems('result')).toEqual([DISA, 'urn:openldr:other']);
+  });
+
+  // Review focus 2.
+  it('finds nothing when no dictionary is loaded', async () => {
+    const { externalDb, mapping } = await buildMapping();
+    await seedResult(externalDb, 'o1', DISA, 'HIVVL', null, '2026-05-01T08:00:00Z');
+    expect((await mapping.planMatch(DISA)).matches).toEqual([]);
+  });
+});
+
+describe('pack result mappings', () => {
+  // Review focus 5.
+  it('resolves by the field\'s LOINC, and skips unknown LOINC codes and dictionary codes', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedParam(internalDb, 'VLC', 'HIV VL copies', { loinc: '20447-9' });
+
+    const plan = await mapping.planPack([
+      { system: DISA, code: 'HIVVL', loinc: '20447-9' },
+      { system: DISA, code: 'CD4', loinc: '9999-9' },
+      { system: PARAMS, code: 'VLC', loinc: '20447-9' },
+    ], 'result');
+
+    expect(plan).toEqual({
+      mapped: [{ system: DISA, code: 'HIVVL', catalogCode: 'VLC' }],
+      kept: [],
+      skipped: [
+        { system: DISA, code: 'CD4', reason: 'no result field is linked to LOINC 9999-9' },
+        { system: PARAMS, code: 'VLC', reason: `${PARAMS} codes are result fields already and need no mapping` },
+      ],
+    });
+  });
+
+  it('writes result mappings, not test mappings', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedParam(internalDb, 'VLC', 'HIV VL copies', { loinc: '20447-9' });
+
+    await mapping.applyPack([{ system: DISA, code: 'HIVVL', loinc: '20447-9' }], 'result');
+
+    expect((await mapping.activeFor(DISA, 'HIVVL', 'result')).map((r) => r.to_code)).toEqual(['VLC']);
+    expect(await mapping.activeFor(DISA, 'HIVVL')).toEqual([]);
+  });
+});
