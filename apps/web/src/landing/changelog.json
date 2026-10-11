@@ -3,8 +3,50 @@
   "days": [
     {
       "date": "2026-10-11",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
+        {
+          "hash": "bf7ad76a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep the order rejection after a submit so a second submit cannot write an accepted duplicate"
+        },
+        {
+          "hash": "660e8752",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Load order reasons honestly and pin the rejected rows"
+        },
+        {
+          "hash": "7bbfdae3",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Reject a whole order from the capture page menu"
+        },
+        {
+          "hash": "0f6e6ac0",
+          "type": "feat",
+          "scope": "db",
+          "title": "The Lab order holds an order-level rejection (migration 110)"
+        },
+        {
+          "hash": "a7214727",
+          "type": "feat",
+          "scope": "server",
+          "title": "Link every result of a bench order to the order"
+        },
+        {
+          "hash": "0bb4e44f",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A rejected order writes no generic Observation either"
+        },
+        {
+          "hash": "837dcce4",
+          "type": "feat",
+          "scope": "forms",
+          "title": "A rejected order revokes the request and writes no results"
+        },
         {
           "hash": "ab2cf19a",
           "type": "fix",
@@ -21,7 +63,7 @@
     },
     {
       "date": "2026-10-09",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "531227e2",
@@ -105,7 +147,7 @@
     },
     {
       "date": "2026-10-08",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "bd271e9f",
@@ -165,7 +207,7 @@
     },
     {
       "date": "2026-10-07",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "f778307b",
@@ -231,7 +273,7 @@
     },
     {
       "date": "2026-10-06",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "dbc59ae0",
@@ -351,7 +393,7 @@
     },
     {
       "date": "2026-09-30",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "c239f266",
@@ -405,7 +447,7 @@
     },
     {
       "date": "2026-09-29",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "cf127547",
@@ -441,7 +483,7 @@
     },
     {
       "date": "2026-09-28",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "483f21ad",
@@ -507,7 +549,7 @@
     },
     {
       "date": "2026-09-17",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "e4ea78dc",
@@ -525,7 +567,7 @@
     },
     {
       "date": "2026-09-16",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "4d087065",
@@ -813,7 +855,7 @@
     },
     {
       "date": "2026-09-15",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "d3256617",
@@ -1041,7 +1083,7 @@
     },
     {
       "date": "2026-09-14",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "fe106b82",
@@ -1365,7 +1407,7 @@
     },
     {
       "date": "2026-09-11",
-      "version": null,
+      "version": "v0.1.11",
       "entries": [
         {
           "hash": "d19fd88d",
