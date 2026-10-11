@@ -33,7 +33,7 @@ import {
   IMAGE_NAMES,
   type FetchJson,
 } from '../packages/release/src/registry';
-import { parseFailedTasks, formatFailedTask } from '../packages/release/src/gate';
+import { parseFailedTasks, formatFailedTask, tasksNeverFinished, GATE_TURBO_ARGS } from '../packages/release/src/gate';
 import { parseThirdPartyList } from '../packages/release/src/third-party';
 
 const OWNER = 'Open-Laboratory-Data-Repository';
@@ -152,23 +152,30 @@ function newestTag(): string | null {
  *  --fail-if-no-match makes that impossible a second way: measured on pnpm 11.13.0, the same
  *  filter exits 1 with it and 0 without. */
 async function gateGreen(): Promise<boolean> {
-  // ⛔ --concurrency=4, not turbo's default. This box has 12 CPUs and 35 test tasks, each
-  // spawning its own vitest with workers up to the core count, so the default oversubscribes and
-  // tests fail on `Test timed out` rather than on anything real. Measured 2026-08-19 on a cold
-  // cache: the default failed 4 of 4 runs, each on a DIFFERENT package, every one passing when
-  // run alone; --concurrency=4 passed 35/35.
+  // Why --continue and --concurrency=4: see GATE_TURBO_ARGS.
   //
-  // ⚠ The five releases before this one passed at the default only because 29 to 33 of the 35
-  // tasks came from cache, so almost nothing ran concurrently. That is luck, not evidence, and it
-  // runs out on exactly the release that changes the most packages. The retry loop below would
+  // ⚠ The five releases before --concurrency=4 passed at the default only because 29 to 33 of the
+  // 35 tasks came from cache, so almost nothing ran concurrently. That is luck, not evidence, and
+  // it runs out on exactly the release that changes the most packages. The retry loop below would
   // have caught it, but a release should not depend on its own recovery path.
-  const gate = await pnpm(['turbo', 'run', 'test', '--concurrency=4']);
+  const gate = await pnpm([...GATE_TURBO_ARGS]);
   if (gate.code === 0) return true;
 
   const failed = parseFailedTasks(gate.output);
   if (failed.length === 0) {
     console.error('\ngate failed and no "Failed:" line could be read from turbo’s output.');
     console.error('an unreadable failure is not a timeout — refusing.');
+    return false;
+  }
+
+  // A retry vouches only for the tasks it re-runs. One that never finished is in no list.
+  const unfinished = tasksNeverFinished(gate.output, failed.length);
+  if (unfinished === null || unfinished !== 0) {
+    console.error(
+      unfinished === null
+        ? '\ngate failed and turbo’s "Tasks:" summary could not be read — refusing.'
+        : `\ngate failed and ${unfinished} task(s) neither passed nor failed — they never finished, refusing.`,
+    );
     return false;
   }
 

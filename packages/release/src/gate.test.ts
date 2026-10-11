@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseFailedTasks, formatFailedTask } from './gate';
+import { parseFailedTasks, formatFailedTask, tasksNeverFinished, GATE_TURBO_ARGS } from './gate';
 
 describe('parseFailedTasks', () => {
   it('reads one failed task off turbo’s summary line', () => {
@@ -74,5 +74,50 @@ describe('parseFailedTasks', () => {
 describe('formatFailedTask', () => {
   it('prints package#task the way turbo does', () => {
     expect(formatFailedTask({ pkg: '@openldr/db', task: 'test' })).toBe('@openldr/db#test');
+  });
+});
+
+describe('GATE_TURBO_ARGS', () => {
+  // Without --continue turbo stops at the first failure and kills the tasks still running. They
+  // never reach the Failed line, so the retry never covers them. Measured on the 0.1.10 dry run:
+  // bootstrap failed, cli, server and studio were cut off mid-run, and the gate still said green.
+  it('keeps running every task after one fails', () => {
+    expect(GATE_TURBO_ARGS).toContain('--continue');
+  });
+
+  it('runs the test task at the measured concurrency', () => {
+    expect(GATE_TURBO_ARGS.slice(0, 3)).toEqual(['turbo', 'run', 'test']);
+    expect(GATE_TURBO_ARGS).toContain('--concurrency=4');
+  });
+});
+
+describe('tasksNeverFinished', () => {
+  // The real 0.1.10 dry-run summary: 31 + 1 failed leaves 3 of 35 that never finished.
+  it('counts the tasks turbo neither passed nor failed', () => {
+    const out = [
+      ' Tasks:    31 successful, 35 total',
+      'Cached:    0 cached, 35 total',
+      'Failed:    @openldr/bootstrap#test',
+    ].join('\n');
+    expect(tasksNeverFinished(out, 1)).toBe(3);
+  });
+
+  it('is zero when every task passed or failed', () => {
+    const out = ' Tasks:    31 successful, 35 total\nFailed:    @openldr/a#test, @openldr/b#test, @openldr/c#test, @openldr/d#test\n';
+    expect(tasksNeverFinished(out, 4)).toBe(0);
+  });
+
+  // No count means nothing can be proven. The caller refuses on null, never on a guess.
+  it('is null when the output has no Tasks line', () => {
+    expect(tasksNeverFinished('Failed:    @openldr/db#test\n', 1)).toBeNull();
+  });
+
+  it('is null for empty output', () => {
+    expect(tasksNeverFinished('', 0)).toBeNull();
+  });
+
+  it('reads the summary line, not a Tasks line printed by a test', () => {
+    const out = '@openldr/x:test: Tasks:    9 successful, 9 total\n Tasks:    2 successful, 4 total\n';
+    expect(tasksNeverFinished(out, 1)).toBe(1);
   });
 });
