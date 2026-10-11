@@ -75,6 +75,7 @@ import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
+import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -545,6 +546,8 @@ export interface AppContext {
   /** The national test catalog (test catalog S1): the catalog code system, its LOINC links and this
    *  install's own settings for each test. The test catalog routes and CLI share it. */
   testCatalog: TestCatalog;
+  /** Lab test codes mapped to catalog tests, and the warehouse copy test_map. */
+  testMapping: TestMapping;
   /** Gates persistResources() strictness for the webhook (Persist Store node) and ingest paths
    *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
   validationStrictness: ValidationStrictness;
@@ -985,7 +988,12 @@ const reporting: ReportingApi = {
     },
   };
 
-  const testCatalog = createTestCatalog({ db: termDb, admin: termAdmin, ops: terminology.ops });
+  // Built before the catalog, so a catalog change can ask for a test_map rebuild (test mapping spec 4.3).
+  const testMapping = createTestMapping({ internalDb: termDb, externalDb, admin: termAdmin, logger });
+  const testCatalog = createTestCatalog({
+    db: termDb, admin: termAdmin, ops: terminology.ops,
+    onChanged: () => { void testMapping.requestRebuild(); },
+  });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
   // the polling worker that drains it. `runIngest` streams+extracts the uploaded zip to a fresh
@@ -1079,6 +1087,9 @@ const reporting: ReportingApi = {
     await facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'boot' }).catch((err) => {
       logger.warn({ err }, 'boot facility-map-rebuild enqueue failed');
     });
+    // Fills test_map once after an upgrade, and repairs it after a failed rebuild. Inline and cheap:
+    // tens to hundreds of rows. Server boot only, for the same reason as the facility rebuild.
+    void testMapping.requestRebuild();
   }
 
   const connectorStore = createConnectorStore(internal.db);
@@ -1481,13 +1492,18 @@ const reporting: ReportingApi = {
       const applyRecord = async (rec: import('@openldr/sync').PullRecord): Promise<'applied' | 'skipped'> => {
         if (rec.entityType === 'terminology_system') {
           await termBulk.syncSystem(rec.entityId, rec.body);
+          // The catalog's tests arrive here. Their names and LOINC links feed test_map.
+          if (isTestMapRelevantRecord(rec)) void testMapping.requestRebuild();
           return 'applied';
         }
         if (rec.entityType === 'concept_map') {
           await termBulk.syncConceptMap(rec.entityId, rec.body);
           return 'applied';
         }
-        return referenceApplier(rec);
+        const outcome = await referenceApplier(rec);
+        // A synced test mapping must reach this lab's warehouse now, not at its next boot.
+        if (outcome === 'applied' && isTestMapRelevantRecord(rec)) void testMapping.requestRebuild();
+        return outcome;
       };
       const quarantine = syncQuarantine;
       // Sync S7-A: targeted re-sync of a quarantined bulk entity, independent of the advanced cursor.
@@ -1752,6 +1768,7 @@ const reporting: ReportingApi = {
     updateCheck,
     facilityRegistry,
     testCatalog,
+    testMapping,
     facilityJobs,
     featureFlags,
     numberSettings,

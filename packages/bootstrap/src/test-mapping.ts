@@ -135,7 +135,7 @@ export function mappingTouchesTestMap(fromSystem: string | null | undefined, toS
 
 /** Whether a record a lab pulled from central changes test_map. A term mapping delete carries no body,
  *  so it counts: a spare rebuild is cheap, a missed one leaves reports wrong. */
-export function isTestMapRelevantRecord(rec: { entityType: string; body: unknown }): boolean {
+export function isTestMapRelevantRecord(rec: { entityType: string; body?: unknown }): boolean {
   const body = rec.body as { fromSystem?: string; toSystem?: string; url?: string } | null;
   if (rec.entityType === 'term_mapping') return body === null || body === undefined || mappingTouchesTestMap(body.fromSystem, body.toSystem);
   if (rec.entityType === 'terminology_system') return body?.url === TEST_CATALOG_SYSTEM;
