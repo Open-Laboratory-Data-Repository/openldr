@@ -6,6 +6,7 @@ import { ObservationExtractor, ServiceRequestExtractor } from './extract/extract
 import { TestResultsExtractor } from './extract/test-results'
 import { toTransactionBundle } from './to-transaction-bundle'
 import { makeField, makeSchema, definitionOf } from './__fixtures__/forms'
+import { orderRejectionFieldId } from './order-rejection-path'
 
 const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-06-04T00:00:00Z' }
 
@@ -260,5 +261,82 @@ describe('TestResultsExtractor (bench result entry)', () => {
     }) as any[]
     expect(out[0].valueQuantity).toEqual({ value: 11.2, unit: 'g/dL' })
     expect(out[0].referenceRange).toBeUndefined()
+  })
+})
+
+describe('order-level rejection (2026-10-11 spec, part 2)', () => {
+  const CATALOG = 'urn:openldr:codesystem:test-catalog'
+  const REASON = { system: 'urn:openldr:cs:reject-order', code: 'UNLABELLED', display: 'Unlabelled specimen' }
+  const order = () =>
+    makeSchema({
+      id: 'o', name: 'Order', fhirResourceType: 'ServiceRequest',
+      fields: [
+        makeField({ id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 0, fhirPath: 'ServiceRequest.code', referenceMultiple: true, cardinality: { min: 1, max: '*' } }),
+        makeField({ id: 'details', displayLabel: 'Results', fieldType: 'testDetails', order: 1, referenceDependsOn: 'tests' }),
+        makeField({ id: 'rej', displayLabel: 'Order rejection', fieldType: 'reference', order: 2, fhirPath: 'ServiceRequest.rejection', valueSetUrl: 'urn:openldr:valueset:order-reject-reason' }),
+      ],
+    })
+  const run = (answers: Record<string, unknown>) => {
+    const model = order()
+    const qr = toQuestionnaireResponse(model, answers as never)
+    const q = toQuestionnaire(model)
+    return { sr: ServiceRequestExtractor.extract(qr, q, ctx), results: TestResultsExtractor.extract(qr, q, ctx) }
+  }
+  const typed = (specimen: unknown) => ({
+    [`${CATALOG}|FBC`]: { specimen, rejection: null, results: [
+      { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL' },
+    ] },
+  })
+
+  it('finds the field by its path, not its id', () => {
+    expect(orderRejectionFieldId(order())).toBe('rej')
+    expect(orderRejectionFieldId(makeSchema({ id: 'x', name: 'X', fields: [] }))).toBeNull()
+  })
+
+  it('revokes the order, carries the reason in the warehouse extension, and writes an unsatisfactory Specimen', () => {
+    const { sr } = run({ tests: [{ system: CATALOG, code: 'FBC' }], details: typed(null), rej: REASON })
+    expect(sr).toHaveLength(2)
+    const [request, specimen] = sr as any[]
+    expect(request.status).toBe('revoked')
+    expect(request.extension).toEqual([{ url: 'urn:openldr:ext:rejection', extension: [
+      { url: 'code', valueCode: 'UNLABELLED' },
+      { url: 'reason', valueString: 'Unlabelled specimen' },
+    ] }])
+    expect(specimen).toEqual({
+      resourceType: 'Specimen',
+      status: 'unsatisfactory',
+      subject: { reference: 'Patient/p1' },
+      condition: [{ coding: [REASON] }],
+    })
+  })
+
+  it('gives the Specimen a type only when every test chose the same one', () => {
+    const blood = { system: 'urn:openldr:cs:local', code: 'BLD', display: 'Blood' }
+    const same = run({ tests: [{ system: CATALOG, code: 'FBC' }], details: typed(blood), rej: REASON }).sr as any[]
+    expect(same[1].type).toEqual({ coding: [blood] })
+    const mixed = run({
+      tests: [{ system: CATALOG, code: 'FBC' }, { system: CATALOG, code: 'GLU' }],
+      details: { ...typed(blood), [`${CATALOG}|GLU`]: { specimen: { system: 'urn:openldr:cs:local', code: 'UR' }, rejection: null, results: [] } },
+      rej: REASON,
+    }).sr as any[]
+    expect(mixed[1].type).toBeUndefined()
+  })
+
+  it('falls back to the code when the reason has no display', () => {
+    const { sr } = run({ tests: [{ system: CATALOG, code: 'FBC' }], rej: { system: REASON.system, code: 'DUPLICATE' } })
+    expect((sr[0] as any).extension[0].extension[1]).toEqual({ url: 'reason', valueString: 'DUPLICATE' })
+  })
+
+  it('writes no Observation at all on a rejected order', () => {
+    const { results } = run({ tests: [{ system: CATALOG, code: 'FBC' }], details: typed(null), rej: REASON })
+    expect(results).toEqual([])
+  })
+
+  it('leaves an order with no rejection active, with no Specimen', () => {
+    const { sr, results } = run({ tests: [{ system: CATALOG, code: 'FBC' }], details: typed(null) })
+    expect(sr).toHaveLength(1)
+    expect((sr[0] as any).status).toBe('active')
+    expect((sr[0] as any).extension).toBeUndefined()
+    expect(results).toHaveLength(1)
   })
 })

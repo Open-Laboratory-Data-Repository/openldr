@@ -2,6 +2,7 @@ import type { FhirResource, Observation, Questionnaire, QuestionnaireResponse, Q
 import type { FormSchema } from '../schema/form-schema'
 import { parseTestDetails, type ResultCoding, type TestDetail, type TypedResult } from '../test-details'
 import type { ExtractionContext, ResourceExtractor } from './extract'
+import { orderRejectionOf } from './order-rejection'
 
 // Bench result entry (docs/superpowers/specs/2026-09-16-bench-result-entry-design.md, 5).
 //
@@ -71,7 +72,7 @@ function observationsFor(key: string, detail: TestDetail, ctx: ExtractionContext
 }
 
 /** Rebuild the answer from the nested items the response carries (test-details.ts writes them). */
-function readTestDetails(response: QuestionnaireResponse): Record<string, unknown> {
+export function readTestDetails(response: QuestionnaireResponse): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   const walk = (items: QuestionnaireResponseItem[] | undefined): void => {
     for (const item of items ?? []) {
@@ -107,7 +108,10 @@ export const TestResultsExtractor: ResourceExtractor = {
   canExtract(model: FormSchema): boolean {
     return model.fields.some((field) => field.fieldType === 'testDetails')
   },
-  extract(response: QuestionnaireResponse, _questionnaire: Questionnaire, ctx: ExtractionContext): FhirResource[] {
+  extract(response: QuestionnaireResponse, questionnaire: Questionnaire, ctx: ExtractionContext): FhirResource[] {
+    // Rejection wins (2026-10-11 spec, decision 2): a rejected order writes no result and no
+    // per-test cancelled Observation. The typed values stay in the response only.
+    if (orderRejectionOf(response, questionnaire)) return []
     const answer = parseTestDetails(readTestDetails(response))
     return Object.entries(answer).flatMap(([key, detail]) => observationsFor(key, detail, ctx))
   },
