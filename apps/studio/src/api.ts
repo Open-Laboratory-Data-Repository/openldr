@@ -2562,6 +2562,57 @@ export async function downloadTestCatalogCsv(): Promise<void> {
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
+
+// Mirrors of @openldr/bootstrap's test-mapping.ts. The routes are apps/server/src/test-mapping-routes.ts.
+export type ObservedStatus = 'unmapped' | 'mapped' | 'ambiguous';
+export interface ObservedTestCode {
+  system: string; code: string; description: string | null; requests: number; lastSeen: string | null;
+  status: ObservedStatus; catalog: { code: string; name: string | null; loinc: string | null } | null; centralManaged: boolean;
+}
+export interface ObservedTestCodesResult { rows: ObservedTestCode[]; total: number; warehouse: { stale: boolean; error: string | null } }
+export interface MappingTarget { code: string; name: string | null; loinc: string | null; retired: boolean }
+export type RebuildOutcome =
+  | { ok: true; result: { mapped: number; ambiguous: Array<{ system: string; code: string; catalogCodes: string[] }>; targetMissing: Array<{ system: string; code: string; catalogCode: string }>; written: number } }
+  | { ok: false; error: string };
+export interface TestMappingChange { system: string; code: string; before: string | null; after: string | null; rebuild: RebuildOutcome }
+export interface MappingImportReport {
+  counts: { new: number; changed: number; unchanged: number; refused: number };
+  refused: Array<{ line: number; system: string; code: string; reason: string }>;
+  rebuild: RebuildOutcome | null;
+}
+
+export function listObservedTestCodes(p: { status?: ObservedStatus | 'all'; q?: string; limit: number; offset: number }): Promise<ObservedTestCodesResult> {
+  const s = new URLSearchParams();
+  if (p.status && p.status !== 'all') s.set('status', p.status);
+  if (p.q) s.set('q', p.q);
+  s.set('limit', String(p.limit));
+  s.set('offset', String(p.offset));
+  return apiGet<ObservedTestCodesResult>(`/api/test-catalog/mappings/observed?${s}`, 'list lab test codes');
+}
+export const getMappingTargets = (): Promise<MappingTarget[]> =>
+  apiGet<{ targets: MappingTarget[] }>('/api/test-catalog/mappings/targets', 'load catalog tests').then((r) => r.targets);
+export const setTestMapping = (system: string, code: string, catalogCode: string): Promise<TestMappingChange> =>
+  authFetch('/api/test-catalog/mappings', jbody({ system, code, catalogCode }, 'PUT')).then((r) => okJson<TestMappingChange>(r, 'map test code'));
+export const clearTestMapping = (system: string, code: string): Promise<TestMappingChange> =>
+  authFetch('/api/test-catalog/mappings/clear', jbody({ system, code }, 'POST')).then((r) => okJson<TestMappingChange>(r, 'clear mapping'));
+const uploadMappingsCsv = (url: string, file: File, what: string): Promise<MappingImportReport> =>
+  authFetch(url, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file }).then((r) => okJson<MappingImportReport>(r, what));
+export const previewTestMappingImport = (file: File): Promise<MappingImportReport> =>
+  uploadMappingsCsv('/api/test-catalog/mappings/import/preview', file, 'check mappings file');
+export const applyTestMappingImport = (file: File): Promise<MappingImportReport> =>
+  uploadMappingsCsv('/api/test-catalog/mappings/import/apply', file, 'import mappings');
+export const rebuildTestMap = (): Promise<RebuildOutcome> =>
+  authFetch('/api/test-catalog/mappings/rebuild', { method: 'POST' }).then((r) => okJson<RebuildOutcome>(r, 'rebuild warehouse copy'));
+/** Fetched with the token, then saved through a link, exactly as downloadTestCatalogCsv does. */
+export async function downloadTestMappingsCsv(): Promise<void> {
+  const r = await authFetch('/api/test-catalog/mappings/export', { method: 'GET' });
+  if (!r.ok) throw new Error(formatApiError('export mappings', await errorDetail(r)));
+  const url = URL.createObjectURL(await r.blob());
+  const a = document.createElement('a');
+  a.href = url; a.download = 'test-mappings.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
 /** The specimens at least one of these tests accepts, by this lab's lists (test catalog S4). The server
  *  ignores codings that are not catalog tests, so an empty list means the picker does not narrow. */
 export const catalogSpecimensFor = (
