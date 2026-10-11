@@ -82,6 +82,42 @@ describe('test mapping: CSV', () => {
     expect((await mapping.importPreview(csv(text))).counts).toEqual({ new: 3, changed: 0, unchanged: 0, refused: 0 });
   });
 
+  it('keeps a central row that asks for no change, and still refuses one that asks for a different test', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedCatalogTest(internalDb, 'CD4', 'CD4 count');
+    await seedMapping(internalDb, 'm1', DISA, 'HIVVL', 'VL', { central: true });
+
+    const same = await mapping.importPreview(csv(`system,code,catalog_code
+${DISA},HIVVL,VL
+`));
+    expect(same.counts).toEqual({ new: 0, changed: 0, unchanged: 1, refused: 0 });
+
+    const other = await mapping.importPreview(csv(`system,code,catalog_code
+${DISA},HIVVL,CD4
+`));
+    expect(other.counts).toEqual({ new: 0, changed: 0, unchanged: 0, refused: 1 });
+    expect(other.refused[0].reason).toBe('central maps HIVVL; a lab cannot change it');
+  });
+
+  it('refuses a code the warehouse holds with surrounding spaces, and still counts an unobserved code as new', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedRequest(externalDb, 'r1', DISA, 'HIVVL ', null, '2026-05-01T08:00:00Z');
+    await seedRequest(externalDb, 'r2', DISA, 'CD4', null, '2026-05-01T08:00:00Z');
+
+    const report = await mapping.importPreview(csv(`system,code,catalog_code
+${DISA},HIVVL,VL
+${DISA},CD4,VL
+${DISA},NEVERSEEN,VL
+`));
+
+    expect(report.counts).toEqual({ new: 2, changed: 0, unchanged: 0, refused: 1 });
+    expect(report.refused).toEqual([
+      { line: 2, system: DISA, code: 'HIVVL', reason: 'the warehouse holds this code with surrounding spaces; map it on the Observed tab or with map set' },
+    ]);
+  });
+
   it('refuses a file without the system and code columns, or without catalog_code and loinc', async () => {
     const { mapping } = await buildMapping();
     await expect(mapping.importPreview(csv('code,catalog_code\nA,VL\n'))).rejects.toMatchObject({ kind: 'invalid', message: 'the file needs a system column and a code column' });

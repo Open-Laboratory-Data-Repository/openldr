@@ -404,6 +404,20 @@ export function createTestMapping(deps: TestMappingDeps) {
     const cell = (row: string[], name: string): string => (col(name) < 0 ? '' : (row[col(name)] ?? '').trim());
 
     const catalog = await readCatalog();
+    // One warehouse read per import. A code the warehouse holds with surrounding spaces is a different
+    // code from its trimmed form, and a file cell cannot carry the spaces (readTableFile trims every cell).
+    const observedCodes = new Map<string, Set<string>>();
+    for (const g of await readObservedGroups()) {
+      const set = observedCodes.get(g.system) ?? new Set<string>();
+      set.add(g.code);
+      observedCodes.set(g.system, set);
+    }
+    const heldWithSpaces = (system: string, code: string): boolean => {
+      const codes = observedCodes.get(system);
+      if (!codes || codes.has(code)) return false;
+      for (const c of codes) if (c !== code && c.trim() === code) return true;
+      return false;
+    };
     const report: MappingImportReport = { counts: { new: 0, changed: 0, unchanged: 0, refused: 0 }, refused: [], rebuild: null };
     const writes: PlannedRow[] = [];
     const seen = new Set<string>();
@@ -414,14 +428,19 @@ export function createTestMapping(deps: TestMappingDeps) {
 
     for (let i = 0; i < table.rows.length; i++) {
       const line = i + 2;
-      // Codes are kept exactly as typed between the separators. Only the surrounding cell padding a
-      // spreadsheet adds is dropped, which a real lab code never carries.
+      // readTableFile and cell() trim the cell, so a code cannot keep surrounding spaces here. A file
+      // cell is read as the trimmed code. Codes match exactly, so heldWithSpaces refuses the row when
+      // the warehouse holds only the padded form, rather than writing a mapping that never joins.
       const system = cell(table.rows[i], 'system');
       const code = cell(table.rows[i], 'code');
       if (system === '' || code === '') { refuse(line, system, code, 'system and code are required'); continue; }
       const key = sourceKey(system, code);
       if (seen.has(key)) { refuse(line, system, code, 'listed twice in the file'); continue; }
       seen.add(key);
+      if (heldWithSpaces(system, code)) {
+        refuse(line, system, code, 'the warehouse holds this code with surrounding spaces; map it on the Observed tab or with map set');
+        continue;
+      }
 
       const catalogCodeCell = cell(table.rows[i], 'catalog_code');
       const loinc = cell(table.rows[i], 'loinc');
@@ -439,9 +458,11 @@ export function createTestMapping(deps: TestMappingDeps) {
       const existing = await activeFor(system, code);
       // Blank catalog_code and loinc: leave the code as it is. An exported file lists unmapped codes so.
       if (catalogCode === null) { report.counts.unchanged += 1; continue; }
-      if (existing.some((r) => r.managed_origin === 'central')) { refuse(line, system, code, `central maps ${code}; a lab cannot change it`); continue; }
       const targets = [...new Set(existing.map((r) => r.to_code))];
+      // A row that asks for the target the code already has is no change, central-owned or not, so an
+      // untouched export re-imports cleanly. Central only blocks a different target.
       if (targets.length === 1 && targets[0] === catalogCode) { report.counts.unchanged += 1; continue; }
+      if (existing.some((r) => r.managed_origin === 'central')) { refuse(line, system, code, `central maps ${code}; a lab cannot change it`); continue; }
       if (existing.length === 0) report.counts.new += 1; else report.counts.changed += 1;
       writes.push({ system, code, catalogCode, name: catalog.get(catalogCode)!.name });
     }
