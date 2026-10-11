@@ -384,12 +384,12 @@ A category answer is `"kind": "existing"` with a `code`, or `"kind": "new"` with
 openldr test-catalog export --out catalog.csv
 ```
 
-Map lab test codes to catalog tests. See **Mapping lab test codes** in the in-app Test catalog guide. Use the System value the Observed tab shows for a code:
+Map lab test codes to catalog tests. See **Mapping lab test codes** in the in-app Test catalog guide. The system is a URN, as shown in the System column of the Observed tab. For DISA data it is `urn:openldr:disa`:
 
 ```sh
 openldr test-catalog map list --status unmapped --json
-openldr test-catalog map set DISA POCVR HIVVL
-openldr test-catalog map clear DISA POCVR --force
+openldr test-catalog map set urn:openldr:disa POCVR HIVVL
+openldr test-catalog map clear urn:openldr:disa POCVR --force
 openldr test-catalog map export --out mappings.csv
 openldr test-catalog map import mappings.csv
 openldr test-catalog map import mappings.csv --apply --force
@@ -450,12 +450,12 @@ Une réponse de catégorie est `"kind": "existing"` avec un `code`, ou `"kind": 
 openldr test-catalog export --out catalog.csv
 ```
 
-Associer des codes de test de laboratoire à des tests du catalogue. Voir **Associer les codes de test du laboratoire** dans le guide Catalogue des examens de l'application. Utilisez la valeur Système que l'onglet Observés affiche pour un code :
+Associer des codes de test de laboratoire à des tests du catalogue. Voir **Associer les codes de test du laboratoire** dans le guide Catalogue des examens de l'application. Le système est un URN, comme dans la colonne Système de l'onglet Observés. Pour les données DISA, c'est `urn:openldr:disa` :
 
 ```sh
 openldr test-catalog map list --status unmapped --json
-openldr test-catalog map set DISA POCVR HIVVL
-openldr test-catalog map clear DISA POCVR --force
+openldr test-catalog map set urn:openldr:disa POCVR HIVVL
+openldr test-catalog map clear urn:openldr:disa POCVR --force
 openldr test-catalog map export --out mappings.csv
 openldr test-catalog map import mappings.csv
 openldr test-catalog map import mappings.csv --apply --force
@@ -516,12 +516,12 @@ Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "ne
 openldr test-catalog export --out catalog.csv
 ```
 
-Associar códigos de teste do laboratório a testes do catálogo. Veja **Associar códigos de teste do laboratório** no guia Catálogo de exames da aplicação. Use o valor Sistema que o separador Observados mostra para um código:
+Associar códigos de teste do laboratório a testes do catálogo. Veja **Associar códigos de teste do laboratório** no guia Catálogo de exames da aplicação. O sistema é um URN, como na coluna Sistema do separador Observados. Para dados DISA, é `urn:openldr:disa`:
 
 ```sh
 openldr test-catalog map list --status unmapped --json
-openldr test-catalog map set DISA POCVR HIVVL
-openldr test-catalog map clear DISA POCVR --force
+openldr test-catalog map set urn:openldr:disa POCVR HIVVL
+openldr test-catalog map clear urn:openldr:disa POCVR --force
 openldr test-catalog map export --out mappings.csv
 openldr test-catalog map import mappings.csv
 openldr test-catalog map import mappings.csv --apply --force
