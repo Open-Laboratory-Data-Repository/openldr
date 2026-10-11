@@ -351,6 +351,7 @@ describe('createContentPackInstaller', () => {
 
     const checked = await s.installer.check(bundle);
     expect(checked.testMapPreview).toEqual([{
+      level: 'test',
       mapped: [{ system: 'urn:openldr:disa', code: 'HIVVL', loinc: '25836-8', catalogCode: 'VL' }],
       kept: [],
       skipped: [{ system: 'urn:openldr:disa', code: 'WW', reason: 'no catalog test is linked to LOINC 9999-9' }],
@@ -362,10 +363,28 @@ describe('createContentPackInstaller', () => {
     expect(events(s.audit).find((e) => e.action === 'test_mapping.pack')).toMatchObject({
       entityType: 'test_mapping',
       metadata: {
+        level: 'test',
         mapped: [{ system: 'urn:openldr:disa', code: 'HIVVL', catalogCode: 'VL' }], kept: [], skipped: [{ code: 'WW' }],
         mappedCount: 1, keptCount: 0, skippedCount: 1,
       },
     });
+    await cleanup();
+  });
+
+  it('a result-mappings step plans and writes at the result level', async () => {
+    const pack = { formatVersion: 1, steps: [{ kind: 'result-mappings', mappings: [
+      { system: 'urn:openldr:disa', code: 'HIVVL', loinc: '20447-9' },
+    ] }] };
+    const { bundle, cleanup } = await buildPack({ pack, steps: summarizeContentPack(parseContentPack(pack)) });
+    const s = setup();
+
+    const checked = await s.installer.check(bundle);
+    expect(checked.testMapPreview.map((p) => p.level)).toEqual(['result']);
+    expect(s.deps.planTestMappings).toHaveBeenLastCalledWith(pack.steps[0].mappings, 'result');
+
+    await s.installer.install(bundle, { actor });
+    expect(s.deps.applyTestMappings).toHaveBeenLastCalledWith(pack.steps[0].mappings, 'result');
+    expect(events(s.audit).find((e) => e.action === 'test_mapping.pack')).toMatchObject({ metadata: { level: 'result' } });
     await cleanup();
   });
 

@@ -6,7 +6,7 @@ import {
 import type { MarketplaceInstallStore, MarketplaceInstallRow } from '@openldr/db';
 import { safeRecord, type AuditEventInput, type AuditStore } from '@openldr/audit';
 import { redact, type Logger } from '@openldr/core';
-import type { PackMappingInput, PackMappingPlan } from './test-mapping';
+import type { MapLevel, PackMappingInput, PackMappingPlan } from './test-mapping';
 
 type Actor = { id: string | null; name: string };
 type StepOutcome = { ok: true } | { ok: false; error: string };
@@ -44,10 +44,10 @@ export interface ContentPackDeps {
     | { ok: true; wouldLink: number }
     | { ok: false; reason: 'unknown-register' | 'deactivated-register'; error: string }
   >;
-  /** Resolve a pack's test mappings by LOINC, writing nothing (test mapping spec 4.7). */
-  planTestMappings(mappings: PackMappingInput[]): Promise<PackMappingPlan>;
+  /** Resolve a pack's test or result mappings by LOINC, writing nothing (mapping specs 4.7). */
+  planTestMappings(mappings: PackMappingInput[], level: MapLevel): Promise<PackMappingPlan>;
   /** Write the resolvable ones and rebuild test_map once. Existing mappings are kept. */
-  applyTestMappings(mappings: PackMappingInput[]): Promise<PackMappingPlan>;
+  applyTestMappings(mappings: PackMappingInput[], level: MapLevel): Promise<PackMappingPlan>;
 }
 
 export interface ContentPackInstallOptions {
@@ -105,7 +105,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     if (canonicalJSON(payload.steps) !== canonicalJSON(steps)) throw new Error('step list does not match pack.json');
 
     const linkPreview: LinkPreview[] = [];
-    const testMapPreview: PackMappingPlan[] = [];
+    const testMapPreview: Array<PackMappingPlan & { level: MapLevel }> = [];
     const packRegisters = new Set<string>();
     for (const step of pack.steps) {
       switch (step.kind) {
@@ -135,8 +135,11 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
           break;
         }
         case 'test-mappings':
-          testMapPreview.push(await deps.planTestMappings(step.mappings));
+        case 'result-mappings': {
+          const level: MapLevel = step.kind === 'test-mappings' ? 'test' : 'result';
+          testMapPreview.push({ level, ...(await deps.planTestMappings(step.mappings, level)) });
           break;
+        }
       }
     }
     return { pack, steps, linkPreview, testMapPreview };
@@ -182,13 +185,16 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
         }
         return;
       }
-      case 'test-mappings': {
-        const plan = await deps.applyTestMappings(step.mappings);
+      case 'test-mappings':
+      case 'result-mappings': {
+        const level: MapLevel = step.kind === 'test-mappings' ? 'test' : 'result';
+        const plan = await deps.applyTestMappings(step.mappings, level);
         await record({
           ...who(actor), action: 'test_mapping.pack', entityType: 'test_mapping', entityId: `pack:${at.pack}`,
           before: null, after: null,
           metadata: {
             ...source,
+            level,
             mapped: plan.mapped.map((m) => ({ system: m.system, code: m.code, catalogCode: m.catalogCode })),
             kept: plan.kept, skipped: plan.skipped,
             mappedCount: plan.mapped.length, keptCount: plan.kept.length, skippedCount: plan.skipped.length,
@@ -199,7 +205,7 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
     }
   }
 
-  async function check(bundle: Bundle): Promise<{ steps: { kind: string; label: string; count: number }[]; linkPreview: LinkPreview[]; testMapPreview: PackMappingPlan[] }> {
+  async function check(bundle: Bundle): Promise<{ steps: { kind: string; label: string; count: number }[]; linkPreview: LinkPreview[]; testMapPreview: Array<PackMappingPlan & { level: MapLevel }> }> {
     const { steps, linkPreview, testMapPreview } = await verify(bundle, { id: null, name: 'check' });
     return { steps, linkPreview, testMapPreview };
   }

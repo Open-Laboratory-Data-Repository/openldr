@@ -154,7 +154,7 @@ async function installPack(
             ? `would link codes to ${p.registerUrl} once this pack loads its register (not counted yet)`
             : `would link ${p.wouldLink} code(s) to ${p.registerUrl}`)),
           ...testMapPreview.flatMap((p) => [
-            `test mappings: ${p.mapped.length} to map, ${p.kept.length} kept, ${p.skipped.length} skipped`,
+            `${p.level === 'result' ? 'result' : 'test'} mappings: ${p.mapped.length} to map, ${p.kept.length} kept, ${p.skipped.length} skipped`,
             ...p.skipped.map((s) => `  skipped ${s.system} ${s.code}: ${s.reason}`),
           ]),
         ].join('\n'),

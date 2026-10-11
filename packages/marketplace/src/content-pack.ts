@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const CONTENT_PACK_FORMAT_VERSION = 1;
 export class ContentPackError extends Error {}
 const NEWER = 'this pack needs a newer CE';
-const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries', 'test-mappings'] as const;
+const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries', 'test-mappings', 'result-mappings'] as const;
 
 const fhir = (resourceType: 'CodeSystem' | 'ValueSet') =>
   z.object({ resourceType: z.literal(resourceType), url: z.string().min(1) }).passthrough();
@@ -23,6 +23,16 @@ const stepSchema = z.discriminatedUnion('kind', [
   // refuses the pack as needing a newer CE.
   z.object({
     kind: z.literal('test-mappings'),
+    mappings: z.array(z.object({
+      system: z.string().min(1), code: z.string().min(1), loinc: z.string().regex(/^\d{1,7}-\d$/),
+    })).min(1),
+  }),
+  // Lab result codes mapped to result fields by LOINC (result field mapping spec 4.7). A kind of its
+  // own, not a level key on test-mappings: z.object drops unknown keys, so a CE from before this step
+  // would read a level key as nothing and write result codes as test mappings. As a new kind, that CE
+  // refuses the pack as needing a newer CE.
+  z.object({
+    kind: z.literal('result-mappings'),
     mappings: z.array(z.object({
       system: z.string().min(1), code: z.string().min(1), loinc: z.string().regex(/^\d{1,7}-\d$/),
     })).min(1),
@@ -63,6 +73,8 @@ export function summarizeContentPack(pack: ContentPack): { kind: string; label: 
         return { kind: s.kind, label: s.file.queries.map((q) => q.name).join(', '), count: s.file.queries.length };
       case 'test-mappings':
         return { kind: s.kind, label: 'Test mappings', count: s.mappings.length };
+      case 'result-mappings':
+        return { kind: s.kind, label: 'Result mappings', count: s.mappings.length };
     }
   });
 }
