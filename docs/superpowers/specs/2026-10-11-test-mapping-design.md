@@ -216,8 +216,8 @@ can clear a mapping by hand.
 
 | Case | What happens |
 |---|---|
-| Map to a catalog code that does not exist | The route refuses with 400 and a new code in the error-code catalog. |
-| Edit a central-owned mapping on a lab | The route refuses with 403. |
+| Map to a catalog code that does not exist | The route refuses with 400 and `{ error, kind: 'invalid' }`. |
+| Edit a central-owned mapping on a lab | The route refuses with 409 and `kind: 'central-managed'`. |
 | Map a code that already has a mapping | Set replaces it. On a lab, a central-owned mapping refuses as in the row above. One active mapping per code. |
 | Two active mappings exist, from a sync race or old data | The rebuild leaves the code out of `test_map`. The Observed tab shows it as ambiguous. |
 | The warehouse write fails | The mapping stays saved. The Observed tab shows the copy is out of date. |
@@ -271,3 +271,26 @@ Check the tab and the sheet at 375 px.
 - A guard on the general term-mapping routes for central-owned rows.
 - The dashboard builder's join list.
 - Fixing the boot-only rebuild for synced facility mappings (section 2). Noted, not fixed here.
+
+## 9. Changes during planning
+
+Each follows existing code.
+
+1. A lab editing a central-owned mapping gets 409 with `kind: 'central-managed'`, as the catalog routes do, not 403.
+2. Refusals are `{ error, kind }`, as the catalog routes do, not error-catalog codes.
+3. The studio install confirm does not show the pack's mapped, kept and skipped lists. It does not call the check for link-matching either. The CLI dry run and the audit row carry them.
+4. Catalog edits call an `onChanged` callback on `createTestCatalog`.
+5. Sync bursts go through a coalescing runner: at most two rebuilds per burst.
+6. Warehouse rows with a null `panel_system` or `panel_code` are left off the Observed list.
+7. A blank `catalog_code` and `loinc` in an imported CSV row means no change.
+
+## 10. Changes during the build
+
+Each came from a task review.
+
+1. Rebuilds run one at a time. A save's rebuild and a sync rebuild could otherwise overlap, and the second would fail on the primary key and report the copy out of date.
+2. `AppContext.close()` waits for a rebuild in flight before it closes the databases. A CLI command could otherwise exit mid-rebuild.
+3. An offline sync bundle import asks for a rebuild, as an online pull does.
+4. On a lab, a CSV row that asks for the mapping central already has counts as unchanged. Only a row that would change it is refused.
+5. The file reader trims every cell, so a CSV row is refused when the warehouse holds its code only with surrounding spaces. Such a code is mapped on the Observed tab or with `map set`.
+6. Codes match the way the warehouse database compares text: exact on Postgres; MSSQL and MySQL default collations ignore case, and MSSQL ignores trailing spaces. The docs say so.
