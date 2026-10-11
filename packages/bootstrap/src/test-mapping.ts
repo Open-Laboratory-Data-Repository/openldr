@@ -18,6 +18,8 @@ const RETIRED = 'DEPRECATED';
 const INSERT_CHUNK = 200;
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
+/** How long the Observed list reuses one warehouse scan. */
+const OBSERVED_CACHE_MS = 60_000;
 const STATUSES = ['unmapped', 'mapped', 'ambiguous', 'all'] as const;
 
 export type ObservedStatus = 'unmapped' | 'mapped' | 'ambiguous';
@@ -60,6 +62,8 @@ export interface TestMappingDeps {
   externalDb: Kysely<ExternalSchema>;
   admin: TerminologyAdminStore;
   logger: { warn(obj: object, msg: string): void };
+  /** Clock in ms, for the Observed scan cache. Tests inject one. Defaults to Date.now. */
+  now?: () => number;
 }
 
 type MappingRow = { id: string; from_system: string; from_code: string; to_code: string; to_display: string | null; map_type: string; managed_origin: string | null };
@@ -171,6 +175,7 @@ export interface PackMappingPlan {
 export function createTestMapping(deps: TestMappingDeps) {
   const { internalDb, externalDb } = deps;
   let lastRebuild: { ok: boolean; error: string | null } = { ok: true, error: null };
+  const now = deps.now ?? Date.now;
 
   async function readCatalog(): Promise<Map<string, CatalogEntry>> {
     const concepts = await internalDb.selectFrom('terminology_concepts')
@@ -200,11 +205,14 @@ export function createTestMapping(deps: TestMappingDeps) {
     const out = new Map<string, { system: string; code: string; resolved: Resolved; central: boolean }>();
     for (const [k, group] of groups) {
       // Distinct targets, not rows: two rows naming one test resolve the same way.
-      const targets = [...new Set(group.map((g) => g.to_code))].sort(compare);
+      // Central wins: when central has mapped the code, a lab's own row for it is ignored.
+      const central = group.filter((g) => g.managed_origin === 'central');
+      const deciding = central.length > 0 ? central : group;
+      const targets = [...new Set(deciding.map((g) => g.to_code))].sort(compare);
       const resolved: Resolved = targets.length > 1
         ? { kind: 'ambiguous', catalogCodes: targets }
         : catalog.has(targets[0]) ? { kind: 'mapped', catalogCode: targets[0] } : { kind: 'missing', catalogCode: targets[0] };
-      out.set(k, { system: group[0].from_system, code: group[0].from_code, resolved, central: group.some((g) => g.managed_origin === 'central') });
+      out.set(k, { system: group[0].from_system, code: group[0].from_code, resolved, central: central.length > 0 });
     }
     return out;
   }
@@ -263,7 +271,21 @@ export function createTestMapping(deps: TestMappingDeps) {
     return run;
   }
 
-  async function readObservedGroups(): Promise<Array<{ system: string; code: string; description: string | null; requests: number; lastSeen: string | null }>> {
+  type ObservedGroup = { system: string; code: string; description: string | null; requests: number; lastSeen: string | null };
+  // The group-by over lab_requests is the costly read behind the Observed list. Cache it for a minute.
+  // A rebuild does not clear it: a rebuild does not change lab_requests. Mappings and the catalog are
+  // never cached. A failed scan is not kept.
+  let observedCache: { at: number; groups: Promise<ObservedGroup[]> } | null = null;
+
+  function readObservedGroups(): Promise<ObservedGroup[]> {
+    if (observedCache && now() - observedCache.at < OBSERVED_CACHE_MS) return observedCache.groups;
+    const entry = { at: now(), groups: scanObservedGroups() };
+    observedCache = entry;
+    entry.groups.catch(() => { if (observedCache === entry) observedCache = null; });
+    return entry.groups;
+  }
+
+  async function scanObservedGroups(): Promise<ObservedGroup[]> {
     const rows = await externalDb.selectFrom('lab_requests')
       .select((eb) => [
         'panel_system', 'panel_code',

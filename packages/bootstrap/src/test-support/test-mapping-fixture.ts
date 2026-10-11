@@ -9,7 +9,7 @@ import { createTestMapping } from '../test-mapping';
 // Shared by the test-mapping*.test.ts files: a migrated internal db, a migrated warehouse, the real
 // terminology admin store, and helpers that seed catalog tests, mappings and lab requests.
 
-export async function buildMapping() {
+export async function buildMapping(opts: { now?: () => number } = {}) {
   const internalDb = await makeMigratedDb();
   const externalDb = await makeMigratedExternalDb();
   const fhirStore = createFhirStore(internalDb);
@@ -27,8 +27,18 @@ export async function buildMapping() {
   };
   const admin = createTerminologyAdminStore(internalDb, projection);
   const warnings: string[] = [];
-  const mapping = createTestMapping({ internalDb, externalDb, admin, logger: { warn: (_o, msg) => { warnings.push(msg); } } });
-  return { internalDb, externalDb, admin, mapping, warnings };
+  // Counts selects that read lab_requests, so a test can tell a cached Observed scan from a fresh one.
+  const counter = { groupQueries: 0 };
+  const countingDb = externalDb.withPlugin({
+    transformQuery(args) {
+      const node = args.node as { kind: string; from?: { froms?: Array<{ table?: { identifier?: { name?: string } } }> } };
+      if (node.kind === 'SelectQueryNode' && node.from?.froms?.some((f) => f.table?.identifier?.name === 'lab_requests')) counter.groupQueries += 1;
+      return args.node;
+    },
+    async transformResult(args) { return args.result; },
+  });
+  const mapping = createTestMapping({ internalDb, externalDb: countingDb, admin, now: opts.now, logger: { warn: (_o, msg) => { warnings.push(msg); } } });
+  return { internalDb, externalDb, admin, mapping, warnings, counter };
 }
 
 export async function seedCatalogTest(db: Kysely<InternalSchema>, code: string, display: string, opts: { category?: string; loinc?: string; status?: string } = {}) {

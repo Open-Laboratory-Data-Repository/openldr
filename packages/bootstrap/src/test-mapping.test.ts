@@ -51,6 +51,38 @@ describe('test mapping: read side and rebuild', () => {
     expect((await mapping.publish({ apply: true })).ambiguous).toEqual([]);
   });
 
+  it('lets central win over a lab row for the same code', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedCatalogTest(internalDb, 'EID', 'Early infant diagnosis');
+    await seedMapping(internalDb, 'lab1', DISA, 'HIVVL', 'EID');
+    await seedMapping(internalDb, 'central1', DISA, 'HIVVL', 'VL', { central: true });
+
+    const result = await mapping.publish({ apply: true });
+
+    expect(result.ambiguous).toEqual([]);
+    expect(result.mapped).toBe(1);
+    expect((await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code']).execute())).toEqual([{ source_code: 'HIVVL', catalog_code: 'VL' }]);
+    const row = (await mapping.observed({ status: 'all', q: '', limit: 25, offset: 0 })).rows.find((r) => r.code === 'HIVVL')!;
+    expect(row.status).toBe('mapped');
+    expect(row.catalog?.code).toBe('VL');
+    expect(row.centralManaged).toBe(true);
+  });
+
+  it('still calls a code ambiguous when two central rows name different tests', async () => {
+    const { internalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedCatalogTest(internalDb, 'EID', 'Early infant diagnosis');
+    await seedMapping(internalDb, 'c1', DISA, 'HIVVL', 'VL', { central: true });
+    await seedMapping(internalDb, 'c2', DISA, 'HIVVL', 'EID', { central: true });
+    await seedMapping(internalDb, 'lab1', DISA, 'HIVVL', 'VL');
+
+    const result = await mapping.publish({ apply: false });
+
+    expect(result.ambiguous).toEqual([{ system: DISA, code: 'HIVVL', catalogCodes: ['EID', 'VL'] }]);
+    expect(result.mapped).toBe(0);
+  });
+
   it('ignores inactive mappings', async () => {
     const { internalDb, mapping } = await buildMapping();
     await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
@@ -100,6 +132,27 @@ describe('test mapping: read side and rebuild', () => {
   });
 
   // Review focus 3.
+  it('reads the warehouse scan once a minute, and the mappings fresh each time', async () => {
+    let clock = 1_000_000;
+    const { internalDb, externalDb, mapping, counter } = await buildMapping({ now: () => clock });
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedRequest(externalDb, 'r1', DISA, 'HIVVL', 'HIV VL', '2026-01-01T00:00:00Z');
+    const query = { status: 'all' as const, q: '', limit: 25, offset: 0 };
+
+    const first = await mapping.observed(query);
+    expect(first.rows.map((r) => r.status)).toEqual(['unmapped']);
+    expect(counter.groupQueries).toBe(1);
+
+    await seedMapping(internalDb, 'm1', DISA, 'HIVVL', 'VL');
+    clock += 59_000;
+    expect((await mapping.observed(query)).rows.map((r) => r.status)).toEqual(['mapped']);
+    expect(counter.groupQueries).toBe(1);
+
+    clock += 2_000;
+    await mapping.observed(query);
+    expect(counter.groupQueries).toBe(2);
+  });
+
   it('leaves out warehouse rows with no code system or no code', async () => {
     const { externalDb, mapping } = await buildMapping();
     await seedRequest(externalDb, 'r1', null, 'HIVVL', null, '2026-05-01T08:00:00Z');
