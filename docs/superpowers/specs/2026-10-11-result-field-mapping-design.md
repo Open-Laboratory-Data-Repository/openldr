@@ -148,7 +148,7 @@ The Test catalog page goes from two tabs to three: **Tests**, **Result fields**,
 - Page `⋯`: Export CSV, Import CSV.
 - Read-only when the dictionary came from central. The rule copies `ownedHere`, reading
   `managed_origin` on the dictionary's `terminology_systems` row.
-- No dictionary loaded: `StripedEmpty` says so and points to the Terminology page's import.
+- No dictionary loaded: `StripedEmpty` says so and names `openldr terminology import parameters`.
 
 **Observed tab (extended).** It gains a second button group, **Tests | Results**, styled like its
 status filter (`apps/studio/src/test-catalog/ObservedCodesTab.tsx:88`). In Results mode:
@@ -189,11 +189,11 @@ openldr test-catalog map clear <system> <code> --level result --force
 openldr test-catalog map export --out <file> --level result
 openldr test-catalog map import <file> [--apply --force] --level result
 openldr test-catalog map match <system> [--apply --force]
-openldr test-catalog params list [--loinc linked|none] [--role <role>] [--json]
-openldr test-catalog params link <code> <loinc>
-openldr test-catalog params unlink <code> --force
-openldr test-catalog params export --out <file>
-openldr test-catalog params import <file> [--apply --force]
+openldr test-catalog result-fields list [--loinc linked|none] [--role <role>] [--json]
+openldr test-catalog result-fields link <code> <loinc>
+openldr test-catalog result-fields unlink <code> --force
+openldr test-catalog result-fields export --out <file>
+openldr test-catalog result-fields import <file> [--apply --force]
 ```
 
 Each command calls the same `@openldr/bootstrap` function as its route. Clear, unlink, match and
@@ -287,3 +287,16 @@ counts both the ingested and the bench results. Check both tabs and the match sh
 - Any index or query work on the Observed results list beyond the cache, unless section 5's numbers
   prove wrong on a real warehouse.
 - A `category` value for result rows. Role would fit, but no report asks for it.
+
+## 9. Changes during planning
+
+Each comes from code the design did not account for.
+
+1. The CLI group is `openldr test-catalog result-fields`, not `params`. `openldr test-catalog params <code>` already edits one test's result parameters (`packages/cli/src/program.ts:391-398`).
+2. The Observed list leaves out the catalog's own system in Tests mode too. CE's own orders are mapped by self rows, and listing them as Unmapped would invite a mapping the routes refuse.
+3. The dictionary import exists only in the CLI, through a context with no warehouse. The CLI opens the app context after the import and rebuilds once. The Result fields empty state names that command.
+4. The mapping routes keep the body field `catalogCode` for the target code at both levels, and take an optional `level`.
+5. Audit actions stay `test_mapping.*` with `metadata.level`. Map matching codes audits `test_mapping.match`. Result fields audit `result_field.link`, `.unlink` and `.import`.
+6. A result-fields CSV preview is refused too on a lab whose dictionary came from central.
+7. Last seen on the Results list is the newest `lab_results.created_at`, the time the row reached the warehouse. cdr sends no result time.
+8. The rebuild result keeps slice 1's top-level fields for the test level, and adds `results` and `selfRows`. `written` counts every row.
