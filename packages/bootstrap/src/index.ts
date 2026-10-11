@@ -1827,6 +1827,7 @@ export {
   type CatalogImportFile, type CatalogImportInput, type CatalogImportReport, type CatalogImportRefusal,
   type CatalogUnmatchedValue,
 } from './test-catalog';
+export * from './test-mapping';
 export {
   RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams,
   type BandFit, type SexOption, type TestResultParam, type ResultBand, type ResultType,
