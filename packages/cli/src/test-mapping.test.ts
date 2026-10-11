@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const testMapping = {
   observed: vi.fn(), set: vi.fn(), clear: vi.fn(), exportCsv: vi.fn(),
   importPreview: vi.fn(), importApply: vi.fn(), publish: vi.fn(), rebuildNow: vi.fn(),
+  observedSystems: vi.fn(), planMatch: vi.fn(), applyMatch: vi.fn(),
 };
 const audit: unknown[] = [];
 vi.mock('@openldr/config', () => ({ loadConfig: () => ({}) }));
@@ -18,7 +19,7 @@ vi.mock('@openldr/bootstrap', async (orig) => {
   };
 });
 
-import { runTestMappingClear, runTestMappingImport, runTestMappingList, runTestMappingRebuild, runTestMappingSet } from './test-mapping';
+import { runTestMappingClear, runTestMappingImport, runTestMappingList, runTestMappingMatch, runTestMappingRebuild, runTestMappingSet } from './test-mapping';
 
 const DISA = 'urn:openldr:disa';
 const REBUILT = { ok: true, result: { mapped: 1, ambiguous: [], targetMissing: [], written: 1 } };
@@ -105,5 +106,34 @@ describe('openldr test-catalog map', () => {
     const io = capture();
     expect(await runTestMappingRebuild({ apply: true, json: false })).toBe(1);
     expect(io.err()).toContain('test-catalog map rebuild failed: boom');
+  });
+
+  it('passes --level result to the service and refuses an unknown level', async () => {
+    testMapping.set.mockResolvedValue({ system: DISA, code: 'HIVVL', before: null, after: 'VLC', rebuild: REBUILT });
+    const io = capture();
+    expect(await runTestMappingSet(DISA, 'HIVVL', 'VLC', { json: false, level: 'result' })).toBe(0);
+    expect(testMapping.set).toHaveBeenCalledWith(DISA, 'HIVVL', 'VLC', 'result');
+    expect(io.out()).toContain('HIVVL now maps to result field VLC.');
+    expect(audit[0]).toMatchObject({ action: 'test_mapping.set', metadata: { level: 'result' } });
+    expect(await runTestMappingSet(DISA, 'HIVVL', 'VLC', { json: false, level: 'panel' })).toBe(1);
+    expect(io.err()).toContain('level must be test or result');
+  });
+
+  it('match previews without --apply and refuses --apply without --force', async () => {
+    testMapping.planMatch.mockResolvedValue({ system: DISA, matches: [{ code: 'HIVVL', display: 'HIV VL', results: 2 }] });
+    const io = capture();
+    expect(await runTestMappingMatch(DISA, { apply: false, force: false, json: false })).toBe(0);
+    expect(io.out()).toContain('would map 1 code(s)');
+    expect(io.out()).toContain('  HIVVL  HIV VL  2');
+    expect(testMapping.applyMatch).not.toHaveBeenCalled();
+    expect(await runTestMappingMatch(DISA, { apply: true, force: false, json: false })).toBe(1);
+    expect(testMapping.applyMatch).not.toHaveBeenCalled();
+  });
+
+  it('match --apply --force writes and audits', async () => {
+    testMapping.applyMatch.mockResolvedValue({ system: DISA, matches: [{ code: 'HIVVL', display: 'HIV VL', results: 2 }], rebuild: REBUILT });
+    capture();
+    expect(await runTestMappingMatch(DISA, { apply: true, force: true, json: false })).toBe(0);
+    expect(audit[0]).toMatchObject({ action: 'test_mapping.match', entityId: `match:${DISA}`, metadata: { codes: ['HIVVL'] } });
   });
 });

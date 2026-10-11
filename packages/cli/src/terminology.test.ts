@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(),
   readFileSync: vi.fn(),
   runDbReproject: vi.fn(),
+  appCtx: { testMapping: { rebuildNow: vi.fn() }, close: vi.fn() },
+  createAppContext: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({
@@ -39,6 +41,7 @@ vi.mock('@openldr/config', () => ({
 
 vi.mock('@openldr/bootstrap', () => ({
   createTerminologyContext: mocks.createTerminologyContext,
+  createAppContext: mocks.createAppContext,
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
@@ -67,6 +70,9 @@ describe('terminology CLI audit', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     mocks.createTerminologyContext.mockResolvedValue(mocks.termCtx);
     mocks.termCtx.close.mockResolvedValue(undefined);
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+    mocks.appCtx.close.mockResolvedValue(undefined);
+    mocks.appCtx.testMapping.rebuildNow.mockResolvedValue({ ok: true, result: { written: 2 } });
   });
 
   afterEach(() => {
@@ -154,6 +160,9 @@ describe('terminology CLI audit', () => {
         metadata: { source: 'parameters', result },
       }),
     );
+    // The import runs through a context with no warehouse, so the CLI rebuilds test_map itself.
+    expect(mocks.appCtx.testMapping.rebuildNow).toHaveBeenCalledTimes(1);
+    expect(mocks.appCtx.close).toHaveBeenCalledTimes(1);
   });
 
   it('still rejects an unknown import kind', async () => {

@@ -1,7 +1,7 @@
 import { readFileSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { loadConfig } from '@openldr/config';
-import { createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
+import { createAppContext, createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 import { validateDistributionImportArgs, isActiveJobConflict } from './distribution-args';
@@ -48,6 +48,17 @@ export async function runTerminologyImport(kind: string, path: string, opts: { a
         Object.entries(r.byRole).map(([t, n]) => `  ${t}: ${n}`).join('\n') +
         (r.skipped ? `\n  skipped (no code): ${r.skipped}` : ''));
       await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'parameters', metadata: { source: 'parameters', result: r } });
+      // The dictionary's fields get self rows in test_map, and their LOINC links fill its loinc column.
+      // This context opens no warehouse, so open the app context and rebuild once.
+      const app = await createAppContext(loadConfig());
+      try {
+        const rebuilt = await app.testMapping.rebuildNow();
+        if (!rebuilt.ok) {
+          process.stderr.write(`the warehouse copy test_map is out of date: ${rebuilt.error}. Run openldr test-catalog map rebuild --apply.\n`);
+        }
+      } finally {
+        await app.close();
+      }
     } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|organisms|parameters|resource)\n`); return 1; }
     return 0;
   } catch (err) { process.stderr.write(`terminology import failed: ${redactError(err)}\n`); return 1; }
