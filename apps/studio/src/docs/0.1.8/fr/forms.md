@@ -116,11 +116,11 @@ Une valeur hors de son intervalle est signalée à côté de la saisie. Elle n'e
 
 Chaque résultat numérique a un sélecteur d'intervalle sous sa saisie, qui liste chaque intervalle par son nom, ou, s'il n'en a pas, par qui il vise. Il démarre sur l'intervalle qui correspond au patient. Choisir un intervalle qui ne correspond pas affiche un avertissement et reste permis. Le signalement suit l'intervalle choisi. Si les intervalles de l'examen ont changé depuis l'ouverture du panneau, l'envoi de la demande est refusé. Rouvrez l'examen et choisissez de nouveau un intervalle.
 
-Un examen peut être refusé depuis le menu de sa ligne, avec un motif pris dans une liste. Un examen refusé est enregistré avec son motif.
+Un examen peut être refusé depuis le menu de sa ligne, avec un motif pris dans une liste. Un examen refusé est enregistré avec son motif, mais le motif n'atteint pas les rapports. Sur sa demande, l'examen apparaît comme une ligne de résultat sans valeur.
 
-La demande entière peut être refusée depuis le menu de la page, avec **Refuser la demande**. Choisissez un motif dans la liste. Si les motifs ne peuvent pas être lus, le panneau le dit et vous ne pouvez pas refuser tant qu'ils ne sont pas chargés. Une fois la demande refusée, une ligne sous l'en-tête montre le motif, et chaque ligne d'examen indique "Demande refusée" et est fermée à la saisie. Les valeurs déjà saisies restent à l'écran mais ne sont pas écrites. **Annuler le refus**, dans le même menu, rouvre les lignes.
+La demande entière peut être refusée depuis le menu de la page, avec **Refuser la demande**. Choisissez un motif dans la liste. Si les motifs ne peuvent pas être lus, le panneau le dit et vous ne pouvez pas refuser. Rien ne réessaie de lui-même, donc fermez le panneau et rouvrez-le. Une fois la demande refusée, une ligne sous l'en-tête montre le motif, et chaque ligne d'examen indique "Demande refusée" et est fermée à la saisie. Les valeurs déjà saisies restent à l'écran mais ne sont pas écrites. **Annuler le refus**, dans le même menu, rouvre les lignes.
 
-Une demande refusée est enregistrée comme révoquée, avec le code et le texte du motif. Le motif parvient au dossier du laboratoire (le code et le motif de refus sur la demande), donc les rapports de refus la comptent. Aucun résultat n'est écrit pour une demande refusée.
+Une demande refusée est marquée comme refusée, avec le code et le texte du motif. Le motif parvient au dossier du laboratoire (le code et le motif de refus sur la demande), donc un rapport peut la compter. Le code de refus de la demande se trouve au même endroit que les codes de refus qui arrivent du système du laboratoire, donc un rapport qui regroupe par code voit les deux sortes. Aucun résultat n'est écrit pour une demande refusée.
 
 Chaque résultat écrit est lié à sa demande, pour que les rapports puissent joindre un résultat à la demande dont il vient.
 

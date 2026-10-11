@@ -523,8 +523,9 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       // A failed run does NOT mean nothing was stored. `persist-1` runs before `log-1`, so a
       // failure in the Log node or in the `data.persisted` publish lands here with the resources
       // already written. Telling the clerk only "failed" makes them resubmit — and
-      // `unwrapBundle` assigns a fresh randomUUID() per entry on every submission, so the retry
-      // writes a SECOND ServiceRequest and QuestionnaireResponse for the same clinical event.
+      // every submission mints fresh ids (`linkToOrder` for the order and its Specimen,
+      // `unwrapBundle` for entries that still have none), so the retry writes a SECOND
+      // ServiceRequest and QuestionnaireResponse for the same clinical event.
       // The run's own metadata already knows; say what actually landed.
       //
       // NOT covered here: a run-store insert failure. `deps.runs.record(run)` throws INSIDE

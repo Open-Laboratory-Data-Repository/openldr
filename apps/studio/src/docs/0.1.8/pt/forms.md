@@ -116,11 +116,11 @@ Um valor fora do intervalo é assinalado ao lado do campo. Nunca é recusado: qu
 
 Cada resultado numérico tem um seletor de intervalo por baixo do campo, que lista cada intervalo pelo nome, ou, quando não tem nome, por quem é. Começa no intervalo que corresponde ao doente. Escolher um intervalo que não corresponde mostra um aviso e continua permitido. O sinal segue o intervalo escolhido. Se os intervalos do exame mudaram depois de o painel ter sido aberto, o envio do pedido é recusado. Reabra o exame e escolha um intervalo novamente.
 
-Um exame pode ser recusado no menu da sua linha, com um motivo de uma lista. Um exame recusado fica registado com o motivo.
+Um exame pode ser recusado no menu da sua linha, com um motivo de uma lista. Um exame recusado fica registado com o motivo, mas o motivo não chega aos relatórios. No seu pedido, o exame aparece como uma linha de resultado sem valor.
 
-O pedido inteiro pode ser recusado no menu da página, com **Recusar o pedido**. Escolha um motivo da lista. Se os motivos não puderem ser lidos, o painel diz isso e não é possível recusar até eles carregarem. Depois de recusado, uma linha por baixo do cabeçalho mostra o motivo, e cada linha de exame mostra "Pedido recusado" e fica fechada à escrita. Os valores já escritos ficam no ecrã mas não são gravados. **Anular a recusa**, no mesmo menu, volta a abrir as linhas.
+O pedido inteiro pode ser recusado no menu da página, com **Recusar o pedido**. Escolha um motivo da lista. Se os motivos não puderem ser lidos, o painel diz isso e não é possível recusar. Nada tenta de novo sozinho, por isso feche o painel e abra-o outra vez. Depois de recusado, uma linha por baixo do cabeçalho mostra o motivo, e cada linha de exame mostra "Pedido recusado" e fica fechada à escrita. Os valores já escritos ficam no ecrã mas não são gravados. **Anular a recusa**, no mesmo menu, volta a abrir as linhas.
 
-Um pedido recusado fica guardado como revogado, com o código e o texto do motivo. O motivo chega ao registo do laboratório (o código e o motivo de recusa no pedido), por isso os relatórios de recusa contam-no. Nenhum resultado é escrito para um pedido recusado.
+Um pedido recusado fica marcado como recusado, com o código e o texto do motivo. O motivo chega ao registo do laboratório (o código e o motivo de recusa no pedido), por isso um relatório pode contá-lo. O código de recusa do pedido fica no mesmo lugar que os códigos de recusa que chegam do sistema do laboratório, por isso um relatório que agrupa por código vê os dois tipos. Nenhum resultado é escrito para um pedido recusado.
 
 Cada resultado escrito fica ligado ao seu pedido, para que os relatórios possam juntar um resultado ao pedido de onde veio.
 

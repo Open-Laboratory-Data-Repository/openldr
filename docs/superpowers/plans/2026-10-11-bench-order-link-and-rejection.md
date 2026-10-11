@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Controller ruling during Task 3:** the field binds `ServiceRequest.extension` with `fhirDiscriminator: { url: 'urn:openldr:ext:rejection' }`, not `ServiceRequest.rejection`, because the FHIR path lint rule refuses a path that is not an R4 element. Read every mention below in that light.
+
 **Goal:** Every Observation from a Lab order submit points at its order, and the bench can reject a
 whole order with a coded reason that reaches the warehouse.
 
