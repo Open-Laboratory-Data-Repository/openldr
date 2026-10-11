@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const CONTENT_PACK_FORMAT_VERSION = 1;
 export class ContentPackError extends Error {}
 const NEWER = 'this pack needs a newer CE';
-const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries'] as const;
+const KINDS = ['code-system', 'value-set', 'facility-register', 'link-matching', 'custom-queries', 'test-mappings'] as const;
 
 const fhir = (resourceType: 'CodeSystem' | 'ValueSet') =>
   z.object({ resourceType: z.literal(resourceType), url: z.string().min(1) }).passthrough();
@@ -19,6 +19,14 @@ const stepSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('link-matching'), registerUrl: z.string().min(1) }),
   z.object({ kind: z.literal('custom-queries'), file: z.object({ queries: z.array(z.object({ name: z.string() }).passthrough()) }).passthrough() }),
+  // Lab test codes mapped to catalog tests by LOINC (test mapping spec 4.7). A CE without this kind
+  // refuses the pack as needing a newer CE.
+  z.object({
+    kind: z.literal('test-mappings'),
+    mappings: z.array(z.object({
+      system: z.string().min(1), code: z.string().min(1), loinc: z.string().regex(/^\d{1,7}-\d$/),
+    })).min(1),
+  }),
 ]);
 
 export const contentPackSchema = z.object({ formatVersion: z.literal(CONTENT_PACK_FORMAT_VERSION), steps: z.array(stepSchema).min(1) });
@@ -53,6 +61,8 @@ export function summarizeContentPack(pack: ContentPack): { kind: string; label: 
         return { kind: s.kind, label: s.registerUrl, count: 1 };
       case 'custom-queries':
         return { kind: s.kind, label: s.file.queries.map((q) => q.name).join(', '), count: s.file.queries.length };
+      case 'test-mappings':
+        return { kind: s.kind, label: 'Test mappings', count: s.mappings.length };
     }
   });
 }

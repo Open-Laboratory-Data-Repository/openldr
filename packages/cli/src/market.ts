@@ -143,16 +143,20 @@ async function installPack(
   try {
     const { id, version } = bundle.manifest;
     if (opts.dryRun) {
-      const { steps, linkPreview = [] } = await ctx.marketplacePacks.check(bundle);
+      const { steps, linkPreview = [], testMapPreview = [] } = await ctx.marketplacePacks.check(bundle);
       emit(
         opts.json,
-        { id, version, dryRun: true, steps, linkPreview },
+        { id, version, dryRun: true, steps, linkPreview, testMapPreview },
         [
           `dry run: ${id}@${version} would run ${steps.length} step(s)`,
           ...steps.map((s, i) => `  ${i + 1}. ${s.kind.padEnd(18)} ${s.label} (${s.count})`),
           ...linkPreview.map((p) => (p.wouldLink === null
             ? `would link codes to ${p.registerUrl} once this pack loads its register (not counted yet)`
             : `would link ${p.wouldLink} code(s) to ${p.registerUrl}`)),
+          ...testMapPreview.flatMap((p) => [
+            `test mappings: ${p.mapped.length} to map, ${p.kept.length} kept, ${p.skipped.length} skipped`,
+            ...p.skipped.map((s) => `  skipped ${s.system} ${s.code}: ${s.reason}`),
+          ]),
         ].join('\n'),
       );
       return 0;

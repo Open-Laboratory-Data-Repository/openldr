@@ -289,6 +289,23 @@ describe('market commands', () => {
     expect(text).toContain('would link codes to urn:test:new once this pack loads its register (not counted yet)');
   });
 
+  it('install pack --dry-run: prints the test mapping plan', async () => {
+    await useBundle(packBundle);
+    mockPacks.check.mockResolvedValueOnce({
+      steps: [{ kind: 'test-mappings', label: 'Test mappings', count: 2 }],
+      testMapPreview: [{
+        mapped: [{ system: 's', code: 'A', catalogCode: 'VL' }],
+        kept: [],
+        skipped: [{ system: 's', code: 'B', reason: 'no catalog test is linked to LOINC 9999-9' }],
+      }],
+    });
+    const code = await runMarketInstall('/some/dir', { json: false, dryRun: true });
+    expect(code).toBe(0);
+    const text = writeSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(text).toContain('test mappings: 1 to map, 0 kept, 1 skipped');
+    expect(text).toContain('skipped s B: no catalog test is linked to LOINC 9999-9');
+  });
+
   it('install pack: a failed row installs again without --force', async () => {
     await useBundle(packBundle);
     mockPacks.list.mockResolvedValueOnce([{ artifactId: 'demo-pack', version: '1.0.0', status: 'failed', failedStep: 3 }]);

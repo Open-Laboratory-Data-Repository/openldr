@@ -159,6 +159,15 @@ export interface MappingImportReport {
 
 type PlannedRow = { system: string; code: string; catalogCode: string; name: string | null };
 
+export interface PackMappingInput { system: string; code: string; loinc: string }
+
+export interface PackMappingPlan {
+  mapped: Array<{ system: string; code: string; catalogCode: string }>;
+  /** Already mapped here, by hand or by central. A pack never overwrites. */
+  kept: Array<{ system: string; code: string }>;
+  skipped: Array<{ system: string; code: string; reason: string }>;
+}
+
 export function createTestMapping(deps: TestMappingDeps) {
   const { internalDb, externalDb } = deps;
   let lastRebuild: { ok: boolean; error: string | null } = { ok: true, error: null };
@@ -493,9 +502,32 @@ export function createTestMapping(deps: TestMappingDeps) {
     return { ...report, rebuild: await rebuildNow() };
   }
 
+  async function planPack(mappings: PackMappingInput[]): Promise<PackMappingPlan> {
+    const plan: PackMappingPlan = { mapped: [], kept: [], skipped: [] };
+    const seen = new Set<string>();
+    for (const m of mappings) {
+      const key = sourceKey(m.system, m.code);
+      if (seen.has(key)) { plan.skipped.push({ system: m.system, code: m.code, reason: 'listed twice in this pack' }); continue; }
+      seen.add(key);
+      if ((await activeFor(m.system, m.code)).length > 0) { plan.kept.push({ system: m.system, code: m.code }); continue; }
+      const codes = await catalogCodesForLoinc(m.loinc);
+      if (codes.length === 0) { plan.skipped.push({ system: m.system, code: m.code, reason: `no catalog test is linked to LOINC ${m.loinc}` }); continue; }
+      if (codes.length > 1) { plan.skipped.push({ system: m.system, code: m.code, reason: `${codes.length} catalog tests are linked to LOINC ${m.loinc}` }); continue; }
+      plan.mapped.push({ system: m.system, code: m.code, catalogCode: codes[0] });
+    }
+    return plan;
+  }
+
+  async function applyPack(mappings: PackMappingInput[]): Promise<PackMappingPlan & { rebuild: RebuildOutcome }> {
+    const plan = await planPack(mappings);
+    const catalog = await readCatalog();
+    for (const m of plan.mapped) await writeMapping(m.system, m.code, m.catalogCode, catalog.get(m.catalogCode)?.name ?? null);
+    return { ...plan, rebuild: await rebuildNow() };
+  }
+
   return {
     observed, observedAll, targets, publish, rebuildNow, requestRebuild, settled, set, clear, writeMapping, activeFor, readCatalog, readMappings,
-    exportCsv, importPreview, importApply, catalogCodesForLoinc,
+    exportCsv, importPreview, importApply, catalogCodesForLoinc, planPack, applyPack,
   };
 }
 

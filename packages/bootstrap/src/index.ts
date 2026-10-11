@@ -1144,6 +1144,8 @@ const reporting: ReportingApi = {
       }
       return { ok: true, counts: out.result.counts };
     },
+    planTestMappings: (mappings) => testMapping.planPack(mappings),
+    applyTestMappings: (mappings) => testMapping.applyPack(mappings),
   });
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
