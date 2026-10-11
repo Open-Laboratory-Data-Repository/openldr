@@ -6,6 +6,114 @@
       "version": "v0.1.11",
       "entries": [
         {
+          "hash": "bf464435",
+          "type": "fix",
+          "scope": "db",
+          "title": "Test_map level column uses the short key type"
+        },
+        {
+          "hash": "aeffdd17",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Map rebuild --apply goes through the rebuild mutex"
+        },
+        {
+          "hash": "d90c6a57",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Close waits for the test_map rebuild just before the databases close"
+        },
+        {
+          "hash": "b217ce3c",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Import apply always rebuilds; import reads back guarded CSV codes"
+        },
+        {
+          "hash": "fb740f26",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Pack audit lists the codes it mapped, kept and skipped"
+        },
+        {
+          "hash": "908a7af7",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Observed tab ignores a stale response"
+        },
+        {
+          "hash": "5f300664",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Central mapping wins over a lab row; cache the Observed warehouse scan for 60 s"
+        },
+        {
+          "hash": "7b2e90c0",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Observed tab maps lab test codes to catalog tests"
+        },
+        {
+          "hash": "28f5fe82",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr test-catalog map commands"
+        },
+        {
+          "hash": "d130e027",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "Test-mappings content pack step"
+        },
+        {
+          "hash": "ee5447f4",
+          "type": "feat",
+          "scope": "server",
+          "title": "Routes for test mappings"
+        },
+        {
+          "hash": "bd111efe",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Wait for test_map rebuilds on close, and rebuild after a bundle import"
+        },
+        {
+          "hash": "de6fb218",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Rebuild test_map on catalog edits, sync and boot"
+        },
+        {
+          "hash": "37a5d434",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "CSV import keeps central rows that ask for no change, and refuses padded codes"
+        },
+        {
+          "hash": "279d7d53",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Export and import test mappings as CSV"
+        },
+        {
+          "hash": "5f48cb93",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Set and clear test mappings, with coalesced rebuilds"
+        },
+        {
+          "hash": "16809536",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Read observed test codes and rebuild test_map"
+        },
+        {
+          "hash": "b7b759f4",
+          "type": "feat",
+          "scope": "db",
+          "title": "Test_map warehouse table for test mappings"
+        },
+        {
           "hash": "f3f21d03",
           "type": "fix",
           "scope": "release",
