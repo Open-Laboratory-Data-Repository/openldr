@@ -90,4 +90,20 @@ describe('openldr test-catalog map', () => {
     expect(io.out()).toContain('would write 3 row(s); 1 ambiguous, 0 with a missing catalog test');
     expect(io.out()).toContain(`  ambiguous ${DISA} X: A, B`);
   });
+  it('rebuild --apply goes through the rebuild mutex and prints what it wrote', async () => {
+    testMapping.publish.mockReset();
+    testMapping.rebuildNow.mockResolvedValue({ ok: true, result: { mapped: 3, ambiguous: [], targetMissing: [], written: 3 } });
+    const io = capture();
+    expect(await runTestMappingRebuild({ apply: true, json: false })).toBe(0);
+    expect(testMapping.rebuildNow).toHaveBeenCalledTimes(1);
+    expect(testMapping.publish).not.toHaveBeenCalled();
+    expect(io.out()).toContain('wrote 3 row(s); 0 ambiguous, 0 with a missing catalog test');
+  });
+
+  it('rebuild --apply prints the error and exits 1 when the rebuild fails', async () => {
+    testMapping.rebuildNow.mockResolvedValue({ ok: false, error: 'boom' });
+    const io = capture();
+    expect(await runTestMappingRebuild({ apply: true, json: false })).toBe(1);
+    expect(io.err()).toContain('test-catalog map rebuild failed: boom');
+  });
 });

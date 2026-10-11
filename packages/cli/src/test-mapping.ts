@@ -105,7 +105,15 @@ export async function runTestMappingImport(file: string, opts: { apply: boolean;
 export async function runTestMappingRebuild(opts: { apply: boolean; json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
-    const result = await ctx.testMapping.publish({ apply: opts.apply });
+    let result;
+    if (opts.apply) {
+      // Same path as the route and the sync: one rebuild at a time, and a failure is reported, not thrown.
+      const outcome = await ctx.testMapping.rebuildNow();
+      if (!outcome.ok) return fail('rebuild', new Error(outcome.error), opts.json);
+      result = outcome.result;
+    } else {
+      result = await ctx.testMapping.publish({ apply: false });
+    }
     if (opts.json) { process.stdout.write(JSON.stringify(result, null, 2) + '\n'); return 0; }
     process.stdout.write([
       `${opts.apply ? 'wrote' : 'would write'} ${result.written} row(s); ${result.ambiguous.length} ambiguous, ${result.targetMissing.length} with a missing catalog test`,
