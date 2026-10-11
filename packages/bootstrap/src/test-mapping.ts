@@ -1,7 +1,7 @@
 import type { Kysely } from 'kysely';
-import { testMapId, type ExternalSchema, type InternalSchema, type TerminologyAdminStore } from '@openldr/db';
+import { testMapId, type ExternalSchema, type InternalSchema, type MapType, type TerminologyAdminStore } from '@openldr/db';
 import { LOINC_SYSTEM } from '@openldr/terminology';
-import { TEST_CATALOG_SYSTEM } from './test-catalog';
+import { TEST_CATALOG_SYSTEM, TestCatalogError } from './test-catalog';
 
 // Test mapping (docs/superpowers/specs/2026-10-11-test-mapping-design.md). Each lab's own test codes,
 // as the warehouse stores them in lab_requests.panel_system and panel_code, map to catalog tests
@@ -67,6 +67,8 @@ type Resolved =
   | { kind: 'ambiguous'; catalogCodes: string[] }
   | { kind: 'missing'; catalogCode: string };
 
+const MAPPING_COLUMNS = ['id', 'from_system', 'from_code', 'to_code', 'to_display', 'map_type', 'managed_origin'] as const;
+
 const sourceKey = (system: string, code: string): string => `${system}\u0000${code}`;
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -90,6 +92,54 @@ export function parseObservedQuery(raw: Record<string, unknown>): { ok: true; qu
   return { ok: true, query: { status: status as ObservedQuery['status'], q, limit, offset: Number(offsetRaw) } };
 }
 
+export interface TestMappingChange {
+  system: string;
+  code: string;
+  before: string | null;
+  after: string | null;
+  rebuild: RebuildOutcome;
+}
+
+/** Coalesce rebuild requests. One run at a time; requests made while it runs share one more run.
+ *  A sync pull can apply hundreds of relevant records, and each must not cost a rebuild. */
+export function createCoalescedRunner(run: () => Promise<void>): () => Promise<void> {
+  let running: Promise<void> | null = null;
+  let again = false;
+  const loop = async (): Promise<void> => {
+    try {
+      do {
+        again = false;
+        await run();
+      } while (again);
+    } finally {
+      running = null;
+    }
+  };
+  return () => {
+    if (running) {
+      again = true;
+      return running;
+    }
+    running = loop();
+    return running;
+  };
+}
+
+/** A term mapping into the catalog is a test mapping. One out of the catalog is its LOINC link. Both
+ *  change test_map. */
+export function mappingTouchesTestMap(fromSystem: string | null | undefined, toSystem: string | null | undefined): boolean {
+  return toSystem === TEST_CATALOG_SYSTEM || fromSystem === TEST_CATALOG_SYSTEM;
+}
+
+/** Whether a record a lab pulled from central changes test_map. A term mapping delete carries no body,
+ *  so it counts: a spare rebuild is cheap, a missed one leaves reports wrong. */
+export function isTestMapRelevantRecord(rec: { entityType: string; body: unknown }): boolean {
+  const body = rec.body as { fromSystem?: string; toSystem?: string; url?: string } | null;
+  if (rec.entityType === 'term_mapping') return body === null || body === undefined || mappingTouchesTestMap(body.fromSystem, body.toSystem);
+  if (rec.entityType === 'terminology_system') return body?.url === TEST_CATALOG_SYSTEM;
+  return false;
+}
+
 export function createTestMapping(deps: TestMappingDeps) {
   const { internalDb, externalDb } = deps;
   let lastRebuild: { ok: boolean; error: string | null } = { ok: true, error: null };
@@ -109,7 +159,7 @@ export function createTestMapping(deps: TestMappingDeps) {
 
   async function readMappings(): Promise<MappingRow[]> {
     return internalDb.selectFrom('term_mappings')
-      .select(['id', 'from_system', 'from_code', 'to_code', 'to_display', 'map_type', 'managed_origin'])
+      .select(MAPPING_COLUMNS)
       .where('to_system', '=', TEST_CATALOG_SYSTEM).where('is_active', '=', true).execute();
   }
 
@@ -161,8 +211,7 @@ export function createTestMapping(deps: TestMappingDeps) {
     return result;
   }
 
-  /** Rebuild test_map now. Never throws: a failure is logged, kept for the Observed list, and returned. */
-  async function rebuildNow(): Promise<RebuildOutcome> {
+  async function doRebuild(): Promise<RebuildOutcome> {
     try {
       const result = await publish({ apply: true });
       lastRebuild = { ok: true, error: null };
@@ -173,6 +222,17 @@ export function createTestMapping(deps: TestMappingDeps) {
       deps.logger.warn({ err }, 'test_map rebuild failed');
       return { ok: false, error };
     }
+  }
+
+  // One rebuild at a time. Two overlapping rebuilds both delete, then the second insert hits the primary
+  // key and rolls back, so the table is right but the outcome says "stale". Later calls wait their turn.
+  let chain: Promise<unknown> = Promise.resolve();
+
+  /** Rebuild test_map now. Never throws: a failure is logged, kept for the Observed list, and returned. */
+  function rebuildNow(): Promise<RebuildOutcome> {
+    const run = chain.then(doRebuild, doRebuild);
+    chain = run.catch(() => undefined);
+    return run;
   }
 
   async function readObservedGroups(): Promise<Array<{ system: string; code: string; description: string | null; requests: number; lastSeen: string | null }>> {
@@ -238,7 +298,67 @@ export function createTestMapping(deps: TestMappingDeps) {
       .sort((a, b) => compare(a.code, b.code));
   }
 
-  return { observed, observedAll, targets, publish, rebuildNow, readCatalog, readMappings };
+  async function activeFor(system: string, code: string): Promise<MappingRow[]> {
+    return internalDb.selectFrom('term_mappings')
+      .select(MAPPING_COLUMNS)
+      .where('from_system', '=', system).where('from_code', '=', code)
+      .where('to_system', '=', TEST_CATALOG_SYSTEM).where('is_active', '=', true).execute();
+  }
+
+  function assertSource(system: string, code: string): void {
+    if (system.trim() === '' || code.trim() === '') throw new TestCatalogError('system and code are required', 'invalid');
+  }
+
+  function assertNotCentral(rows: MappingRow[], code: string): void {
+    if (rows.some((r) => r.managed_origin === 'central')) {
+      throw new TestCatalogError(`central maps ${code}; a lab cannot change it`, 'central-managed');
+    }
+  }
+
+  async function deactivate(row: MappingRow): Promise<void> {
+    await deps.admin.termMappings.update(row.id, {
+      fromSystem: row.from_system, fromCode: row.from_code, toSystem: TEST_CATALOG_SYSTEM, toCode: row.to_code,
+      toDisplay: row.to_display, mapType: row.map_type as MapType, isActive: false,
+    });
+  }
+
+  /** Make `catalogCode` the one active catalog mapping for this code. No guard and no rebuild: the
+   *  callers (set, CSV import, pack install) check first and rebuild once at the end. */
+  async function writeMapping(system: string, code: string, catalogCode: string, name: string | null): Promise<void> {
+    const saved = await deps.admin.termMappings.saveExclusive({
+      fromSystem: system, fromCode: code, toSystem: TEST_CATALOG_SYSTEM, toCode: catalogCode,
+      toDisplay: name, mapType: MAP_TYPE, isActive: true,
+    });
+    // saveExclusive supersedes only SAME-AS rows. One made through the general mapping dialog with
+    // another type would stay active and make the code ambiguous, so it goes too.
+    for (const other of await activeFor(system, code)) {
+      if (other.id !== saved.mapping.id) await deactivate(other);
+    }
+  }
+
+  async function set(system: string, code: string, catalogCode: string): Promise<TestMappingChange> {
+    assertSource(system, code);
+    const entry = (await readCatalog()).get(catalogCode);
+    if (!entry) throw new TestCatalogError(`no catalog test has code ${catalogCode}`, 'invalid');
+    const existing = await activeFor(system, code);
+    assertNotCentral(existing, code);
+    const before = existing.map((r) => r.to_code).sort(compare)[0] ?? null;
+    await writeMapping(system, code, catalogCode, entry.name);
+    return { system, code, before, after: catalogCode, rebuild: await rebuildNow() };
+  }
+
+  async function clear(system: string, code: string): Promise<TestMappingChange> {
+    assertSource(system, code);
+    const existing = await activeFor(system, code);
+    if (existing.length === 0) throw new TestCatalogError(`${code} has no catalog mapping`, 'not-found');
+    assertNotCentral(existing, code);
+    for (const row of existing) await deactivate(row);
+    return { system, code, before: existing.map((r) => r.to_code).sort(compare)[0], after: null, rebuild: await rebuildNow() };
+  }
+
+  const requestRebuild = createCoalescedRunner(async () => { await rebuildNow(); });
+
+  return { observed, observedAll, targets, publish, rebuildNow, requestRebuild, set, clear, writeMapping, activeFor, readCatalog, readMappings };
 }
 
 export type TestMapping = ReturnType<typeof createTestMapping>;
