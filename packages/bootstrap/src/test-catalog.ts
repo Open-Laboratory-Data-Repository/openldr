@@ -48,7 +48,8 @@ const MAX_LIMIT = 200;
 /** Terminology's statuses are ACTIVE, DRAFT, DEPRECATED and DISABLED, and the Terminology page accepts
  *  nothing else (apps/server/src/terminology-admin-routes.ts), so a retired test is stored as DEPRECATED. */
 const RETIRED_STATUS = 'DEPRECATED';
-const LOINC_CODE = /^\d{1,7}-\d$/;
+/** A LOINC code's shape. Result fields check their links against it too. */
+export const LOINC_CODE = /^\d{1,7}-\d$/;
 /** An import looks its LOINC codes up in batches, so thousands of rows cost a few queries. */
 const LOINC_LOOKUP_CHUNK = 1000;
 
@@ -442,6 +443,17 @@ export function withLabTestsList(
   };
 }
 
+/** Whether LOINC itself is loaded here. Linking to a LOINC code that is not loaded stubs a DRAFT concept
+ *  (terminology-admin-store.ts, termMappings.create and saveExclusive), so DRAFT rows alone do not count. */
+export async function isLoincLoaded(db: Kysely<InternalSchema>): Promise<boolean> {
+  const row = await db.selectFrom('terminology_concepts').select('code')
+    .where('system', '=', LOINC_SYSTEM)
+    .where((eb) => eb.or([eb('status', 'is', null), eb('status', '!=', 'DRAFT')]))
+    .limit(1)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
 export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   const { db } = deps;
   const changed = (): void => { deps.onChanged?.(); };
@@ -530,14 +542,7 @@ export function createTestCatalog(deps: TestCatalogDeps): TestCatalog {
   }
 
   async function loincLoaded(): Promise<boolean> {
-    // Linking a test to a LOINC code that is not loaded stubs a DRAFT concept (terminology-admin-store.ts,
-    // termMappings.create and saveExclusive), so DRAFT rows alone do not mean LOINC is loaded.
-    const row = await db.selectFrom('terminology_concepts').select('code')
-      .where('system', '=', LOINC_SYSTEM)
-      .where((eb) => eb.or([eb('status', 'is', null), eb('status', '!=', 'DRAFT')]))
-      .limit(1)
-      .executeTakeFirst();
-    return row !== undefined;
+    return isLoincLoaded(db);
   }
 
   /**
