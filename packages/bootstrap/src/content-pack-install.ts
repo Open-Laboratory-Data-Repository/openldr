@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import {
-  canonicalJSON, evaluateTrust, keyFingerprint, parseContentPack, summarizeContentPack, verifyBundle,
+  canonicalJSON, evaluateTrust, isCompatible, keyFingerprint, parseContentPack, summarizeContentPack, verifyBundle,
   type Bundle, type ContentPack, type ContentPackStep, type TrustStore,
 } from '@openldr/marketplace';
 import type { MarketplaceInstallStore, MarketplaceInstallRow } from '@openldr/db';
@@ -26,6 +26,8 @@ export interface ContentPackDeps {
   trustStore: TrustStore;
   audit: Pick<AuditStore, 'record'>;
   logger: Logger;
+  /** The running CE version. A pack whose `compatibility.ceVersion` range excludes it is refused. */
+  ceVersion: string;
   /** Loads a terminology resource as installed by the pack `packId` (its source shows as that pack). */
   loadResource(json: unknown, packId: string): Promise<{ resourceUrl: string }>;
   /** Throws when the resource would not load. Writes nothing. */
@@ -74,6 +76,10 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       throw new Error(`not a content-pack: ${bundle.manifest.type}`);
     }
     if ((bundle.manifest.capabilities ?? []).length > 0) throw new Error('a content pack declares no capabilities');
+    const range = bundle.manifest.compatibility.ceVersion;
+    if (!isCompatible(range, deps.ceVersion)) {
+      throw new Error(`${bundle.manifest.id}@${bundle.manifest.version} needs CE ${range}; this is CE ${deps.ceVersion}`);
+    }
 
     const publisher = bundle.manifest.publisher;
     if (!publisher) throw new Error('a content pack must be signed by a publisher');

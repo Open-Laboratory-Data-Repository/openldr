@@ -4,7 +4,7 @@ import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import type { AppContext } from '@openldr/bootstrap';
+import { CE_VERSION, type AppContext } from '@openldr/bootstrap';
 import { generatePublisherKeypair, packBundle, signManifest, keyFingerprint } from '@openldr/marketplace';
 import { createPluginRuntime } from '@openldr/plugins';
 import { createRegistryStore } from '@openldr/db';
@@ -194,7 +194,7 @@ describe('marketplace routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/marketplace/available/reg-local::demo-1' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body).toMatchObject({ ref: 'reg-local::demo-1', id: 'demo', version: '1.0.0', valid: true, compatible: true, ceVersion: '0.1.0', registryId: 'reg-local', registryName: 'Local Bundles' });
+    expect(body).toMatchObject({ ref: 'reg-local::demo-1', id: 'demo', version: '1.0.0', valid: true, compatible: true, ceVersion: CE_VERSION, registryId: 'reg-local', registryName: 'Local Bundles' });
     expect(body.payload).toMatchObject({ kind: 'plugin' });
     expect(body.capabilities).toEqual([{ kind: 'emit-fhir', resourceTypes: ['Patient'] }]);
   });
