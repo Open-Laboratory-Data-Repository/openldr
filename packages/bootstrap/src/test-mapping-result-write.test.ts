@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { RESULT_PARAM_SYSTEM } from '@openldr/terminology';
 import { TEST_CATALOG_SYSTEM } from './test-catalog';
 import { buildMapping, seedCatalogTest, seedParam, seedResult, seedResultMapping } from './test-support/test-mapping-fixture';
@@ -194,5 +194,25 @@ describe('pack result mappings', () => {
 
     expect((await mapping.activeFor(DISA, 'HIVVL', 'result')).map((r) => r.to_code)).toEqual(['VLC']);
     expect(await mapping.activeFor(DISA, 'HIVVL')).toEqual([]);
+  });
+
+  it('still rebuilds when a write fails part way, then rethrows the failure', async () => {
+    const { internalDb, externalDb, admin, mapping } = await buildMapping();
+    await seedParam(internalDb, 'VLC', 'HIV VL copies', { loinc: '20447-9' });
+    await seedParam(internalDb, 'CD4C', 'CD4 count', { loinc: '24467-3' });
+    const real = admin.termMappings.saveExclusive.bind(admin.termMappings);
+    let calls = 0;
+    vi.spyOn(admin.termMappings, 'saveExclusive').mockImplementation(async (input) => {
+      calls += 1;
+      if (calls === 2) throw new Error('disk full');
+      return real(input);
+    });
+
+    await expect(mapping.applyPack([
+      { system: DISA, code: 'HIVVL', loinc: '20447-9' },
+      { system: DISA, code: 'CD4', loinc: '24467-3' },
+    ], 'result')).rejects.toThrow('disk full');
+
+    expect(await externalDb.selectFrom('test_map').select('source_code').where('source_system', '=', DISA).execute()).toEqual([{ source_code: 'HIVVL' }]);
   });
 });

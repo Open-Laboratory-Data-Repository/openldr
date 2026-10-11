@@ -695,7 +695,13 @@ export function createTestMapping(deps: TestMappingDeps) {
   async function applyPack(mappings: PackMappingInput[], level: MapLevel = 'test'): Promise<PackMappingPlan & { rebuild: RebuildOutcome }> {
     const plan = await planPack(mappings, level);
     const targetsByCode = await readTargets(level);
-    for (const m of plan.mapped) await writeMapping(m.system, m.code, m.catalogCode, targetsByCode.get(m.catalogCode)?.name ?? null, level);
+    try {
+      for (const m of plan.mapped) await writeMapping(m.system, m.code, m.catalogCode, targetsByCode.get(m.catalogCode)?.name ?? null, level);
+    } catch (err) {
+      // As applyMatch: writes already made stay made, so test_map catches up before the failure goes up.
+      await rebuildNow();
+      throw err;
+    }
     return { ...plan, rebuild: await rebuildNow() };
   }
 
