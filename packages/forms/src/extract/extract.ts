@@ -14,9 +14,9 @@ import type {
 } from 'fhir/r4'
 import type { FieldDiscriminator, FormField, FormSchema } from '../schema/form-schema'
 import { fromAnswer } from '../answer-value'
-import { discriminatorEquals } from '../discriminator'
+import { discriminatorEquals, extrasDiscriminator } from '../discriminator'
 import { parseTestDetails } from '../test-details'
-import { ORDER_REJECTION_EXTENSION, ORDER_REJECTION_PATH } from '../order-rejection-path'
+import { ORDER_REJECTION_EXTENSION, isOrderRejectionBinding } from '../order-rejection-path'
 import { orderRejectionOf } from './order-rejection'
 import { readTestDetails } from './test-results'
 import { EXT_CORLIX_FHIR_PATH, EXT_CORLIX_FIELD_EXTRAS, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
@@ -61,16 +61,6 @@ interface ItemMeta {
   answerOptions?: Array<{ code?: string; display?: string }>
   /** The field's discriminator, carried in the field-extras extension. */
   discriminator?: FieldDiscriminator
-}
-
-function extrasDiscriminator(item: QuestionnaireItem): FieldDiscriminator | undefined {
-  const json = item.extension?.find((e) => e.url === EXT_CORLIX_FIELD_EXTRAS)?.valueString
-  if (!json) return undefined
-  try {
-    return (JSON.parse(json) as { fhirDiscriminator?: FieldDiscriminator }).fhirDiscriminator
-  } catch {
-    return undefined // a malformed extras blob names no discriminator; the rest still extracts
-  }
 }
 
 function indexItems(questionnaire: Questionnaire): Map<string, ItemMeta> {
@@ -202,7 +192,9 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       const meta = index.get(item.linkId)
       const path = meta?.fhirPath
       if (path === undefined) return
-      if (path === ORDER_REJECTION_PATH) return
+      // The order-rejection field is read by orderRejectionOf below. Path AND discriminator, so a
+      // field bound to some other ServiceRequest.extension is not swallowed.
+      if (isOrderRejectionBinding(path, meta?.discriminator)) return
 
       // The ordered test(s) → ServiceRequest.code. An answer carries its own system: a catalog test
       // since the Lab order moved to the lab's test list (test catalog S4), LOINC before that. An answer

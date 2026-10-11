@@ -206,7 +206,8 @@ const rejectableOrderSchema = {
     ...resultOrderSchema.fields,
     {
       id: 'rej',
-      fhirPath: 'ServiceRequest.rejection',
+      fhirPath: 'ServiceRequest.extension',
+      fhirDiscriminator: { url: 'urn:openldr:ext:rejection' },
       displayLabel: 'Order rejection',
       description: null,
       fieldType: 'reference' as const,

@@ -84,10 +84,13 @@ out of scope (section 7).
 
 **A new field on the Lab order.** `fld-ord-rejection`, a coded field bound to
 `urn:openldr:valueset:order-reject-reason`, `required: false`, in the order section, with
-`fhirPath: 'ServiceRequest.rejection'`. That path is CE's own, like `ServiceRequest.identifier.value`
-today: it names the field's job, not a FHIR element. Every reader finds the field by this path, never
-by its id, so an operator's copy of the form keeps working. The runtime does not draw a field with
-this path as an input. It is set only through the page's ⋯ menu.
+`fhirPath: 'ServiceRequest.extension'` and `fhirDiscriminator: { url: 'urn:openldr:ext:rejection' }`. The
+field fills that extension, a real R4 element, and the discriminator names which extension it is. The
+FHIR path lint rule refuses a path that is not an R4 element, which is why the field does not bind a
+path of CE's own. Every reader finds the field by path and discriminator url, never by its id, so an
+operator's copy of the form keeps working, and a field bound to some other `ServiceRequest.extension`
+is not taken for it. The runtime does not draw a field with this binding as an input. It is set only
+through the page's ⋯ menu.
 
 **The ⋯ menu.** On a form that has this field, the page header ⋯ menu adds "Reject order". It opens
 `RejectSheet` at `level: 'order'` with the order reasons the server already sends. Choosing a reason
@@ -110,7 +113,7 @@ check that no unmerged branch has claimed 110.
 
 ### Extraction
 
-When the field bound to `ServiceRequest.rejection` holds a reason (each extractor reads it through
+When the field bound to `ServiceRequest.extension` with the rejection discriminator holds a reason (each extractor reads it through
 the Questionnaire index it already builds, `indexItems` in `extract.ts`):
 
 - **ServiceRequest.** `ServiceRequestExtractor` sets `status: 'revoked'` and adds

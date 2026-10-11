@@ -6,7 +6,7 @@ import { ObservationExtractor, ServiceRequestExtractor } from './extract/extract
 import { TestResultsExtractor } from './extract/test-results'
 import { toTransactionBundle } from './to-transaction-bundle'
 import { makeField, makeSchema, definitionOf } from './__fixtures__/forms'
-import { orderRejectionFieldId } from './order-rejection-path'
+import { isOrderRejectionField, orderRejectionFieldId } from './order-rejection-path'
 
 const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-06-04T00:00:00Z' }
 
@@ -273,7 +273,7 @@ describe('order-level rejection (2026-10-11 spec, part 2)', () => {
       fields: [
         makeField({ id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 0, fhirPath: 'ServiceRequest.code', referenceMultiple: true, cardinality: { min: 1, max: '*' } }),
         makeField({ id: 'details', displayLabel: 'Results', fieldType: 'testDetails', order: 1, referenceDependsOn: 'tests' }),
-        makeField({ id: 'rej', displayLabel: 'Order rejection', fieldType: 'reference', order: 2, fhirPath: 'ServiceRequest.rejection', valueSetUrl: 'urn:openldr:valueset:order-reject-reason' }),
+        makeField({ id: 'rej', displayLabel: 'Order rejection', fieldType: 'reference', order: 2, fhirPath: 'ServiceRequest.extension', fhirDiscriminator: { url: 'urn:openldr:ext:rejection' }, valueSetUrl: 'urn:openldr:valueset:order-reject-reason' }),
       ],
     })
   const run = (answers: Record<string, unknown>) => {
@@ -291,6 +291,25 @@ describe('order-level rejection (2026-10-11 spec, part 2)', () => {
   it('finds the field by its path, not its id', () => {
     expect(orderRejectionFieldId(order())).toBe('rej')
     expect(orderRejectionFieldId(makeSchema({ id: 'x', name: 'X', fields: [] }))).toBeNull()
+  })
+
+  it('does not take a field on another ServiceRequest.extension for the rejection field', () => {
+    const model = makeSchema({
+      id: 'o3', name: 'Order', fhirResourceType: 'ServiceRequest',
+      fields: [
+        makeField({ id: 'tests', displayLabel: 'Tests', fieldType: 'reference', order: 0, fhirPath: 'ServiceRequest.code', referenceMultiple: true, cardinality: { min: 1, max: '*' } }),
+        makeField({ id: 'other', displayLabel: 'Other', fieldType: 'reference', order: 1, fhirPath: 'ServiceRequest.extension', fhirDiscriminator: { url: 'urn:example:ext:other' }, valueSetUrl: 'urn:openldr:valueset:order-reject-reason' }),
+        makeField({ id: 'bare', displayLabel: 'Bare', fieldType: 'reference', order: 2, fhirPath: 'ServiceRequest.extension' }),
+      ],
+    })
+    expect(orderRejectionFieldId(model)).toBeNull()
+    expect(isOrderRejectionField({ fhirPath: 'ServiceRequest.extension', fhirDiscriminator: { url: 'urn:example:ext:other' } })).toBe(false)
+    expect(isOrderRejectionField({ fhirPath: 'ServiceRequest.extension' })).toBe(false)
+    const qr = toQuestionnaireResponse(model, { tests: [{ system: CATALOG, code: 'FBC' }], other: REASON } as never)
+    const [request, ...rest] = ServiceRequestExtractor.extract(qr, toQuestionnaire(model), ctx) as any[]
+    expect(rest).toEqual([])
+    expect(request.status).toBe('active')
+    expect(request.extension).toBeUndefined()
   })
 
   it('revokes the order, carries the reason in the warehouse extension, and writes an unsatisfactory Specimen', () => {
@@ -350,7 +369,7 @@ describe('order-level rejection (2026-10-11 spec, part 2)', () => {
       id: 'o2', name: 'Order', fhirResourceType: 'ServiceRequest',
       fields: [
         makeField({ id: 'hgb', displayLabel: 'Hemoglobin', fieldType: 'number', order: 0, observationExtract: true, code: [{ system: 'http://loinc.org', code: '718-7' }] }),
-        makeField({ id: 'rej', displayLabel: 'Order rejection', fieldType: 'reference', order: 1, fhirPath: 'ServiceRequest.rejection', valueSetUrl: 'urn:openldr:valueset:order-reject-reason' }),
+        makeField({ id: 'rej', displayLabel: 'Order rejection', fieldType: 'reference', order: 1, fhirPath: 'ServiceRequest.extension', fhirDiscriminator: { url: 'urn:openldr:ext:rejection' }, valueSetUrl: 'urn:openldr:valueset:order-reject-reason' }),
       ],
     })
     const q = toQuestionnaire(model)
