@@ -219,6 +219,8 @@ export function ResultFieldsTab({ canManage, loinc }: { canManage: boolean; loin
         preview={previewResultFieldsImport}
         apply={applyResultFieldsImport}
         description={t('testCatalog.resultFields.importDescription')}
+        title={t('testCatalog.resultFields.importTitle')}
+        doneMessage={t('testCatalog.resultFields.importDone')}
       />
     </div>
   );

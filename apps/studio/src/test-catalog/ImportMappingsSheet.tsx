@@ -10,13 +10,15 @@ import { applyTestMappingImport, previewTestMappingImport, type ImportReportLike
 
 /** The import sheet for test mappings. Result mappings and result field links pass their own functions
  *  and description; every caller shares the preview, refusals and apply. */
-export function ImportMappingsSheet({ open, onClose, onImported, preview = previewTestMappingImport, apply: applyFile = applyTestMappingImport, description }: {
+export function ImportMappingsSheet({ open, onClose, onImported, preview = previewTestMappingImport, apply: applyFile = applyTestMappingImport, description, title, doneMessage }: {
   open: boolean;
   onClose: () => void;
   onImported: () => void;
   preview?: (file: File) => Promise<ImportReportLike>;
   apply?: (file: File) => Promise<ImportReportLike>;
   description?: string;
+  title?: string;
+  doneMessage?: string;
 }): JSX.Element {
   const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
@@ -44,7 +46,7 @@ export function ImportMappingsSheet({ open, onClose, onImported, preview = previ
     setBusy(true);
     try {
       const done = await applyFile(file);
-      toast.success(t('testCatalog.importMappings.done'));
+      toast.success(doneMessage ?? t('testCatalog.importMappings.done'));
       if (done.rebuild && !done.rebuild.ok) toast.error(t('testCatalog.observed.stale', { error: done.rebuild.error }));
       onImported();
       close();
@@ -60,7 +62,7 @@ export function ImportMappingsSheet({ open, onClose, onImported, preview = previ
     <Sheet open={open} onOpenChange={(o) => { if (!o) close(); }}>
       <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-border px-6 py-4">
-          <SheetTitle>{t('testCatalog.importMappings.title')}</SheetTitle>
+          <SheetTitle>{title ?? t('testCatalog.importMappings.title')}</SheetTitle>
           <SheetDescription>{description ?? t('testCatalog.importMappings.description')}</SheetDescription>
         </SheetHeader>
         <section>

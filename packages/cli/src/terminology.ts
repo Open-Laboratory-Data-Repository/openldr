@@ -50,14 +50,17 @@ export async function runTerminologyImport(kind: string, path: string, opts: { a
       await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'parameters', metadata: { source: 'parameters', result: r } });
       // The dictionary's fields get self rows in test_map, and their LOINC links fill its loinc column.
       // This context opens no warehouse, so open the app context and rebuild once.
-      const app = await createAppContext(loadConfig());
+      // The import is already committed, so a failure here only leaves test_map stale. It must not fail the command.
+      const stale = (reason: string) => process.stderr.write(`the warehouse copy test_map is out of date: ${reason}. Run openldr test-catalog map rebuild --apply.\n`);
+      let app: Awaited<ReturnType<typeof createAppContext>> | undefined;
       try {
+        app = await createAppContext(loadConfig());
         const rebuilt = await app.testMapping.rebuildNow();
-        if (!rebuilt.ok) {
-          process.stderr.write(`the warehouse copy test_map is out of date: ${rebuilt.error}. Run openldr test-catalog map rebuild --apply.\n`);
-        }
+        if (!rebuilt.ok) stale(rebuilt.error);
+      } catch (err) {
+        stale(redactError(err));
       } finally {
-        await app.close();
+        await app?.close();
       }
     } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|organisms|parameters|resource)\n`); return 1; }
     return 0;

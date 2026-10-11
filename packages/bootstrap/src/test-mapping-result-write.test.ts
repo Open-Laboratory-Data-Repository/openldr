@@ -140,6 +140,12 @@ describe('map matching codes', () => {
     expect(await mapping.planMatch(DISA)).toEqual({ system: DISA, matches: [{ code: 'HIVVL', display: 'HIV VL', results: 2 }] });
   });
 
+  it('leaves a code central mapped to a field the dictionary no longer holds', async () => {
+    const { internalDb, mapping } = await seeded();
+    await seedResultMapping(internalDb, 'c2', DISA, 'HIVVL', 'GONE', { central: true });
+    expect((await mapping.planMatch(DISA)).matches).toEqual([]);
+  });
+
   it('applies the matches as ordinary mappings and rebuilds once', async () => {
     const { externalDb, mapping } = await seeded();
 

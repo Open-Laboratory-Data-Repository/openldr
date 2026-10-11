@@ -1011,6 +1011,8 @@ export const en = {
       exportAction: 'Export CSV',
       importAction: 'Import CSV',
       importDescription: 'A CSV with code and loinc columns. A blank loinc leaves the link as it is.',
+      importTitle: 'Import LOINC links',
+      importDone: 'LOINC links imported',
       loincFilter: 'LOINC',
       loinc: { all: 'All', linked: 'Linked', none: 'No LOINC' },
       roleFilter: 'Role',

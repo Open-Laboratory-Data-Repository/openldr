@@ -656,8 +656,8 @@ export function createTestMapping(deps: TestMappingDeps) {
     const self = selfSystemReason(system, 'result');
     if (self) throw new TestCatalogError(self, 'invalid');
     const params = await readTargets('result');
-    // Only unmapped codes. A code central has mapped counts as mapped, and an ambiguous one needs a person.
-    const rows = (await observedAll('result')).filter((r) => r.system === system && r.status === 'unmapped' && params.has(r.code));
+    // Only unmapped codes. A code central has mapped counts as mapped, even when its field left the dictionary (status 'unmapped' then). An ambiguous one needs a person.
+    const rows = (await observedAll('result')).filter((r) => r.system === system && r.status === 'unmapped' && !r.centralManaged && params.has(r.code));
     return { system, matches: rows.map((r) => ({ code: r.code, display: params.get(r.code)!.name, results: r.requests })) };
   }
 

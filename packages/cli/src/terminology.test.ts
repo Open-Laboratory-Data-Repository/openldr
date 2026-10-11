@@ -165,6 +165,35 @@ describe('terminology CLI audit', () => {
     expect(mocks.appCtx.close).toHaveBeenCalledTimes(1);
   });
 
+  describe('parameters import when the test_map rebuild goes wrong', () => {
+    const stale = (reason: string) => `the warehouse copy test_map is out of date: ${reason}. Run openldr test-catalog map rebuild --apply.\n`;
+    const loaded = { system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result', byRole: { result: 1, metadata: 1 }, skipped: 0 };
+
+    it('warns and still exits 0 when the rebuild reports a failure', async () => {
+      mocks.termCtx.loaders.parameters.mockResolvedValue(loaded);
+      mocks.readFileSync.mockReturnValue('[]');
+      mocks.appCtx.testMapping.rebuildNow.mockResolvedValue({ ok: false, error: 'boom' });
+
+      const code = await runTerminologyImport('parameters', '/some/file.json', { json: true });
+
+      expect(code).toBe(0);
+      expect(process.stderr.write).toHaveBeenCalledWith(stale('boom'));
+      expect(mocks.appCtx.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('warns and still exits 0 when the app context cannot be opened', async () => {
+      mocks.termCtx.loaders.parameters.mockResolvedValue(loaded);
+      mocks.readFileSync.mockReturnValue('[]');
+      mocks.createAppContext.mockRejectedValue(new Error('no warehouse'));
+
+      const code = await runTerminologyImport('parameters', '/some/file.json', { json: true });
+
+      expect(code).toBe(0);
+      expect(process.stderr.write).toHaveBeenCalledWith(stale('no warehouse'));
+      expect(mocks.appCtx.close).not.toHaveBeenCalled();
+    });
+  });
+
   it('still rejects an unknown import kind', async () => {
     const code = await runTerminologyImport('nonsense', '/some/file.json', { json: false });
 

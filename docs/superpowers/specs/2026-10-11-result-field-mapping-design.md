@@ -178,7 +178,7 @@ Result mappings CSV: `system, code, description, results, parameter_code, loinc`
 row on none or several. Slice 1's preview, refusals, trimming rule and single rebuild carry over.
 
 Parameter links CSV: `code, display, role, units, loinc`. Import reads only `code` and `loinc`. A blank
-`loinc` means no change (slice 1, section 9.7). Clearing a link is `params unlink`.
+`loinc` means no change (slice 1, section 9.7). Clearing a link is `result-fields unlink`.
 
 `--level` defaults to `test`, so slice 1's commands keep working.
 

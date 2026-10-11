@@ -1001,6 +1001,8 @@ export const fr: EnShape = {
       exportAction: 'Exporter en CSV',
       importAction: 'Importer un CSV',
       importDescription: 'Un CSV avec les colonnes code et loinc. Un loinc vide laisse le lien inchangé.',
+      importTitle: 'Importer des liens LOINC',
+      importDone: 'Liens LOINC importés',
       loincFilter: 'LOINC',
       loinc: { all: 'Tous', linked: 'Liés', none: 'Pas de LOINC' },
       roleFilter: 'Rôle',

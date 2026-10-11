@@ -25,6 +25,8 @@ export function MatchCodesSheet({ open, onClose, onApplied }: { open: boolean; o
     if (!open) return;
     setSystem(null);
     setPlan(null);
+    // A preview cut off by the close never clears busy itself, so reset it here.
+    setBusy(false);
     getObservedSystems('result')
       .then((list) => {
         setSystems(list);

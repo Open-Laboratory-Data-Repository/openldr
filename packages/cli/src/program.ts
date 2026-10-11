@@ -405,7 +405,7 @@ export function buildProgram(): Command {
   // With --level result the same commands map lab result codes to result dictionary fields.
   const testMap = testCatalog.command('map').description('Map lab test codes to catalog tests, and lab result codes to result fields');
   testMap.command('list')
-    .description('List the lab test codes seen in the warehouse, with their catalog mapping')
+    .description('List the lab codes seen in the warehouse, with their mapping (test codes, or result codes with --level result)')
     .option('--status <unmapped|mapped|ambiguous|all>', 'which codes to list (default: all)')
     .option('--search <text>', 'match code, description or catalog name')
     .option('--limit <n>', 'rows per page, 1 to 200 (default: 25)')
@@ -421,7 +421,7 @@ export function buildProgram(): Command {
       process.exitCode = await runTestMappingSet(system, code, targetCode, opts);
     });
   testMap.command('clear <system> <code>')
-    .description('Remove a lab test code\'s catalog mapping')
+    .description('Remove a lab code\'s mapping (a catalog test, or a result field with --level result)')
     .option('--level <test|result>', 'test codes or result codes (default: test)')
     .option('--force', 'confirm the removal', false)
     .option('--json', 'emit JSON', false)
