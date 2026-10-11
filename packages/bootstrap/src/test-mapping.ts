@@ -1,7 +1,9 @@
 import type { Kysely } from 'kysely';
 import { testMapId, type ExternalSchema, type InternalSchema, type MapType, type TerminologyAdminStore } from '@openldr/db';
 import { LOINC_SYSTEM } from '@openldr/terminology';
+import { toCsv } from '@openldr/reporting';
 import { TEST_CATALOG_SYSTEM, TestCatalogError } from './test-catalog';
+import { readTableFile, TableFileError } from './table-file';
 
 // Test mapping (docs/superpowers/specs/2026-10-11-test-mapping-design.md). Each lab's own test codes,
 // as the warehouse stores them in lab_requests.panel_system and panel_code, map to catalog tests
@@ -139,6 +141,20 @@ export function isTestMapRelevantRecord(rec: { entityType: string; body: unknown
   if (rec.entityType === 'terminology_system') return body?.url === TEST_CATALOG_SYSTEM;
   return false;
 }
+
+export const TEST_MAPPING_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
+export const TEST_MAPPING_IMPORT_MAX_ROWS = 20_000;
+
+const CSV_COLUMNS = ['system', 'code', 'description', 'requests', 'catalog_code', 'loinc'].map((k) => ({ key: k, label: k }));
+
+export interface MappingImportReport {
+  counts: { new: number; changed: number; unchanged: number; refused: number };
+  refused: Array<{ line: number; system: string; code: string; reason: string }>;
+  /** Set by apply. Null for a preview. */
+  rebuild: RebuildOutcome | null;
+}
+
+type PlannedRow = { system: string; code: string; catalogCode: string; name: string | null };
 
 export function createTestMapping(deps: TestMappingDeps) {
   const { internalDb, externalDb } = deps;
@@ -358,7 +374,94 @@ export function createTestMapping(deps: TestMappingDeps) {
 
   const requestRebuild = createCoalescedRunner(async () => { await rebuildNow(); });
 
-  return { observed, observedAll, targets, publish, rebuildNow, requestRebuild, set, clear, writeMapping, activeFor, readCatalog, readMappings };
+  async function catalogCodesForLoinc(loinc: string): Promise<string[]> {
+    const rows = await internalDb.selectFrom('term_mappings').select('from_code')
+      .where('from_system', '=', TEST_CATALOG_SYSTEM).where('to_system', '=', LOINC_SYSTEM)
+      .where('to_code', '=', loinc).where('map_type', '=', MAP_TYPE).where('is_active', '=', true).execute();
+    return [...new Set(rows.map((r) => r.from_code))].sort(compare);
+  }
+
+  async function exportCsv(): Promise<string> {
+    const rows = await observedAll();
+    return toCsv(CSV_COLUMNS, rows.map((r) => ({
+      system: r.system, code: r.code, description: r.description, requests: r.requests,
+      catalog_code: r.catalog?.code ?? null, loinc: r.catalog?.loinc ?? null,
+    })));
+  }
+
+  async function planImport(bytes: Uint8Array): Promise<{ report: MappingImportReport; writes: PlannedRow[] }> {
+    let table;
+    try {
+      table = readTableFile(bytes, 'csv', { maxBytes: TEST_MAPPING_IMPORT_MAX_BYTES, maxRows: TEST_MAPPING_IMPORT_MAX_ROWS });
+    } catch (err) {
+      if (err instanceof TableFileError) throw new TestCatalogError(err.message, 'invalid');
+      throw err;
+    }
+    const headers = table.headers.map((h) => h.replace(/^﻿/, '').trim().toLowerCase());
+    const col = (name: string): number => headers.indexOf(name);
+    if (col('system') < 0 || col('code') < 0) throw new TestCatalogError('the file needs a system column and a code column', 'invalid');
+    if (col('catalog_code') < 0 && col('loinc') < 0) throw new TestCatalogError('the file needs a catalog_code column or a loinc column', 'invalid');
+    const cell = (row: string[], name: string): string => (col(name) < 0 ? '' : (row[col(name)] ?? '').trim());
+
+    const catalog = await readCatalog();
+    const report: MappingImportReport = { counts: { new: 0, changed: 0, unchanged: 0, refused: 0 }, refused: [], rebuild: null };
+    const writes: PlannedRow[] = [];
+    const seen = new Set<string>();
+    const refuse = (line: number, system: string, code: string, reason: string) => {
+      report.counts.refused += 1;
+      report.refused.push({ line, system, code, reason });
+    };
+
+    for (let i = 0; i < table.rows.length; i++) {
+      const line = i + 2;
+      // Codes are kept exactly as typed between the separators. Only the surrounding cell padding a
+      // spreadsheet adds is dropped, which a real lab code never carries.
+      const system = cell(table.rows[i], 'system');
+      const code = cell(table.rows[i], 'code');
+      if (system === '' || code === '') { refuse(line, system, code, 'system and code are required'); continue; }
+      const key = sourceKey(system, code);
+      if (seen.has(key)) { refuse(line, system, code, 'listed twice in the file'); continue; }
+      seen.add(key);
+
+      const catalogCodeCell = cell(table.rows[i], 'catalog_code');
+      const loinc = cell(table.rows[i], 'loinc');
+      let catalogCode: string | null = null;
+      if (catalogCodeCell !== '') {
+        if (!catalog.has(catalogCodeCell)) { refuse(line, system, code, `no catalog test has code ${catalogCodeCell}`); continue; }
+        catalogCode = catalogCodeCell;
+      } else if (loinc !== '') {
+        const codes = await catalogCodesForLoinc(loinc);
+        if (codes.length === 0) { refuse(line, system, code, `no catalog test is linked to LOINC ${loinc}`); continue; }
+        if (codes.length > 1) { refuse(line, system, code, `${codes.length} catalog tests are linked to LOINC ${loinc}`); continue; }
+        catalogCode = codes[0];
+      }
+
+      const existing = await activeFor(system, code);
+      // Blank catalog_code and loinc: leave the code as it is. An exported file lists unmapped codes so.
+      if (catalogCode === null) { report.counts.unchanged += 1; continue; }
+      if (existing.some((r) => r.managed_origin === 'central')) { refuse(line, system, code, `central maps ${code}; a lab cannot change it`); continue; }
+      const targets = [...new Set(existing.map((r) => r.to_code))];
+      if (targets.length === 1 && targets[0] === catalogCode) { report.counts.unchanged += 1; continue; }
+      if (existing.length === 0) report.counts.new += 1; else report.counts.changed += 1;
+      writes.push({ system, code, catalogCode, name: catalog.get(catalogCode)!.name });
+    }
+    return { report, writes };
+  }
+
+  async function importPreview(bytes: Uint8Array): Promise<MappingImportReport> {
+    return (await planImport(bytes)).report;
+  }
+
+  async function importApply(bytes: Uint8Array): Promise<MappingImportReport> {
+    const { report, writes } = await planImport(bytes);
+    for (const w of writes) await writeMapping(w.system, w.code, w.catalogCode, w.name);
+    return { ...report, rebuild: await rebuildNow() };
+  }
+
+  return {
+    observed, observedAll, targets, publish, rebuildNow, requestRebuild, set, clear, writeMapping, activeFor, readCatalog, readMappings,
+    exportCsv, importPreview, importApply, catalogCodesForLoinc,
+  };
 }
 
 export type TestMapping = ReturnType<typeof createTestMapping>;
