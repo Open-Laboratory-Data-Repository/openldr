@@ -68,4 +68,18 @@ describe('ObservedCodesTab', () => {
     fireEvent.click(screen.getByTestId('observed-status-unmapped'));
     await waitFor(() => expect(vi.mocked(api.listObservedTestCodes)).toHaveBeenLastCalledWith({ status: 'unmapped', q: undefined, limit: 25, offset: 0 }));
   });
+  it('ignores a slower earlier response that arrives after a newer one', async () => {
+    type Result = Awaited<ReturnType<typeof api.listObservedTestCodes>>;
+    let resolveFirst!: (v: Result) => void;
+    const first = new Promise<Result>((r) => { resolveFirst = r; });
+    const newer: Result = { rows: [{ ...ROW, code: 'CD4' }], total: 1, warehouse: { stale: false, error: null } };
+    vi.mocked(api.listObservedTestCodes).mockReturnValueOnce(first).mockResolvedValueOnce(newer);
+    render(<ObservedCodesTab canManage />);
+    fireEvent.click(screen.getByTestId('observed-status-unmapped'));
+    expect(await screen.findByTestId('observed-row-CD4')).toBeTruthy();
+    resolveFirst({ rows: [ROW], total: 1, warehouse: { stale: false, error: null } });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId('observed-row-HIVVL')).toBeNull();
+    expect(screen.getByTestId('observed-row-CD4')).toBeTruthy();
+  });
 });

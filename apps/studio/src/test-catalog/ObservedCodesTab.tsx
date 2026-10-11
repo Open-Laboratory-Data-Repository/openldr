@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
@@ -40,16 +40,22 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
     return () => clearTimeout(id);
   }, [search]);
 
+  // Only the latest request may write state. A slower earlier response must not overwrite a newer one.
+  const latest = useRef(0);
   const load = useCallback(async () => {
+    const mine = ++latest.current;
     setLoading(true);
     setError(null);
     try {
-      setData(await listObservedTestCodes({ status, q: q || undefined, limit: pageSize, offset: page * pageSize }));
+      const result = await listObservedTestCodes({ status, q: q || undefined, limit: pageSize, offset: page * pageSize });
+      if (mine === latest.current) setData(result);
     } catch (e) {
-      setData(null);
-      setError(e instanceof Error ? e.message : String(e));
+      if (mine === latest.current) {
+        setData(null);
+        setError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
-      setLoading(false);
+      if (mine === latest.current) setLoading(false);
     }
   }, [status, q, page, pageSize]);
 
