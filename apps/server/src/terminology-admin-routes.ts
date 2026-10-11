@@ -306,7 +306,7 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
           ctx.logger.error({ err, mappingId: id }, 'failed to enqueue a facility-map-rebuild job after updating a facility mapping');
         }
       }
-      if (mappingTouchesTestMap(previous?.from_system, parsed.data.toSystem)
+      if (mappingTouchesTestMap(parsed.data.fromSystem ?? previous?.from_system, parsed.data.toSystem)
         || (previous && mappingTouchesTestMap(previous.from_system, previous.to_system))) {
         void ctx.testMapping.requestRebuild();
       }

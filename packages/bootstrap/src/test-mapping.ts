@@ -104,7 +104,7 @@ export interface TestMappingChange {
 
 /** Coalesce rebuild requests. One run at a time; requests made while it runs share one more run.
  *  A sync pull can apply hundreds of relevant records, and each must not cost a rebuild. */
-export function createCoalescedRunner(run: () => Promise<void>): () => Promise<void> {
+export function createCoalescedRunner(run: () => Promise<void>): (() => Promise<void>) & { idle(): Promise<void> } {
   let running: Promise<void> | null = null;
   let again = false;
   const loop = async (): Promise<void> => {
@@ -117,7 +117,7 @@ export function createCoalescedRunner(run: () => Promise<void>): () => Promise<v
       running = null;
     }
   };
-  return () => {
+  const request = (): Promise<void> => {
     if (running) {
       again = true;
       return running;
@@ -125,6 +125,9 @@ export function createCoalescedRunner(run: () => Promise<void>): () => Promise<v
     running = loop();
     return running;
   };
+  /** Resolves when no run is in flight, including the extra run a burst asked for. Starts nothing. */
+  const idle = (): Promise<void> => running ?? Promise.resolve();
+  return Object.assign(request, { idle });
 }
 
 /** A term mapping into the catalog is a test mapping. One out of the catalog is its LOINC link. Both
@@ -374,6 +377,17 @@ export function createTestMapping(deps: TestMappingDeps) {
 
   const requestRebuild = createCoalescedRunner(async () => { await rebuildNow(); });
 
+  /** Resolves when no rebuild is running or queued. Starts none, and never rejects. A process that is
+   *  about to close its databases waits on this, so a rebuild it asked for is not cut off. */
+  async function settled(): Promise<void> {
+    try {
+      await requestRebuild.idle();
+      await chain;
+    } catch {
+      // rebuildNow never throws; nothing here may stop a close.
+    }
+  }
+
   async function catalogCodesForLoinc(loinc: string): Promise<string[]> {
     const rows = await internalDb.selectFrom('term_mappings').select('from_code')
       .where('from_system', '=', TEST_CATALOG_SYSTEM).where('to_system', '=', LOINC_SYSTEM)
@@ -480,7 +494,7 @@ export function createTestMapping(deps: TestMappingDeps) {
   }
 
   return {
-    observed, observedAll, targets, publish, rebuildNow, requestRebuild, set, clear, writeMapping, activeFor, readCatalog, readMappings,
+    observed, observedAll, targets, publish, rebuildNow, requestRebuild, settled, set, clear, writeMapping, activeFor, readCatalog, readMappings,
     exportCsv, importPreview, importApply, catalogCodesForLoinc,
   };
 }

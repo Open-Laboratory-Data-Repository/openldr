@@ -710,6 +710,18 @@ describe('test mapping: mapping mutations ask for a test_map rebuild', () => {
     expect(requestRebuild).toHaveBeenCalledTimes(2);
   });
 
+  it('asks for a rebuild when a PUT moves the mapping source onto the catalog', async () => {
+    const { app, requestRebuild } = await realApp();
+    const id = (await post(app, body({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }))).json().mapping.id;
+    expect(requestRebuild).not.toHaveBeenCalled();
+    const put = await app.inject({
+      method: 'PUT', url: `/api/terminology/mappings/${id}`,
+      payload: { ...body({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }), fromSystem: CATALOG, fromCode: 'VL' },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(requestRebuild).toHaveBeenCalledTimes(1);
+  });
+
   it('asks for a rebuild when a catalog mapping is retargeted away from the catalog', async () => {
     const { app, requestRebuild } = await realApp();
     const id = (await post(app, body())).json().mapping.id;

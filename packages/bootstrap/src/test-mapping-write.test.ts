@@ -86,12 +86,60 @@ describe('createCoalescedRunner', () => {
     expect(runs).toBe(2);
   });
 
+  it('idle() resolves only after the run in flight has finished, and at once when nothing runs', async () => {
+    let finished = false;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const request = createCoalescedRunner(async () => { await gate; finished = true; });
+    await request.idle(); // nothing running yet
+    void request();
+    let idled = false;
+    const idle = request.idle().then(() => { idled = true; });
+    await Promise.resolve();
+    expect([finished, idled]).toEqual([false, false]);
+    release();
+    await idle;
+    expect([finished, idled]).toEqual([true, true]);
+  });
+
+  it('idle() never starts a run', async () => {
+    let runs = 0;
+    const request = createCoalescedRunner(async () => { runs += 1; });
+    await request.idle();
+    expect(runs).toBe(0);
+  });
+
   it('runs again for a request made after the burst finished', async () => {
     let runs = 0;
     const request = createCoalescedRunner(async () => { runs += 1; });
     await request();
     await request();
     expect(runs).toBe(2);
+  });
+});
+
+describe('test mapping: settled', () => {
+  it('resolves after a requested rebuild has written test_map', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedMapping(internalDb, 'm1', DISA, 'HIVVL', 'VL');
+
+    void mapping.requestRebuild();
+    await mapping.settled();
+
+    expect(await externalDb.selectFrom('test_map').select('source_code').execute()).toEqual([{ source_code: 'HIVVL' }]);
+  });
+
+  it('waits for a direct rebuildNow too, and resolves when nothing is pending', async () => {
+    const { internalDb, externalDb, mapping } = await buildMapping();
+    await mapping.settled();
+    await seedCatalogTest(internalDb, 'VL', 'HIV viral load');
+    await seedMapping(internalDb, 'm1', DISA, 'HIVVL', 'VL');
+
+    void mapping.rebuildNow();
+    await mapping.settled();
+
+    expect((await externalDb.selectFrom('test_map').select('source_code').execute()).length).toBe(1);
   });
 });
 

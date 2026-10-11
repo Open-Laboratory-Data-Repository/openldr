@@ -553,6 +553,32 @@ describe('exportPullBundle / importPullBundle', () => {
     expect(Number(stateRow?.generation)).toBe(2);
   });
 
+  it('asks for a test_map rebuild after a relevant record, and not for an unrelated one', async () => {
+    const requestRebuild = vi.fn(async () => {});
+    const labDb = await makeMigratedDb();
+    const kp = hexKeys();
+    const ctx = makeCtx({
+      appSettings: fakeAppSettings({ 'sync.central_public_key': kp.pub }),
+      internalDb: labDb,
+      testMapping: { requestRebuild },
+    });
+    const manifest: BundleManifest = {
+      formatVersion: 1, kind: 'pull', siteId: SITE, fromCursor: 0, toCursor: 2, recordCount: 2,
+      signerKeyId: 'central', producedAt: new Date().toISOString(),
+    };
+    const send = async (records: BundleRecords) =>
+      importPullBundle(ctx, signBundle({ ...manifest, recordCount: records.records.length }, records, kp.priv));
+
+    await send({ kind: 'pull', records: [{ seq: 1, entityType: 'setting', entityId: 's1', op: 'upsert', contentHash: 'h', body: 'on' }] });
+    expect(requestRebuild).not.toHaveBeenCalled();
+
+    await send({ kind: 'pull', records: [{
+      seq: 2, entityType: 'term_mapping', entityId: 'm1', op: 'upsert', contentHash: 'hm',
+      body: { fromSystem: 'urn:openldr:disa', toSystem: 'urn:openldr:codesystem:test-catalog' },
+    }] });
+    expect(requestRebuild).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a pull bundle that starts ahead of the consumed cursor (BundleGapError)', async () => {
     // reported cursor 10 → export window starts at fromCursor 10; lab has consumed only up to 0.
     const ctx = seedPullCtx(10);

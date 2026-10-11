@@ -1783,6 +1783,9 @@ const reporting: ReportingApi = {
     cfg,
     close() {
       closePromise ??= (async () => {
+        // A test_map rebuild a catalog edit or sync asked for must finish before the databases close.
+        // settled() never rejects, and the catch keeps any surprise from stopping the close.
+        await testMapping.settled().catch(() => undefined);
         await workflowListeners.stopAll();
         // The runtime stops both workers and ends the push LISTEN client it owns.
         await syncRuntime.stop();
