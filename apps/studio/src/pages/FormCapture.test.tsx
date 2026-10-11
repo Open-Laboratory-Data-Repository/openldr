@@ -318,9 +318,10 @@ describe('FormCapture order rejection (2026-10-11 spec)', () => {
       'form-1',
       expect.objectContaining({ patientId: 'P-100', rej: { system: 's', code: 'WRONGPT', display: 'Wrong patient' } }),
     ));
-    // A submitted rejection is spent: the banner goes, so the next order starts clean.
+    // The rejection stays after submit. The form keeps its answers, so clearing it would reopen the
+    // rows and a second Submit would write an accepted duplicate with the typed results.
     expect(await screen.findByText('Response captured.')).toBeInTheDocument();
-    expect(screen.queryByText('Order rejected: Wrong patient')).not.toBeInTheDocument();
+    expect(screen.getByText('Order rejected: Wrong patient')).toBeInTheDocument();
   });
 
   it('shows the spinner, not the empty state, while the reasons are read', async () => {

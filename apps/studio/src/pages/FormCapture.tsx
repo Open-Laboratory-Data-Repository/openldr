@@ -72,7 +72,6 @@ export function FormCapture() {
     try {
       await submitFormResponse(id, cleaned);
       setSuccess(true);
-      setOrderRejection(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
