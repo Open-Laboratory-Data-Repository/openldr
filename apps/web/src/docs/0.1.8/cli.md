@@ -403,6 +403,32 @@ openldr test-catalog map rebuild --apply
 - `map import <file>` shows what would change and writes nothing. `--apply --force` writes it. It refuses without both.
 - `map rebuild` shows what the warehouse copy `test_map` would hold. `--apply` writes it.
 
+Result codes use the same commands with `--level result`. The target is a result field code:
+
+```sh
+openldr test-catalog map list --level result --status unmapped
+openldr test-catalog map set urn:openldr:disa HIVVC HIVVL --level result
+openldr test-catalog map match urn:openldr:disa
+openldr test-catalog map match urn:openldr:disa --apply --force
+```
+
+- `--level result` on `map list`, `set`, `clear`, `export` and `import` works on result codes. The result CSV has the columns `system, code, description, results, parameter_code, loinc`.
+- `map match <system>` lists every unmapped result code of that lab system that equals a result field code. `--apply --force` maps them. It refuses `--apply` without `--force`.
+
+Link result fields to LOINC:
+
+```sh
+openldr test-catalog result-fields list --loinc none
+openldr test-catalog result-fields link HIVVL 20447-9
+openldr test-catalog result-fields unlink HIVVL --force
+openldr test-catalog result-fields export --out result-fields.csv
+openldr test-catalog result-fields import result-fields.csv --apply --force
+```
+
+- `result-fields list` lists the fields with their role, units and LOINC link. `--loinc` takes `linked`, `none` or `all`, and `--role` takes `result`, `specimen`, `metadata` or `admin`.
+- `result-fields unlink` refuses without `--force`. `result-fields import` previews unless `--apply --force` is given. A lab that receives its dictionary from central cannot change links.
+- `openldr terminology import parameters <file>` rebuilds `test_map` after it loads the dictionary.
+
 Each change is recorded in the audit log as the CLI user.
 
 ### Français
@@ -468,6 +494,32 @@ openldr test-catalog map rebuild --apply
 - `map export` écrit tous les codes observés et leur correspondance en CSV, dans la disposition que lit `map import`. `--out` nomme un fichier. Sans lui, le CSV va sur la sortie standard.
 - `map import <file>` montre ce qui changerait et n'écrit rien. `--apply --force` l'écrit. Elle refuse sans les deux.
 - `map rebuild` montre ce que contiendrait la copie d'entrepôt `test_map`. `--apply` l'écrit.
+
+Les codes de résultat utilisent les mêmes commandes avec `--level result`. La cible est un code de champ de résultat :
+
+```sh
+openldr test-catalog map list --level result --status unmapped
+openldr test-catalog map set urn:openldr:disa HIVVC HIVVL --level result
+openldr test-catalog map match urn:openldr:disa
+openldr test-catalog map match urn:openldr:disa --apply --force
+```
+
+- `--level result` sur `map list`, `set`, `clear`, `export` et `import` agit sur les codes de résultat. Le CSV des résultats a les colonnes `system, code, description, results, parameter_code, loinc`.
+- `map match <system>` liste chaque code de résultat sans correspondance de ce système de laboratoire qui est égal à un code de champ de résultat. `--apply --force` les associe. Elle refuse `--apply` sans `--force`.
+
+Lier les champs de résultat à LOINC :
+
+```sh
+openldr test-catalog result-fields list --loinc none
+openldr test-catalog result-fields link HIVVL 20447-9
+openldr test-catalog result-fields unlink HIVVL --force
+openldr test-catalog result-fields export --out result-fields.csv
+openldr test-catalog result-fields import result-fields.csv --apply --force
+```
+
+- `result-fields list` liste les champs avec leur rôle, leurs unités et leur lien LOINC. `--loinc` accepte `linked`, `none` ou `all`, et `--role` accepte `result`, `specimen`, `metadata` ou `admin`.
+- `result-fields unlink` refuse sans `--force`. `result-fields import` montre un aperçu sauf avec `--apply --force`. Un laboratoire qui reçoit son dictionnaire du central ne peut pas modifier les liens.
+- `openldr terminology import parameters <fichier>` reconstruit `test_map` après avoir chargé le dictionnaire.
 
 Chaque changement est inscrit au journal d'audit au nom de l'utilisateur de la CLI.
 
@@ -535,6 +587,32 @@ openldr test-catalog map rebuild --apply
 - `map import <file>` mostra o que mudaria e não escreve nada. `--apply --force` escreve-o. Recusa sem ambos.
 - `map rebuild` mostra o que a cópia do armazém `test_map` teria. `--apply` escreve-a.
 
+Os códigos de resultado usam os mesmos comandos com `--level result`. O destino é um código de campo de resultado:
+
+```sh
+openldr test-catalog map list --level result --status unmapped
+openldr test-catalog map set urn:openldr:disa HIVVC HIVVL --level result
+openldr test-catalog map match urn:openldr:disa
+openldr test-catalog map match urn:openldr:disa --apply --force
+```
+
+- `--level result` em `map list`, `set`, `clear`, `export` e `import` trabalha com códigos de resultado. O CSV dos resultados tem as colunas `system, code, description, results, parameter_code, loinc`.
+- `map match <system>` lista cada código de resultado sem correspondência desse sistema do laboratório que é igual a um código de campo de resultado. `--apply --force` associa-os. Recusa `--apply` sem `--force`.
+
+Ligar campos de resultado ao LOINC:
+
+```sh
+openldr test-catalog result-fields list --loinc none
+openldr test-catalog result-fields link HIVVL 20447-9
+openldr test-catalog result-fields unlink HIVVL --force
+openldr test-catalog result-fields export --out result-fields.csv
+openldr test-catalog result-fields import result-fields.csv --apply --force
+```
+
+- `result-fields list` lista os campos com a sua função, unidades e ligação LOINC. `--loinc` aceita `linked`, `none` ou `all`, e `--role` aceita `result`, `specimen`, `metadata` ou `admin`.
+- `result-fields unlink` recusa sem `--force`. `result-fields import` mostra uma pré-visualização, exceto com `--apply --force`. Um laboratório que recebe o dicionário do central não pode alterar as ligações.
+- `openldr terminology import parameters <ficheiro>` reconstrói `test_map` depois de carregar o dicionário.
+
 Cada alteração fica no registo de auditoria em nome do utilizador da CLI.
 
 ## Install a content pack
@@ -546,7 +624,7 @@ openldr market install <bundle-dir> --dry-run
 openldr market install <bundle-dir>
 ```
 
-`--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. For each test-mappings step it lists the test mappings it would map, keep and skip. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
+`--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. For each test-mappings or result-mappings step it lists the mappings it would map, keep and skip. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
 
 ### Français
 

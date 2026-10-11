@@ -101,3 +101,28 @@ group by tm.catalog_name
 ```
 
 A cópia atualiza-se quando uma correspondência ou um teste do catálogo muda, e no arranque. Se uma atualização falhar, o separador di-lo. Escolha **Reconstruir a cópia do armazém** no seu menu ⋯.
+
+## Associar códigos de resultado do laboratório
+
+Um exame dá vários resultados, e cada sistema de laboratório também os nomeia à sua maneira. Os resultados de carga viral do DISA chegam como `HIVVL`, `HIVVC`, `POCVR` e outros. Associe cada código de resultado ao campo de resultado que significa, e um relatório pode escolher o resultado pelo que ele é.
+
+Os campos de resultado vêm do dicionário de resultados do site. Importe um com `openldr terminology import parameters <ficheiro>`. O separador **Campos de resultado** lista cada campo com a sua função, unidades e código LOINC. Para ligar um campo ao LOINC, abra o menu ⋯ da sua linha, escolha **Ligar LOINC**, escolha ou escreva o código e depois **Guardar** no menu ⋯ do painel. **Exportar CSV** e **Importar CSV**, no menu ⋯ do separador, ligam vários campos de uma vez, com as colunas `code` e `loinc`. Um `loinc` vazio deixa a ligação como está. Um laboratório que recebe o dicionário do central não pode alterar as ligações.
+
+No separador **Observados**, escolha **Resultados** para listar os códigos de resultado do armazém, com o número de resultados. Associe um código no menu ⋯ da sua linha com **Associar a um campo de resultado**. Num site DISA, a maioria dos códigos de resultado é igual aos códigos do dicionário. **Associar códigos iguais**, no menu ⋯ do separador, associa-os todos de uma vez. Escolha o sistema do laboratório, verifique a lista e depois escolha **Associar estes códigos**. Só são associados códigos sem correspondência. Um código que o central associou, ou um código **Ambíguo**, fica como está.
+
+O CSV dos resultados tem as colunas `system, code, description, results, parameter_code, loinc`. Preencha `parameter_code`, ou `loinc` quando só conhece esse.
+
+Os resultados registados no CE não precisam de correspondência. Já trazem os códigos do dicionário, e a cópia do armazém associa cada campo a si próprio. O mesmo vale para os pedidos feitos no CE: cada teste do catálogo é associado a si próprio.
+
+Um relatório que conta cópias de carga viral entre laboratórios junta `test_map` assim:
+
+```sql
+select count(*)
+from lab_results l
+join test_map tm on tm.level = 'result'
+  and tm.source_system = l.observation_system
+  and tm.source_code = l.observation_code
+where tm.loinc = '20447-9'
+```
+
+Um pacote de conteúdo pode trazer correspondências de resultados com um passo `result-mappings`. Cada entrada indica um código do laboratório e um código LOINC, e a instalação associa o código ao único campo de resultado ligado a esse código LOINC. Um código já associado aqui é mantido.

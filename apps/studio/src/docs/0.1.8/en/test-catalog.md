@@ -101,3 +101,28 @@ group by tm.catalog_name
 ```
 
 The copy updates when a mapping or a catalog test changes, and at start-up. If an update fails, the tab says so. Choose **Rebuild warehouse copy** from its ⋯ menu.
+
+## Mapping lab result codes
+
+A test yields several results, and each lab system names those its own way too. DISA's viral load results come as `HIVVL`, `HIVVC`, `POCVR` and more. Map each result code to the result field it means, and a report can pick the result by what it is.
+
+Result fields come from the site's result dictionary. Import one with `openldr terminology import parameters <file>`. The **Result fields** tab lists every field with its role, units and LOINC code. To link a field to LOINC, open its row's ⋯ menu, choose **Link LOINC**, pick or type the code, then choose **Save** from the sheet's ⋯ menu. **Export CSV** and **Import CSV** in the tab's ⋯ menu link many fields at once, with `code` and `loinc` columns. A blank `loinc` leaves a link as it is. A lab that receives its dictionary from central cannot change the links.
+
+On the **Observed** tab, choose **Results** to list the result codes in the warehouse, with their result count. Map a code from its row's ⋯ menu with **Map to result field**. On a DISA site most result codes are the same as the dictionary's codes. **Map matching codes** in the tab's ⋯ menu maps them all at once. Pick the lab system, check the list, then choose **Map these codes**. It maps only unmapped codes. A code central has mapped, or one that is **Ambiguous**, is left alone.
+
+The result CSV has the columns `system, code, description, results, parameter_code, loinc`. Fill in `parameter_code`, or `loinc` when you know only that.
+
+Results entered in CE need no mapping. They already carry the dictionary's codes, and the warehouse copy maps each field to itself. The same goes for orders taken in CE: each catalog test maps to itself.
+
+A report that counts viral load copies across labs joins `test_map` like this:
+
+```sql
+select count(*)
+from lab_results l
+join test_map tm on tm.level = 'result'
+  and tm.source_system = l.observation_system
+  and tm.source_code = l.observation_code
+where tm.loinc = '20447-9'
+```
+
+A content pack can ship result mappings with a `result-mappings` step. Each entry names a lab code and a LOINC code, and the install maps the code to the one result field linked to that LOINC code. A code already mapped here is kept.
