@@ -23,12 +23,14 @@ describe('023_test_map', () => {
     expect(() => mem.public.getTable('test_map')).toThrow();
   });
 
-  it('uses key-sized columns on MySQL and MSSQL, and utf8mb4 on MySQL', async () => {
+  it('uses key-sized columns, a short level column, and utf8mb4 on MySQL', async () => {
     const mysql = await collectCompiledSql('mysql', (db) => m023.up(db, 'mysql'));
-    expect(mysql[0]).toContain('`level` varchar(255) not null');
+    expect(mysql[0]).toContain('`level` varchar(64) not null');
+    expect(mysql[0]).toContain('`source_code` varchar(255) not null');
     expect(mysql[0]).toContain('character set utf8mb4');
     expect(mysql[1]).toBe('create index `test_map_source_idx` on `test_map` (`level`, `source_system`, `source_code`)');
     const mssql = await collectCompiledSql('mssql', (db) => m023.up(db, 'mssql'));
+    expect(mssql[0]).toContain('"level" varchar(64) not null');
     expect(mssql[0]).toContain('"source_code" varchar(450) not null');
     expect(mssql[1]).toBe('create index "test_map_source_idx" on "test_map" ("level", "source_system", "source_code")');
   });
