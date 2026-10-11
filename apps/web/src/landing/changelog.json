@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "ab2cf19a",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Check pack ceVersion against the real CE version"
+        },
+        {
           "hash": "a8d30bfd",
           "type": "perf",
           "scope": "db",
