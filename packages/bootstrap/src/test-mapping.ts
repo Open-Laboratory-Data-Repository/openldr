@@ -1,14 +1,15 @@
 import type { Kysely } from 'kysely';
-import { testMapId, type ExternalSchema, type InternalSchema, type MapType, type TerminologyAdminStore } from '@openldr/db';
-import { LOINC_SYSTEM } from '@openldr/terminology';
+import { testMapId, type ExternalSchema, type InternalSchema, type MapType, type TerminologyAdminStore, type TestMapLevel } from '@openldr/db';
+import { LOINC_SYSTEM, RESULT_PARAM_SYSTEM } from '@openldr/terminology';
 import { toCsv } from '@openldr/reporting';
 import { TEST_CATALOG_SYSTEM, TestCatalogError } from './test-catalog';
 import { readTableFile, TableFileError } from './table-file';
 
-// Test mapping (docs/superpowers/specs/2026-10-11-test-mapping-design.md). Each lab's own test codes,
-// as the warehouse stores them in lab_requests.panel_system and panel_code, map to catalog tests
-// through ordinary term_mappings rows. The route, the CLI and the content pack installer all call
-// this module (AGENTS.md section 6), and test_map is the warehouse copy report SQL joins.
+// Test mapping (docs/superpowers/specs/2026-10-11-test-mapping-design.md) and result field mapping
+// (docs/superpowers/specs/2026-10-11-result-field-mapping-design.md). A lab's own test codes map to
+// catalog tests, and its result codes map to fields of the result dictionary, through ordinary
+// term_mappings rows. The route, the CLI and the content pack installer all call this module
+// (AGENTS.md section 6), and test_map is the warehouse copy report SQL joins.
 
 /** Must equal the map type the catalog's LOINC link uses (test-catalog.ts, LOINC_MAP_TYPE). */
 const MAP_TYPE = 'SAME-AS' as const;
@@ -21,6 +22,21 @@ const MAX_LIMIT = 200;
 /** How long the Observed list reuses one warehouse scan. */
 const OBSERVED_CACHE_MS = 60_000;
 const STATUSES = ['unmapped', 'mapped', 'ambiguous', 'all'] as const;
+
+/** A mapping's level: a lab test code maps to a catalog test, a lab result code to a result field. */
+export type MapLevel = TestMapLevel;
+/** Where each level's mappings point. A code in this system is a target already and needs no mapping. */
+export const MAP_TARGET_SYSTEM: Record<MapLevel, string> = { test: TEST_CATALOG_SYSTEM, result: RESULT_PARAM_SYSTEM };
+const TARGET_SYSTEMS = new Set(Object.values(MAP_TARGET_SYSTEM));
+/** How each level names its target in messages. Slice 1's test-level wording is kept exactly. */
+const TARGET_NOUN: Record<MapLevel, string> = { test: 'catalog test', result: 'result field' };
+
+/** Read a level from a query string, a body or a CLI flag. Blank means 'test', slice 1's only level. */
+export function parseMapLevel(raw: unknown): { ok: true; level: MapLevel } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, level: 'test' };
+  if (raw === 'test' || raw === 'result') return { ok: true, level: raw };
+  return { ok: false, error: 'level must be test or result' };
+}
 
 export type ObservedStatus = 'unmapped' | 'mapped' | 'ambiguous';
 
@@ -48,10 +64,19 @@ export interface ObservedResult {
 
 export interface CatalogTarget { code: string; name: string | null; loinc: string | null; retired: boolean }
 
-export interface TestMapPublishResult {
+export interface LevelPublishSummary {
   mapped: number;
   ambiguous: Array<{ system: string; code: string; catalogCodes: string[] }>;
   targetMissing: Array<{ system: string; code: string; catalogCode: string }>;
+}
+
+/** The top-level counts are the test level, as slice 1 shipped them. */
+export interface TestMapPublishResult extends LevelPublishSummary {
+  /** The same counts for result codes. */
+  results: LevelPublishSummary;
+  /** Rows that point a catalog test or a result field at itself, so CE's own orders and results join. */
+  selfRows: number;
+  /** Every row written: both levels, self rows included. */
   written: number;
 }
 
@@ -134,10 +159,10 @@ export function createCoalescedRunner(run: () => Promise<void>): (() => Promise<
   return Object.assign(request, { idle });
 }
 
-/** A term mapping into the catalog is a test mapping. One out of the catalog is its LOINC link. Both
- *  change test_map. */
+/** A term mapping into the catalog or the dictionary is a mapping. One out of either is a LOINC link. All
+ *  of them change test_map. */
 export function mappingTouchesTestMap(fromSystem: string | null | undefined, toSystem: string | null | undefined): boolean {
-  return toSystem === TEST_CATALOG_SYSTEM || fromSystem === TEST_CATALOG_SYSTEM;
+  return TARGET_SYSTEMS.has(toSystem ?? '') || TARGET_SYSTEMS.has(fromSystem ?? '');
 }
 
 /** Whether a record a lab pulled from central changes test_map. A term mapping delete carries no body,
@@ -145,7 +170,7 @@ export function mappingTouchesTestMap(fromSystem: string | null | undefined, toS
 export function isTestMapRelevantRecord(rec: { entityType: string; body?: unknown }): boolean {
   const body = rec.body as { fromSystem?: string; toSystem?: string; url?: string } | null;
   if (rec.entityType === 'term_mapping') return body === null || body === undefined || mappingTouchesTestMap(body.fromSystem, body.toSystem);
-  if (rec.entityType === 'terminology_system') return body?.url === TEST_CATALOG_SYSTEM;
+  if (rec.entityType === 'terminology_system') return TARGET_SYSTEMS.has(body?.url ?? '');
   return false;
 }
 
@@ -190,10 +215,30 @@ export function createTestMapping(deps: TestMappingDeps) {
     }]));
   }
 
-  async function readMappings(): Promise<MappingRow[]> {
+  /** The result dictionary, shaped like the catalog. A field has no category. */
+  async function readParams(): Promise<Map<string, CatalogEntry>> {
+    const concepts = await internalDb.selectFrom('terminology_concepts')
+      .select(['code', 'display', 'status'])
+      .where('system', '=', RESULT_PARAM_SYSTEM).execute();
+    const links = await internalDb.selectFrom('term_mappings').select(['from_code', 'to_code'])
+      .where('from_system', '=', RESULT_PARAM_SYSTEM).where('to_system', '=', LOINC_SYSTEM)
+      .where('map_type', '=', MAP_TYPE).where('is_active', '=', true).execute();
+    const loinc = new Map(links.map((l) => [l.from_code, l.to_code]));
+    return new Map(concepts.map((c) => [c.code, {
+      name: c.display, category: null, loinc: loinc.get(c.code) ?? null, retired: c.status === RETIRED,
+    }]));
+  }
+
+  function readTargets(level: MapLevel): Promise<Map<string, CatalogEntry>> {
+    return level === 'test' ? readCatalog() : readParams();
+  }
+
+  async function readMappings(level: MapLevel = 'test'): Promise<MappingRow[]> {
     return internalDb.selectFrom('term_mappings')
       .select(MAPPING_COLUMNS)
-      .where('to_system', '=', TEST_CATALOG_SYSTEM).where('is_active', '=', true).execute();
+      .where('to_system', '=', MAP_TARGET_SYSTEM[level]).where('is_active', '=', true)
+      // A row from the target system to itself would collide with that code's self row on the key.
+      .where('from_system', '!=', MAP_TARGET_SYSTEM[level]).execute();
   }
 
   function resolveAll(rows: MappingRow[], catalog: Map<string, CatalogEntry>): Map<string, { system: string; code: string; resolved: Resolved; central: boolean }> {
@@ -217,29 +262,47 @@ export function createTestMapping(deps: TestMappingDeps) {
     return out;
   }
 
-  async function publish(opts: { apply: boolean }): Promise<TestMapPublishResult> {
-    const catalog = await readCatalog();
-    const resolved = [...resolveAll(await readMappings(), catalog).values()];
-    const mapped = resolved.filter((r) => r.resolved.kind === 'mapped');
-    const rows = mapped.map((r) => {
-      const catalogCode = (r.resolved as { catalogCode: string }).catalogCode;
-      const entry = catalog.get(catalogCode)!;
+  type TestMapRow = {
+    id: string; level: MapLevel; source_system: string; source_code: string;
+    catalog_code: string; catalog_name: string | null; category: string | null; loinc: string | null;
+  };
+
+  async function planLevel(level: MapLevel): Promise<{ rows: TestMapRow[]; selfRows: number; summary: LevelPublishSummary }> {
+    const targets = await readTargets(level);
+    const resolved = [...resolveAll(await readMappings(level), targets).values()];
+    const row = (system: string, code: string, targetCode: string): TestMapRow => {
+      const entry = targets.get(targetCode)!;
       return {
-        id: testMapId('test', r.system, r.code), level: 'test', source_system: r.system, source_code: r.code,
-        catalog_code: catalogCode, catalog_name: entry.name, category: entry.category, loinc: entry.loinc,
+        id: testMapId(level, system, code), level, source_system: system, source_code: code,
+        catalog_code: targetCode, catalog_name: entry.name, category: entry.category, loinc: entry.loinc,
       };
-    });
+    };
+    const mapped = resolved.flatMap((r) => (r.resolved.kind === 'mapped' ? [row(r.system, r.code, r.resolved.catalogCode)] : []));
+    // CE's own orders and results already carry the target's code, so each target maps to itself.
+    const self = [...targets.keys()].sort(compare).map((code) => row(MAP_TARGET_SYSTEM[level], code, code));
+    return {
+      rows: [...mapped, ...self],
+      selfRows: self.length,
+      summary: {
+        mapped: mapped.length,
+        ambiguous: resolved.flatMap((r) => (r.resolved.kind === 'ambiguous' ? [{ system: r.system, code: r.code, catalogCodes: r.resolved.catalogCodes }] : [])),
+        targetMissing: resolved.flatMap((r) => (r.resolved.kind === 'missing' ? [{ system: r.system, code: r.code, catalogCode: r.resolved.catalogCode }] : [])),
+      },
+    };
+  }
+
+  async function publish(opts: { apply: boolean }): Promise<TestMapPublishResult> {
+    const tests = await planLevel('test');
+    const results = await planLevel('result');
+    const rows = [...tests.rows, ...results.rows];
     const result: TestMapPublishResult = {
-      mapped: mapped.length,
-      ambiguous: resolved.flatMap((r) => (r.resolved.kind === 'ambiguous' ? [{ system: r.system, code: r.code, catalogCodes: r.resolved.catalogCodes }] : [])),
-      targetMissing: resolved.flatMap((r) => (r.resolved.kind === 'missing' ? [{ system: r.system, code: r.code, catalogCode: r.resolved.catalogCode }] : [])),
-      written: rows.length,
+      ...tests.summary, results: results.summary, selfRows: tests.selfRows + results.selfRows, written: rows.length,
     };
     if (!opts.apply) return result;
-    // Delete then insert in one transaction, so a reader never sees the table empty. Only this
-    // level's rows: the result-field slice owns the 'result' rows.
+    // Delete then insert in one transaction, so a reader never sees the table empty. This module owns
+    // both levels, so it replaces the whole table.
     await externalDb.transaction().execute(async (trx) => {
-      await trx.deleteFrom('test_map').where('level', '=', 'test').execute();
+      await trx.deleteFrom('test_map').execute();
       for (let i = 0; i < rows.length; i += INSERT_CHUNK) {
         await trx.insertInto('test_map').values(rows.slice(i, i + INSERT_CHUNK)).execute();
       }
@@ -557,7 +620,7 @@ export function createTestMapping(deps: TestMappingDeps) {
   }
 
   return {
-    observed, observedAll, targets, publish, rebuildNow, requestRebuild, settled, set, clear, writeMapping, activeFor, readCatalog, readMappings,
+    observed, observedAll, targets, publish, rebuildNow, requestRebuild, settled, set, clear, writeMapping, activeFor, readCatalog, readMappings, readTargets,
     exportCsv, importPreview, importApply, catalogCodesForLoinc, planPack, applyPack,
   };
 }

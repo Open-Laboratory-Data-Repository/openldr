@@ -20,7 +20,7 @@ describe('test mapping: writes', () => {
 
     expect([change.before, change.after, change.rebuild.ok]).toEqual([null, 'VL', true]);
     expect(await active(internalDb, 'HIVVL')).toEqual([{ to_code: 'VL', map_type: 'SAME-AS' }]);
-    expect(await externalDb.selectFrom('test_map').select('source_code').execute()).toEqual([{ source_code: 'HIVVL' }]);
+    expect(await externalDb.selectFrom('test_map').select('source_code').where('source_system', '=', DISA).execute()).toEqual([{ source_code: 'HIVVL' }]);
   });
 
   it('set replaces the earlier target and deactivates any other active mapping, whatever its type', async () => {
@@ -64,7 +64,7 @@ describe('test mapping: writes', () => {
 
     expect([change.before, change.after, change.rebuild.ok]).toEqual(['VL', null, true]);
     expect(await active(internalDb, 'HIVVL')).toEqual([]);
-    expect(await externalDb.selectFrom('test_map').selectAll().execute()).toEqual([]);
+    expect(await externalDb.selectFrom('test_map').selectAll().where('source_system', '=', DISA).execute()).toEqual([]);
   });
 
   it('clear refuses a code with no mapping as not-found', async () => {
@@ -127,7 +127,7 @@ describe('test mapping: settled', () => {
     void mapping.requestRebuild();
     await mapping.settled();
 
-    expect(await externalDb.selectFrom('test_map').select('source_code').execute()).toEqual([{ source_code: 'HIVVL' }]);
+    expect(await externalDb.selectFrom('test_map').select('source_code').where('source_system', '=', DISA).execute()).toEqual([{ source_code: 'HIVVL' }]);
   });
 
   it('waits for a direct rebuildNow too, and resolves when nothing is pending', async () => {
@@ -139,7 +139,7 @@ describe('test mapping: settled', () => {
     void mapping.rebuildNow();
     await mapping.settled();
 
-    expect((await externalDb.selectFrom('test_map').select('source_code').execute()).length).toBe(1);
+    expect((await externalDb.selectFrom('test_map').select('source_code').where('source_system', '=', DISA).execute()).length).toBe(1);
   });
 });
 
@@ -174,7 +174,7 @@ describe('rebuildNow runs one at a time', () => {
     expect([a.ok, b.ok]).toEqual([true, true]);
     expect(finished).toEqual([1, 2]);
     expect(warnings).toEqual([]);
-    expect(await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code']).execute())
+    expect(await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code']).where('source_system', '=', DISA).execute())
       .toEqual([{ source_code: 'HIVVL', catalog_code: 'VL' }]);
   });
 });

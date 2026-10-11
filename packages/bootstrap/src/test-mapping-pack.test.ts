@@ -52,7 +52,7 @@ describe('test mapping: pack plan and apply', () => {
     ]);
 
     expect(out.rebuild.ok).toBe(true);
-    const rows = await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code']).orderBy('source_code').execute();
+    const rows = await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code']).where('source_system', '=', DISA).orderBy('source_code').execute();
     expect(rows).toEqual([{ source_code: 'HIVVL', catalog_code: 'VL' }, { source_code: 'POCVR', catalog_code: 'A' }]);
   });
 });

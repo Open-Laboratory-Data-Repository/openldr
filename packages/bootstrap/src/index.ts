@@ -1088,7 +1088,7 @@ const reporting: ReportingApi = {
       logger.warn({ err }, 'boot facility-map-rebuild enqueue failed');
     });
     // Fills test_map once after an upgrade, and repairs it after a failed rebuild. Inline and cheap:
-    // tens to hundreds of rows. Server boot only, for the same reason as the facility rebuild.
+    // a few thousand rows at most. Server boot only, for the same reason as the facility rebuild.
     void testMapping.requestRebuild();
   }
 
