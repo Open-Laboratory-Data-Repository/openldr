@@ -1785,9 +1785,6 @@ const reporting: ReportingApi = {
     cfg,
     close() {
       closePromise ??= (async () => {
-        // A test_map rebuild a catalog edit or sync asked for must finish before the databases close.
-        // settled() never rejects, and the catch keeps any surprise from stopping the close.
-        await testMapping.settled().catch(() => undefined);
         await workflowListeners.stopAll();
         // The runtime stops both workers and ends the push LISTEN client it owns.
         await syncRuntime.stop();
@@ -1799,6 +1796,10 @@ const reporting: ReportingApi = {
         await facilityImportWorker?.stop();
         if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
         await eventing.close();
+        // Last step before the databases close. The sync runtime and the workers are stopped by now, so
+        // no pull can start a rebuild that the closing databases would cut off. settled() never rejects,
+        // and the catch keeps any surprise from stopping the close.
+        await testMapping.settled().catch(() => undefined);
         await Promise.allSettled([store.close(), internal.close()]);
       })();
       return closePromise;
