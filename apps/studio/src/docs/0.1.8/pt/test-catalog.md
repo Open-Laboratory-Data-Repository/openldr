@@ -67,3 +67,37 @@ Um exame pode nomear os parâmetros de resultado que produz: hemoglobina, contag
 Um parâmetro numérico pode ter intervalos de referência. Cada intervalo tem um limite inferior, um superior, uma unidade, e um nome opcional, por exemplo Mulheres do planalto. Pode também nomear um sexo e uma faixa etária. O menu ⋯ da linha de um intervalo move-o para cima, para baixo ou remove-o, e o menu ⋯ do parâmetro acrescenta um. A ordem decide qual o intervalo que começa selecionado na bancada. Dois intervalos do mesmo parâmetro não podem ter o mesmo nome. Um exame sem parâmetros continua a funcionar: o painel pede apenas uma amostra.
 
 Na linha de comandos, `openldr test-catalog params <code>` mostra os parâmetros de um exame, e `--set <ficheiro>` substitui-os a partir de um ficheiro JSON.
+
+## Associar códigos de teste do laboratório
+
+Cada sistema de laboratório dá nomes aos seus testes à sua maneira. O DISA chama à carga viral `HIVVL`, `POCVR` ou `POHVL`. Associe cada um desses códigos ao teste do catálogo que significa, e os relatórios podem contar o teste do catálogo seja qual for o nome dado pelo laboratório.
+
+Abra o separador **Observados**. Lista todos os códigos de teste do armazém, com a descrição, o número de pedidos e a data em que foram vistos pela última vez. Um código associado antes de chegarem dados aparece com 0 pedidos. Filtre por **Sem correspondência**, **Com correspondência** ou **Ambíguo**.
+
+Para associar um código, abra o menu ⋯ da sua linha e escolha **Associar a um teste do catálogo**. Escolha o teste e depois **Guardar** no menu ⋯ do painel. **Remover correspondência**, no mesmo menu, retira-a.
+
+Os códigos são comparados como a base de dados do armazém compara texto. No Postgres a comparação é exata: `HIVVL` e `HIVVL ` (com um espaço no fim) são dois códigos. No MSSQL e no MySQL com as definições por omissão, maiúsculas e minúsculas contam como iguais, e o MSSQL ignora também os espaços no fim.
+
+Um código é **Ambíguo** quando tem duas correspondências com o catálogo, por exemplo uma feita na página Terminologia e outra feita aqui. Os relatórios deixam-no de fora até o associar de novo.
+
+Um laboratório não pode alterar uma correspondência enviada pelo central. A sua linha indica **Do central**.
+
+### Associar vários códigos de uma vez
+
+**Exportar CSV**, no menu ⋯ do separador, escreve todos os códigos observados. Preencha `catalog_code`, ou `loinc` quando só conhece o código LOINC, e depois **Importar CSV**. A importação mostra as linhas novas, alteradas, inalteradas e recusadas antes de escrever o que quer que seja. Uma linha com ambas as colunas vazias fica como está. Uma linha é recusada quando o armazém só tem esse código com espaços à volta, porque o leitor de ficheiros apara as células. Associe esse código no separador Observados ou com `openldr test-catalog map set`. Num laboratório, uma linha cujo código o central associou é recusada, a não ser que peça a correspondência que o central já tem.
+
+### Relatórios
+
+As correspondências são copiadas para a tabela do armazém `test_map`. Um relatório junta-a assim:
+
+```sql
+select tm.catalog_name, count(*)
+from lab_requests lr
+join test_map tm on tm.level = 'test'
+  and tm.source_system = lr.panel_system
+  and tm.source_code = lr.panel_code
+where tm.loinc = '25836-8'
+group by tm.catalog_name
+```
+
+A cópia atualiza-se quando uma correspondência ou um teste do catálogo muda, e no arranque. Se uma atualização falhar, o separador di-lo. Escolha **Reconstruir a cópia do armazém** no seu menu ⋯.

@@ -384,6 +384,27 @@ A category answer is `"kind": "existing"` with a `code`, or `"kind": "new"` with
 openldr test-catalog export --out catalog.csv
 ```
 
+Map lab test codes to catalog tests. See **Mapping lab test codes** in the in-app Test catalog guide. Use the System value the Observed tab shows for a code:
+
+```sh
+openldr test-catalog map list --status unmapped --json
+openldr test-catalog map set DISA POCVR HIVVL
+openldr test-catalog map clear DISA POCVR --force
+openldr test-catalog map export --out mappings.csv
+openldr test-catalog map import mappings.csv
+openldr test-catalog map import mappings.csv --apply --force
+openldr test-catalog map rebuild --apply
+```
+
+- `map list` lists the lab test codes in the warehouse with their catalog mapping. `--status` takes `unmapped`, `mapped`, `ambiguous` or `all`. `--search`, `--limit` (1 to 200, 25 by default) and `--offset` narrow and page the list.
+- `map set <system> <code> <catalog-code>` maps one code to a catalog test.
+- `map clear <system> <code>` removes a mapping. It refuses without `--force`.
+- `map export` writes every observed code and its mapping as CSV, in the layout `map import` reads. `--out` names a file. Without it the CSV goes to standard output.
+- `map import <file>` shows what would change and writes nothing. `--apply --force` writes it. It refuses without both.
+- `map rebuild` shows what the warehouse copy `test_map` would hold. `--apply` writes it.
+
+Each change is recorded in the audit log as the CLI user.
+
 ### Français
 
 Le catalogue des examens est la liste nationale des examens. C'est un système de codes de la page Terminologie, **Test catalog**. Ses catégories forment un second système de codes, **Test categories**, avec cinq catégories au départ : Chemistry, Haematology, Microbiology, Serology et Molecular. Modifiez les catégories sur la page Terminologie.
@@ -429,6 +450,27 @@ Une réponse de catégorie est `"kind": "existing"` avec un `code`, ou `"kind": 
 openldr test-catalog export --out catalog.csv
 ```
 
+Associer des codes de test de laboratoire à des tests du catalogue. Voir **Associer les codes de test du laboratoire** dans le guide Catalogue des examens de l'application. Utilisez la valeur Système que l'onglet Observés affiche pour un code :
+
+```sh
+openldr test-catalog map list --status unmapped --json
+openldr test-catalog map set DISA POCVR HIVVL
+openldr test-catalog map clear DISA POCVR --force
+openldr test-catalog map export --out mappings.csv
+openldr test-catalog map import mappings.csv
+openldr test-catalog map import mappings.csv --apply --force
+openldr test-catalog map rebuild --apply
+```
+
+- `map list` liste les codes de test de laboratoire de l'entrepôt avec leur correspondance. `--status` accepte `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (de 1 à 200, 25 par défaut) et `--offset` filtrent et paginent la liste.
+- `map set <system> <code> <catalog-code>` associe un code à un test du catalogue.
+- `map clear <system> <code>` supprime une correspondance. Elle refuse sans `--force`.
+- `map export` écrit tous les codes observés et leur correspondance en CSV, dans la disposition que lit `map import`. `--out` nomme un fichier. Sans lui, le CSV va sur la sortie standard.
+- `map import <file>` montre ce qui changerait et n'écrit rien. `--apply --force` l'écrit. Elle refuse sans les deux.
+- `map rebuild` montre ce que contiendrait la copie d'entrepôt `test_map`. `--apply` l'écrit.
+
+Chaque changement est inscrit au journal d'audit au nom de l'utilisateur de la CLI.
+
 ### Português
 
 O catálogo de exames é a lista nacional de exames. É um sistema de códigos na página Terminologia, **Test catalog**. As categorias formam um segundo sistema de códigos, **Test categories**, com cinco no início: Chemistry, Haematology, Microbiology, Serology e Molecular. Edite as categorias na página Terminologia.
@@ -473,6 +515,27 @@ Uma resposta de categoria é `"kind": "existing"` com um `code`, ou `"kind": "ne
 ```sh
 openldr test-catalog export --out catalog.csv
 ```
+
+Associar códigos de teste do laboratório a testes do catálogo. Veja **Associar códigos de teste do laboratório** no guia Catálogo de exames da aplicação. Use o valor Sistema que o separador Observados mostra para um código:
+
+```sh
+openldr test-catalog map list --status unmapped --json
+openldr test-catalog map set DISA POCVR HIVVL
+openldr test-catalog map clear DISA POCVR --force
+openldr test-catalog map export --out mappings.csv
+openldr test-catalog map import mappings.csv
+openldr test-catalog map import mappings.csv --apply --force
+openldr test-catalog map rebuild --apply
+```
+
+- `map list` lista os códigos de teste do laboratório no armazém com a sua correspondência. `--status` aceita `unmapped`, `mapped`, `ambiguous` ou `all`. `--search`, `--limit` (de 1 a 200, 25 por omissão) e `--offset` filtram e paginam a lista.
+- `map set <system> <code> <catalog-code>` associa um código a um teste do catálogo.
+- `map clear <system> <code>` remove uma correspondência. Recusa sem `--force`.
+- `map export` escreve todos os códigos observados e a sua correspondência em CSV, no formato que `map import` lê. `--out` indica um ficheiro. Sem ele, o CSV vai para a saída padrão.
+- `map import <file>` mostra o que mudaria e não escreve nada. `--apply --force` escreve-o. Recusa sem ambos.
+- `map rebuild` mostra o que a cópia do armazém `test_map` teria. `--apply` escreve-a.
+
+Cada alteração fica no registo de auditoria em nome do utilizador da CLI.
 
 ## Install a content pack
 
