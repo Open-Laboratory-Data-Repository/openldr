@@ -40,8 +40,12 @@ import {
 } from './test-catalog';
 import {
   runTestMappingList, runTestMappingSet, runTestMappingClear, runTestMappingExport, runTestMappingImport,
-  runTestMappingRebuild, type TestMappingListOpts,
+  runTestMappingRebuild, runTestMappingMatch, type TestMappingListOpts,
 } from './test-mapping';
+import {
+  runResultFieldsList, runResultFieldsLink, runResultFieldsUnlink, runResultFieldsExport, runResultFieldsImport,
+  type ResultFieldsListOpts,
+} from './result-fields';
 import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
 
@@ -398,38 +402,44 @@ export function buildProgram(): Command {
     });
 
   // Test mapping spec 4.6: lab test codes mapped to catalog tests. Clear and an applied import take --force.
-  const testMap = testCatalog.command('map').description('Map lab test codes to catalog tests');
+  // With --level result the same commands map lab result codes to result dictionary fields.
+  const testMap = testCatalog.command('map').description('Map lab test codes to catalog tests, and lab result codes to result fields');
   testMap.command('list')
-    .description('List the lab test codes seen in the warehouse, with their catalog mapping')
+    .description('List the lab codes seen in the warehouse, with their mapping (test codes, or result codes with --level result)')
     .option('--status <unmapped|mapped|ambiguous|all>', 'which codes to list (default: all)')
     .option('--search <text>', 'match code, description or catalog name')
     .option('--limit <n>', 'rows per page, 1 to 200 (default: 25)')
     .option('--offset <n>', 'rows to skip (default: 0)')
+    .option('--level <test|result>', 'test codes or result codes (default: test)')
     .option('--json', 'emit JSON', false)
     .action(async (opts: TestMappingListOpts) => { process.exitCode = await runTestMappingList(opts); });
-  testMap.command('set <system> <code> <catalog-code>')
-    .description('Map a lab test code to a catalog test')
+  testMap.command('set <system> <code> <target-code>')
+    .description('Map a lab test code to a catalog test, or with --level result a lab result code to a result field')
+    .option('--level <test|result>', 'test codes or result codes (default: test)')
     .option('--json', 'emit JSON', false)
-    .action(async (system: string, code: string, catalogCode: string, opts: { json: boolean }) => {
-      process.exitCode = await runTestMappingSet(system, code, catalogCode, opts);
+    .action(async (system: string, code: string, targetCode: string, opts: { json: boolean; level?: string }) => {
+      process.exitCode = await runTestMappingSet(system, code, targetCode, opts);
     });
   testMap.command('clear <system> <code>')
-    .description('Remove a lab test code\'s catalog mapping')
+    .description('Remove a lab code\'s mapping (a catalog test, or a result field with --level result)')
+    .option('--level <test|result>', 'test codes or result codes (default: test)')
     .option('--force', 'confirm the removal', false)
     .option('--json', 'emit JSON', false)
-    .action(async (system: string, code: string, opts: { force: boolean; json: boolean }) => {
+    .action(async (system: string, code: string, opts: { force: boolean; json: boolean; level?: string }) => {
       process.exitCode = await runTestMappingClear(system, code, opts);
     });
   testMap.command('export')
     .description('Write every observed code and its mapping as CSV, in the layout import reads')
+    .option('--level <test|result>', 'test codes or result codes (default: test)')
     .option('--out <file>', 'write to this file instead of standard output')
-    .action(async (opts: { out?: string }) => { process.exitCode = await runTestMappingExport(opts); });
+    .action(async (opts: { out?: string; level?: string }) => { process.exitCode = await runTestMappingExport(opts); });
   testMap.command('import <file>')
     .description('Import mappings from CSV. Shows what would change unless --apply --force is given.')
+    .option('--level <test|result>', 'test codes or result codes (default: test)')
     .option('--apply', 'write the changes', false)
     .option('--force', 'confirm the write', false)
     .option('--json', 'emit JSON', false)
-    .action(async (file: string, opts: { apply: boolean; force: boolean; json: boolean }) => {
+    .action(async (file: string, opts: { apply: boolean; force: boolean; json: boolean; level?: string }) => {
       process.exitCode = await runTestMappingImport(file, opts);
     });
   testMap.command('rebuild')
@@ -437,6 +447,45 @@ export function buildProgram(): Command {
     .option('--apply', 'write test_map', false)
     .option('--json', 'emit JSON', false)
     .action(async (opts: { apply: boolean; json: boolean }) => { process.exitCode = await runTestMappingRebuild(opts); });
+  testMap.command('match <system>')
+    .description('Map each unmapped result code in one lab system to the result field with the same code. Shows the list unless --apply --force is given.')
+    .option('--apply', 'write the mappings', false)
+    .option('--force', 'confirm the write', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (system: string, opts: { apply: boolean; force: boolean; json: boolean }) => {
+      process.exitCode = await runTestMappingMatch(system, opts);
+    });
+
+  // Result field mapping spec 4.6: the result dictionary's LOINC links. Unlink and an applied import take --force.
+  const resultFields = testCatalog.command('result-fields').description('The result dictionary and its LOINC links');
+  resultFields.command('list')
+    .description('List the result fields with their role, units and LOINC link')
+    .option('--search <text>', 'match code, name or LOINC')
+    .option('--loinc <linked|none|all>', 'which fields to list (default: all)')
+    .option('--role <result|specimen|metadata|admin>', 'only fields with this role')
+    .option('--limit <n>', 'rows per page, 1 to 200 (default: 25)')
+    .option('--offset <n>', 'rows to skip (default: 0)')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: ResultFieldsListOpts) => { process.exitCode = await runResultFieldsList(opts); });
+  resultFields.command('link <code> <loinc>')
+    .description('Link a result field to a LOINC code')
+    .option('--json', 'emit JSON', false)
+    .action(async (code: string, loinc: string, opts: { json: boolean }) => { process.exitCode = await runResultFieldsLink(code, loinc, opts); });
+  resultFields.command('unlink <code>')
+    .description('Remove a result field\'s LOINC link')
+    .option('--force', 'confirm the removal', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (code: string, opts: { force: boolean; json: boolean }) => { process.exitCode = await runResultFieldsUnlink(code, opts); });
+  resultFields.command('export')
+    .description('Write every result field and its LOINC link as CSV, in the layout import reads')
+    .option('--out <file>', 'write to this file instead of standard output')
+    .action(async (opts: { out?: string }) => { process.exitCode = await runResultFieldsExport(opts); });
+  resultFields.command('import <file>')
+    .description('Import LOINC links from CSV. Shows what would change unless --apply --force is given.')
+    .option('--apply', 'write the changes', false)
+    .option('--force', 'confirm the write', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (file: string, opts: { apply: boolean; force: boolean; json: boolean }) => { process.exitCode = await runResultFieldsImport(file, opts); });
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');
   // Task 4: CLI parity for Task 3's `GET /api/facilities` — the same `parseWhereFlags`/

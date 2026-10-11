@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import { createFhirStore, createTerminologyStore, createTerminologyAdminStore, type InternalSchema, type ValueSetProjection } from '@openldr/db';
-import { LOINC_SYSTEM } from '@openldr/terminology';
+import { LOINC_SYSTEM, RESULT_PARAM_SYSTEM } from '@openldr/terminology';
 import { TEST_CATALOG_SYSTEM } from '../test-catalog';
 import { createTestMapping } from '../test-mapping';
 
@@ -27,12 +27,14 @@ export async function buildMapping(opts: { now?: () => number } = {}) {
   };
   const admin = createTerminologyAdminStore(internalDb, projection);
   const warnings: string[] = [];
-  // Counts selects that read lab_requests, so a test can tell a cached Observed scan from a fresh one.
-  const counter = { groupQueries: 0 };
+  // Counts selects that read lab_requests or lab_results, so a test can tell a cached Observed scan from a fresh one.
+  const counter = { groupQueries: 0, resultGroupQueries: 0 };
   const countingDb = externalDb.withPlugin({
     transformQuery(args) {
       const node = args.node as { kind: string; from?: { froms?: Array<{ table?: { identifier?: { name?: string } } }> } };
-      if (node.kind === 'SelectQueryNode' && node.from?.froms?.some((f) => f.table?.identifier?.name === 'lab_requests')) counter.groupQueries += 1;
+      const names = node.kind === 'SelectQueryNode' ? (node.from?.froms ?? []).map((f) => f.table?.identifier?.name) : [];
+      if (names.includes('lab_requests')) counter.groupQueries += 1;
+      if (names.includes('lab_results')) counter.resultGroupQueries += 1;
       return args.node;
     },
     async transformResult(args) { return args.result; },
@@ -64,4 +66,29 @@ export async function seedMapping(db: Kysely<InternalSchema>, id: string, system
 
 export async function seedRequest(db: Kysely<any>, id: string, system: string | null, code: string | null, desc: string | null, authoredAt: string) {
   await db.insertInto('lab_requests').values({ id, panel_system: system, panel_code: code, panel_desc: desc, authored_at: authoredAt }).execute();
+}
+
+export async function seedParam(db: Kysely<InternalSchema>, code: string, display: string, opts: { role?: string; units?: string; loinc?: string } = {}) {
+  await db.insertInto('terminology_concepts').values({
+    system: RESULT_PARAM_SYSTEM, code, display, status: null,
+    properties: JSON.stringify({ result_role: opts.role ?? 'result', ...(opts.units ? { parm_units: opts.units } : {}) }) as never,
+  }).execute();
+  if (opts.loinc) {
+    await db.insertInto('term_mappings').values({
+      id: `loinc-param-${code}`, from_system: RESULT_PARAM_SYSTEM, from_code: code, to_system: LOINC_SYSTEM, to_code: opts.loinc,
+      to_display: null, map_type: 'SAME-AS', relationship: null, owner: null, is_active: true, managed_origin: null,
+    }).execute();
+  }
+}
+
+export async function seedResultMapping(db: Kysely<InternalSchema>, id: string, system: string, code: string, paramCode: string, opts: { active?: boolean; central?: boolean; mapType?: string } = {}) {
+  await db.insertInto('term_mappings').values({
+    id, from_system: system, from_code: code, to_system: RESULT_PARAM_SYSTEM, to_code: paramCode,
+    to_display: null, map_type: opts.mapType ?? 'SAME-AS', relationship: null, owner: null,
+    is_active: opts.active ?? true, managed_origin: opts.central ? 'central' : null,
+  }).execute();
+}
+
+export async function seedResult(db: Kysely<any>, id: string, system: string | null, code: string | null, desc: string | null, createdAt: string) {
+  await db.insertInto('lab_results').values({ id, observation_system: system, observation_code: code, observation_desc: desc, created_at: createdAt }).execute();
 }

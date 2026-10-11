@@ -76,6 +76,7 @@ import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
 import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
+import { createResultFields, type ResultFields } from './result-fields';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -548,6 +549,8 @@ export interface AppContext {
   testCatalog: TestCatalog;
   /** Lab test codes mapped to catalog tests, and the warehouse copy test_map. */
   testMapping: TestMapping;
+  /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
+  resultFields: ResultFields;
   /** Gates persistResources() strictness for the webhook (Persist Store node) and ingest paths
    *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
   validationStrictness: ValidationStrictness;
@@ -994,6 +997,8 @@ const reporting: ReportingApi = {
     db: termDb, admin: termAdmin, ops: terminology.ops,
     onChanged: () => { void testMapping.requestRebuild(); },
   });
+  // A changed LOINC link changes the loinc column of test_map's result rows.
+  const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
   // the polling worker that drains it. `runIngest` streams+extracts the uploaded zip to a fresh
@@ -1088,7 +1093,7 @@ const reporting: ReportingApi = {
       logger.warn({ err }, 'boot facility-map-rebuild enqueue failed');
     });
     // Fills test_map once after an upgrade, and repairs it after a failed rebuild. Inline and cheap:
-    // tens to hundreds of rows. Server boot only, for the same reason as the facility rebuild.
+    // a few thousand rows at most. Server boot only, for the same reason as the facility rebuild.
     void testMapping.requestRebuild();
   }
 
@@ -1144,8 +1149,8 @@ const reporting: ReportingApi = {
       }
       return { ok: true, counts: out.result.counts };
     },
-    planTestMappings: (mappings) => testMapping.planPack(mappings),
-    applyTestMappings: (mappings) => testMapping.applyPack(mappings),
+    planTestMappings: (mappings, level) => testMapping.planPack(mappings, level),
+    applyTestMappings: (mappings, level) => testMapping.applyPack(mappings, level),
   });
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
@@ -1771,6 +1776,7 @@ const reporting: ReportingApi = {
     facilityRegistry,
     testCatalog,
     testMapping,
+    resultFields,
     facilityJobs,
     featureFlags,
     numberSettings,
@@ -1851,6 +1857,7 @@ export {
   type CatalogUnmatchedValue,
 } from './test-catalog';
 export * from './test-mapping';
+export * from './result-fields';
 export {
   RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams,
   type BandFit, type SexOption, type TestResultParam, type ResultBand, type ResultType,

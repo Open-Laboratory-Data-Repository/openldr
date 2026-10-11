@@ -12,6 +12,7 @@ const OBSERVED = {
 };
 const CHANGE = { system: DISA, code: 'HIVVL', before: null, after: 'VL', rebuild: { ok: true, result: { mapped: 1, ambiguous: [], targetMissing: [], written: 1 } } };
 const REPORT = { counts: { new: 1, changed: 0, unchanged: 0, refused: 0 }, refused: [], rebuild: null };
+const MATCH = { system: DISA, matches: [{ code: 'HIVVL', display: 'HIV VL', results: 2 }] };
 
 type Impl = (...args: any[]) => Promise<unknown>;
 
@@ -27,6 +28,9 @@ function fakeCtx(over: Record<string, Impl> = {}) {
     exportCsv: spy('exportCsv', over.exportCsv ?? (async () => 'system,code\n')),
     importPreview: spy('importPreview', over.importPreview ?? (async () => REPORT)),
     importApply: spy('importApply', over.importApply ?? (async () => ({ ...REPORT, rebuild: CHANGE.rebuild }))),
+    observedSystems: spy('observedSystems', over.observedSystems ?? (async () => ['urn:openldr:disa'])),
+    planMatch: spy('planMatch', over.planMatch ?? (async () => MATCH)),
+    applyMatch: spy('applyMatch', over.applyMatch ?? (async () => ({ ...MATCH, rebuild: CHANGE.rebuild }))),
     rebuildNow: spy('rebuildNow', over.rebuildNow ?? (async () => CHANGE.rebuild)),
   };
   const ctx = {
@@ -52,7 +56,7 @@ describe('test mapping routes', () => {
     const res = await appWith(ctx).inject({ method: 'GET', url: '/api/test-catalog/mappings/observed?status=mapped&q=viral&limit=10' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual(OBSERVED);
-    expect(calls).toEqual([{ method: 'observed', args: [{ status: 'mapped', q: 'viral', limit: 10, offset: 0 }] }]);
+    expect(calls).toEqual([{ method: 'observed', args: [{ status: 'mapped', q: 'viral', limit: 10, offset: 0 }, 'test'] }]);
   });
 
   it('GET observed refuses a bad filter with 400 before the service', async () => {
@@ -74,7 +78,7 @@ describe('test mapping routes', () => {
     const res = await appWith(ctx).inject({ method: 'PUT', url: '/api/test-catalog/mappings', payload: { system: DISA, code: 'HIVVL', catalogCode: 'VL' } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual(CHANGE);
-    expect(calls).toEqual([{ method: 'set', args: [DISA, 'HIVVL', 'VL'] }]);
+    expect(calls).toEqual([{ method: 'set', args: [DISA, 'HIVVL', 'VL', 'test'] }]);
     expect(audit).toMatchObject([{ action: 'test_mapping.set', entityType: 'test_mapping', entityId: `${DISA}|HIVVL`, before: { catalogCode: null }, after: { catalogCode: 'VL' } }]);
   });
 
@@ -98,7 +102,7 @@ describe('test mapping routes', () => {
     const { ctx, calls, audit } = fakeCtx();
     const res = await appWith(ctx).inject({ method: 'POST', url: '/api/test-catalog/mappings/clear', payload: { system: DISA, code: 'HIVVL' } });
     expect(res.statusCode).toBe(200);
-    expect(calls).toEqual([{ method: 'clear', args: [DISA, 'HIVVL'] }]);
+    expect(calls).toEqual([{ method: 'clear', args: [DISA, 'HIVVL', 'test'] }]);
     expect(audit).toMatchObject([{ action: 'test_mapping.clear', before: { catalogCode: 'VL' }, after: { catalogCode: null } }]);
   });
 
@@ -134,5 +138,46 @@ describe('test mapping routes', () => {
     const app = appWith(ctx, ['terminology.view']);
     expect((await app.inject({ method: 'GET', url: '/api/test-catalog/mappings/observed' })).statusCode).toBe(200);
     expect((await app.inject({ method: 'PUT', url: '/api/test-catalog/mappings', payload: { system: DISA, code: 'HIVVL', catalogCode: 'VL' } })).statusCode).toBe(403);
+  });
+
+  it('passes level=result through to the service, and refuses an unknown level', async () => {
+    const { ctx, calls } = fakeCtx();
+    const app = appWith(ctx);
+    await app.inject({ method: 'GET', url: '/api/test-catalog/mappings/observed?level=result' });
+    await app.inject({ method: 'GET', url: '/api/test-catalog/mappings/targets?level=result' });
+    await app.inject({ method: 'PUT', url: '/api/test-catalog/mappings', payload: { system: DISA, code: 'HIVVL', catalogCode: 'VLC', level: 'result' } });
+    expect(calls.map((c) => [c.method, c.args[c.args.length - 1]])).toEqual([['observed', 'result'], ['targets', 'result'], ['set', 'result']]);
+    const bad = await app.inject({ method: 'GET', url: '/api/test-catalog/mappings/observed?level=panel' });
+    expect([bad.statusCode, bad.json()]).toEqual([400, { error: 'level must be test or result' }]);
+  });
+
+  it('records the level on the audit row of a set', async () => {
+    const { ctx, audit } = fakeCtx();
+    await appWith(ctx).inject({ method: 'PUT', url: '/api/test-catalog/mappings', payload: { system: DISA, code: 'HIVVL', catalogCode: 'VLC', level: 'result' } });
+    expect(audit[0]).toMatchObject({ action: 'test_mapping.set', metadata: { level: 'result' } });
+  });
+
+  it('names the result-level export file', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx).inject({ method: 'GET', url: '/api/test-catalog/mappings/export?level=result' });
+    expect(res.headers['content-disposition']).toBe('attachment; filename="result-mappings.csv"');
+  });
+
+  it('lists observed systems, previews a match, and audits an applied match', async () => {
+    const { ctx, calls, audit } = fakeCtx();
+    const app = appWith(ctx);
+    expect((await app.inject({ method: 'GET', url: '/api/test-catalog/mappings/systems?level=result' })).json()).toEqual({ systems: [DISA] });
+    expect((await app.inject({ method: 'GET', url: `/api/test-catalog/mappings/match?system=${encodeURIComponent(DISA)}` })).json()).toEqual(MATCH);
+    const applied = await app.inject({ method: 'POST', url: '/api/test-catalog/mappings/match', payload: { system: DISA } });
+    expect(applied.statusCode).toBe(200);
+    expect(calls.map((c) => c.method)).toEqual(['observedSystems', 'planMatch', 'applyMatch']);
+    expect(audit[0]).toMatchObject({ action: 'test_mapping.match', entityId: `match:${DISA}`, metadata: { level: 'result', system: DISA, codes: ['HIVVL'] } });
+  });
+
+  it('refuses a match with no system, and a match by a viewer', async () => {
+    const { ctx } = fakeCtx();
+    expect((await appWith(ctx).inject({ method: 'GET', url: '/api/test-catalog/mappings/match' })).statusCode).toBe(400);
+    const viewer = await appWith(ctx, ['terminology.view']).inject({ method: 'POST', url: '/api/test-catalog/mappings/match', payload: { system: DISA } });
+    expect(viewer.statusCode).toBe(403);
   });
 });

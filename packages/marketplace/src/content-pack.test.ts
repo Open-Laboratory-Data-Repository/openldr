@@ -58,3 +58,17 @@ describe('test-mappings step', () => {
     expect(() => parseContentPack({ formatVersion: 1, steps: [{ ...step, mappings: [] }] })).toThrow(/invalid pack/);
   });
 });
+
+describe('result-mappings step', () => {
+  const step = { kind: 'result-mappings', mappings: [{ system: 'urn:openldr:disa', code: 'HIVVL', loinc: '20447-9' }] };
+
+  it('parses and summarises as "Result mappings" with the count', () => {
+    const pack = parseContentPack({ formatVersion: 1, steps: [step] });
+    expect(summarizeContentPack(pack)).toEqual([{ kind: 'result-mappings', label: 'Result mappings', count: 1 }]);
+  });
+
+  it('refuses a malformed LOINC code and an empty list', () => {
+    expect(() => parseContentPack({ formatVersion: 1, steps: [{ ...step, mappings: [{ system: 'x', code: 'y', loinc: 'abc' }] }] })).toThrow(/invalid pack/);
+    expect(() => parseContentPack({ formatVersion: 1, steps: [{ ...step, mappings: [] }] })).toThrow(/invalid pack/);
+  });
+});

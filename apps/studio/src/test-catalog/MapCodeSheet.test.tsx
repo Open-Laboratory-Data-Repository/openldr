@@ -14,7 +14,7 @@ import { MapCodeSheet } from './MapCodeSheet';
 
 const DISA = 'urn:openldr:disa';
 const ROW: api.ObservedTestCode = { system: DISA, code: 'HIVVL', description: null, requests: 2, lastSeen: null, status: 'unmapped', catalog: null, centralManaged: false };
-const REBUILT: api.RebuildOutcome = { ok: true, result: { mapped: 1, ambiguous: [], targetMissing: [], written: 1 } };
+const REBUILT: api.RebuildOutcome = { ok: true, result: { mapped: 1, ambiguous: [], targetMissing: [], written: 1, results: { mapped: 0, ambiguous: [], targetMissing: [] }, selfRows: 0 } };
 
 // Radix menus open on pointerDown in jsdom, with Enter as the fallback (as in TestSheet.test.tsx).
 function openMenu(testId: string) {
@@ -44,7 +44,7 @@ describe('MapCodeSheet', () => {
     openMenu('map-sheet-menu');
     const save = await screen.findByTestId('map-sheet-save');
     await act(async () => { fireEvent.click(save); });
-    await waitFor(() => expect(api.setTestMapping).toHaveBeenCalledWith(DISA, 'HIVVL', 'VL'));
+    await waitFor(() => expect(api.setTestMapping).toHaveBeenCalledWith(DISA, 'HIVVL', 'VL', 'test'));
     expect(onSaved).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalled();
   });

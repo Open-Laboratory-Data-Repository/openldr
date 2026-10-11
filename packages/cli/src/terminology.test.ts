@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(),
   readFileSync: vi.fn(),
   runDbReproject: vi.fn(),
+  appCtx: { testMapping: { rebuildNow: vi.fn() }, close: vi.fn() },
+  createAppContext: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({
@@ -39,6 +41,7 @@ vi.mock('@openldr/config', () => ({
 
 vi.mock('@openldr/bootstrap', () => ({
   createTerminologyContext: mocks.createTerminologyContext,
+  createAppContext: mocks.createAppContext,
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
@@ -67,6 +70,9 @@ describe('terminology CLI audit', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     mocks.createTerminologyContext.mockResolvedValue(mocks.termCtx);
     mocks.termCtx.close.mockResolvedValue(undefined);
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+    mocks.appCtx.close.mockResolvedValue(undefined);
+    mocks.appCtx.testMapping.rebuildNow.mockResolvedValue({ ok: true, result: { written: 2 } });
   });
 
   afterEach(() => {
@@ -154,6 +160,38 @@ describe('terminology CLI audit', () => {
         metadata: { source: 'parameters', result },
       }),
     );
+    // The import runs through a context with no warehouse, so the CLI rebuilds test_map itself.
+    expect(mocks.appCtx.testMapping.rebuildNow).toHaveBeenCalledTimes(1);
+    expect(mocks.appCtx.close).toHaveBeenCalledTimes(1);
+  });
+
+  describe('parameters import when the test_map rebuild goes wrong', () => {
+    const stale = (reason: string) => `the warehouse copy test_map is out of date: ${reason}. Run openldr test-catalog map rebuild --apply.\n`;
+    const loaded = { system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result', byRole: { result: 1, metadata: 1 }, skipped: 0 };
+
+    it('warns and still exits 0 when the rebuild reports a failure', async () => {
+      mocks.termCtx.loaders.parameters.mockResolvedValue(loaded);
+      mocks.readFileSync.mockReturnValue('[]');
+      mocks.appCtx.testMapping.rebuildNow.mockResolvedValue({ ok: false, error: 'boom' });
+
+      const code = await runTerminologyImport('parameters', '/some/file.json', { json: true });
+
+      expect(code).toBe(0);
+      expect(process.stderr.write).toHaveBeenCalledWith(stale('boom'));
+      expect(mocks.appCtx.close).toHaveBeenCalledTimes(1);
+    });
+
+    it('warns and still exits 0 when the app context cannot be opened', async () => {
+      mocks.termCtx.loaders.parameters.mockResolvedValue(loaded);
+      mocks.readFileSync.mockReturnValue('[]');
+      mocks.createAppContext.mockRejectedValue(new Error('no warehouse'));
+
+      const code = await runTerminologyImport('parameters', '/some/file.json', { json: true });
+
+      expect(code).toBe(0);
+      expect(process.stderr.write).toHaveBeenCalledWith(stale('no warehouse'));
+      expect(mocks.appCtx.close).not.toHaveBeenCalled();
+    });
   });
 
   it('still rejects an unknown import kind', async () => {

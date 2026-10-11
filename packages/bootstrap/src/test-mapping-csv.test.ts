@@ -70,7 +70,7 @@ describe('test mapping: CSV', () => {
     const report = await mapping.importApply(csv(`system,code,catalog_code,loinc\n${DISA},HIVVL,VL,\n${DISA},BAD,NOPE,\n`));
     expect(report.counts).toEqual({ new: 1, changed: 0, unchanged: 0, refused: 1 });
     expect(report.rebuild?.ok).toBe(true);
-    expect(await externalDb.selectFrom('test_map').select('source_code').execute()).toEqual([{ source_code: 'HIVVL' }]);
+    expect(await externalDb.selectFrom('test_map').select('source_code').where('source_system', '=', DISA).execute()).toEqual([{ source_code: 'HIVVL' }]);
   });
 
   it('apply still rebuilds when a write fails partway, then rethrows the failure', async () => {
@@ -89,7 +89,7 @@ ${DISA},A1,VL
 ${DISA},B2,VL
 `))).rejects.toThrow('disk full');
 
-    expect(await externalDb.selectFrom('test_map').select('source_code').execute()).toEqual([{ source_code: 'A1' }]);
+    expect(await externalDb.selectFrom('test_map').select('source_code').where('source_system', '=', DISA).execute()).toEqual([{ source_code: 'A1' }]);
   });
 
   // Review focus 4.
@@ -151,7 +151,7 @@ ${DISA},NEVERSEEN,VL
     // The same file against an unmapped code writes +X, not '+X.
     await internalDb.deleteFrom('term_mappings').execute();
     await mapping.importApply(csv(exported));
-    expect((await externalDb.selectFrom('test_map').select('source_code').execute()).map((r) => r.source_code)).toEqual(['+X']);
+    expect((await externalDb.selectFrom('test_map').select('source_code').where('source_system', '=', DISA).execute()).map((r) => r.source_code)).toEqual(['+X']);
   });
 
   it('refuses a file without the system and code columns, or without catalog_code and loinc', async () => {

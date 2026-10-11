@@ -2564,6 +2564,7 @@ export async function downloadTestCatalogCsv(): Promise<void> {
 }
 
 // Mirrors of @openldr/bootstrap's test-mapping.ts. The routes are apps/server/src/test-mapping-routes.ts.
+export type MapLevel = 'test' | 'result';
 export type ObservedStatus = 'unmapped' | 'mapped' | 'ambiguous';
 export interface ObservedTestCode {
   system: string; code: string; description: string | null; requests: number; lastSeen: string | null;
@@ -2571,8 +2572,13 @@ export interface ObservedTestCode {
 }
 export interface ObservedTestCodesResult { rows: ObservedTestCode[]; total: number; warehouse: { stale: boolean; error: string | null } }
 export interface MappingTarget { code: string; name: string | null; loinc: string | null; retired: boolean }
+export interface LevelPublishSummary {
+  mapped: number;
+  ambiguous: Array<{ system: string; code: string; catalogCodes: string[] }>;
+  targetMissing: Array<{ system: string; code: string; catalogCode: string }>;
+}
 export type RebuildOutcome =
-  | { ok: true; result: { mapped: number; ambiguous: Array<{ system: string; code: string; catalogCodes: string[] }>; targetMissing: Array<{ system: string; code: string; catalogCode: string }>; written: number } }
+  | { ok: true; result: LevelPublishSummary & { results: LevelPublishSummary; selfRows: number; written: number } }
   | { ok: false; error: string };
 export interface TestMappingChange { system: string; code: string; before: string | null; after: string | null; rebuild: RebuildOutcome }
 export interface MappingImportReport {
@@ -2580,39 +2586,80 @@ export interface MappingImportReport {
   refused: Array<{ line: number; system: string; code: string; reason: string }>;
   rebuild: RebuildOutcome | null;
 }
+/** What ImportMappingsSheet shows. Test mapping and result field imports both fit it. */
+export interface ImportReportLike {
+  counts: MappingImportReport['counts'];
+  refused: Array<{ line: number; code: string; reason: string }>;
+  rebuild?: RebuildOutcome | null;
+}
+export interface MatchPlan { system: string; matches: Array<{ code: string; display: string | null; results: number }> }
 
-export function listObservedTestCodes(p: { status?: ObservedStatus | 'all'; q?: string; limit: number; offset: number }): Promise<ObservedTestCodesResult> {
+export function listObservedTestCodes(p: { level?: MapLevel; status?: ObservedStatus | 'all'; q?: string; limit: number; offset: number }): Promise<ObservedTestCodesResult> {
   const s = new URLSearchParams();
+  if (p.level) s.set('level', p.level);
   if (p.status && p.status !== 'all') s.set('status', p.status);
   if (p.q) s.set('q', p.q);
   s.set('limit', String(p.limit));
   s.set('offset', String(p.offset));
-  return apiGet<ObservedTestCodesResult>(`/api/test-catalog/mappings/observed?${s}`, 'list lab test codes');
+  return apiGet<ObservedTestCodesResult>(`/api/test-catalog/mappings/observed?${s}`, 'list lab codes');
 }
-export const getMappingTargets = (): Promise<MappingTarget[]> =>
-  apiGet<{ targets: MappingTarget[] }>('/api/test-catalog/mappings/targets', 'load catalog tests').then((r) => r.targets);
-export const setTestMapping = (system: string, code: string, catalogCode: string): Promise<TestMappingChange> =>
-  authFetch('/api/test-catalog/mappings', jbody({ system, code, catalogCode }, 'PUT')).then((r) => okJson<TestMappingChange>(r, 'map test code'));
-export const clearTestMapping = (system: string, code: string): Promise<TestMappingChange> =>
-  authFetch('/api/test-catalog/mappings/clear', jbody({ system, code }, 'POST')).then((r) => okJson<TestMappingChange>(r, 'clear mapping'));
-const uploadMappingsCsv = (url: string, file: File, what: string): Promise<MappingImportReport> =>
-  authFetch(url, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file }).then((r) => okJson<MappingImportReport>(r, what));
-export const previewTestMappingImport = (file: File): Promise<MappingImportReport> =>
-  uploadMappingsCsv('/api/test-catalog/mappings/import/preview', file, 'check mappings file');
-export const applyTestMappingImport = (file: File): Promise<MappingImportReport> =>
-  uploadMappingsCsv('/api/test-catalog/mappings/import/apply', file, 'import mappings');
+export const getMappingTargets = (level: MapLevel = 'test'): Promise<MappingTarget[]> =>
+  apiGet<{ targets: MappingTarget[] }>(`/api/test-catalog/mappings/targets?level=${level}`, 'load mapping targets').then((r) => r.targets);
+export const setTestMapping = (system: string, code: string, catalogCode: string, level: MapLevel = 'test'): Promise<TestMappingChange> =>
+  authFetch('/api/test-catalog/mappings', jbody({ system, code, catalogCode, level }, 'PUT')).then((r) => okJson<TestMappingChange>(r, 'map code'));
+export const clearTestMapping = (system: string, code: string, level: MapLevel = 'test'): Promise<TestMappingChange> =>
+  authFetch('/api/test-catalog/mappings/clear', jbody({ system, code, level }, 'POST')).then((r) => okJson<TestMappingChange>(r, 'clear mapping'));
+const uploadCsv = <T,>(url: string, file: File, what: string): Promise<T> =>
+  authFetch(url, { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file }).then((r) => okJson<T>(r, what));
+export const previewTestMappingImport = (file: File, level: MapLevel = 'test'): Promise<MappingImportReport> =>
+  uploadCsv(`/api/test-catalog/mappings/import/preview?level=${level}`, file, 'check mappings file');
+export const applyTestMappingImport = (file: File, level: MapLevel = 'test'): Promise<MappingImportReport> =>
+  uploadCsv(`/api/test-catalog/mappings/import/apply?level=${level}`, file, 'import mappings');
 export const rebuildTestMap = (): Promise<RebuildOutcome> =>
   authFetch('/api/test-catalog/mappings/rebuild', { method: 'POST' }).then((r) => okJson<RebuildOutcome>(r, 'rebuild warehouse copy'));
 /** Fetched with the token, then saved through a link, exactly as downloadTestCatalogCsv does. */
-export async function downloadTestMappingsCsv(): Promise<void> {
-  const r = await authFetch('/api/test-catalog/mappings/export', { method: 'GET' });
-  if (!r.ok) throw new Error(formatApiError('export mappings', await errorDetail(r)));
-  const url = URL.createObjectURL(await r.blob());
+async function downloadCsv(url: string, filename: string, what: string): Promise<void> {
+  const r = await authFetch(url, { method: 'GET' });
+  if (!r.ok) throw new Error(formatApiError(what, await errorDetail(r)));
+  const href = URL.createObjectURL(await r.blob());
   const a = document.createElement('a');
-  a.href = url; a.download = 'test-mappings.csv';
+  a.href = href; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(href);
 }
+export const downloadTestMappingsCsv = (level: MapLevel = 'test'): Promise<void> =>
+  downloadCsv(`/api/test-catalog/mappings/export?level=${level}`, `${level}-mappings.csv`, 'export mappings');
+export const getObservedSystems = (level: MapLevel): Promise<string[]> =>
+  apiGet<{ systems: string[] }>(`/api/test-catalog/mappings/systems?level=${level}`, 'list lab systems').then((r) => r.systems);
+export const previewMatchCodes = (system: string): Promise<MatchPlan> =>
+  apiGet<MatchPlan>(`/api/test-catalog/mappings/match?system=${encodeURIComponent(system)}`, 'check matching codes');
+export const applyMatchCodes = (system: string): Promise<MatchPlan & { rebuild: RebuildOutcome }> =>
+  authFetch('/api/test-catalog/mappings/match', jbody({ system }, 'POST')).then((r) => okJson<MatchPlan & { rebuild: RebuildOutcome }>(r, 'map matching codes'));
+// Mirrors of @openldr/bootstrap's result-fields.ts. The routes are apps/server/src/result-fields-routes.ts.
+export interface ResultField { code: string; display: string | null; role: string | null; units: string | null; loinc: string | null }
+export interface ResultFieldList { rows: ResultField[]; total: number; ownedHere: boolean; loaded: boolean }
+export interface ResultFieldLinkChange { code: string; before: string | null; after: string | null }
+
+export function listResultFields(p: { q?: string; loinc?: 'linked' | 'none' | 'all'; role?: string; limit: number; offset: number }): Promise<ResultFieldList> {
+  const s = new URLSearchParams();
+  if (p.q) s.set('q', p.q);
+  if (p.loinc && p.loinc !== 'all') s.set('loinc', p.loinc);
+  if (p.role) s.set('role', p.role);
+  s.set('limit', String(p.limit));
+  s.set('offset', String(p.offset));
+  return apiGet<ResultFieldList>(`/api/test-catalog/result-fields?${s}`, 'list result fields');
+}
+const resultFieldLoincUrl = (code: string) => `/api/test-catalog/result-fields/${encodeURIComponent(code)}/loinc`;
+export const linkResultField = (code: string, loinc: string): Promise<ResultFieldLinkChange> =>
+  authFetch(resultFieldLoincUrl(code), jbody({ loinc }, 'PUT')).then((r) => okJson<ResultFieldLinkChange>(r, 'link LOINC'));
+export const unlinkResultField = (code: string): Promise<ResultFieldLinkChange> =>
+  authFetch(resultFieldLoincUrl(code), { method: 'DELETE' }).then((r) => okJson<ResultFieldLinkChange>(r, 'clear LOINC link'));
+export const downloadResultFieldsCsv = (): Promise<void> =>
+  downloadCsv('/api/test-catalog/result-fields/export', 'result-fields.csv', 'export result fields');
+export const previewResultFieldsImport = (file: File): Promise<ImportReportLike> =>
+  uploadCsv('/api/test-catalog/result-fields/import/preview', file, 'check result fields file');
+export const applyResultFieldsImport = (file: File): Promise<ImportReportLike> =>
+  uploadCsv('/api/test-catalog/result-fields/import/apply', file, 'import result fields');
 /** The specimens at least one of these tests accepts, by this lab's lists (test catalog S4). The server
  *  ignores codings that are not catalog tests, so an empty list means the picker does not narrow. */
 export const catalogSpecimensFor = (

@@ -11,19 +11,22 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { LoadingState } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import {
-  downloadTestMappingsCsv, listObservedTestCodes, rebuildTestMap,
-  type ObservedStatus, type ObservedTestCode, type ObservedTestCodesResult,
+  applyTestMappingImport, downloadTestMappingsCsv, listObservedTestCodes, previewTestMappingImport, rebuildTestMap,
+  type MapLevel, type ObservedStatus, type ObservedTestCode, type ObservedTestCodesResult,
 } from '@/api';
 import { MapCodeSheet } from './MapCodeSheet';
 import { ImportMappingsSheet } from './ImportMappingsSheet';
+import { MatchCodesSheet } from './MatchCodesSheet';
 
 // The Observed tab of the Test catalog page (docs/superpowers/specs/2026-10-11-test-mapping-design.md,
 // 4.4). Layout copied from facilities/ObservedTab.tsx and pages/TestCatalog.tsx.
 
 const STATUSES: Array<ObservedStatus | 'all'> = ['all', 'unmapped', 'mapped', 'ambiguous'];
+const LEVELS: MapLevel[] = ['test', 'result'];
 
 export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Element {
   const { t } = useTranslation();
+  const [level, setLevel] = useState<MapLevel>('test');
   const [status, setStatus] = useState<ObservedStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
@@ -34,6 +37,8 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
   const [error, setError] = useState<string | null>(null);
   const [mapping, setMapping] = useState<ObservedTestCode | null>(null);
   const [importing, setImporting] = useState(false);
+  const [matching, setMatching] = useState(false);
+  const result = level === 'result';
 
   useEffect(() => {
     const id = setTimeout(() => { setQ(search.trim()); setPage(0); }, 300);
@@ -47,7 +52,7 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
     setLoading(true);
     setError(null);
     try {
-      const result = await listObservedTestCodes({ status, q: q || undefined, limit: pageSize, offset: page * pageSize });
+      const result = await listObservedTestCodes({ level, status, q: q || undefined, limit: pageSize, offset: page * pageSize });
       if (mine === latest.current) setData(result);
     } catch (e) {
       if (mine === latest.current) {
@@ -57,7 +62,7 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
     } finally {
       if (mine === latest.current) setLoading(false);
     }
-  }, [status, q, page, pageSize]);
+  }, [level, status, q, page, pageSize]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -81,10 +86,25 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder={t('testCatalog.observed.searchPlaceholder')}
+          placeholder={t(result ? 'testCatalog.observed.searchPlaceholderResult' : 'testCatalog.observed.searchPlaceholder')}
           className="h-8 sm:max-w-xs"
           data-testid="observed-search"
         />
+        <div className="flex flex-wrap items-center gap-1" role="group" aria-label={t('testCatalog.observed.levelFilter')}>
+          {LEVELS.map((l) => (
+            <Button
+              key={l}
+              variant={level === l ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8"
+              data-testid={`observed-level-${l}`}
+              aria-pressed={level === l}
+              onClick={() => { setLevel(l); setPage(0); }}
+            >
+              {t(`testCatalog.observed.level.${l}`)}
+            </Button>
+          ))}
+        </div>
         <div className="flex flex-wrap items-center gap-1" role="group" aria-label={t('testCatalog.observed.statusFilter')}>
           {STATUSES.map((s) => (
             <Button
@@ -111,7 +131,7 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
                   data-testid="observed-export"
-                  onSelect={() => { downloadTestMappingsCsv().catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); }); }}
+                  onSelect={() => { downloadTestMappingsCsv(level).catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); }); }}
                 >
                   {t('testCatalog.observed.exportAction')}
                 </DropdownMenuItem>
@@ -121,6 +141,11 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
                 <DropdownMenuItem data-testid="observed-rebuild" onSelect={() => void rebuild()}>
                   {t('testCatalog.observed.rebuildAction')}
                 </DropdownMenuItem>
+                {result && (
+                  <DropdownMenuItem data-testid="observed-match" onSelect={() => setMatching(true)}>
+                    {t('testCatalog.observed.matchAction')}
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -140,7 +165,7 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
         )}
         {!loading && !error && rows.length === 0 && (
           <StripedEmpty className="min-h-[16rem] flex-1">
-            {q !== '' || status !== 'all' ? t('testCatalog.observed.noMatch') : t('testCatalog.observed.empty')}
+            {q !== '' || status !== 'all' ? t('testCatalog.observed.noMatch') : t(result ? 'testCatalog.observed.emptyResult' : 'testCatalog.observed.empty')}
           </StripedEmpty>
         )}
         {/* Rendered only when populated: an empty table's header forces intrinsic width and scrolls a
@@ -151,8 +176,8 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
               <TableRow>
                 <TableHead>{t('testCatalog.observed.col.code')}</TableHead>
                 <TableHead>{t('testCatalog.observed.col.description')}</TableHead>
-                <TableHead className="text-right">{t('testCatalog.observed.col.requests')}</TableHead>
-                <TableHead>{t('testCatalog.observed.col.catalog')}</TableHead>
+                <TableHead className="text-right">{t(result ? 'testCatalog.observed.col.results' : 'testCatalog.observed.col.requests')}</TableHead>
+                <TableHead>{t(result ? 'testCatalog.observed.col.resultField' : 'testCatalog.observed.col.catalog')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('testCatalog.observed.col.system')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('testCatalog.observed.col.lastSeen')}</TableHead>
                 {canManage && <TableHead className="w-12"><span className="sr-only">{t('testCatalog.observed.rowActions')}</span></TableHead>}
@@ -196,7 +221,7 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem data-testid={`observed-map-${r.code}`} onSelect={() => setMapping(r)}>
-                              {t('testCatalog.observed.mapAction')}
+                              {t(result ? 'testCatalog.observed.mapResultAction' : 'testCatalog.observed.mapAction')}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -219,8 +244,16 @@ export function ObservedCodesTab({ canManage }: { canManage: boolean }): JSX.Ele
         leftSlot={<span className="text-muted-foreground">{t('testCatalog.observed.count', { count: data?.total ?? 0 })}</span>}
       />
 
-      <MapCodeSheet target={mapping} onClose={() => setMapping(null)} onSaved={() => { void load(); }} />
-      <ImportMappingsSheet open={importing} onClose={() => setImporting(false)} onImported={() => { void load(); }} />
+      <MapCodeSheet target={mapping} level={level} onClose={() => setMapping(null)} onSaved={() => { void load(); }} />
+      <ImportMappingsSheet
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={() => { void load(); }}
+        preview={(f) => previewTestMappingImport(f, level)}
+        apply={(f) => applyTestMappingImport(f, level)}
+        description={t(result ? 'testCatalog.importMappings.descriptionResult' : 'testCatalog.importMappings.description')}
+      />
+      <MatchCodesSheet open={matching} onClose={() => setMatching(false)} onApplied={() => { void load(); }} />
     </div>
   );
 }

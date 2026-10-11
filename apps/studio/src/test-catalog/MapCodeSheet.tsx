@@ -8,13 +8,15 @@ import { Combobox } from '@/components/ui/combobox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   clearTestMapping, getMappingTargets, setTestMapping,
-  type MappingTarget, type ObservedTestCode, type TestMappingChange,
+  type MapLevel, type MappingTarget, type ObservedTestCode, type TestMappingChange,
 } from '@/api';
 
 // Header and section layout copied from TestSheet.tsx. Save and Clear live in the section's menu.
 
-export function MapCodeSheet({ target, onClose, onSaved }: {
+export function MapCodeSheet({ target, level = 'test', onClose, onSaved }: {
   target: ObservedTestCode | null;
+  /** 'result' maps a lab result code to a result field. */
+  level?: MapLevel;
   onClose: () => void;
   onSaved: () => void;
 }): JSX.Element {
@@ -26,8 +28,8 @@ export function MapCodeSheet({ target, onClose, onSaved }: {
   useEffect(() => {
     if (!target) return;
     setPicked(target.catalog?.code ?? null);
-    getMappingTargets().then(setTargets).catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
-  }, [target]);
+    getMappingTargets(level).then(setTargets).catch((e: unknown) => { toast.error(e instanceof Error ? e.message : String(e)); });
+  }, [target, level]);
 
   const run = async (action: () => Promise<TestMappingChange>, done: string) => {
     setBusy(true);
@@ -49,13 +51,14 @@ export function MapCodeSheet({ target, onClose, onSaved }: {
     label: `${x.name ?? x.code} (${x.code}${x.loinc ? `, ${x.loinc}` : ''})${x.retired ? `, ${t('testCatalog.mapSheet.retired')}` : ''}`,
   }));
   const pickedName = targets.find((x) => x.code === picked)?.name ?? picked ?? '';
+  const result = level === 'result';
 
   return (
     <Sheet open={target !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
       <SheetContent className="flex w-full max-w-full flex-col gap-0 overflow-y-auto p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-border px-6 py-4">
-          <SheetTitle>{t('testCatalog.mapSheet.title')}</SheetTitle>
-          <SheetDescription>{t('testCatalog.mapSheet.description')}</SheetDescription>
+          <SheetTitle>{t(result ? 'testCatalog.mapSheet.titleResult' : 'testCatalog.mapSheet.title')}</SheetTitle>
+          <SheetDescription>{t(result ? 'testCatalog.mapSheet.descriptionResult' : 'testCatalog.mapSheet.description')}</SheetDescription>
         </SheetHeader>
         {target && (
           <section>
@@ -72,7 +75,7 @@ export function MapCodeSheet({ target, onClose, onSaved }: {
                     <DropdownMenuItem
                       data-testid="map-sheet-save"
                       disabled={busy || !picked}
-                      onSelect={() => { if (picked) void run(() => setTestMapping(target.system, target.code, picked), t('testCatalog.mapSheet.saved', { code: target.code, catalog: pickedName })); }}
+                      onSelect={() => { if (picked) void run(() => setTestMapping(target.system, target.code, picked, level), t('testCatalog.mapSheet.saved', { code: target.code, catalog: pickedName })); }}
                     >
                       {t('common.save')}
                     </DropdownMenuItem>
@@ -80,7 +83,7 @@ export function MapCodeSheet({ target, onClose, onSaved }: {
                       <DropdownMenuItem
                         data-testid="map-sheet-clear"
                         disabled={busy}
-                        onSelect={() => void run(() => clearTestMapping(target.system, target.code), t('testCatalog.mapSheet.cleared', { code: target.code }))}
+                        onSelect={() => void run(() => clearTestMapping(target.system, target.code, level), t(result ? 'testCatalog.mapSheet.clearedResult' : 'testCatalog.mapSheet.cleared', { code: target.code }))}
                       >
                         {t('testCatalog.mapSheet.clear')}
                       </DropdownMenuItem>
@@ -96,7 +99,7 @@ export function MapCodeSheet({ target, onClose, onSaved }: {
               <div className="break-all font-mono text-xs">{target.system}</div>
               <div className="text-muted-foreground">{t('testCatalog.mapSheet.code')}</div>
               <div className="font-mono text-xs">{target.code}</div>
-              <div className="text-muted-foreground">{t('testCatalog.mapSheet.catalogTest')}</div>
+              <div className="text-muted-foreground">{t(result ? 'testCatalog.mapSheet.resultField' : 'testCatalog.mapSheet.catalogTest')}</div>
               {target.centralManaged ? (
                 <div className="text-xs text-muted-foreground">{t('testCatalog.mapSheet.centralNote')}</div>
               ) : (
@@ -104,8 +107,8 @@ export function MapCodeSheet({ target, onClose, onSaved }: {
                   options={options}
                   value={picked}
                   onChange={setPicked}
-                  placeholder={t('testCatalog.mapSheet.pick')}
-                  searchPlaceholder={t('testCatalog.mapSheet.search')}
+                  placeholder={t(result ? 'testCatalog.mapSheet.pickResult' : 'testCatalog.mapSheet.pick')}
+                  searchPlaceholder={t(result ? 'testCatalog.mapSheet.searchResult' : 'testCatalog.mapSheet.search')}
                   disabled={busy}
                 />
               )}

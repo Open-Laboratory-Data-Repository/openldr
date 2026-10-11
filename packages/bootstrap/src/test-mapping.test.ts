@@ -3,6 +3,7 @@ import { parseObservedQuery } from './test-mapping';
 import { buildMapping, seedCatalogTest, seedMapping, seedRequest } from './test-support/test-mapping-fixture';
 
 const DISA = 'urn:openldr:disa';
+const NO_RESULTS = { mapped: 0, ambiguous: [], targetMissing: [] };
 
 describe('test mapping: read side and rebuild', () => {
   it('publishes one test_map row per mapped code, with the catalog name, category and LOINC', async () => {
@@ -13,8 +14,8 @@ describe('test mapping: read side and rebuild', () => {
 
     const result = await mapping.publish({ apply: true });
 
-    expect(result).toEqual({ mapped: 2, ambiguous: [], targetMissing: [], written: 2 });
-    const rows = await externalDb.selectFrom('test_map').selectAll().orderBy('source_code').execute();
+    expect(result).toEqual({ mapped: 2, ambiguous: [], targetMissing: [], results: NO_RESULTS, selfRows: 1, written: 3 });
+    const rows = await externalDb.selectFrom('test_map').selectAll().where('source_system', '=', DISA).orderBy('source_code').execute();
     expect(rows.map((r) => [r.id, r.level, r.source_system, r.source_code, r.catalog_code, r.catalog_name, r.category, r.loinc])).toEqual([
       [`test|${DISA}|HIVVL`, 'test', DISA, 'HIVVL', 'VL', 'HIV viral load', 'MOL', '25836-8'],
       [`test|${DISA}|POCVR`, 'test', DISA, 'POCVR', 'VL', 'HIV viral load', 'MOL', '25836-8'],
@@ -33,7 +34,7 @@ describe('test mapping: read side and rebuild', () => {
 
     expect(result.ambiguous).toEqual([{ system: DISA, code: 'HIVVL', catalogCodes: ['EID', 'VL'] }]);
     expect(result.targetMissing).toEqual([{ system: DISA, code: 'OLD', catalogCode: 'GONE' }]);
-    expect(await externalDb.selectFrom('test_map').selectAll().execute()).toEqual([]);
+    expect(await externalDb.selectFrom('test_map').selectAll().where('source_system', '=', DISA).execute()).toEqual([]);
   });
 
   it('maps to a retired catalog test, because old results still belong to it', async () => {
@@ -62,7 +63,7 @@ describe('test mapping: read side and rebuild', () => {
 
     expect(result.ambiguous).toEqual([]);
     expect(result.mapped).toBe(1);
-    expect((await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code']).execute())).toEqual([{ source_code: 'HIVVL', catalog_code: 'VL' }]);
+    expect((await externalDb.selectFrom('test_map').select(['source_code', 'catalog_code']).where('source_system', '=', DISA).execute())).toEqual([{ source_code: 'HIVVL', catalog_code: 'VL' }]);
     const row = (await mapping.observed({ status: 'all', q: '', limit: 25, offset: 0 })).rows.find((r) => r.code === 'HIVVL')!;
     expect(row.status).toBe('mapped');
     expect(row.catalog?.code).toBe('VL');
@@ -98,9 +99,9 @@ describe('test mapping: read side and rebuild', () => {
     await internalDb.updateTable('term_mappings').set({ is_active: false }).where('id', '=', 'm1').execute();
 
     expect((await mapping.publish({ apply: false })).mapped).toBe(0);
-    expect(await externalDb.selectFrom('test_map').selectAll().execute()).toHaveLength(1);
+    expect(await externalDb.selectFrom('test_map').selectAll().where('source_system', '=', DISA).execute()).toHaveLength(1);
     await mapping.publish({ apply: true });
-    expect(await externalDb.selectFrom('test_map').selectAll().execute()).toHaveLength(0);
+    expect(await externalDb.selectFrom('test_map').selectAll().where('source_system', '=', DISA).execute()).toHaveLength(0);
   });
 
   it('lists observed codes with counts, newest date and status, ordered by system then code', async () => {
