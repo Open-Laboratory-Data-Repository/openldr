@@ -198,6 +198,28 @@ const resultOrderSchema = {
   ],
 } satisfies FormInput['schema'];
 
+// 2026-10-11 spec: the same order, plus the field that holds an order-level rejection.
+const rejectableOrderSchema = {
+  ...resultOrderSchema,
+  id: 'rejectable-order',
+  fields: [
+    ...resultOrderSchema.fields,
+    {
+      id: 'rej',
+      fhirPath: 'ServiceRequest.rejection',
+      displayLabel: 'Order rejection',
+      description: null,
+      fieldType: 'reference' as const,
+      required: false,
+      enabled: true,
+      order: 3,
+      cardinality: { min: 0, max: '1' },
+      section: 'main',
+      valueSetUrl: 'urn:openldr:valueset:order-reject-reason',
+    },
+  ],
+} satisfies FormInput['schema'];
+
 // Task 9: fakeCtx() previously provided no fhirStore/terminology stubs because nothing
 // needed them — the second validator wired into POST /responses (`validateReferences`)
 // was never actually exercised. These record what they were called with (not merely
@@ -1110,6 +1132,77 @@ describe('forms routes', () => {
     const observation = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'Observation');
     expect(observation.valueQuantity).toEqual({ value: 11.2, unit: 'g/dL' });
     expect(observation.referenceRange).toEqual([{ low: { value: 12, unit: 'g/dL' }, high: { value: 15, unit: 'g/dL' } }]);
+  });
+
+  it('points every Observation at the order it was submitted with', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async () => new Map(),
+      resultParamsFor: async () => [{
+        test: { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' },
+        params: [{ system: 'urn:openldr:default_result', code: 'HGB', resultType: 'numeric', valueSetUrl: null, unit: 'g/dL', display: 'HGB', band: null, fits: [],
+          bands: [{ name: null, low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null }] }],
+      }],
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: resultOrderSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        details: { 'urn:openldr:codesystem:test-catalog|FBC': { specimen: null, rejection: null, results: [
+          { param: { system: 'urn:openldr:default_result', code: 'HGB' }, resultType: 'numeric', value: 11.2, unit: 'g/dL',
+            band: { low: 12, high: 15, unit: 'g/dL', sex: 'female', ageLow: 18, ageHigh: null } },
+        ] } },
+      } },
+    });
+    expect(res.statusCode).toBe(201);
+    const resources = runs[0].body.entry.map((e: any) => e.resource);
+    const request = resources.find((r: any) => r.resourceType === 'ServiceRequest');
+    expect(typeof request.id).toBe('string');
+    const observations = resources.filter((r: any) => r.resourceType === 'Observation');
+    expect(observations.length).toBeGreaterThan(0);
+    for (const observation of observations) {
+      expect(observation.basedOn).toEqual([{ reference: `ServiceRequest/${request.id}` }]);
+    }
+  });
+
+  it('a rejected order is revoked with the reason, carries a Specimen, and writes no Observation', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    (ctx as any).testCatalog = {
+      loincCodingsFor: async () => new Map(),
+      resultParamsFor: async () => [],
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: rejectableOrderSchema, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'FBC' }],
+        rej: { system: 'urn:openldr:cs:reject-order', code: 'WRONGPT', display: 'Wrong patient' },
+      } },
+    });
+    expect(res.statusCode).toBe(201);
+    const resources = runs[0].body.entry.map((e: any) => e.resource);
+    const request = resources.find((r: any) => r.resourceType === 'ServiceRequest');
+    const specimen = resources.find((r: any) => r.resourceType === 'Specimen');
+    expect(request.status).toBe('revoked');
+    expect(request.extension).toEqual([{ url: 'urn:openldr:ext:rejection', extension: [
+      { url: 'code', valueCode: 'WRONGPT' }, { url: 'reason', valueString: 'Wrong patient' },
+    ] }]);
+    expect(specimen.status).toBe('unsatisfactory');
+    expect(request.specimen).toEqual([{ reference: `Specimen/${specimen.id}` }]);
+    expect(resources.filter((r: any) => r.resourceType === 'Observation')).toEqual([]);
   });
 
   it('refuses a result whose range the catalog does not hold, and stores nothing', async () => {

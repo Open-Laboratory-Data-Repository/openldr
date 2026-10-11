@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
 import { TEST_CATALOG_SYSTEM, findCatalogBand, type AppContext, type ResultBand } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
 import type { ExtractionContext, FormSchema } from '@openldr/forms';
-import { extractorsForForm, isEntityAnswer, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
+import { extractorsForForm, isEntityAnswer, linkToOrder, isCodingAnswer, parseTestDetails, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -478,8 +478,12 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const codingBefore = await catalogCodingsBefore(ctx, f.schema, p.data.answers);
     if (codingBefore) extractionContext.codingBefore = codingBefore;
     if (matchedBands.size > 0) extractionContext.testBands = matchedBands;
-    const resources = extractorsForForm(f.schema as never)
-      .flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext));
+    // Point every Observation and Specimen at the order (2026-10-11 spec, part 1), so
+    // lab_results.request_id fills and reports can join a result to its order.
+    const resources = linkToOrder(
+      extractorsForForm(f.schema as never).flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext)),
+      randomUUID,
+    );
     if (resources.length === 0) {
       // A form that produces nothing is a form-configuration bug, so 400 is correct — but the
       // operator has to be able to read a diagnosis out of it. The commonest cause by far is a
