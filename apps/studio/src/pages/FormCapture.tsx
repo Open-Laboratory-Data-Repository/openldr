@@ -11,11 +11,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TruncatedText } from '@/components/ui/truncated-text';
-import { getForm, submitFormResponse, type FormDefinition } from '@/api';
-import { canSubmitForm } from '@openldr/forms/pure';
+import { catalogResultParams, getForm, submitFormResponse, type CatalogRejectReason, type FormDefinition } from '@/api';
+import { canSubmitForm, orderRejectionFieldId, type CodingAnswer } from '@openldr/forms/pure';
 import { SubmissionReadiness } from '@/forms-runtime/SubmissionReadiness';
 import { useTranslation } from 'react-i18next';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
+import { RejectSheet } from '@/forms-runtime/RejectSheet';
 import type { FormSchema } from '@/forms-runtime/types';
 
 function asFormSchema(value: unknown): FormSchema | null {
@@ -36,6 +37,11 @@ export function FormCapture() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // The order-level rejection (2026-10-11 spec). The page owns it, the runtime only submits it.
+  const [orderRejection, setOrderRejection] = useState<CodingAnswer | null>(null);
+  const [rejectingOrder, setRejectingOrder] = useState(false);
+  const [orderReasons, setOrderReasons] = useState<CatalogRejectReason[] | null>(null);
+  const [orderReasonsFailed, setOrderReasonsFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,6 +63,7 @@ export function FormCapture() {
 
   const isPublished = form?.status === 'published';
   const captureEligible = schema ? canSubmitForm(schema) : false;
+  const rejectionField = schema ? orderRejectionFieldId(schema) : null;
 
   const handleSubmit = async (cleaned: Record<string, unknown>) => {
     if (!id || !isPublished || !captureEligible) return;
@@ -93,6 +100,25 @@ export function FormCapture() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {rejectionField ? (
+                orderRejection ? (
+                  <DropdownMenuItem onSelect={() => setOrderRejection(null)}>{t('forms.orderUndoReject')}</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      // The sheet shows a spinner until this answers, and an error line if it fails.
+                      setOrderReasons(null);
+                      setOrderReasonsFailed(false);
+                      void catalogResultParams([], null)
+                        .then((answer) => setOrderReasons(answer.rejectReasons.order))
+                        .catch(() => setOrderReasonsFailed(true));
+                      setRejectingOrder(true);
+                    }}
+                  >
+                    {t('forms.orderReject')}
+                  </DropdownMenuItem>
+                )
+              ) : null}
               <DropdownMenuItem
                 disabled={loading || submitting || !schema || !isPublished || !captureEligible}
                 onSelect={() => {
@@ -115,6 +141,12 @@ export function FormCapture() {
           {success ? <div className="mx-6 mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">Response captured.</div> : null}
           {form && !isPublished ? <div className="mx-6 mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">This form is not published. Submission is disabled until it is published.</div> : null}
 
+          {orderRejection ? (
+            <div className="mx-6 mt-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {t('forms.orderRejectedBanner', { reason: orderRejection.display ?? orderRejection.code })}
+            </div>
+          ) : null}
+
           {!loading && schema ? <SubmissionReadiness schema={schema} /> : null}
 
           {!loading && schema && captureEligible ? (
@@ -125,6 +157,7 @@ export function FormCapture() {
               formId="form-capture"
               formDefinitionId={id}
               footer={null}
+              orderRejection={rejectionField ? orderRejection : undefined}
               onSubmit={handleSubmit}
               // The runtime is schema-driven and has no i18n of its own, so this page, which has one,
               // supplies the row list's chrome (FormRuntime.tsx, suggestCopy has the same reasoning).
@@ -136,6 +169,7 @@ export function FormCapture() {
                 remove: t('forms.testsRemove'),
                 noSpecimen: t('forms.testsNoSpecimen'),
                 rejected: t('forms.testsRejected'),
+                orderRejected: t('forms.testsOrderRejected'),
                 language: i18n.language,
                 range: t('forms.range'),
                 chooseRange: t('forms.rangeChoose'),
@@ -161,6 +195,26 @@ export function FormCapture() {
           ) : null}
         </div>
       </div>
+      {rejectingOrder ? (
+        <RejectSheet
+          level="order"
+          reasons={orderReasons ?? []}
+          loading={orderReasons === null && !orderReasonsFailed}
+          error={orderReasonsFailed ? t('forms.orderRejectError') : null}
+          copy={{
+            title: t('forms.orderRejectTitle'),
+            hint: t('forms.orderRejectHint'),
+            reject: t('forms.orderRejectAction'),
+            none: t('forms.orderRejectNone'),
+            choose: t('forms.orderRejectChoose'),
+          }}
+          onReject={(reason) => {
+            setOrderRejection({ system: reason.system, code: reason.code, display: reason.display });
+            setRejectingOrder(false);
+          }}
+          onClose={() => setRejectingOrder(false)}
+        />
+      ) : null}
     </AppShell>
   );
 }

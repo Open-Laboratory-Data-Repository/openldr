@@ -10,10 +10,15 @@ import type {
   QuestionnaireResponseItemAnswer,
   Reference,
   ServiceRequest,
+  Specimen,
 } from 'fhir/r4'
 import type { FieldDiscriminator, FormField, FormSchema } from '../schema/form-schema'
 import { fromAnswer } from '../answer-value'
-import { discriminatorEquals } from '../discriminator'
+import { discriminatorEquals, extrasDiscriminator } from '../discriminator'
+import { parseTestDetails } from '../test-details'
+import { ORDER_REJECTION_EXTENSION, isOrderRejectionBinding } from '../order-rejection-path'
+import { orderRejectionOf } from './order-rejection'
+import { readTestDetails } from './test-results'
 import { EXT_CORLIX_FHIR_PATH, EXT_CORLIX_FIELD_EXTRAS, EXT_QUESTIONNAIRE_UNIT, EXT_SDC_OBSERVATION_EXTRACT } from '../extensions'
 
 /** Context the extractors need but the form can't supply (e.g. the encounter's subject). */
@@ -56,16 +61,6 @@ interface ItemMeta {
   answerOptions?: Array<{ code?: string; display?: string }>
   /** The field's discriminator, carried in the field-extras extension. */
   discriminator?: FieldDiscriminator
-}
-
-function extrasDiscriminator(item: QuestionnaireItem): FieldDiscriminator | undefined {
-  const json = item.extension?.find((e) => e.url === EXT_CORLIX_FIELD_EXTRAS)?.valueString
-  if (!json) return undefined
-  try {
-    return (JSON.parse(json) as { fhirDiscriminator?: FieldDiscriminator }).fhirDiscriminator
-  } catch {
-    return undefined // a malformed extras blob names no discriminator; the rest still extracts
-  }
 }
 
 function indexItems(questionnaire: Questionnaire): Map<string, ItemMeta> {
@@ -146,6 +141,8 @@ export const ObservationExtractor: ResourceExtractor = {
     return model.fields.some((field) => isEnabledField(field, model.fields) && field.fieldType !== 'group' && hasObservationCode(field))
   },
   extract(response, questionnaire, ctx) {
+    // Rejection wins (2026-10-11 spec): a rejected order writes no Observation of any kind.
+    if (orderRejectionOf(response, questionnaire)) return []
     const index = indexItems(questionnaire)
     const out: Observation[] = []
     walkResponse(response.item, (item) => {
@@ -164,6 +161,15 @@ export const ObservationExtractor: ResourceExtractor = {
 }
 
 // ─── ServiceRequest extraction (requisition domain) ──────────────────────────
+
+/** The specimen type every test on the order chose, or null when none chose one or they differ. */
+function sharedSpecimenType(response: QuestionnaireResponse): Coding | null {
+  const chosen = Object.values(parseTestDetails(readTestDetails(response))).map((d) => d.specimen)
+  if (chosen.length === 0 || chosen.some((s) => !s)) return null
+  const first = chosen[0]!
+  if (!chosen.every((s) => s!.system === first.system && s!.code === first.code)) return null
+  return { system: first.system, code: first.code, ...(first.display ? { display: first.display } : {}) }
+}
 
 /**
  * Emit a single ServiceRequest for a requisition form, mapping answers whose
@@ -186,6 +192,9 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       const meta = index.get(item.linkId)
       const path = meta?.fhirPath
       if (path === undefined) return
+      // The order-rejection field is read by orderRejectionOf below. Path AND discriminator, so a
+      // field bound to some other ServiceRequest.extension is not swallowed.
+      if (isOrderRejectionBinding(path, meta?.discriminator)) return
 
       // The ordered test(s) → ServiceRequest.code. An answer carries its own system: a catalog test
       // since the Lab order moved to the lab's test list (test catalog S4), LOINC before that. An answer
@@ -218,6 +227,27 @@ export const ServiceRequestExtractor: ResourceExtractor = {
     })
     if (codings.length) request.code = { coding: codings }
 
-    return [request]
+    const rejection = orderRejectionOf(response, questionnaire)
+    if (!rejection) return [request]
+
+    // Order-level rejection (2026-10-11 spec, part 2). The extension is the shape the warehouse reads
+    // into lab_requests.rejection_code and rejection_reason; the Specimen is for FHIR readers.
+    request.status = 'revoked'
+    request.extension = [...(request.extension ?? []), {
+      url: ORDER_REJECTION_EXTENSION,
+      extension: [
+        { url: 'code', valueCode: rejection.code },
+        { url: 'reason', valueString: rejection.display || rejection.code },
+      ],
+    }]
+    const specimen: Specimen = {
+      resourceType: 'Specimen',
+      status: 'unsatisfactory',
+      subject: request.subject,
+      condition: [{ coding: [rejection] }],
+    }
+    const type = sharedSpecimenType(response)
+    if (type) specimen.type = { coding: [type] }
+    return [request, specimen]
   },
 }

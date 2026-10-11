@@ -1,3 +1,5 @@
+import type { QuestionnaireItem } from 'fhir/r4';
+import { EXT_CORLIX_FIELD_EXTRAS } from './extensions';
 import type { DiscriminatorCondition, DiscriminatorRule, FieldDiscriminator } from './schema/form-schema';
 
 /**
@@ -99,4 +101,15 @@ export function discriminatorLabel(d: FieldDiscriminator | undefined): string | 
   const rule = normalizeDiscriminator(d);
   if (!rule || rule.conds.length === 0) return null;
   return rule.conds.map(condText).join(rule.join === 'any' ? ' or ' : ', ');
+}
+
+/** The field's discriminator as a Questionnaire item carries it: JSON inside the field-extras extension. */
+export function extrasDiscriminator(item: QuestionnaireItem): FieldDiscriminator | undefined {
+  const json = item.extension?.find((e) => e.url === EXT_CORLIX_FIELD_EXTRAS)?.valueString;
+  if (!json) return undefined;
+  try {
+    return (JSON.parse(json) as { fhirDiscriminator?: FieldDiscriminator }).fhirDiscriminator;
+  } catch {
+    return undefined; // a malformed extras blob names no discriminator; the rest still extracts
+  }
 }

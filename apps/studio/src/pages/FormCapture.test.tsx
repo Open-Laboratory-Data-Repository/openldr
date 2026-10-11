@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { FormCapture } from './FormCapture';
 import * as api from '../api';
+import '@/i18n';
 
 // New-model FormDefinition: schema is a flat FormSchema
 const form: api.FormDefinition = {
@@ -249,4 +250,117 @@ it('explains unsupported capture before entry and refuses submission', async () 
   expect(screen.queryByLabelText('Patient ID')).not.toBeInTheDocument();
   clickActionsMenuItem('Submit');
   expect(submit).not.toHaveBeenCalled();
+});
+
+describe('FormCapture order rejection (2026-10-11 spec)', () => {
+  const rejectionField = {
+    id: 'rej',
+    fhirPath: 'ServiceRequest.extension',
+    fhirDiscriminator: { url: 'urn:openldr:ext:rejection' },
+    displayLabel: 'Order rejection',
+    description: null,
+    fieldType: 'reference',
+    required: false,
+    enabled: true,
+    order: 9,
+    cardinality: { min: 0, max: '1' },
+    valueSetUrl: 'urn:openldr:valueset:order-reject-reason',
+  };
+  const labOrderForm: api.FormDefinition = {
+    ...publishedForm,
+    schema: { ...(publishedForm.schema as object), fields: [...(publishedForm.schema as { fields: unknown[] }).fields, rejectionField] },
+  };
+
+  const renderPage = () => render(
+    <MemoryRouter initialEntries={['/forms/form-1']}>
+      <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
+    </MemoryRouter>,
+  );
+
+  beforeEach(() => {
+    vi.spyOn(api, 'submitFormResponse').mockResolvedValue({ resourceType: 'QuestionnaireResponse' });
+    vi.spyOn(api, 'catalogResultParams').mockResolvedValue({
+      tests: [],
+      rejectReasons: { order: [{ system: 's', code: 'WRONGPT', display: 'Wrong patient' }], test: [] },
+      sexes: [],
+    });
+  });
+
+  it('rejects the order from the menu, shows the reason, and undoes it', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(labOrderForm);
+    renderPage();
+    await screen.findByText('Specimen intake');
+
+    clickActionsMenuItem('Reject order');
+    fireEvent.click(await screen.findByText('Wrong patient'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+
+    expect(await screen.findByText('Order rejected: Wrong patient')).toBeInTheDocument();
+    expect(api.catalogResultParams).toHaveBeenCalledWith([], null);
+
+    clickActionsMenuItem('Undo rejection');
+    await waitFor(() => expect(screen.queryByText('Order rejected: Wrong patient')).not.toBeInTheDocument());
+  });
+
+  it('sends the rejection with the submission', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(labOrderForm);
+    renderPage();
+    await screen.findByText('Specimen intake');
+    fireEvent.change(screen.getByLabelText('Patient ID'), { target: { value: 'P-100' } });
+
+    clickActionsMenuItem('Reject order');
+    fireEvent.click(await screen.findByText('Wrong patient'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    await screen.findByText('Order rejected: Wrong patient');
+
+    clickActionsMenuItem('Submit');
+    await waitFor(() => expect(api.submitFormResponse).toHaveBeenCalledWith(
+      'form-1',
+      expect.objectContaining({ patientId: 'P-100', rej: { system: 's', code: 'WRONGPT', display: 'Wrong patient' } }),
+    ));
+    // The rejection stays after submit. The form keeps its answers, so clearing it would reopen the
+    // rows and a second Submit would write an accepted duplicate with the typed results.
+    expect(await screen.findByText('Response captured.')).toBeInTheDocument();
+    expect(screen.getByText('Order rejected: Wrong patient')).toBeInTheDocument();
+  });
+
+  it('shows the spinner, not the empty state, while the reasons are read', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(labOrderForm);
+    vi.spyOn(api, 'catalogResultParams').mockReturnValue(new Promise(() => {}));
+    renderPage();
+    await screen.findByText('Specimen intake');
+    clickActionsMenuItem('Reject order');
+    expect(await screen.findByText('Reject this order')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByText('No reasons are configured.')).not.toBeInTheDocument();
+  });
+
+  it('says the reasons could not be read when the read fails', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(labOrderForm);
+    vi.spyOn(api, 'catalogResultParams').mockRejectedValue(new Error('boom'));
+    renderPage();
+    await screen.findByText('Specimen intake');
+    clickActionsMenuItem('Reject order');
+    expect(await screen.findByText('The reasons could not be read.')).toBeInTheDocument();
+    expect(screen.queryByText('No reasons are configured.')).not.toBeInTheDocument();
+  });
+
+  it('keeps the striped none state when the server really offers no reasons', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(labOrderForm);
+    vi.spyOn(api, 'catalogResultParams').mockResolvedValue({ tests: [], rejectReasons: { order: [], test: [] }, sexes: [] });
+    renderPage();
+    await screen.findByText('Specimen intake');
+    clickActionsMenuItem('Reject order');
+    expect(await screen.findByText('No reasons are configured.')).toBeInTheDocument();
+  });
+
+  it('offers neither menu item on a form without the rejection field', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(publishedForm);
+    renderPage();
+    await screen.findByText('Specimen intake');
+    fireEvent.pointerDown(screen.getByRole('button', { name: /form actions/i }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    expect(await screen.findByText('Submit')).toBeInTheDocument();
+    expect(screen.queryByText('Reject order')).not.toBeInTheDocument();
+    expect(screen.queryByText('Undo rejection')).not.toBeInTheDocument();
+  });
 });

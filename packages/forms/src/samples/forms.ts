@@ -464,6 +464,23 @@ const orderForm: FormSchema = {
       section: 'order',
       placeholder: 'Search facilities by name or MFL ID…',
     },
+    {
+      // Order-level rejection (2026-10-11 spec, part 2). Set from the capture page's ⋯ menu, never
+      // typed: the runtime does not draw a field bound to the rejection extension. Found by that
+      // path and discriminator, not by this id.
+      id: 'fld-ord-rejection',
+      fhirPath: 'ServiceRequest.extension',
+      fhirDiscriminator: { url: 'urn:openldr:ext:rejection' },
+      displayLabel: 'Order rejection',
+      description: null,
+      fieldType: 'reference',
+      required: false,
+      enabled: true,
+      order: 9,
+      cardinality: { min: 0, max: '1' },
+      section: 'order',
+      valueSetUrl: 'urn:openldr:valueset:order-reject-reason',
+    },
   ],
 }
 

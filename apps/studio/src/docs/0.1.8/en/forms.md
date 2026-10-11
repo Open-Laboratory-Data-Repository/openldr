@@ -236,6 +236,12 @@ A value outside its range is flagged beside the input. It is never refused: the 
 
 Each numeric result has a range picker under its input, listing every range by name, or, when unnamed, by who it is for. It starts on the range that fits the patient. Picking a range that does not fit shows a warning and is still allowed. The flag follows the picked range. If the test's ranges changed after the sheet opened, submitting the order is refused. Reopen the test and pick a range again.
 
-A test can be rejected from its row menu, and the whole order from the page menu, each with a reason from a list. A rejected test is recorded with its reason, and does not yet appear in reports.
+A test can be rejected from its row menu with a reason from a list. A rejected test is recorded with its reason, but the reason does not reach reports. On its order, the test shows as a result row with no value.
+
+The whole order can be rejected from the page menu, with **Reject order**. Pick a reason from the list. If the reasons cannot be read, the sheet says so and you cannot reject. Nothing retries on its own, so close the sheet and open it again. Once rejected, a line under the header shows the reason, and every test row reads "Order rejected" and is closed for entry. Values already typed stay on the screen but are not written. **Undo rejection** in the same menu opens the rows again.
+
+A rejected order is marked as rejected, with its reason code and text. The reason reaches the lab record (the rejection code and reason on the order), so a report can count it. The order's rejection code sits in the same place as rejection codes that arrive from the lab system, so a report that groups by code sees both kinds. No result is written for a rejected order.
+
+Each result written is linked to its order, so reports can join a result to the order it came from.
 
 A submitted order writes one result record per value typed. Results are typed with the order, in one pass. There is no way yet to reopen a submitted order and add them later.

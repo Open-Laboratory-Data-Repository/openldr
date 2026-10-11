@@ -15,13 +15,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { isCodingAnswer, isEntityAnswer, isMultiValued, resolveReferenceSource, type CodingAnswer, type TestDetailsAnswer } from '@openldr/forms/pure';
+import { isCodingAnswer, isEntityAnswer, isMultiValued, isOrderRejectionField, orderRejectionFieldId, resolveReferenceSource, type CodingAnswer, type TestDetailsAnswer } from '@openldr/forms/pure';
 import { referenceSearch, referenceSearchPreview } from '@/api';
 import type { FieldSuggestions, FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
 import { fieldsNeedingResolution, pickSeededMatch, type ResolvableRow } from './seeded-references';
 import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
 import { TestDetailsField, type TestDetailsCopy } from './TestDetailsField';
+import { OrderRejectedContext } from './order-rejection-context';
 import { BROWSE_TESTS_EN, BrowseTestsSheet, type BrowseTestsCopy } from './BrowseTestsSheet';
 
 /**
@@ -54,6 +55,7 @@ export function FormRuntime({
   suggestCopy,
   testDetailsCopy,
   browseCopy,
+  orderRejection,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -103,6 +105,12 @@ export function FormRuntime({
   testDetailsCopy?: TestDetailsCopy;
   /** Browsing the test catalog from a depended-on field. Same reasoning: the runtime has no i18n. */
   browseCopy?: BrowseTestsCopy;
+  /**
+   * The order-level rejection the page holds (2026-10-11 spec). Undefined leaves the form as before.
+   * The rejection field is never drawn: the page owns the choice, and submit writes it under the
+   * field's id (null removes it).
+   */
+  orderRejection?: CodingAnswer | null;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -196,7 +204,7 @@ export function FormRuntime({
   const topLevelFields = useMemo(
     () =>
       schema.fields
-        .filter((f) => visible.has(f.id) && !f.groupId)
+        .filter((f) => visible.has(f.id) && !f.groupId && !isOrderRejectionField(f))
         .sort((a, b) => a.order - b.order),
     [schema.fields, visible],
   );
@@ -274,6 +282,7 @@ export function FormRuntime({
 
   return (
     <TooltipProvider>
+    <OrderRejectedContext.Provider value={Boolean(orderRejection)}>
     <form
       id={formId}
       // Field-level `required` (below) is declared for assistive tech, but native validation UI is
@@ -285,6 +294,14 @@ export function FormRuntime({
         event.preventDefault();
         // Wire schema validation to submission: compute field errors, surface them, and only
         // hand off to the caller's onSubmit when the form is valid.
+        // Validate the answers that are submitted. The rejection field is never drawn, so a rule on it
+        // must see the page's choice, not the empty answer.
+        const rejectionId = orderRejectionFieldId(schema);
+        const submitted = { ...answers };
+        if (rejectionId && orderRejection !== undefined) {
+          if (orderRejection) submitted[rejectionId] = orderRejection;
+          else delete submitted[rejectionId];
+        }
         // Reference fields still holding exactly the string they were seeded with. The operator did
         // not enter these — storage did — so a value the vocabulary does not contain must not block
         // an unrelated edit. See `validate`'s own docblock for the measurement behind this.
@@ -293,14 +310,14 @@ export function FormRuntime({
         // never lands here, and anything they changed no longer equals its seed.
         const seeded = initialAnswers ?? {};
         const untouched = new Set(
-          fieldsNeedingResolution(schema, answers)
+          fieldsNeedingResolution(schema, submitted)
             .filter(({ fieldId, raw }) => raw === seeded[fieldId])
             .map(({ fieldId }) => fieldId),
         );
-        const nextErrors = validate(schema, answers, untouched);
+        const nextErrors = validate(schema, submitted, untouched);
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length > 0) return;
-        void onSubmit(cleanAnswers(schema, answers));
+        void onSubmit(cleanAnswers(schema, submitted));
       }}
     >
       {sectionGroups ? (
@@ -329,6 +346,7 @@ export function FormRuntime({
         </div>
       ) : footer}
     </form>
+    </OrderRejectedContext.Provider>
     </TooltipProvider>
   );
 }

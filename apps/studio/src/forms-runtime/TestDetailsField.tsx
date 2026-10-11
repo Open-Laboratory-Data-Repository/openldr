@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { catalogResultParams, type CatalogResultParam, type CatalogRejectReason, type CatalogSexOption, type CatalogTestParams } from '@/api';
 import type { CodingAnswer, TestDetail, TestDetailsAnswer } from '@openldr/forms/pure';
@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/spinner';
 import { TestDetailSheet } from './TestDetailSheet';
 import { RejectSheet } from './RejectSheet';
 import { RANGE_EN, type RangeCopy } from './rangeLabel';
+import { OrderRejectedContext } from './order-rejection-context';
 
 /**
  * Chrome copy. FormRuntime is schema-driven and has no i18n of its own (FormRuntime.tsx:84-92), so
@@ -22,6 +23,7 @@ export interface TestDetailsCopy extends RangeCopy {
   remove?: string;
   noSpecimen?: string;
   rejected?: string;
+  orderRejected?: string;
 }
 
 const EN: Required<TestDetailsCopy> = {
@@ -33,6 +35,7 @@ const EN: Required<TestDetailsCopy> = {
   remove: 'Remove from order',
   noSpecimen: 'Specimen type not set',
   rejected: 'Rejected',
+  orderRejected: 'Order rejected',
 };
 
 const keyOf = (c: { system: string; code: string }): string => `${c.system}|${c.code}`;
@@ -48,6 +51,7 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
   copy?: TestDetailsCopy;
 }): JSX.Element {
   const t = { ...EN, ...(copy ?? {}) };
+  const orderRejected = useContext(OrderRejectedContext);
   const [params, setParams] = useState<CatalogTestParams[]>([]);
   const [reasons, setReasons] = useState<{ order: CatalogRejectReason[]; test: CatalogRejectReason[] }>({ order: [], test: [] });
   const [sexes, setSexes] = useState<CatalogSexOption[]>([]);
@@ -81,19 +85,21 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
   const write = (test: CodingAnswer, detail: TestDetail): void => onChange({ ...value, [keyOf(test)]: detail });
 
   const stateLine = (test: CodingAnswer): string => {
+    if (orderRejected) return t.orderRejected;
     const detail = detailFor(test);
     if (detail.rejection) return `${t.rejected}: ${detail.rejection.display ?? detail.rejection.code}`;
     return detail.specimen ? (detail.specimen.display ?? detail.specimen.code) : t.noSpecimen;
   };
 
-  const open = tests.find((test) => keyOf(test) === openTest);
-  const reject = tests.find((test) => keyOf(test) === rejecting);
+  // A rejected order closes every row: no sheet opens, whatever was open before.
+  const open = orderRejected ? undefined : tests.find((test) => keyOf(test) === openTest);
+  const reject = orderRejected ? undefined : tests.find((test) => keyOf(test) === rejecting);
 
   return (
     <div className="rounded-md border border-border">
       {tests.map((test) => (
         <div key={keyOf(test)} className="flex items-start gap-3 border-b border-border p-3 last:border-b-0">
-          <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpenTest(keyOf(test))}>
+          <button type="button" className="min-w-0 flex-1 text-left" disabled={orderRejected} onClick={() => { if (!orderRejected) setOpenTest(keyOf(test)); }}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-xs">{test.code}</span>
               <span className="text-sm font-medium">{test.display ?? test.code}</span>
@@ -105,8 +111,8 @@ export function TestDetailsField({ tests, value, onChange, onRemoveTest, patient
               <Button variant="ghost" size="icon" aria-label={`Actions for ${test.display ?? test.code}`}><MoreHorizontal className="h-4 w-4" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setOpenTest(keyOf(test))}>{t.open}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setRejecting(keyOf(test))}>{t.reject}</DropdownMenuItem>
+              {orderRejected ? null : <DropdownMenuItem onClick={() => setOpenTest(keyOf(test))}>{t.open}</DropdownMenuItem>}
+              {orderRejected ? null : <DropdownMenuItem onClick={() => setRejecting(keyOf(test))}>{t.reject}</DropdownMenuItem>}
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onClick={() => onRemoveTest({ system: test.system, code: test.code })}

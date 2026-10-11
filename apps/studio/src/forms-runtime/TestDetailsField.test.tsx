@@ -9,6 +9,7 @@ vi.mock('@/api', () => ({
 }));
 import { catalogResultParams, catalogSpecimensFor, expandValueSetByUrl } from '@/api';
 import { TestDetailsField } from './TestDetailsField';
+import { OrderRejectedContext } from './order-rejection-context';
 
 const CATALOG = 'urn:openldr:codesystem:test-catalog';
 const tests = [
@@ -73,5 +74,46 @@ describe('TestDetailsField', () => {
   it('takes its chrome copy from the caller, and falls back to English', () => {
     render(<TestDetailsField tests={[]} value={{}} onChange={() => {}} onRemoveTest={() => {}} patient={null} copy={{ empty: 'Aucun examen choisi' }} />);
     expect(screen.getByText('Aucun examen choisi')).toBeInTheDocument();
+  });
+
+  describe('while the whole order is rejected', () => {
+    const renderRejected = () => render(
+      <OrderRejectedContext.Provider value={true}>
+        <TestDetailsField tests={[tests[0]]} value={{}} onChange={() => {}} onRemoveTest={() => {}} patient={null} />
+      </OrderRejectedContext.Provider>,
+    );
+
+    it('shows the order as rejected on the row', async () => {
+      renderRejected();
+      await waitFor(() => expect(screen.getByText('Full blood count')).toBeInTheDocument());
+      expect(screen.getByText('Order rejected')).toBeInTheDocument();
+    });
+
+    it('opens no result sheet when the row is clicked', async () => {
+      const user = userEvent.setup();
+      renderRejected();
+      await waitFor(() => expect(screen.getByText('Full blood count')).toBeInTheDocument());
+      await user.click(screen.getByText('Full blood count'));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    it('keeps only the remove entry in the row menu', async () => {
+      const user = userEvent.setup();
+      renderRejected();
+      await waitFor(() => expect(screen.getByText('Full blood count')).toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: /actions for/i }));
+      expect(await screen.findByText(/remove from order/i)).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /^open$/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/reject with reason/i)).not.toBeInTheDocument();
+    });
+
+    it('takes the state line copy from the caller', async () => {
+      render(
+        <OrderRejectedContext.Provider value={true}>
+          <TestDetailsField tests={[tests[0]]} value={{}} onChange={() => {}} onRemoveTest={() => {}} patient={null} copy={{ orderRejected: 'Demande refusée' }} />
+        </OrderRejectedContext.Provider>,
+      );
+      await waitFor(() => expect(screen.getByText('Demande refusée')).toBeInTheDocument());
+    });
   });
 });
