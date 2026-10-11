@@ -14,7 +14,7 @@ import { sampleForms } from './forms';
  */
 
 /** Bump when a pack's content changes. Boot rewrites the seeded packs either way. */
-export const STARTER_PACK_VERSION = '3';
+export const STARTER_PACK_VERSION = '4';
 
 interface PackSource {
   id: string;
@@ -66,6 +66,7 @@ const RATIONALE: Record<string, string> = {
   'fld-ord-notes': 'Clinical context the lab may need to choose or read a test.',
   'fld-ord-ref-facility': 'Where the order came from, so results go back there.',
   'fld-ord-specimen-type': 'What was collected, from the seeded specimen type list.',
+  'fld-ord-rejection': 'Why the lab refused the whole order, from the seeded order rejection reasons. Set from the page menu.',
 };
 
 function toEntry(field: FormField, ord: number, form: FormSchema, page: string | undefined): StarterPackEntry {

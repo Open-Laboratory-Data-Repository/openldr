@@ -19,7 +19,7 @@ import {
   USERS_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS,
   LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
-  LAB_ORDER_FORM_MIGRATION_NO_ORDER_SPECIMEN,
+  LAB_ORDER_FORM_MIGRATION_ORDER_REJECTION,
   LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
@@ -296,8 +296,8 @@ describe('every shipped sample passes the FHIR path rules', () => {
 describe('migrations 102 and 103 on the Lab order form', () => {
   const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
 
-  it("matches migration 107's frozen snapshot exactly", () => {
-    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_NO_ORDER_SPECIMEN);
+  it("matches migration 110's frozen snapshot exactly", () => {
+    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_ORDER_REJECTION);
   });
 
   // The order asked for a specimen twice: once per test in the results sheet, once here. The
