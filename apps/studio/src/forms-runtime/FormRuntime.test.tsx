@@ -844,3 +844,47 @@ describe('seeded reference answers are resolved before validation sees them', ()
     expect(vi.mocked(referenceSearch)).not.toHaveBeenCalled();
   });
 });
+
+describe('order-level rejection (2026-10-11 spec)', () => {
+  const REJECTION_URL = 'urn:openldr:ext:rejection';
+  const baseField = { description: null, required: false, enabled: true, cardinality: { min: 0, max: '1' } };
+  const rejectionSchema = {
+    id: 'ord', name: 'Order', versionLabel: null, fhirVersion: null, fhirResourceType: 'ServiceRequest',
+    fhirProfileUrl: null, facilityId: null, sections: [], version: 1,
+    fields: [
+      { ...baseField, id: 'note', fhirPath: null, displayLabel: 'Order note', fieldType: 'text', order: 1 },
+      {
+        ...baseField, id: 'rej', fhirPath: 'ServiceRequest.extension', fhirDiscriminator: { url: REJECTION_URL },
+        displayLabel: 'Order rejection', fieldType: 'reference', order: 2, valueSetUrl: 'urn:openldr:valueset:order-reject-reason',
+      },
+      {
+        ...baseField, id: 'other', fhirPath: 'ServiceRequest.extension', fhirDiscriminator: { url: 'urn:example:other' },
+        displayLabel: 'Other extension', fieldType: 'text', order: 3,
+      },
+    ],
+  } as unknown as FormSchema;
+
+  it('does not draw the rejection field, but still draws another field on ServiceRequest.extension', () => {
+    render(<FormRuntime schema={rejectionSchema} onSubmit={() => {}} />);
+    expect(screen.queryByText('Order rejection')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Other extension')).toBeInTheDocument();
+    expect(screen.getByLabelText('Order note')).toBeInTheDocument();
+  });
+
+  it('submits the rejection the page holds under the field id', async () => {
+    const onSubmit = vi.fn();
+    const coding = { system: 's', code: 'C', display: 'D' };
+    const { container } = render(<FormRuntime schema={rejectionSchema} onSubmit={onSubmit} orderRejection={coding} />);
+    fireEvent.submit(container.querySelector('form')!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ rej: coding });
+  });
+
+  it('submits without the field id when the page holds no rejection', async () => {
+    const onSubmit = vi.fn();
+    const { container } = render(<FormRuntime schema={rejectionSchema} onSubmit={onSubmit} orderRejection={null} />);
+    fireEvent.submit(container.querySelector('form')!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('rej');
+  });
+});
