@@ -16,7 +16,7 @@ const PACK = {
   ],
 };
 
-interface Opts { pack?: unknown; steps?: unknown }
+interface Opts { pack?: unknown; steps?: unknown; ceVersion?: string }
 
 async function buildPack(o: Opts = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'pack-bundle-'));
@@ -26,7 +26,7 @@ async function buildPack(o: Opts = {}) {
   const manifest = {
     schemaVersion: 1, type: 'content-pack', id: 'test-pack', version: '1.0.0',
     publisher: { id: 'acme', name: 'Acme', keyFingerprint: '0'.repeat(64) },
-    compatibility: { ceVersion: '*' }, capabilities: [],
+    compatibility: { ceVersion: o.ceVersion ?? '*' }, capabilities: [],
     payload: { kind: 'content-pack', packSha256: '0'.repeat(64), steps },
   };
   const outDir = join(dir, 'test-pack-1.0.0');
@@ -63,7 +63,7 @@ function setup(over: Record<string, unknown> = {}) {
   const audit = { record: vi.fn(async (_e: any) => undefined) };
   const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn() };
   const deps = {
-    installStore: installs.store, trustStore: trust.store, audit, logger,
+    installStore: installs.store, trustStore: trust.store, audit, logger, ceVersion: '0.1.9',
     loadResource: vi.fn(async (j: any) => { calls.push('loadResource'); return { resourceUrl: j.url }; }),
     checkResource: vi.fn(() => { calls.push('checkResource'); }),
     checkQueries: vi.fn(() => { calls.push('checkQueries'); }),
@@ -111,6 +111,25 @@ describe('createContentPackInstaller', () => {
     ]);
     expect(events(s.audit).at(-1)).toMatchObject({ action: 'marketplace.install', metadata: { type: 'content-pack', steps: 5 } });
     expect(s.trust.store.pin).toHaveBeenCalledOnce();
+    await cleanup();
+  });
+
+  it('installs a pack that needs >=0.1.9 on CE 0.1.9', async () => {
+    const { bundle, cleanup } = await buildPack({ ceVersion: '>=0.1.9' });
+    const s = setup();
+    const res = await s.installer.install(bundle, { actor });
+    expect(res).toMatchObject({ id: 'test-pack', status: 'installed' });
+    await cleanup();
+  });
+
+  it('refuses a pack that needs >=99.0.0 before any write', async () => {
+    const { bundle, cleanup } = await buildPack({ ceVersion: '>=99.0.0' });
+    const s = setup();
+    await expect(s.installer.install(bundle, { actor })).rejects.toThrow('test-pack@1.0.0 needs CE >=99.0.0; this is CE 0.1.9');
+    await expect(s.installer.check(bundle)).rejects.toThrow('needs CE >=99.0.0');
+    expect(s.calls).toEqual([]);
+    expect(s.installs.store.upsert).not.toHaveBeenCalled();
+    expect(s.trust.store.pin).not.toHaveBeenCalled();
     await cleanup();
   });
 

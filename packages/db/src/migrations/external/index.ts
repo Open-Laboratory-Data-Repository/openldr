@@ -21,6 +21,7 @@ import * as m018 from './018_lab_request_requester';
 import * as m019 from './019_v1_request_facts';
 import * as m020 from './020_lab_result_comparator';
 import * as m021 from './021_facility_registry';
+import * as m022 from './022_questionnaire_response_based_on_index';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -45,5 +46,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '019_v1_request_facts': { up: (db) => m019.up(db, engine), down: m019.down },
     '020_lab_result_comparator': { up: (db) => m020.up(db, engine), down: m020.down },
     '021_facility_registry': { up: (db) => m021.up(db, engine), down: m021.down },
+    '022_questionnaire_response_based_on_index': { up: (db) => m022.up(db, engine), down: (db) => m022.down(db, engine) },
   };
 }

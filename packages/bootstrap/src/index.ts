@@ -92,7 +92,7 @@ import { createPostgresListenerDriver } from './listener-postgres';
 import { createEmailListenerDriver } from './listener-email';
 import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
-import { createPluginRegistry } from './plugin-registry';
+import { createPluginRegistry, CE_VERSION } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
 import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, checkTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type ImportOrigin, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
@@ -1088,6 +1088,7 @@ const reporting: ReportingApi = {
     trustStore: createTrustStore(internal.db),
     audit,
     logger,
+    ceVersion: CE_VERSION,
     // Reuse the id registered for the URL, so a reinstall replaces the resource and its codes.
     loadResource: async (json, packId) => terminology.loaders.resource(await withRegisteredResourceId(termDb, json), { origin: 'pack', originRef: packId }),
     checkResource: (json) => { checkTerminologyResource(json); },

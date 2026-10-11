@@ -1,6 +1,36 @@
 {
-  "generatedAt": "2026-10-08",
+  "generatedAt": "2026-10-11",
   "days": [
+    {
+      "date": "2026-10-11",
+      "version": null,
+      "entries": [
+        {
+          "hash": "ab2cf19a",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Check pack ceVersion against the real CE version"
+        },
+        {
+          "hash": "a8d30bfd",
+          "type": "perf",
+          "scope": "db",
+          "title": "Index questionnaire_responses.based_on_id"
+        }
+      ]
+    },
+    {
+      "date": "2026-10-09",
+      "version": null,
+      "entries": [
+        {
+          "hash": "e347a028",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "Reference-numbers and unique-id request attributes"
+        }
+      ]
+    },
     {
       "date": "2026-10-08",
       "version": null,
