@@ -339,4 +339,24 @@ describe('order-level rejection (2026-10-11 spec, part 2)', () => {
     expect((sr[0] as any).extension).toBeUndefined()
     expect(results).toHaveLength(1)
   })
+
+  it('falls back to the code when the display is empty', () => {
+    const { sr } = run({ tests: [{ system: CATALOG, code: 'FBC' }], rej: { ...REASON, display: '' } })
+    expect((sr[0] as any).extension[0].extension[1]).toEqual({ url: 'reason', valueString: 'UNLABELLED' })
+  })
+
+  it('writes no generic Observation on a rejected order either', () => {
+    const model = makeSchema({
+      id: 'o2', name: 'Order', fhirResourceType: 'ServiceRequest',
+      fields: [
+        makeField({ id: 'hgb', displayLabel: 'Hemoglobin', fieldType: 'number', order: 0, observationExtract: true, code: [{ system: 'http://loinc.org', code: '718-7' }] }),
+        makeField({ id: 'rej', displayLabel: 'Order rejection', fieldType: 'reference', order: 1, fhirPath: 'ServiceRequest.rejection', valueSetUrl: 'urn:openldr:valueset:order-reject-reason' }),
+      ],
+    })
+    const q = toQuestionnaire(model)
+    const rejected = ObservationExtractor.extract(toQuestionnaireResponse(model, { hgb: 12.5, rej: REASON } as never), q, ctx)
+    expect(rejected).toEqual([])
+    const open = ObservationExtractor.extract(toQuestionnaireResponse(model, { hgb: 12.5 } as never), q, ctx)
+    expect(open).toHaveLength(1)
+  })
 })

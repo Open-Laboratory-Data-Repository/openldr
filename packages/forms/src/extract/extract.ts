@@ -151,6 +151,8 @@ export const ObservationExtractor: ResourceExtractor = {
     return model.fields.some((field) => isEnabledField(field, model.fields) && field.fieldType !== 'group' && hasObservationCode(field))
   },
   extract(response, questionnaire, ctx) {
+    // Rejection wins (2026-10-11 spec): a rejected order writes no Observation of any kind.
+    if (orderRejectionOf(response, questionnaire)) return []
     const index = indexItems(questionnaire)
     const out: Observation[] = []
     walkResponse(response.item, (item) => {
@@ -243,7 +245,7 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       url: ORDER_REJECTION_EXTENSION,
       extension: [
         { url: 'code', valueCode: rejection.code },
-        { url: 'reason', valueString: rejection.display ?? rejection.code },
+        { url: 'reason', valueString: rejection.display || rejection.code },
       ],
     }]
     const specimen: Specimen = {
