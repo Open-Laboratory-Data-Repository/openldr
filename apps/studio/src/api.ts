@@ -2635,6 +2635,31 @@ export const previewMatchCodes = (system: string): Promise<MatchPlan> =>
   apiGet<MatchPlan>(`/api/test-catalog/mappings/match?system=${encodeURIComponent(system)}`, 'check matching codes');
 export const applyMatchCodes = (system: string): Promise<MatchPlan & { rebuild: RebuildOutcome }> =>
   authFetch('/api/test-catalog/mappings/match', jbody({ system }, 'POST')).then((r) => okJson<MatchPlan & { rebuild: RebuildOutcome }>(r, 'map matching codes'));
+// Mirrors of @openldr/bootstrap's result-fields.ts. The routes are apps/server/src/result-fields-routes.ts.
+export interface ResultField { code: string; display: string | null; role: string | null; units: string | null; loinc: string | null }
+export interface ResultFieldList { rows: ResultField[]; total: number; ownedHere: boolean; loaded: boolean }
+export interface ResultFieldLinkChange { code: string; before: string | null; after: string | null }
+
+export function listResultFields(p: { q?: string; loinc?: 'linked' | 'none' | 'all'; role?: string; limit: number; offset: number }): Promise<ResultFieldList> {
+  const s = new URLSearchParams();
+  if (p.q) s.set('q', p.q);
+  if (p.loinc && p.loinc !== 'all') s.set('loinc', p.loinc);
+  if (p.role) s.set('role', p.role);
+  s.set('limit', String(p.limit));
+  s.set('offset', String(p.offset));
+  return apiGet<ResultFieldList>(`/api/test-catalog/result-fields?${s}`, 'list result fields');
+}
+const resultFieldLoincUrl = (code: string) => `/api/test-catalog/result-fields/${encodeURIComponent(code)}/loinc`;
+export const linkResultField = (code: string, loinc: string): Promise<ResultFieldLinkChange> =>
+  authFetch(resultFieldLoincUrl(code), jbody({ loinc }, 'PUT')).then((r) => okJson<ResultFieldLinkChange>(r, 'link LOINC'));
+export const unlinkResultField = (code: string): Promise<ResultFieldLinkChange> =>
+  authFetch(resultFieldLoincUrl(code), { method: 'DELETE' }).then((r) => okJson<ResultFieldLinkChange>(r, 'clear LOINC link'));
+export const downloadResultFieldsCsv = (): Promise<void> =>
+  downloadCsv('/api/test-catalog/result-fields/export', 'result-fields.csv', 'export result fields');
+export const previewResultFieldsImport = (file: File): Promise<ImportReportLike> =>
+  uploadCsv('/api/test-catalog/result-fields/import/preview', file, 'check result fields file');
+export const applyResultFieldsImport = (file: File): Promise<ImportReportLike> =>
+  uploadCsv('/api/test-catalog/result-fields/import/apply', file, 'import result fields');
 /** The specimens at least one of these tests accepts, by this lab's lists (test catalog S4). The server
  *  ignores codings that are not catalog tests, so an empty list means the picker does not narrow. */
 export const catalogSpecimensFor = (

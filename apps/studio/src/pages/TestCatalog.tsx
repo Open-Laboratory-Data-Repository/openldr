@@ -23,6 +23,7 @@ import { translateFilters } from '@/test-catalog/catalogFilters';
 import { TestSheet, type TestSheetTarget } from '@/test-catalog/TestSheet';
 import { ImportCatalogSheet } from '@/test-catalog/ImportCatalogSheet';
 import { ObservedCodesTab } from '@/test-catalog/ObservedCodesTab';
+import { ResultFieldsTab } from '@/test-catalog/ResultFieldsTab';
 
 // Test catalog S2 (docs/superpowers/specs/2026-09-15-test-catalog-design.md, 4.3). Server-paged with
 // named filters, as Notifications.tsx is. The toolbar menu, row menu and empty state copy
@@ -192,6 +193,7 @@ export function TestCatalog() {
         <div className="border-b border-border px-4">
           <TabsList className="border-b-0">
             <TabsTrigger value="tests" data-testid="test-catalog-tab-tests">{t('testCatalog.tabs.tests')}</TabsTrigger>
+            <TabsTrigger value="result-fields" data-testid="test-catalog-tab-result-fields">{t('testCatalog.tabs.resultFields')}</TabsTrigger>
             <TabsTrigger value="observed" data-testid="test-catalog-tab-observed">{t('testCatalog.tabs.observed')}</TabsTrigger>
           </TabsList>
         </div>
@@ -348,6 +350,9 @@ export function TestCatalog() {
               onImported={() => { void load(); loadOptions(); }}
             />
           </div>
+        </TabsContent>
+        <TabsContent value="result-fields" className="flex min-h-0 flex-1 flex-col">
+          <ResultFieldsTab canManage={canManage} loinc={options.loinc} />
         </TabsContent>
         <TabsContent value="observed" className="flex min-h-0 flex-1 flex-col">
           <ObservedCodesTab canManage={canManage} />
