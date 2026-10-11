@@ -318,6 +318,39 @@ describe('FormCapture order rejection (2026-10-11 spec)', () => {
       'form-1',
       expect.objectContaining({ patientId: 'P-100', rej: { system: 's', code: 'WRONGPT', display: 'Wrong patient' } }),
     ));
+    // A submitted rejection is spent: the banner goes, so the next order starts clean.
+    expect(await screen.findByText('Response captured.')).toBeInTheDocument();
+    expect(screen.queryByText('Order rejected: Wrong patient')).not.toBeInTheDocument();
+  });
+
+  it('shows the spinner, not the empty state, while the reasons are read', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(labOrderForm);
+    vi.spyOn(api, 'catalogResultParams').mockReturnValue(new Promise(() => {}));
+    renderPage();
+    await screen.findByText('Specimen intake');
+    clickActionsMenuItem('Reject order');
+    expect(await screen.findByText('Reject this order')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByText('No reasons are configured.')).not.toBeInTheDocument();
+  });
+
+  it('says the reasons could not be read when the read fails', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(labOrderForm);
+    vi.spyOn(api, 'catalogResultParams').mockRejectedValue(new Error('boom'));
+    renderPage();
+    await screen.findByText('Specimen intake');
+    clickActionsMenuItem('Reject order');
+    expect(await screen.findByText('The reasons could not be read.')).toBeInTheDocument();
+    expect(screen.queryByText('No reasons are configured.')).not.toBeInTheDocument();
+  });
+
+  it('keeps the striped none state when the server really offers no reasons', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(labOrderForm);
+    vi.spyOn(api, 'catalogResultParams').mockResolvedValue({ tests: [], rejectReasons: { order: [], test: [] }, sexes: [] });
+    renderPage();
+    await screen.findByText('Specimen intake');
+    clickActionsMenuItem('Reject order');
+    expect(await screen.findByText('No reasons are configured.')).toBeInTheDocument();
   });
 
   it('offers neither menu item on a form without the rejection field', async () => {

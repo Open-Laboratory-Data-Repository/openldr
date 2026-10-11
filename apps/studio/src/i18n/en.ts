@@ -331,6 +331,7 @@ export const en = {
     orderRejectAction: 'Reject',
     orderRejectNone: 'No reasons are configured.',
     orderRejectChoose: 'Choose a reason first',
+    orderRejectError: 'The reasons could not be read.',
     testsOrderRejected: 'Order rejected',
     range: 'Range',
     rangeChoose: 'Choose a range',

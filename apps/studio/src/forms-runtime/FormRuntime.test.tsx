@@ -7,10 +7,12 @@ vi.mock('@/api', () => ({
   referenceSearch: vi.fn(),
   referenceSearchPreview: vi.fn(),
   catalogSpecimensFor: vi.fn(),
+  catalogResultParams: vi.fn(),
+  expandValueSetByUrl: vi.fn(),
   browseTestCatalog: vi.fn(),
   browseTestCategories: vi.fn(),
 }));
-import { browseTestCatalog, browseTestCategories, catalogSpecimensFor, referenceSearch, referenceSearchPreview } from '@/api';
+import { browseTestCatalog, browseTestCategories, catalogResultParams, catalogSpecimensFor, referenceSearch, referenceSearchPreview } from '@/api';
 import { FormRuntime } from './FormRuntime';
 import type { FormSchema } from './types';
 
@@ -880,9 +882,56 @@ describe('order-level rejection (2026-10-11 spec)', () => {
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ rej: coding });
   });
 
+  it('validates the rejection the page holds, so a required rejection field never blocks on an undrawn field', async () => {
+    const onSubmit = vi.fn();
+    const requiredSchema = {
+      ...rejectionSchema,
+      fields: (rejectionSchema.fields as Array<{ id: string }>).map((f) => (f.id === 'rej' ? { ...f, required: true } : f)),
+    } as unknown as FormSchema;
+    const { container } = render(
+      <FormRuntime schema={requiredSchema} onSubmit={onSubmit} orderRejection={{ system: 's', code: 'C', display: 'D' }} />,
+    );
+    fireEvent.submit(container.querySelector('form')!);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+  });
+
+  describe('rows follow the page', () => {
+    const CAT = 'urn:openldr:codesystem:test-catalog';
+    const chosen = [{ system: CAT, code: 'FBC', display: 'Full blood count' }];
+    const rowsSchema = {
+      ...rejectionSchema,
+      fields: [
+        { ...baseField, id: 'tests', fhirPath: 'ServiceRequest.code', displayLabel: 'Tests', fieldType: 'reference', order: 1, referenceMultiple: true, valueSetUrl: 'urn:openldr:valueset:lab-tests' },
+        { ...baseField, id: 'results', fhirPath: null, displayLabel: 'Results', fieldType: 'testDetails', order: 2, referenceDependsOn: 'tests' },
+        (rejectionSchema.fields as unknown[])[1],
+      ],
+    } as unknown as FormSchema;
+
+    it('closes the rows while the page holds a rejection, and opens them again when it lets go', async () => {
+      vi.mocked(catalogResultParams).mockResolvedValue({
+        tests: [{ test: { system: CAT, code: 'FBC' }, params: [] }],
+        rejectReasons: { order: [], test: [] },
+        sexes: [],
+      });
+      const coding = { system: 's', code: 'C', display: 'D' };
+      const ui = (rejection: typeof coding | null) => (
+        <FormRuntime schema={rowsSchema} onSubmit={() => {}} initialAnswers={{ tests: chosen }} orderRejection={rejection} />
+      );
+      const { rerender } = render(ui(coding));
+      await waitFor(() => expect(screen.getByText('Full blood count')).toBeInTheDocument());
+      expect(screen.getByText('Order rejected')).toBeInTheDocument();
+      rerender(ui(null));
+      await waitFor(() => expect(screen.queryByText('Order rejected')).not.toBeInTheDocument());
+      expect(screen.getByText('Full blood count')).toBeInTheDocument();
+    });
+  });
+
   it('submits without the field id when the page holds no rejection', async () => {
     const onSubmit = vi.fn();
-    const { container } = render(<FormRuntime schema={rejectionSchema} onSubmit={onSubmit} orderRejection={null} />);
+    // Seeded, so the delete branch is the thing under test: without it the answer would stay.
+    const { container } = render(
+      <FormRuntime schema={rejectionSchema} onSubmit={onSubmit} orderRejection={null} initialAnswers={{ rej: { system: 's', code: 'C', display: 'D' } }} />,
+    );
     fireEvent.submit(container.querySelector('form')!);
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('rej');

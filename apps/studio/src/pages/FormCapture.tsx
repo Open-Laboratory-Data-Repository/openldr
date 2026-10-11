@@ -40,7 +40,8 @@ export function FormCapture() {
   // The order-level rejection (2026-10-11 spec). The page owns it, the runtime only submits it.
   const [orderRejection, setOrderRejection] = useState<CodingAnswer | null>(null);
   const [rejectingOrder, setRejectingOrder] = useState(false);
-  const [orderReasons, setOrderReasons] = useState<CatalogRejectReason[]>([]);
+  const [orderReasons, setOrderReasons] = useState<CatalogRejectReason[] | null>(null);
+  const [orderReasonsFailed, setOrderReasonsFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,9 +107,12 @@ export function FormCapture() {
                 ) : (
                   <DropdownMenuItem
                     onSelect={() => {
+                      // The sheet shows a spinner until this answers, and an error line if it fails.
+                      setOrderReasons(null);
+                      setOrderReasonsFailed(false);
                       void catalogResultParams([], null)
                         .then((answer) => setOrderReasons(answer.rejectReasons.order))
-                        .catch(() => setOrderReasons([]));
+                        .catch(() => setOrderReasonsFailed(true));
                       setRejectingOrder(true);
                     }}
                   >
@@ -195,7 +199,9 @@ export function FormCapture() {
       {rejectingOrder ? (
         <RejectSheet
           level="order"
-          reasons={orderReasons}
+          reasons={orderReasons ?? []}
+          loading={orderReasons === null && !orderReasonsFailed}
+          error={orderReasonsFailed ? t('forms.orderRejectError') : null}
           copy={{
             title: t('forms.orderRejectTitle'),
             hint: t('forms.orderRejectHint'),

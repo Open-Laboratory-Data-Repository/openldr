@@ -294,6 +294,14 @@ export function FormRuntime({
         event.preventDefault();
         // Wire schema validation to submission: compute field errors, surface them, and only
         // hand off to the caller's onSubmit when the form is valid.
+        // Validate the answers that are submitted. The rejection field is never drawn, so a rule on it
+        // must see the page's choice, not the empty answer.
+        const rejectionId = orderRejectionFieldId(schema);
+        const submitted = { ...answers };
+        if (rejectionId && orderRejection !== undefined) {
+          if (orderRejection) submitted[rejectionId] = orderRejection;
+          else delete submitted[rejectionId];
+        }
         // Reference fields still holding exactly the string they were seeded with. The operator did
         // not enter these — storage did — so a value the vocabulary does not contain must not block
         // an unrelated edit. See `validate`'s own docblock for the measurement behind this.
@@ -302,19 +310,13 @@ export function FormRuntime({
         // never lands here, and anything they changed no longer equals its seed.
         const seeded = initialAnswers ?? {};
         const untouched = new Set(
-          fieldsNeedingResolution(schema, answers)
+          fieldsNeedingResolution(schema, submitted)
             .filter(({ fieldId, raw }) => raw === seeded[fieldId])
             .map(({ fieldId }) => fieldId),
         );
-        const nextErrors = validate(schema, answers, untouched);
+        const nextErrors = validate(schema, submitted, untouched);
         setErrors(nextErrors);
         if (Object.keys(nextErrors).length > 0) return;
-        const rejectionId = orderRejectionFieldId(schema);
-        const submitted = { ...answers };
-        if (rejectionId && orderRejection !== undefined) {
-          if (orderRejection) submitted[rejectionId] = orderRejection;
-          else delete submitted[rejectionId];
-        }
         void onSubmit(cleanAnswers(schema, submitted));
       }}
     >

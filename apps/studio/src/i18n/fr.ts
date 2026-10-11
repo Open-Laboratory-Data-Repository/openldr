@@ -329,6 +329,7 @@ export const fr: EnShape = {
     orderRejectAction: 'Refuser',
     orderRejectNone: "Aucun motif n'est configuré.",
     orderRejectChoose: "Choisissez d'abord un motif",
+    orderRejectError: "Les motifs n'ont pas pu être lus.",
     testsOrderRejected: 'Demande refusée',
     range: 'Intervalle',
     rangeChoose: 'Choisir un intervalle',

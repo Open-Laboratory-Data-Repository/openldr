@@ -329,6 +329,7 @@ export const pt: EnShape = {
     orderRejectAction: 'Recusar',
     orderRejectNone: 'Nenhum motivo está configurado.',
     orderRejectChoose: 'Escolha primeiro um motivo',
+    orderRejectError: 'Não foi possível ler os motivos.',
     testsOrderRejected: 'Pedido recusado',
     range: 'Intervalo',
     rangeChoose: 'Escolher um intervalo',

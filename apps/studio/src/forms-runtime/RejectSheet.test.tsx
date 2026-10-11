@@ -41,6 +41,18 @@ describe('RejectSheet', () => {
     expect(screen.queryByText(/choose a reason/i)).toBeNull();
   });
 
+  it('shows the spinner, not the empty state, while the reasons are being read', () => {
+    render(<RejectSheet level="order" reasons={[]} loading onReject={() => {}} onClose={() => {}} />);
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByText(/no reasons/i)).toBeNull();
+  });
+
+  it('shows the error line, not the empty state, when the reasons could not be read', () => {
+    render(<RejectSheet level="order" reasons={[]} error="The reasons could not be read." onReject={() => {}} onClose={() => {}} />);
+    expect(screen.getByText('The reasons could not be read.')).toBeInTheDocument();
+    expect(screen.queryByText(/no reasons/i)).toBeNull();
+  });
+
   it('shows an empty state when the server offered no reasons', () => {
     render(<RejectSheet level="order" reasons={[]} onReject={() => {}} onClose={() => {}} />);
     expect(screen.getByText(/no reasons/i)).toBeInTheDocument();

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { LoadingState } from '@/components/ui/spinner';
 import { cn } from '@/lib/cn';
 
 export interface RejectReason { system: string; code: string; display: string | null }
@@ -20,9 +21,13 @@ export interface RejectCopy {
  * The reasons arrive as a prop, expanded by the server (apps/server/src/test-catalog-routes.ts). This
  * component names no value set: the studio must never carry clinical vocabulary (AGENTS.md section 8).
  */
-export function RejectSheet({ level, reasons, onReject, onClose, copy }: {
+export function RejectSheet({ level, reasons, loading, error: loadError, onReject, onClose, copy }: {
   level: 'order' | 'test';
   reasons: RejectReason[];
+  /** The reasons are still being read. Shows the spinner, never the striped empty state. */
+  loading?: boolean;
+  /** The reasons could not be read. Shows this line instead of the list. */
+  error?: string | null;
   onReject: (reason: RejectReason) => void;
   onClose: () => void;
   copy?: RejectCopy;
@@ -62,7 +67,11 @@ export function RejectSheet({ level, reasons, onReject, onClose, copy }: {
         </SheetHeader>
 
         <div className="px-6 pb-6">
-          {reasons.length === 0 ? (
+          {loading ? (
+            <LoadingState className="min-h-[8rem]" />
+          ) : loadError ? (
+            <p className="text-sm text-destructive" role="alert">{loadError}</p>
+          ) : reasons.length === 0 ? (
             <StripedEmpty className="min-h-[8rem]"><span className="text-sm text-muted-foreground">{t.none}</span></StripedEmpty>
           ) : (
             <div className="rounded-md border border-border">
