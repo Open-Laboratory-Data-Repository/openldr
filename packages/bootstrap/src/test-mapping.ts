@@ -179,7 +179,13 @@ export function isTestMapRelevantRecord(rec: { entityType: string; body?: unknow
 export const TEST_MAPPING_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 export const TEST_MAPPING_IMPORT_MAX_ROWS = 20_000;
 
-const CSV_COLUMNS = ['system', 'code', 'description', 'requests', 'catalog_code', 'loinc'].map((k) => ({ key: k, label: k }));
+/** Each level's CSV. The count column and the target column differ; system, code and loinc do not. */
+const CSV_COLUMNS: Record<MapLevel, Array<{ key: string; label: string }>> = {
+  test: ['system', 'code', 'description', 'requests', 'catalog_code', 'loinc'].map((k) => ({ key: k, label: k })),
+  result: ['system', 'code', 'description', 'results', 'parameter_code', 'loinc'].map((k) => ({ key: k, label: k })),
+};
+const COUNT_COLUMN: Record<MapLevel, string> = { test: 'requests', result: 'results' };
+const TARGET_COLUMN: Record<MapLevel, string> = { test: 'catalog_code', result: 'parameter_code' };
 
 export interface MappingImportReport {
   counts: { new: number; changed: number; unchanged: number; refused: number };
@@ -436,15 +442,22 @@ export function createTestMapping(deps: TestMappingDeps) {
       .sort((a, b) => compare(a.code, b.code));
   }
 
-  async function activeFor(system: string, code: string): Promise<MappingRow[]> {
+  async function activeFor(system: string, code: string, level: MapLevel = 'test'): Promise<MappingRow[]> {
     return internalDb.selectFrom('term_mappings')
       .select(MAPPING_COLUMNS)
       .where('from_system', '=', system).where('from_code', '=', code)
-      .where('to_system', '=', TEST_CATALOG_SYSTEM).where('is_active', '=', true).execute();
+      .where('to_system', '=', MAP_TARGET_SYSTEM[level]).where('is_active', '=', true).execute();
   }
 
-  function assertSource(system: string, code: string): void {
+  /** A code in the target system is a target already. Mapping it would collide with its self row. */
+  function selfSystemReason(system: string, level: MapLevel): string | null {
+    return system === MAP_TARGET_SYSTEM[level] ? `${system} codes are ${TARGET_NOUN[level]}s already and need no mapping` : null;
+  }
+
+  function assertSource(system: string, code: string, level: MapLevel): void {
     if (system.trim() === '' || code.trim() === '') throw new TestCatalogError('system and code are required', 'invalid');
+    const self = selfSystemReason(system, level);
+    if (self) throw new TestCatalogError(self, 'invalid');
   }
 
   function assertNotCentral(rows: MappingRow[], code: string): void {
@@ -453,44 +466,45 @@ export function createTestMapping(deps: TestMappingDeps) {
     }
   }
 
-  async function deactivate(row: MappingRow): Promise<void> {
+  async function deactivate(row: MappingRow, level: MapLevel): Promise<void> {
     await deps.admin.termMappings.update(row.id, {
-      fromSystem: row.from_system, fromCode: row.from_code, toSystem: TEST_CATALOG_SYSTEM, toCode: row.to_code,
+      fromSystem: row.from_system, fromCode: row.from_code, toSystem: MAP_TARGET_SYSTEM[level], toCode: row.to_code,
       toDisplay: row.to_display, mapType: row.map_type as MapType, isActive: false,
     });
   }
 
-  /** Make `catalogCode` the one active catalog mapping for this code. No guard and no rebuild: the
-   *  callers (set, CSV import, pack install) check first and rebuild once at the end. */
-  async function writeMapping(system: string, code: string, catalogCode: string, name: string | null): Promise<void> {
+  /** Make `targetCode` the one active mapping for this code at this level. No guard and no rebuild: the
+   *  callers (set, CSV import, pack install, match) check first and rebuild once at the end. */
+  async function writeMapping(system: string, code: string, targetCode: string, name: string | null, level: MapLevel = 'test'): Promise<void> {
     const saved = await deps.admin.termMappings.saveExclusive({
-      fromSystem: system, fromCode: code, toSystem: TEST_CATALOG_SYSTEM, toCode: catalogCode,
+      fromSystem: system, fromCode: code, toSystem: MAP_TARGET_SYSTEM[level], toCode: targetCode,
       toDisplay: name, mapType: MAP_TYPE, isActive: true,
     });
     // saveExclusive supersedes only SAME-AS rows. One made through the general mapping dialog with
     // another type would stay active and make the code ambiguous, so it goes too.
-    for (const other of await activeFor(system, code)) {
-      if (other.id !== saved.mapping.id) await deactivate(other);
+    for (const other of await activeFor(system, code, level)) {
+      if (other.id !== saved.mapping.id) await deactivate(other, level);
     }
   }
 
-  async function set(system: string, code: string, catalogCode: string): Promise<TestMappingChange> {
-    assertSource(system, code);
-    const entry = (await readCatalog()).get(catalogCode);
-    if (!entry) throw new TestCatalogError(`no catalog test has code ${catalogCode}`, 'invalid');
-    const existing = await activeFor(system, code);
+  async function set(system: string, code: string, targetCode: string, level: MapLevel = 'test'): Promise<TestMappingChange> {
+    assertSource(system, code, level);
+    const entry = (await readTargets(level)).get(targetCode);
+    if (!entry) throw new TestCatalogError(`no ${TARGET_NOUN[level]} has code ${targetCode}`, 'invalid');
+    const existing = await activeFor(system, code, level);
     assertNotCentral(existing, code);
     const before = existing.map((r) => r.to_code).sort(compare)[0] ?? null;
-    await writeMapping(system, code, catalogCode, entry.name);
-    return { system, code, before, after: catalogCode, rebuild: await rebuildNow() };
+    await writeMapping(system, code, targetCode, entry.name, level);
+    return { system, code, before, after: targetCode, rebuild: await rebuildNow() };
   }
 
-  async function clear(system: string, code: string): Promise<TestMappingChange> {
-    assertSource(system, code);
-    const existing = await activeFor(system, code);
-    if (existing.length === 0) throw new TestCatalogError(`${code} has no catalog mapping`, 'not-found');
+  async function clear(system: string, code: string, level: MapLevel = 'test'): Promise<TestMappingChange> {
+    assertSource(system, code, level);
+    const existing = await activeFor(system, code, level);
+    // Slice 1's words at the test level, kept exactly.
+    if (existing.length === 0) throw new TestCatalogError(`${code} has no ${level === 'test' ? 'catalog' : 'result field'} mapping`, 'not-found');
     assertNotCentral(existing, code);
-    for (const row of existing) await deactivate(row);
+    for (const row of existing) await deactivate(row, level);
     return { system, code, before: existing.map((r) => r.to_code).sort(compare)[0], after: null, rebuild: await rebuildNow() };
   }
 
@@ -507,22 +521,22 @@ export function createTestMapping(deps: TestMappingDeps) {
     }
   }
 
-  async function catalogCodesForLoinc(loinc: string): Promise<string[]> {
+  async function catalogCodesForLoinc(loinc: string, level: MapLevel = 'test'): Promise<string[]> {
     const rows = await internalDb.selectFrom('term_mappings').select('from_code')
-      .where('from_system', '=', TEST_CATALOG_SYSTEM).where('to_system', '=', LOINC_SYSTEM)
+      .where('from_system', '=', MAP_TARGET_SYSTEM[level]).where('to_system', '=', LOINC_SYSTEM)
       .where('to_code', '=', loinc).where('map_type', '=', MAP_TYPE).where('is_active', '=', true).execute();
     return [...new Set(rows.map((r) => r.from_code))].sort(compare);
   }
 
-  async function exportCsv(): Promise<string> {
-    const rows = await observedAll();
-    return toCsv(CSV_COLUMNS, rows.map((r) => ({
-      system: r.system, code: r.code, description: r.description, requests: r.requests,
-      catalog_code: r.catalog?.code ?? null, loinc: r.catalog?.loinc ?? null,
+  async function exportCsv(level: MapLevel = 'test'): Promise<string> {
+    const rows = await observedAll(level);
+    return toCsv(CSV_COLUMNS[level], rows.map((r) => ({
+      system: r.system, code: r.code, description: r.description, [COUNT_COLUMN[level]]: r.requests,
+      [TARGET_COLUMN[level]]: r.catalog?.code ?? null, loinc: r.catalog?.loinc ?? null,
     })));
   }
 
-  async function planImport(bytes: Uint8Array): Promise<{ report: MappingImportReport; writes: PlannedRow[] }> {
+  async function planImport(bytes: Uint8Array, level: MapLevel): Promise<{ report: MappingImportReport; writes: PlannedRow[] }> {
     let table;
     try {
       table = readTableFile(bytes, 'csv', { maxBytes: TEST_MAPPING_IMPORT_MAX_BYTES, maxRows: TEST_MAPPING_IMPORT_MAX_ROWS });
@@ -533,17 +547,18 @@ export function createTestMapping(deps: TestMappingDeps) {
     const headers = table.headers.map((h) => h.replace(/^﻿/, '').trim().toLowerCase());
     const col = (name: string): number => headers.indexOf(name);
     if (col('system') < 0 || col('code') < 0) throw new TestCatalogError('the file needs a system column and a code column', 'invalid');
-    if (col('catalog_code') < 0 && col('loinc') < 0) throw new TestCatalogError('the file needs a catalog_code column or a loinc column', 'invalid');
+    const targetColumn = TARGET_COLUMN[level];
+    if (col(targetColumn) < 0 && col('loinc') < 0) throw new TestCatalogError(`the file needs a ${targetColumn} column or a loinc column`, 'invalid');
     const cell = (row: string[], name: string): string => (col(name) < 0 ? '' : (row[col(name)] ?? '').trim());
     // The export puts an apostrophe before a cell that starts with = @ + - so a spreadsheet does not run
     // it as a formula (reporting toCsv). Take that one apostrophe off the system and code cells.
     const unguard = (v: string): string => (/^'[=@+-]/.test(v) ? v.slice(1) : v);
 
-    const catalog = await readCatalog();
+    const targetsByCode = await readTargets(level);
     // One warehouse read per import. A code the warehouse holds with surrounding spaces is a different
     // code from its trimmed form, and a file cell cannot carry the spaces (readTableFile trims every cell).
     const observedCodes = new Map<string, Set<string>>();
-    for (const g of await readObservedGroups()) {
+    for (const g of await readObservedGroups(level)) {
       const set = observedCodes.get(g.system) ?? new Set<string>();
       set.add(g.code);
       observedCodes.set(g.system, set);
@@ -578,41 +593,45 @@ export function createTestMapping(deps: TestMappingDeps) {
         continue;
       }
 
-      const catalogCodeCell = cell(table.rows[i], 'catalog_code');
+      const self = selfSystemReason(system, level);
+      if (self) { refuse(line, system, code, self); continue; }
+
+      const targetCell = cell(table.rows[i], targetColumn);
       const loinc = cell(table.rows[i], 'loinc');
-      let catalogCode: string | null = null;
-      if (catalogCodeCell !== '') {
-        if (!catalog.has(catalogCodeCell)) { refuse(line, system, code, `no catalog test has code ${catalogCodeCell}`); continue; }
-        catalogCode = catalogCodeCell;
+      const noun = TARGET_NOUN[level];
+      let targetCode: string | null = null;
+      if (targetCell !== '') {
+        if (!targetsByCode.has(targetCell)) { refuse(line, system, code, `no ${noun} has code ${targetCell}`); continue; }
+        targetCode = targetCell;
       } else if (loinc !== '') {
-        const codes = await catalogCodesForLoinc(loinc);
-        if (codes.length === 0) { refuse(line, system, code, `no catalog test is linked to LOINC ${loinc}`); continue; }
-        if (codes.length > 1) { refuse(line, system, code, `${codes.length} catalog tests are linked to LOINC ${loinc}`); continue; }
-        catalogCode = codes[0];
+        const codes = await catalogCodesForLoinc(loinc, level);
+        if (codes.length === 0) { refuse(line, system, code, `no ${noun} is linked to LOINC ${loinc}`); continue; }
+        if (codes.length > 1) { refuse(line, system, code, `${codes.length} ${noun}s are linked to LOINC ${loinc}`); continue; }
+        targetCode = codes[0];
       }
 
-      const existing = await activeFor(system, code);
-      // Blank catalog_code and loinc: leave the code as it is. An exported file lists unmapped codes so.
-      if (catalogCode === null) { report.counts.unchanged += 1; continue; }
-      const targets = [...new Set(existing.map((r) => r.to_code))];
+      const existing = await activeFor(system, code, level);
+      // Blank target and loinc: leave the code as it is. An exported file lists unmapped codes so.
+      if (targetCode === null) { report.counts.unchanged += 1; continue; }
+      const current = [...new Set(existing.map((r) => r.to_code))];
       // A row that asks for the target the code already has is no change, central-owned or not, so an
       // untouched export re-imports cleanly. Central only blocks a different target.
-      if (targets.length === 1 && targets[0] === catalogCode) { report.counts.unchanged += 1; continue; }
+      if (current.length === 1 && current[0] === targetCode) { report.counts.unchanged += 1; continue; }
       if (existing.some((r) => r.managed_origin === 'central')) { refuse(line, system, code, `central maps ${code}; a lab cannot change it`); continue; }
       if (existing.length === 0) report.counts.new += 1; else report.counts.changed += 1;
-      writes.push({ system, code, catalogCode, name: catalog.get(catalogCode)!.name });
+      writes.push({ system, code, catalogCode: targetCode, name: targetsByCode.get(targetCode)!.name });
     }
     return { report, writes };
   }
 
-  async function importPreview(bytes: Uint8Array): Promise<MappingImportReport> {
-    return (await planImport(bytes)).report;
+  async function importPreview(bytes: Uint8Array, level: MapLevel = 'test'): Promise<MappingImportReport> {
+    return (await planImport(bytes, level)).report;
   }
 
-  async function importApply(bytes: Uint8Array): Promise<MappingImportReport> {
-    const { report, writes } = await planImport(bytes);
+  async function importApply(bytes: Uint8Array, level: MapLevel = 'test'): Promise<MappingImportReport> {
+    const { report, writes } = await planImport(bytes, level);
     try {
-      for (const w of writes) await writeMapping(w.system, w.code, w.catalogCode, w.name);
+      for (const w of writes) await writeMapping(w.system, w.code, w.catalogCode, w.name, level);
     } catch (err) {
       // Writes already made stay made, so test_map must still catch up with them before the failure goes up.
       await rebuildNow();
