@@ -33,7 +33,11 @@ pushed, and reports every problem at once:
 6. Test gate green. A first failure is re-run alone, package by package, before it counts as a
    regression — this is usually a timeout under parallel load, not a real break (AGENTS.md
    `test-gate-flakiness-timeouts`). Which packages to retry is read out of turbo's own
-   `Failed:` line; there is no operator-supplied override.
+   `Failed:` line; there is no operator-supplied override. The gate runs turbo with
+   `--continue`, so one failure does not stop the others. It still refuses if turbo's `Tasks:`
+   count shows any task that neither passed nor failed, because a retry vouches only for the
+   tasks it re-runs. Before this, the 0.1.10 dry run reported green with three packages cut off
+   mid-run.
 
 Then it pushes the five images, checks that every package is public (it cannot make them
 public — see below), verifies by installing the published tag into a clean directory, and only
@@ -151,7 +155,8 @@ sequence, or its rollback. Those are proven only by running a real release.
 
 Nothing in the suite touches a real registry either, so the package-visibility read-back is
 also real-release-only. The gate-retry loop is unproven against a genuinely red turbo run — the
-tests exercise `parseFailedTasks` against captured output, not a live failing suite.
+tests exercise `parseFailedTasks` and `tasksNeverFinished` against captured output, not a live
+failing suite.
 
 The post-publish manifest check is the same: it fetches the direct release asset URL, retries
 three times, and exits non-zero without rolling back the tag if the file is still unreadable or
