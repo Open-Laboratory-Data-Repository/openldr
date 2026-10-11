@@ -359,8 +359,12 @@ describe('createContentPackInstaller', () => {
 
     const res = await s.installer.install(bundle, { actor });
     expect(res.status).toBe('installed');
-    expect(events(s.audit).find((e) => e.action === 'testMapping.pack')).toMatchObject({
-      entityType: 'test_mapping', metadata: { mapped: 1, kept: 0, skipped: [{ code: 'WW' }] },
+    expect(events(s.audit).find((e) => e.action === 'test_mapping.pack')).toMatchObject({
+      entityType: 'test_mapping',
+      metadata: {
+        mapped: [{ system: 'urn:openldr:disa', code: 'HIVVL', catalogCode: 'VL' }], kept: [], skipped: [{ code: 'WW' }],
+        mappedCount: 1, keptCount: 0, skippedCount: 1,
+      },
     });
     await cleanup();
   });

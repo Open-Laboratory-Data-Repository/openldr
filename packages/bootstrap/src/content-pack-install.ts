@@ -185,9 +185,14 @@ export function createContentPackInstaller(deps: ContentPackDeps) {
       case 'test-mappings': {
         const plan = await deps.applyTestMappings(step.mappings);
         await record({
-          ...who(actor), action: 'testMapping.pack', entityType: 'test_mapping', entityId: `pack:${at.pack}`,
+          ...who(actor), action: 'test_mapping.pack', entityType: 'test_mapping', entityId: `pack:${at.pack}`,
           before: null, after: null,
-          metadata: { ...source, mapped: plan.mapped.length, kept: plan.kept.length, skipped: plan.skipped },
+          metadata: {
+            ...source,
+            mapped: plan.mapped.map((m) => ({ system: m.system, code: m.code, catalogCode: m.catalogCode })),
+            kept: plan.kept, skipped: plan.skipped,
+            mappedCount: plan.mapped.length, keptCount: plan.kept.length, skippedCount: plan.skipped.length,
+          },
         });
         return;
       }
