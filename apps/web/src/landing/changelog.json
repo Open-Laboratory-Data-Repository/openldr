@@ -1,10 +1,88 @@
 {
-  "generatedAt": "2026-10-11",
+  "generatedAt": "2026-10-12",
   "days": [
+    {
+      "date": "2026-10-12",
+      "version": null,
+      "entries": [
+        {
+          "hash": "e5254196",
+          "type": "fix",
+          "scope": "",
+          "title": "Match skips central rows; sheet and CLI fixes from final review"
+        }
+      ]
+    },
     {
       "date": "2026-10-11",
       "version": "v0.1.11",
       "entries": [
+        {
+          "hash": "f9bfe41c",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Result fields tab with LOINC links"
+        },
+        {
+          "hash": "850964c3",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Result codes on the Observed tab, and Map matching codes"
+        },
+        {
+          "hash": "413d8fe3",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Result mappings, map match and result-fields commands"
+        },
+        {
+          "hash": "5a32017e",
+          "type": "feat",
+          "scope": "server",
+          "title": "Result mapping and result field routes"
+        },
+        {
+          "hash": "6e559f44",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "Result-mappings content pack step"
+        },
+        {
+          "hash": "e08b7ce4",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Result fields with LOINC links"
+        },
+        {
+          "hash": "3984b636",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Rebuild test_map when a pack write fails part way"
+        },
+        {
+          "hash": "eb85607b",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Map matching result codes, and pack planning per level"
+        },
+        {
+          "hash": "a67b7ec6",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Result mappings by hand and by CSV"
+        },
+        {
+          "hash": "e5daf1a6",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Observed result codes and result field targets"
+        },
+        {
+          "hash": "294808a1",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Test_map rebuild writes result mappings and self rows"
+        },
         {
           "hash": "bf464435",
           "type": "fix",
