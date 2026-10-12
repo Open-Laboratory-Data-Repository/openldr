@@ -13,6 +13,14 @@ import { PatientIndexError, type PatientIdentifierSystems } from './patient-iden
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
 const STATUSES = ['active', 'merged', 'all'] as const;
+// MSSQL allows about 2,100 parameters per statement, so every IN list is cut into parts this long.
+const CHUNK = 500;
+
+function chunks<T>(xs: T[], size = CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size));
+  return out;
+}
 
 export type PatientStatus = typeof STATUSES[number];
 export interface PatientListQuery { q: string; status: PatientStatus; limit: number; offset: number }
@@ -105,27 +113,35 @@ export function createPatientIndex(deps: {
   }
 
   async function identifiersFor(ids: string[]) {
-    if (!ids.length) return new Map<string, { system: string | null; value: string }[]>();
-    const rows = await db.selectFrom('patient_identifiers').select(['patient_id', 'system', 'value'])
-      .where('patient_id', 'in', ids).orderBy('system').orderBy('value').execute();
     const out = new Map<string, { system: string | null; value: string }[]>();
-    for (const r of rows) out.set(r.patient_id, [...(out.get(r.patient_id) ?? []), { system: r.system, value: r.value }]);
+    // One patient's identifiers all fall in one chunk, so the per-patient order holds.
+    for (const part of chunks(ids)) {
+      const rows = await db.selectFrom('patient_identifiers').select(['patient_id', 'system', 'value'])
+        .where('patient_id', 'in', part).orderBy('system').orderBy('value').execute();
+      for (const r of rows) out.set(r.patient_id, [...(out.get(r.patient_id) ?? []), { system: r.system, value: r.value }]);
+    }
     return out;
   }
 
   async function requestStatsFor(ids: string[]) {
-    if (!ids.length) return new Map<string, { n: number; last: string | null }>();
-    const rows = await db.selectFrom('lab_requests')
-      .select(['patient_id', (eb) => eb.fn.countAll<string | number>().as('n'), (eb) => eb.fn.max('authored_at').as('last')])
-      .where('patient_id', 'in', ids).groupBy('patient_id').execute();
-    return new Map(rows.map((r) => [String(r.patient_id), { n: Number(r.n), last: (r.last as string | null) ?? null }]));
+    const out = new Map<string, { n: number; last: string | null }>();
+    for (const part of chunks(ids)) {
+      const rows = await db.selectFrom('lab_requests')
+        .select(['patient_id', (eb) => eb.fn.countAll<string | number>().as('n'), (eb) => eb.fn.max('authored_at').as('last')])
+        .where('patient_id', 'in', part).groupBy('patient_id').execute();
+      for (const r of rows) out.set(String(r.patient_id), { n: Number(r.n), last: (r.last as string | null) ?? null });
+    }
+    return out;
   }
 
   async function facilityNamesFor(refsIn: (string | null)[]) {
     const ids = [...new Set(refsIn.filter((r): r is string => !!r).map((r) => r.replace(/^Organization\//, '')))];
-    if (!ids.length) return new Map<string, string | null>();
-    const rows = await db.selectFrom('facilities').select(['id', 'facility_name']).where('id', 'in', ids).execute();
-    return new Map(rows.map((r) => [r.id, r.facility_name]));
+    const out = new Map<string, string | null>();
+    for (const part of chunks(ids)) {
+      const rows = await db.selectFrom('facilities').select(['id', 'facility_name']).where('id', 'in', part).execute();
+      for (const r of rows) out.set(r.id, r.facility_name);
+    }
+    return out;
   }
 
   async function build(records: PatientRecord[], unmask: boolean, allIdentifiers: boolean): Promise<Array<PatientRow & { record: PatientRecord }>> {
@@ -252,8 +268,8 @@ export function createPatientIndex(deps: {
   async function rowsByIds(ids: string[], opts: { unmask: boolean }): Promise<PatientRow[]> {
     if (!ids.length) return [];
     const records: Array<Record<string, unknown>> = [];
-    for (let i = 0; i < ids.length; i += 500) {
-      records.push(...await db.selectFrom('patients').select([...PATIENT_COLUMNS]).where('id', 'in', ids.slice(i, i + 500)).execute());
+    for (const part of chunks(ids)) {
+      records.push(...await db.selectFrom('patients').select([...PATIENT_COLUMNS]).where('id', 'in', part).execute());
     }
     const built = await build(records as PatientRecord[], opts.unmask, false);
     const byId = new Map(built.map(({ record, ...row }) => [record.id, row]));
