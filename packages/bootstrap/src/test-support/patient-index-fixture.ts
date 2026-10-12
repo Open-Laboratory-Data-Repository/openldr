@@ -5,7 +5,7 @@ import { DataType } from 'pg-mem';
 import { makeMigratedExternalDbWithMem } from '@openldr/db/testing-external';
 import {
   createFhirStore, createTerminologyStore, createTerminologyAdminStore,
-  type ExternalSchema, type ValueSetProjection,
+  patientMatchKey, type ExternalSchema, type ValueSetProjection,
 } from '@openldr/db';
 import { createPatientIdentifierSystems } from '../patient-identifier-systems';
 
@@ -49,6 +49,7 @@ export async function seedPatient(db: Kysely<ExternalSchema>, p: {
     id: p.id, patient_guid: p.guid ?? null, surname: p.surname ?? null, firstname: p.firstname ?? null,
     date_of_birth: p.dob ?? null, sex: p.sex ?? null, national_id: null, phone: p.phone ?? null,
     email: p.email ?? null, managing_organization: p.org ?? null, active: p.active ?? true,
+    match_key: patientMatchKey(p.surname ?? null, p.firstname ?? null, p.dob ?? null),
     replaced_by_id: p.replacedBy ?? null, source_system: null, plugin_id: null, plugin_version: null, batch_id: null,
   }).execute();
 }

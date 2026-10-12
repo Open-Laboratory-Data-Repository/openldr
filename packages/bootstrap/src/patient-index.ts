@@ -35,6 +35,9 @@ export interface PatientIndex {
   idForRef(ref: string): string | null;
   requests(ref: string, q: { limit: number; offset: number }): Promise<PatientRequestList>;
   requestsById(id: string, q: { limit: number; offset: number }): Promise<PatientRequestList>;
+  /** Patient rows for these ids, masked unless `unmask`, in the given order. Missing ids are skipped.
+   *  The duplicates list builds its members here so masking stays in this file. */
+  rowsByIds(ids: string[], opts: { unmask: boolean }): Promise<PatientRow[]>;
 }
 
 export function parsePageQuery(raw: Record<string, unknown>): { ok: true; query: { limit: number; offset: number } } | { ok: false; error: string } {
@@ -246,6 +249,14 @@ export function createPatientIndex(deps: {
     };
   }
 
+  async function rowsByIds(ids: string[], opts: { unmask: boolean }): Promise<PatientRow[]> {
+    if (!ids.length) return [];
+    const records = await db.selectFrom('patients').select([...PATIENT_COLUMNS]).where('id', 'in', ids).execute();
+    const built = await build(records as PatientRecord[], opts.unmask, false);
+    const byId = new Map(built.map(({ record, ...row }) => [record.id, row]));
+    return ids.map((id) => byId.get(id)).filter((r): r is PatientRow => r !== undefined);
+  }
+
   return {
     list,
     get: async (ref, opts) => getById(requireId(ref), opts),
@@ -253,5 +264,6 @@ export function createPatientIndex(deps: {
     idForRef,
     requests: async (ref, q) => requestsById(requireId(ref), q),
     requestsById,
+    rowsByIds,
   };
 }

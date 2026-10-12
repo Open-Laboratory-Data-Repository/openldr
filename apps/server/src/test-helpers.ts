@@ -558,6 +558,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     resultFields: {} as never,
     patientIdentifierSystems: {} as never,
     patientIndex: {} as never,
+    patientDuplicates: {} as never,
     // Same shape as `facilityRegistry` above: a bare `{}` has no `enqueue`, so any route this fake
     // context reaches that calls `ctx.facilityJobs.enqueue(...)` fails with a bare
     // `TypeError: enqueue is not a function` rather than a helpful message. `facilityRegistry`'s
