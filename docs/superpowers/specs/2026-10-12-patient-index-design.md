@@ -145,6 +145,14 @@ Without `patients.view_identifiers`:
 | phone, email | omitted |
 | sex, managing facility, active, request dates and counts | returned |
 
+### Patient references
+
+A patient's resource id can carry an identifier. The HL7 v2 converter builds `Patient/hl7-{patient_id}`
+from PID-3 (`wasm/hl7v2/src/mapping.rs:55`). So no masked response carries the id. Every row carries
+`ref`, the id sealed with AES-256-GCM under a random key made when the process starts. Detail routes
+take `ref`. Unmasked rows carry `id` as well. A `ref` stops working after a restart. The CLI takes the
+raw id.
+
 ### Search
 
 - With `patients.view_identifiers`: substring match on surname, firstname and patient_guid, and
@@ -170,16 +178,18 @@ Nav: "Patients", under Test Catalog in `apps/studio/src/shell/AppShell.tsx`, gat
 ### Patients tab
 
 - `DataTableToolbar` with search (debounced 250 ms) and an Active or Merged filter.
-- Columns: name, sex, age, one column per identifier system with `listColumn`, managing facility,
-  last request date, request count.
+- Columns: name, sex, age, identifiers, managing facility, last request date, request count. The
+  identifiers column stacks each `listColumn` identifier as `Label: value`. Table headers are i18n
+  keys, so an operator's label cannot be a header without changing the shared table.
 - Per-row ⋯ menu with View. Clicking a row also opens the detail sheet.
 - No header ⋯ menu, because the tab has no actions. The page does not create, import or export.
 - `TablePagination`. `StripedEmpty` when empty, `LoadingState` while loading, in a `colSpan` cell.
 - Without `patients.view_identifiers`, the list still shows masked rows, and the search placeholder
   says "Exact identifier" so a masked user knows partial names will not match.
 
-Managing facility shows the facility name when `managing_organization` matches a register facility,
-else the raw reference.
+Managing facility shows `facility_name` from the warehouse `facilities` table when its id matches
+`managing_organization` without the `Organization/` prefix, else the raw reference. That table holds
+projected Organizations, which is what the reference points at.
 
 ### Identifier systems tab
 
@@ -210,8 +220,8 @@ In a new `apps/server/src/patient-routes.ts`, registered in `app.ts`.
 | Route | Capability |
 |---|---|
 | `GET /api/patients?search=&status=&offset=&limit=` | `patients.view` |
-| `GET /api/patients/:id` | `patients.view` |
-| `GET /api/patients/:id/requests?offset=&limit=` | `patients.view` |
+| `GET /api/patients/:ref` | `patients.view` |
+| `GET /api/patients/:ref/requests?offset=&limit=` | `patients.view` |
 | `GET /api/patients/identifier-systems` | `patients.view` |
 | `PUT /api/patients/identifier-systems` (body has the system URI) | `patients.manage` |
 
@@ -262,7 +272,7 @@ log.
 
 ## Open points
 
-- Terminology sync. If central sync carries the `urn:openldr:cs:patient-identifier-system` concepts,
-  labels set at central would reach every site, which suits a shared MPI. Not checked. The plan
-  must check `packages/db/src/terminology-sync.ts` before relying on it either way.
+- Terminology sync. Checked: a lab that pulls a code system from central stamps it
+  `managed_origin = 'central'` (`packages/sync/src/terminology-sync.ts:114`). The label edit refuses
+  with 409 there, as result fields do (`packages/bootstrap/src/result-fields.ts:71-83`).
 - Bottom-anchored UI in the sheet can only be confirmed on a real phone.
