@@ -88,7 +88,7 @@ export function DuplicateGroupSheet({ group, canManage, onClose, onChanged, onOp
                 <div className="text-muted-foreground">{t('patients.duplicates.col.rule')}</div>
                 <div>{ruleLabel(t, group)}</div>
                 <div className="text-muted-foreground">{t('patients.duplicates.col.evidence')}</div>
-                <div className="break-all font-mono text-xs">{group.evidence.text}</div>
+                <div className="break-words font-mono text-xs">{group.evidence.text}</div>
                 <div className="text-muted-foreground">{t('patients.duplicates.col.dismissed')}</div>
                 <div>{t('patients.duplicates.dismissedOf', { dismissed: group.dismissedPairs, pairs: group.pairs })}</div>
                 {canManage && canMark && (

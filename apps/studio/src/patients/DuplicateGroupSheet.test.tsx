@@ -95,4 +95,12 @@ describe('DuplicateGroupSheet', () => {
     expect(await screen.findByTestId('duplicate-show-again')).toBeTruthy();
     expect(screen.queryByTestId('duplicate-mark-not')).toBeNull();
   });
+
+  it('wraps evidence at spaces rather than between any two letters', () => {
+    render(<DuplicateGroupSheet group={GROUP} canManage onClose={() => {}} onChanged={() => {}} onOpen={() => {}} />);
+    // Members show the same value as identifier spans; the evidence is the only div.
+    const evidence = screen.getAllByText(GROUP.evidence.text).find((el) => el.tagName === 'DIV') as HTMLElement;
+    expect(evidence.className).toContain('break-words');
+    expect(evidence.className).not.toContain('break-all');
+  });
 });

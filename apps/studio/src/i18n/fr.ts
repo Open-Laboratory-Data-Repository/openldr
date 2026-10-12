@@ -1216,6 +1216,7 @@ export const fr: EnShape = {
     },
     duplicates: {
       empty: 'Aucun doublon probable.',
+      emptyDismissed: 'Aucun groupe n\'est marqué comme pas des doublons.',
       statusFilter: 'Statut',
       status: { open: 'Ouverts', dismissed: 'Pas des doublons', all: 'Tous' },
       menu: 'Actions des doublons',

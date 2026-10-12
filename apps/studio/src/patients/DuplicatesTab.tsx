@@ -95,7 +95,7 @@ export function DuplicatesTab({ canManage, canExport, onOpen }: {
           <div className="flex min-h-[16rem] flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>
         )}
         {!loading && !error && rows.length === 0 && (
-          <StripedEmpty className="min-h-[16rem] flex-1">{t('patients.duplicates.empty')}</StripedEmpty>
+          <StripedEmpty className="min-h-[16rem] flex-1">{status === 'dismissed' ? t('patients.duplicates.emptyDismissed') : t('patients.duplicates.empty')}</StripedEmpty>
         )}
         {!loading && !error && rows.length > 0 && (
           <Table wrapperClassName="min-h-0 flex-1">
@@ -112,7 +112,7 @@ export function DuplicatesTab({ canManage, canExport, onOpen }: {
               {rows.map((g, i) => (
                 <TableRow key={`${page}-${i}`} data-testid={`duplicate-row-${i}`} className="cursor-pointer" onClick={() => setSelected(g)}>
                   <TableCell>{ruleLabel(t, g)}</TableCell>
-                  <TableCell className="break-all font-mono text-xs">{g.evidence.text}</TableCell>
+                  <TableCell className="break-words font-mono text-xs">{g.evidence.text}</TableCell>
                   <TableCell>{g.memberCount}</TableCell>
                   <TableCell>{t('patients.duplicates.dismissedOf', { dismissed: g.dismissedPairs, pairs: g.pairs })}</TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>

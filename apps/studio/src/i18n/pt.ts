@@ -1216,6 +1216,7 @@ export const pt: EnShape = {
     },
     duplicates: {
       empty: 'Não há duplicados prováveis.',
+      emptyDismissed: 'Nenhum grupo está marcado como não duplicado.',
       statusFilter: 'Estado',
       status: { open: 'Abertos', dismissed: 'Não são duplicados', all: 'Todos' },
       menu: 'Ações dos duplicados',
