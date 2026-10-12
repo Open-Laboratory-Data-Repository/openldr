@@ -61,4 +61,4 @@ Os pacientes recebidos antes desta versão não têm identificadores listados at
 - `openldr patients duplicates dismiss <idA> <idB> [--reason <texto>]` e `restore <idA> <idB>`
 - `openldr patients duplicates export [--out <ficheiro>]`
 
-A saída está oculta, a não ser que passe `--identifiers`, que fica registado na auditoria.
+A saída está oculta, a não ser que passe `--identifiers`. `patients list` e `patients show` com `--identifiers` ficam registados na auditoria. `duplicates export` nunca é ocultado e fica registado na auditoria. `duplicates dismiss` e `restore` ficam registados na auditoria.

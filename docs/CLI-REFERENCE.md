@@ -212,7 +212,7 @@ matches it. `identifier-systems set` changes one system and is audited too.
 `duplicates list` shows groups of patients that look like the same person: the same value in a
 searchable identifier system, or the same surname, first name and date of birth. `--status`
 picks open groups (the default), groups marked as not duplicates, or both. Output is masked
-unless you pass `--identifiers`, which is audited. `dismiss` and `restore` take two patient
+unless you pass `--identifiers`, and `list` writes no audit event. `dismiss` and `restore` take two patient
 ids, mark them as different people or undo that, and are audited. `export` writes the open
 groups as CSV with names and identifiers, to stdout or to `--out`. It always writes an audit
 event that records the group count only. CE does not merge patients. The source system fixes

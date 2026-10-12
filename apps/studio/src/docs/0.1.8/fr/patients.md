@@ -61,4 +61,4 @@ Les patients reçus avant cette version n'ont aucun identifiant listé tant que 
 - `openldr patients duplicates dismiss <idA> <idB> [--reason <texte>]` et `restore <idA> <idB>`
 - `openldr patients duplicates export [--out <fichier>]`
 
-La sortie est masquée sauf avec `--identifiers`, qui est audité.
+La sortie est masquée sauf avec `--identifiers`. `patients list` et `patients show` avec `--identifiers` sont audités. `duplicates export` n'est jamais masqué et est audité. `duplicates dismiss` et `restore` sont audités.
