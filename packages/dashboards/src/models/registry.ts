@@ -15,7 +15,7 @@ export type ColumnPolicy = Map<string, Set<string>>;
  */
 export const HARDCODED_DENY_UNION: Record<string, string[]> = {
   patients: ['id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email',
-             'date_of_birth', 'replaced_by_id', 'plugin_id', 'plugin_version', 'batch_id'],
+             'date_of_birth', 'replaced_by_id', 'match_key', 'plugin_id', 'plugin_version', 'batch_id'],
   specimens: ['id', 'patient_id', 'accession', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'],
   lab_requests: ['id', 'request_id', 'patient_id', 'clinical_info', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'],
   facilities: ['plugin_id', 'plugin_version', 'batch_id'],
@@ -43,7 +43,7 @@ export const HARDCODED_DENY_UNION: Record<string, string[]> = {
 /** Columns classified as PII for the Data Exposure UI badge + un-hide confirmation ONLY.
  *  Display metadata — never an enforcement input. */
 export const PII_COLUMNS: Record<string, string[]> = {
-  patients: ['patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email', 'date_of_birth'],
+  patients: ['patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email', 'date_of_birth', 'match_key'],
   specimens: [], lab_requests: ['clinical_info'], facilities: [], diagnostic_reports: [], lab_results: [],
   // facility_map holds facility names, codes and administrative areas — no patient data — so no
   // column gets the PII badge or the un-hide confirmation.

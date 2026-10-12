@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { projectPatient, projectPatientIdentifiers } from './patient';
+import { projectPatient, projectPatientIdentifiers, patientMatchKey } from './patient';
 
 describe('projectPatient active/replaced_by_id', () => {
   it('defaults active to true and replaced_by_id to null for a plain patient', () => {
@@ -43,5 +43,40 @@ describe('projectPatientIdentifiers', () => {
 
   it('returns no rows for a patient without identifiers', () => {
     expect(projectPatientIdentifiers({ resourceType: 'Patient', id: 'p1' }, {})).toEqual([]);
+  });
+});
+
+describe('patientMatchKey', () => {
+  it('lowercases, strips accents and collapses spaces', () => {
+    expect(patientMatchKey('  Mwanza ', 'Émile  Jean', '1990-01-05')).toBe('mwanza|emile jean|1990-01-05');
+    expect(patientMatchKey('MWANZA', 'emile jean', '1990-01-05')).toBe(patientMatchKey('mwanza', 'Émile Jean', '1990-01-05'));
+  });
+
+  it('is null when any part is missing or blank', () => {
+    expect(patientMatchKey(null, 'A', '1990')).toBeNull();
+    expect(patientMatchKey('B', '  ', '1990')).toBeNull();
+    expect(patientMatchKey('B', 'A', null)).toBeNull();
+  });
+
+  it('keeps a partial date as given', () => {
+    expect(patientMatchKey('B', 'A', '1990')).toBe('b|a|1990');
+  });
+
+  it('hashes a key too long for a key-sized column', () => {
+    const key = patientMatchKey('x'.repeat(300), 'A', '1990') as string;
+    expect(key.length).toBeLessThanOrEqual(200);
+    expect(key).toMatch(/^mk-/);
+    expect(patientMatchKey('x'.repeat(300), 'A', '1990')).toBe(key);
+  });
+});
+
+describe('projectPatient match_key', () => {
+  it('stores the key from the first name entry and birth date', () => {
+    const out = projectPatient({ resourceType: 'Patient', id: 'p1', name: [{ family: 'Banda', given: ['Ruth'] }], birthDate: '1985-02-03' }, {});
+    expect(out.match_key).toBe('banda|ruth|1985-02-03');
+  });
+
+  it('stores null without a birth date', () => {
+    expect(projectPatient({ resourceType: 'Patient', id: 'p1', name: [{ family: 'Banda', given: ['Ruth'] }] }, {}).match_key).toBeNull();
   });
 });

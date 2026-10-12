@@ -200,7 +200,7 @@ describe('policy-aware exposure', () => {
   it('HARDCODED_DENY_UNION is the per-table union of every hardcoded denylist', () => {
     expect(new Set(HARDCODED_DENY_UNION.patients)).toEqual(new Set([
       'id', 'patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email',
-      'date_of_birth', 'replaced_by_id', 'plugin_id', 'plugin_version', 'batch_id',
+      'date_of_birth', 'replaced_by_id', 'match_key', 'plugin_id', 'plugin_version', 'batch_id',
     ]));
     // source_system unioned in from the per-model specimen/request joins:
     expect(HARDCODED_DENY_UNION.specimens).toContain('source_system');
