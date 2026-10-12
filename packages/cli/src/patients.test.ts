@@ -108,8 +108,28 @@ describe('openldr patients duplicates', () => {
     patientDuplicates.list.mockResolvedValue({ rows: [GROUP], total: 1, masked: true });
     const io = capture();
     expect(await runDuplicatesList({ json: false, identifiers: false })).toBe(0);
-    expect(patientDuplicates.list).toHaveBeenCalledWith({ status: 'open', limit: 200, offset: 0 }, { unmask: false });
+    expect(patientDuplicates.list).toHaveBeenCalledWith({ status: 'open', limit: 25, offset: 0 }, { unmask: false });
     expect(io.out()).toContain('Same NRC  •••10/1  2 patient(s)  0 of 1 pair(s) dismissed');
+  });
+
+  it('list passes --limit and --offset through, and refuses a bad limit', async () => {
+    patientDuplicates.list.mockResolvedValue({ rows: [], total: 0, masked: true });
+    capture();
+    expect(await runDuplicatesList({ limit: '5', offset: '10', json: false, identifiers: false })).toBe(0);
+    expect(patientDuplicates.list).toHaveBeenCalledWith({ status: 'open', limit: 5, offset: 10 }, { unmask: false });
+    const io = capture();
+    expect(await runDuplicatesList({ limit: '500', json: false, identifiers: false })).toBe(1);
+    expect(io.err()).toContain('limit must be a whole number from 1 to 200');
+  });
+
+  it('list --identifiers audits the count and a masked list does not', async () => {
+    patientDuplicates.list.mockResolvedValue({ rows: [GROUP], total: 4, masked: false });
+    capture();
+    expect(await runDuplicatesList({ json: false, identifiers: true })).toBe(0);
+    expect(audit).toEqual([{ action: 'patients.duplicate.list', entityType: 'patient', entityId: 'duplicates', metadata: { count: 4 } }]);
+    audit.length = 0;
+    expect(await runDuplicatesList({ json: false, identifiers: false })).toBe(0);
+    expect(audit).toEqual([]);
   });
 
   it('list refuses a bad status', async () => {

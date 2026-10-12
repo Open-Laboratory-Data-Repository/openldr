@@ -108,19 +108,20 @@ export async function runIdentifierSystemsSet(system: string, opts: IdentifierSy
 }
 
 // `openldr patients duplicates ...`: likely duplicate groups (patient duplicate detection spec). CE
-// lists them; the source system fixes them. Masked unless --identifiers, which does not audit a list.
+// lists them; the source system fixes them. Masked unless --identifiers, which audits the count.
 // Dismiss, restore and export audit; export writes CSV that is unmasked.
 
-export interface DuplicatesListOpts { status?: string; identifiers: boolean; json: boolean }
+export interface DuplicatesListOpts { status?: string; limit?: string; offset?: string; identifiers: boolean; json: boolean }
 
 const ruleText = (g: DuplicateGroup) => (g.rule === 'identifier' ? `Same ${g.evidence.label ?? g.evidence.system ?? 'identifier'}` : 'Same name and date of birth');
 
 export async function runDuplicatesList(opts: DuplicatesListOpts): Promise<number> {
-  const parsed = parseDuplicateListQuery({ status: opts.status, limit: '200' });
+  const parsed = parseDuplicateListQuery({ status: opts.status, limit: opts.limit, offset: opts.offset });
   if (!parsed.ok) { process.stderr.write(`patients duplicates list failed: ${parsed.error}\n`); return 1; }
   const ctx = await createAppContext(loadConfig());
   try {
     const out = await ctx.patientDuplicates.list(parsed.query, { unmask: opts.identifiers });
+    if (opts.identifiers) await recordAuditEvent(ctx, cliActor(), { action: 'patients.duplicate.list', entityType: 'patient', entityId: 'duplicates', metadata: { count: out.total } });
     if (opts.json) { process.stdout.write(JSON.stringify(out, null, 2) + '\n'); return 0; }
     const lines = out.rows.map((g) => [
       ruleText(g), g.evidence.text, `${g.memberCount} patient(s)`, `${g.dismissedPairs} of ${g.pairs} pair(s) dismissed`,

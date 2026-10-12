@@ -149,6 +149,16 @@ describe('patient duplicate routes', () => {
     expect(b.calls.find((c) => c.method === 'dup.list')?.args[1]).toEqual({ unmask: true });
   });
 
+  it('audits an unmasked duplicates list by count, and a masked list not at all', async () => {
+    const a = fakeCtx({ 'dup.list': async () => ({ rows: [], total: 7, masked: false }) });
+    await appWith(a.ctx, ALL).inject({ method: 'GET', url: '/api/patients/duplicates' });
+    expect(a.audit.map((e) => [e.action, e.entityType, e.entityId, e.metadata]))
+      .toEqual([['patients.duplicate.list', 'patient', 'duplicates', { count: 7 }]]);
+    const b = fakeCtx();
+    await appWith(b.ctx, ['patients.view']).inject({ method: 'GET', url: '/api/patients/duplicates' });
+    expect(b.audit).toEqual([]);
+  });
+
   it('is not read as a patient ref', async () => {
     const { ctx, calls } = fakeCtx();
     await appWith(ctx, ['patients.view']).inject({ method: 'GET', url: '/api/patients/duplicates' });

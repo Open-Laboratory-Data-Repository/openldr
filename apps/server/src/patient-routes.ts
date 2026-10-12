@@ -37,7 +37,11 @@ export function registerPatientRoutes(app: FastifyInstance<any, any, any, any>, 
   app.get('/api/patients/duplicates', VIEW, async (req, reply) => {
     const parsed = parseDuplicateListQuery(req.query as Record<string, unknown>);
     if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
-    return reply.send(await ctx.patientDuplicates.list(parsed.query, { unmask: canUnmask(req) }));
+    const unmask = canUnmask(req);
+    const out = await ctx.patientDuplicates.list(parsed.query, { unmask });
+    // An unmasked list shows names and identifiers, so it is audited like the patient list: count only.
+    if (unmask) await recordAudit(ctx, req, { action: 'patients.duplicate.list', entityType: 'patient', entityId: 'duplicates', metadata: { count: out.total } });
+    return reply.send(out);
   });
 
   app.get('/api/patients/duplicates/export', IDENTIFIERS, async (req, reply) => {

@@ -525,6 +525,8 @@ export function buildProgram(): Command {
   dups.command('list')
     .description('List likely duplicate groups; masked unless --identifiers')
     .option('--status <open|dismissed|all>', 'which groups (default: open)')
+    .option('--limit <n>', 'groups per page, 1 to 200 (default: 25)')
+    .option('--offset <n>', 'groups to skip (default: 0)')
     .option('--identifiers', 'show names, identifiers and patient ids', false)
     .option('--json', 'emit JSON', false)
     .action(async (opts: DuplicatesListOpts) => { process.exitCode = await runDuplicatesList(opts); });
