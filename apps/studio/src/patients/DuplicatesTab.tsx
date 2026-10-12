@@ -40,10 +40,12 @@ export function DuplicatesTab({ canManage, canExport, onOpen }: {
       const out = await listPatientDuplicates({ status, limit: pageSize, offset: page * pageSize });
       if (seq !== loadSeq.current) return;
       // Rows can vanish under a later page (a dismissal elsewhere, a rebuild). Step back to the last
-      // page that has rows, which reloads.
-      if (out.rows.length === 0 && out.total > 0 && page > 0) {
+      // page that has rows, which reloads. Only when that page is earlier: if it is this page, setPage
+      // changes nothing, no reload runs, and the spinner would never clear. Show the empty page then.
+      const lastPage = Math.max(0, Math.ceil(out.total / pageSize) - 1);
+      if (out.rows.length === 0 && out.total > 0 && lastPage < page) {
         stepBack = true;
-        setPage(Math.max(0, Math.ceil(out.total / pageSize) - 1));
+        setPage(lastPage);
         return;
       }
       setRows(out.rows);

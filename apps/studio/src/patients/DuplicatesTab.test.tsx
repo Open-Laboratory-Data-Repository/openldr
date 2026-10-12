@@ -80,6 +80,23 @@ describe('DuplicatesTab', () => {
     expect(await screen.findByTestId('duplicate-row-0')).toBeTruthy();
   });
 
+  // An inconsistent answer: page 1 is empty but total still says 30, so the last page with rows
+  // (ceil(30/25) - 1 = 1) is the page already shown. Stepping "back" to it changes nothing and
+  // never reloads, so the spinner must clear and the empty state show instead.
+  it('clears the spinner when the empty page is already the last page', async () => {
+    const list = vi.mocked(api.listPatientDuplicates);
+    list.mockImplementation(async (q) => (q.offset === 0
+      ? { rows: [GROUP], total: 30, masked: false }
+      : { rows: [], total: 30, masked: false }));
+    render(<DuplicatesTab canManage canExport={false} onOpen={() => {}} />);
+    await screen.findByTestId('duplicate-row-0');
+    fireEvent.click(screen.getByLabelText('Next page'));
+    await waitFor(() => expect(list).toHaveBeenCalledWith({ status: 'open', limit: 25, offset: 25 }));
+    expect(await screen.findByText('No likely duplicates.')).toBeTruthy();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(list.mock.calls.filter(([q]) => q.offset === 0)).toHaveLength(1);
+  });
+
   it('ignores a late response from an earlier load', async () => {
     let resolveFirst: (v: api.DuplicateList) => void = () => {};
     vi.mocked(api.listPatientDuplicates)
