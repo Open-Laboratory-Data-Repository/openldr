@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "37694807",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Duplicates spinner clears when the empty page is already the last page"
+        },
+        {
           "hash": "c77faf35",
           "type": "fix",
           "scope": "studio",
