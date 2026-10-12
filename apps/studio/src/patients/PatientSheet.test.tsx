@@ -42,6 +42,7 @@ describe('PatientSheet', () => {
     const onOpen = vi.fn();
     render(<PatientSheet patientRef="r1" onClose={() => {}} onOpen={onOpen} />);
     await screen.findByText('John Mwanza');
+    expect(screen.getByText('Replaced by')).toBeTruthy();
     const trigger = screen.getByTestId('patient-sheet-menu');
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });

@@ -92,6 +92,7 @@ export function PatientSheet({ patientRef, onClose, onOpen }: {
                 {row(t('patients.sheet.age'), detail.ageYears === null ? null : String(detail.ageYears))}
                 {row(t('patients.sheet.facility'), detail.managingFacility?.name ?? detail.managingFacility?.reference)}
                 {row(t('patients.sheet.status'), detail.active && !detail.replacedByRef ? t('patients.status.active') : t('patients.status.merged'))}
+                {detail.replacedByRef && row(t('patients.sheet.replacedBy'), t('patients.status.merged'))}
                 {row(t('patients.sheet.guid'), detail.patientGuid)}
                 {row(t('patients.sheet.phone'), detail.phone)}
                 {row(t('patients.sheet.email'), detail.email)}
