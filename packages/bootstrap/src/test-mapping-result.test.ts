@@ -159,4 +159,18 @@ describe('test mapping: observed lists per level', () => {
       { code: 'VLC', name: 'HIV VL copies', loinc: '20447-9', retired: false },
     ]);
   });
+
+  // Review focus 1, 2 and 3.
+  it('counts results only: a rejected test is left out, a row with no status is kept', async () => {
+    const { externalDb, mapping } = await buildMapping();
+    await seedResult(externalDb, 'o1', DISA, 'HIVVL', 'HIV VL', '2026-05-01T08:00:00Z', { status: 'final' });
+    await seedResult(externalDb, 'o2', DISA, 'HIVVL', 'HIV VL', '2026-05-02T08:00:00Z', { status: 'cancelled' });
+    await seedResult(externalDb, 'o3', DISA, 'HIVVL', 'HIV VL', '2026-05-03T08:00:00Z');
+    await seedResult(externalDb, 'o4', 'urn:openldr:codesystem:test-catalog', 'CHEM-GLU', null, '2026-05-01T08:00:00Z', { status: 'cancelled' });
+
+    const out = await mapping.observed({ status: 'all', q: '', limit: 25, offset: 0 }, 'result');
+
+    expect(out.rows.map((r) => [r.system, r.code, r.requests])).toEqual([[DISA, 'HIVVL', 2]]);
+    expect(await mapping.observedSystems('result')).toEqual([DISA]);
+  });
 });

@@ -89,6 +89,8 @@ export async function seedResultMapping(db: Kysely<InternalSchema>, id: string, 
   }).execute();
 }
 
-export async function seedResult(db: Kysely<any>, id: string, system: string | null, code: string | null, desc: string | null, createdAt: string) {
-  await db.insertInto('lab_results').values({ id, observation_system: system, observation_code: code, observation_desc: desc, created_at: createdAt }).execute();
+export async function seedResult(db: Kysely<any>, id: string, system: string | null, code: string | null, desc: string | null, createdAt: string, opts: { status?: string | null } = {}) {
+  await db.insertInto('lab_results').values({
+    id, observation_system: system, observation_code: code, observation_desc: desc, created_at: createdAt, status: opts.status ?? null,
+  }).execute();
 }

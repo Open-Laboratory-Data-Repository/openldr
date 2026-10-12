@@ -404,6 +404,9 @@ export function createTestMapping(deps: TestMappingDeps) {
       .where('observation_code', 'is not', null)
       // CE's own results carry dictionary codes, which self rows map already.
       .where('observation_system', '!=', RESULT_PARAM_SYSTEM)
+      // A test the bench rejects is a cancelled Observation, not a result. A null status is a row
+      // projected before migration 024 and counts as a result.
+      .where((eb) => eb.or([eb('status', 'is', null), eb('status', '<>', 'cancelled')]))
       .groupBy(['observation_system', 'observation_code'])
       .execute();
     return rows.map(toGroup);
