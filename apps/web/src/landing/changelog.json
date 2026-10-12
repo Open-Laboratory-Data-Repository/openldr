@@ -6,6 +6,72 @@
       "version": null,
       "entries": [
         {
+          "hash": "7f998555",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Clamp an empty duplicates page, rule-aware too-large hint"
+        },
+        {
+          "hash": "ae5b8b94",
+          "type": "fix",
+          "scope": "patients",
+          "title": "Audit the unmasked duplicates list, add --limit and --offset to the CLI list"
+        },
+        {
+          "hash": "2fe268d1",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Regroup identifier duplicates on exact values, query per system"
+        },
+        {
+          "hash": "d88cbada",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Chunk patient index IN lists at 500 for MSSQL"
+        },
+        {
+          "hash": "45e80e62",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Duplicates tab and group sheet on the Patients page"
+        },
+        {
+          "hash": "d0e49ef3",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr patients duplicates list, dismiss, restore and export"
+        },
+        {
+          "hash": "72c293f7",
+          "type": "feat",
+          "scope": "server",
+          "title": "Patient duplicate routes"
+        },
+        {
+          "hash": "4ee14339",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Duplicate groups found in SQL, bounded, masked member order"
+        },
+        {
+          "hash": "1c819e34",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Likely duplicate patients with dismissals and export"
+        },
+        {
+          "hash": "9c4d86a9",
+          "type": "feat",
+          "scope": "db",
+          "title": "Patient_duplicate_dismissals table"
+        },
+        {
+          "hash": "e624d65d",
+          "type": "feat",
+          "scope": "db",
+          "title": "Patients.match_key for duplicate detection"
+        },
+        {
           "hash": "7050ba86",
           "type": "fix",
           "scope": "bootstrap",
