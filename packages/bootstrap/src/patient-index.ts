@@ -251,7 +251,10 @@ export function createPatientIndex(deps: {
 
   async function rowsByIds(ids: string[], opts: { unmask: boolean }): Promise<PatientRow[]> {
     if (!ids.length) return [];
-    const records = await db.selectFrom('patients').select([...PATIENT_COLUMNS]).where('id', 'in', ids).execute();
+    const records: Array<Record<string, unknown>> = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      records.push(...await db.selectFrom('patients').select([...PATIENT_COLUMNS]).where('id', 'in', ids.slice(i, i + 500)).execute());
+    }
     const built = await build(records as PatientRecord[], opts.unmask, false);
     const byId = new Map(built.map(({ record, ...row }) => [record.id, row]));
     return ids.map((id) => byId.get(id)).filter((r): r is PatientRow => r !== undefined);

@@ -72,6 +72,45 @@ describe('patient duplicates: rules', () => {
   });
 });
 
+describe('patient duplicates: bounds', () => {
+  it('caps members at 50 but counts the whole group and every pair', async () => {
+    const { externalDb, dups } = await build();
+    for (let n = 0; n < 60; n += 1) {
+      const id = `p${String(n).padStart(2, '0')}`;
+      await seedPatient(externalDb, { id }); await seedIdentifier(externalDb, id, NRC, 'PLACEHOLDER');
+    }
+    const out = await dups.list(OPEN, { unmask: true });
+    expect([out.rows[0].memberCount, out.rows[0].members.length, out.rows[0].pairs]).toEqual([60, 50, 1770]);
+  });
+
+  it('counts compatible pairs for a details group with mixed sexes', async () => {
+    const { externalDb, dups } = await build();
+    for (const [id, sex] of [['a', 'M'], ['b', 'M'], ['c', 'F'], ['d', null]] as const) {
+      await seedPatient(externalDb, { id, surname: 'Banda', firstname: 'Chris', dob: '1990', sex });
+    }
+    const out = await dups.list(OPEN, { unmask: true });
+    expect([out.rows[0].pairs, out.rows[0].members.length, out.rows[0].memberCount]).toEqual([4, 4, 4]);
+  });
+
+  it('lists masked members in md5 order, not id order', async () => {
+    const { externalDb, dups } = await build();
+    for (const [id, surname] of [['hl7-001', 'Alpha'], ['hl7-002', 'Bravo'], ['hl7-003', 'Charlie']]) {
+      await seedPatient(externalDb, { id, surname, firstname: 'John', dob: '1990-01-05' });
+      await seedIdentifier(externalDb, id, NRC, 'SHARED-1');
+    }
+    const out = await dups.list(OPEN, { unmask: false });
+    // md5: hl7-001 4612..., hl7-003 5522..., hl7-002 6096...
+    expect(out.rows[0].members.map((m) => m.name)).toEqual(['J*** A***', 'J*** C***', 'J*** B***']);
+  });
+
+  it('refuses more than 50 ids', async () => {
+    const { dups } = await build();
+    const ids = Array.from({ length: 51 }, (_, n) => `x${n}`);
+    await expect(dups.dismiss({ ids, reason: null, by: 'x' })).rejects.toMatchObject({ kind: 'invalid' });
+    expect(parsePairInput({ refs: ids })).toEqual({ ok: false, error: 'refs must list at most 50 patients' });
+  });
+});
+
 describe('patient duplicates: dismissals', () => {
   async function twoSharing() {
     const b = await build();

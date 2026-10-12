@@ -135,7 +135,8 @@ One bootstrap module, `packages/bootstrap/src/patient-duplicates.ts`, serves the
    keys with two or more patients.
 3. Apply the sex rule to rule 2 groups.
 4. Load dismissals for the member ids. Drop a group when every pair in it is dismissed.
-5. Sort by rule, then by key, so paging is stable. Page in memory.
+5. Order groups by a hash of the group key (rule, system, value), so paging is stable and the order
+   hints at no name or identifier. Page in memory.
 
 Dismissals are in the internal db and patients in the warehouse, so steps 4 and 5 run in code. That
 is fine for thousands of groups. A site with hundreds of thousands of groups would need a stored scan
@@ -150,7 +151,9 @@ Each group row:
 - `rule`: `identifier` or `details`.
 - `evidence`: for rule 1 the identifier system's label and the value; for rule 2 the names and date of
   birth.
-- `members`: each member's `ref` and the same fields a patient list row has.
+- `members`: each member's `ref` and the same fields a patient list row has. A group shows at most 50
+  members. `memberCount` is the full size of the group. Masked, members are ordered by a hash of the
+  id, not the id.
 - `dismissedPairs`: the count of dismissed pairs in the group.
 
 Masking follows `patient-index.ts` exactly. Without `patients.view_identifiers`:
@@ -193,7 +196,7 @@ sends the group's member refs; the CLI sends two.
 
 `/duplicates` is a static path, so it never collides with `/api/patients/:ref`. A route test proves it.
 
-Fewer than two refs, or the same ref twice, is 400. A ref that does not resolve is 404.
+Fewer than two refs, more than 50 refs, or the same ref twice, is 400. A ref that does not resolve is 404.
 
 The export is a CSV with one row per member of each open group: `group`, `rule`, `system_label`,
 `evidence`, `patient_id`, `patient_guid`, `surname`, `firstname`, `date_of_birth`, `sex`,

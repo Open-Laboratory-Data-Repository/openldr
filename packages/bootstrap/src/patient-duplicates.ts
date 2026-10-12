@@ -17,13 +17,20 @@ const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 200;
 const STATUSES = ['open', 'dismissed', 'all'] as const;
 const CHUNK = 500;
+const MEMBER_CAP = 50;
+const MAX_REFS = 50;
+const INSERT_CHUNK = 200;
+const DELETE_CHUNK = 100;
+const PAIR_LIMIT_ERROR = 'refs must list at most 50 patients';
 
 export type DuplicateRule = 'identifier' | 'details';
 export type DuplicateStatus = typeof STATUSES[number];
 export interface DuplicateGroup {
   rule: DuplicateRule;
   evidence: { system: string | null; label: string | null; text: string };
+  /** At most 50 members; memberCount is the full size of the group. */
   members: PatientRow[];
+  memberCount: number;
   pairs: number;
   dismissedPairs: number;
 }
@@ -50,17 +57,24 @@ export function parsePairInput(raw: unknown): { ok: true; refs: string[]; reason
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const refs = Array.isArray(r.refs) ? r.refs.filter((x): x is string => typeof x === 'string' && x.length > 0) : [];
   if (new Set(refs).size < 2 || refs.length !== new Set(refs).size) return { ok: false, error: 'refs must list at least two different patients' };
+  if (refs.length > MAX_REFS) return { ok: false, error: PAIR_LIMIT_ERROR };
   const reason = typeof r.reason === 'string' && r.reason.trim() ? r.reason.trim() : null;
   return { ok: true, refs, reason };
 }
 
-type RawGroup = { rule: DuplicateRule; system: string | null; value: string; ids: string[]; pairs: [string, string][] };
+type RawGroup = {
+  rule: DuplicateRule; system: string | null; value: string;
+  ids: string[];               // every member, sorted by id
+  pairs: number;               // compatible pairs, counted arithmetically
+  sexes?: Map<string, string | null>; // details groups only
+};
 
 const pairKey = (a: string, b: string) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`);
 const sorted = (a: string, b: string): [string, string] => (a < b ? [a, b] : [b, a]);
+const md5 = (s: string) => createHash('md5').update(s).digest('hex');
 // The list order is a hash of the group key, so it hints at neither names nor identifier values, the
 // same reason the masked patient list orders by md5(id).
-const orderKey = (g: RawGroup) => createHash('md5').update(`${g.rule}|${g.system ?? ''}|${g.value}`).digest('hex');
+const orderKey = (g: RawGroup) => md5(`${g.rule}|${g.system ?? ''}|${g.value}`);
 
 function allPairs(ids: string[]): [string, string][] {
   const out: [string, string][] = [];
@@ -68,11 +82,13 @@ function allPairs(ids: string[]): [string, string][] {
   return out;
 }
 
-function chunks<T>(xs: T[]): T[][] {
+function chunks<T>(xs: T[], size = CHUNK): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < xs.length; i += CHUNK) out.push(xs.slice(i, i + CHUNK));
+  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size));
   return out;
 }
+
+const compatible = (a: string | null | undefined, b: string | null | undefined) => !a || !b || a === b;
 
 export function createPatientDuplicates(deps: {
   internalDb: Kysely<InternalSchema>; externalDb: Kysely<ExternalSchema>; index: PatientIndex; systems: PatientIdentifierSystems;
@@ -81,79 +97,124 @@ export function createPatientDuplicates(deps: {
 
   async function identifierGroups(): Promise<RawGroup[]> {
     const unsearchable = await systems.unsearchableSystems();
-    let keys = db.selectFrom('patient_identifiers as i')
+    let inner = db.selectFrom('patient_identifiers as i')
       .innerJoin('patients as p', 'p.id', 'i.patient_id')
-      .select(['i.system', 'i.value', 'i.patient_id'])
+      .select(['i.system', 'i.value', (eb) => eb.fn.count('i.patient_id').distinct().as('n')])
       .where('i.system', 'is not', null)
       .where('p.active', '=', true).where('p.replaced_by_id', 'is', null);
-    if (unsearchable.length) keys = keys.where('i.system', 'not in', unsearchable);
-    // pg-mem rejects count(distinct) in having, so the rows come back plain and are counted here.
-    const rows = await keys.execute();
-    const members = new Map<string, Set<string>>();
-    for (const r of rows) {
-      const k = `${r.system}\u0000${r.value}`;
-      members.set(k, (members.get(k) ?? new Set()).add(r.patient_id));
+    if (unsearchable.length) inner = inner.where('i.system', 'not in', unsearchable);
+    // Duplicate keys are found in SQL. The count is filtered in an outer WHERE because pg-mem rejects
+    // HAVING with an aggregate; Postgres and MySQL plan the two forms the same way.
+    const found = await db.selectFrom(inner.groupBy(['i.system', 'i.value']).as('g'))
+      .select(['g.system', 'g.value']).where('g.n', '>', 1).execute();
+    const wanted = new Map<string, Set<string>>();
+    for (const k of found) {
+      if (k.system === null) continue;
+      wanted.set(k.system, (wanted.get(k.system) ?? new Set()).add(k.value));
     }
-    for (const [k, set] of members) if (set.size < 2) members.delete(k);
-    return [...members].map(([k, set]) => {
-      const [system, value] = k.split('\u0000');
-      const ids = [...set].sort();
-      return { rule: 'identifier' as const, system, value, ids, pairs: allPairs(ids) };
-    });
-  }
-
-  async function detailGroups(): Promise<RawGroup[]> {
-    // Plain select, grouped here, for the same pg-mem reason as identifierGroups.
-    const rows = await db.selectFrom('patients').select(['id', 'sex', 'match_key'])
-      .where('match_key', 'is not', null).where('active', '=', true).where('replaced_by_id', 'is', null).execute();
-    const byKey = new Map<string, { id: string; sex: string | null }[]>();
-    for (const r of rows) byKey.set(r.match_key as string, [...(byKey.get(r.match_key as string) ?? []), { id: r.id, sex: r.sex }]);
-    const out: RawGroup[] = [];
-    for (const [value, list] of byKey) {
-      const people = [...list].sort((a, b) => (a.id < b.id ? -1 : 1));
-      // Sexes are compatible when equal or when either is missing (spec section 1).
-      const pairs: [string, string][] = [];
-      for (let i = 0; i < people.length; i += 1) {
-        for (let j = i + 1; j < people.length; j += 1) {
-          const a = people[i]; const b = people[j];
-          if (!a.sex || !b.sex || a.sex === b.sex) pairs.push(sorted(a.id, b.id));
-        }
+    const members = new Map<string, Map<string, Set<string>>>();
+    for (const values of chunks([...new Set(found.map((k) => k.value))])) {
+      const rows = await db.selectFrom('patient_identifiers as i')
+        .innerJoin('patients as p', 'p.id', 'i.patient_id')
+        .select(['i.system', 'i.value', 'i.patient_id'])
+        .where('i.value', 'in', values)
+        .where('p.active', '=', true).where('p.replaced_by_id', 'is', null).execute();
+      for (const r of rows) {
+        if (r.system === null || !wanted.get(r.system)?.has(r.value)) continue;
+        const bySystem = members.get(r.system) ?? new Map<string, Set<string>>();
+        bySystem.set(r.value, (bySystem.get(r.value) ?? new Set()).add(r.patient_id));
+        members.set(r.system, bySystem);
       }
-      if (!pairs.length) continue;
-      const ids = [...new Set(pairs.flat())].sort();
-      out.push({ rule: 'details', system: null, value, ids, pairs });
+    }
+    const out: RawGroup[] = [];
+    for (const [system, byValue] of members) {
+      for (const [value, set] of byValue) {
+        const ids = [...set].sort();
+        out.push({ rule: 'identifier', system, value, ids, pairs: (ids.length * (ids.length - 1)) / 2 });
+      }
     }
     return out;
   }
 
-  async function dismissedAmong(ids: string[]): Promise<Set<string>> {
-    const out = new Set<string>();
+  async function detailGroups(): Promise<RawGroup[]> {
+    const inner = db.selectFrom('patients')
+      .select(['match_key', (eb) => eb.fn.countAll().as('n')])
+      .where('match_key', 'is not', null).where('active', '=', true).where('replaced_by_id', 'is', null)
+      .groupBy('match_key').as('g');
+    const found = await db.selectFrom(inner).select('g.match_key').where('g.n', '>', 1).execute();
+    const byKey = new Map<string, { id: string; sex: string | null }[]>();
+    for (const keys of chunks(found.map((f) => f.match_key as string))) {
+      const rows = await db.selectFrom('patients').select(['id', 'sex', 'match_key'])
+        .where('match_key', 'in', keys).where('active', '=', true).where('replaced_by_id', 'is', null).execute();
+      for (const r of rows) byKey.set(r.match_key as string, [...(byKey.get(r.match_key as string) ?? []), { id: r.id, sex: r.sex }]);
+    }
+    const out: RawGroup[] = [];
+    for (const [value, people] of byKey) {
+      // Sexes are compatible when equal or when either is missing (spec section 1). Count the pairs
+      // arithmetically: all pairs, minus pairs whose two sexes are both set and different.
+      const n = people.length;
+      const bySex = new Map<string, number>();
+      let nulls = 0;
+      for (const p of people) { if (p.sex) bySex.set(p.sex, (bySex.get(p.sex) ?? 0) + 1); else nulls += 1; }
+      const set = n - nulls;
+      let squares = 0;
+      for (const c of bySex.values()) squares += c * c;
+      const pairs = (n * (n - 1)) / 2 - (set * set - squares) / 2;
+      if (pairs === 0) continue;
+      // A member belongs to the group only if some other member is compatible with it.
+      const kept = people.filter((p) => (p.sex ? nulls > 0 || (bySex.get(p.sex) ?? 0) > 1 : n > 1));
+      const ids = kept.map((p) => p.id).sort();
+      out.push({ rule: 'details', system: null, value, ids, pairs, sexes: new Map(kept.map((p) => [p.id, p.sex])) });
+    }
+    return out;
+  }
+
+  async function dismissedRows(ids: string[]): Promise<[string, string][]> {
+    const out: [string, string][] = [];
     for (const part of chunks([...new Set(ids)])) {
       const rows = await internalDb.selectFrom('patient_duplicate_dismissals').select(['patient_a', 'patient_b'])
         .where('patient_a', 'in', part).execute();
-      for (const r of rows) out.add(pairKey(r.patient_a, r.patient_b));
+      for (const r of rows) out.push([r.patient_a, r.patient_b]);
     }
     return out;
   }
 
   async function groupsWithStatus(): Promise<Array<RawGroup & { dismissedPairs: number }>> {
     const groups = [...await identifierGroups(), ...await detailGroups()];
-    const dismissed = await dismissedAmong(groups.flatMap((g) => g.ids));
+    const groupsOf = new Map<string, number[]>();
+    groups.forEach((g, gi) => g.ids.forEach((id) => groupsOf.set(id, [...(groupsOf.get(id) ?? []), gi])));
+    const counts = groups.map(() => 0);
+    for (const [a, b] of await dismissedRows([...groupsOf.keys()])) {
+      const inB = groupsOf.get(b);
+      if (!inB) continue;
+      for (const gi of groupsOf.get(a) ?? []) {
+        if (!inB.includes(gi)) continue;
+        const sexes = groups[gi].sexes;
+        if (sexes && !compatible(sexes.get(a), sexes.get(b))) continue;
+        counts[gi] += 1;
+      }
+    }
     return groups
-      .map((g) => ({ ...g, dismissedPairs: g.pairs.filter(([a, b]) => dismissed.has(pairKey(a, b))).length }))
+      .map((g, gi) => ({ ...g, dismissedPairs: counts[gi] }))
       .sort((x, y) => (orderKey(x) < orderKey(y) ? -1 : orderKey(x) > orderKey(y) ? 1 : 0));
   }
 
   async function list(q: { status: DuplicateStatus; limit: number; offset: number }, opts: { unmask: boolean }): Promise<DuplicateList> {
     const all = await groupsWithStatus();
     const matched = all.filter((g) => q.status === 'all'
-      || (q.status === 'open' ? g.dismissedPairs < g.pairs.length : g.dismissedPairs === g.pairs.length));
+      || (q.status === 'open' ? g.dismissedPairs < g.pairs : g.dismissedPairs === g.pairs));
     const page = matched.slice(q.offset, q.offset + q.limit);
     const systemsOnPage = [...new Set(page.map((g) => g.system).filter((s): s is string => s !== null))];
     const labels = await systems.settingsFor(systemsOnPage);
+    // Masked, the members show in md5(id) order: ids can carry PID-3, so id order would line members up
+    // beside the full identifier. Unmasked, they stay in id order.
+    const shown = page.map((g) => (opts.unmask ? g.ids : [...g.ids].sort((a, b) => (md5(a) < md5(b) ? -1 : 1))).slice(0, MEMBER_CAP));
+    const built = await index.rowsByIds([...new Set(shown.flat())], opts);
+    const byId = new Map<string, PatientRow>();
+    for (const row of built) { const id = index.idForRef(row.ref); if (id) byId.set(id, row); }
     const rows: DuplicateGroup[] = [];
-    for (const g of page) {
-      const members = await index.rowsByIds(g.ids, opts);
+    page.forEach((g, i) => {
+      const members = shown[i].map((id) => byId.get(id)).filter((r): r is PatientRow => r !== undefined);
       // Details evidence comes from the first member's row, which rowsByIds has already masked.
       const text = g.rule === 'identifier'
         ? (opts.unmask ? g.value : (maskValue(g.value) as string))
@@ -162,10 +223,11 @@ export function createPatientDuplicates(deps: {
         rule: g.rule,
         evidence: { system: g.system, label: g.system ? labels.get(g.system)?.label ?? null : null, text },
         members,
-        pairs: g.pairs.length,
+        memberCount: g.ids.length,
+        pairs: g.pairs,
         dismissedPairs: g.dismissedPairs,
       });
-    }
+    });
     return { rows, total: matched.length, masked: !opts.unmask };
   }
 
@@ -173,18 +235,23 @@ export function createPatientDuplicates(deps: {
     if (new Set(ids).size < 2 || ids.length !== new Set(ids).size) {
       throw new PatientIndexError('list at least two different patients', 'invalid');
     }
-    const found = await db.selectFrom('patients').select('id').where('id', 'in', ids).execute();
-    if (found.length !== ids.length) throw new PatientIndexError('patient not found', 'not-found');
+    if (ids.length > MAX_REFS) throw new PatientIndexError(PAIR_LIMIT_ERROR, 'invalid');
+    let found = 0;
+    for (const part of chunks(ids)) {
+      found += (await db.selectFrom('patients').select('id').where('id', 'in', part).execute()).length;
+    }
+    if (found !== ids.length) throw new PatientIndexError('patient not found', 'not-found');
   }
 
   async function dismiss(input: { ids: string[]; reason: string | null; by: string }): Promise<{ changed: number }> {
     await requireKnown(input.ids);
     const pairs = allPairs([...input.ids].sort());
-    const existing = await dismissedAmong(input.ids);
+    const existing = new Set((await dismissedRows(input.ids)).map(([a, b]) => pairKey(a, b)));
     const fresh = pairs.filter(([a, b]) => !existing.has(pairKey(a, b)));
-    if (fresh.length) {
+    for (const part of chunks(fresh, INSERT_CHUNK)) {
       await internalDb.insertInto('patient_duplicate_dismissals')
-        .values(fresh.map(([a, b]) => ({ patient_a: a, patient_b: b, reason: input.reason, dismissed_by: input.by })))
+        .values(part.map(([a, b]) => ({ patient_a: a, patient_b: b, reason: input.reason, dismissed_by: input.by })))
+        .onConflict((oc) => oc.columns(['patient_a', 'patient_b']).doNothing())
         .execute();
     }
     return { changed: fresh.length };
@@ -193,16 +260,17 @@ export function createPatientDuplicates(deps: {
   async function restore(input: { ids: string[] }): Promise<{ changed: number }> {
     await requireKnown(input.ids);
     let changed = 0;
-    for (const [a, b] of allPairs([...input.ids].sort())) {
+    for (const part of chunks(allPairs([...input.ids].sort()), DELETE_CHUNK)) {
       const res = await internalDb.deleteFrom('patient_duplicate_dismissals')
-        .where('patient_a', '=', a).where('patient_b', '=', b).executeTakeFirst();
+        .where((eb) => eb.or(part.map(([a, b]) => eb.and([eb('patient_a', '=', a), eb('patient_b', '=', b)]))))
+        .executeTakeFirst();
       changed += Number(res.numDeletedRows ?? 0);
     }
     return { changed };
   }
 
   async function exportCsv(): Promise<{ csv: string; groups: number }> {
-    const open = (await groupsWithStatus()).filter((g) => g.dismissedPairs < g.pairs.length);
+    const open = (await groupsWithStatus()).filter((g) => g.dismissedPairs < g.pairs);
     const ids = [...new Set(open.flatMap((g) => g.ids))];
     const people = new Map<string, Record<string, string | null>>();
     for (const part of chunks(ids)) {
@@ -231,7 +299,8 @@ export function createPatientDuplicates(deps: {
         rows.push({
           group: i + 1, rule: g.rule,
           system_label: g.system ? labels.get(g.system)?.label ?? g.system : '',
-          evidence: g.rule === 'identifier' ? g.value : [p.surname, p.firstname, p.date_of_birth].filter(Boolean).join(' '),
+          evidence: g.rule === 'identifier' ? g.value
+            : [[p.firstname, p.surname].filter(Boolean).join(' '), p.date_of_birth].filter(Boolean).join(', '),
           patient_id: id, patient_guid: p.patient_guid, surname: p.surname, firstname: p.firstname,
           date_of_birth: p.date_of_birth, sex: p.sex, managing_facility: org ? facilities.get(org) ?? p.managing_organization : '',
         });
