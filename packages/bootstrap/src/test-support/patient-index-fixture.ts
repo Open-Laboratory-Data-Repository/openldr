@@ -1,6 +1,8 @@
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { makeMigratedExternalDb } from '@openldr/db/testing-external';
+import { createHash } from 'node:crypto';
+import { DataType } from 'pg-mem';
+import { makeMigratedExternalDbWithMem } from '@openldr/db/testing-external';
 import {
   createFhirStore, createTerminologyStore, createTerminologyAdminStore,
   type ExternalSchema, type ValueSetProjection,
@@ -12,7 +14,14 @@ import { createPatientIdentifierSystems } from '../patient-identifier-systems';
 
 export async function buildPatientIndexFixture() {
   const internalDb = await makeMigratedDb();
-  const externalDb = (await makeMigratedExternalDb()) as unknown as Kysely<ExternalSchema>;
+  const { db: memDb, mem } = await makeMigratedExternalDbWithMem();
+  // pg-mem has no md5(). The masked list orders by md5(id) (patient-index.ts, neutralOrder), so the
+  // fake gets the same function Postgres and MySQL have.
+  mem.public.registerFunction({
+    name: 'md5', args: [DataType.text], returns: DataType.text,
+    implementation: (v: string) => createHash('md5').update(v).digest('hex'),
+  });
+  const externalDb = memDb as unknown as Kysely<ExternalSchema>;
   const fhirStore = createFhirStore(internalDb);
   const store = createTerminologyStore(internalDb, fhirStore);
   const projection: ValueSetProjection = {

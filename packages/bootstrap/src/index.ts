@@ -1006,7 +1006,7 @@ const reporting: ReportingApi = {
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
-  const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems });
+  const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems, engine });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
   // the polling worker that drains it. `runIngest` streams+extracts the uploaded zip to a fresh
