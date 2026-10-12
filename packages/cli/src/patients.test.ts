@@ -2,18 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const patientIndex = { list: vi.fn(), getById: vi.fn(), requestsById: vi.fn() };
 const patientIdentifierSystems = { list: vi.fn(), get: vi.fn(), set: vi.fn() };
+const patientDuplicates = { list: vi.fn(), dismiss: vi.fn(), restore: vi.fn(), exportCsv: vi.fn() };
 const audit: Array<Record<string, unknown>> = [];
 vi.mock('@openldr/config', () => ({ loadConfig: () => ({}) }));
 vi.mock('@openldr/bootstrap', async (orig) => {
   const actual = await orig<typeof import('@openldr/bootstrap')>();
   return {
     ...actual,
-    createAppContext: async () => ({ patientIndex, patientIdentifierSystems, close: async () => {} }),
+    createAppContext: async () => ({ patientIndex, patientIdentifierSystems, patientDuplicates, close: async () => {} }),
     recordAuditEvent: async (_ctx: unknown, _actor: unknown, e: Record<string, unknown>) => { audit.push(e); },
   };
 });
 
-import { runIdentifierSystemsList, runIdentifierSystemsSet, runPatientsList, runPatientsShow } from './patients';
+import {
+  runDuplicatesDismiss, runDuplicatesExport, runDuplicatesList, runDuplicatesRestore,
+  runIdentifierSystemsList, runIdentifierSystemsSet, runPatientsList, runPatientsShow,
+} from './patients';
 
 function capture() {
   const out: string[] = [];
@@ -28,7 +32,7 @@ const ROW = { ref: 'r', id: null, name: 'J*** M***', sex: 'M', birthDate: '1990'
 beforeEach(() => {
   vi.restoreAllMocks();
   audit.length = 0;
-  for (const f of [...Object.values(patientIndex), ...Object.values(patientIdentifierSystems)]) f.mockReset();
+  for (const f of [...Object.values(patientIndex), ...Object.values(patientIdentifierSystems), ...Object.values(patientDuplicates)]) f.mockReset();
 });
 
 describe('openldr patients', () => {
@@ -94,5 +98,47 @@ describe('openldr patients', () => {
     const io = capture();
     expect(await runIdentifierSystemsSet('urn:zm:mpi', { listColumn: 'yes', json: false })).toBe(1);
     expect(io.err()).toContain('--list-column must be on or off');
+  });
+});
+
+describe('openldr patients duplicates', () => {
+  const GROUP = { rule: 'identifier', evidence: { system: 'urn:zm:nrc', label: 'NRC', text: '•••10/1' }, members: [ROW, ROW], memberCount: 2, pairs: 1, dismissedPairs: 0 };
+
+  it('list is masked by default and prints one line per group', async () => {
+    patientDuplicates.list.mockResolvedValue({ rows: [GROUP], total: 1, masked: true });
+    const io = capture();
+    expect(await runDuplicatesList({ json: false, identifiers: false })).toBe(0);
+    expect(patientDuplicates.list).toHaveBeenCalledWith({ status: 'open', limit: 200, offset: 0 }, { unmask: false });
+    expect(io.out()).toContain('Same NRC  •••10/1  2 patient(s)  0 of 1 pair(s) dismissed');
+  });
+
+  it('list refuses a bad status', async () => {
+    const io = capture();
+    expect(await runDuplicatesList({ status: 'gone', json: false, identifiers: false })).toBe(1);
+    expect(io.err()).toContain('status must be open, dismissed or all');
+  });
+
+  it('dismiss writes and audits as the CLI actor', async () => {
+    patientDuplicates.dismiss.mockResolvedValue({ changed: 1 });
+    capture();
+    expect(await runDuplicatesDismiss('a', 'b', { reason: 'twins', json: false })).toBe(0);
+    expect(patientDuplicates.dismiss.mock.calls[0][0]).toMatchObject({ ids: ['a', 'b'], reason: 'twins' });
+    expect(audit[0]).toMatchObject({ action: 'patients.duplicate.dismiss', entityId: 'a', metadata: { ids: ['a', 'b'], reason: 'twins', changed: 1 } });
+  });
+
+  it('restore audits', async () => {
+    patientDuplicates.restore.mockResolvedValue({ changed: 0 });
+    const io = capture();
+    expect(await runDuplicatesRestore('a', 'b', { json: false })).toBe(0);
+    expect(io.out()).toContain('0 pair(s) restored');
+    expect(audit[0]).toMatchObject({ action: 'patients.duplicate.restore' });
+  });
+
+  it('export writes the CSV to stdout and audits the group count', async () => {
+    patientDuplicates.exportCsv.mockResolvedValue({ csv: 'group,rule\n1,identifier\n', groups: 1 });
+    const io = capture();
+    expect(await runDuplicatesExport({})).toBe(0);
+    expect(io.out()).toBe('group,rule\n1,identifier\n');
+    expect(audit[0]).toEqual({ action: 'patients.duplicate.export', entityType: 'patient', entityId: 'duplicates', metadata: { groups: 1 } });
   });
 });

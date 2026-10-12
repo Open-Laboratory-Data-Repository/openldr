@@ -1,7 +1,8 @@
+import { writeFileSync } from 'node:fs';
 import { loadConfig } from '@openldr/config';
 import {
-  createAppContext, parsePatientListQuery, parseSystemInput, recordAuditEvent,
-  type PatientIdentifierView, type PatientRow,
+  createAppContext, parseDuplicateListQuery, parsePatientListQuery, parseSystemInput, recordAuditEvent,
+  type DuplicateGroup, type PatientIdentifierView, type PatientRow,
 } from '@openldr/bootstrap';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
@@ -104,4 +105,60 @@ export async function runIdentifierSystemsSet(system: string, opts: IdentifierSy
     process.stdout.write(opts.json ? JSON.stringify(after, null, 2) + '\n' : `${after.system} saved as ${after.label ?? '(no label)'}.\n`);
     return 0;
   } catch (err) { return fail('identifier-systems set', err, opts.json); } finally { await ctx.close(); }
+}
+
+// `openldr patients duplicates ...`: likely duplicate groups (patient duplicate detection spec). CE
+// lists them; the source system fixes them. Masked unless --identifiers, which does not audit a list.
+// Dismiss, restore and export audit; export writes CSV that is unmasked.
+
+export interface DuplicatesListOpts { status?: string; identifiers: boolean; json: boolean }
+
+const ruleText = (g: DuplicateGroup) => (g.rule === 'identifier' ? `Same ${g.evidence.label ?? g.evidence.system ?? 'identifier'}` : 'Same name and date of birth');
+
+export async function runDuplicatesList(opts: DuplicatesListOpts): Promise<number> {
+  const parsed = parseDuplicateListQuery({ status: opts.status, limit: '200' });
+  if (!parsed.ok) { process.stderr.write(`patients duplicates list failed: ${parsed.error}\n`); return 1; }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const out = await ctx.patientDuplicates.list(parsed.query, { unmask: opts.identifiers });
+    if (opts.json) { process.stdout.write(JSON.stringify(out, null, 2) + '\n'); return 0; }
+    const lines = out.rows.map((g) => [
+      ruleText(g), g.evidence.text, `${g.memberCount} patient(s)`, `${g.dismissedPairs} of ${g.pairs} pair(s) dismissed`,
+      ...(opts.identifiers ? [g.members.map((m) => m.id).join(' ')] : []),
+    ].join('  '));
+    process.stdout.write([...lines, `${out.rows.length} of ${out.total} group(s)${out.masked ? ' (masked; --identifiers shows names and ids)' : ''}`].join('\n') + '\n');
+    return 0;
+  } catch (err) { return fail('duplicates list', err, opts.json); } finally { await ctx.close(); }
+}
+
+export async function runDuplicatesDismiss(idA: string, idB: string, opts: { reason?: string; json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const actor = cliActor();
+    const reason = opts.reason?.trim() || null;
+    const out = await ctx.patientDuplicates.dismiss({ ids: [idA, idB], reason, by: actor.actorName });
+    await recordAuditEvent(ctx, actor, { action: 'patients.duplicate.dismiss', entityType: 'patient', entityId: idA, metadata: { ids: [idA, idB], reason, changed: out.changed } });
+    process.stdout.write(opts.json ? JSON.stringify(out) + '\n' : `${out.changed} pair(s) dismissed.\n`);
+    return 0;
+  } catch (err) { return fail('duplicates dismiss', err, opts.json); } finally { await ctx.close(); }
+}
+
+export async function runDuplicatesRestore(idA: string, idB: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const out = await ctx.patientDuplicates.restore({ ids: [idA, idB] });
+    await recordAuditEvent(ctx, cliActor(), { action: 'patients.duplicate.restore', entityType: 'patient', entityId: idA, metadata: { ids: [idA, idB], changed: out.changed } });
+    process.stdout.write(opts.json ? JSON.stringify(out) + '\n' : `${out.changed} pair(s) restored.\n`);
+    return 0;
+  } catch (err) { return fail('duplicates restore', err, opts.json); } finally { await ctx.close(); }
+}
+
+export async function runDuplicatesExport(opts: { out?: string }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const { csv, groups } = await ctx.patientDuplicates.exportCsv();
+    await recordAuditEvent(ctx, cliActor(), { action: 'patients.duplicate.export', entityType: 'patient', entityId: 'duplicates', metadata: { groups } });
+    if (opts.out) writeFileSync(opts.out, csv, 'utf8'); else process.stdout.write(csv);
+    return 0;
+  } catch (err) { return fail('duplicates export', err, false); } finally { await ctx.close(); }
 }
