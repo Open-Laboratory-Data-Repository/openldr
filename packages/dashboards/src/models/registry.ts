@@ -34,6 +34,10 @@ export const HARDCODED_DENY_UNION: Record<string, string[]> = {
   // test_map holds lab codes and catalog names, no patient data. Hide only the surrogate id; report
   // SQL joins on level, source_system and source_code.
   test_map: ['id'],
+  // patient_identifiers holds MPI numbers, national ids and folder numbers. Hidden until an operator
+  // decides, as patients' identifiers are. The patient index page reads it directly, not through
+  // this policy.
+  patient_identifiers: ['id', 'patient_id', 'value', 'plugin_id', 'plugin_version', 'batch_id'],
 };
 
 /** Columns classified as PII for the Data Exposure UI badge + un-hide confirmation ONLY.
@@ -46,6 +50,7 @@ export const PII_COLUMNS: Record<string, string[]> = {
   facility_map: [],
   test_map: [],
   lab_request_attributes: ['value_text'],
+  patient_identifiers: ['value'],
 };
 
 /** Hidden-column set for a table: the policy entry, else the hardcoded union fallback. */

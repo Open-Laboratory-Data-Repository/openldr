@@ -279,6 +279,24 @@ export interface WarehouseFacilityRegistryTable {
   updated_at: Generated<Date>;
 }
 
+/** Every Patient.identifier (migration 025). One row per (patient, system, value). `id` is derived
+ *  from those three, so a repeated identifier collapses to one row. The writer replaces a patient's
+ *  whole set on every new version of the Patient. `system` is null when the sender gave none. */
+export interface PatientIdentifiersTable {
+  id: string;
+  patient_id: string;
+  system: string | null;
+  value: string;
+  type_code: string | null;
+  type_text: string | null;
+  use: string | null;
+  source_system: string | null;
+  plugin_id: string | null;
+  plugin_version: string | null;
+  batch_id: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface ExternalSchema {
   patients: PatientsTable;
   lab_requests: LabRequestsTable;
@@ -293,6 +311,7 @@ export interface ExternalSchema {
   test_map: TestMapTable;
   ingest_events: IngestEventsTable;
   lab_request_attributes: LabRequestAttributesTable;
+  patient_identifiers: PatientIdentifiersTable;
 }
 
 /**
@@ -315,4 +334,5 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   test_map: ['id', 'level', 'source_system', 'source_code', 'catalog_code', 'catalog_name', 'category', 'loinc', 'updated_at'],
   ingest_events: ['resource_type', 'resource_id', 'version', 'recorded_at'],
   lab_request_attributes: ['id', 'lab_request_id', 'system', 'code', 'value_text', 'value_number', 'value_datetime', 'value_boolean', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  patient_identifiers: ['id', 'patient_id', 'system', 'value', 'type_code', 'type_text', 'use', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
 };
