@@ -76,6 +76,8 @@ An HTTP 202 means the webhook was accepted, not completed. Poll outstanding rece
 
 If you upgrade from a release before lab_results had a status column, run `openldr db reproject --force` once. It fills in the status of results already in the warehouse, so rejected tests stop counting as results.
 
+If you upgrade from a release before the Patient Index, run `openldr db reproject --force` once. It lists every identifier of patients already in the warehouse, so search can find them by any identifier, not only the first.
+
 Resume senders only after these checks pass. Keep the verified backup and previous images according to the site's retention policy.
 
 ### Moving from MinIO to Garage (installs from before 0.1.11)

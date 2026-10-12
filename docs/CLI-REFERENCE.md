@@ -32,6 +32,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr target-store test` | Probe the analytics warehouse adapter. |
 | `openldr terminology ...` | Import, query, translate, and administer terminology assets. |
 | `openldr forms list/extract` | List forms or extract QuestionnaireResponse data. |
+| `openldr patients ...` | List and show patients, and label identifier systems. Masked unless `--identifiers`. |
 | `openldr ingest <file>` | **Ingest a data file through the pipeline** (accept + drain), optionally via a converter plugin. The primary "push data into CE" CLI. |
 | `openldr pipeline ...` | Inspect/retry ingest pipeline batches. |
 | `openldr queue status` | Inspect the event queue. |
@@ -186,6 +187,22 @@ A dry run by default. It reports four counts: codes it would link, codes already
 kept because they already have a mapping, and codes with no match. It never changes a code that
 already has a mapping. With `--apply` it writes every link in one transaction and queues a
 facility map rebuild. An unknown or deactivated register exits 1.
+
+## Patients
+
+Reads the patient index. The source system owns each patient, so every command here reads
+except `identifier-systems set`, which changes only a label.
+
+    openldr patients list [--search <text>] [--status active|merged|all] [--limit <n>] [--offset <n>] [--identifiers] [--json]
+    openldr patients show <id> [--identifiers] [--json]
+    openldr patients identifier-systems list [--json]
+    openldr patients identifier-systems set <system> [--label <text>] [--list-column on|off] [--searchable on|off] [--json]
+
+Output is masked unless you pass `--identifiers`, which is audited. A masked name keeps its
+first letter and a masked identifier keeps its last four characters. `list` and `show` with
+`--identifiers` write an audit event with `actorName: 'cli'`. `identifier-systems list` shows each
+identifier system CE has seen, its label, whether it shows in the list and whether search
+matches it. `identifier-systems set` changes one system and is audited too.
 
 ## Captured Terminal Output
 
