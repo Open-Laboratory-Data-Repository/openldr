@@ -45,6 +45,8 @@ Un résultat numérique hors de la plage de mesure de la méthode du laboratoire
 de la limite avec un comparateur, par exemple `< 20`. `lab_results.numeric_comparator` contient `<`, `<=`, `>=`
 ou `>`, et reste vide pour un nombre ordinaire. `numeric_value` contient alors la limite.
 
+Chaque résultat porte son statut FHIR dans `lab_results.status`. Un test rejeté à la saisie des résultats est enregistré comme une ligne au statut `cancelled`, sans valeur, avec la raison dans `data_absent_code` et `data_absent_reason`, par exemple `HAEM` et `Haemolysed`. Pour compter les résultats, ajoutez `(status is null or status <> 'cancelled')` à la requête. Pour compter les tests rejetés, utilisez `status = 'cancelled'`. Une installation mise à niveau depuis une version antérieure n'a pas de statut sur les lignes qu'elle contenait déjà. Lancez `openldr db reproject --force` une fois après la mise à niveau pour les remplir.
+
 `clinical_info` est masqué du générateur de tableaux de bord par défaut, car il peut contenir du
 texte libre ou un identifiant patient pseudonymisé. Démasquez-le dans Paramètres, puis Exposition
 des données. La table `lab_request_attributes` n'est pas dans le générateur de tableaux de bord
