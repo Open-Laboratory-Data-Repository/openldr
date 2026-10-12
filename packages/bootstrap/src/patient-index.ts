@@ -1,5 +1,5 @@
 import { sql, type Kysely } from 'kysely';
-import type { ExternalSchema } from '@openldr/db';
+import type { ExternalSchema, TargetEngine } from '@openldr/db';
 import { ageInYears, birthYear, createRefCodec, maskName, maskValue } from './patient-mask';
 import { PatientIndexError, type PatientIdentifierSystems } from './patient-identifier-systems';
 
@@ -69,8 +69,19 @@ const fullName = (r: { firstname: string | null; surname: string | null }) =>
 const maskedName = (r: { firstname: string | null; surname: string | null }) =>
   [maskName(r.firstname), maskName(r.surname)].filter(Boolean).join(' ') || null;
 
+/** The masked list's sort key: an MD5 hash of the patient id. A patient id can carry PID-3
+ *  (`Patient/hl7-{id}`), so ordering by id would line rows up in the order of the full identifier
+ *  beside their last four characters. The hash is stable, so paging holds, and says nothing about
+ *  the id's value. Each dialect names the function differently. */
+export function neutralOrder(engine: TargetEngine) {
+  return engine === 'mssql'
+    ? sql`convert(varchar(32), hashbytes('MD5', ${sql.ref('id')}), 2)`
+    : sql`md5(${sql.ref('id')})`;
+}
+
 export function createPatientIndex(deps: {
-  externalDb: Kysely<ExternalSchema>; systems: PatientIdentifierSystems; now?: () => Date; refKey?: Buffer;
+  externalDb: Kysely<ExternalSchema>; systems: PatientIdentifierSystems; engine: TargetEngine;
+  now?: () => Date; refKey?: Buffer;
 }): PatientIndex {
   const { externalDb: db, systems } = deps;
   const now = deps.now ?? (() => new Date());
@@ -168,9 +179,12 @@ export function createPatientIndex(deps: {
         base = base.where('id', 'in', exact);
       }
     }
-    // A masked list sorts by id, so the order does not hint at names. The unique id ends both orders.
+    // A masked list sorts by a hash of the id (neutralOrder), so the order hints at neither the name
+    // nor the identifier. The unique id ends both orders.
     let ordered = base.select([...PATIENT_COLUMNS]);
-    ordered = opts.unmask ? ordered.orderBy('surname').orderBy('firstname').orderBy('id') : ordered.orderBy('id');
+    ordered = opts.unmask
+      ? ordered.orderBy('surname').orderBy('firstname').orderBy('id')
+      : ordered.orderBy(neutralOrder(deps.engine)).orderBy('id');
     const [records, counted] = await Promise.all([
       ordered.limit(q.limit).offset(q.offset).execute(),
       base.select((eb) => eb.fn.countAll<string | number>().as('n')).executeTakeFirst(),

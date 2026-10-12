@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import { createPatientIndex, parsePageQuery, parsePatientListQuery } from './patient-index';
+import {
+  DummyDriver, Kysely, MssqlAdapter, MssqlIntrospector, MssqlQueryCompiler, MysqlAdapter, MysqlIntrospector,
+  MysqlQueryCompiler,
+} from 'kysely';
+import { createPatientIndex, neutralOrder, parsePageQuery, parsePatientListQuery } from './patient-index';
 import { buildPatientIndexFixture, seedIdentifier, seedPatient, seedRequest, seedResult } from './test-support/patient-index-fixture';
 
 const MPI = 'urn:zm:mpi';
@@ -10,7 +14,7 @@ const Q = { q: '', status: 'active' as const, limit: 25, offset: 0 };
 
 async function build() {
   const f = await buildPatientIndexFixture();
-  const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, now: NOW, refKey: randomBytes(32) });
+  const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', now: NOW, refKey: randomBytes(32) });
   await seedPatient(f.externalDb, { id: 'hl7-111', surname: 'Mwanza', firstname: 'John', dob: '1990-01-05', sex: 'M', guid: 'G-111', phone: '0977', email: 'j@x', org: 'Organization/fac-1' });
   await seedPatient(f.externalDb, { id: 'hl7-222', surname: 'Banda', firstname: 'Ruth', dob: '1985', sex: 'F', guid: 'G-222' });
   await seedPatient(f.externalDb, { id: 'hl7-333', surname: 'Phiri', firstname: 'Old', active: false, replacedBy: 'hl7-111' });
@@ -98,6 +102,52 @@ describe('patient index: list', () => {
   });
 });
 
+describe('patient index: masked order', () => {
+  // A patient id can carry PID-3 (`hl7-{id}`). Ordering a masked list by id would put rows in the
+  // order of the full identifier next to their last four characters, so it orders by md5(id).
+  it('orders a masked list by md5 of the id, the same way every time', async () => {
+    const f = await buildPatientIndexFixture();
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', now: NOW, refKey: randomBytes(32) });
+    // md5: hl7-001 4612..., hl7-003 5522..., hl7-002 6096..., hl7-004 d2f6...
+    for (const [id, first] of [['hl7-001', 'Ada'], ['hl7-002', 'Bea'], ['hl7-003', 'Cid'], ['hl7-004', 'Dan']]) {
+      await seedPatient(f.externalDb, { id, firstname: first, surname: 'Zed' });
+    }
+    const names = async () => (await index.list(Q, { unmask: false })).rows.map((r) => r.name);
+    expect(await names()).toEqual(['A*** Z***', 'C*** Z***', 'B*** Z***', 'D*** Z***']);
+    expect(await names()).toEqual(await names());
+    const page2 = (await index.list({ ...Q, limit: 2, offset: 2 }, { unmask: false })).rows.map((r) => r.name);
+    expect(page2).toEqual(['B*** Z***', 'D*** Z***']);
+  });
+
+  it('keeps the unmasked order by name', async () => {
+    const f = await buildPatientIndexFixture();
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', now: NOW, refKey: randomBytes(32) });
+    for (const [id, first] of [['hl7-001', 'Ada'], ['hl7-002', 'Bea'], ['hl7-003', 'Cid']]) {
+      await seedPatient(f.externalDb, { id, firstname: first, surname: 'Zed' });
+    }
+    expect((await index.list(Q, { unmask: true })).rows.map((r) => r.id)).toEqual(['hl7-001', 'hl7-002', 'hl7-003']);
+  });
+
+  // Offline against Kysely's real compilers, as the external migration tests do. Neither proves a real
+  // MySQL or SQL Server accepts it.
+  it('compiles the hash for MySQL and SQL Server', () => {
+    const compile = (engine: 'mysql' | 'mssql') => {
+      const mssql = engine === 'mssql';
+      const db = new Kysely<{ patients: { id: string } }>({
+        dialect: {
+          createAdapter: () => (mssql ? new MssqlAdapter() : new MysqlAdapter()),
+          createDriver: () => new DummyDriver(),
+          createIntrospector: (k) => (mssql ? new MssqlIntrospector(k) : new MysqlIntrospector(k)),
+          createQueryCompiler: () => (mssql ? new MssqlQueryCompiler() : new MysqlQueryCompiler()),
+        },
+      });
+      return db.selectFrom('patients').select('id').orderBy(neutralOrder(engine)).compile().sql;
+    };
+    expect(compile('mysql')).toBe('select `id` from `patients` order by md5(`id`)');
+    expect(compile('mssql')).toBe(`select "id" from "patients" order by convert(varchar(32), hashbytes('MD5', "id"), 2)`);
+  });
+});
+
 describe('patient index: detail and requests', () => {
   it('returns every identifier, guid, phone and email unmasked', async () => {
     const { index } = await build();
@@ -121,7 +171,7 @@ describe('patient index: detail and requests', () => {
   it('refuses a bad or foreign ref as not found', async () => {
     const { index, externalDb, systems } = await build();
     await expect(index.get('nope', { unmask: true })).rejects.toMatchObject({ kind: 'not-found' });
-    const other = createPatientIndex({ externalDb, systems, now: NOW, refKey: randomBytes(32) });
+    const other = createPatientIndex({ externalDb, systems, engine: 'postgres', now: NOW, refKey: randomBytes(32) });
     const foreign = (await other.list(Q, { unmask: true })).rows[0].ref;
     await expect(index.get(foreign, { unmask: true })).rejects.toMatchObject({ kind: 'not-found' });
   });
