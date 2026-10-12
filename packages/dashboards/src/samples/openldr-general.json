@@ -64,7 +64,7 @@
       "visual": { "yAxisKey": "value" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT COUNT(*) AS value FROM lab_results\nWHERE 1=1\n[[AND substring(result_timestamp,1,10) >= {{period_from}}]]\n[[AND substring(result_timestamp,1,10) <= {{period_to}}]]\n[[AND observation_desc = {{test}}]]",
+        "sql": "SELECT COUNT(*) AS value FROM lab_results\nWHERE (status IS NULL OR status <> 'cancelled')\n[[AND substring(result_timestamp,1,10) >= {{period_from}}]]\n[[AND substring(result_timestamp,1,10) <= {{period_to}}]]\n[[AND observation_desc = {{test}}]]",
         "variableBindings": { "period": "period", "test": "test" },
         "variables": {
           "period": { "type": "date-range", "label": "Period" },
@@ -157,7 +157,7 @@
       "visual": { "xAxisKey": "label", "yAxisKey": "value" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT 'Ordered' AS label, COUNT(*) AS value FROM lab_requests\nUNION ALL SELECT 'Specimen Received', COUNT(*) FROM specimens WHERE received_time IS NOT NULL\nUNION ALL SELECT 'Result Recorded', COUNT(*) FROM lab_results\nUNION ALL SELECT 'Report Issued', COUNT(*) FROM diagnostic_reports WHERE issued IS NOT NULL"
+        "sql": "SELECT 'Ordered' AS label, COUNT(*) AS value FROM lab_requests\nUNION ALL SELECT 'Specimen Received', COUNT(*) FROM specimens WHERE received_time IS NOT NULL\nUNION ALL SELECT 'Result Recorded', COUNT(*) FROM lab_results WHERE (status IS NULL OR status <> 'cancelled')\nUNION ALL SELECT 'Report Issued', COUNT(*) FROM diagnostic_reports WHERE issued IS NOT NULL"
       }
     },
     {
@@ -183,7 +183,7 @@
       "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#8b5cf6" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT substring(result_timestamp,1,10) AS label, COUNT(*) AS value FROM lab_results\nWHERE 1=1\n[[AND substring(result_timestamp,1,10) >= {{period_from}}]]\n[[AND substring(result_timestamp,1,10) <= {{period_to}}]]\n[[AND observation_desc = {{test}}]]\nGROUP BY substring(result_timestamp,1,10)\nORDER BY label",
+        "sql": "SELECT substring(result_timestamp,1,10) AS label, COUNT(*) AS value FROM lab_results\nWHERE (status IS NULL OR status <> 'cancelled')\n[[AND substring(result_timestamp,1,10) >= {{period_from}}]]\n[[AND substring(result_timestamp,1,10) <= {{period_to}}]]\n[[AND observation_desc = {{test}}]]\nGROUP BY substring(result_timestamp,1,10)\nORDER BY label",
         "variableBindings": { "period": "period", "test": "test" },
         "variables": {
           "period": { "type": "date-range", "label": "Period" },

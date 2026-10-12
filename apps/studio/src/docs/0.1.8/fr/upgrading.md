@@ -71,6 +71,8 @@ Démarrez d'abord les services existants de stockage et d'identité, puis les se
 
 HTTP 202 signifie que le webhook a été accepté, pas terminé. Consultez les reçus en attente. Examinez les reçus interrompus et les effets externes avant de soumettre un travail de remplacement. Réessayez la même requête logique avec son `Idempotency-Key` et son contenu d'origine. Ne rejouez pas en masse les requêtes interrompues avec de nouvelles clés.
 
+Si vous mettez à niveau depuis une version où lab_results n'avait pas de colonne status, lancez `openldr db reproject --force` une fois. Cela remplit le statut des résultats déjà présents dans l'entrepôt, pour que les tests rejetés ne comptent plus comme des résultats.
+
 Reprenez les envois seulement après ces vérifications. Conservez la sauvegarde vérifiée et les anciennes images selon la politique du site.
 
 ## Passer de MinIO à Garage (installations antérieures à 0.1.11)

@@ -219,4 +219,31 @@ describe('rows a resource owns in other tables', () => {
     expect(await db.selectFrom('lab_request_attributes').selectAll().execute()).toEqual([]);
     await db.destroy();
   });
+
+  it('writes a rejected test with its status and reason', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    expect(await w.write({
+      resourceType: 'Observation', id: 'o-rej', status: 'cancelled',
+      code: { coding: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'CHEM-GLU' }] },
+      dataAbsentReason: { coding: [{ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' }] },
+    }, {})).toBe('written');
+    const rows = await db.selectFrom('lab_results').select(['status', 'data_absent_code', 'data_absent_reason', 'numeric_value']).execute();
+    expect(rows).toEqual([{ status: 'cancelled', data_absent_code: 'HAEM', data_absent_reason: 'Haemolysed', numeric_value: null }]);
+    await db.destroy();
+  });
+
+  it('a re-write of the same Observation updates its status and reason', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    const code = { coding: [{ system: 'urn:openldr:codesystem:test-catalog', code: 'CHEM-GLU' }] };
+    await w.write({ resourceType: 'Observation', id: 'o-rw', status: 'final', code }, {});
+    await w.write({
+      resourceType: 'Observation', id: 'o-rw', status: 'cancelled', code,
+      dataAbsentReason: { coding: [{ code: 'HAEM', display: 'Haemolysed' }] },
+    }, {});
+    const rows = await db.selectFrom('lab_results').select(['status', 'data_absent_code', 'data_absent_reason']).execute();
+    expect(rows).toEqual([{ status: 'cancelled', data_absent_code: 'HAEM', data_absent_reason: 'Haemolysed' }]);
+    await db.destroy();
+  });
 });

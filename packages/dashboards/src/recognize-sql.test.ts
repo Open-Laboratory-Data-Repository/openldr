@@ -79,7 +79,7 @@ describe('recognizeSql — filters and corpus', () => {
     expect(r).toMatchObject({ ok: false, code: 'order_by_unsupported' });
   });
 
-  it('recognizes 9 of the 13 seeded widgets, with expected refusal codes', () => {
+  it('recognizes 7 of the 13 seeded widgets, with expected refusal codes', () => {
     // IS NOT NULL is only faithfully droppable on the group-by column (the builder
     // shows those nulls as a `(none)` bucket). On any other column — including a real
     // dimension like `numeric_value` (key `value`) — dropping the predicate would
@@ -88,12 +88,16 @@ describe('recognizeSql — filters and corpus', () => {
     // its AVG/COUNT, so it refuses with `not_null_unsupported`.
     const results = board.widgets.map((w: any) => ({ title: w.title, r: recognizeSql(w.query.sql) }));
     const passed = results.filter((x) => x.r.ok).map((x) => x.title);
-    expect(passed.length).toBe(9);
+    // Results Recorded and Results Trend stay SQL: they filter on lab_results.status,
+    // which the builder's Results model does not expose.
+    expect(passed.length).toBe(7);
     const refusals = Object.fromEntries(results.filter((x) => !x.r.ok).map((x) => [x.title, (x.r as any).code]));
     expect(refusals).toEqual({
+      'Results Recorded': 'unrecognized_predicate',
       'Result Finalisation %': 'case_measure',
       'Order → Report Pipeline': 'union',
       'Analyte Volume vs Avg Value': 'not_null_unsupported',
+      'Results Trend': 'unrecognized_predicate',
       'Recent Orders': 'detail_rows',
     });
   });

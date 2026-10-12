@@ -74,6 +74,8 @@ Start the existing storage and identity services first, then the pinned new appl
 
 An HTTP 202 means the webhook was accepted, not completed. Poll outstanding receipts. Investigate interrupted receipts and external effects before deciding whether to submit replacement work. Retry the same logical request with its original `Idempotency-Key` and input. Do not bulk replay interrupted requests with fresh keys.
 
+If you upgrade from a release before lab_results had a status column, run `openldr db reproject --force` once. It fills in the status of results already in the warehouse, so rejected tests stop counting as results.
+
 Resume senders only after these checks pass. Keep the verified backup and previous images according to the site's retention policy.
 
 ### Moving from MinIO to Garage (installs from before 0.1.11)
@@ -208,6 +210,8 @@ Démarrez d'abord les services existants de stockage et d'identité, puis les se
 
 HTTP 202 signifie que le webhook a été accepté, pas terminé. Consultez les reçus en attente. Examinez les reçus interrompus et les effets externes avant de soumettre un travail de remplacement. Réessayez la même requête logique avec son `Idempotency-Key` et son contenu d'origine. Ne rejouez pas en masse les requêtes interrompues avec de nouvelles clés.
 
+Si vous mettez à niveau depuis une version où lab_results n'avait pas de colonne status, lancez `openldr db reproject --force` une fois. Cela remplit le statut des résultats déjà présents dans l'entrepôt, pour que les tests rejetés ne comptent plus comme des résultats.
+
 Reprenez les envois seulement après ces vérifications. Conservez la sauvegarde vérifiée et les anciennes images selon la politique du site.
 
 ### Passer de MinIO à Garage (installations antérieures à 0.1.11)
@@ -341,6 +345,8 @@ Se a migração falhar, pare aqui. Algumas alterações do esquema podem já est
 Inicie primeiro os serviços existentes de armazenamento e identidade, depois os serviços aplicacionais da versão escolhida. Preserve as versões dos motores de bases. Verifique `docker compose ps`, a saúde da API e os registos. Leia dados representativos no Studio ou na CLI. Verifique os recibos webhook e as execuções associadas antes de reabrir o tráfego.
 
 HTTP 202 significa que o webhook foi aceite, não concluído. Consulte os recibos pendentes. Investigue recibos interrompidos e efeitos externos antes de decidir submeter trabalho de substituição. Repita o mesmo pedido lógico com o `Idempotency-Key` e conteúdo originais. Não repita em massa pedidos interrompidos com novas chaves.
+
+Se atualizar a partir de uma versão em que lab_results não tinha a coluna status, execute `openldr db reproject --force` uma vez. Isso preenche o estado dos resultados que já estão no armazém, para que os testes rejeitados deixem de contar como resultados.
 
 Retome os emissores apenas após estas verificações. Guarde a cópia verificada e imagens anteriores conforme a política de retenção local.
 
