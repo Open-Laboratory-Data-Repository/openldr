@@ -35,9 +35,17 @@ export function DuplicatesTab({ canManage, canExport, onOpen }: {
     const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
+    let stepBack = false;
     try {
       const out = await listPatientDuplicates({ status, limit: pageSize, offset: page * pageSize });
       if (seq !== loadSeq.current) return;
+      // Rows can vanish under a later page (a dismissal elsewhere, a rebuild). Step back to the last
+      // page that has rows, which reloads.
+      if (out.rows.length === 0 && out.total > 0 && page > 0) {
+        stepBack = true;
+        setPage(Math.max(0, Math.ceil(out.total / pageSize) - 1));
+        return;
+      }
       setRows(out.rows);
       setTotal(out.total);
     } catch (e) {
@@ -46,7 +54,7 @@ export function DuplicatesTab({ canManage, canExport, onOpen }: {
       setTotal(0);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      if (seq === loadSeq.current) setLoading(false);
+      if (seq === loadSeq.current && !stepBack) setLoading(false);
     }
   }, [status, page, pageSize]);
 

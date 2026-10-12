@@ -1242,6 +1242,8 @@ export const fr: EnShape = {
       restored: 'Affichés à nouveau.',
       showingOf: '{{shown}} patients affichés sur {{count}}.',
       tooMany: 'Ce groupe est trop grand pour être marqué ici. Corrigez-le dans le système source, ou désactivez La recherche le trouve pour ce système d\'identifiants.',
+
+      tooManyDetails: 'Ce groupe est trop grand pour être marqué ici. Corrigez-le dans le système source.',
     },
   },
   nav: {

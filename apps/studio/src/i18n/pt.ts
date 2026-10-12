@@ -1242,6 +1242,8 @@ export const pt: EnShape = {
       restored: 'Mostrados de novo.',
       showingOf: 'A mostrar {{shown}} de {{count}} pacientes.',
       tooMany: 'Este grupo é demasiado grande para marcar aqui. Corrija-o no sistema de origem, ou desligue A pesquisa encontra-o para este sistema de identificadores.',
+
+      tooManyDetails: 'Este grupo é demasiado grande para marcar aqui. Corrija-o no sistema de origem.',
     },
   },
   nav: {

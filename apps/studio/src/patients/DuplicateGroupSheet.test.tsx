@@ -74,6 +74,12 @@ describe('DuplicateGroupSheet', () => {
     expect(onOpen).toHaveBeenCalledWith('r2');
   });
 
+  it('tells a truncated details group to fix it in the source system, without the search hint', () => {
+    render(<DuplicateGroupSheet group={{ ...GROUP, rule: 'details', memberCount: 60 }} canManage onClose={() => {}} onChanged={() => {}} onOpen={() => {}} />);
+    expect(screen.getByText('This group is too large to mark here. Fix it in the source system.')).toBeTruthy();
+    expect(screen.queryByText(/turn off Search matches it/)).toBeNull();
+  });
+
   it('cannot mark a group larger than the rows it holds', async () => {
     render(<DuplicateGroupSheet group={{ ...GROUP, memberCount: 60 }} canManage onClose={() => {}} onChanged={() => {}} onOpen={() => {}} />);
     expect(screen.getByText('Showing 2 of 60 patients.')).toBeTruthy();

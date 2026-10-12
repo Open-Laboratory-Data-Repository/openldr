@@ -103,7 +103,7 @@ export function DuplicateGroupSheet({ group, canManage, onClose, onChanged, onOp
                 {canManage && truncated && (
                   <>
                     <div className="text-muted-foreground">{t('patients.duplicates.reason')}</div>
-                    <div className="text-xs text-muted-foreground">{t('patients.duplicates.tooMany')}</div>
+                    <div className="text-xs text-muted-foreground">{t(group.rule === 'details' ? 'patients.duplicates.tooManyDetails' : 'patients.duplicates.tooMany')}</div>
                   </>
                 )}
               </div>

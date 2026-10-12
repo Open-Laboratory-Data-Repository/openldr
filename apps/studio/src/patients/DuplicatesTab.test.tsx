@@ -67,6 +67,19 @@ describe('DuplicatesTab', () => {
     await waitFor(() => expect(vi.mocked(api.downloadPatientDuplicatesCsv)).toHaveBeenCalled());
   });
 
+  it('steps back to the last page with rows when the current page comes back empty', async () => {
+    const list = vi.mocked(api.listPatientDuplicates);
+    list.mockImplementation(async (q) => (q.offset === 0
+      ? { rows: [GROUP], total: 30, masked: false }
+      : { rows: [], total: 3, masked: false }));
+    render(<DuplicatesTab canManage canExport={false} onOpen={() => {}} />);
+    await screen.findByTestId('duplicate-row-0');
+    fireEvent.click(screen.getByLabelText('Next page'));
+    await waitFor(() => expect(list).toHaveBeenCalledWith({ status: 'open', limit: 25, offset: 25 }));
+    await waitFor(() => expect(list.mock.calls.filter(([q]) => q.offset === 0)).toHaveLength(2));
+    expect(await screen.findByTestId('duplicate-row-0')).toBeTruthy();
+  });
+
   it('ignores a late response from an earlier load', async () => {
     let resolveFirst: (v: api.DuplicateList) => void = () => {};
     vi.mocked(api.listPatientDuplicates)

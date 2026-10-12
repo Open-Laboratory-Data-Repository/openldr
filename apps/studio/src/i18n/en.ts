@@ -1252,6 +1252,8 @@ export const en = {
       restored: 'Shown again.',
       showingOf: 'Showing {{shown}} of {{count}} patients.',
       tooMany: 'This group is too large to mark here. Fix it in the source system, or turn off Search matches it for this identifier system.',
+
+      tooManyDetails: 'This group is too large to mark here. Fix it in the source system.',
     },
   },
   nav: {
