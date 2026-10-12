@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "c4a5f6f4",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Identifier system without a label shows its URI"
+        },
+        {
           "hash": "86f75e8f",
           "type": "fix",
           "scope": "core",
