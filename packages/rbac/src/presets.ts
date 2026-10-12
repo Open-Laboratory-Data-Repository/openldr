@@ -16,6 +16,7 @@ const MANAGER = [
   'query.run',
   'terminology.view', 'terminology.manage',
   'facilities.view', 'facilities.manage',
+  'patients.view', 'patients.view_identifiers', 'patients.manage',
   'activity.view', 'notifications.view',
 ];
 
@@ -31,6 +32,7 @@ const ANALYST = [
   'query.run',
   'terminology.view',
   'facilities.view',
+  'patients.view',
   'activity.view', 'notifications.view',
 ];
 
@@ -40,6 +42,7 @@ const AUDITOR = [
   'forms.view',
   'terminology.view',
   'facilities.view',
+  'patients.view',
   'activity.view', 'notifications.view',
   'audit.view',
 ];

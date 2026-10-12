@@ -44,6 +44,10 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   // Facilities
   { key: 'facilities.view', group: 'facilities', label: 'View facilities', description: 'Open the Facilities workspace and see the facility register.' },
   { key: 'facilities.manage', group: 'facilities', label: 'Manage facilities', description: 'Create, edit and remove facility records.' },
+  // Patients
+  { key: 'patients.view', group: 'patients', label: 'View patient index', description: 'Open the Patient Index. Names and identifiers are masked, and search matches an exact identifier only.' },
+  { key: 'patients.view_identifiers', group: 'patients', label: 'View patient identifiers', description: 'See patient names, identifiers, date of birth, phone and email in full, and search by name. Every unmasked view is audited.' },
+  { key: 'patients.manage', group: 'patients', label: 'Manage patient index', description: 'Name identifier systems and choose which ones are listed and searched.' },
   // Roles
   { key: 'roles.view', group: 'roles', label: 'View roles', description: 'Open the Roles workspace and see roles and their capabilities.' },
   { key: 'roles.manage', group: 'roles', label: 'Manage roles', description: 'Create, edit, delete roles and assign them to users.' },
@@ -80,6 +84,7 @@ const GROUP_LABELS: Record<string, string> = {
   query: 'Query',
   users: 'Users',
   facilities: 'Facilities',
+  patients: 'Patients',
   roles: 'Roles',
   terminology: 'Terminology',
   marketplace: 'Marketplace',
