@@ -30,9 +30,26 @@ Avec l'autorisation Gérer l'index des patients, choisissez **Modifier** dans le
 
 Un laboratoire qui reçoit ces libellés du central ne peut pas les modifier.
 
+## Doublons
+
+L'onglet **Doublons** liste les patients qui semblent être la même personne. CE en trouve deux sortes :
+
+- **Même identifiant.** Deux patients ou plus portent la même valeur dans le même système d'identifiants, par exemple le même NRC. Les identifiants sans système, et les systèmes où **La recherche le trouve** est désactivé, ne sont pas utilisés.
+- **Même nom et même date de naissance.** Le nom, le prénom et la date de naissance correspondent, sans tenir compte des majuscules, des espaces en trop ni des accents. Les patients de sexes différents ne sont pas rapprochés. Un patient sans date de naissance n'est jamais rapproché de cette façon.
+
+Seuls les patients actifs sont comparés. CE ne fusionne pas les patients : corrigez les doublons dans le système source, et la mise à jour suivante fait disparaître le groupe ici.
+
+Cliquez sur un groupe pour voir ses patients. Choisissez **Ouvrir le patient** dans le menu ⋯ d'un patient pour voir le dossier complet.
+
+Un groupe peut être grand. La liste montre au plus 50 patients par groupe, et la fiche indique combien elle en montre sur le total. Un groupe qui compte plus de patients ne peut pas être marqué ici comme pas des doublons. Corrigez-le dans le système source, ou désactivez **La recherche le trouve** pour ce système d'identifiants. La cause habituelle est un identifiant factice partagé par de nombreux patients.
+
+Avec l'autorisation Gérer l'index des patients, choisissez **Marquer comme pas des doublons** dans le menu ⋯ du groupe quand les patients sont des personnes différentes. Vous pouvez ajouter un motif. Utilisez **Statut** pour revoir ces groupes, et **Afficher à nouveau** pour annuler.
+
+Avec l'autorisation Voir les identifiants des patients, choisissez **Exporter en CSV** dans le menu ⋯ de l'onglet pour envoyer les groupes ouverts à l'équipe du système source. Chaque export est inscrit au journal d'audit.
+
 ## Après la mise à jour
 
-Les patients reçus avant cette version n'ont aucun identifiant listé tant que vous n'avez pas lancé `openldr db reproject --force` une fois.
+Les patients reçus avant cette version n'ont aucun identifiant listé tant que vous n'avez pas lancé `openldr db reproject --force` une fois. Elle remplit aussi ce dont CE a besoin pour trouver les patients ayant le même nom et la même date de naissance.
 
 ## En ligne de commande
 
@@ -40,5 +57,8 @@ Les patients reçus avant cette version n'ont aucun identifiant listé tant que 
 - `openldr patients show <id> [--identifiers]`
 - `openldr patients identifier-systems list`
 - `openldr patients identifier-systems set <système> [--label <texte>] [--list-column on|off] [--searchable on|off]`
+- `openldr patients duplicates list [--status open|dismissed|all] [--identifiers]`
+- `openldr patients duplicates dismiss <idA> <idB> [--reason <texte>]` et `restore <idA> <idB>`
+- `openldr patients duplicates export [--out <fichier>]`
 
 La sortie est masquée sauf avec `--identifiers`, qui est audité.

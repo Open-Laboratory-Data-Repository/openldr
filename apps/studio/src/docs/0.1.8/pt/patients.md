@@ -30,9 +30,26 @@ Com a permissão Gerir índice de pacientes, escolha **Editar** no menu ⋯ de u
 
 Um laboratório que recebe estas etiquetas do central não as pode alterar.
 
+## Duplicados
+
+O separador **Duplicados** lista pacientes que parecem ser a mesma pessoa. O CE encontra dois tipos:
+
+- **Mesmo identificador.** Dois ou mais pacientes têm o mesmo valor no mesmo sistema de identificadores, por exemplo o mesmo NRC. Os identificadores sem sistema, e os sistemas em que **A pesquisa encontra-o** está desligado, não são usados.
+- **Mesmo nome e data de nascimento.** O apelido, o nome próprio e a data de nascimento coincidem, sem contar maiúsculas, espaços a mais nem acentos. Pacientes de sexos diferentes não são juntados. Um paciente sem data de nascimento nunca é juntado desta forma.
+
+Só os pacientes ativos são comparados. O CE não funde pacientes: corrija os duplicados no sistema de origem, e a atualização seguinte remove o grupo aqui.
+
+Clique num grupo para ver os seus pacientes. Escolha **Abrir paciente** no menu ⋯ de um paciente para ver o registo completo.
+
+Um grupo pode ser grande. A lista mostra no máximo 50 pacientes por grupo, e a ficha indica quantos mostra do total. Um grupo com mais pacientes do que isso não pode ser marcado aqui como não duplicados. Corrija-o no sistema de origem, ou desligue **A pesquisa encontra-o** para esse sistema de identificadores. A causa habitual é um identificador de substituição partilhado por muitos pacientes.
+
+Com a permissão Gerir índice de pacientes, escolha **Marcar como não duplicados** no menu ⋯ do grupo quando os pacientes são pessoas diferentes. Pode acrescentar um motivo. Use **Estado** para voltar a ver esses grupos, e **Mostrar de novo** para anular.
+
+Com a permissão Ver identificadores de pacientes, escolha **Exportar CSV** no menu ⋯ do separador para enviar os grupos abertos à equipa do sistema de origem. Cada exportação fica registada na auditoria.
+
 ## Depois de atualizar
 
-Os pacientes recebidos antes desta versão não têm identificadores listados até executar `openldr db reproject --force` uma vez.
+Os pacientes recebidos antes desta versão não têm identificadores listados até executar `openldr db reproject --force` uma vez. Também preenche o que o CE precisa para encontrar pacientes com o mesmo nome e data de nascimento.
 
 ## Na linha de comandos
 
@@ -40,5 +57,8 @@ Os pacientes recebidos antes desta versão não têm identificadores listados at
 - `openldr patients show <id> [--identifiers]`
 - `openldr patients identifier-systems list`
 - `openldr patients identifier-systems set <sistema> [--label <texto>] [--list-column on|off] [--searchable on|off]`
+- `openldr patients duplicates list [--status open|dismissed|all] [--identifiers]`
+- `openldr patients duplicates dismiss <idA> <idB> [--reason <texto>]` e `restore <idA> <idB>`
+- `openldr patients duplicates export [--out <ficheiro>]`
 
 A saída está oculta, a não ser que passe `--identifiers`, que fica registado na auditoria.

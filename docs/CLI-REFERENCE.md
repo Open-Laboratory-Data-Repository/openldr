@@ -197,6 +197,10 @@ except `identifier-systems set`, which changes only a label.
     openldr patients show <id> [--identifiers] [--json]
     openldr patients identifier-systems list [--json]
     openldr patients identifier-systems set <system> [--label <text>] [--list-column on|off] [--searchable on|off] [--json]
+    openldr patients duplicates list [--status open|dismissed|all] [--identifiers] [--json]
+    openldr patients duplicates dismiss <idA> <idB> [--reason <text>] [--json]
+    openldr patients duplicates restore <idA> <idB> [--json]
+    openldr patients duplicates export [--out <file>]
 
 Output is masked unless you pass `--identifiers`, which is audited. A masked name keeps its
 first letter and a masked identifier keeps its last four characters. `list` and `show` with
@@ -204,6 +208,15 @@ first letter and a masked identifier keeps its last four characters. `list` and 
 `--actor` override. `identifier-systems list` shows each
 identifier system CE has seen, its label, whether it shows in the list and whether search
 matches it. `identifier-systems set` changes one system and is audited too.
+
+`duplicates list` shows groups of patients that look like the same person: the same value in a
+searchable identifier system, or the same surname, first name and date of birth. `--status`
+picks open groups (the default), groups marked as not duplicates, or both. Output is masked
+unless you pass `--identifiers`, which is audited. `dismiss` and `restore` take two patient
+ids, mark them as different people or undo that, and are audited. `export` writes the open
+groups as CSV with names and identifiers, to stdout or to `--out`. It always writes an audit
+event that records the group count only. CE does not merge patients. The source system fixes
+duplicates.
 
 ## Captured Terminal Output
 

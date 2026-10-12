@@ -219,11 +219,26 @@ linked at least one code queues a facility map rebuild.
 | `GET` | `/api/patients/:ref/requests?limit=&offset=` | The patient's lab requests, newest first. Needs `patients.view`. |
 | `GET` | `/api/patients/identifier-systems?limit=&offset=` | Every identifier system seen, with its label and settings. Needs `patients.view`. |
 | `PUT` | `/api/patients/identifier-systems` | Set a label. Needs `patients.manage`. Body `{ system, label, listColumn, searchable }`. |
+| `GET` | `/api/patients/duplicates?status=&limit=&offset=` | Groups of likely duplicate patients. Needs `patients.view`. `status` is `open`, `dismissed` or `all`. |
+| `GET` | `/api/patients/duplicates/export` | The open groups as CSV (`patient-duplicates.csv`, `text/csv`). Needs `patients.view_identifiers`. |
+| `POST` | `/api/patients/duplicates/dismiss` | Mark patients as not duplicates. Needs `patients.manage`. Body `{ refs, reason? }`. Answers `{ changed }`. |
+| `POST` | `/api/patients/duplicates/restore` | Undo a dismissal. Needs `patients.manage`. Body `{ refs, reason? }`. Answers `{ changed }`. |
 
 Names, identifiers, full dates of birth, phone and email are masked unless the caller holds
 `patients.view_identifiers`. Unmasked list and detail calls are audited as `patients.list` and
 `patients.view`. The audit event records how many patients matched, never the search text. The
 PUT is audited as `patients.identifier_system.update`.
+
+The duplicates list answers `{ rows, total, masked }`. Each row has `rule`, `evidence`
+(`{ system, label, text }`), `members` (at most 50 patients), `memberCount`, `pairs` and
+`dismissedPairs`. Without `patients.view_identifiers`, members are masked like any patient list
+and `masked` is true. `dismiss` and `restore` need 2 to 50 different patients in `refs`. Fewer
+than two answers 400 `refs must list at least two different patients`. More than 50 answers 400
+`refs must list at most 50 patients`. An unknown ref answers 404. A group with more than 50
+patients cannot be dismissed through the API. Fix it in the source system, or turn off
+`searchable` for the identifier system. The calls are audited as `patients.duplicate.dismiss`,
+`patients.duplicate.restore` and `patients.duplicate.export`. The export event records the group
+count only, never the contents.
 
 `:ref` is an opaque reference from the list response. It stops working after a server restart,
 so reload the list to get a new one. An unknown `ref` answers 404. The PUT answers 409 when
