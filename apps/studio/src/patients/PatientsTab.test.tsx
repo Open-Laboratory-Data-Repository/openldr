@@ -8,6 +8,9 @@ vi.mock('@/api', async (orig) => {
   return { ...actual, listPatients: vi.fn() };
 });
 
+const auth = vi.hoisted(() => ({ caps: new Set<string>() }));
+vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ hasCapability: (c: string) => auth.caps.has(c) }) }));
+
 import * as api from '@/api';
 import { PatientsTab } from './PatientsTab';
 
@@ -18,7 +21,10 @@ const ROW: api.PatientRow = {
   active: true, replacedByRef: null, lastRequestAt: '2026-03-04', requestCount: 2,
 };
 
-beforeEach(() => { vi.mocked(api.listPatients).mockReset(); });
+beforeEach(() => {
+  vi.mocked(api.listPatients).mockReset();
+  auth.caps = new Set(['patients.view_identifiers']);
+});
 
 describe('PatientsTab', () => {
   it('shows the spinner, then a row with its listed identifier and facility', async () => {
@@ -62,4 +68,36 @@ describe('PatientsTab', () => {
     fireEvent.change(screen.getByPlaceholderText('Search name or identifier'), { target: { value: 'MPI-0001' } });
     await waitFor(() => expect(vi.mocked(api.listPatients)).toHaveBeenLastCalledWith({ search: 'MPI-0001', status: 'active', limit: 25, offset: 0 }));
   });
+
+  it('shows the masked placeholder from the start when the user lacks the identifiers capability', async () => {
+    auth.caps = new Set();
+    let resolve!: (v: api.PatientList) => void;
+    vi.mocked(api.listPatients).mockReturnValue(new Promise((r) => { resolve = r; }));
+    render(<PatientsTab onOpen={() => {}} />);
+    expect(screen.getByPlaceholderText('Exact identifier')).toBeTruthy();
+    expect(screen.getByText('Names and identifiers are masked. Search matches an exact identifier only.')).toBeTruthy();
+    resolve({ rows: [], total: 0, masked: true });
+    await screen.findByText('No patients yet. Patients arrive with lab data from the source system.');
+  });
+
+  it('keeps the rows of the latest search when responses arrive out of order', async () => {
+    const first = deferred();
+    const second = deferred();
+    vi.mocked(api.listPatients).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    render(<PatientsTab onOpen={() => {}} />);
+    fireEvent.change(screen.getByPlaceholderText('Search name or identifier'), { target: { value: 'two' } });
+    await waitFor(() => expect(vi.mocked(api.listPatients)).toHaveBeenCalledTimes(2));
+    second.resolve({ rows: [{ ...ROW, ref: 'r2', name: 'Second Person' }], total: 1, masked: false });
+    await screen.findByTestId('patient-row-r2');
+    first.resolve({ rows: [{ ...ROW, ref: 'r1', name: 'First Person' }], total: 1, masked: false });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByTestId('patient-row-r2')).toBeTruthy();
+    expect(screen.queryByTestId('patient-row-r1')).toBeNull();
+  });
 });
+
+function deferred() {
+  let resolve!: (v: api.PatientList) => void;
+  const promise = new Promise<api.PatientList>((r) => { resolve = r; });
+  return { promise, resolve };
+}

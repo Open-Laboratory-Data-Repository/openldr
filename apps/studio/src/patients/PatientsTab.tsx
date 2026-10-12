@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TablePagination } from '@/components/ui/table-pagination';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ActiveFilterChips, DataTableToolbar, useTableState, type ColumnDef, type FilterRule } from '@/components/data-table';
+import { useAuth } from '@/auth/AuthProvider';
 import { listPatients, type PatientRow } from '@/api';
 
 // The Patients tab (docs/superpowers/specs/2026-10-12-patient-index-design.md, section 3). Copies
@@ -24,6 +25,7 @@ function statusFrom(filters: FilterRule[]): 'active' | 'merged' | 'all' {
 
 export function PatientsTab({ onOpen }: { onOpen: (ref: string) => void }): JSX.Element {
   const { t } = useTranslation();
+  const { hasCapability } = useAuth();
   const [rows, setRows] = useState<PatientRow[]>([]);
   const [total, setTotal] = useState(0);
   const [masked, setMasked] = useState(false);
@@ -31,6 +33,9 @@ export function PatientsTab({ onOpen }: { onOpen: (ref: string) => void }): JSX.
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
+  const loadSeq = useRef(0);
+  // Masked UI shows if either the user's capability or the server's flag says masked.
+  const showMasked = masked || !hasCapability('patients.view_identifiers');
 
   const columns = useMemo<ColumnDef<PatientRow>[]>(() => [
     {
@@ -83,19 +88,23 @@ export function PatientsTab({ onOpen }: { onOpen: (ref: string) => void }): JSX.
   const status = useMemo(() => statusFrom(table.filters), [table.filters]);
 
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
     try {
       const out = await listPatients({ search: q || undefined, status, limit: table.pageSize, offset: table.page * table.pageSize });
+      if (seq !== loadSeq.current) return;
       setRows(out.rows);
       setTotal(out.total);
       setMasked(out.masked);
     } catch (e) {
+      if (seq !== loadSeq.current) return;
       setRows([]);
       setTotal(0);
+      setMasked(false);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [q, status, table.page, table.pageSize]);
 
@@ -118,10 +127,10 @@ export function PatientsTab({ onOpen }: { onOpen: (ref: string) => void }): JSX.
           onResetAll={() => { table.resetAll(); setSearch(''); }}
           searchValue={search}
           onSearchChange={setSearch}
-          searchPlaceholder={masked ? t('patients.searchPlaceholderMasked') : t('patients.searchPlaceholder')}
+          searchPlaceholder={showMasked ? t('patients.searchPlaceholderMasked') : t('patients.searchPlaceholder')}
         />
         <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
-        {masked && <div className="text-xs text-muted-foreground">{t('patients.maskedNote')}</div>}
+        {showMasked && <div className="text-xs text-muted-foreground">{t('patients.maskedNote')}</div>}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
