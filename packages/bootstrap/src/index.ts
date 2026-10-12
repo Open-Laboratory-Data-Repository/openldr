@@ -77,6 +77,8 @@ import { createFacilityJobRunners } from './facility-job-runners';
 import { createTestCatalog, withLabTestsList, type TestCatalog } from './test-catalog';
 import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './test-mapping';
 import { createResultFields, type ResultFields } from './result-fields';
+import { createPatientIdentifierSystems, type PatientIdentifierSystems } from './patient-identifier-systems';
+import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -551,6 +553,10 @@ export interface AppContext {
   testMapping: TestMapping;
   /** The result dictionary and its LOINC links (result field mapping spec 4.5). */
   resultFields: ResultFields;
+  /** Labels and flags for patient identifier systems (patient index spec, section 1). */
+  patientIdentifierSystems: PatientIdentifierSystems;
+  /** The read-only patient index and its masking (patient index spec, section 2). */
+  patientIndex: PatientIndex;
   /** Gates persistResources() strictness for the webhook (Persist Store node) and ingest paths
    *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
   validationStrictness: ValidationStrictness;
@@ -999,6 +1005,8 @@ const reporting: ReportingApi = {
   });
   // A changed LOINC link changes the loinc column of test_map's result rows.
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
+  const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
+  const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
   // the polling worker that drains it. `runIngest` streams+extracts the uploaded zip to a fresh
@@ -1777,6 +1785,8 @@ const reporting: ReportingApi = {
     testCatalog,
     testMapping,
     resultFields,
+    patientIdentifierSystems,
+    patientIndex,
     facilityJobs,
     featureFlags,
     numberSettings,
@@ -1858,6 +1868,9 @@ export {
 } from './test-catalog';
 export * from './test-mapping';
 export * from './result-fields';
+export * from './patient-identifier-systems';
+export * from './patient-index';
+export * from './patient-mask';
 export {
   RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams,
   type BandFit, type SexOption, type TestResultParam, type ResultBand, type ResultType,
