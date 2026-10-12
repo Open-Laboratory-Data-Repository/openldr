@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "7050ba86",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Masked patient list orders by a hash of the id"
+        },
+        {
           "hash": "c4a5f6f4",
           "type": "fix",
           "scope": "studio",
