@@ -1,6 +1,6 @@
 import type { Provenance } from '../provenance';
 import type { ExternalSchema } from '../schema/external';
-import { projectPatient } from './patient';
+import { projectPatient, projectPatientIdentifiers } from './patient';
 import { projectServiceRequest, projectServiceRequestAttributes } from './service-request';
 import { projectObservation } from './observation';
 import { projectFacility } from './facility';
@@ -61,6 +61,12 @@ export function projectOwnedRows(resource: unknown, prov: Provenance = {}): Rela
   if (typeof resource !== 'object' || resource === null) return [];
   const r = resource as Record<string, unknown>;
   switch (r['resourceType']) {
+    case 'Patient':
+      return [{
+        table: 'patient_identifiers',
+        rows: projectPatientIdentifiers(r, prov),
+        scope: { column: 'patient_id', value: String(r['id']) },
+      }];
     case 'ServiceRequest':
       return [{
         table: 'lab_request_attributes',
@@ -74,6 +80,7 @@ export function projectOwnedRows(resource: unknown, prov: Provenance = {}): Rela
 /** The tables `projectOwnedRows` writes for a resource type, with the column that scopes them. */
 export function ownedTablesFor(resourceType: string): { table: keyof ExternalSchema; scopeColumn: string }[] {
   switch (resourceType) {
+    case 'Patient': return [{ table: 'patient_identifiers', scopeColumn: 'patient_id' }];
     case 'ServiceRequest': return [{ table: 'lab_request_attributes', scopeColumn: 'lab_request_id' }];
     default: return [];
   }
