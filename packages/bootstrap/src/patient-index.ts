@@ -1,7 +1,7 @@
 import { sql, type Kysely } from 'kysely';
 import type { ExternalSchema } from '@openldr/db';
 import { ageInYears, birthYear, createRefCodec, maskName, maskValue } from './patient-mask';
-import { PatientIndexError, type PatientIdentifierSystems, type SystemSettings } from './patient-identifier-systems';
+import { PatientIndexError, type PatientIdentifierSystems } from './patient-identifier-systems';
 
 // The patient index reads (docs/superpowers/specs/2026-10-12-patient-index-design.md, sections 2-4).
 // Read-only: the HIMS owns the records. Every response is built here, masked unless the caller holds
@@ -77,8 +77,8 @@ export function createPatientIndex(deps: {
   const refs = createRefCodec(deps.refKey);
 
   /** Patient ids whose searchable identifier, or patient_guid, equals q exactly. */
-  async function exactMatches(q: string, settings: Map<string, SystemSettings>): Promise<string[]> {
-    const unsearchable = [...settings].filter(([, s]) => !s.searchable).map(([system]) => system);
+  async function exactMatches(q: string): Promise<string[]> {
+    const unsearchable = await systems.unsearchableSystems();
     let byIdentifier = db.selectFrom('patient_identifiers').select('patient_id').where('value', '=', q);
     if (unsearchable.length) {
       byIdentifier = byIdentifier.where((eb) => eb.or([eb('system', 'is', null), eb('system', 'not in', unsearchable)]));
@@ -116,9 +116,11 @@ export function createPatientIndex(deps: {
 
   async function build(records: PatientRecord[], unmask: boolean, allIdentifiers: boolean): Promise<Array<PatientRow & { record: PatientRecord }>> {
     const ids = records.map((r) => r.id);
-    const [settings, idents, stats, facilities] = await Promise.all([
-      systems.settings(), identifiersFor(ids), requestStatsFor(ids), facilityNamesFor(records.map((r) => r.managing_organization)),
+    const [idents, stats, facilities] = await Promise.all([
+      identifiersFor(ids), requestStatsFor(ids), facilityNamesFor(records.map((r) => r.managing_organization)),
     ]);
+    const pageSystems = [...new Set([...idents.values()].flat().map((i) => i.system).filter((x): x is string => x !== null))];
+    const settings = await systems.settingsFor(pageSystems);
     const today = now();
     return records.map((r) => {
       const identifiers = (idents.get(r.id) ?? [])
@@ -153,7 +155,7 @@ export function createPatientIndex(deps: {
     if (q.status === 'active') base = base.where('active', '=', true).where('replaced_by_id', 'is', null);
     if (q.status === 'merged') base = base.where((eb) => eb.or([eb('active', '=', false), eb('replaced_by_id', 'is not', null)]));
     if (q.q) {
-      const exact = await exactMatches(q.q, await systems.settings());
+      const exact = await exactMatches(q.q);
       if (opts.unmask) {
         // lower(col) LIKE lower(?) holds on Postgres, MySQL and MSSQL, as reference-search.ts notes.
         const needle = `%${q.q.toLowerCase()}%`;

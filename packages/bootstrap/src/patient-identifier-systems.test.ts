@@ -26,6 +26,21 @@ describe('patient identifier systems', () => {
     ]);
   });
 
+  it('settingsFor reads source text only for the systems asked, and unsearchableSystems reads concepts', async () => {
+    const { externalDb, systems } = await buildPatientIndexFixture();
+    await seedPatient(externalDb, { id: 'p1' });
+    await seedIdentifier(externalDb, 'p1', MPI, 'M1', 'MPI number');
+    await seedIdentifier(externalDb, 'p1', NRC, 'N1', 'National ID');
+    await systems.set({ system: 'urn:zm:old', label: 'Old', listColumn: false, searchable: false });
+
+    const only = await systems.settingsFor([MPI]);
+    expect([...only.keys()].sort()).toEqual([MPI, 'urn:zm:old'].sort());
+    expect(only.get(MPI)).toEqual({ label: 'MPI number', labelSource: 'source', listColumn: false, searchable: true });
+    expect(only.has(NRC)).toBe(false);
+    expect((await systems.settingsFor([])).get(MPI)).toBeUndefined();
+    expect(await systems.unsearchableSystems()).toEqual(['urn:zm:old']);
+  });
+
   it('saves an operator label and both flags, and the operator label wins over the source text', async () => {
     const { externalDb, internalDb, systems } = await buildPatientIndexFixture();
     await seedPatient(externalDb, { id: 'p1' });

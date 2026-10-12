@@ -31,6 +31,10 @@ export interface IdentifierSystemInput { system: string; label: string | null; l
 export interface PatientIdentifierSystems {
   list(q: { limit: number; offset: number }): Promise<IdentifierSystemList>;
   settings(): Promise<Map<string, SystemSettings>>;
+  /** Like settings(), but the source-text scan runs only for the given systems. */
+  settingsFor(systems: string[]): Promise<Map<string, SystemSettings>>;
+  /** Systems whose concept says searchable is false. Reads concepts only. */
+  unsearchableSystems(): Promise<string[]>;
   get(system: string): Promise<IdentifierSystemRow | null>;
   set(input: IdentifierSystemInput): Promise<IdentifierSystemRow>;
   ownedHere(): Promise<boolean>;
@@ -89,11 +93,13 @@ export function createPatientIdentifierSystems(deps: {
   }
 
   /** The most common non-empty type_text per system. Ties go to the alphabetically first text. */
-  async function sourceTexts(): Promise<Map<string, string>> {
-    const rows = await externalDb.selectFrom('patient_identifiers')
+  async function sourceTexts(onlySystems?: string[]): Promise<Map<string, string>> {
+    if (onlySystems && !onlySystems.length) return new Map();
+    let query = externalDb.selectFrom('patient_identifiers')
       .select(['system', 'type_text', (eb) => eb.fn.countAll<string | number>().as('n')])
-      .where('system', 'is not', null).where('type_text', 'is not', null)
-      .groupBy(['system', 'type_text']).execute();
+      .where('system', 'is not', null).where('type_text', 'is not', null);
+    if (onlySystems) query = query.where('system', 'in', onlySystems);
+    const rows = await query.groupBy(['system', 'type_text']).execute();
     const best = new Map<string, { text: string; n: number }>();
     for (const r of rows) {
       if (!r.system || !r.type_text) continue;
@@ -104,7 +110,7 @@ export function createPatientIdentifierSystems(deps: {
     return new Map([...best].map(([s, v]) => [s, v.text]));
   }
 
-  function settingsFor(system: string | null, concept: { display: string | null; props: Record<string, unknown> } | undefined, source: string | undefined): SystemSettings {
+  function settingOf(system: string | null, concept: { display: string | null; props: Record<string, unknown> } | undefined, source: string | undefined): SystemSettings {
     const listColumn = concept?.props.listColumn === true;
     const searchable = concept?.props.searchable !== false;
     if (concept?.display) return { label: concept.display, labelSource: 'operator', listColumn, searchable };
@@ -115,8 +121,19 @@ export function createPatientIdentifierSystems(deps: {
   async function settings(): Promise<Map<string, SystemSettings>> {
     const [c, s] = await Promise.all([concepts(), sourceTexts()]);
     const out = new Map<string, SystemSettings>();
-    for (const system of new Set([...c.keys(), ...s.keys()])) out.set(system, settingsFor(system, c.get(system), s.get(system)));
+    for (const system of new Set([...c.keys(), ...s.keys()])) out.set(system, settingOf(system, c.get(system), s.get(system)));
     return out;
+  }
+
+  async function settingsForSystems(wanted: string[]): Promise<Map<string, SystemSettings>> {
+    const [c, s] = await Promise.all([concepts(), sourceTexts(wanted)]);
+    const out = new Map<string, SystemSettings>();
+    for (const system of new Set([...c.keys(), ...s.keys()])) out.set(system, settingOf(system, c.get(system), s.get(system)));
+    return out;
+  }
+
+  async function unsearchableSystems(): Promise<string[]> {
+    return [...(await concepts())].filter(([, v]) => v.props.searchable === false).map(([system]) => system);
   }
 
   async function allRows(): Promise<IdentifierSystemRow[]> {
@@ -128,7 +145,7 @@ export function createPatientIdentifierSystems(deps: {
       sourceTexts(),
     ]);
     return counts
-      .map((r) => ({ system: r.system, patientCount: Number(r.n), ...settingsFor(r.system, r.system === null ? undefined : c.get(r.system), r.system === null ? undefined : s.get(r.system)) }))
+      .map((r) => ({ system: r.system, patientCount: Number(r.n), ...settingOf(r.system, r.system === null ? undefined : c.get(r.system), r.system === null ? undefined : s.get(r.system)) }))
       .sort((a, b) => compareSystems(a.system, b.system));
   }
 
@@ -141,7 +158,7 @@ export function createPatientIdentifierSystems(deps: {
     const found = (await allRows()).find((r) => r.system === system);
     if (found) return found;
     const c = (await concepts()).get(system);
-    return c ? { system, patientCount: 0, ...settingsFor(system, c, undefined) } : null;
+    return c ? { system, patientCount: 0, ...settingOf(system, c, undefined) } : null;
   }
 
   async function set(input: IdentifierSystemInput): Promise<IdentifierSystemRow> {
@@ -173,5 +190,5 @@ export function createPatientIdentifierSystems(deps: {
     return saved;
   }
 
-  return { list, settings, get, set, ownedHere };
+  return { list, settings, settingsFor: settingsForSystems, unsearchableSystems, get, set, ownedHere };
 }
