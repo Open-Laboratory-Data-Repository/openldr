@@ -241,6 +241,12 @@ patients cannot be dismissed through the API. Fix it in the source system, or tu
 `patients.view_identifiers`) is audited as `patients.duplicate.list`. The list and export events
 record a count only, never the contents.
 
+A dismissal means "these two patients are different people", whichever rule matched them. So
+`dismiss` stores every pair among `refs` that is not already stored, and `changed` counts those
+pairs. That can be more than the group's `pairs`: a same-details group counts only pairs whose
+sexes agree, but dismissing it also stores the pairs whose sexes differ. `restore` deletes every
+stored pair among `refs`, and its `changed` counts the pairs deleted.
+
 `:ref` is an opaque reference from the list response. It stops working after a server restart,
 so reload the list to get a new one. An unknown `ref` answers 404. The PUT answers 409 when
 central owns the labels.

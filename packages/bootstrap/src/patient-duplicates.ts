@@ -263,6 +263,10 @@ export function createPatientDuplicates(deps: {
     if (found !== ids.length) throw new PatientIndexError('patient not found', 'not-found');
   }
 
+  /** Store every pair among `ids` as "different people", and count the pairs newly stored. A dismissal
+   *  is not tied to a rule, so a details group's pairs whose sexes differ are stored too: someone looked
+   *  at those patients and said they differ, and the same pair may also share an identifier. So
+   *  `changed` can exceed the group's `pairs`. Kept on purpose (decided 2026-10-12). */
   async function dismiss(input: { ids: string[]; reason: string | null; by: string }): Promise<{ changed: number }> {
     await requireKnown(input.ids);
     const pairs = allPairs([...input.ids].sort());
