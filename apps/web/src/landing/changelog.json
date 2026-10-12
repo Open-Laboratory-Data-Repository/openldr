@@ -6,6 +6,102 @@
       "version": null,
       "entries": [
         {
+          "hash": "86f75e8f",
+          "type": "fix",
+          "scope": "core",
+          "title": "Request logs redact the patient search text"
+        },
+        {
+          "hash": "e3e0644a",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Patient list scans source text only for the page's systems"
+        },
+        {
+          "hash": "a150d6d0",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Tamper test always changes the ref"
+        },
+        {
+          "hash": "53a404a9",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Patient sheet shows the Replaced by row"
+        },
+        {
+          "hash": "b9db8f8a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Patients list ignores stale responses and masks from the first paint"
+        },
+        {
+          "hash": "a1c174fe",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Identifier systems tab and label sheet"
+        },
+        {
+          "hash": "1f4ddd86",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Patient sheet ignores stale responses"
+        },
+        {
+          "hash": "57e76ca7",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Patient detail sheet with request history"
+        },
+        {
+          "hash": "c8702d5c",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Patients page with the patient list"
+        },
+        {
+          "hash": "1ec03d1b",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr patients list, show and identifier-systems"
+        },
+        {
+          "hash": "36d7ee04",
+          "type": "feat",
+          "scope": "server",
+          "title": "Patient index routes with masking and audit"
+        },
+        {
+          "hash": "c020f092",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Patient index reads with server-side masking"
+        },
+        {
+          "hash": "e8bab5c9",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Patient identifier system labels"
+        },
+        {
+          "hash": "2fec5114",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "Patients.view, patients.view_identifiers and patients.manage"
+        },
+        {
+          "hash": "1abbdfbf",
+          "type": "feat",
+          "scope": "db",
+          "title": "Project every Patient.identifier into patient_identifiers"
+        },
+        {
+          "hash": "cd12f2da",
+          "type": "feat",
+          "scope": "db",
+          "title": "Patient_identifiers warehouse table"
+        },
+        {
           "hash": "c351aa48",
           "type": "fix",
           "scope": "",
