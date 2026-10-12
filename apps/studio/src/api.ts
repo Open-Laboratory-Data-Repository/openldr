@@ -3435,3 +3435,23 @@ export const listIdentifierSystems = (p: { limit: number; offset: number }): Pro
   apiGet<IdentifierSystemList>(`/api/patients/identifier-systems?limit=${p.limit}&offset=${p.offset}`, 'list identifier systems');
 export const saveIdentifierSystem = (i: { system: string; label: string | null; listColumn: boolean; searchable: boolean }): Promise<IdentifierSystemRow> =>
   authFetch('/api/patients/identifier-systems', jbody(i, 'PUT')).then((r) => okJson<IdentifierSystemRow>(r, 'save identifier system'));
+
+// Patient duplicates (docs/superpowers/specs/2026-10-12-patient-duplicates-design.md).
+// members holds at most 50 rows; memberCount is the real size of the group.
+export interface DuplicateGroup {
+  rule: 'identifier' | 'details';
+  evidence: { system: string | null; label: string | null; text: string };
+  members: PatientRow[];
+  memberCount: number;
+  pairs: number;
+  dismissedPairs: number;
+}
+export interface DuplicateList { rows: DuplicateGroup[]; total: number; masked: boolean }
+export const listPatientDuplicates = (p: { status: 'open' | 'dismissed' | 'all'; limit: number; offset: number }): Promise<DuplicateList> =>
+  apiGet<DuplicateList>(`/api/patients/duplicates?status=${p.status}&limit=${p.limit}&offset=${p.offset}`, 'list duplicate patients');
+export const dismissPatientDuplicates = (refs: string[], reason: string | null): Promise<{ changed: number }> =>
+  authFetch('/api/patients/duplicates/dismiss', jbody({ refs, reason }, 'POST')).then((r) => okJson<{ changed: number }>(r, 'mark as not duplicates'));
+export const restorePatientDuplicates = (refs: string[]): Promise<{ changed: number }> =>
+  authFetch('/api/patients/duplicates/restore', jbody({ refs }, 'POST')).then((r) => okJson<{ changed: number }>(r, 'show duplicates again'));
+export const downloadPatientDuplicatesCsv = (): Promise<void> =>
+  downloadCsv('/api/patients/duplicates/export', 'patient-duplicates.csv', 'export duplicate patients');
