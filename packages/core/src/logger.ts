@@ -17,10 +17,13 @@ export const redactPaths = [
 /**
  * Redacts the value of the `access_token` query parameter from a URL string.
  * Handles it appearing as `?access_token=...` or `&access_token=...`.
+ * On /api/patients URLs it also redacts the `search` value (a patient identifier).
  * All other query parameters are preserved unchanged.
  */
 export function redactUrl(url: string): string {
-  return url.replace(/(?<=[?&]access_token=)[^&]*/g, '[REDACTED]');
+  const out = url.replace(/(?<=[?&]access_token=)[^&]*/g, '[REDACTED]');
+  // The patient list takes an identifier in `search`; keep it out of request logs.
+  return out.startsWith('/api/patients') ? out.replace(/(?<=[?&]search=)[^&]*/g, '[redacted]') : out;
 }
 
 export function createLogger(opts?: { level?: string; name?: string }): Logger {
