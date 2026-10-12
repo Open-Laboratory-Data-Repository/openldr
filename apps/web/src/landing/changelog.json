@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "c351aa48",
+          "type": "fix",
+          "scope": "",
+          "title": "Default dashboard skips rejected tests; docs and upgrade note for result status"
+        },
+        {
+          "hash": "09b46dc6",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Rejected tests are not result codes on the Observed list"
+        },
+        {
+          "hash": "84040dfd",
+          "type": "feat",
+          "scope": "db",
+          "title": "Carry a result's status and missing-value reason into lab_results"
+        },
+        {
           "hash": "e5254196",
           "type": "fix",
           "scope": "",
