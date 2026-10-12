@@ -1,7 +1,8 @@
 import type { Provenance } from '../provenance';
 import type { Insertable } from 'kysely';
-import type { PatientsTable } from '../schema/external';
+import type { PatientsTable, PatientIdentifiersTable } from '../schema/external';
 import { provColumns, firstIdentifier, str, reference } from './extract';
+import { boundedRowId } from './row-id';
 
 const SEX: Record<string, string> = { male: 'M', female: 'F', other: 'O', unknown: 'U' };
 
@@ -30,4 +31,34 @@ export function projectPatient(r: Record<string, unknown>, prov: Provenance): In
     })(),
     ...provColumns(prov),
   };
+}
+
+/** One row per `Patient.identifier` with a value (patient index spec, section 1). A repeated
+ *  (system, value) keeps one row: the id is derived from (patient, system, value), so two rows would
+ *  collide on insert (Postgres and SQL Server reject the duplicate key; pg-mem does not). */
+export function projectPatientIdentifiers(
+  r: Record<string, unknown>, prov: Provenance,
+): Insertable<PatientIdentifiersTable>[] {
+  const patientId = String(r['id']);
+  const identifiers = (r['identifier'] as Record<string, unknown>[] | undefined) ?? [];
+  const byId = new Map<string, Insertable<PatientIdentifiersTable>>();
+  for (const idn of identifiers) {
+    const value = str(idn['value']);
+    if (!value) continue;
+    const system = str(idn['system']) || null;
+    const type = idn['type'] as Record<string, unknown> | undefined;
+    const coding = (type?.['coding'] as Record<string, unknown>[] | undefined)?.[0];
+    const id = boundedRowId([patientId, system ?? '', value], 'pid');
+    byId.set(id, {
+      id,
+      patient_id: patientId,
+      system,
+      value,
+      type_code: str(coding?.['code']),
+      type_text: str(type?.['text']) ?? str(coding?.['display']),
+      use: str(idn['use']),
+      ...provColumns(prov),
+    });
+  }
+  return [...byId.values()];
 }

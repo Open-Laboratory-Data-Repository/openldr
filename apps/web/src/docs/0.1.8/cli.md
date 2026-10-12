@@ -56,6 +56,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | --- | --- |
 | `health` | Report service health (auth, storage, eventing, target store). |
 | `db` | `migrate`, `reset`, `seed` the database; `reproject` the warehouse read model. |
+| `patients` | `list` and `show` patients (masked unless `--identifiers`, which is audited); `identifier-systems list` and `set` labels. |
 | `settings` | Feature `flags list` / `flags set`, `danger <action>`, and `sync show` / `sync set` (lab⇄central sync config). |
 | `terminology` | Import and query CodeSystems, ValueSets, ConceptMaps, ontologies. |
 | `fhir` | Validate FHIR R4 resources. |

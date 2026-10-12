@@ -30,6 +30,12 @@ describe('redactUrl', () => {
     expect(redactUrl('/api/x/build?path=p&foo=bar')).toBe('/api/x/build?path=p&foo=bar');
   });
 
+  it('redacts the search value on patient list URLs only', () => {
+    expect(redactUrl('/api/patients?search=MPI-0001&limit=25')).toBe('/api/patients?search=[redacted]&limit=25');
+    expect(redactUrl('/api/patients?status=all&search=MPI-0001')).toBe('/api/patients?status=all&search=[redacted]');
+    expect(redactUrl('/api/facilities?search=Chilenje')).toBe('/api/facilities?search=Chilenje');
+  });
+
   it('leaves plain paths unchanged', () => {
     expect(redactUrl('/api/me')).toBe('/api/me');
   });

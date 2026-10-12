@@ -210,6 +210,25 @@ Each pair gives `observedSystem`, `code`, `sourceDisplay`, `reportCount`, `regis
 An unknown or deactivated register answers 400 with `{ "error": "..." }`. An applied run that
 linked at least one code queues a facility map rebuild.
 
+## Patients
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/patients?search=&status=&limit=&offset=` | List patients. Needs `patients.view`. `status` is `active`, `merged` or `all`. |
+| `GET` | `/api/patients/:ref` | One patient. Needs `patients.view`. |
+| `GET` | `/api/patients/:ref/requests?limit=&offset=` | The patient's lab requests, newest first. Needs `patients.view`. |
+| `GET` | `/api/patients/identifier-systems?limit=&offset=` | Every identifier system seen, with its label and settings. Needs `patients.view`. |
+| `PUT` | `/api/patients/identifier-systems` | Set a label. Needs `patients.manage`. Body `{ system, label, listColumn, searchable }`. |
+
+Names, identifiers, full dates of birth, phone and email are masked unless the caller holds
+`patients.view_identifiers`. Unmasked list and detail calls are audited as `patients.list` and
+`patients.view`. The audit event records how many patients matched, never the search text. The
+PUT is audited as `patients.identifier_system.update`.
+
+`:ref` is an opaque reference from the list response. It stops working after a server restart,
+so reload the list to get a new one. An unknown `ref` answers 404. The PUT answers 409 when
+central owns the labels.
+
 ## Users & Audit
 
 | Method | Path | Purpose |

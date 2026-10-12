@@ -10,9 +10,10 @@ describe('capability catalog', () => {
   // 37 -> 38: forms.submit was split out of forms.view when form submission stopped being a
   // read-only echo and started writing clinical records.
   // 38 -> 40: facilities.view and facilities.manage were added for the Facilities workspace.
-  it('exposes 40 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(40);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(40);
+  // 40 -> 43: patients.view, patients.view_identifiers and patients.manage for the Patient Index.
+  it('exposes 43 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(43);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(43);
   });
 
   it('separates submitting a form from viewing one', () => {
@@ -54,5 +55,23 @@ describe('facilities capabilities', () => {
     expect(role('system_auditor').capabilities).not.toContain('facilities.manage');
     // A bench technician fills forms; they do not curate the facility register.
     expect(role('lab_technician').capabilities).not.toContain('facilities.view');
+  });
+});
+
+describe('patients capabilities', () => {
+  const role = (slug: string) => SYSTEM_ROLES.find((r) => r.slug === slug)!;
+
+  it('exposes view, view_identifiers and manage', () => {
+    expect(CAPABILITY_KEYS).toEqual(expect.arrayContaining(['patients.view', 'patients.view_identifiers', 'patients.manage']));
+  });
+
+  it('gives the manager all three, analyst and auditor only the masked view, the technician none', () => {
+    expect(role('lab_manager').capabilities).toEqual(expect.arrayContaining(['patients.view', 'patients.view_identifiers', 'patients.manage']));
+    for (const slug of ['data_analyst', 'system_auditor']) {
+      expect(role(slug).capabilities).toContain('patients.view');
+      expect(role(slug).capabilities).not.toContain('patients.view_identifiers');
+      expect(role(slug).capabilities).not.toContain('patients.manage');
+    }
+    expect(role('lab_technician').capabilities.some((c) => c.startsWith('patients.'))).toBe(false);
   });
 });

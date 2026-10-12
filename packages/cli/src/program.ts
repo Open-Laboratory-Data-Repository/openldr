@@ -46,6 +46,10 @@ import {
   runResultFieldsList, runResultFieldsLink, runResultFieldsUnlink, runResultFieldsExport, runResultFieldsImport,
   type ResultFieldsListOpts,
 } from './result-fields';
+import {
+  runIdentifierSystemsList, runIdentifierSystemsSet, runPatientsList, runPatientsShow,
+  type IdentifierSystemsSetOpts, type PatientsListOpts,
+} from './patients';
 import { runQueryExport, runQueryImport } from './query';
 import { setActorOverride } from './cli-actor';
 
@@ -486,6 +490,35 @@ export function buildProgram(): Command {
     .option('--force', 'confirm the write', false)
     .option('--json', 'emit JSON', false)
     .action(async (file: string, opts: { apply: boolean; force: boolean; json: boolean }) => { process.exitCode = await runResultFieldsImport(file, opts); });
+
+  // Patient index spec, section 5. Masked unless --identifiers, which is audited.
+  const patients = program.command('patients').description('The patient index (read-only; the source system owns patients)');
+  patients.command('list')
+    .description('List patients; masked unless --identifiers')
+    .option('--search <text>', 'masked: exact identifier; with --identifiers: also part of a name')
+    .option('--status <active|merged|all>', 'which patients (default: active)')
+    .option('--limit <n>', 'rows per page, 1 to 200 (default: 25)')
+    .option('--offset <n>', 'rows to skip (default: 0)')
+    .option('--identifiers', 'show names and identifiers in full (audited)', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: PatientsListOpts) => { process.exitCode = await runPatientsList(opts); });
+  patients.command('show <id>')
+    .description('Show one patient by id, with its requests')
+    .option('--identifiers', 'show names and identifiers in full (audited)', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { identifiers: boolean; json: boolean }) => { process.exitCode = await runPatientsShow(id, opts); });
+  const idSystems = patients.command('identifier-systems').description('Labels for patient identifier systems');
+  idSystems.command('list')
+    .description('List identifier systems with label, patient count and flags')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => { process.exitCode = await runIdentifierSystemsList(opts); });
+  idSystems.command('set <system>')
+    .description('Set a system\'s label, and whether it is listed and searched')
+    .option('--label <text>', 'the label; an empty string clears it')
+    .option('--list-column <on|off>', 'show this identifier in the list')
+    .option('--searchable <on|off>', 'let search match this identifier')
+    .option('--json', 'emit JSON', false)
+    .action(async (system: string, opts: IdentifierSystemsSetOpts) => { process.exitCode = await runIdentifierSystemsSet(system, opts); });
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');
   // Task 4: CLI parity for Task 3's `GET /api/facilities` — the same `parseWhereFlags`/

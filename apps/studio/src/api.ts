@@ -3399,3 +3399,39 @@ export async function saveNotificationPrefs(
   });
   if (!res.ok) throw new Error('save preferences failed: ' + res.status);
 }
+
+// Patient index (docs/superpowers/specs/2026-10-12-patient-index-design.md). The server masks; these
+// types carry whatever it sent. `ref` is opaque and dies with the server process.
+export interface PatientIdentifierView { system: string | null; label: string | null; value: string }
+export interface PatientRow {
+  ref: string; id: string | null; name: string | null; sex: string | null; birthDate: string | null;
+  ageYears: number | null; identifiers: PatientIdentifierView[];
+  managingFacility: { reference: string; name: string | null } | null;
+  active: boolean; replacedByRef: string | null; lastRequestAt: string | null; requestCount: number;
+}
+export interface PatientList { rows: PatientRow[]; total: number; masked: boolean }
+export interface PatientDetail extends PatientRow { patientGuid: string | null; phone: string | null; email: string | null; masked: boolean }
+export interface PatientRequestRow { authoredAt: string | null; panel: string | null; requester: string | null; status: string | null; resultCount: number }
+export interface PatientRequestList { rows: PatientRequestRow[]; total: number }
+export interface IdentifierSystemRow {
+  system: string | null; label: string | null; labelSource: 'operator' | 'source' | 'none';
+  patientCount: number; listColumn: boolean; searchable: boolean;
+}
+export interface IdentifierSystemList { rows: IdentifierSystemRow[]; total: number; ownedHere: boolean }
+
+export function listPatients(p: { search?: string; status?: 'active' | 'merged' | 'all'; limit: number; offset: number }): Promise<PatientList> {
+  const s = new URLSearchParams();
+  if (p.search) s.set('search', p.search);
+  if (p.status && p.status !== 'active') s.set('status', p.status);
+  s.set('limit', String(p.limit));
+  s.set('offset', String(p.offset));
+  return apiGet<PatientList>(`/api/patients?${s}`, 'list patients');
+}
+export const getPatient = (ref: string): Promise<PatientDetail> =>
+  apiGet<PatientDetail>(`/api/patients/${encodeURIComponent(ref)}`, 'open patient');
+export const listPatientRequests = (ref: string, p: { limit: number; offset: number }): Promise<PatientRequestList> =>
+  apiGet<PatientRequestList>(`/api/patients/${encodeURIComponent(ref)}/requests?limit=${p.limit}&offset=${p.offset}`, 'list patient requests');
+export const listIdentifierSystems = (p: { limit: number; offset: number }): Promise<IdentifierSystemList> =>
+  apiGet<IdentifierSystemList>(`/api/patients/identifier-systems?limit=${p.limit}&offset=${p.offset}`, 'list identifier systems');
+export const saveIdentifierSystem = (i: { system: string; label: string | null; listColumn: boolean; searchable: boolean }): Promise<IdentifierSystemRow> =>
+  authFetch('/api/patients/identifier-systems', jbody(i, 'PUT')).then((r) => okJson<IdentifierSystemRow>(r, 'save identifier system'));

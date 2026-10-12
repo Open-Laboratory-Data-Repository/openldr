@@ -23,9 +23,12 @@ describe('EXTERNAL_TABLE_COLUMNS', () => {
   //
   // test_map is included deliberately: the warehouse copy of the test mappings (migration 023). It
   // holds lab codes and catalog names, no patient data, and it is governed in Data Exposure.
-  it('covers the 7 canonical fact tables, the terminology dimension, the facility_map dimension, the facility_registry copy, the test_map copy, the ingest_events ledger, and the lab_request_attributes table', () => {
+  //
+  // patient_identifiers is included deliberately: rows a Patient owns (migration 025). Its value
+  // column is hidden in Data Exposure by default.
+  it('covers the 7 canonical fact tables, the terminology dimension, the facility_map dimension, the facility_registry copy, the test_map copy, the ingest_events ledger, the lab_request_attributes table, and the patient_identifiers table', () => {
     expect(Object.keys(EXTERNAL_TABLE_COLUMNS).sort()).toEqual(
-      ['diagnostic_reports', 'facilities', 'facility_map', 'facility_registry', 'ingest_events', 'lab_request_attributes', 'lab_requests', 'lab_results', 'patients', 'questionnaire_responses', 'specimens', 'terminology_codes', 'test_map'],
+      ['diagnostic_reports', 'facilities', 'facility_map', 'facility_registry', 'ingest_events', 'lab_request_attributes', 'lab_requests', 'lab_results', 'patient_identifiers', 'patients', 'questionnaire_responses', 'specimens', 'terminology_codes', 'test_map'],
     );
   });
   it('every table includes id + provenance columns', () => {

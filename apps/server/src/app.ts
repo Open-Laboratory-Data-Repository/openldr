@@ -16,6 +16,7 @@ import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
 import { registerTestCatalogRoutes } from './test-catalog-routes';
 import { registerTestMappingRoutes } from './test-mapping-routes';
 import { registerResultFieldsRoutes } from './result-fields-routes';
+import { registerPatientRoutes } from './patient-routes';
 import { registerOntologyRoutes } from './ontology-routes';
 import { registerDashboardRoutes } from './dashboards-routes';
 import { registerAuditRoutes } from './audit-routes';
@@ -155,6 +156,7 @@ export async function buildApp(ctx: AppContext) {
   registerTestCatalogRoutes(app, ctx);
   registerTestMappingRoutes(app, ctx);
   registerResultFieldsRoutes(app, ctx);
+  registerPatientRoutes(app, ctx);
   registerOntologyRoutes(app, ctx);
   registerDashboardRoutes(app, ctx);
   registerAuditRoutes(app, ctx);

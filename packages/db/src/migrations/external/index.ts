@@ -24,6 +24,7 @@ import * as m021 from './021_facility_registry';
 import * as m022 from './022_questionnaire_response_based_on_index';
 import * as m023 from './023_test_map';
 import * as m024 from './024_lab_result_status';
+import * as m025 from './025_patient_identifiers';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -51,5 +52,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '022_questionnaire_response_based_on_index': { up: (db) => m022.up(db, engine), down: (db) => m022.down(db, engine) },
     '023_test_map': { up: (db) => m023.up(db, engine), down: m023.down },
     '024_lab_result_status': { up: (db) => m024.up(db, engine), down: m024.down },
+    '025_patient_identifiers': { up: (db) => m025.up(db, engine), down: m025.down },
   };
 }

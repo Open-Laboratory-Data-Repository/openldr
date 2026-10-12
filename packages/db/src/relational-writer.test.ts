@@ -247,3 +247,36 @@ describe('rows a resource owns in other tables', () => {
     await db.destroy();
   });
 });
+
+describe('relational writer: patient identifiers', () => {
+  const pat = (identifier: unknown[], id = 'p1') => ({ resourceType: 'Patient', id, name: [{ family: 'Banda' }], identifier });
+
+  it('writes the patient and one row per identifier', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    await w.write(pat([{ system: 'urn:zm:mpi', value: 'M1' }, { system: 'urn:zm:nrc', value: 'N1' }]), {});
+    expect(await db.selectFrom('patient_identifiers').select(['patient_id', 'system', 'value']).orderBy('system').execute())
+      .toEqual([{ patient_id: 'p1', system: 'urn:zm:mpi', value: 'M1' }, { patient_id: 'p1', system: 'urn:zm:nrc', value: 'N1' }]);
+    await db.destroy();
+  });
+
+  it('replaces the set on a new version, down to none', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    await w.write(pat([{ system: 'urn:zm:mpi', value: 'M1' }, { system: 'urn:zm:nrc', value: 'N1' }]), {});
+    await w.write(pat([{ system: 'urn:zm:mpi', value: 'M1' }]), {});
+    expect(await db.selectFrom('patient_identifiers').select('value').execute()).toEqual([{ value: 'M1' }]);
+    await w.write(pat([]), {});
+    expect(await db.selectFrom('patient_identifiers').selectAll().execute()).toEqual([]);
+    await db.destroy();
+  });
+
+  it('deleteById removes the patient and its identifiers', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as never, 'postgres');
+    await w.write(pat([{ system: 'urn:zm:mpi', value: 'M1' }]), {});
+    await w.deleteById('Patient', 'p1');
+    expect(await db.selectFrom('patient_identifiers').selectAll().execute()).toEqual([]);
+    await db.destroy();
+  });
+});
