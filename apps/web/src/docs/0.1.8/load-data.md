@@ -247,7 +247,7 @@ A numeric result outside the lab's reporting range arrives as the limit with a c
 example `< 20`. `lab_results.numeric_comparator` holds `<`, `<=`, `>=` or `>`, and is empty for an
 ordinary number. `numeric_value` holds the limit in that case.
 
-Each result carries its FHIR status in `lab_results.status`. A test rejected at result entry is stored as a row with status `cancelled`, no value, and the reason in `data_absent_code` and `data_absent_reason`, for example `HAEM` and `Haemolysed`. To count results, add `(status is null or status <> 'cancelled')` to the query. To count rejected tests, use `status = 'cancelled'`. An install upgraded from an earlier version has no status on the rows it already held. Run `openldr db reproject --force` once after upgrading to fill them in.
+Each result carries its FHIR status in `lab_results.status`. A test rejected at result entry is stored as a row with status `cancelled`, no value, and the reason in `data_absent_code` and `data_absent_reason`, for example `HAEM` and `Haemolysed`. To count results, add `(l.status is null or l.status <> 'cancelled')` to the query. To count rejected tests, use `l.status = 'cancelled'`. Qualify `status` with the lab_results alias, because lab_requests, specimens and diagnostic_reports also have a `status` column; an older query that joins them and uses a bare `status` needs qualifying. An install upgraded from an earlier version has no status on the rows it already held. Run `openldr db reproject --force` once after upgrading to fill them in.
 
 `clinical_info` is hidden from the dashboard builder by default, because it can hold free text or
 a pseudonymous patient id. Unhide it in Settings, then Data Exposure. The `lab_request_attributes`

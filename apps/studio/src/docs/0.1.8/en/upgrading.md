@@ -71,6 +71,8 @@ Start the existing storage and identity services first, then the pinned new appl
 
 An HTTP 202 means the webhook was accepted, not completed. Poll outstanding receipts. Investigate interrupted receipts and external effects before deciding whether to submit replacement work. Retry the same logical request with its original `Idempotency-Key` and input. Do not bulk replay interrupted requests with fresh keys.
 
+If you upgrade from a release before lab_results had a status column, run `openldr db reproject --force` once. It fills in the status of results already in the warehouse, so rejected tests stop counting as results.
+
 Resume senders only after these checks pass. Keep the verified backup and previous images according to the site's retention policy.
 
 ## Moving from MinIO to Garage (installs from before 0.1.11)

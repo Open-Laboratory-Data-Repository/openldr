@@ -41,7 +41,9 @@ I checked each one in the code on 2026-10-12.
 - **Shipped reports do not count raw result rows.** The AMR reports filter on organism code `634-6` or an
   S/I/R flag, and the volume report uses `lab_results` only to find orders by facility
   (`packages/reporting/src/seed/report-seeds.ts:311`, `:413`, `:954`, `:1006`,
-  `packages/reporting/src/amr/query.ts:13-15`). A rejected test matches none of them.
+  `packages/reporting/src/amr/query.ts:13-15`). A rejected test matches none of them. The seeded default
+  dashboard (`packages/dashboards/src/samples/openldr-general.json`) did count them in three widgets,
+  and this change filters them.
 - **The Observed Results list scans every `lab_results` row** except the dictionary's own system
   (`packages/bootstrap/src/test-mapping.ts`, `scanResultGroups`).
 - **cdr sends every Observation as `final`** (cdr `apps/cli/src/export/fhir-transform.ts:495`, `:552`, `:599`). DISA data never carries a cancelled result.
@@ -136,8 +138,17 @@ the status from.
 ## 7. Not in this spec
 
 - A rejection-rate report or dashboard.
-- Dashboard builder changes. The Results model offers the table's columns minus a deny list
-  (`packages/dashboards/src/models/registry.ts:104`), so the three columns appear there with no change.
+- Dashboard builder changes. The builder's Results model has a fixed field list
+  (`packages/dashboards/src/models/registry.ts`, the `observations` model), so it does not offer `status`.
+  Adding it waits for a null-safe "is not cancelled" filter, because the builder's not-equals compiles to
+  plain `<>`, which drops every null-status row.
 - Pack SQL. DISA data never carries a cancelled result.
 - Storing the reason's code system.
 - Bench rejection behaviour itself. The FHIR it writes stays as it is.
+
+## 8. Changes during review
+
+1. The default dashboard's three result counts now filter rejected tests.
+2. The builder's Results model does not get `status`. Its field list is fixed, and its not-equals compiles to
+   plain `<>`, which drops every null-status row.
+3. The docs show the rule with a qualified column, and the upgrade guides name the reproject step.
