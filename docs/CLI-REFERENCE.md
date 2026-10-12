@@ -200,7 +200,8 @@ except `identifier-systems set`, which changes only a label.
 
 Output is masked unless you pass `--identifiers`, which is audited. A masked name keeps its
 first letter and a masked identifier keeps its last four characters. `list` and `show` with
-`--identifiers` write an audit event with `actorName: 'cli'`. `identifier-systems list` shows each
+`--identifiers` write an audit event. It records actor type `cli` and the OS user name, or the
+`--actor` override. `identifier-systems list` shows each
 identifier system CE has seen, its label, whether it shows in the list and whether search
 matches it. `identifier-systems set` changes one system and is audited too.
 

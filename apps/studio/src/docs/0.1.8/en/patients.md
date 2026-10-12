@@ -2,7 +2,7 @@
 
 The Patient Index lists the patients CE has received with lab data. The source system, such as a HIMS, owns each patient. CE shows patients and never edits them.
 
-Open **Patients** in the sidebar. You need the Patients view permission.
+Open **Patients** in the sidebar. You need the View patient index permission.
 
 ## What you see
 

@@ -12,7 +12,7 @@ Com Ver identificadores de pacientes, vê tudo, e a pesquisa também encontra pa
 
 ## Encontrar um paciente
 
-Escreva um identificador, por exemplo um número MPI ou um identificador nacional, e o CE encontra o paciente seja qual for o identificador. Use **Filtro** e **Estado** para mostrar registos fundidos.
+Escreva um identificador, por exemplo um número MPI ou um identificador nacional, e o CE encontra o paciente seja qual for o identificador. Use **Filtrar** e **Estado** para mostrar registos fundidos.
 
 A coluna **Identificadores** mostra os sistemas escolhidos no separador **Sistemas de identificadores**.
 

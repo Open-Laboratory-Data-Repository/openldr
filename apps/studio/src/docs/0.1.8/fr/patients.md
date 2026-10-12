@@ -12,7 +12,7 @@ Avec Voir les identifiants des patients, vous voyez tout, et la recherche trouve
 
 ## Trouver un patient
 
-Saisissez un identifiant, par exemple un numéro MPI ou un identifiant national, et CE trouve le patient quel que soit l'identifiant. Utilisez **Filtre** et **Statut** pour afficher les dossiers fusionnés.
+Saisissez un identifiant, par exemple un numéro MPI ou un identifiant national, et CE trouve le patient quel que soit l'identifiant. Utilisez **Filtrer** et **Statut** pour afficher les dossiers fusionnés.
 
 La colonne **Identifiants** affiche les systèmes choisis dans l'onglet **Systèmes d'identifiants**.
 
