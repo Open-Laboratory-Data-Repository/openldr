@@ -64,4 +64,19 @@ describe('PatientSheet', () => {
     render(<PatientSheet patientRef="r1" onClose={() => {}} onOpen={() => {}} />);
     expect(await screen.findByText('This list is out of date. Reload the page to open the patient.')).toBeTruthy();
   });
+
+  it('ignores a late response for a previous patient', async () => {
+    let resolveOld: (d: api.PatientDetail) => void = () => {};
+    const old = new Promise<api.PatientDetail>((res) => { resolveOld = res; });
+    vi.mocked(api.getPatient).mockImplementation((ref: string) =>
+      ref === 'r1' ? old : Promise.resolve({ ...DETAIL, ref: 'r2', name: 'Jane Banda', replacedByRef: null }));
+    vi.mocked(api.listPatientRequests).mockResolvedValue({ rows: [], total: 0 });
+    const { rerender } = render(<PatientSheet patientRef="r1" onClose={() => {}} onOpen={() => {}} />);
+    rerender(<PatientSheet patientRef="r2" onClose={() => {}} onOpen={() => {}} />);
+    expect(await screen.findByText('Jane Banda')).toBeTruthy();
+    resolveOld(DETAIL);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByText('John Mwanza')).toBeNull();
+    expect(screen.getByText('Jane Banda')).toBeTruthy();
+  });
 });

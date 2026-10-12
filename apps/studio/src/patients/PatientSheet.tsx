@@ -31,15 +31,21 @@ export function PatientSheet({ patientRef, onClose, onOpen }: {
     setGone(false);
     setPage(0);
     if (!patientRef) return;
-    getPatient(patientRef).then(setDetail).catch(() => setGone(true));
+    let cancelled = false;
+    getPatient(patientRef)
+      .then((d) => { if (!cancelled) setDetail(d); })
+      .catch(() => { if (!cancelled) setGone(true); });
+    return () => { cancelled = true; };
   }, [patientRef]);
 
   useEffect(() => {
     setRequests(null);
     if (!patientRef) return;
+    let cancelled = false;
     listPatientRequests(patientRef, { limit: pageSize, offset: page * pageSize })
-      .then(setRequests)
-      .catch(() => setRequests({ rows: [], total: 0 }));
+      .then((r) => { if (!cancelled) setRequests(r); })
+      .catch(() => { if (!cancelled) setRequests({ rows: [], total: 0 }); });
+    return () => { cancelled = true; };
   }, [patientRef, page, pageSize]);
 
   const row = (label: string, value: string | null | undefined) => (value ? (
