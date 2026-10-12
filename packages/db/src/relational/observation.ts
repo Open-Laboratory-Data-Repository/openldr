@@ -11,6 +11,8 @@ export function projectObservation(r: Record<string, unknown>, prov: Provenance)
   const valueCc = codeable(r['valueCodeableConcept']);
   const quantity = r['valueQuantity'] as Record<string, unknown> | undefined;
   const interpretation = codeable((r['interpretation'] as unknown[] | undefined)?.[0]);
+  // A rejected test is a cancelled Observation whose dataAbsentReason says why (bench result entry).
+  const absent = codeable(r['dataAbsentReason']);
   const comparator = str(quantity?.['comparator']);
   const numericValue = num(quantity?.['value']);
   const textValue = valueCc.text ?? str(r['valueString']);
@@ -20,6 +22,9 @@ export function projectObservation(r: Record<string, unknown>, prov: Provenance)
     request_id: referenceId((r['basedOn'] as unknown[] | undefined)?.[0]),
     patient_id: referenceId(r['subject']),
     specimen_id: referenceId(r['specimen']),
+    status: str(r['status']),
+    data_absent_code: absent.code,
+    data_absent_reason: absent.text,
     observation_code: code.code,
     observation_system: code.system,
     observation_desc: code.text,

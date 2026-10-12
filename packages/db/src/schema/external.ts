@@ -72,6 +72,12 @@ export interface LabResultsTable extends ProvenanceColumns {
   result_timestamp: string | null;
   patient_id: string | null;
   specimen_id: string | null;
+  /** Observation.status. A test the bench rejects is 'cancelled'. Null on rows projected before 024. */
+  status: string | null;
+  /** Observation.dataAbsentReason code, for example a reject reason. */
+  data_absent_code: string | null;
+  /** Observation.dataAbsentReason text, else its first coding's display. */
+  data_absent_reason: string | null;
 }
 
 export interface FacilitiesTable extends ProvenanceColumns {
@@ -298,7 +304,7 @@ export interface ExternalSchema {
 export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   patients: ['id', 'patient_guid', 'surname', 'firstname', 'date_of_birth', 'sex', 'national_id', 'phone', 'email', 'managing_organization', 'active', 'replaced_by_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   lab_requests: ['id', 'request_id', 'patient_id', 'panel_code', 'panel_system', 'panel_desc', 'status', 'priority', 'authored_at', 'requester_code', 'requester_system', 'requester_display', 'analysis_at', 'point_of_care', 'request_type', 'registered_by', 'tested_by', 'requester_practitioner', 'obr_set_id', 'age_years', 'age_days', 'clinical_info', 'analyzer_code', 'rejection_code', 'rejection_reason', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
-  lab_results: ['id', 'request_id', 'observation_code', 'observation_system', 'observation_desc', 'result_type', 'numeric_value', 'numeric_units', 'numeric_comparator', 'coded_value', 'text_value', 'abnormal_flag', 'result_timestamp', 'patient_id', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  lab_results: ['id', 'request_id', 'observation_code', 'observation_system', 'observation_desc', 'result_type', 'numeric_value', 'numeric_units', 'numeric_comparator', 'coded_value', 'text_value', 'abnormal_flag', 'result_timestamp', 'patient_id', 'specimen_id', 'status', 'data_absent_code', 'data_absent_reason', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facilities: ['id', 'facility_code', 'facility_name', 'facility_type', 'source_resource', 'region', 'district', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'origin', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'based_on_id', 'performer', 'performer_display', 'performer_system', 'specimen_id', 'section_code', 'authorised_by', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
