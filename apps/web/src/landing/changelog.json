@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "c77faf35",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Duplicate evidence wraps at spaces; empty text for the not-duplicates filter"
+        },
+        {
           "hash": "7f998555",
           "type": "fix",
           "scope": "studio",
