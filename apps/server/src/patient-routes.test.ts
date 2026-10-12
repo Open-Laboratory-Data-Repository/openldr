@@ -25,6 +25,12 @@ function fakeCtx(over: Record<string, Impl> = {}) {
       get: spy('systems.get', over['systems.get'] ?? (async () => null)),
       set: spy('systems.set', over['systems.set'] ?? (async () => SYSTEM)),
     },
+    patientDuplicates: {
+      list: spy('dup.list', over['dup.list'] ?? (async () => ({ rows: [], total: 0, masked: false }))),
+      dismiss: spy('dup.dismiss', over['dup.dismiss'] ?? (async () => ({ changed: 1 }))),
+      restore: spy('dup.restore', over['dup.restore'] ?? (async () => ({ changed: 1 }))),
+      exportCsv: spy('dup.export', over['dup.export'] ?? (async () => ({ csv: 'group,rule\n', groups: 2 }))),
+    },
     audit: { record: async (e: Record<string, unknown>) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
   } as unknown as AppContext;
@@ -128,5 +134,81 @@ describe('patient routes', () => {
     const central = fakeCtx({ 'systems.set': async () => { throw new PatientIndexError('central owns it', 'central-managed'); } });
     const res = await appWith(central.ctx, ALL).inject({ method: 'PUT', url: '/api/patients/identifier-systems', payload: body });
     expect([res.statusCode, res.json().kind]).toEqual([409, 'central-managed']);
+  });
+});
+
+const REFS = { idForRef: (ref: string) => (ref.startsWith('r') ? `id-${ref}` : null) };
+
+describe('patient duplicate routes', () => {
+  it('lists duplicates masked for view only, unmasked with view_identifiers', async () => {
+    const a = fakeCtx();
+    expect((await appWith(a.ctx, ['patients.view']).inject({ method: 'GET', url: '/api/patients/duplicates?status=all' })).statusCode).toBe(200);
+    expect(a.calls.find((c) => c.method === 'dup.list')?.args).toEqual([{ status: 'all', limit: 25, offset: 0 }, { unmask: false }]);
+    const b = fakeCtx();
+    await appWith(b.ctx, ALL).inject({ method: 'GET', url: '/api/patients/duplicates' });
+    expect(b.calls.find((c) => c.method === 'dup.list')?.args[1]).toEqual({ unmask: true });
+  });
+
+  it('audits an unmasked duplicates list by count, and a masked list not at all', async () => {
+    const a = fakeCtx({ 'dup.list': async () => ({ rows: [], total: 7, masked: false }) });
+    await appWith(a.ctx, ALL).inject({ method: 'GET', url: '/api/patients/duplicates' });
+    expect(a.audit.map((e) => [e.action, e.entityType, e.entityId, e.metadata]))
+      .toEqual([['patients.duplicate.list', 'patient', 'duplicates', { count: 7 }]]);
+    const b = fakeCtx();
+    await appWith(b.ctx, ['patients.view']).inject({ method: 'GET', url: '/api/patients/duplicates' });
+    expect(b.audit).toEqual([]);
+  });
+
+  it('is not read as a patient ref', async () => {
+    const { ctx, calls } = fakeCtx();
+    await appWith(ctx, ['patients.view']).inject({ method: 'GET', url: '/api/patients/duplicates' });
+    expect(calls.some((c) => c.method === 'get')).toBe(false);
+  });
+
+  it('refuses a bad status with 400', async () => {
+    const { ctx } = fakeCtx();
+    const res = await appWith(ctx, ['patients.view']).inject({ method: 'GET', url: '/api/patients/duplicates?status=gone' });
+    expect([res.statusCode, res.json()]).toEqual([400, { error: 'status must be open, dismissed or all' }]);
+  });
+
+  it('dismisses with patients.manage, turning refs into ids, and audits ids and reason', async () => {
+    const { ctx, calls, audit } = fakeCtx(REFS);
+    const res = await appWith(ctx, ALL).inject({ method: 'POST', url: '/api/patients/duplicates/dismiss', payload: { refs: ['r1', 'r2'], reason: 'twins' } });
+    expect([res.statusCode, res.json()]).toEqual([200, { changed: 1 }]);
+    expect(calls.find((c) => c.method === 'dup.dismiss')?.args).toEqual([{ ids: ['id-r1', 'id-r2'], reason: 'twins', by: 'user' }]);
+    expect(audit.map((e) => [e.action, e.entityId, e.metadata])).toEqual([['patients.duplicate.dismiss', 'id-r1', { ids: ['id-r1', 'id-r2'], reason: 'twins', changed: 1 }]]);
+  });
+
+  it('restores with patients.manage and audits', async () => {
+    const { ctx, audit } = fakeCtx(REFS);
+    const res = await appWith(ctx, ALL).inject({ method: 'POST', url: '/api/patients/duplicates/restore', payload: { refs: ['r1', 'r2'] } });
+    expect(res.statusCode).toBe(200);
+    expect(audit.map((e) => e.action)).toEqual(['patients.duplicate.restore']);
+  });
+
+  it('refuses dismiss without patients.manage, with one ref, and with an unknown ref', async () => {
+    const body = { refs: ['r1', 'r2'] };
+    expect((await appWith(fakeCtx(REFS).ctx, ['patients.view']).inject({ method: 'POST', url: '/api/patients/duplicates/dismiss', payload: body })).statusCode).toBe(403);
+    const one = await appWith(fakeCtx(REFS).ctx, ALL).inject({ method: 'POST', url: '/api/patients/duplicates/dismiss', payload: { refs: ['r1'] } });
+    expect([one.statusCode, one.json()]).toEqual([400, { error: 'refs must list at least two different patients' }]);
+    const bad = await appWith(fakeCtx(REFS).ctx, ALL).inject({ method: 'POST', url: '/api/patients/duplicates/dismiss', payload: { refs: ['r1', 'zzz'] } });
+    expect([bad.statusCode, bad.json()]).toEqual([404, { error: 'patient not found', kind: 'not-found' }]);
+  });
+
+  it('refuses more than 50 refs with 400', async () => {
+    const refs = Array.from({ length: 51 }, (_, i) => `r${i}`);
+    const res = await appWith(fakeCtx(REFS).ctx, ALL).inject({ method: 'POST', url: '/api/patients/duplicates/dismiss', payload: { refs } });
+    expect([res.statusCode, res.json()]).toEqual([400, { error: 'refs must list at most 50 patients' }]);
+  });
+
+  it('exports with view_identifiers as CSV and audits the group count only', async () => {
+    const { ctx, audit } = fakeCtx();
+    const res = await appWith(ctx, ['patients.view', 'patients.view_identifiers']).inject({ method: 'GET', url: '/api/patients/duplicates/export' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    expect(res.headers['content-disposition']).toContain('patient-duplicates.csv');
+    expect(res.body).toBe('group,rule\n');
+    expect(audit.map((e) => [e.action, e.metadata])).toEqual([['patients.duplicate.export', { groups: 2 }]]);
+    expect((await appWith(fakeCtx().ctx, ['patients.view']).inject({ method: 'GET', url: '/api/patients/duplicates/export' })).statusCode).toBe(403);
   });
 });

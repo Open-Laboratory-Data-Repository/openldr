@@ -79,6 +79,7 @@ import { createTestMapping, isTestMapRelevantRecord, type TestMapping } from './
 import { createResultFields, type ResultFields } from './result-fields';
 import { createPatientIdentifierSystems, type PatientIdentifierSystems } from './patient-identifier-systems';
 import { createPatientIndex, type PatientIndex } from './patient-index';
+import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -557,6 +558,8 @@ export interface AppContext {
   patientIdentifierSystems: PatientIdentifierSystems;
   /** The read-only patient index and its masking (patient index spec, section 2). */
   patientIndex: PatientIndex;
+  /** Likely duplicate patients and their dismissals (patient duplicates spec). */
+  patientDuplicates: PatientDuplicates;
   /** Gates persistResources() strictness for the webhook (Persist Store node) and ingest paths
    *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
   validationStrictness: ValidationStrictness;
@@ -1007,6 +1010,7 @@ const reporting: ReportingApi = {
   const resultFields = createResultFields({ db: termDb, admin: termAdmin, onChanged: () => { void testMapping.requestRebuild(); } });
   const patientIdentifierSystems = createPatientIdentifierSystems({ internalDb: termDb, externalDb, admin: termAdmin });
   const patientIndex = createPatientIndex({ externalDb, systems: patientIdentifierSystems, engine });
+  const patientDuplicates = createPatientDuplicates({ internalDb: termDb, externalDb, index: patientIndex, systems: patientIdentifierSystems });
 
   // Task 6: terminology distribution ingest — job store (queue/claim/progress/retain-latest) +
   // the polling worker that drains it. `runIngest` streams+extracts the uploaded zip to a fresh
@@ -1787,6 +1791,7 @@ const reporting: ReportingApi = {
     resultFields,
     patientIdentifierSystems,
     patientIndex,
+    patientDuplicates,
     facilityJobs,
     featureFlags,
     numberSettings,
@@ -1870,6 +1875,7 @@ export * from './test-mapping';
 export * from './result-fields';
 export * from './patient-identifier-systems';
 export * from './patient-index';
+export * from './patient-duplicates';
 export * from './patient-mask';
 export {
   RESULT_PARAM_VALUE_SET, SEX_OPTIONS, bandFit, bandInCatalog, findCatalogBand, matchBand, parseResultParams,

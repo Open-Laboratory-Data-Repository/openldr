@@ -78,6 +78,8 @@ If you upgrade from a release before lab_results had a status column, run `openl
 
 If you upgrade from a release before the Patient Index, run `openldr db reproject --force` once. It lists every identifier of patients already in the warehouse, so search can find them by any identifier, not only the first.
 
+If you upgrade from a release before duplicate detection, run `openldr db reproject --force` once. It stores the normalised name and date of birth that the Duplicates tab matches on.
+
 Resume senders only after these checks pass. Keep the verified backup and previous images according to the site's retention policy.
 
 ### Moving from MinIO to Garage (installs from before 0.1.11)

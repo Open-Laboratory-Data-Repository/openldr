@@ -30,9 +30,26 @@ With the Manage patient index permission, choose **Edit** from a row's ⋯ menu 
 
 A lab that receives these labels from central cannot change them.
 
+## Duplicates
+
+The **Duplicates** tab lists patients that look like the same person. CE finds two kinds:
+
+- **Same identifier.** Two or more patients carry the same value in the same identifier system, such as the same NRC. Identifiers with no system, and systems where **Search matches it** is off, are not used.
+- **Same name and date of birth.** Surname, first name and date of birth match, ignoring case, extra spaces and accents. Patients whose sexes differ are not matched. A patient with no date of birth is never matched this way.
+
+Only active patients are compared. CE does not merge patients: fix duplicates in the source system, and the next update from it clears the group here.
+
+Click a group to see its patients. Choose **Open patient** from a patient's ⋯ menu to see the full record.
+
+A group can be large. The list shows at most 50 patients per group, and the sheet says how many it shows out of the total. A group with more patients than that cannot be marked as not duplicates here. Fix it in the source system, or turn off **Search matches it** for that identifier system. A placeholder identifier shared by many patients is the usual cause.
+
+With the Manage patient index permission, choose **Mark as not duplicates** from the group's ⋯ menu when the patients are different people. You can add a reason. Use **Status** to see these groups again, and **Show again** to undo.
+
+With the View patient identifiers permission, choose **Export CSV** from the tab's ⋯ menu to send the open groups to the source system's team. Each export is written to the audit log.
+
 ## After upgrading
 
-Patients received before this release have no identifiers listed until you run `openldr db reproject --force` once.
+Patients received before this release have no identifiers listed until you run `openldr db reproject --force` once. It also fills in what CE needs to find patients with the same name and date of birth.
 
 ## From the command line
 
@@ -40,5 +57,8 @@ Patients received before this release have no identifiers listed until you run `
 - `openldr patients show <id> [--identifiers]`
 - `openldr patients identifier-systems list`
 - `openldr patients identifier-systems set <system> [--label <text>] [--list-column on|off] [--searchable on|off]`
+- `openldr patients duplicates list [--status open|dismissed|all] [--limit <n>] [--offset <n>] [--identifiers]`
+- `openldr patients duplicates dismiss <idA> <idB> [--reason <text>]` and `restore <idA> <idB>`
+- `openldr patients duplicates export [--out <file>]`
 
-Output is masked unless you pass `--identifiers`, which is audited.
+Output is masked unless you pass `--identifiers`. `patients list` and `patients show` with `--identifiers` are audited. `duplicates list` with `--identifiers` and `duplicates export` are audited too. `duplicates export` is always unmasked. `duplicates dismiss` and `restore` are audited.

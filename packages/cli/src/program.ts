@@ -47,6 +47,7 @@ import {
   type ResultFieldsListOpts,
 } from './result-fields';
 import {
+  runDuplicatesDismiss, runDuplicatesExport, runDuplicatesList, runDuplicatesRestore, type DuplicatesListOpts,
   runIdentifierSystemsList, runIdentifierSystemsSet, runPatientsList, runPatientsShow,
   type IdentifierSystemsSetOpts, type PatientsListOpts,
 } from './patients';
@@ -519,6 +520,29 @@ export function buildProgram(): Command {
     .option('--searchable <on|off>', 'let search match this identifier')
     .option('--json', 'emit JSON', false)
     .action(async (system: string, opts: IdentifierSystemsSetOpts) => { process.exitCode = await runIdentifierSystemsSet(system, opts); });
+
+  const dups = patients.command('duplicates').description('Likely duplicate patients (CE lists them; the source system fixes them)');
+  dups.command('list')
+    .description('List likely duplicate groups; masked unless --identifiers')
+    .option('--status <open|dismissed|all>', 'which groups (default: open)')
+    .option('--limit <n>', 'groups per page, 1 to 200 (default: 25)')
+    .option('--offset <n>', 'groups to skip (default: 0)')
+    .option('--identifiers', 'show names, identifiers and patient ids', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: DuplicatesListOpts) => { process.exitCode = await runDuplicatesList(opts); });
+  dups.command('dismiss <idA> <idB>')
+    .description('Mark two patients as different people')
+    .option('--reason <text>', 'why they are not duplicates')
+    .option('--json', 'emit JSON', false)
+    .action(async (a: string, b: string, opts: { reason?: string; json: boolean }) => { process.exitCode = await runDuplicatesDismiss(a, b, opts); });
+  dups.command('restore <idA> <idB>')
+    .description('Undo a dismissal')
+    .option('--json', 'emit JSON', false)
+    .action(async (a: string, b: string, opts: { json: boolean }) => { process.exitCode = await runDuplicatesRestore(a, b, opts); });
+  dups.command('export')
+    .description('Write the open groups as CSV, unmasked (audited)')
+    .option('--out <file>', 'write to a file instead of stdout')
+    .action(async (opts: { out?: string }) => { process.exitCode = await runDuplicatesExport(opts); });
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');
   // Task 4: CLI parity for Task 3's `GET /api/facilities` — the same `parseWhereFlags`/

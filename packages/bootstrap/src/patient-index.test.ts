@@ -198,6 +198,24 @@ describe('patient index: detail and requests', () => {
 });
 
 describe('patient index parsers', () => {
+  it('builds rows for more ids than one IN list holds (MSSQL allows about 2,100 parameters)', async () => {
+    const f = await buildPatientIndexFixture();
+    const index = createPatientIndex({ externalDb: f.externalDb, systems: f.systems, engine: 'postgres', now: NOW, refKey: randomBytes(32) });
+    const ids: string[] = [];
+    for (let i = 0; i < 1200; i += 1) {
+      const id = `bulk-${i}`;
+      ids.push(id);
+      await seedPatient(f.externalDb, { id, surname: 'S', firstname: 'F' });
+      await seedIdentifier(f.externalDb, id, MPI, `V-${i}`);
+      await seedRequest(f.externalDb, { id: `rq-${i}`, patientId: id, authoredAt: '2026-01-01' });
+    }
+    await f.systems.set({ system: MPI, label: 'MPI', listColumn: true, searchable: true });
+    const rows = await index.rowsByIds(ids, { unmask: true });
+    expect(rows).toHaveLength(1200);
+    expect(rows.map((r) => r.id)).toEqual(ids);
+    expect(rows.every((r, i) => r.requestCount === 1 && r.identifiers.length === 1 && r.identifiers[0].value === `V-${i}`)).toBe(true);
+  }, 60_000);
+
   it('parses the list query', () => {
     expect(parsePatientListQuery({})).toEqual({ ok: true, query: { q: '', status: 'active', limit: 25, offset: 0 } });
     expect(parsePatientListQuery({ search: ' x ', status: 'merged', limit: '10', offset: '20' }))
