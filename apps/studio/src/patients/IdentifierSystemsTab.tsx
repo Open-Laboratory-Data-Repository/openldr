@@ -78,7 +78,7 @@ export function IdentifierSystemsTab({ canManage }: { canManage: boolean }): JSX
             <TableBody className="[&_tr:last-child]:border-b">
               {rows.map((r) => (
                 <TableRow key={key(r)} data-testid={`identifier-system-row-${key(r)}`}>
-                  <TableCell>{r.system === null ? t('patients.noSystem') : r.label ?? ''}</TableCell>
+                  <TableCell>{r.system === null ? t('patients.noSystem') : r.label ?? r.system}</TableCell>
                   <TableCell className="break-all font-mono text-xs">{r.system ?? ''}</TableCell>
                   <TableCell>{r.patientCount}</TableCell>
                   <TableCell>{r.listColumn ? t('patients.systems.yes') : t('patients.systems.no')}</TableCell>
