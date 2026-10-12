@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { randomBytes } from 'node:crypto';
 import { createPatientIndex } from './patient-index';
-import { createPatientDuplicates, parseDuplicateListQuery, parsePairInput } from './patient-duplicates';
+import { createPatientDuplicates, groupExact, parseDuplicateListQuery, parsePairInput } from './patient-duplicates';
 import { buildPatientIndexFixture, seedIdentifier, seedPatient } from './test-support/patient-index-fixture';
 
 const NRC = 'urn:zm:nrc';
@@ -184,6 +184,26 @@ describe('patient duplicates: masking, paging and export', () => {
       `1,identifier,${NRC},998877/10/1,a,G-a,Mwanza,John,1990-01-05,M,`,
       `1,identifier,${NRC},998877/10/1,b,G-b,Phiri,Ann,1991,F,`,
     ]);
+  });
+});
+
+describe('patient duplicates: exact regrouping', () => {
+  it('drops a group whose members differ only by case (a case-insensitive collation folded them)', () => {
+    expect(groupExact([
+      { system: 's', value: 'AB12', patient_id: 'a' },
+      { system: 's', value: 'ab12', patient_id: 'b' },
+    ])).toEqual([]);
+  });
+
+  it('keeps a group of two distinct patients under one exact pair, and drops one patient repeated', () => {
+    const out = groupExact([
+      { system: 's', value: 'X1', patient_id: 'b' },
+      { system: 's', value: 'X1', patient_id: 'a' },
+      { system: 's', value: 'Y2', patient_id: 'a' },
+      { system: 's', value: 'Y2', patient_id: 'a' },
+      { system: null, value: 'X1', patient_id: 'c' },
+    ]);
+    expect(out).toEqual([{ rule: 'identifier', system: 's', value: 'X1', ids: ['a', 'b'], pairs: 1 }]);
   });
 });
 

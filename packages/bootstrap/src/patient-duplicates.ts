@@ -62,7 +62,7 @@ export function parsePairInput(raw: unknown): { ok: true; refs: string[]; reason
   return { ok: true, refs, reason };
 }
 
-type RawGroup = {
+export type RawGroup = {
   rule: DuplicateRule; system: string | null; value: string;
   ids: string[];               // every member, sorted by id
   pairs: number;               // compatible pairs, counted arithmetically
@@ -88,6 +88,30 @@ function chunks<T>(xs: T[], size = CHUNK): T[][] {
   return out;
 }
 
+export type ExactRow = { system: string | null; value: string; patient_id: string };
+
+/** Regroup identifier rows on the exact (system, value) they carry. A case-insensitive collation
+ *  (MySQL, MSSQL) makes the SQL grouping fold 'AB12' and 'ab12' together; the rule is an exact
+ *  match, so a group needs two or more distinct patients under one exact pair. */
+export function groupExact(rows: ExactRow[]): RawGroup[] {
+  const bySystem = new Map<string, Map<string, Set<string>>>();
+  for (const r of rows) {
+    if (r.system === null) continue;
+    const byValue = bySystem.get(r.system) ?? new Map<string, Set<string>>();
+    byValue.set(r.value, (byValue.get(r.value) ?? new Set()).add(r.patient_id));
+    bySystem.set(r.system, byValue);
+  }
+  const out: RawGroup[] = [];
+  for (const [system, byValue] of bySystem) {
+    for (const [value, set] of byValue) {
+      if (set.size < 2) continue;
+      const ids = [...set].sort();
+      out.push({ rule: 'identifier', system, value, ids, pairs: (ids.length * (ids.length - 1)) / 2 });
+    }
+  }
+  return out;
+}
+
 const compatible = (a: string | null | undefined, b: string | null | undefined) => !a || !b || a === b;
 
 export function createPatientDuplicates(deps: {
@@ -107,33 +131,24 @@ export function createPatientDuplicates(deps: {
     // HAVING with an aggregate; Postgres and MySQL plan the two forms the same way.
     const found = await db.selectFrom(inner.groupBy(['i.system', 'i.value']).as('g'))
       .select(['g.system', 'g.value']).where('g.n', '>', 1).execute();
-    const wanted = new Map<string, Set<string>>();
+    // Load the members per system, so the (system, value) index serves each query.
+    const valuesBySystem = new Map<string, Set<string>>();
     for (const k of found) {
       if (k.system === null) continue;
-      wanted.set(k.system, (wanted.get(k.system) ?? new Set()).add(k.value));
+      valuesBySystem.set(k.system, (valuesBySystem.get(k.system) ?? new Set()).add(k.value));
     }
-    const members = new Map<string, Map<string, Set<string>>>();
-    for (const values of chunks([...new Set(found.map((k) => k.value))])) {
-      const rows = await db.selectFrom('patient_identifiers as i')
-        .innerJoin('patients as p', 'p.id', 'i.patient_id')
-        .select(['i.system', 'i.value', 'i.patient_id'])
-        .where('i.value', 'in', values)
-        .where('p.active', '=', true).where('p.replaced_by_id', 'is', null).execute();
-      for (const r of rows) {
-        if (r.system === null || !wanted.get(r.system)?.has(r.value)) continue;
-        const bySystem = members.get(r.system) ?? new Map<string, Set<string>>();
-        bySystem.set(r.value, (bySystem.get(r.value) ?? new Set()).add(r.patient_id));
-        members.set(r.system, bySystem);
+    const loaded: ExactRow[] = [];
+    for (const [system, values] of valuesBySystem) {
+      for (const part of chunks([...values])) {
+        const rows = await db.selectFrom('patient_identifiers as i')
+          .innerJoin('patients as p', 'p.id', 'i.patient_id')
+          .select(['i.system', 'i.value', 'i.patient_id'])
+          .where('i.system', '=', system).where('i.value', 'in', part)
+          .where('p.active', '=', true).where('p.replaced_by_id', 'is', null).execute();
+        loaded.push(...rows);
       }
     }
-    const out: RawGroup[] = [];
-    for (const [system, byValue] of members) {
-      for (const [value, set] of byValue) {
-        const ids = [...set].sort();
-        out.push({ rule: 'identifier', system, value, ids, pairs: (ids.length * (ids.length - 1)) / 2 });
-      }
-    }
-    return out;
+    return groupExact(loaded);
   }
 
   async function detailGroups(): Promise<RawGroup[]> {
@@ -146,7 +161,12 @@ export function createPatientDuplicates(deps: {
     for (const keys of chunks(found.map((f) => f.match_key as string))) {
       const rows = await db.selectFrom('patients').select(['id', 'sex', 'match_key'])
         .where('match_key', 'in', keys).where('active', '=', true).where('replaced_by_id', 'is', null).execute();
-      for (const r of rows) byKey.set(r.match_key as string, [...(byKey.get(r.match_key as string) ?? []), { id: r.id, sex: r.sex }]);
+      for (const r of rows) {
+        const key = r.match_key as string;
+        const list = byKey.get(key) ?? [];
+        list.push({ id: r.id, sex: r.sex });
+        byKey.set(key, list);
+      }
     }
     const out: RawGroup[] = [];
     for (const [value, people] of byKey) {
