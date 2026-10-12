@@ -26,7 +26,10 @@ describe('patient masking', () => {
     expect(ref).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(codec.decode(ref)).toBe('hl7-12345');
     expect(createRefCodec(randomBytes(32)).decode(ref)).toBeNull();
-    expect(codec.decode(`${ref.slice(0, -2)}AA`)).toBeNull();
+    const i = Math.floor(ref.length / 2);
+    const tampered = ref.slice(0, i) + (ref[i] === 'A' ? 'B' : 'A') + ref.slice(i + 1);
+    expect(tampered).not.toBe(ref);
+    expect(codec.decode(tampered)).toBeNull();
     expect(codec.decode('not a ref!')).toBeNull();
     expect(codec.decode('')).toBeNull();
   });
