@@ -949,6 +949,10 @@ export interface InternalSchema {
   notification_prefs: NotificationPrefsTable;
   users: UsersTable;
   account_access_blocks: { subject: string };
+  /** Pairs of patients marked "not duplicates" (migration 111). patient_a < patient_b. */
+  patient_duplicate_dismissals: {
+    patient_a: string; patient_b: string; reason: string | null; dismissed_by: string; dismissed_at: Generated<Date>;
+  };
   terminology_concepts: TerminologyConceptsTable;
   terminology_systems: TerminologySystemsTable;
   test_catalog_lab_settings: TestCatalogLabSettingsTable;
