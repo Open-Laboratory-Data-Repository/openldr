@@ -93,4 +93,23 @@ describe('DuplicatesTab', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.getByTestId('duplicate-row-0').textContent).toContain('second');
   });
+
+  it('says no groups are marked when the Not duplicates filter is empty', async () => {
+    vi.mocked(api.listPatientDuplicates).mockResolvedValue({ rows: [], total: 0, masked: false });
+    render(<DuplicatesTab canManage canExport={false} onOpen={() => {}} />);
+    expect(await screen.findByText('No likely duplicates.')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('duplicates-status-trigger'));
+    fireEvent.click(await screen.findByText('Not duplicates'));
+    expect(await screen.findByText('No groups are marked as not duplicates.')).toBeTruthy();
+    expect(screen.queryByText('No likely duplicates.')).toBeNull();
+  });
+
+  // jsdom has no layout, so this pins the wrapping rule: wrap at spaces, break a long value only when it must.
+  it('wraps evidence at spaces rather than between any two letters', async () => {
+    vi.mocked(api.listPatientDuplicates).mockResolvedValue({ rows: [GROUP], total: 1, masked: false });
+    render(<DuplicatesTab canManage canExport={false} onOpen={() => {}} />);
+    const cell = (await screen.findByTestId('duplicate-row-0')).querySelectorAll('td')[1];
+    expect(cell.className).toContain('break-words');
+    expect(cell.className).not.toContain('break-all');
+  });
 });

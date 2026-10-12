@@ -1226,6 +1226,7 @@ export const en = {
     },
     duplicates: {
       empty: 'No likely duplicates.',
+      emptyDismissed: 'No groups are marked as not duplicates.',
       statusFilter: 'Status',
       status: { open: 'Open', dismissed: 'Not duplicates', all: 'All' },
       menu: 'Duplicates actions',
