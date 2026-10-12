@@ -57,8 +57,8 @@ Patients received before this release have no identifiers listed until you run `
 - `openldr patients show <id> [--identifiers]`
 - `openldr patients identifier-systems list`
 - `openldr patients identifier-systems set <system> [--label <text>] [--list-column on|off] [--searchable on|off]`
-- `openldr patients duplicates list [--status open|dismissed|all] [--identifiers]`
+- `openldr patients duplicates list [--status open|dismissed|all] [--limit <n>] [--offset <n>] [--identifiers]`
 - `openldr patients duplicates dismiss <idA> <idB> [--reason <text>]` and `restore <idA> <idB>`
 - `openldr patients duplicates export [--out <file>]`
 
-Output is masked unless you pass `--identifiers`. `patients list` and `patients show` with `--identifiers` are audited. `duplicates export` is always unmasked and audited. `duplicates dismiss` and `restore` are audited.
+Output is masked unless you pass `--identifiers`. `patients list` and `patients show` with `--identifiers` are audited. `duplicates list` with `--identifiers` and `duplicates export` are audited too. `duplicates export` is always unmasked. `duplicates dismiss` and `restore` are audited.

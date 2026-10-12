@@ -222,7 +222,7 @@ linked at least one code queues a facility map rebuild.
 | `GET` | `/api/patients/duplicates?status=&limit=&offset=` | Groups of likely duplicate patients. Needs `patients.view`. `status` is `open`, `dismissed` or `all`. |
 | `GET` | `/api/patients/duplicates/export` | The open groups as CSV (`patient-duplicates.csv`, `text/csv`). Needs `patients.view_identifiers`. |
 | `POST` | `/api/patients/duplicates/dismiss` | Mark patients as not duplicates. Needs `patients.manage`. Body `{ refs, reason? }`. Answers `{ changed }`. |
-| `POST` | `/api/patients/duplicates/restore` | Undo a dismissal. Needs `patients.manage`. Body `{ refs, reason? }`. Answers `{ changed }`. |
+| `POST` | `/api/patients/duplicates/restore` | Undo a dismissal. Needs `patients.manage`. Body `{ refs }`. Answers `{ changed }`. |
 
 Names, identifiers, full dates of birth, phone and email are masked unless the caller holds
 `patients.view_identifiers`. Unmasked list and detail calls are audited as `patients.list` and
@@ -237,8 +237,9 @@ than two answers 400 `refs must list at least two different patients`. More than
 `refs must list at most 50 patients`. An unknown ref answers 404. A group with more than 50
 patients cannot be dismissed through the API. Fix it in the source system, or turn off
 `searchable` for the identifier system. The calls are audited as `patients.duplicate.dismiss`,
-`patients.duplicate.restore` and `patients.duplicate.export`. The export event records the group
-count only, never the contents.
+`patients.duplicate.restore` and `patients.duplicate.export`. An unmasked list (the caller holds
+`patients.view_identifiers`) is audited as `patients.duplicate.list`. The list and export events
+record a count only, never the contents.
 
 `:ref` is an opaque reference from the list response. It stops working after a server restart,
 so reload the list to get a new one. An unknown `ref` answers 404. The PUT answers 409 when
