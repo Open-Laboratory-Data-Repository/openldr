@@ -127,8 +127,18 @@ Two separate credentials are needed here, and they are not interchangeable:
   `write:packages` implies read on GitHub, so a token that shows only `write:packages` in
   `gh auth status` is not a failed refresh — it already has what the release needs.
 - **A `docker login ghcr.io` credential**, for the actual image push. This is a different
-  credential from the `gh` CLI's own token. Log in with a PAT that has `write:packages` before
+  credential from the `gh` CLI's own token. Log in with a token that has `write:packages` before
   running `pnpm release`.
+
+  The plain `docker login ghcr.io -u <github-username>` prompt has failed before. This works, on
+  Windows and Linux alike, once the `gh` token has `write:packages` (the refresh above):
+
+  ```
+  gh auth token | docker login ghcr.io -u <github-username> --password-stdin
+  ```
+
+  It prints `Login Succeeded`. It reuses the `gh` token, so no PAT needs pasting. Measured
+  2026-10-14.
 
 ### First release
 
