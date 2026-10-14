@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { Lightbox } from '@/components/Lightbox';
 import { screenshotUrl } from '@/landing/screenshots';
 
 interface Shot {
@@ -19,75 +19,14 @@ const SHOTS: Shot[] = [
   { name: 'marketplace.png', label: 'Marketplace', alt: 'Browsing marketplace artifacts' },
 ];
 
-function Lightbox({ shot, onClose, onStep }: { shot: Shot; onClose: () => void; onStep: (delta: number) => void }) {
-  const closeRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    closeRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-      if (event.key === 'ArrowRight') onStep(1);
-      if (event.key === 'ArrowLeft') onStep(-1);
-    };
-    document.addEventListener('keydown', onKey);
-    // The page behind must not scroll while the overlay is up.
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [onClose, onStep]);
-
+function ShotLightbox({ shot, onClose, onStep }: { shot: Shot; onClose: () => void; onStep: (delta: number) => void }) {
   const url = screenshotUrl(shot.name);
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={shot.label}
-      className="fixed inset-0 z-50 flex flex-col bg-background/95 p-4 sm:p-8"
-      onClick={onClose}
-    >
-      <div className="flex items-center justify-between gap-4 pb-4">
-        <p className="text-sm font-medium">{shot.label}</p>
-        <button
-          ref={closeRef}
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <X aria-hidden="true" className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Stop the click on the image itself from closing, so only the backdrop dismisses. */}
-      <div className="flex min-h-0 flex-1 items-center gap-3" onClick={(event) => event.stopPropagation()}>
-        <button
-          type="button"
-          aria-label="Previous screenshot"
-          onClick={() => onStep(-1)}
-          className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ChevronLeft aria-hidden="true" className="h-4 w-4" />
-        </button>
-        {url ? (
-          <img src={url} alt={shot.alt} className="mx-auto max-h-full min-h-0 w-auto max-w-full rounded-lg border border-border" />
-        ) : null}
-        <button
-          type="button"
-          aria-label="Next screenshot"
-          onClick={() => onStep(1)}
-          className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ChevronRight aria-hidden="true" className="h-4 w-4" />
-        </button>
-      </div>
-    </div>
+    <Lightbox label={shot.label} itemNoun="screenshot" onClose={onClose} onStep={onStep}>
+      {url ? (
+        <img src={url} alt={shot.alt} className="mx-auto max-h-full min-h-0 w-auto max-w-full rounded-lg border border-border" />
+      ) : null}
+    </Lightbox>
   );
 }
 
@@ -145,7 +84,7 @@ export function Gallery() {
         })}
       </ul>
 
-      {openIndex === null ? null : <Lightbox shot={SHOTS[openIndex]} onClose={close} onStep={step} />}
+      {openIndex === null ? null : <ShotLightbox shot={SHOTS[openIndex]} onClose={close} onStep={step} />}
     </div>
   );
 }
