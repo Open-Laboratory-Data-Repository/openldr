@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "c4c3e6e4",
+          "type": "fix",
+          "scope": "web",
+          "title": "README video links open and play that video"
+        },
+        {
           "hash": "6b877b2b",
           "type": "feat",
           "scope": "web",
