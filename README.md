@@ -13,23 +13,23 @@ OpenLDR CE ingests heterogeneous laboratory data from any source, normalizes it 
 
 ## Watch it work
 
-Each video is under a minute. Click a picture to watch it on [openldr.online](https://openldr.online/).
+Each video is under a minute. Click a picture to play it on [openldr.online](https://openldr.online/).
 
 <table>
   <tr>
-    <td width="50%"><a href="https://openldr.online/"><img src="apps/web/src/landing/videos/dashboard.jpg" alt="Building a dashboard chart without writing code"></a><br><b>Dashboards</b>: build a chart without writing code</td>
-    <td width="50%"><a href="https://openldr.online/"><img src="apps/web/src/landing/videos/query.jpg" alt="Querying the warehouse by point and click or by SQL"></a><br><b>Query</b>: point and click, or write SQL</td>
+    <td width="50%"><a href="https://openldr.online/#/watch/dashboard"><img src="apps/web/src/landing/videos/dashboard.jpg" alt="Building a dashboard chart without writing code"></a><br><b>Dashboards</b>: build a chart without writing code</td>
+    <td width="50%"><a href="https://openldr.online/#/watch/query"><img src="apps/web/src/landing/videos/query.jpg" alt="Querying the warehouse by point and click or by SQL"></a><br><b>Query</b>: point and click, or write SQL</td>
   </tr>
   <tr>
-    <td><a href="https://openldr.online/"><img src="apps/web/src/landing/videos/report-designer.jpg" alt="Laying out a query result as a printable report"></a><br><b>Report designer</b>: lay out a query as a printable report</td>
-    <td><a href="https://openldr.online/"><img src="apps/web/src/landing/videos/forms.jpg" alt="Turning a paper lab request into a form whose answers map to FHIR"></a><br><b>Forms</b>: turn a paper request into a form that maps to FHIR</td>
+    <td><a href="https://openldr.online/#/watch/report-designer"><img src="apps/web/src/landing/videos/report-designer.jpg" alt="Laying out a query result as a printable report"></a><br><b>Report designer</b>: lay out a query as a printable report</td>
+    <td><a href="https://openldr.online/#/watch/forms"><img src="apps/web/src/landing/videos/forms.jpg" alt="Turning a paper lab request into a form whose answers map to FHIR"></a><br><b>Forms</b>: turn a paper request into a form that maps to FHIR</td>
   </tr>
   <tr>
-    <td><a href="https://openldr.online/"><img src="apps/web/src/landing/videos/terminology.jpg" alt="Mapping a local lab test code to LOINC"></a><br><b>Terminology</b>: map a local test code to LOINC</td>
-    <td><a href="https://openldr.online/"><img src="apps/web/src/landing/videos/national-codes.jpg" alt="Mapping each lab's own test codes to one national catalog"></a><br><b>Code mapping</b>: map each lab's codes to one national catalog</td>
+    <td><a href="https://openldr.online/#/watch/terminology"><img src="apps/web/src/landing/videos/terminology.jpg" alt="Mapping a local lab test code to LOINC"></a><br><b>Terminology</b>: map a local test code to LOINC</td>
+    <td><a href="https://openldr.online/#/watch/national-codes"><img src="apps/web/src/landing/videos/national-codes.jpg" alt="Mapping each lab's own test codes to one national catalog"></a><br><b>Code mapping</b>: map each lab's codes to one national catalog</td>
   </tr>
   <tr>
-    <td><a href="https://openldr.online/"><img src="apps/web/src/landing/videos/workflows.jpg" alt="Connecting nodes into a workflow that checks and stores results"></a><br><b>Workflows</b>: connect nodes that check and store results</td>
+    <td><a href="https://openldr.online/#/watch/workflows"><img src="apps/web/src/landing/videos/workflows.jpg" alt="Connecting nodes into a workflow that checks and stores results"></a><br><b>Workflows</b>: connect nodes that check and store results</td>
     <td></td>
   </tr>
 </table>

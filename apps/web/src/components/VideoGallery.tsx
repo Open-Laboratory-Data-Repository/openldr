@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Play } from 'lucide-react';
 import { Lightbox } from '@/components/Lightbox';
 import { VIDEOS, type ProductVideo } from '@/landing/videos';
@@ -23,21 +24,37 @@ function VideoLightbox({ item, onClose, onStep }: { item: ProductVideo; onClose:
 }
 
 export function VideoGallery() {
-  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  // Set on /watch/:video, the link the README uses for each poster.
+  const { video: linkedVideo } = useParams();
+  const navigate = useNavigate();
+  const linkedIndex = VIDEOS.findIndex((item) => item.name === linkedVideo);
+  const [openIndex, setOpenIndex] = useState<number | null>(linkedIndex >= 0 ? linkedIndex : null);
   const openedFrom = useRef<HTMLButtonElement | null>(null);
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  // The landing stays mounted when the hash changes from / to /watch/:video, so the initial
+  // state above is not enough. Behind the overlay, put the section on screen, so closing the
+  // video leaves the reader here.
+  useEffect(() => {
+    if (linkedIndex < 0) return;
+    setOpenIndex(linkedIndex);
+    sectionRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [linkedIndex]);
 
   const close = useCallback(() => {
     setOpenIndex(null);
+    // Drop /watch/:video, so a reload does not reopen the video.
+    if (linkedVideo) navigate('/', { replace: true });
     // Send focus back to the tile the reader opened, not to the top of the page.
     openedFrom.current?.focus();
-  }, []);
+  }, [linkedVideo, navigate]);
 
   const step = useCallback((delta: number) => {
     setOpenIndex((current) => (current === null ? null : (current + delta + VIDEOS.length) % VIDEOS.length));
   }, []);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-16">
+    <div ref={sectionRef} className="mx-auto max-w-6xl scroll-mt-16 px-6 py-16">
       <div className="mx-auto mb-12 max-w-2xl text-center">
         <h2 className="text-3xl font-semibold tracking-tight">Watch it work</h2>
         <p className="mt-3 text-base leading-7 text-muted-foreground">

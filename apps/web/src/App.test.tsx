@@ -27,6 +27,29 @@ describe('App routes', () => {
     expect(screen.queryByRole('heading', { name: 'The pieces you need, shown directly.' })).not.toBeInTheDocument();
   });
 
+  // The README links each poster to /#/watch/<name>, so the reader lands on that video playing.
+  it('opens the named video from a watch link', () => {
+    render(
+      <MemoryRouter initialEntries={['/watch/forms']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Forms' });
+    expect(dialog.querySelector('video')).not.toBeNull();
+  });
+
+  it('shows the plain landing page for an unknown video name', () => {
+    render(
+      <MemoryRouter initialEntries={['/watch/nope']}>
+        <App />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'Watch it work' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('renders public docs from the docs route', () => {
     render(
       <MemoryRouter initialEntries={['/docs/install']}>
