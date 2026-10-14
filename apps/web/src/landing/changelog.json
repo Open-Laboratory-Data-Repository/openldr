@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-10-12",
+  "generatedAt": "2026-10-14",
   "days": [
+    {
+      "date": "2026-10-14",
+      "version": null,
+      "entries": [
+        {
+          "hash": "6b877b2b",
+          "type": "feat",
+          "scope": "web",
+          "title": "Product videos on the landing page and in the README"
+        }
+      ]
+    },
     {
       "date": "2026-10-12",
       "version": null,
