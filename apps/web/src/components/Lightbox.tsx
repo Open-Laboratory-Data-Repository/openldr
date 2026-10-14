@@ -10,7 +10,7 @@ interface LightboxProps {
   children: ReactNode;
 }
 
-// Full-size overlay shared by the screenshot gallery and the video section.
+// Full-size overlay for the landing's video section.
 export function Lightbox({ label, itemNoun, onClose, onStep, children }: LightboxProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
