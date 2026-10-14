@@ -26,7 +26,3 @@ reference-plugins/**/ui.html text eol=lf
 # Generated from @types/fhir at build time. The generator writes LF; pin it so a CRLF
 # checkout on Windows does not mark the file modified after every `pnpm gen:fhir-paths`.
 packages/fhir/src/paths/r4-paths.generated.ts text eol=lf
-
-# Generated graphify output. Binary so a Windows checkout never rewrites its line endings
-# and git never tries to diff a 30 MB JSON file.
-graphify-out/** binary
