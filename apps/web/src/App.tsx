@@ -4,6 +4,7 @@ import { WorkflowPreview } from '@/components/WorkflowPreview';
 import { FeatureGrid } from '@/components/FeatureGrid';
 import { MarketplaceTable } from '@/components/MarketplaceTable';
 import { Gallery } from '@/components/Gallery';
+import { VideoGallery } from '@/components/VideoGallery';
 import { InstallBlock } from '@/components/InstallBlock';
 import { Footer } from '@/components/Footer';
 import { GitHubLink } from '@/components/GitHubLink';
@@ -33,6 +34,9 @@ function Landing() {
       </div>
       <div className="border-t border-border">
         <MarketplaceTable />
+      </div>
+      <div className="border-t border-border">
+        <VideoGallery />
       </div>
       <div className="border-t border-border">
         <Gallery />
