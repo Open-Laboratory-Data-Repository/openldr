@@ -38,3 +38,8 @@ packages/bootstrap/Python/
 # System and country content packs: only the README is tracked (see packs/README.md).
 packs/*
 !packs/README.md
+
+# graphify: the graph is committed so every machine shares it. The cache rebuilds itself,
+# and .graphify_python holds this machine's interpreter path, which is wrong anywhere else.
+graphify-out/cache/
+graphify-out/.graphify_python
