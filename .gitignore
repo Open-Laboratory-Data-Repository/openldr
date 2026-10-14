@@ -39,7 +39,6 @@ packages/bootstrap/Python/
 packs/*
 !packs/README.md
 
-# graphify: the graph is committed so every machine shares it. The cache rebuilds itself,
-# and .graphify_python holds this machine's interpreter path, which is wrong anywhere else.
-graphify-out/cache/
-graphify-out/.graphify_python
+# graphify output is local to each machine. `graphify update` rebuilds the code graph
+# without an LLM.
+graphify-out/
