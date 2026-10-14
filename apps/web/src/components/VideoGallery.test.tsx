@@ -1,6 +1,16 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { VideoGallery } from './VideoGallery';
+import { MemoryRouter } from 'react-router-dom';
+import { VideoGallery as Gallery } from './VideoGallery';
 import { VIDEOS } from '@/landing/videos';
+
+// The gallery reads /watch/:video, so it needs a router around it.
+function VideoGallery() {
+  return (
+    <MemoryRouter>
+      <Gallery />
+    </MemoryRouter>
+  );
+}
 
 describe('VideoGallery', () => {
   it('shows every video as its own tile', () => {

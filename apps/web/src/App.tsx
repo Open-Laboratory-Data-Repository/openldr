@@ -64,6 +64,8 @@ export function App() {
       <main>
         <Routes>
           <Route path="/" element={<Landing />} />
+          {/* The README links each video poster here. */}
+          <Route path="/watch/:video" element={<Landing />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/docs/:page" element={<DocsPage />} />
           <Route path="/changelog" element={<ChangelogPage />} />
