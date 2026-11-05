@@ -138,6 +138,20 @@ describe.skipIf(!url)('durable webhook receipts on disposable PostgreSQL', () =>
     expect(effect).toBe(0);
     expect((await service.get(receipt.id))?.status).toBe('cancelled');
   });
+  it('notifies the outbox worker when it accepts a receipt, so the run does not wait for the poll', async () => {
+    const listener = await admin.connect();
+    const payloads: string[] = [];
+    listener.on('notification', n => { if (n.channel === 'openldr_events') payloads.push(n.payload ?? ''); });
+    await listener.query('listen openldr_events');
+    try {
+      await service.accept({ workflowId: 'w', input: { body: { value: 1 } } });
+      for (let i = 0; i < 50 && payloads.length === 0; i++) await new Promise(r => setTimeout(r, 20));
+      expect(payloads).toContain('workflow.webhook.accepted');
+    } finally {
+      await listener.query('unlisten openldr_events');
+      listener.release();
+    }
+  });
   it('atomically creates one receipt and event under concurrent retries and rejects changed data', async () => {
     const all = await Promise.all(Array.from({ length: 12 }, () => service.accept({ workflowId: 'w', input: { body: { value: 1 } }, idempotencyKey: 'key' })));
     expect(new Set(all.map(a => a.receipt.id)).size).toBe(1);
