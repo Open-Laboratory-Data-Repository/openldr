@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-10-14",
+  "generatedAt": "2026-11-05",
   "days": [
+    {
+      "date": "2026-11-05",
+      "version": null,
+      "entries": [
+        {
+          "hash": "c466ae0e",
+          "type": "fix",
+          "scope": "workflows",
+          "title": "Wake the outbox worker when a webhook is accepted"
+        }
+      ]
+    },
     {
       "date": "2026-10-14",
       "version": null,
