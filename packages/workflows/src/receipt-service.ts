@@ -149,7 +149,10 @@ export function createWorkflowReceiptService(deps: ReceiptDeps): WorkflowReceipt
           return { receipt: publicReceipt(duplicate), created: false };
         }
         await trx.insertInto('outbox_events').values({ id: eventId, type: EVENT, payload: JSON.stringify({ receiptId: id }), claim_token: null, last_error: null, batch_id: null }).execute();
-        // Existing worker polls the same table; notifications are an optional latency optimization.
+        // Wake the outbox worker now. Without this it finds the event only on its 2 second poll, and the
+        // webhook caller waits for that poll. PostgreSQL delivers the notify only when this transaction
+        // commits, so the worker never wakes before the row is visible. The poll stays as the fallback.
+        await sql`select pg_notify('openldr_events', ${EVENT})`.execute(trx);
         return { receipt: publicReceipt(row), created: true };
       });
     },
