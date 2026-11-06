@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { exportCustomQueries, importCustomQueries, CustomQueryTransferError, type AppContext } from '@openldr/bootstrap';
 import { CustomQueryInputSchema, validateSelectSql } from '@openldr/dashboards';
-import type { CustomQueryStore } from '@openldr/db';
+import type { CustomQueryGroupStore, CustomQueryStore } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 import { prepareSelect } from './run-stored-query';
@@ -12,6 +12,7 @@ const ROW_CAP = 1000;
 
 export interface QueryRouteDeps {
   customQueries: CustomQueryStore;
+  customQueryGroups: CustomQueryGroupStore;
   connectors: {
     list(): Promise<{ id: string; name: string; type: string | null; enabled: boolean }[]>;
     get(id: string): Promise<{ id: string; name: string; type: string | null; enabled: boolean } | null>;
@@ -75,6 +76,67 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     await deps.customQueries.remove(id);
     await recordAudit(ctx, req, {
       action: 'customQuery.delete', entityType: 'customQuery', entityId: id, before, after: null,
+    });
+    return { ok: true };
+  });
+
+  // ---- Groups ----
+  // Groups only arrange the Query page list. They are local to this install and never synced.
+  const GroupBody = z.object({ name: z.string().trim().min(1).max(200) });
+
+  app.get('/api/custom-query-groups', GUARD, async () => deps.customQueryGroups.list());
+
+  app.post('/api/custom-query-groups', GUARD, async (req, reply) => {
+    const parsed = GroupBody.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    if (await deps.customQueryGroups.getByName(parsed.data.name)) { reply.code(409); return { error: 'name already exists' }; }
+    const created = { id: `cqg_${randomUUID().slice(0, 8)}`, name: parsed.data.name };
+    await deps.customQueryGroups.create(created);
+    await recordAudit(ctx, req, {
+      action: 'customQueryGroup.create', entityType: 'customQueryGroup', entityId: created.id, before: null, after: created,
+    });
+    return { id: created.id };
+  });
+
+  app.put('/api/custom-query-groups/:id', GUARD, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = await deps.customQueryGroups.get(id);
+    if (!existing) { reply.code(404); return { error: 'not found' }; }
+    const parsed = GroupBody.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    const clash = await deps.customQueryGroups.getByName(parsed.data.name);
+    if (clash && clash.id !== id) { reply.code(409); return { error: 'name already exists' }; }
+    await deps.customQueryGroups.rename(id, parsed.data.name);
+    await recordAudit(ctx, req, {
+      action: 'customQueryGroup.update', entityType: 'customQueryGroup', entityId: id,
+      before: existing, after: { id, name: parsed.data.name },
+    });
+    return { ok: true };
+  });
+
+  app.delete('/api/custom-query-groups/:id', GUARD, async (req) => {
+    const { id } = req.params as { id: string };
+    const before = await deps.customQueryGroups.get(id);
+    await deps.customQueryGroups.remove(id);
+    await recordAudit(ctx, req, {
+      action: 'customQueryGroup.delete', entityType: 'customQueryGroup', entityId: id, before, after: null,
+    });
+    return { ok: true };
+  });
+
+  const MoveBody = z.object({ groupId: z.string().min(1).nullable() });
+  app.put('/api/custom-queries/:id/group', GUARD, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = await deps.customQueries.get(id);
+    if (!existing) { reply.code(404); return { error: 'not found' }; }
+    const parsed = MoveBody.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    const { groupId } = parsed.data;
+    if (groupId !== null && !(await deps.customQueryGroups.get(groupId))) { reply.code(400); return { error: 'group not found' }; }
+    await deps.customQueries.setGroup(id, groupId);
+    await recordAudit(ctx, req, {
+      action: 'customQuery.update', entityType: 'customQuery', entityId: id,
+      before: existing, after: { ...existing, groupId },
     });
     return { ok: true };
   });

@@ -768,8 +768,16 @@ export interface CustomQueriesTable {
   connector_id: string;
   sql: string;
   params: unknown; // JSON: CustomQueryParam[]
+  /** custom_query_groups.id, or null for no group. Local to this install, never synced. */
+  group_id: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+}
+
+export interface CustomQueryGroupsTable {
+  id: string;
+  name: string;
+  created_at: Generated<Date>;
 }
 
 export interface ConnectorsTable {
@@ -997,6 +1005,7 @@ export interface InternalSchema {
   workflow_schedules: WorkflowSchedulesTable;
   workflow_datasets: WorkflowDatasetsTable;
   custom_queries: CustomQueriesTable;
+  custom_query_groups: CustomQueryGroupsTable;
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;

@@ -11,6 +11,7 @@ function fakeCtx(): any {
 // Minimal in-memory fakes.
 function makeDeps(): QueryRouteDeps {
   const store = new Map<string, any>();
+  const groups = new Map<string, { id: string; name: string }>();
   return {
     customQueries: {
       async create(q) { store.set(q.id, { ...q }); },
@@ -18,7 +19,19 @@ function makeDeps(): QueryRouteDeps {
       async getByName(name) { return [...store.values()].find((q) => q.name === name) ?? null; },
       async list() { return [...store.values()]; },
       async update(id, patch) { store.set(id, { ...store.get(id), ...patch }); },
+      async setGroup(id, groupId) { store.set(id, { ...store.get(id), groupId }); },
       async remove(id) { store.delete(id); },
+    },
+    customQueryGroups: {
+      async list() { return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name)); },
+      async get(id) { return groups.get(id) ?? null; },
+      async getByName(name) { return [...groups.values()].find((g) => g.name === name) ?? null; },
+      async create(g) { groups.set(g.id, { ...g }); },
+      async rename(id, name) { groups.set(id, { id, name }); },
+      async remove(id) {
+        groups.delete(id);
+        for (const [k, q] of store) if (q.groupId === id) store.set(k, { ...q, groupId: null });
+      },
     },
     connectors: {
       async list() { return [{ id: 'c1', name: 'PG', type: 'postgres', enabled: true } as any]; },
@@ -484,5 +497,65 @@ describe('custom query export and import', () => {
     const im = await bare.inject({ method: 'POST', url: '/api/custom-queries/import', payload: { file: file([]) } });
     expect(ex.statusCode).toBe(403);
     expect(im.statusCode).toBe(403);
+  });
+});
+
+describe('custom query groups', () => {
+  beforeEach(() => auditRecord.mockClear());
+
+  async function makeQuery(app: FastifyInstance, name: string): Promise<string> {
+    const res = await app.inject({ method: 'POST', url: '/api/custom-queries', payload: { name, connectorId: 'c1', sql: 'select 1', params: [] } });
+    return res.json().id;
+  }
+
+  it('creates, lists, renames and rejects a duplicate name', async () => {
+    const app = await build();
+    const a = await app.inject({ method: 'POST', url: '/api/custom-query-groups', payload: { name: 'TB' } });
+    expect(a.statusCode).toBe(200);
+    const id = a.json().id as string;
+    expect(id).toMatch(/^cqg_/);
+    const dup = await app.inject({ method: 'POST', url: '/api/custom-query-groups', payload: { name: 'TB' } });
+    expect(dup.statusCode).toBe(409);
+    expect((await app.inject({ method: 'POST', url: '/api/custom-query-groups', payload: { name: '  ' } })).statusCode).toBe(400);
+
+    await app.inject({ method: 'POST', url: '/api/custom-query-groups', payload: { name: 'Viral load' } });
+    const clash = await app.inject({ method: 'PUT', url: `/api/custom-query-groups/${id}`, payload: { name: 'Viral load' } });
+    expect(clash.statusCode).toBe(409);
+    const ren = await app.inject({ method: 'PUT', url: `/api/custom-query-groups/${id}`, payload: { name: 'Tuberculosis' } });
+    expect(ren.statusCode).toBe(200);
+    const list = await app.inject({ method: 'GET', url: '/api/custom-query-groups' });
+    expect(list.json()).toEqual([{ id, name: 'Tuberculosis' }, expect.objectContaining({ name: 'Viral load' })]);
+    expect((await app.inject({ method: 'PUT', url: '/api/custom-query-groups/nope', payload: { name: 'X' } })).statusCode).toBe(404);
+    expect(auditRecord).toHaveBeenCalledWith(expect.objectContaining({ action: 'customQueryGroup.update', entityId: id }));
+  });
+
+  it('moves a query into a group and out again, and refuses an unknown group', async () => {
+    const app = await build();
+    const qid = await makeQuery(app, 'TB LAM');
+    const gid = (await app.inject({ method: 'POST', url: '/api/custom-query-groups', payload: { name: 'TB' } })).json().id;
+
+    expect((await app.inject({ method: 'PUT', url: `/api/custom-queries/${qid}/group`, payload: { groupId: gid } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: `/api/custom-queries/${qid}` })).json().groupId).toBe(gid);
+
+    expect((await app.inject({ method: 'PUT', url: `/api/custom-queries/${qid}/group`, payload: { groupId: 'cqg_nope' } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'PUT', url: '/api/custom-queries/nope/group', payload: { groupId: gid } })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'PUT', url: `/api/custom-queries/${qid}/group`, payload: {} })).statusCode).toBe(400);
+
+    expect((await app.inject({ method: 'PUT', url: `/api/custom-queries/${qid}/group`, payload: { groupId: null } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: `/api/custom-queries/${qid}` })).json().groupId).toBeNull();
+  });
+
+  it('deleting a group keeps its queries, ungrouped', async () => {
+    const app = await build();
+    const qid = await makeQuery(app, 'TB LAM');
+    const gid = (await app.inject({ method: 'POST', url: '/api/custom-query-groups', payload: { name: 'TB' } })).json().id;
+    await app.inject({ method: 'PUT', url: `/api/custom-queries/${qid}/group`, payload: { groupId: gid } });
+
+    expect((await app.inject({ method: 'DELETE', url: `/api/custom-query-groups/${gid}` })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/custom-query-groups' })).json()).toEqual([]);
+    const q = (await app.inject({ method: 'GET', url: `/api/custom-queries/${qid}` })).json();
+    expect(q.name).toBe('TB LAM');
+    expect(q.groupId).toBeNull();
+    expect(auditRecord).toHaveBeenCalledWith(expect.objectContaining({ action: 'customQueryGroup.delete', entityId: gid }));
   });
 });

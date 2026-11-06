@@ -15,6 +15,7 @@ vi.mock('../api', () => ({ queryApi: {
   create: vi.fn(async () => ({ id: 'saved-new' })),
   update: vi.fn(async () => ({ ok: true })),
   list: vi.fn(async () => []),
+  groups: vi.fn(async () => []),
 } }));
 
 const tab: QueryTabModel = { id: 't1', kind: 'query', title: 'Query #1', connectorId: 'c1', sql: 'select 1 as n', params: [], dirty: false };

@@ -21,6 +21,8 @@ export interface CustomQuery {
   connectorId: string;
   sql: string;
   params: CustomQueryParam[];
+  /** The Query page group this query sits in, or null. Local to this install, never synced. */
+  groupId?: string | null;
 }
 
 export interface NewCustomQuery {
@@ -35,15 +37,19 @@ export interface CustomQueryStore {
   getByName(name: string): Promise<CustomQuery | null>;
   list(): Promise<CustomQuery[]>;
   update(id: string, patch: CustomQueryPatch): Promise<void>;
+  /** Moves a query into a group, or out of all groups with null. Writes no sync record, because
+   *  groups are local to this install. */
+  setGroup(id: string, groupId: string | null): Promise<void>;
   remove(id: string): Promise<void>;
 }
 
-const COLS = ['id', 'name', 'connector_id', 'sql', 'params'] as const;
+const COLS = ['id', 'name', 'connector_id', 'sql', 'params', 'group_id'] as const;
 
-function toQuery(r: { id: string; name: string; connector_id: string; sql: string; params: unknown }): CustomQuery {
+function toQuery(r: { id: string; name: string; connector_id: string; sql: string; params: unknown; group_id: string | null }): CustomQuery {
   return {
     id: r.id, name: r.name, connectorId: r.connector_id, sql: r.sql,
     params: (r.params as CustomQueryParam[]) ?? [],
+    groupId: r.group_id ?? null,
   };
 }
 
@@ -91,6 +97,9 @@ export function createCustomQueryStore(db: Kysely<InternalSchema>, capture?: Ref
         const r = await trx.selectFrom('custom_queries').select(COLS).where('id', '=', id).executeTakeFirst();
         if (capture && r) await capture.record(trx, 'custom_query', id, 'upsert', hashOf(toQuery(r)));
       });
+    },
+    async setGroup(id, groupId) {
+      await db.updateTable('custom_queries').set({ group_id: groupId }).where('id', '=', id).execute();
     },
     async remove(id) {
       await db.transaction().execute(async (trx) => {

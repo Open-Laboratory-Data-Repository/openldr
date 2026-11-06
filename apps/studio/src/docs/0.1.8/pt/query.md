@@ -74,3 +74,17 @@ openldr query import queries.json [--connector <name>] [--force]
 `--out` substitui um ficheiro existente. `--force` substitui as consultas que já existem.
 
 O conteúdo escrito para um sistema de laboratório é partilhado como estes ficheiros. Ficam na pasta `packs/` do operador, não no CE.
+
+## Agrupar consultas
+
+Um pacote de conteúdo pode adicionar muitas consultas de uma vez. Os grupos mantêm a lista do Explorador legível.
+
+- Para criar um grupo, abra o menu de ações de **Consultas personalizadas** e escolha **Novo grupo**. Introduza um nome e escolha Guardar no menu do painel.
+- Para colocar uma consulta num grupo, arraste-a para o grupo. Num telemóvel, mantenha a consulta premida primeiro, ou use **Mover para o grupo** no menu de ações da consulta.
+- Para tirar uma consulta do grupo, arraste-a para **Consultas personalizadas**, ou escolha **Mover para o grupo** e depois **Sem grupo**.
+- Cada linha de consulta tem um menu de ações com **Renomear**, **Mover para o grupo** e **Eliminar consulta**. Não precisa de abrir a consulta num separador para a renomear.
+- Cada linha de grupo tem um menu de ações com **Renomear grupo** e **Eliminar grupo**. Eliminar um grupo mantém as consultas. Elas saem do grupo.
+
+Os grupos apenas organizam a lista. Mover uma consulta não altera o nome, o SQL nem o identificador, por isso os relatórios que a usam continuam a funcionar.
+
+Os grupos pertencem a esta instalação. Não estão nos ficheiros de exportação, e a sincronização do central para os laboratórios não os envia nem altera.

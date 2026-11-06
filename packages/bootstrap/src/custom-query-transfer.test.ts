@@ -19,6 +19,10 @@ function fakeStore(seed: CustomQuery[] = []): CustomQueryStore & { map: Map<stri
       const cur = map.get(id);
       if (cur) map.set(id, { ...cur, ...patch });
     },
+    async setGroup(id: string, groupId: string | null) {
+      const cur = map.get(id);
+      if (cur) map.set(id, { ...cur, groupId });
+    },
     async remove(id: string) { map.delete(id); },
   };
   return store;

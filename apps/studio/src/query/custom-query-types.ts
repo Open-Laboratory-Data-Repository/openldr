@@ -23,7 +23,15 @@ export interface CustomQuery {
   connectorId: string;
   sql: string;
   params: CustomQueryParam[];
+  /** The Query page group this query sits in, or null. Local to the install, never synced. */
+  groupId?: string | null;
+}
+
+/** A named group of custom queries on the Query page. */
+export interface CustomQueryGroup {
+  id: string;
+  name: string;
 }
 
 /** Body accepted on create/update (id assigned server-side). */
-export type CustomQueryInput = Omit<CustomQuery, 'id'>;
+export type CustomQueryInput = Omit<CustomQuery, 'id' | 'groupId'>;

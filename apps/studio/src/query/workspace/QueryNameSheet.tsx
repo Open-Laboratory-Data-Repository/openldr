@@ -7,10 +7,15 @@ import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
-export function QueryNameSheet({ initialName, onClose, onSave }: {
+/** A one-field name sheet. Saves a query name by default; the Query page explorer also uses it
+ *  to rename a query and to name a group, with its own title, description and clash message. */
+export function QueryNameSheet({ initialName, onClose, onSave, title, description, existsMessage }: {
   initialName: string;
   onClose: () => void;
   onSave: (name: string) => Promise<void>;
+  title?: string;
+  description?: string;
+  existsMessage?: string;
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState(initialName);
@@ -26,7 +31,7 @@ export function QueryNameSheet({ initialName, onClose, onSave }: {
       onClose();
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : String(cause);
-      setError(message === 'name already exists' ? t('query.nameExists') : message);
+      setError(message === 'name already exists' ? (existsMessage ?? t('query.nameExists')) : message);
     } finally {
       setBusy(false);
     }
@@ -37,7 +42,7 @@ export function QueryNameSheet({ initialName, onClose, onSave }: {
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b border-border px-6 py-4">
           <div className="flex items-center justify-between gap-2 pr-6">
-            <SheetTitle>{t('query.saveNameTitle')}</SheetTitle>
+            <SheetTitle>{title ?? t('query.saveNameTitle')}</SheetTitle>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label={t('query.nameActions')}>
@@ -50,7 +55,7 @@ export function QueryNameSheet({ initialName, onClose, onSave }: {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <SheetDescription>{t('query.nameDescription')}</SheetDescription>
+          <SheetDescription>{description ?? t('query.nameDescription')}</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3">

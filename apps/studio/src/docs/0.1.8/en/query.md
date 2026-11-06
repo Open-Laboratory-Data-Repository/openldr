@@ -97,3 +97,17 @@ openldr query import queries.json [--connector <name>] [--force]
 `--out` overwrites an existing file. `--force` replaces queries that already exist.
 
 Content written for one lab system is shared as these files. They live in the operator's `packs/` folder, not in CE itself.
+
+## Group queries
+
+A content pack can add many queries at once. Groups keep the Explorer list readable.
+
+- To make a group, open the actions menu on **Custom Queries** and choose **New group**. Enter a name and choose Save from the sheet's actions menu.
+- To put a query in a group, drag it onto the group. On a phone, press and hold the query first, or use **Move to group** in the query's actions menu.
+- To take a query out of its group, drag it onto **Custom Queries**, or choose **Move to group**, then **No group**.
+- Each query row has an actions menu with **Rename**, **Move to group** and **Delete query**. You do not need to open the query in a tab to rename it.
+- Each group row has an actions menu with **Rename group** and **Delete group**. Deleting a group keeps its queries. They move out of the group.
+
+Groups only arrange the list. Moving a query does not change its name, SQL or id, so reports that use it keep working.
+
+Groups belong to this install. They are not in export files, and central-to-lab sync does not send or change them.
