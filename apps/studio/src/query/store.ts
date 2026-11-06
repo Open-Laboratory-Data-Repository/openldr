@@ -23,6 +23,9 @@ interface State {
   activeId: string | null;
   savedRevision: number;
   refreshSavedQueries(): void;
+  /** Counts Refresh clicks in the explorer menu. The explorer reloads every open branch on a change. */
+  explorerRevision: number;
+  refreshExplorer(): void;
   openTableTab(t: { connectorId: string; type: string; schema: string; table: string }): void;
   openDatasetTab(d: { name: string }): void;
   openQueryTab(q: { title?: string; customQueryId?: string; connectorId?: string; sql?: string; params?: CustomQueryParam[] }): void;
@@ -35,8 +38,9 @@ interface State {
 }
 
 export const useQueryStore = create<State>((set, get) => ({
-  tabs: [], activeId: null, savedRevision: 0,
+  tabs: [], activeId: null, savedRevision: 0, explorerRevision: 0,
   refreshSavedQueries() { set((state) => ({ savedRevision: state.savedRevision + 1 })); },
+  refreshExplorer() { set((state) => ({ savedRevision: state.savedRevision + 1, explorerRevision: state.explorerRevision + 1 })); },
   openTableTab({ connectorId, type, schema, table }) {
     const existing = get().tabs.find((t) => t.kind === 'table' && t.connectorId === connectorId && t.schema === schema && t.table === table);
     if (existing) { set({ activeId: existing.id }); return; }

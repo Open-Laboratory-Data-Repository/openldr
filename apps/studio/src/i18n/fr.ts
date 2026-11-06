@@ -1638,7 +1638,7 @@ export const fr: EnShape = {
       moveFailed: 'Impossible de déplacer la requête : {{error}}',
       deleteFailed: 'Impossible de supprimer le groupe : {{error}}',
     },
-    collapseExplorer: 'Réduire l’explorateur', expandExplorer: 'Développer l’explorateur',
+    refreshExplorer: 'Actualiser', collapseExplorer: 'Réduire l’explorateur', expandExplorer: 'Développer l’explorateur',
     selectOrOpen: 'Sélectionnez une table ou ouvrez une requête',
     noSourcesTitle: 'Rien à interroger pour le moment',
     noSources: 'Ajoutez un connecteur ou un jeu de données dans les paramètres pour commencer à interroger.',

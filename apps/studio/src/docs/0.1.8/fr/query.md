@@ -49,7 +49,7 @@ SQL Server lit jusqu'au décalage demandé ; les pages éloignées peuvent prend
 
 ## Exporter et importer des requêtes
 
-Utilisez le menu d'actions dans l'en-tête de l'Explorateur. Choisissez Exporter les requêtes ou Importer des requêtes.
+Utilisez le menu d'actions dans l'en-tête de l'Explorateur. Choisissez Exporter les requêtes ou Importer des requêtes. Le même menu propose Actualiser, qui recharge l'Explorateur quand des requêtes changent ailleurs, par exemple depuis la CLI ou un pack de contenu.
 
 Le fichier contient le nom, le SQL et les paramètres de chaque requête, ainsi que le nom de son groupe s'il en a un. Il ne contient ni l'identifiant ni le connecteur.
 

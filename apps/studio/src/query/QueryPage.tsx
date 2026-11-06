@@ -16,7 +16,7 @@ import { queryApi } from './api';
 import { ExportQueriesSheet } from './transfer/ExportQueriesSheet';
 import { ImportQueriesSheet } from './transfer/ImportQueriesSheet';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
 function Workspace({ canQuery }: { canQuery: boolean }): JSX.Element {
@@ -67,6 +67,7 @@ export function QueryPage(): JSX.Element {
   // The query store is module-level (survives route changes); clear open tabs when leaving so
   // re-entering the page starts from a blank workspace rather than restoring the old session.
   const reset = useQueryStore((s) => s.reset);
+  const refreshExplorer = useQueryStore((s) => s.refreshExplorer);
   useEffect(() => () => reset(), [reset]);
 
   // Eagerly check whether there is anything queryable at all (connectors, datasets, or saved
@@ -101,6 +102,10 @@ export function QueryPage(): JSX.Element {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem data-testid="query-refresh" onSelect={() => refreshExplorer()}>
+                      {t('query.refreshExplorer')}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem data-testid="query-export" onSelect={() => setTransfer('export')}>
                       {t('query.transfer.export')}
                     </DropdownMenuItem>
