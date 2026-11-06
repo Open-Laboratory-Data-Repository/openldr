@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "8a9aed9b",
+          "type": "feat",
+          "scope": "query",
+          "title": "Import and export carry each query's group"
+        },
+        {
           "hash": "8db1d52b",
           "type": "feat",
           "scope": "query",
