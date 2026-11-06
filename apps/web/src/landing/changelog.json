@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "ee150bda",
+          "type": "feat",
+          "scope": "query",
+          "title": "Refresh in the explorer menu reloads the explorer"
+        },
+        {
           "hash": "8a9aed9b",
           "type": "feat",
           "scope": "query",
