@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-11-05",
+  "generatedAt": "2026-11-06",
   "days": [
+    {
+      "date": "2026-11-06",
+      "version": null,
+      "entries": [
+        {
+          "hash": "8db1d52b",
+          "type": "feat",
+          "scope": "query",
+          "title": "Group custom queries in the Query explorer"
+        }
+      ]
+    },
     {
       "date": "2026-11-05",
       "version": null,
