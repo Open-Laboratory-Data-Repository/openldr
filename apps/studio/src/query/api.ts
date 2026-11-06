@@ -6,7 +6,7 @@ export interface RunResult { columns: { key: string; label: string }[]; rows: Re
 export interface ConnectorRef { id: string; name: string; type: string | null }
 export interface QueryTransferFile {
   format: 'openldr.custom-queries'; version: number; exportedAt: string;
-  queries: { name: string; sql: string; params: CustomQueryParam[] }[];
+  queries: { name: string; sql: string; params: CustomQueryParam[]; group?: string }[];
 }
 export interface ImportResult { results: { name: string; outcome: 'created' | 'replaced' | 'skipped'; id: string }[] }
 export interface DatasetRef { id: string; name: string; rowCount: number }

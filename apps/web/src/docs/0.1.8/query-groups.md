@@ -12,7 +12,13 @@ A content pack can add many queries at once. Groups keep the Explorer list reada
 
 Groups only arrange the list. Moving a query does not change its name, SQL or id, so reports that use it keep working.
 
-Groups belong to this install. They are not in export files, and central-to-lab sync does not send or change them.
+Groups belong to this install. Central-to-lab sync does not send or change them.
+
+An export file carries each query's group name. On import, and when a content pack installs queries:
+
+- A query with a group name goes into the group with that name. The group is created if it does not exist.
+- A new query always joins its group.
+- A replaced query joins its group only if it has no group yet. A query you already moved stays where you put it.
 
 ## Français
 
@@ -26,7 +32,13 @@ Un pack de contenu peut ajouter beaucoup de requêtes d'un coup. Les groupes gar
 
 Les groupes ne font que ranger la liste. Déplacer une requête ne change ni son nom, ni son SQL, ni son identifiant. Les rapports qui l'utilisent continuent donc de fonctionner.
 
-Les groupes appartiennent à cette installation. Ils ne sont pas dans les fichiers d'export, et la synchronisation du central vers les laboratoires ne les envoie ni ne les modifie.
+Les groupes appartiennent à cette installation. La synchronisation du central vers les laboratoires ne les envoie ni ne les modifie.
+
+Un fichier d'export porte le nom du groupe de chaque requête. À l'importation, et quand un pack de contenu installe des requêtes :
+
+- Une requête qui porte un nom de groupe va dans le groupe de ce nom. Le groupe est créé s'il n'existe pas.
+- Une nouvelle requête rejoint toujours son groupe.
+- Une requête remplacée ne rejoint son groupe que si elle n'a pas encore de groupe. Une requête que vous avez déjà déplacée reste où vous l'avez mise.
 
 ## Português
 
@@ -40,4 +52,10 @@ Um pacote de conteúdo pode adicionar muitas consultas de uma vez. Os grupos man
 
 Os grupos apenas organizam a lista. Mover uma consulta não altera o nome, o SQL nem o identificador, por isso os relatórios que a usam continuam a funcionar.
 
-Os grupos pertencem a esta instalação. Não estão nos ficheiros de exportação, e a sincronização do central para os laboratórios não os envia nem altera.
+Os grupos pertencem a esta instalação. A sincronização do central para os laboratórios não os envia nem altera.
+
+Um ficheiro de exportação leva o nome do grupo de cada consulta. Na importação, e quando um pacote de conteúdo instala consultas:
+
+- Uma consulta com nome de grupo vai para o grupo com esse nome. O grupo é criado se não existir.
+- Uma consulta nova entra sempre no seu grupo.
+- Uma consulta substituída só entra no grupo se ainda não tiver grupo. Uma consulta que já moveu fica onde a colocou.

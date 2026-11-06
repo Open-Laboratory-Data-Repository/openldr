@@ -51,7 +51,7 @@ SQL Server lit jusqu'au décalage demandé ; les pages éloignées peuvent prend
 
 Utilisez le menu d'actions dans l'en-tête de l'Explorateur. Choisissez Exporter les requêtes ou Importer des requêtes.
 
-Le fichier contient le nom, le SQL et les paramètres de chaque requête. Il ne contient ni l'identifiant ni le connecteur.
+Le fichier contient le nom, le SQL et les paramètres de chaque requête, ainsi que le nom de son groupe s'il en a un. Il ne contient ni l'identifiant ni le connecteur.
 
 L'importation suit ces règles :
 
@@ -87,4 +87,10 @@ Un pack de contenu peut ajouter beaucoup de requêtes d'un coup. Les groupes gar
 
 Les groupes ne font que ranger la liste. Déplacer une requête ne change ni son nom, ni son SQL, ni son identifiant. Les rapports qui l'utilisent continuent donc de fonctionner.
 
-Les groupes appartiennent à cette installation. Ils ne sont pas dans les fichiers d'export, et la synchronisation du central vers les laboratoires ne les envoie ni ne les modifie.
+Les groupes appartiennent à cette installation. La synchronisation du central vers les laboratoires ne les envoie ni ne les modifie.
+
+Un fichier d'export porte le nom du groupe de chaque requête. À l'importation, et quand un pack de contenu installe des requêtes :
+
+- Une requête qui porte un nom de groupe va dans le groupe de ce nom. Le groupe est créé s'il n'existe pas.
+- Une nouvelle requête rejoint toujours son groupe.
+- Une requête remplacée ne rejoint son groupe que si elle n'a pas encore de groupe. Une requête que vous avez déjà déplacée reste où vous l'avez mise.

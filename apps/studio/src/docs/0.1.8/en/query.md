@@ -74,7 +74,7 @@ SQL Server reads through the requested offset, so later pages can take longer. P
 
 Use the actions menu in the Explorer header. Choose Export queries or Import queries.
 
-The file holds each query's name, SQL and parameters. It does not hold the id or the connector.
+The file holds each query's name, SQL and parameters, and its group name if it has one. It does not hold the id or the connector.
 
 Import follows these rules:
 
@@ -110,4 +110,10 @@ A content pack can add many queries at once. Groups keep the Explorer list reada
 
 Groups only arrange the list. Moving a query does not change its name, SQL or id, so reports that use it keep working.
 
-Groups belong to this install. They are not in export files, and central-to-lab sync does not send or change them.
+Groups belong to this install. Central-to-lab sync does not send or change them.
+
+An export file carries each query's group name. On import, and when a content pack installs queries:
+
+- A query with a group name goes into the group with that name. The group is created if it does not exist.
+- A new query always joins its group.
+- A replaced query joins its group only if it has no group yet. A query you already moved stays where you put it.

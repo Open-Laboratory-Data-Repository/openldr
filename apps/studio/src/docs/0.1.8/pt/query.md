@@ -51,7 +51,7 @@ SQL Server lê até ao deslocamento pedido, pelo que páginas distantes podem de
 
 Use o menu de ações no cabeçalho do Explorador. Escolha Exportar consultas ou Importar consultas.
 
-O ficheiro contém o nome, o SQL e os parâmetros de cada consulta. Não contém o id nem o conector.
+O ficheiro contém o nome, o SQL e os parâmetros de cada consulta, e o nome do grupo, se tiver um. Não contém o id nem o conector.
 
 A importação segue estas regras:
 
@@ -87,4 +87,10 @@ Um pacote de conteúdo pode adicionar muitas consultas de uma vez. Os grupos man
 
 Os grupos apenas organizam a lista. Mover uma consulta não altera o nome, o SQL nem o identificador, por isso os relatórios que a usam continuam a funcionar.
 
-Os grupos pertencem a esta instalação. Não estão nos ficheiros de exportação, e a sincronização do central para os laboratórios não os envia nem altera.
+Os grupos pertencem a esta instalação. A sincronização do central para os laboratórios não os envia nem altera.
+
+Um ficheiro de exportação leva o nome do grupo de cada consulta. Na importação, e quando um pacote de conteúdo instala consultas:
+
+- Uma consulta com nome de grupo vai para o grupo com esse nome. O grupo é criado se não existir.
+- Uma consulta nova entra sempre no seu grupo.
+- Uma consulta substituída só entra no grupo se ainda não tiver grupo. Uma consulta que já moveu fica onde a colocou.

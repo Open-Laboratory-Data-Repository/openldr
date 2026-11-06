@@ -4,7 +4,7 @@
 
 Use the actions menu in the Explorer header. Choose Export queries or Import queries.
 
-The file holds each query's name, SQL and parameters. It does not hold the id or the connector.
+The file holds each query's name, SQL and parameters, and its group name if it has one. It does not hold the id or the connector.
 
 Import follows these rules:
 
@@ -32,7 +32,7 @@ Content written for one lab system is shared as these files. They live in the op
 
 Utilisez le menu d'actions dans l'en-tête de l'Explorateur. Choisissez Exporter les requêtes ou Importer des requêtes.
 
-Le fichier contient le nom, le SQL et les paramètres de chaque requête. Il ne contient ni l'identifiant ni le connecteur.
+Le fichier contient le nom, le SQL et les paramètres de chaque requête, ainsi que le nom de son groupe s'il en a un. Il ne contient ni l'identifiant ni le connecteur.
 
 L'importation suit ces règles :
 
@@ -60,7 +60,7 @@ Le contenu écrit pour un système de laboratoire est partagé sous forme de ces
 
 Use o menu de ações no cabeçalho do Explorador. Escolha Exportar consultas ou Importar consultas.
 
-O ficheiro contém o nome, o SQL e os parâmetros de cada consulta. Não contém o id nem o conector.
+O ficheiro contém o nome, o SQL e os parâmetros de cada consulta, e o nome do grupo, se tiver um. Não contém o id nem o conector.
 
 A importação segue estas regras:
 
