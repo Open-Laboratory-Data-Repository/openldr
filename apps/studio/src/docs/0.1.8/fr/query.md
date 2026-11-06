@@ -74,3 +74,17 @@ openldr query import queries.json [--connector <name>] [--force]
 `--out` écrase un fichier existant. `--force` remplace les requêtes qui existent déjà.
 
 Le contenu écrit pour un système de laboratoire est partagé sous forme de ces fichiers. Ils sont gardés dans le dossier `packs/` de l'opérateur, pas dans CE.
+
+## Grouper les requêtes
+
+Un pack de contenu peut ajouter beaucoup de requêtes d'un coup. Les groupes gardent la liste de l'Explorateur lisible.
+
+- Pour créer un groupe, ouvrez le menu d'actions de **Requêtes personnalisées** et choisissez **Nouveau groupe**. Saisissez un nom, puis choisissez Enregistrer dans le menu du panneau.
+- Pour mettre une requête dans un groupe, faites-la glisser sur le groupe. Sur un téléphone, appuyez longuement sur la requête d'abord, ou utilisez **Déplacer vers le groupe** dans le menu d'actions de la requête.
+- Pour sortir une requête de son groupe, faites-la glisser sur **Requêtes personnalisées**, ou choisissez **Déplacer vers le groupe**, puis **Aucun groupe**.
+- Chaque ligne de requête a un menu d'actions avec **Renommer**, **Déplacer vers le groupe** et **Supprimer la requête**. Il n'est pas nécessaire d'ouvrir la requête dans un onglet pour la renommer.
+- Chaque ligne de groupe a un menu d'actions avec **Renommer le groupe** et **Supprimer le groupe**. Supprimer un groupe conserve ses requêtes. Elles sortent du groupe.
+
+Les groupes ne font que ranger la liste. Déplacer une requête ne change ni son nom, ni son SQL, ni son identifiant. Les rapports qui l'utilisent continuent donc de fonctionner.
+
+Les groupes appartiennent à cette installation. Ils ne sont pas dans les fichiers d'export, et la synchronisation du central vers les laboratoires ne les envoie ni ne les modifie.

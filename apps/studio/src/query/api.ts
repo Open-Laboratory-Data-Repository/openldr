@@ -1,6 +1,6 @@
 // apps/studio/src/query/api.ts
 import { authFetch } from '@/api';
-import type { CustomQuery, CustomQueryInput, CustomQueryParam } from './custom-query-types';
+import type { CustomQuery, CustomQueryGroup, CustomQueryInput, CustomQueryParam } from './custom-query-types';
 
 export interface RunResult { columns: { key: string; label: string }[]; rows: Record<string, unknown>[]; rowCount: number; ms: number; total?: number; hasMore?: boolean }
 export interface ConnectorRef { id: string; name: string; type: string | null }
@@ -35,4 +35,13 @@ export const queryApi = {
   importQueries: (body: { file: unknown; connectorName?: string; replace?: boolean }) =>
     authFetch('/api/custom-queries/import', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(j<ImportResult>),
   remove: (id: string) => authFetch(`/api/custom-queries/${id}`, { method: 'DELETE' }).then(j<{ ok: true }>),
+  /** Moves a query into a group, or out of all groups with null. */
+  moveQuery: (id: string, groupId: string | null) =>
+    authFetch(`/api/custom-queries/${id}/group`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ groupId }) }).then(j<{ ok: true }>),
+  groups: () => authFetch('/api/custom-query-groups').then(j<CustomQueryGroup[]>),
+  createGroup: (name: string) =>
+    authFetch('/api/custom-query-groups', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) }).then(j<{ id: string }>),
+  renameGroup: (id: string, name: string) =>
+    authFetch(`/api/custom-query-groups/${id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) }).then(j<{ ok: true }>),
+  removeGroup: (id: string) => authFetch(`/api/custom-query-groups/${id}`, { method: 'DELETE' }).then(j<{ ok: true }>),
 };

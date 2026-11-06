@@ -38,7 +38,7 @@ import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { registerQueryRoutes } from './query-routes';
 import { registerSyncRoutes } from './sync-routes';
 import { registerFacilitiesRoutes } from './facilities-routes';
-import { createConnectorStore, createCustomQueryStore, createPatientResolver, referenceCapture } from '@openldr/db';
+import { createConnectorStore, createCustomQueryGroupStore, createCustomQueryStore, createPatientResolver, referenceCapture } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 import { readAppVersion } from './version';
 
@@ -187,6 +187,7 @@ export async function buildApp(ctx: AppContext) {
     // referenceCapture: an operator-authored query on CENTRAL is reference config that must
     // reach labs alongside the report that points at it (reports.primary_query_id).
     customQueries: createCustomQueryStore(ctx.internalDb, referenceCapture),
+    customQueryGroups: createCustomQueryGroupStore(ctx.internalDb),
     connectors: {
       list: () => ctx.connectors.list(),
       get: (id) => ctx.connectors.get(id),

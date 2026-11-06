@@ -34,6 +34,7 @@ export * from './marketplace-install-store';
 export * from './connector-store';
 export * from './workflow-secret-store';
 export * from './custom-query-store';
+export * from './custom-query-group-store';
 export * from './registry-store';
 export * from './plugin-data-store';
 export * from './app-settings-store';
