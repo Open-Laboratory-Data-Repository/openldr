@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   store: { getByName: vi.fn(), get: vi.fn(), list: vi.fn(), create: vi.fn(), update: vi.fn() },
   createAppContext: vi.fn(),
   createCustomQueryStore: vi.fn(),
+  createCustomQueryGroupStore: vi.fn(() => ({ group: true })),
   referenceCapture: { marker: 'referenceCapture' },
   exportCustomQueries: vi.fn(),
   importCustomQueries: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('@openldr/bootstrap', async () => {
 });
 vi.mock('@openldr/db', () => ({
   createCustomQueryStore: mocks.createCustomQueryStore,
+  createCustomQueryGroupStore: mocks.createCustomQueryGroupStore,
   referenceCapture: mocks.referenceCapture,
 }));
 

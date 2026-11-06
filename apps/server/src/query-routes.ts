@@ -147,7 +147,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     const parsed = ExportBody.safeParse(req.body ?? {});
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
     return exportCustomQueries(
-      { customQueries: deps.customQueries, connectors: deps.connectors },
+      { customQueries: deps.customQueries, customQueryGroups: deps.customQueryGroups, connectors: deps.connectors },
       parsed.data.ids ? { ids: parsed.data.ids } : undefined,
     );
   });
@@ -164,7 +164,7 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     const beforeByName = new Map((await deps.customQueries.list()).map((q) => [q.name, q]));
     try {
       const result = await importCustomQueries(
-        { customQueries: deps.customQueries, connectors: deps.connectors },
+        { customQueries: deps.customQueries, customQueryGroups: deps.customQueryGroups, connectors: deps.connectors },
         parsed.data.file,
         { connectorName: parsed.data.connectorName, replace: parsed.data.replace ?? false },
       );

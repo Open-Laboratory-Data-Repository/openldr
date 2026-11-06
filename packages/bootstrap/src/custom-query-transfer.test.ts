@@ -35,11 +35,26 @@ const q = (name: string, sql = 'select 1') => ({ name, sql, params: [] });
 const stored = (id: string, name: string, connectorId = 'c1', sql = 'select 1'): CustomQuery =>
   ({ id, name, connectorId, sql, params: [] });
 
-function deps(store: CustomQueryStore, connectors: Record<string, string> = { [DEFAULT_CONNECTOR_NAME]: 'c1' }): TransferDeps {
-  let n = 0;
+function fakeGroups(seed: { id: string; name: string }[] = []) {
+  const map = new Map(seed.map((g) => [g.id, { ...g }]));
   return {
-    customQueries: store, connectors: fakeConnectors(connectors),
-    newId: () => `cq_new${++n}`, now: () => new Date('2026-09-30T12:00:00Z'),
+    map,
+    async list() { return [...map.values()]; },
+    async getByName(name: string) { return [...map.values()].find((g) => g.name === name) ?? null; },
+    async create(g: { id: string; name: string }) { map.set(g.id, { ...g }); },
+  };
+}
+
+function deps(
+  store: CustomQueryStore,
+  connectors: Record<string, string> = { [DEFAULT_CONNECTOR_NAME]: 'c1' },
+  groups = fakeGroups(),
+): TransferDeps {
+  let n = 0;
+  let g = 0;
+  return {
+    customQueries: store, customQueryGroups: groups, connectors: fakeConnectors(connectors),
+    newId: () => `cq_new${++n}`, newGroupId: () => `cqg_new${++g}`, now: () => new Date('2026-09-30T12:00:00Z'),
   };
 }
 
@@ -153,6 +168,73 @@ describe('importCustomQueries', () => {
     const again = await exportCustomQueries(deps(dst));
     expect(again.queries).toEqual(exported.queries);
     expect(again.queries.map((x) => x.name)).toEqual(['a', 'b']);
+  });
+});
+
+describe('query groups in files', () => {
+  it('export writes the group name, and leaves it out for an ungrouped query', async () => {
+    const store = fakeStore([{ ...stored('i1', 'a'), groupId: 'g1' }, stored('i2', 'b')]);
+    const out = await exportCustomQueries(deps(store, undefined, fakeGroups([{ id: 'g1', name: 'Mozambique' }])));
+    expect(out.queries).toEqual([
+      { name: 'a', sql: 'select 1', params: [], group: 'Mozambique' },
+      { name: 'b', sql: 'select 1', params: [] },
+    ]);
+  });
+
+  it('import creates the group once and puts new queries in it', async () => {
+    const store = fakeStore();
+    const groups = fakeGroups();
+    await importCustomQueries(deps(store, undefined, groups),
+      file([{ ...q('a'), group: 'Mozambique' }, { ...q('b'), group: 'Mozambique' }, q('c')]), { replace: false });
+    expect([...groups.map.values()]).toEqual([{ id: 'cqg_new1', name: 'Mozambique' }]);
+    expect(store.map.get('cq_new1')?.groupId).toBe('cqg_new1');
+    expect(store.map.get('cq_new2')?.groupId).toBe('cqg_new1');
+    expect(store.map.get('cq_new3')?.groupId).toBeUndefined();
+  });
+
+  it('import reuses a group that already has the name', async () => {
+    const store = fakeStore();
+    const groups = fakeGroups([{ id: 'g1', name: 'Mozambique' }]);
+    await importCustomQueries(deps(store, undefined, groups), file([{ ...q('a'), group: 'Mozambique' }]), { replace: false });
+    expect(groups.map.size).toBe(1);
+    expect(store.map.get('cq_new1')?.groupId).toBe('g1');
+  });
+
+  it('a replace groups an ungrouped query, but never moves a query already in a group', async () => {
+    const store = fakeStore([{ ...stored('i1', 'a'), groupId: null }, { ...stored('i2', 'b'), groupId: 'mine' }]);
+    const groups = fakeGroups([{ id: 'mine', name: 'My picks' }]);
+    await importCustomQueries(deps(store, undefined, groups),
+      file([{ ...q('a'), group: 'Mozambique' }, { ...q('b'), group: 'Mozambique' }]), { replace: true });
+    const moz = [...groups.map.values()].find((g) => g.name === 'Mozambique')!;
+    expect(store.map.get('i1')?.groupId).toBe(moz.id);
+    expect(store.map.get('i2')?.groupId).toBe('mine');
+  });
+
+  it('a skipped query is not grouped, and no group is made for it', async () => {
+    const store = fakeStore([{ ...stored('i1', 'a'), groupId: null }]);
+    const groups = fakeGroups();
+    await importCustomQueries(deps(store, undefined, groups), file([{ ...q('a'), group: 'Mozambique' }]), { replace: false });
+    expect(groups.map.size).toBe(0);
+    expect(store.map.get('i1')?.groupId).toBeNull();
+  });
+
+  it('refuses a blank group name, writing nothing', async () => {
+    const store = fakeStore();
+    await expect(importCustomQueries(deps(store), file([{ ...q('a'), group: '  ' }]), { replace: false }))
+      .rejects.toThrow(CustomQueryTransferError);
+    expect(store.writes).toBe(0);
+  });
+
+  it('round-trips groups: export then import into an empty install', async () => {
+    const source = fakeStore([{ ...stored('i1', 'a'), groupId: 'g1' }, stored('i2', 'b')]);
+    const out = await exportCustomQueries(deps(source, undefined, fakeGroups([{ id: 'g1', name: 'TB' }])));
+    const target = fakeStore();
+    const groups = fakeGroups();
+    await importCustomQueries(deps(target, undefined, groups), out, { replace: false });
+    const byName = new Map([...target.map.values()].map((x) => [x.name, x.groupId]));
+    expect(byName.get('a')).toBe([...groups.map.values()][0].id);
+    expect([...groups.map.values()][0].name).toBe('TB');
+    expect(byName.get('b')).toBeUndefined();
   });
 });
 

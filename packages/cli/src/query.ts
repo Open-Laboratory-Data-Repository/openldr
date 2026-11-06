@@ -4,7 +4,7 @@ import {
   createAppContext, exportCustomQueries, importCustomQueries, recordAuditEvent,
   type ImportResult,
 } from '@openldr/bootstrap';
-import { createCustomQueryStore, referenceCapture } from '@openldr/db';
+import { createCustomQueryGroupStore, createCustomQueryStore, referenceCapture } from '@openldr/db';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
@@ -28,6 +28,7 @@ export interface QueryImportOpts {
 function buildDeps(ctx: Awaited<ReturnType<typeof createAppContext>>) {
   return {
     customQueries: createCustomQueryStore(ctx.internalDb, referenceCapture),
+    customQueryGroups: createCustomQueryGroupStore(ctx.internalDb),
     connectors: { list: () => ctx.connectors.list() },
   };
 }
