@@ -1746,7 +1746,7 @@ export const en = {
       moveFailed: 'Could not move the query: {{error}}',
       deleteFailed: 'Could not delete the group: {{error}}',
     },
-    collapseExplorer: 'Collapse explorer', expandExplorer: 'Expand explorer',
+    refreshExplorer: 'Refresh', collapseExplorer: 'Collapse explorer', expandExplorer: 'Expand explorer',
     selectOrOpen: 'Select a table or open a query',
     noSourcesTitle: 'Nothing to query yet',
     noSources: 'Add a connector or dataset in Settings to start querying.',

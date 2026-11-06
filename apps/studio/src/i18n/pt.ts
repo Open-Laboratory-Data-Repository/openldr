@@ -1638,7 +1638,7 @@ export const pt: EnShape = {
       moveFailed: 'Não foi possível mover a consulta: {{error}}',
       deleteFailed: 'Não foi possível eliminar o grupo: {{error}}',
     },
-    collapseExplorer: 'Recolher explorador', expandExplorer: 'Expandir explorador',
+    refreshExplorer: 'Atualizar', collapseExplorer: 'Recolher explorador', expandExplorer: 'Expandir explorador',
     selectOrOpen: 'Selecione uma tabela ou abra uma consulta',
     noSourcesTitle: 'Nada para consultar ainda',
     noSources: 'Adicione um conector ou conjunto de dados em Definições para começar a consultar.',

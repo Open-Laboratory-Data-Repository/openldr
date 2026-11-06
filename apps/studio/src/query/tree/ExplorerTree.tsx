@@ -150,6 +150,27 @@ export function ExplorerTree(): JSX.Element {
     return () => { cancelled = true; };
   }, [openBranch.queries, savedRevision]);
 
+  // Refresh in the explorer menu. Custom queries reload through savedRevision above. This drops the
+  // cached connector, dataset, schema and table lists, and fetches again the ones that are open.
+  const explorerRevision = useQueryStore((s) => s.explorerRevision);
+  useEffect(() => {
+    if (explorerRevision === 0) return;
+    setConnectors([]); setDatasets([]); setSchemas({}); setTables({});
+    if (openBranch.connectors) queryApi.connectors().then(setConnectors).catch(onErr('connectors'));
+    if (openBranch.datasets) queryApi.datasets().then(setDatasets).catch(onErr('datasets'));
+    for (const [k, open] of Object.entries(openBranch)) {
+      if (!open) continue;
+      if (k.startsWith('c:')) {
+        const id = k.slice(2);
+        queryApi.schemas(id).then((s) => setSchemas((m) => ({ ...m, [id]: s }))).catch(onErr('schemas'));
+      } else if (k.startsWith('s:')) {
+        const key = k.slice(2);
+        const slash = key.indexOf('/');
+        queryApi.tables(key.slice(0, slash), key.slice(slash + 1)).then((tb) => setTables((m) => ({ ...m, [key]: tb }))).catch(onErr('tables'));
+      }
+    }
+  }, [explorerRevision]);
+
   const loadSchemas = (id: string) => { toggle(`c:${id}`); if (!schemas[id]) queryApi.schemas(id).then((s) => setSchemas((m) => ({ ...m, [id]: s }))).catch(onErr('schemas')); };
   const loadTables = (id: string, schema: string) => {
     const key = `${id}/${schema}`; toggle(`s:${key}`);

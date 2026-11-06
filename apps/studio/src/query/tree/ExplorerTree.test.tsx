@@ -1,6 +1,6 @@
 // apps/studio/src/query/tree/ExplorerTree.test.tsx
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within, act } from '@testing-library/react';
 import { ExplorerTree, dropMove, groupDropId, groupQueries, queryDragId } from './ExplorerTree';
 import { queryApi } from '../api';
 import { useQueryStore } from '../store';
@@ -58,6 +58,24 @@ describe('groupQueries and dropMove', () => {
 
 describe('ExplorerTree', () => {
   beforeEach(() => { vi.clearAllMocks(); useQueryStore.getState().reset(); });
+
+  it('Refresh reloads the custom queries and every open connector branch', async () => {
+    await openQueries();
+    fireEvent.click(screen.getByText('Connectors'));
+    fireEvent.click(await screen.findByText('PG'));
+    await screen.findByText('public');
+    vi.mocked(queryApi.list).mockResolvedValueOnce([
+      { id: 'cq1', name: 'Q1', connectorId: 'c1', sql: '', params: [], groupId: null },
+      { id: 'cq3', name: 'Added elsewhere', connectorId: 'c1', sql: '', params: [], groupId: null },
+    ]);
+    vi.mocked(queryApi.schemas).mockResolvedValueOnce(['public', 'audit']);
+
+    act(() => useQueryStore.getState().refreshExplorer());
+
+    expect(await screen.findByText('Added elsewhere')).toBeInTheDocument();
+    expect(await screen.findByText('audit')).toBeInTheDocument();
+    expect(queryApi.connectors).toHaveBeenCalledTimes(2);
+  });
 
   it('renders the three system branches and lazy-loads a connector', async () => {
     render(<ExplorerTree />);

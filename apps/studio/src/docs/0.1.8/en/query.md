@@ -72,7 +72,7 @@ SQL Server reads through the requested offset, so later pages can take longer. P
 
 ## Export and import queries
 
-Use the actions menu in the Explorer header. Choose Export queries or Import queries.
+Use the actions menu in the Explorer header. Choose Export queries or Import queries. The same menu has Refresh, which reloads the Explorer after queries change elsewhere, for example from the CLI or a content pack.
 
 The file holds each query's name, SQL and parameters, and its group name if it has one. It does not hold the id or the connector.
 
