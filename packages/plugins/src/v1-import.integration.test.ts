@@ -51,6 +51,10 @@ describe.skipIf(!present)('openldr-v1-import wasm', () => {
     });
     expect(manifest.capabilities.map((c) => c.kind)).toEqual(['host:import', 'emit-fhir']);
     expect(manifest.payload.kind === 'plugin' && manifest.payload.wasmSha256).toBe(sha256Hex(new Uint8Array(readFileSync(wasmPath))));
+    // The page ships beside the wasm, is admin-only, and matches the hash the manifest pins.
+    const ui = manifest.payload.kind === 'plugin' ? manifest.payload.ui : undefined;
+    expect(ui).toMatchObject({ entry: 'ui.html', requiredRoles: ['lab_admin'], nav: { label: 'OpenLDR v1 import', icon: 'database', section: 'apps' } });
+    expect(ui?.sha256).toBe(sha256Hex(new Uint8Array(readFileSync(join(pluginDir, 'ui.html')))));
   });
 
   it('returns the key query and four detail queries', async () => {

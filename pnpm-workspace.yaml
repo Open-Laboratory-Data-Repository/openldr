@@ -2,6 +2,7 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'wasm/dhis2-sink/ui'
+  - 'wasm/openldr-v1-import/ui'
   - 'e2e'
 # Allow the pinned SheetJS `xlsx` URL tarball (packages/{workflows,bootstrap}) to resolve as a
 # sub-dependency during `pnpm deploy` (production Docker build). pnpm 10+ blocks URL-resolved

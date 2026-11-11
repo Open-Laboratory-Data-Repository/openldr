@@ -1,5 +1,5 @@
-// Builds the OpenLDR v1 import plugin to wasm and stages plugin.wasm + manifest.json under
-// reference-plugins/openldr-v1-import/ (both git-ignored build output).
+// Builds the OpenLDR v1 import plugin to wasm, bundles its page, and stages plugin.wasm, ui.html
+// and manifest.json under reference-plugins/openldr-v1-import/ (all git-ignored build output).
 //
 // Needs the Rust wasm32-wasip1 target (wasm/rust-toolchain.toml asks rustup for it). Unlike the
 // WHONET plugin, this crate has no C code, so no clang or WASI sysroot is needed.
@@ -12,6 +12,7 @@ import { execSync } from 'node:child_process';
 import { mkdirSync, copyFileSync, writeFileSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+import { build as esbuild } from 'esbuild';
 
 const root = process.cwd();
 const wasmDir = join(root, 'wasm');
@@ -27,6 +28,28 @@ copyFileSync(built, staged);
 const sha = createHash('sha256').update(readFileSync(staged)).digest('hex');
 // Version comes from the workspace package version in wasm/Cargo.toml.
 const ver = (readFileSync(join(wasmDir, 'Cargo.toml'), 'utf8').match(/version\s*=\s*"([^"]+)"/) || [])[1] || '0.1.0';
+
+// Bundle the page (Preact) and inline its JS and CSS into one ui.html. The host wraps that body
+// in a sandboxed iframe and injects window.openldr. Same recipe as scripts/build-dhis2-sink.mjs.
+const uiSrc = join(wasmDir, id, 'ui', 'src');
+const bundle = await esbuild({
+  entryPoints: [join(uiSrc, 'main.tsx')],
+  bundle: true,
+  minify: true,
+  format: 'iife',
+  jsx: 'automatic',
+  jsxImportSource: 'preact',
+  target: 'es2020',
+  write: false,
+  logLevel: 'info',
+});
+const js = bundle.outputFiles[0].text;
+const css = readFileSync(join(uiSrc, 'styles.css'), 'utf8');
+if (css.includes('</style>')) throw new Error('styles.css contains </style>, which would end the inlined <style> tag');
+if (js.includes('</script>')) throw new Error('the page bundle contains </script>, which would end the inlined <script> tag');
+const uiHtml = `<style>${css}</style><div id="app"></div><script>${js}</script>`;
+writeFileSync(join(outDir, 'ui.html'), uiHtml);
+const uiSha = createHash('sha256').update(uiHtml).digest('hex');
 
 const ENTRYPOINTS = ['import_queries', 'import_checks', 'import_map'];
 // A full artifact manifest, not the flat legacy shape: `importSource` only exists on the
@@ -60,7 +83,9 @@ const manifest = {
       sourceSystem: 'openldr-v1',
       entrypoints: { queries: 'import_queries', checks: 'import_checks', map: 'import_map' },
     },
+    // The plugin's page in studio. Every import op is admin-only, so the page is too.
+    ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'OpenLDR v1 import', icon: 'database', section: 'apps' }, uiSdkVersion: '1', requiredRoles: ['lab_admin'] },
   },
 };
 writeFileSync(join(outDir, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-process.stdout.write(`staged ${staged} (sha256 ${sha}) + manifest.json\n`);
+process.stdout.write(`staged ${staged} (wasm ${sha.slice(0, 12)}, ui ${uiSha.slice(0, 12)}) + manifest.json + ui.html\n`);
