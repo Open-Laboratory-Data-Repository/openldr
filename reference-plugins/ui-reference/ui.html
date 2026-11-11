@@ -7,6 +7,7 @@
 <div class="ref">
   <h1>OpenLDR Reference Plugin</h1>
   <p>Proves the host handshake, datastore, and a gated host service.</p>
+  <p>Drawn in: <strong id="site" data-testid="site">…</strong></p>
   <button id="ping">Save + reload note</button>
   <p>Saved note: <span id="note" data-testid="note">…</span></p>
   <h2 style="font-size:14px">reports.list (host:reports)</h2>
@@ -15,6 +16,8 @@
 <script>
   (async function () {
     await window.openldr.ready;
+    // 'page', 'widget' (dashboard card) or 'panel' (side panel).
+    document.getElementById('site').textContent = window.openldr.site || 'page';
     var noteEl = document.getElementById('note');
     var reportsEl = document.getElementById('reports');
     async function refresh() {

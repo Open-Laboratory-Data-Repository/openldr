@@ -2167,6 +2167,16 @@ export const en = {
     notFound: 'Plugin not found or not installed.',
     noUi: 'This plugin contributes no UI.',
     loadError: 'Failed to load plugin UI.',
+    sites: {
+      menu: 'Places',
+      title: 'Places for {{name}}',
+      description: 'Turn a place off to hide it for everyone. The plugin page keeps working.',
+      widget: 'Dashboard card',
+      panel: 'Side panel',
+      none: 'This plugin has no dashboard card or side panel.',
+      error: 'Could not save: {{error}}',
+      openPanel: 'Side panels',
+    },
   },
   // Shared field labels for parameter-editing UIs (e.g. the Query page's Custom Query
   // ParametersEditor). Originally lived under the retired Report Builder's `reportBuilder.parameters`

@@ -2057,6 +2057,16 @@ export const fr: EnShape = {
     notFound: "Extension introuvable ou non installée.",
     noUi: "Cette extension ne fournit aucune interface.",
     loadError: "Échec du chargement de l'interface de l'extension.",
+    sites: {
+      menu: 'Emplacements',
+      title: 'Emplacements de {{name}}',
+      description: 'Désactivez un emplacement pour le masquer pour tous. La page de l\'extension reste disponible.',
+      widget: 'Carte du tableau de bord',
+      panel: 'Panneau latéral',
+      none: 'Cette extension n\'a ni carte de tableau de bord ni panneau latéral.',
+      error: 'Échec de l\'enregistrement : {{error}}',
+      openPanel: 'Panneaux latéraux',
+    },
   },
   queryParams: {
     variableId: 'ID de variable',

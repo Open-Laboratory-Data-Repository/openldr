@@ -28,7 +28,9 @@ const manifest = {
   wasi: true,
   limits: { memoryMb: 256, timeoutMs: 30000 },
   capabilities: [{ kind: 'host:reports' }],
-  ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'Reference Plugin', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1' },
+  ui: { entry: 'ui.html', sha256: uiSha, nav: { label: 'Reference Plugin', icon: 'puzzle', section: 'apps' }, uiSdkVersion: '1',
+    // A dashboard card and a side panel, drawn from the same ui.html (it reads openldr.site).
+    sites: { widget: { title: 'Reference card', height: 'small' }, panel: { title: 'Reference panel' } } },
 };
 writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log('staged reference-plugins/ui-reference (wasm', wasmSha.slice(0, 12), 'ui', uiSha.slice(0, 12), ')');

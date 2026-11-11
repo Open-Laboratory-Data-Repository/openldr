@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useMatch, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, type LucideIcon,
+  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, PanelRight, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/cn';
 import { listPluginUis, type PluginUiEntry } from '@/api';
 import { pluginIcon } from '@/plugins/icons';
+import { openPluginPanel, syncPluginPanel } from '@/plugins/pluginPanel';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
 
@@ -101,12 +102,19 @@ export function AppShell({
   useEffect(() => {
     let cancelled = false;
     void listPluginUis()
-      .then((list) => { if (!cancelled) setPluginUis(Array.isArray(list) ? list : []); })
+      .then((list) => {
+        if (cancelled) return;
+        const entries = Array.isArray(list) ? list : [];
+        setPluginUis(entries);
+        // Close an open side panel whose plugin no longer offers one (disabled, removed, switched off).
+        syncPluginPanel(entries);
+      })
       .catch(() => { if (!cancelled) setPluginUis([]); });
     return () => { cancelled = true; };
   }, []);
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const panelPlugins = pluginUis.filter((p) => p.sites?.panel);
 
   const userTrigger = (
     <DropdownMenuTrigger asChild>
@@ -293,6 +301,30 @@ export function AppShell({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-xs">{t('a11y.devBypassTooltip')}</TooltipContent>
               </Tooltip>
+            )}
+            {/* Plugin side panels. The panel itself lives above the routes (PluginPanelHost). */}
+            {panelPlugins.length > 0 && (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label={t('plugins.sites.openPanel')} data-testid="plugin-panel-menu">
+                        <PanelRight className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t('plugins.sites.openPanel')}</TooltipContent>
+                </Tooltip>
+                {/* No focus return to the button on close: focus belongs in the panel that just
+                    opened, and a refocused button reopens its tooltip over the header. */}
+                <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+                  {panelPlugins.map((p) => (
+                    <DropdownMenuItem key={p.id} onClick={() => openPluginPanel(p.id, p.sites!.panel!.title)}>
+                      {p.sites!.panel!.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {hasCapability('notifications.view') && <NotificationBell />}
             <Tooltip>

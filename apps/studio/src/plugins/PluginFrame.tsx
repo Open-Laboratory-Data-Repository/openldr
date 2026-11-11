@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { SDK_BOOTSTRAP_V1, type PluginInitContext } from '@openldr/plugin-ui-sdk';
+import { SDK_BOOTSTRAP_V1, type PluginInitContext, type PluginSiteName } from '@openldr/plugin-ui-sdk';
+import i18n from '@/i18n';
 import { authFetch, pluginUiAssetUrl, pluginBrokerCall } from '@/api';
 import { wireHostPort, type HostPortLike } from './host-bridge';
 
@@ -9,6 +10,12 @@ const CSP =
 /** The host's current theme (the app sets data-theme on <html> via useTheme; dark default). */
 function hostTheme(): 'light' | 'dark' {
   return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+}
+
+/** The init context for one drawing of a plugin's page. `site` tells the page where it is:
+ *  its own page, a dashboard card, or the side panel. */
+export function pluginFrameContext(pluginId: string, site: PluginSiteName): PluginInitContext {
+  return { pluginId, capabilities: [], theme: hostTheme(), locale: i18n.language, sessionId: crypto.randomUUID(), site };
 }
 
 /** Wrap the plugin's body HTML in a host-controlled document: strict CSP + the injected SDK

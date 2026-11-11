@@ -26,6 +26,7 @@ import { Workflows } from './workflows/page';
 import { QueryPage } from './query/QueryPage';
 import { WorkflowList } from './workflows/WorkflowList';
 import { PluginContainer } from './plugins/PluginContainer';
+import { PluginPanelHost } from './plugins/PluginPanelHost';
 import { RequireCapability } from './auth/RequireCapability';
 import { Roles } from './pages/Roles';
 import { DataExposure } from '@/pages/settings/DataExposure';
@@ -39,6 +40,8 @@ export function App() {
   return (
     <>
     <UserPreferencesSync />
+    {/* Outside <Routes> so a plugin side panel stays open, without reloading, across pages. */}
+    <PluginPanelHost />
     <Routes>
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/access-denied" element={<RequireCapability><AccessDeniedPage /></RequireCapability>} />

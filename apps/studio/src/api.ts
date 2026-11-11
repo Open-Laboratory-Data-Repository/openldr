@@ -3337,7 +3337,24 @@ export interface PluginUiEntry {
   hasWebview: boolean;
   hasDeclarative: boolean;
   declarative: unknown | null;
+  /** Dashboard card and side panel, minus any an admin switched off. Older servers omit it. */
+  sites?: PluginUiSites;
 }
+
+/** Places outside its own page where a plugin draws its ui.html. Mirrors UiSites in @openldr/marketplace. */
+export interface PluginUiSites {
+  widget?: { title: string; height: 'small' | 'medium' | 'large' };
+  panel?: { title: string };
+}
+export type PluginSiteKey = 'widget' | 'panel';
+export interface PluginSitesState { declared: PluginUiSites; off: PluginSiteKey[] }
+
+export const getPluginSites = (id: string): Promise<PluginSitesState> =>
+  apiGet<PluginSitesState>(`/api/marketplace/${encodeURIComponent(id)}/sites`, 'read plugin sites');
+
+export const setPluginSite = (id: string, site: PluginSiteKey, on: boolean): Promise<PluginSitesState> =>
+  authFetch(`/api/marketplace/${encodeURIComponent(id)}/sites`, jbody({ site, on }, 'PUT'))
+    .then((r) => okJson<PluginSitesState>(r, 'save plugin site'));
 
 export const listPluginUis = (): Promise<PluginUiEntry[]> =>
   apiGet<PluginUiEntry[]>('/api/plugins/ui', 'list plugin UIs');

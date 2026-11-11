@@ -16,6 +16,7 @@ import { Plus, Pencil, Check, SlidersHorizontal, MoreHorizontal, Download, Uploa
 import { listDashboards, createDashboard, saveDashboard, deleteDashboard, fetchClientConfig, type Dashboard, type DashboardFilterDef, type WidgetConfig } from '../api';
 import { useDashboardStore } from './store';
 import { DashboardGrid } from './DashboardGrid';
+import { PluginWidgets } from '@/plugins/PluginWidgets';
 import { DashboardFilterBar } from './filters/DashboardFilterBar';
 import { DashboardFilterEditor } from './filters/DashboardFilterEditor';
 import { exportDashboard, importDashboard, uniqueName } from './io';
@@ -342,6 +343,8 @@ export function DashboardPage() {
             }}
           />
         </div>
+        {/* Plugin cards: a row of their own under the grid, not part of the user's layout. */}
+        <PluginWidgets />
       </div>
       {editorOpen && (
         <WidgetEditorDialog

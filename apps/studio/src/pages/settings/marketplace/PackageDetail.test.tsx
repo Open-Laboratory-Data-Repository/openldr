@@ -4,7 +4,7 @@ import '@/i18n';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, getAvailableArtifact: vi.fn() };
+  return { ...actual, getAvailableArtifact: vi.fn(), getInstalledArtifact: vi.fn(async () => ({})), getPluginSites: vi.fn() };
 });
 import * as api from '@/api';
 import { PackageDetail } from './PackageDetail';
@@ -161,6 +161,26 @@ describe('PackageDetail', () => {
     await openDetailMenu();
     fireEvent.click(await screen.findByTestId('detail-install'));
     expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'whonet-narrow' }), expect.anything());
+  });
+
+  it('Places is offered only for an installed plugin that declares a card or panel, and opens the sheet', async () => {
+    vi.mocked(api.getPluginSites).mockResolvedValue({ declared: { panel: { title: 'Notes' } }, off: [] });
+    const sited: CardEntry = {
+      ...entry, ref: undefined, installed: true, active: true, enabled: true,
+      payload: { kind: 'plugin', ui: { entry: 'ui.html', nav: { label: 'Notes plugin' }, sites: { panel: { title: 'Notes' } } } },
+    };
+    const view = render(<PackageDetail entry={sited} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    fireEvent.pointerDown(await screen.findByTestId('detail-menu'), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    fireEvent.click(await screen.findByTestId('detail-places'));
+    expect(await screen.findByText('Places for Notes plugin')).toBeTruthy();
+    expect(api.getPluginSites).toHaveBeenCalledWith('whonet-sqlite');
+    view.unmount();
+
+    const plain: CardEntry = { ...sited, payload: { kind: 'plugin', ui: { entry: 'ui.html', nav: { label: 'Plain' } } } };
+    render(<PackageDetail entry={plain} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    fireEvent.pointerDown(await screen.findByTestId('detail-menu'), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    expect(await screen.findByText('Disable')).toBeTruthy(); // the menu is open
+    expect(screen.queryByTestId('detail-places')).toBeNull();
   });
 
   it('installed item shows the actions menu instead of Install', async () => {

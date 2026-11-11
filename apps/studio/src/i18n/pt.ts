@@ -2057,6 +2057,16 @@ export const pt: EnShape = {
     notFound: 'Plugin não encontrado ou não instalado.',
     noUi: 'Este plugin não fornece interface.',
     loadError: 'Falha ao carregar a interface do plugin.',
+    sites: {
+      menu: 'Locais',
+      title: 'Locais de {{name}}',
+      description: 'Desative um local para ocultá-lo para todos. A página do plugin continua a funcionar.',
+      widget: 'Cartão do painel',
+      panel: 'Painel lateral',
+      none: 'Este plugin não tem cartão do painel nem painel lateral.',
+      error: 'Não foi possível guardar: {{error}}',
+      openPanel: 'Painéis laterais',
+    },
   },
   queryParams: {
     variableId: 'ID da variável',
