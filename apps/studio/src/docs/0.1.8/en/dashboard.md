@@ -231,7 +231,7 @@ The sample dashboard has three filters. Your new dashboard has none. Add a **Per
 
 1. In edit mode, open the **Dashboard menu** and select **Edit filters**.
 2. Open the filter actions menu, the dots at the top of the panel, and select **Add filter**.
-3. In **Variable ID**, paste `period`. This box has a known problem: it loses focus after each letter you type. Pasting the whole ID at once avoids that.
+3. In **Variable ID**, type `period`.
 4. In **Label**, type `Period`.
 5. In **Type**, choose **Date range**.
 6. Open the filter actions menu and select **Save**. Then select **Done** in the **Dashboard menu**.
@@ -368,7 +368,6 @@ PostgreSQL, MySQL, MariaDB and SQL Server all stop the database work at the time
 - **Edit is missing from the menu.** Your role lacks **Edit dashboards**.
 - **The SQL cannot be edited, or saving says `raw SQL widgets are disabled`.** Turn on **Dashboard raw SQL**. See [Turn on SQL widgets](#turn-on-sql-widgets).
 - **A widget ignores the filter bar.** Builder widgets always do. A SQL widget follows a filter only when its SQL uses the tokens and its variables are bound in **Filters**.
-- **Variable ID keeps only one letter.** Paste the whole ID at once. This is a known problem.
 - **A Breakdown makes no difference to my chart.** Only **Table** shows a breakdown today.
 - **A widget shows an error about time or rows.** It hit the timeout or the row cap. See [Limits and settings](#limits-and-settings).
 - **A new widget is not on screen.** New widgets go to the bottom of the grid. Scroll down.

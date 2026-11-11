@@ -55,6 +55,17 @@ describe('DashboardFilterEditor', () => {
       expect(screen.queryByText('{{period_from}}')).not.toBeInTheDocument();
     });
 
+    it('keeps the Variable ID box, and its focus, while you type', () => {
+      renderEditor([period]);
+      const input = screen.getByLabelText('filter-0-id') as HTMLInputElement;
+      input.focus();
+      fireEvent.change(input, { target: { value: 'p' } });
+      // Keying the row by the id it edits remounted the row on every letter.
+      expect(input.isConnected).toBe(true);
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe('p');
+    });
+
     it('reverts to one token when the type stops being a date-range', () => {
       renderEditor([period]);
       // Radix Select is driven by keyboard here; jsdom has no layout for the popper.

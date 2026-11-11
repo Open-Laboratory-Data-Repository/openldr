@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -49,10 +49,15 @@ export function DashboardFilterEditor({
 }) {
   const { t } = useTranslation();
   const [list, setList] = useState<DashboardFilterDef[]>(filters);
+  // One stable React key per row. Keying a row by its id remounted it on every letter typed into
+  // Variable ID, which edits that id, so the box lost focus after each letter.
+  const nextKey = useRef(0);
+  const freshKeys = (n: number) => Array.from({ length: n }, () => nextKey.current++);
+  const [keys, setKeys] = useState<number[]>(() => freshKeys(filters.length));
 
   // Reset local state whenever the sheet (re)opens.
   useEffect(() => {
-    if (open) setList(filters);
+    if (open) { setList(filters); setKeys(freshKeys(filters.length)); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -65,10 +70,15 @@ export function DashboardFilterEditor({
     const next = [...list];
     [next[i], next[j]] = [next[j], next[i]];
     setList(next);
+    const nextKeys = [...keys];
+    [nextKeys[i], nextKeys[j]] = [nextKeys[j], nextKeys[i]];
+    setKeys(nextKeys);
   };
 
-  const addFilter = () =>
+  const addFilter = () => {
     setList([...list, { id: newId(), label: 'New Filter', type: 'text' }]);
+    setKeys([...keys, ...freshKeys(1)]);
+  };
 
   const copyToken = (token: string) => {
     void navigator.clipboard?.writeText(token).then(
@@ -114,7 +124,7 @@ export function DashboardFilterEditor({
             <p className="text-sm text-muted-foreground">{t('dashboard.filters.empty')}</p>
           )}
           {list.map((f, i) => (
-            <div key={f.id} className="rounded-md border border-border">
+            <div key={keys[i] ?? `row-${i}`} className="rounded-md border border-border">
               <div className="flex items-center justify-between gap-2 px-3 py-2">
                 <div className="flex min-w-0 flex-wrap gap-1">
                   {filterTokens(f).map((token) => {
@@ -153,7 +163,7 @@ export function DashboardFilterEditor({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive"
-                      onSelect={() => setList(list.filter((_, j) => j !== i))}
+                      onSelect={() => { setList(list.filter((_, j) => j !== i)); setKeys(keys.filter((_, j) => j !== i)); }}
                     >
                       {t('dashboard.filters.remove')}
                     </DropdownMenuItem>

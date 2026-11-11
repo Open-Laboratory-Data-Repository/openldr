@@ -233,7 +233,7 @@ O painel de exemplo tem três filtros. O seu painel novo não tem nenhum. Junte 
 
 1. No modo de edição, abra o menu de três pontos e selecione **Edit filters**. O painel **Filtros do painel** abre.
 2. Abra **Ações do filtro**, os três pontos no topo do painel, e selecione **Adicionar filtro**.
-3. Em **Identificador da variável**, cole `period`. Esta caixa tem um problema conhecido: perde o foco depois de cada letra escrita. Colar o identificador inteiro de uma vez evita isso.
+3. Em **Identificador da variável**, escreva `period`.
 4. Em **Rótulo**, escreva `Period`.
 5. Em **Type**, escolha **Intervalo de datas**.
 6. Abra **Ações do filtro** e selecione **Guardar**. Depois selecione **Done** no menu de três pontos.
@@ -370,7 +370,6 @@ O PostgreSQL, o MySQL, o MariaDB e o SQL Server param todos o trabalho da base n
 - **Edit não aparece no menu.** A sua função não tem **Edit dashboards**.
 - **O SQL não se pode editar, ou guardar mostra `raw SQL widgets are disabled`.** Ative **SQL bruto no painel**. Veja [Ativar os widgets SQL](#ativar-os-widgets-sql).
 - **Um widget ignora a barra de filtros.** Os widgets do Builder ignoram-na sempre. Um widget SQL só segue um filtro quando o seu SQL usa os tokens e as suas variáveis estão ligadas em **Filters**.
-- **Identificador da variável só guarda uma letra.** Cole o identificador inteiro de uma vez. É um problema conhecido.
 - **Breakdown não muda nada no meu gráfico.** Hoje só **Table** mostra uma divisão.
 - **Um widget mostra um erro de tempo ou de linhas.** Atingiu o tempo limite ou o limite de linhas. Veja [Limites e definições](#limites-e-definicoes).
 - **Um widget novo não está visível.** Os widgets novos vão para o fundo da grelha. Desça a página.

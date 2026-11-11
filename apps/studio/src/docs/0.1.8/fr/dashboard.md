@@ -233,7 +233,7 @@ Le tableau de bord d'exemple a trois filtres. Votre nouveau tableau de bord n'en
 
 1. En mode modification, ouvrez le menu à trois points et sélectionnez **Edit filters**. Le panneau **Filtres du tableau de bord** s'ouvre.
 2. Ouvrez **Actions du filtre**, les trois points en haut du panneau, et sélectionnez **Ajouter un filtre**.
-3. Dans **Identifiant de variable**, collez `period`. Cette zone a un problème connu : elle perd le focus après chaque lettre tapée. Coller l'identifiant entier d'un coup évite ce problème.
+3. Dans **Identifiant de variable**, tapez `period`.
 4. Dans **Libellé**, tapez `Period`.
 5. Dans **Type**, choisissez **Plage de dates**.
 6. Ouvrez **Actions du filtre** et sélectionnez **Enregistrer**. Puis sélectionnez **Done** dans le menu à trois points.
@@ -370,7 +370,6 @@ PostgreSQL, MySQL, MariaDB et SQL Server arrêtent tous le travail de la base au
 - **Edit n'apparaît pas dans le menu.** Votre rôle n'a pas **Edit dashboards**.
 - **Le SQL n'est pas modifiable, ou l'enregistrement affiche `raw SQL widgets are disabled`.** Activez **SQL brut pour les tableaux de bord**. Voir [Activer les widgets SQL](#activer-les-widgets-sql).
 - **Un widget ignore la barre de filtres.** Les widgets du Builder l'ignorent toujours. Un widget SQL ne suit un filtre que si son SQL utilise les jetons et si ses variables sont reliées dans **Filters**.
-- **Identifiant de variable ne garde qu'une lettre.** Collez l'identifiant entier d'un coup. C'est un problème connu.
 - **Breakdown ne change rien à mon graphique.** Seul **Table** affiche une répartition aujourd'hui.
 - **Un widget affiche une erreur de délai ou de lignes.** Il a atteint le délai ou le plafond de lignes. Voir [Limites et paramètres](#limites-et-parametres).
 - **Un nouveau widget n'est pas visible.** Les nouveaux widgets vont en bas de la grille. Faites défiler vers le bas.
