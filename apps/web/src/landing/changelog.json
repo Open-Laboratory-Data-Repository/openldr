@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "75d27856",
+          "type": "feat",
+          "scope": "query",
+          "title": "List databases under a SQL Server connector with no database"
+        },
+        {
           "hash": "ff6eb8d9",
           "type": "fix",
           "scope": "layouts",
