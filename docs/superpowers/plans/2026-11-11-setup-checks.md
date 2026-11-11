@@ -83,3 +83,44 @@ studio path such as `/settings/laboratory`. Same pattern as `connector-diagnose.
 6. **Check.** Browser at desktop and 375x812 on a throwaway CE, then the full forced gate.
 
 No migration. No new capability.
+
+## 5. As built (2026-11-11)
+
+Built as planned, with these changes:
+
+- **The route is POST**, in its own file `apps/server/src/setup-routes.ts`. It opens test
+  connections and writes an audit row, so GET was the wrong verb.
+- **The Connectors check covers every host connector**, not only databases. `testConnector`
+  already handles mail and SFTP connectors, so the check uses it for all of them.
+- **The page sits second in the Settings list**, after General. Opening Settings lands on the
+  first page, and the checks open live connections, so they should not run on every visit.
+
+Proof, by layer:
+
+| Layer | Result |
+|---|---|
+| The rules, every source faked: `packages/bootstrap/src/setup-checks.test.ts` | 12 tests pass. |
+| The command, checks faked: `packages/cli/src/doctor.test.ts` | 4 tests pass. |
+| The route, checks faked: `apps/server/src/setup-routes.test.ts` | 3 tests pass. |
+| The page, API mocked: `apps/studio/src/pages/settings/SetupChecks.test.tsx` | 6 tests pass. Every check id and hint has strings in en, fr and pt. |
+| `openldr doctor` on a throwaway CE | Below. |
+| Browser on the same CE | Below. |
+
+On a throwaway CE (real Postgres, real storage, dev sign-in bypass on):
+
+1. `openldr doctor` on the fresh install: Services pass, Sign-in warn, Secrets key pass,
+   Laboratory name warn, Time zone warn, Connectors pass (1 of 1), Sync skipped. Exit code 0.
+2. After adding a connector that points at a closed port: Connectors failed and named it. Exit
+   code 1. `--json` gave the same report.
+3. Each run left one `setup.check` audit row as `cli`, with check ids only.
+4. The page showed the same list, with "Open Laboratory" and "Open Connectors" links.
+5. After setting a lab name and a time zone, Run again showed both as passed.
+6. At 375x812 the list wraps and scrolls down only. Nothing scrolls sideways.
+
+HONEST NON-PROOF:
+
+- Sign-in **failing** on a production install was tested with fakes only. The throwaway CE runs
+  as development, where it warns.
+- The Services check failing, and the Sync checks, were tested with fakes only. No service was
+  stopped and no central was set up.
+- The time zone skip on a SQL Server warehouse was tested with fakes only.
