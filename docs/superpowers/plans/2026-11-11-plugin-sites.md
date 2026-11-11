@@ -171,3 +171,55 @@ export function syncPluginPanel(entries: PluginUiEntry[]): void; // closes the p
 Shared files this slice touches outside the plugin area: `AppShell.tsx`, `App.tsx`,
 `components/ui/sheet.tsx` (one optional prop), `DashboardPage.tsx`, `docs/HTTP-API.md`,
 `packages/cli/src/program.ts`.
+
+---
+
+## As built (2026-11-11)
+
+Commits on `claude/ui-plugins-2-daf625`: `5d5355a8` manifest, SDK and off list; `de822da8` routes and
+CLI; `20a29954` studio; `8fe87651` docs; `b6ddbf22` fixes from the branch review.
+
+Changes from the plan:
+
+- `/api/plugins/ui` lists only the active version of a plugin. The store lists every installed
+  version (`packages/plugins/src/store.ts:93`), so a plugin with two versions showed twice in the
+  sidebar and would have shown two cards. A route test failed first, then passed.
+- The CLI audits with the existing `cliActor()` (actor type `cli`, name from `--actor` or the OS
+  user), the same as `openldr user preferences set`.
+- The panel sits under the 48px header, so the header buttons stay usable. On desktop the page is
+  padded by the panel's width while it is open, so the panel never covers page content.
+- Opening the phone menu closes the panel. On a phone the panel fills the screen and would cover
+  the drawer.
+- Escape closes the panel only when focus is inside it.
+- The panel menu does not hand focus back to its button on close. A refocused button reopened its
+  tooltip over the header.
+- The shared `Switch` takes no `id`, so the Places sheet labels each switch with `aria-label`.
+
+### Proof, by layer
+
+| Layer | What ran |
+| --- | --- |
+| Manifest schema | 5 new tests: no `sites` key when absent, both sites and the height default, rejected on a declarative-only UI, unknown site, bad height. |
+| Signature | 1 new test: a signed manifest carrying `sites` verifies, and adding a panel after signing fails with `bad-signature`. |
+| SDK | 1 new test: `openldr.site` is `page` before init and when absent, `widget` when sent, `page` for junk. |
+| Shared off list | 8 tests in `plugin-sites.test.ts`, including junk stored values and the not-found and not-declared errors. |
+| Routes | 6 new `/api/plugins/ui` tests (sites listed, one switched off, none, role gate, disabled, two versions). 6 new admin route tests (GET, PUT and audit, undeclared 400, bad body 400, unknown 404, no `marketplace.manage` 403). |
+| CLI | 7 command tests and 2 registration tests. |
+| Studio | Panel store 4, panel host 6, card row 2, admin sheet 4, header menu 5, Places item 1. |
+| Browser, throwaway CE | Card on the dashboard drawn with `site` widget at 160px. Panel opened from the header, stayed open from Dashboard to Reports with the same iframe element. Places sheet switched the card off: gone from `/api/plugins/ui` and from the dashboard after reload, audit row `plugin.sites.update` written. `openldr market sites` listed and switched sites; a bad site exited 1 with the usage line. Plugin disabled with the panel open: the panel closed on the next page. With a panel open on desktop, the rightmost page button ends at 614px and the panel starts at 640px. |
+| Phone, 375x812 | Card row one column, no sideways scroll. Panel full width under the header, close button at the top and working. Opening the menu closes the panel and shows the whole drawer. |
+
+HONEST NON-PROOF:
+
+- The panel is pinned to the bottom of the screen. Headless Chromium cannot show the `vh` versus
+  `dvh` problem, so only a real phone can confirm its bottom edge.
+- The reference plugin's own CSS sets dark text, so its card and panel are hard to read in dark
+  mode. That is the test plugin, not the host.
+- Two admins switching sites at the same moment can lose one change. The read and write of the
+  off list are not in a transaction.
+
+Deferred minors from the branch review:
+
+- Settings keeps one AppShell, so a panel switched off from Marketplace stays open until the admin
+  leaves Settings.
+- The Places sheet fetches again when the package page redraws.
