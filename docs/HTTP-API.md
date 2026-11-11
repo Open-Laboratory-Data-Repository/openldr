@@ -11,8 +11,12 @@ Source of truth: `apps/server/src/*.ts` (route registration in `apps/server/src/
 | `GET` | `/health` | Run all registered health checks. Returns `503` when health status is down. |
 | `GET` | `/api/config` | Browser-facing feature/auth/OIDC configuration. |
 | `GET` | `/api/me` | Current authenticated user. Returns `401` when no user is available. |
-| `GET` | `/api/me/preferences` | The signed-in user's own studio preferences: `theme`, `sidebarCollapsed`, `startPage`, `language`. No capability needed. |
+| `GET` | `/api/me/preferences` | The signed-in user's own studio preferences: `theme`, `sidebarCollapsed`, `startPage`, `language`, `layout` (a layout id, or `full` for the full sidebar). No capability needed. |
 | `PUT` | `/api/me/preferences` | Merge a patch into the signed-in user's preferences. A `null` value clears a key. Returns the merged result. |
+| `GET` | `/api/layouts` | Layout presets: `{ layouts, roleOrder }`. Each layout has `id`, `name`, `startPage`, `pages` and `roles` (slugs that default to it). `roleOrder` lists the roles that have a default, in Roles page order. Any signed-in user. |
+| `POST` | `/api/layouts` | Create a layout: `{ name, startPage, pages, roles }`. Needs `settings.edit_general`. 400 bad input or unknown role, 409 duplicate name. Audited as `layout.create`. |
+| `PUT` | `/api/layouts/:id` | Replace a layout. A role named in `roles` moves here from any other layout. 404 unknown id. Audited as `layout.update`. |
+| `DELETE` | `/api/layouts/:id` | Delete a layout and its role defaults. 404 unknown id. Audited as `layout.delete`. |
 | `POST` | `/api/settings/setup-checks` | Run the setup checks (services, sign-in, secrets key, laboratory name, time zone, connectors, sync). Returns each check's status, a hint code and the studio page that fixes it. Same list as `openldr doctor`. |
 
 ## Reports

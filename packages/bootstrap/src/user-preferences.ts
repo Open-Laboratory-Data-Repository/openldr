@@ -13,7 +13,7 @@ export interface UserPreferences {
   startPage?: string;
   /** The studio interface language. One of the languages studio ships. */
   language?: 'en' | 'fr' | 'pt';
-  /** The layout this user picked (layout_presets.id), or `none` for the full sidebar. Absent means
+  /** The layout this user picked (layout_presets.id), or `full` for the full sidebar. Absent means
    *  their role's default layout. */
   layout?: string;
 }
@@ -25,7 +25,7 @@ export const studioPathSchema = startPage;
 const theme = z.enum(['light', 'dark']);
 // The languages studio ships (apps/studio/src/i18n/language.ts). A new one is added in both places.
 const language = z.enum(['en', 'fr', 'pt']);
-// A layout id or `none`. Not checked against the table: studio falls back when the id is gone.
+// A layout id or `full`. Not checked against the table: studio falls back when the id is gone.
 const layout = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 
 /** A change to apply. A missing key is left alone; null clears it. */

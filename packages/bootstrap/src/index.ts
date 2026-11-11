@@ -2025,6 +2025,10 @@ export {
   type UserPreferences, type UserPreferencesPatch,
 } from './user-preferences';
 export {
+  listLayouts, saveLayout, deleteLayout, layoutInputSchema, LayoutError,
+  type LayoutPreset, type LayoutList, type LayoutInput,
+} from './layout-presets';
+export {
   SITES_OFF_KEY, getSitesOff, setSiteOn, visibleSites, declaredSites, readPluginSites, updatePluginSite, PluginSitesError,
   type PluginSitesState, type PluginSitesDeps,
 } from './plugin-sites';

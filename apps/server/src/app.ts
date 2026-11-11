@@ -36,6 +36,7 @@ import { registerActivityRoutes } from './activity-routes';
 import { registerNotificationRoutes } from './notification-routes';
 import { registerMePreferencesRoutes } from './me-preferences-routes';
 import { registerSetupRoutes } from './setup-routes';
+import { registerLayoutRoutes } from './layout-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { registerQueryRoutes } from './query-routes';
 import { registerSyncRoutes } from './sync-routes';
@@ -214,6 +215,7 @@ export async function buildApp(ctx: AppContext) {
   registerNotificationRoutes(app, ctx);
   registerMePreferencesRoutes(app, ctx);
   registerSetupRoutes(app, ctx);
+  registerLayoutRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerFacilitiesRoutes(app, ctx);
 

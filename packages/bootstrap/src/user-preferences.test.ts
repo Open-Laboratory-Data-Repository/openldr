@@ -48,13 +48,13 @@ describe('user preferences', () => {
     expect(userPreferencesPatchSchema.safeParse({ startPage }).success).toBe(true);
   });
 
-  it('saves a layout pick: a layout id, or none for the full sidebar', async () => {
+  it('saves a layout pick: a layout id, or full for the full sidebar', async () => {
     const db = await makeMigratedDb();
-    expect(await saveUserPreferences(db, 'u1', { layout: 'none' })).toEqual({ layout: 'none' });
+    expect(await saveUserPreferences(db, 'u1', { layout: 'full' })).toEqual({ layout: 'full' });
     expect(await saveUserPreferences(db, 'u1', { layout: '3f2b8c1e-0000-4000-8000-000000000001' })).toEqual({ layout: '3f2b8c1e-0000-4000-8000-000000000001' });
     expect(await saveUserPreferences(db, 'u1', { layout: null })).toEqual({});
     for (const layout of ['', 'has space', 'x'.repeat(101), '../x']) expect(userPreferencesPatchSchema.safeParse({ layout }).success).toBe(false);
-    expect(parseStoredPreferences({ layout: 'none', theme: 'dark' })).toEqual({ layout: 'none', theme: 'dark' });
+    expect(parseStoredPreferences({ layout: 'full', theme: 'dark' })).toEqual({ layout: 'full', theme: 'dark' });
     expect(parseStoredPreferences({ layout: 42 })).toEqual({});
   });
 

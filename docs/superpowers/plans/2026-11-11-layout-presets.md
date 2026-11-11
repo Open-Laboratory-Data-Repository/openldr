@@ -30,7 +30,7 @@ slice 6 (`docs/superpowers/plans/2026-11-11-user-preferences.md`).
 - The first page in force: the user's own `startPage`, else the layout's, else the Dashboard.
   StartPageGate keeps its rule that it only redirects to a page in the user's sidebar.
 - The layout in force: the user's own pick, else the default of their first role that has one, in
-  the order the Roles page lists roles. The user's pick `none` means the full sidebar.
+  the order the Roles page lists roles. The user's pick `full` means the full sidebar.
 - No layouts ship with CE. The admin makes them. A layout names studio paths, not clinical codes,
   so §8 does not apply, but a shipped "Bench" would still guess at how a lab works.
 - Writes need `settings.edit_general`. Reading the list needs only a signed-in user, because the
@@ -75,7 +75,7 @@ export const layoutInputSchema: z.ZodType<{ name: string; startPage: string | nu
 export async function listLayouts(db: Kysely<InternalSchema>): Promise<LayoutPreset[]>; // roles filled
 export async function saveLayout(db, id: string | null, input, actor: string | null): Promise<LayoutPreset>; // null id creates
 export async function deleteLayout(db, id: string): Promise<void>;
-// user-preferences.ts: UserPreferences.layout?: string  // a layout id, or 'none' for the full sidebar
+// user-preferences.ts: UserPreferences.layout?: string  // a layout id, or 'full' for the full sidebar
 ```
 - `pages` and `startPage` use the slice 6 path rule. `pages` has 1 to 50 entries, no duplicates.
 - Setting `roles` on a layout replaces that layout's role defaults and moves a role off any other
@@ -92,7 +92,7 @@ export async function deleteLayout(db, id: string): Promise<void>;
 **Files:**
 - Create: `apps/server/src/layout-routes.ts` and `.test.ts`; register in `app.ts`
 - Create: `packages/cli/src/layouts.ts` and `.test.ts`; register in `program.ts`
-- Modify: `packages/cli/src/user.ts` (`preferences set <id> layout <id|none>`), `docs/HTTP-API.md`
+- Modify: `packages/cli/src/user.ts` (`preferences set <id> layout <id|full|none>`, `none` clears it as for every key), `docs/HTTP-API.md`
 
 **Interfaces:**
 - `GET /api/layouts` (signed in) returns `LayoutPreset[]`.
