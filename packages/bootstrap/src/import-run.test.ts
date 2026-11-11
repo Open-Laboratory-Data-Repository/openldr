@@ -329,7 +329,9 @@ describe('import run: who may read what', () => {
 
   it('refuses a missing, disabled or wrong-type connector', async () => {
     const h = await harness(keysOf(1));
-    await h.svc.allow('v1-import', 'pg', ADMIN);
+    // Allowing a connector the plugin cannot read is refused up front, not at the first run.
+    await expect(h.svc.allow('v1-import', 'pg', ADMIN)).rejects.toThrow(/microsoft-sql/);
+    expect(await h.svc.allowed('v1-import')).not.toContain('pg');
     await h.svc.allow('v1-import', 'off', ADMIN);
     await expect(h.svc.start({ ...START, connectorId: 'pg' })).rejects.toThrow(/microsoft-sql/);
     await expect(h.svc.start({ ...START, connectorId: 'off' })).rejects.toThrow(/not found or disabled/);
