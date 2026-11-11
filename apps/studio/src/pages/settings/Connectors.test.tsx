@@ -218,6 +218,38 @@ describe('Connectors page', () => {
     }));
   });
 
+  // SQL Server Management Studio shows a named instance as SERVER\INSTANCE, and that is what people
+  // paste into Host. CE splits it only when it connects, so the form showed an empty Instance name.
+  it('SQL Server: SERVER\\INSTANCE typed into Host moves the instance into Instance name', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    (api.createConnector as any).mockResolvedValue({ ...dbConn, id: 'c4', name: 'Lab SQL' });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await openAddConnector();
+    fireEvent.change(await screen.findByTestId('connector-name'), { target: { value: 'Lab SQL' } });
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Microsoft SQL' }));
+
+    const host = await screen.findByTestId('connector-db-host');
+    fireEvent.change(host, { target: { value: 'LABSRV\\SQLEXPRESS' } });
+    fireEvent.blur(host);
+    expect((screen.getByTestId('connector-db-host') as HTMLInputElement).value).toBe('LABSRV');
+    expect((screen.getByTestId('connector-db-instanceName') as HTMLInputElement).value).toBe('SQLEXPRESS');
+
+    // An instance name already given wins, as it does when CE connects; Host keeps only the server.
+    fireEvent.change(screen.getByTestId('connector-db-instanceName'), { target: { value: 'LIS' } });
+    fireEvent.change(host, { target: { value: 'LABSRV\\OTHER' } });
+    fireEvent.change(screen.getByTestId('connector-db-database'), { target: { value: 'disa' } });
+    // Saved without leaving the Host box first: the split also runs on save.
+    await saveConnector();
+    await waitFor(() => expect(api.createConnector).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'microsoft-sql',
+      config: expect.objectContaining({ host: 'LABSRV', instanceName: 'LIS', database: 'disa' }),
+    })));
+  });
+
   it('tests a plugin connector and shows the metadata summary', async () => {
     (api.testConnector as any).mockResolvedValue({ ok: true, metadata: { dataElements: 12, orgUnits: 5, categoryOptionCombos: 3, programs: 1, programStages: 2 } });
     render(<MemoryRouter><Connectors /></MemoryRouter>);
