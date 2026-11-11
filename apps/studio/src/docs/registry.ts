@@ -307,6 +307,7 @@ export const DOC_GUIDES: DocGuide[] = [
     difficulty: 'intermediate',
     relatedSlugs: ['users', 'workflows'],
     screenshotNames: ['audit-filter.png', 'audit-event-detail.png'],
+    capturedNames: ['audit-tour.png', 'audit-filter-workflow.mp4', 'audit-event.png'],
     status: 'published',
   },
   {

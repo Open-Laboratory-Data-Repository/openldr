@@ -272,7 +272,7 @@ describe('authored guide structure', () => {
   // instead of the short Outcome / Steps / Expected result template.
   it('gives every long guide examples, troubleshooting and related guides', () => {
     const long = DOC_GUIDES.filter((g) => (g.capturedNames ?? []).length > 0);
-    expect(long.map((g) => g.slug)).toEqual(expect.arrayContaining(['start-here', 'dashboard', 'reports', 'query', 'workflows', 'activity', 'patients', 'users', 'roles']));
+    expect(long.map((g) => g.slug)).toEqual(expect.arrayContaining(['start-here', 'dashboard', 'reports', 'query', 'workflows', 'activity', 'patients', 'users', 'roles', 'audit']));
     for (const g of long) {
       const content = resolve('en', g.slug)!.content;
       expect(content, `${g.slug} needs a worked example`).toMatch(/^## Example \d+: /m);

@@ -1,68 +1,92 @@
 # Audit
 
-Audit aide les administrateurs et les responsables à retracer les changements visibles par les utilisateurs dans les flux de travail, les formulaires, les utilisateurs, les rapports, les connecteurs et les paramètres.
+**Audit** enregistre qui a modifié quoi, et quand : flux de travail, formulaires, utilisateurs, rôles, rapports, connecteurs, paramètres, patients consultés, et plus. Chaque événement a un acteur, une action, l'objet touché, et souvent une copie de cet objet avant et après.
 
-> **Historique des connexions :** Les connexions et déconnexions réussies sont gérées par Keycloak, pas par OpenLDR — l'application ne voit jamais le mot de passe. Retrouvez-les dans la console d'administration Keycloak sous **Realm → Events**. Ce journal enregistre les échecs d'authentification (`auth.failed`) et les actions des opérateurs — y compris les actions CLI, affichées avec le type d'acteur `cli`.
+Les connexions et déconnexions sont gérées par Keycloak, pas par OpenLDR, qui ne voit jamais le mot de passe. Vous les trouvez dans la console d'administration de Keycloak, sous **Realm**, **Events**. Ce journal enregistre les authentifications refusées (`auth.failed`) et chaque action d'opérateur, y compris en ligne de commande, avec le type d'acteur `cli`.
 
-## Résultat
+Ce guide prend environ 10 minutes. Sélectionnez une image ou un clip pour l'agrandir.
 
-Vous pouvez ouvrir Audit, appliquer des filtres, inspecter un événement, interpréter les champs acteur/action/entité/heure, copier des identifiants et retracer un changement à travers des événements liés.
+![Audit : les événements les plus récents d'abord, avec Quand, Acteur, Action, Type d'entité et ID d'entité.](audit-tour.png)
 
-![Tableau Audit avec filtres et colonne d'horodatage](audit-filter.png)
+## Qui peut faire quoi
+
+Une seule autorisation couvre cette page : **View audit log**. Elle ne fait que lire. Rien ici ne peut modifier ni supprimer un événement.
 
 ## Avant de commencer
 
-- Connaître approximativement l'heure, l'acteur, l'entité ou l'action à investiguer.
-- Utiliser des filtres restreints d'abord quand le volume d'événements est élevé.
+L'exemple retrouve les modifications du flux **Ingest**. Si vous avez suivi [Flux de travail, exemple 1](/docs/workflows#exemple-1-preparer-le-webhook-ingest), il y en a au moins une. Sinon, prenez n'importe quel événement visible.
 
-## Étapes
+## Exemple 1 : qui a modifié le flux Ingest ?
 
-1. Ouvrir **Audit**.
-2. Utiliser le bouton **Filtrer** de la barre d'outils pour ajouter une règle : choisir une colonne, un opérateur et une valeur.
-3. Utiliser **Trier** pour ordonner le tableau par n'importe quelle colonne triable, en ordre croissant ou décroissant.
-4. Utiliser **Colonnes** pour afficher ou masquer des colonnes ; utiliser **Réinitialiser** pour revenir aux réglages par défaut.
-5. Les filtres actifs apparaissent sous forme de puces amovibles sous la barre d'outils — en retirer un sans rouvrir la fenêtre de filtre.
-6. Le filtrage, le tri et la pagination s'exécutent tous côté serveur, ce qui garde les journaux d'audit volumineux rapides.
-7. Sélectionner une ligne d'événement, par exemple une mise à jour de flux de travail ou de formulaire.
-8. Examiner l'acteur, l'action, l'entité et l'heure.
-9. Copier des identifiants quand une comparaison avec un autre écran est nécessaire.
-10. Inspecter les détails avant/après quand ils sont disponibles.
-11. Suivre les événements liés en réutilisant l'acteur, l'entité ou l'identifiant comme un autre filtre.
+![Filtrer sur ID d'entité wf-ingest et ouvrir l'événement le plus récent.](audit-filter-workflow.mp4)
 
-![Détail d'un événement Audit avec acteur, entité et données avant/après](audit-event-detail.png)
+1. Ouvrez **Audit**. Les événements les plus récents sont en haut.
+2. Sélectionnez **Filtrer**, puis **Ajouter un filtre**.
+3. Réglez la colonne sur **ID d'entité**, l'opérateur sur **Contient**, et la valeur sur `wf-ingest`.
+4. Sélectionnez **Appliquer**. Une pastille sous la barre d'outils montre le filtre.
+5. Sélectionnez la ligne la plus récente.
 
-## Résultat attendu
+**Résultat attendu :** un événement `workflow.update` pour chaque enregistrement d'Ingest, par la personne qui l'a enregistré. La fiche montre l'identifiant de l'événement, l'heure, l'acteur, l'action, le type d'entité `workflow` et l'identifiant `wf-ingest`, puis **Before** : le flux tel qu'il était.
 
-Vous pouvez expliquer qui a changé quoi, quand cela s'est produit, quelle entité a été affectée et quels événements voisins peuvent faire partie de la même activité.
+![Un événement : qui, quoi, quand, et le flux avant la modification.](audit-event.png)
+
+Chaque valeur a un bouton de copie, pour coller un identifiant dans un autre filtre ou un autre écran.
+
+## Filtrer, trier et colonnes
+
+- **Filtrer** ajoute des règles : une colonne, un opérateur et une valeur. Les colonnes de texte proposent **Égal à**, **Différent de**, **Contient** et d'autres. **Quand** propose des dates et des plages.
+- Chaque règle s'affiche en pastille sous la barre d'outils. Retirez une pastille pour enlever une règle, ou utilisez **Tout effacer**.
+- **Trier** classe par n'importe quelle colonne, dans un sens ou l'autre.
+- **Colonnes** masque et affiche des colonnes. **Réinitialiser** remet le tableau par défaut.
+- Le filtrage, le tri et la pagination se font sur le serveur, donc un grand journal reste rapide.
+
+Pour suivre une chaîne de modifications, partez de l'entité, ajoutez l'acteur, puis comparez les heures des événements de création, modification, exécution, publication et suppression.
+
+## Actions utiles à connaître
+
+| Action | Ce qui s'est passé |
+| --- | --- |
+| `workflow.create`, `workflow.update`, `workflow.delete` | Un flux a été créé, enregistré ou supprimé |
+| `dashboard.create`, `dashboard.update`, `dashboard.delete` | Un tableau de bord a été créé, enregistré ou supprimé |
+| `customQuery.create`, `customQuery.delete` | Une requête enregistrée a été créée ou supprimée |
+| `role.create`, `role.delete`, `role.capability.backfill` | Un rôle a été créé ou supprimé, ou a reçu une nouvelle capacité à une mise à jour |
+| `settings.flag.update` | Un réglage comme **SQL brut pour les tableaux de bord** a été changé |
+| `patients.list`, `patients.view` | Quelqu'un a listé ou ouvert des patients |
+| `user.status`, `user.status.failed` | Un compte a été activé ou désactivé, ou la tentative a échoué |
+| `auth.failed` | Un jeton de connexion a été refusé |
+
+## En ligne de commande
+
+`openldr audit list` accepte les mêmes filtres et le même tri que la page, donc un script peut refaire n'importe quelle vue.
+
+- `--where column:operator:value` peut être répété. Seuls les deux premiers deux-points séparent la valeur, donc une valeur peut contenir un deux-points, comme un identifiant ou une URL.
+- `--sort column` trie croissant, `--sort -column` trie décroissant. Il peut être répété.
+- Sur la colonne du temps, `eq` avec une date seule comme `2026-08-06` couvre toute la journée. `between` avec deux dates seules inclut tout le dernier jour.
+
+La même recherche que l'exemple 1 :
+
+```bash
+./openldr audit list --where entityId:like:wf-ingest --sort -occurredAt
+```
+
+Tous les événements de formulaires, du plus récent au plus ancien :
+
+```bash
+./openldr audit list --where action:like:form. --sort -occurredAt
+```
+
+Une colonne inconnue, ou un opérateur que cette colonne n'accepte pas, est refusé avec un message qui nomme le problème. C'est la même vérification que sur la page.
 
 ## Dépannage
 
-- **Aucun événement n'apparaît :** élargir la plage de temps ou retirer les filtres un par un.
-- **L'acteur est inattendu :** vérifier si un flux de travail planifié ou une action système a effectué le changement.
-- **Les détails avant/après sont vides :** certains événements enregistrent l'action sans instantané complet de l'objet.
-- **Trop d'événements liés :** combiner les filtres d'entité et d'acteur pour restreindre la séquence.
-
-## Usage web avancé
-
-Combiner les filtres pour suivre une activité en plusieurs étapes : commencer par l'entité, ajouter l'acteur, puis comparer les horodatages entre les événements de mise à jour, d'exécution, de publication ou de suppression.
-
-## Ligne de commande
-
-`openldr audit list` prend en charge la même grammaire de filtre et de tri que la barre d'outils web, ce qui permet à un script de reproduire n'importe quelle vue construite dans le navigateur.
-
-- `--where column:operator:value` — répétable. Seuls les deux premiers deux-points sont des délimiteurs, une valeur peut donc elle-même contenir un deux-points (un identifiant d'entité ou une URL, par exemple).
-- `--sort column` — croissant. `--sort -column` — décroissant (tiret en préfixe). Répétable.
-- Sur la colonne d'horodatage, `eq` avec une date seule (`2026-08-06`, sans heure) correspond à toute la journée, pas à un seul instant. `between` avec deux dates seules inclut le dernier jour en entier.
-
-```bash
-openldr audit list --where action:like:form. --sort -occurredAt
-```
-
-Cette commande liste les événements d'audit dont `action` contient `form.`, du plus récent au plus ancien.
-
-Une colonne inconnue ou un opérateur non autorisé sur cette colonne est rejeté avec un message qui nomme précisément l'erreur — la même validation que la barre d'outils web utilise, si bien qu'un indicateur mal saisi échoue de la même façon qu'un filtre mal saisi dans le navigateur.
+- **Aucun événement n'apparaît.** Élargissez la période, ou retirez un filtre à la fois.
+- **L'acteur est inattendu.** Un flux planifié ou une action du système a peut-être fait la modification.
+- **Avant et après sont vides.** Certains événements notent l'action sans copie complète.
+- **Trop d'événements.** Combinez un filtre sur l'entité et un filtre sur l'acteur.
+- **Je ne trouve pas une connexion.** Les connexions réussies sont dans les événements de Keycloak, pas ici.
 
 ## Guides associés
 
 - [Utilisateurs et rôles](/docs/users)
 - [Flux de travail](/docs/workflows)
+- [Activité](/docs/activity)
