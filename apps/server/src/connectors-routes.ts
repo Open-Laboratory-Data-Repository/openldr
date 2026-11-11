@@ -2,14 +2,16 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { createPluginTarget, testConnector, inspectConnectorConfig, updateConnectorConfig } from '@openldr/bootstrap';
+import { createPluginTarget, testConnector, inspectConnectorConfig, updateConnectorConfig, diagnoseConnector, type DiagnoseResult } from '@openldr/bootstrap';
 import type { ConnectorStore } from '@openldr/db';
-import { redact } from '@openldr/core';
+import { makeRedactor, redact } from '@openldr/core';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
 export interface ConnectorsRouteDeps {
   connectors: ConnectorStore;
+  /** Injectable for tests; defaults to the real step-by-step probe. */
+  diagnose?: (type: string, config: Record<string, string>) => Promise<DiagnoseResult>;
 }
 
 const createInput = z.object({
@@ -62,6 +64,7 @@ function hostFor(config: Record<string, string> | undefined, explicit: string | 
 
 export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: ConnectorsRouteDeps): void {
   const { connectors } = deps;
+  const diagnose = deps.diagnose ?? diagnoseConnector;
   const key = (): string | undefined => ctx.cfg.SECRETS_ENCRYPTION_KEY;
 
   // Installed sink plugins, for the "pick a plugin" dropdown.
@@ -176,6 +179,26 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       metadata: { name: existing?.name, pluginId: existing?.pluginId },
     });
     return { ok: true };
+  });
+
+  // Step-by-step check of a host connector: name, SQL Browser, port, login, version. Opens live
+  // connections with the stored credentials, so it is audited like /test. The audit row carries the
+  // outcome and the failed step only; driver text can echo hosts and users, so it stays out.
+  app.post('/api/connectors/:id/diagnose', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const connector = await connectors.get(id);
+    if (!connector) { reply.code(404); return { error: 'connector not found' }; }
+    if (!connector.type) { reply.code(400); return { error: 'diagnosis is for host connectors' }; }
+    const config = await connectors.getDecryptedConfig(id, key());
+    const result = await diagnose(connector.type, config);
+    // The engine already masks secrets; mask again here so a fake or a future engine cannot leak one.
+    const mask = makeRedactor([config.password, config.clientSecret, config.refreshToken].filter((v): v is string => Boolean(v)));
+    const steps = result.steps.map((s) => (s.detail ? { ...s, detail: redact(mask(s.detail)) } : s));
+    await recordAudit(ctx, req, {
+      action: 'connector.diagnose', entityType: 'connector', entityId: id,
+      metadata: { ok: result.ok, failedStep: steps.find((s) => s.status === 'fail')?.id ?? null },
+    });
+    return { ok: result.ok, steps };
   });
 
   // Live connection test: resolve → loadSink → health_check + pull_metadata (restricted to allowedHost).

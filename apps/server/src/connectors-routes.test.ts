@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import type { ConnectorRecord, ConnectorStore, NewConnector, ConnectorPatch } from '@openldr/db';
-import { registerConnectorsRoutes } from './connectors-routes';
+import { registerConnectorsRoutes, type ConnectorsRouteDeps } from './connectors-routes';
 
 // In-memory ConnectorStore matching the real masking + fail-closed contract.
 function fakeStore(): ConnectorStore {
@@ -326,3 +326,47 @@ describe('connectors routes', () => {
     });
   });
 });
+
+describe('connector diagnosis route', () => {
+  function diagApp(store: ConnectorStore, diagnose: ConnectorsRouteDeps['diagnose'], audited: AuditRecord[] = []) {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'admin', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['connectors.manage'] } as never; });
+    registerConnectorsRoutes(app, fakeCtx({ audited }), { connectors: store, diagnose });
+    return app;
+  }
+
+  it('returns 404 for a missing connector', async () => {
+    const res = await diagApp(fakeStore(), async () => ({ ok: true, steps: [] })).inject({ method: 'POST', url: '/api/connectors/missing/diagnose' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('refuses a plugin connector', async () => {
+    const store = fakeStore();
+    await store.create({ id: 'sink', name: 'DHIS2', pluginId: 'dhis2-sink', kind: 'sink', config: {} }, 'key');
+    const res = await diagApp(store, async () => ({ ok: true, steps: [] })).inject({ method: 'POST', url: '/api/connectors/sink/diagnose' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'diagnosis is for host connectors' });
+  });
+
+  it('runs the diagnosis on the decrypted config, masks the stored password, and audits only the outcome', async () => {
+    const store = fakeStore();
+    const audited: AuditRecord[] = [];
+    await store.create({ id: 'ms', name: 'DISA', type: 'microsoft-sql', kind: 'database', config: { host: 'LABSRV', password: 'stored-secret' } }, 'key');
+    const seen: Array<[string, Record<string, string>]> = [];
+    const app = diagApp(store, async (type, config) => {
+      seen.push([type, config]);
+      return { ok: false, steps: [
+        { id: 'config', status: 'pass', detail: 'LABSRV:1433' },
+        { id: 'login', status: 'fail', hint: 'loginFailed', detail: 'driver said stored-secret was wrong' },
+      ] };
+    }, audited);
+    const res = await app.inject({ method: 'POST', url: '/api/connectors/ms/diagnose' });
+    expect(res.statusCode).toBe(200);
+    expect(seen).toEqual([['microsoft-sql', { host: 'LABSRV', password: 'stored-secret' }]]);
+    expect(res.body).not.toContain('stored-secret');
+    expect(res.json().steps[1]).toMatchObject({ id: 'login', status: 'fail', hint: 'loginFailed' });
+    expect(audited).toEqual([expect.objectContaining({ action: 'connector.diagnose', entityId: 'ms', metadata: { ok: false, failedStep: 'login' } })]);
+    expect(JSON.stringify(audited)).not.toContain('driver said');
+  });
+});
+
