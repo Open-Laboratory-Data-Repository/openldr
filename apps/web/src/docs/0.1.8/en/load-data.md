@@ -36,8 +36,9 @@ secret:
 To use it:
 
 1. In the app, open **Workflows** and open **Ingest**.
-2. On its **Webhook** trigger, **copy the secret**. The trigger has a fixed URL path (`ingest`)
-   and a per-install secret generated at seed time.
+2. Open its **Webhook** trigger. A saved secret cannot be read back, so select **Replace secret**,
+   copy the new secret, then save the workflow. Ingest is a system workflow, so confirm with
+   **Save anyway**. The trigger has a fixed URL path (`ingest`).
 3. Send the payload from your external system:
 
 ```bash

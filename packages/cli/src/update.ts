@@ -77,7 +77,7 @@ export function renderUpdateCheck(state: UpdateState, opts: { json: boolean }): 
         '',
         `${verdict.latest} is available. Schedule downtime before upgrading.`,
         'Pause senders, verify backups, and follow the planned upgrade procedure:',
-        'https://github.com/Open-Laboratory-Data-Repository/openldr/blob/main/apps/web/src/docs/0.1.0/upgrading.md',
+        'https://github.com/Open-Laboratory-Data-Repository/openldr/blob/main/apps/web/src/docs/0.1.8/en/upgrading.md',
       );
       if (verdict.notesUrl) lines.push('', `release notes: ${verdict.notesUrl}`);
       return { text: lines.join('\n'), code };

@@ -20,7 +20,9 @@ const DOC_PAGES = [
   'apps/studio/src/docs/0.1.8/en/environment.md',
   'apps/studio/src/docs/0.1.8/fr/environment.md',
   'apps/studio/src/docs/0.1.8/pt/environment.md',
-  'apps/web/src/docs/0.1.8/environment.md',
+  'apps/web/src/docs/0.1.8/en/environment.md',
+  'apps/web/src/docs/0.1.8/fr/environment.md',
+  'apps/web/src/docs/0.1.8/pt/environment.md',
   'docs/CONFIGURATION.md',
 ];
 

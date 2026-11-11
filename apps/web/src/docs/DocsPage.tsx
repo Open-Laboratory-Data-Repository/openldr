@@ -14,12 +14,12 @@ import {
   DEFAULT_DOC_VERSION,
   DOC_LOCALES,
   NAV,
-  TITLES,
-  docBody,
+  docPage,
+  isDocSlug,
+  pageTitle,
   resolveMedia,
   type DocLocale,
 } from './content';
-import { selectLanguage } from './language';
 import { extractToc, headingIdMaker, wantsToc, type TocEntry } from './toc';
 
 function textContent(children: ReactNode): string {
@@ -51,17 +51,11 @@ function rememberLocale(locale: DocLocale): void {
   }
 }
 
-/** Notes shown above a page that is not fully in the reader's language, in that language. */
-const NOTES: Record<DocLocale, { englishOnly: string; partlyEnglish: string }> = {
-  en: { englishOnly: '', partlyEnglish: '' },
-  fr: {
-    englishOnly: "Cette page n'existe qu'en anglais pour le moment.",
-    partlyEnglish: "Certaines parties de cette page ne sont pas encore traduites et s'affichent en anglais.",
-  },
-  pt: {
-    englishOnly: 'Esta página ainda só existe em inglês.',
-    partlyEnglish: 'Algumas partes desta página ainda não estão traduzidas e aparecem em inglês.',
-  },
+/** Shown above a page that has no file in the reader's language, in that language. */
+const ENGLISH_ONLY: Record<DocLocale, string> = {
+  en: '',
+  fr: "Cette page n'existe qu'en anglais pour le moment.",
+  pt: 'Esta página ainda só existe em inglês.',
 };
 
 function scrollToHeading(id: string): void {
@@ -197,7 +191,7 @@ function markdownComponents(): Components {
         // A link to a page only the in-app docs have reads as plain text instead of landing on
         // the wrong page.
         const docsSlug = href.match(/^\/docs\/([^/#?]+)/)?.[1];
-        if (docsSlug && !TITLES[docsSlug]) return <span>{children}</span>;
+        if (docsSlug && !isDocSlug(docsSlug)) return <span>{children}</span>;
         return <Link to={href}>{children}</Link>;
       }
       return (
@@ -209,7 +203,7 @@ function markdownComponents(): Components {
   };
 }
 
-function NavLink({ slug, active, nested }: { slug: string; active: string; nested?: boolean }) {
+function NavLink({ slug, title, active, nested }: { slug: string; title: string; active: string; nested?: boolean }) {
   const isActive = slug === active;
   return (
     <Link
@@ -223,7 +217,7 @@ function NavLink({ slug, active, nested }: { slug: string; active: string; neste
           : 'text-muted-foreground hover:bg-accent hover:text-foreground',
       ].join(' ')}
     >
-      {TITLES[slug]}
+      {title}
     </Link>
   );
 }
@@ -256,15 +250,11 @@ export function DocsPage() {
   const { page } = useParams();
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
   const [locale, setLocale] = useState<DocLocale>(initialLocale);
-  const key = page && TITLES[page] ? page : 'getting-started';
-  // The site's own pages hold all three languages; keep only the reader's.
-  const own = docBody(key, version);
-  const view = useMemo(() => (own == null ? null : selectLanguage(own, locale)), [own, locale]);
-  const body = view?.markdown ?? null;
-  const note = locale === 'en'
-    ? ''
-    : view && !view.translated ? NOTES[locale].englishOnly : view?.partlyEnglish ? NOTES[locale].partlyEnglish : '';
-  const title = TITLES[key];
+  const key = page && isDocSlug(page) ? page : 'getting-started';
+  const doc = docPage(key, version, locale);
+  const body = doc?.body ?? null;
+  const note = doc && doc.localeUsed !== locale ? ENGLISH_ONLY[locale] : '';
+  const title = pageTitle(key, version, locale);
   const changeLocale = (value: string): void => {
     setLocale(value as DocLocale);
     rememberLocale(value as DocLocale);
@@ -326,9 +316,9 @@ export function DocsPage() {
         <nav aria-label="Public documentation" className="mt-4 space-y-1 border-t border-border pt-4">
           {NAV.map((item) => (
             <div key={item.slug} className="space-y-1">
-              <NavLink slug={item.slug} active={key} />
+              <NavLink slug={item.slug} title={pageTitle(item.slug, version, locale)} active={key} />
               {item.children?.map((child) => (
-                <NavLink key={child} slug={child} active={key} nested />
+                <NavLink key={child} slug={child} title={pageTitle(child, version, locale)} active={key} nested />
               ))}
             </div>
           ))}

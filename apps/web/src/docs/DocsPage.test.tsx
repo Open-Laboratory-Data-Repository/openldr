@@ -44,6 +44,17 @@ describe('DocsPage', () => {
     }
   });
 
+  it('translates the sidebar and the title with the page', () => {
+    window.localStorage.setItem('openldr.docs.lang', 'fr');
+    renderDocs('/docs/upgrading');
+    const nav = screen.getByRole('navigation', { name: /public documentation/i });
+    expect(within(nav).getByRole('link', { name: 'Mises à niveau planifiées' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: "Fournisseurs d'authentification" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Mises à niveau planifiées' })).toBeInTheDocument();
+    expect(screen.queryByText(/pas encore traduites|qu'en anglais/)).toBeNull();
+    window.localStorage.removeItem('openldr.docs.lang');
+  });
+
   it('offers the language picker on every page', () => {
     renderDocs('/docs/install');
     expect(screen.getByRole('combobox', { name: 'Documentation language' })).toBeInTheDocument();
