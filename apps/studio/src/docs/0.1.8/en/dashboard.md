@@ -170,7 +170,7 @@ To change a saved widget, enter edit mode, open the widget's own dots menu, and 
 | Table | The rows themselves | None |
 | Traffic Light | Good, warning or bad | Value column, green from, amber from, suffix |
 
-**Breakdown** adds a `series` column, such as one per priority. Today only **Table** shows it. Line, bar and area charts draw a single series and ignore it.
+**Breakdown** adds a `series` column, such as one per priority. Bar, row, line and area charts draw one series per value, in their own colors, with a legend. A pie or funnel adds the values up, so it shows one total per label. **Table** shows the `series` column as it is.
 
 ## Example 3: orders per week
 
@@ -366,7 +366,7 @@ PostgreSQL, MySQL, MariaDB and SQL Server all stop the database work at the time
 - **Edit is missing from the menu.** Your role lacks **Edit dashboards**.
 - **The SQL cannot be edited, or saving says `raw SQL widgets are disabled`.** Turn on **Dashboard raw SQL**. See [Turn on SQL widgets](#turn-on-sql-widgets).
 - **A widget ignores the filter bar.** It is not bound to that filter. For a Builder widget, pick a field in its **Dashboard filters** block. A SQL widget follows a filter only when its SQL uses the tokens and its variables are bound in **Filters**.
-- **A Breakdown makes no difference to my chart.** Only **Table** shows a breakdown today.
+- **A Breakdown makes no difference to my pie.** A pie or funnel adds the Breakdown values up. Use a bar chart to see them side by side.
 - **A widget shows an error about time or rows.** It hit the timeout or the row cap. See [Limits and settings](#limits-and-settings).
 - **A new widget is not on screen.** New widgets go to the bottom of the grid. Scroll down.
 

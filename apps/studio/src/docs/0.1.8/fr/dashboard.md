@@ -172,7 +172,7 @@ Pour modifier un widget enregistré, passez en mode modification, ouvrez le menu
 | Table | Les lignes elles-mêmes | Aucune |
 | Traffic Light | Bon, à surveiller ou mauvais | Colonne de valeur, vert à partir de, orange à partir de, suffixe |
 
-**Breakdown** ajoute une colonne `series`, par exemple une par priorité. Aujourd'hui, seul **Table** l'affiche. Les graphiques en ligne, en barres et en aires dessinent une seule série et l'ignorent.
+**Breakdown** ajoute une colonne `series`, par exemple une par priorité. Les graphiques en barres, en lignes horizontales, en ligne et en aires dessinent une série par valeur, chacune de sa couleur, avec une légende. Un camembert ou un entonnoir additionne les valeurs et montre un total par libellé. **Table** affiche la colonne `series` telle quelle.
 
 ## Exemple 3 : demandes par semaine
 
@@ -368,7 +368,7 @@ PostgreSQL, MySQL, MariaDB et SQL Server arrêtent tous le travail de la base au
 - **Edit n'apparaît pas dans le menu.** Votre rôle n'a pas **Edit dashboards**.
 - **Le SQL n'est pas modifiable, ou l'enregistrement affiche `raw SQL widgets are disabled`.** Activez **SQL brut pour les tableaux de bord**. Voir [Activer les widgets SQL](#activer-les-widgets-sql).
 - **Un widget ignore la barre de filtres.** Il n'est pas relié à ce filtre. Pour un widget du Builder, choisissez un champ dans son bloc **Dashboard filters**. Un widget SQL ne suit un filtre que si son SQL utilise les jetons et si ses variables sont reliées dans **Filters**.
-- **Breakdown ne change rien à mon graphique.** Seul **Table** affiche une répartition aujourd'hui.
+- **Breakdown ne change rien à mon camembert.** Un camembert ou un entonnoir additionne les valeurs de Breakdown. Utilisez un graphique en barres pour les voir côte à côte.
 - **Un widget affiche une erreur de délai ou de lignes.** Il a atteint le délai ou le plafond de lignes. Voir [Limites et paramètres](#limites-et-parametres).
 - **Un nouveau widget n'est pas visible.** Les nouveaux widgets vont en bas de la grille. Faites défiler vers le bas.
 

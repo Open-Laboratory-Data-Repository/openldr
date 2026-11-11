@@ -172,7 +172,7 @@ Para alterar um widget guardado, entre no modo de edição, abra o menu de três
 | Table | As próprias linhas | Nenhuma |
 | Traffic Light | Bom, atenção ou mau | Coluna de valor, verde a partir de, âmbar a partir de, sufixo |
 
-**Breakdown** junta uma coluna `series`, por exemplo uma por prioridade. Hoje só **Table** a mostra. Os gráficos de linhas, barras e áreas desenham uma só série e ignoram-na.
+**Breakdown** junta uma coluna `series`, por exemplo uma por prioridade. Os gráficos de barras, barras horizontais, linhas e áreas desenham uma série por valor, cada uma com a sua cor e uma legenda. Um gráfico circular ou um funil soma os valores e mostra um total por rótulo. **Table** mostra a coluna `series` tal como vem.
 
 ## Exemplo 3: pedidos por semana
 
@@ -368,7 +368,7 @@ O PostgreSQL, o MySQL, o MariaDB e o SQL Server param todos o trabalho da base n
 - **Edit não aparece no menu.** A sua função não tem **Edit dashboards**.
 - **O SQL não se pode editar, ou guardar mostra `raw SQL widgets are disabled`.** Ative **SQL bruto no painel**. Veja [Ativar os widgets SQL](#ativar-os-widgets-sql).
 - **Um widget ignora a barra de filtros.** Não está ligado a esse filtro. Num widget do Builder, escolha um campo no bloco **Dashboard filters**. Um widget SQL só segue um filtro quando o seu SQL usa os tokens e as suas variáveis estão ligadas em **Filters**.
-- **Breakdown não muda nada no meu gráfico.** Hoje só **Table** mostra uma divisão.
+- **Breakdown não muda nada no meu gráfico circular.** Um gráfico circular ou um funil soma os valores de Breakdown. Use um gráfico de barras para os ver lado a lado.
 - **Um widget mostra um erro de tempo ou de linhas.** Atingiu o tempo limite ou o limite de linhas. Veja [Limites e definições](#limites-e-definicoes).
 - **Um widget novo não está visível.** Os widgets novos vão para o fundo da grelha. Desça a página.
 
