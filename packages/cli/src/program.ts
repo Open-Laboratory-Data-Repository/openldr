@@ -3,6 +3,7 @@ import { loadConfig } from '@openldr/config';
 import { createAppContext } from '@openldr/bootstrap';
 import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
+import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
 import { runAuthRebindIssuer } from './auth';
@@ -62,6 +63,9 @@ import { setActorOverride } from './cli-actor';
 //    defaults (e.g. `facilities import`'s `--apply` default) without any shared state between
 //    tests and without triggering a real parse of the test runner's own argv.
 export function buildProgram(): Command {
+  // Results go to stdout and `--json` output is piped into other tools, so logs go to stderr.
+  // Set before any command builds a context, since each context makes its logger at that point.
+  sendLogsToStderr();
   const program = new Command();
   program.name('openldr').description('OpenLDR CE operator CLI');
   program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');

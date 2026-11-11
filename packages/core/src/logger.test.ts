@@ -54,3 +54,16 @@ describe('logger redaction', () => {
     expect(JSON.stringify(lines())).not.toContain('postgres://u:p@h/db');
   });
 });
+
+describe('log destination', () => {
+  it('logs to stdout by default, and to stderr once the CLI asks', async () => {
+    const { createLogger, sendLogsToStderr, logDestinationFd } = await import('./logger');
+    const { symbols } = await import('pino');
+    const fdOf = (l: unknown) => (l as Record<symbol, { fd?: number }>)[symbols.streamSym]?.fd;
+    expect(logDestinationFd()).toBe(1);
+    expect(fdOf(createLogger())).not.toBe(2);
+    sendLogsToStderr();
+    expect(logDestinationFd()).toBe(2);
+    expect(fdOf(createLogger())).toBe(2);
+  });
+});
