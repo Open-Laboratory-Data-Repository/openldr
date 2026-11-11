@@ -95,9 +95,9 @@ See how long each test takes from specimen received to report issued.
 2. Open **Actions**, then **Parameters**. Set **Date range** to 1 September to 31 October 2026.
 3. Select **Run**.
 
-**Expected result:** **Reports** reads 39 and **Avg hours** reads 358.6. Blood glucose averages 137.7 hours, HIV viral load 288.0, Malaria rapid test 349.8, Full blood count 392.5 and Creatinine 615.0.
+**Expected result:** **Reports** reads 39 and **Avg hours** reads 19.0. Creatinine averages 15.0 hours, Malaria rapid test 17.1, Full blood count 20.5, Blood glucose 20.7 and HIV viral load 21.9.
 
-Those hours are far longer than the hours each sample really took. This report measures from the patient's **earliest** received specimen to each report. The sample has patients with several orders over two months, so a later report is timed from the first specimen. Keep this in mind for patients with repeat tests, such as HIV viral load monitoring.
+Each report is timed from its own specimen: from the time that specimen was received to the time the report was issued. A report with no specimen linked to it is left out.
 
 ## Example 3: schedule a report
 
@@ -193,7 +193,7 @@ A lab system often splits one microbiology result into several orders under one 
 - **A microbiology report shows an organism but no susceptibilities.** Usually a real result. The culture grew something and no sensitivity testing was done.
 - **Every microbiology report has an empty susceptibility table.** Check **Terminology** for the AST interpretation value set first. The report picks susceptibilities from that value set. If it never loaded on this install, every table is empty, which looks like cultures with no sensitivity testing. One empty table is a result. All of them is a setup problem.
 - **An antibiogram shows an `(unmapped)` column.** These are susceptibility results the report could not tie to one antibiotic, often a panel summary row, one result reporting two drugs, or a microscopy finding recorded as S, I or R. They are shown so the count is visible. A large number is a data-quality problem to raise with whoever sets up the analyser.
-- **Turnaround hours look far too long.** See [Example 2](#example-2-specimen-turnaround-time). The report times each report from the patient's first specimen.
+- **A report is missing from Specimen Turnaround Time.** It has no specimen linked to it, or it was issued before its specimen was received. Neither gives a turnaround.
 - **Permission denied.** Your role can view reports but not manage schedules, edit templates, or unpublish and delete.
 - **A previous run failed.** Open **Run History**, read the error, change the filters, and run again.
 - **A report you expect is missing.** It may be unpublished, or not made yet. See [Report Designer](/docs/report-designer).

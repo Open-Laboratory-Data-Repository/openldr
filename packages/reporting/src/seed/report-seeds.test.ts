@@ -889,6 +889,18 @@ describe('SEED_QUERIES — AMR date filtering is NULL-safe in every dialect', ()
   });
 });
 
+describe('SEED_QUERIES — q-turnaround-time times each report from its own specimen', () => {
+  // A patient with repeat tests used to be timed from their EARLIEST specimen, so a later report
+  // showed weeks of turnaround. diagnostic_reports.specimen_id (external migration 010) names the
+  // report's own specimen.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('joins the report to its own specimen in %s', (d) => {
+    const sql = SEED_QUERIES.find((x) => x.id === 'q-turnaround-time')!.sql[d]!;
+    expect(sql).toMatch(/join received r on r\.id = dr\.specimen_id/);
+    expect(sql).not.toMatch(/r\.patient_id = dr\.patient_id/);
+    expect(sql).not.toMatch(/min\(received_time\)/);
+  });
+});
+
 describe('SEED_QUERIES — q-turnaround-time excludes partial-precision timestamps', () => {
   // Regression: `Specimen.receivedTime` is a FHIR `dateTime`, and CE's DATETIME_RE accepts
   // year ('2026') and year-month ('2026-07') precision. Those land verbatim in the TEXT
@@ -932,10 +944,8 @@ describe('SEED_QUERIES — q-turnaround-time excludes partial-precision timestam
     }
   });
 
-  it('keeps the guard INSIDE the received CTE, before min()', () => {
-    // min() here is a LEXICAL text min, so '2026-07' sorts BEFORE that patient's real
-    // full-precision receipts (shorter prefix wins) and would poison every report paired
-    // to that patient. Filtering after the CTE would not prevent that.
+  it('keeps the guard INSIDE the received CTE', () => {
+    // The CTE feeds the cast. A guard placed later would let a partial receipt reach it.
     // The mutation this kills: hoisting the guard out into the `paired` WHERE clause.
     for (const [dialect, sql] of Object.entries(q().sql)) {
       const cte = sql.slice(sql.indexOf('received as ('), sql.indexOf('paired as ('));

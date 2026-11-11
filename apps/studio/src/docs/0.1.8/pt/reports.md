@@ -97,9 +97,9 @@ Veja quanto tempo cada exame leva, da amostra recebida ao relatório emitido.
 2. Abra o menu de três pontos e depois **Parâmetros**. Defina **Date range** de 1 de setembro a 31 de outubro de 2026.
 3. Selecione **Executar**.
 
-**Resultado esperado:** **Reports** mostra 39 e **Avg hours** mostra 358.6. Blood glucose tem em média 137.7 horas, HIV viral load 288.0, Malaria rapid test 349.8, Full blood count 392.5 e Creatinine 615.0.
+**Resultado esperado:** **Reports** mostra 39 e **Avg hours** mostra 19.0. Creatinine tem em média 15.0 horas, Malaria rapid test 17.1, Full blood count 20.5, Blood glucose 20.7 e HIV viral load 21.9.
 
-Estas horas são muito mais longas do que o tempo real de cada amostra. Este relatório mede a partir da **primeira** amostra recebida do paciente até cada relatório. O exemplo tem pacientes com vários pedidos ao longo de dois meses, por isso um relatório mais tardio é contado desde a primeira amostra. Tenha isto em conta nos pacientes com exames repetidos, como a carga viral do VIH.
+Cada relatório é contado desde a sua própria amostra: da receção dessa amostra até à emissão do relatório. Um relatório sem amostra ligada fica de fora.
 
 ## Exemplo 3: agendar um relatório
 
@@ -195,7 +195,7 @@ Um sistema de laboratório divide muitas vezes um resultado de microbiologia em 
 - **Um relatório de microbiologia mostra um organismo sem sensibilidades.** Normalmente é um resultado verdadeiro. A cultura cresceu e não se fez antibiograma.
 - **Todos os relatórios de microbiologia têm a tabela de sensibilidades vazia.** Veja primeiro em **Terminologia** o conjunto de valores de interpretação do antibiograma. O relatório escolhe as sensibilidades desse conjunto. Se nunca foi carregado nesta instalação, todas as tabelas ficam vazias, como culturas sem antibiograma. Uma tabela vazia é um resultado. Todas vazias é um problema de instalação.
 - **Um antibiograma mostra uma coluna `(unmapped)`.** São resultados que o relatório não conseguiu ligar a um antibiótico, muitas vezes uma linha de resumo, um resultado para dois fármacos, ou um resultado de microscopia registado como S, I ou R. Aparecem para que a contagem se veja. Um número grande é um problema de qualidade dos dados a levar a quem configura o analisador.
-- **As horas de resposta parecem demasiado longas.** Veja o [Exemplo 2](#exemplo-2-tempo-de-resposta-das-amostras). O relatório conta cada relatório desde a primeira amostra do paciente.
+- **Falta um relatório em Specimen Turnaround Time.** Não tem amostra ligada, ou foi emitido antes de a amostra ser recebida. Nenhum dos casos dá um tempo de resposta.
 - **Permissão negada.** A sua função pode ver relatórios, mas não gerir agendamentos, editar modelos, nem despublicar ou excluir.
 - **Uma execução anterior falhou.** Abra **Histórico**, leia o erro, mude os filtros e execute de novo.
 - **Falta um relatório que esperava.** Pode estar despublicado ou ainda não ter sido criado. Veja o [Designer de relatórios](/docs/report-designer).

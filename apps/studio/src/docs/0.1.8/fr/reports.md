@@ -97,9 +97,9 @@ Voyez combien de temps chaque examen prend, de l'échantillon reçu au compte re
 2. Ouvrez le menu à trois points, puis **Paramètres**. Réglez **Date range** du 1er septembre au 31 octobre 2026.
 3. Sélectionnez **Exécuter**.
 
-**Résultat attendu :** **Reports** affiche 39 et **Avg hours** affiche 358.6. Blood glucose fait en moyenne 137.7 heures, HIV viral load 288.0, Malaria rapid test 349.8, Full blood count 392.5 et Creatinine 615.0.
+**Résultat attendu :** **Reports** affiche 39 et **Avg hours** affiche 19.0. Creatinine fait en moyenne 15.0 heures, Malaria rapid test 17.1, Full blood count 20.5, Blood glucose 20.7 et HIV viral load 21.9.
 
-Ces heures sont bien plus longues que le temps réel de chaque échantillon. Ce rapport mesure à partir du **premier** échantillon reçu du patient jusqu'à chaque compte rendu. L'exemple contient des patients avec plusieurs demandes sur deux mois, donc un compte rendu tardif est compté depuis le premier échantillon. Gardez-le en tête pour les patients suivis par des examens répétés, comme la charge virale VIH.
+Chaque compte rendu est compté depuis son propre échantillon : de la réception de cet échantillon à l'émission du compte rendu. Un compte rendu sans échantillon lié est laissé de côté.
 
 ## Exemple 3 : planifier un rapport
 
@@ -195,7 +195,7 @@ Un système de laboratoire découpe souvent un résultat de microbiologie en plu
 - **Un rapport de microbiologie montre un germe sans sensibilités.** C'est en général un vrai résultat. La culture a poussé et aucun antibiogramme n'a été fait.
 - **Chaque rapport de microbiologie a un tableau de sensibilités vide.** Vérifiez d'abord dans **Terminologie** le jeu de valeurs d'interprétation de l'antibiogramme. Le rapport choisit les sensibilités dans ce jeu. S'il n'a jamais été chargé sur cette installation, chaque tableau est vide, comme des cultures sans antibiogramme. Un tableau vide est un résultat. Tous vides, c'est un problème d'installation.
 - **Un antibiogramme montre une colonne `(unmapped)`.** Ce sont des résultats que le rapport n'a pas pu rattacher à un antibiotique, souvent une ligne de synthèse, un résultat pour deux molécules, ou un résultat de microscopie noté S, I ou R. Ils restent visibles pour qu'on puisse les compter. Un grand nombre est un problème de qualité des données à signaler à la personne qui configure l'automate.
-- **Les heures de délai paraissent beaucoup trop longues.** Voir [Exemple 2](#exemple-2-delai-de-traitement-des-echantillons). Le rapport compte chaque compte rendu depuis le premier échantillon du patient.
+- **Un compte rendu manque dans Specimen Turnaround Time.** Il n'a pas d'échantillon lié, ou il a été émis avant la réception de son échantillon. Aucun des deux cas ne donne de délai.
 - **Accès refusé.** Votre rôle peut voir les rapports, mais pas gérer les planifications, modifier les modèles, ni dépublier ou supprimer.
 - **Une exécution précédente a échoué.** Ouvrez **Historique**, lisez l'erreur, changez les filtres et relancez.
 - **Un rapport attendu manque.** Il est peut-être dépublié, ou pas encore créé. Voir le [Concepteur de rapports](/docs/report-designer).

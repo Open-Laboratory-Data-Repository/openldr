@@ -453,11 +453,12 @@ order by 1, 2`,
     id: 'q-turnaround-time',
     name: 'Specimen turnaround time',
     connectorId: '',
-    // Mirrors packages/reporting/src/reports/turnaround-time.ts: pair each diagnostic_report with
-    // its patient's EARLIEST specimen receipt (no direct report->specimen FK in the flat schema) —
-    // the `received` CTE is intentionally NOT date/facility filtered, matching the catalog, which
-    // builds its `earliest` map from ALL specimens up front and only filters the REPORTS side by
-    // date/facility while iterating. `hours` = round((issued - received) / 1h), matching
+    // Pairs each diagnostic_report with its OWN specimen, through diagnostic_reports.specimen_id
+    // (external migration 010). It used to pair with the patient's EARLIEST specimen, copying the
+    // old catalog report, so a patient with repeat tests showed weeks of turnaround. Measured on the
+    // dev warehouse on 2026-11-11: 557151 of 557151 reports carry a specimen_id that exists. A
+    // report with no specimen link has no turnaround and is left out. The `received` CTE is not
+    // date/facility filtered; only the REPORTS side is. `hours` = round((issued - received) / 1h), matching
     // hoursBetween's `Math.round((b-a)/3_600_000)`; rows with no specimen match or issued <
     // received are excluded (mirrors `b < a -> null`). Grouped by test (code_text, coalesced
     // '(unknown)'): count, avgHours = round(avg(already-rounded whole-hour values), 1) (mirrors
@@ -472,10 +473,8 @@ order by 1, 2`,
     //  - R3c cutover: reads the v2 `specimens`/`diagnostic_reports`/`patients` tables (originally
     //    `v2_specimens`/`v2_diagnostic_reports`/`v2_patients`, renamed to canonical in R3e —
     //    replacing the old thin `specimens`/`diagnostic_reports`/`patients` tables they superseded).
-    //    v2 stores the bare FHIR id directly
-    //    (`patient_id`) rather than a `Patient/`-prefixed reference string (`subject_ref`), so the
-    //    `received` CTE keys on `patient_id` and the report<->specimen join compares `patient_id`
-    //    to `patient_id`.
+    //    v2 stores the bare FHIR id directly, so the report<->specimen join compares
+    //    `specimen_id` to the specimen's `id`.
     //  - PRECISION GUARD (both sides): `specimens.received_time` and `diagnostic_reports.issued`
     //    are TEXT columns holding whatever FHIR supplied, verbatim. `Specimen.receivedTime` is a
     //    FHIR `dateTime`, and CE's DATETIME_RE (packages/fhir/src/datatypes/primitives.ts) accepts
@@ -484,9 +483,7 @@ order by 1, 2`,
     //    report with a 500 rather than skipping the row. A month-precision receipt also cannot
     //    yield an hours-level turnaround, so these rows are EXCLUDED, not coerced to midnight —
     //    coercing would silently invent up to a month of turnaround. The guard sits INSIDE the
-    //    `received` CTE, before `min()`, because `min()` here is a lexical TEXT min: a single
-    //    '2026-07' row would otherwise win over that patient's real full-precision receipts
-    //    (shorter prefix sorts first) and poison every report paired to that patient.
+    //    `received` CTE, so a partial receipt never reaches the cast.
     //    `issued` is typed FHIR `instant` (INSTANT_RE, always full precision) so it should never
     //    be partial — it is guarded symmetrically as defence in depth, since the cast is equally
     //    fatal there and nothing in the SQL layer re-checks what a writer put in the column.
@@ -513,18 +510,16 @@ order by 1, 2`,
     ],
     sql: {
       postgres: `with received as (
-  select patient_id, min(received_time) as received_time
+  select id, received_time
   from specimens
-  where patient_id is not null
-    and received_time ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
-  group by patient_id
+  where received_time ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
 ),
 paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     round(extract(epoch from (dr.issued::timestamptz - r.received_time::timestamptz)) / 3600.0)::int as hours
   from diagnostic_reports dr
-  join received r on r.patient_id = dr.patient_id
+  join received r on r.id = dr.specimen_id
   where dr.issued ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
@@ -550,18 +545,16 @@ order by "avgHours" desc, test asc`,
       // average; flagged for the parity harness as the most likely subtle divergence in this
       // query. string || -> +.
       mssql: `with received as (
-  select patient_id, min(received_time) as received_time
+  select id, received_time
   from specimens
-  where patient_id is not null
-    and received_time like '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]%'
-  group by patient_id
+  where received_time like '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]%'
 ),
 paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     cast(round(datediff(second, cast(r.received_time as datetime2), cast(dr.issued as datetime2)) / 3600.0, 0) as int) as hours
   from diagnostic_reports dr
-  join received r on r.patient_id = dr.patient_id
+  join received r on r.id = dr.specimen_id
   where dr.issued like '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]%'
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
@@ -586,18 +579,16 @@ order by "avgHours" desc, test asc`,
       // cast(...as signed); string || -> concat(); backtick aliases so ORDER BY key resolves.
       // Flagged for the parity harness (same subtle avg/rounding divergence risk as mssql).
       mysql: `with received as (
-  select patient_id, min(received_time) as received_time
+  select id, received_time
   from specimens
-  where patient_id is not null
-    and received_time regexp '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
-  group by patient_id
+  where received_time regexp '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
 ),
 paired as (
   select
     coalesce(dr.code_text, '(unknown)') as test,
     cast(round(timestampdiff(second, str_to_date(substr(r.received_time, 1, 19), '%Y-%m-%dT%H:%i:%s'), str_to_date(substr(dr.issued, 1, 19), '%Y-%m-%dT%H:%i:%s')) / 3600.0, 0) as signed) as hours
   from diagnostic_reports dr
-  join received r on r.patient_id = dr.patient_id
+  join received r on r.id = dr.specimen_id
   where dr.issued regexp '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
