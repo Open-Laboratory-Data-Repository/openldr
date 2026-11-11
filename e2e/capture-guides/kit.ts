@@ -8,7 +8,7 @@
 // Playwright's recordVideo (soft VP8). ffmpeg turns the frames into H.264, which plays in every
 // browser the docs run in, phones included. Set FFMPEG_PATH when ffmpeg is not on PATH.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +18,20 @@ import { addCallouts, removeCallouts, type Callout } from '../capture-docs/captu
 
 /** Same folder the existing doc screenshots use, so both docs viewers already find them. */
 export const OUT = fileURLToPath(new URL('../../apps/studio/src/docs/0.1.0/screenshots/', import.meta.url));
+
+/** Pictures the older manifest-driven capture owns (screenshot-manifest.json). The same folder holds
+ *  both kinds, so a guide shot with one of these names would silently replace a picture another
+ *  page shows. That happened once, to forms-list.png. */
+const STATIC_NAMES: ReadonlySet<string> = new Set(
+  (JSON.parse(readFileSync(join(OUT, '..', 'screenshot-manifest.json'), 'utf8')) as { shots: Array<{ name: string }> })
+    .shots.map((s) => s.name),
+);
+
+function refuseStaticName(name: string): void {
+  if (STATIC_NAMES.has(`${name}.png`)) {
+    throw new Error(`${name}.png belongs to screenshot-manifest.json. Give this guide picture another name.`);
+  }
+}
 mkdirSync(OUT, { recursive: true });
 
 export const VIEWPORT = { width: 1440, height: 900 };
@@ -138,6 +152,7 @@ export interface ShotOptions {
 
 /** Save a PNG of the page, or of one region of it. */
 export async function shot(page: Page, name: string, options: ShotOptions = {}): Promise<void> {
+  refuseStaticName(name);
   // Park the mouse on the top bar, so no chart tooltip or hover colour ends up in the picture.
   // With `hover`, rest it on that element instead and wait for its tooltip.
   const size = page.viewportSize() ?? VIEWPORT;
@@ -204,6 +219,7 @@ interface Frame { data: string; ts: number }
  * Keep clips short: one task, 5 to 20 seconds.
  */
 export async function clip(page: Page, name: string, steps: () => Promise<void>): Promise<void> {
+  refuseStaticName(name);
   const cdp: CDPSession = await page.context().newCDPSession(page);
   const frames: Frame[] = [];
   cdp.on('Page.screencastFrame', (frame) => {

@@ -215,10 +215,11 @@ export const DOC_GUIDES: DocGuide[] = [
     summary: 'Browse code systems and import terms, ValueSets, and ontology indexes.',
     audience: ['lab-managers', 'administrators'],
     requiredRoles: [],
-    estimatedMinutes: 15,
+    estimatedMinutes: 10,
     difficulty: 'intermediate',
     relatedSlugs: ['forms', 'audit'],
     screenshotNames: ['terminology-overview.png', 'terminology-import.png'],
+    capturedNames: ['terminology-tour.png', 'terminology-browse.mp4', 'terminology-add-term.mp4', 'terminology-reason-in-order.png', 'terminology-value-sets.png'],
     status: 'published',
   },
   {
