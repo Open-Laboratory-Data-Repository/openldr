@@ -379,3 +379,80 @@ describe('connector diagnosis route', () => {
   });
 });
 
+describe('connector plugin access routes', () => {
+  type Call = { op: 'allow' | 'revoke'; pluginId: string; connectorId: string; actor: unknown };
+  function accessApp(over: { capabilities?: string[]; allowed?: Record<string, string[]>; calls?: Call[] } = {}) {
+    const store = fakeStore();
+    const allowed = over.allowed ?? { 'v1-import': [] };
+    const calls = over.calls ?? [];
+    const ctx = {
+      ...fakeCtx(),
+      imports: {
+        importers: async () => [
+          { id: 'v1-import', version: '0.1.0', connectorTypes: ['microsoft-sql'] },
+          { id: 'pg-import', version: '0.2.0', connectorTypes: ['postgres'] },
+        ],
+        allowed: async (pluginId: string) => allowed[pluginId] ?? [],
+        allow: async (pluginId: string, connectorId: string, actor: unknown) => {
+          calls.push({ op: 'allow', pluginId, connectorId, actor });
+          allowed[pluginId] = [...(allowed[pluginId] ?? []), connectorId];
+        },
+        revoke: async (pluginId: string, connectorId: string, actor: unknown) => {
+          calls.push({ op: 'revoke', pluginId, connectorId, actor });
+          allowed[pluginId] = (allowed[pluginId] ?? []).filter((c) => c !== connectorId);
+        },
+      },
+    } as unknown as AppContext;
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => { req.user = { id: 'u1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: over.capabilities ?? ['connectors.manage'] } as never; });
+    registerConnectorsRoutes(app, ctx, { connectors: store });
+    return { app, store, calls };
+  }
+  async function seed(store: ConnectorStore) {
+    await store.create({ id: 'ms', name: 'V1', type: 'microsoft-sql', kind: 'database', config: { host: 'db' } }, 'key');
+    await store.create({ id: 'sink', name: 'DHIS2', pluginId: 'dhis2-sink', kind: 'sink', config: {} }, 'key');
+  }
+
+  it('lists only the import plugins that read this connector type, with whether each is allowed', async () => {
+    const { app, store } = accessApp({ allowed: { 'v1-import': ['ms'] } });
+    await seed(store);
+    const res = await app.inject({ method: 'GET', url: '/api/connectors/ms/import-plugins' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([{ id: 'v1-import', version: '0.1.0', allowed: true }]);
+    // A sink connector has no type, so no plugin can import from it.
+    expect((await app.inject({ method: 'GET', url: '/api/connectors/sink/import-plugins' })).json()).toEqual([]);
+    expect((await app.inject({ method: 'GET', url: '/api/connectors/missing/import-plugins' })).statusCode).toBe(404);
+  });
+
+  it('allows and then revokes a plugin, naming the signed-in user as the actor', async () => {
+    const { app, store, calls } = accessApp();
+    await seed(store);
+    const on = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/v1-import', payload: { allowed: true } });
+    expect(on.statusCode).toBe(200);
+    expect(on.json()).toEqual([{ id: 'v1-import', version: '0.1.0', allowed: true }]);
+    const off = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/v1-import', payload: { allowed: false } });
+    expect(off.json()).toEqual([{ id: 'v1-import', version: '0.1.0', allowed: false }]);
+    expect(calls).toEqual([
+      { op: 'allow', pluginId: 'v1-import', connectorId: 'ms', actor: { type: 'user', id: 'u1', name: 'admin' } },
+      { op: 'revoke', pluginId: 'v1-import', connectorId: 'ms', actor: { type: 'user', id: 'u1', name: 'admin' } },
+    ]);
+  });
+
+  it('refuses a plugin that does not read this connector type, a bad body, and a caller without the capability', async () => {
+    const { app, store, calls } = accessApp();
+    await seed(store);
+    const wrongType = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/pg-import', payload: { allowed: true } });
+    expect(wrongType.statusCode).toBe(400);
+    const unknown = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/nope', payload: { allowed: true } });
+    expect(unknown.statusCode).toBe(400);
+    const badBody = await app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/v1-import', payload: { allowed: 'yes' } });
+    expect(badBody.statusCode).toBe(400);
+    expect((await app.inject({ method: 'PUT', url: '/api/connectors/missing/import-plugins/v1-import', payload: { allowed: true } })).statusCode).toBe(404);
+    expect(calls).toEqual([]);
+    const denied = accessApp({ capabilities: [] });
+    await seed(denied.store);
+    expect((await denied.app.inject({ method: 'GET', url: '/api/connectors/ms/import-plugins' })).statusCode).toBe(403);
+    expect((await denied.app.inject({ method: 'PUT', url: '/api/connectors/ms/import-plugins/v1-import', payload: { allowed: true } })).statusCode).toBe(403);
+    expect(denied.calls).toEqual([]);
+  });
+});

@@ -353,4 +353,14 @@ describe('import run: who may read what', () => {
     await expect(h.svc.resume('v1-import', 'missing', ADMIN)).rejects.toThrow(/not found/);
     await expect(h.svc.stop('v1-import', run.id, ADMIN)).rejects.toThrow(/not running/);
   });
+
+  it('lists the installed plugins that can import, and from which connector types', async () => {
+    const h = await harness(keysOf(1));
+    expect(await h.svc.importers()).toEqual([{ id: 'v1-import', version: '1.2.0', connectorTypes: ['microsoft-sql'] }]);
+    // A plugin without the capability, or with no import source, is not an importer.
+    h.setManifest(manifest({ capabilities: [] }));
+    expect(await h.svc.importers()).toEqual([]);
+    h.setManifest(manifest({ importSource: undefined }));
+    expect(await h.svc.importers()).toEqual([]);
+  });
 });

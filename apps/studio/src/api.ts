@@ -3282,6 +3282,15 @@ export interface DiagnoseResult { ok: boolean; steps: DiagnoseStep[] }
 export const diagnoseConnector = (id: string): Promise<DiagnoseResult> =>
   authFetch(`/api/connectors/${encodeURIComponent(id)}/diagnose`, { method: 'POST' }).then((r) => okJson<DiagnoseResult>(r, 'diagnose connector'));
 
+// Import plugins that can read a host connector, and whether an admin allowed each one.
+export interface ConnectorImportPlugin { id: string; version: string; allowed: boolean }
+export const listConnectorImportPlugins = (id: string): Promise<ConnectorImportPlugin[]> =>
+  authFetch(`/api/connectors/${encodeURIComponent(id)}/import-plugins`).then((r) => okJson<ConnectorImportPlugin[]>(r, 'list import plugins'));
+export const setConnectorImportPlugin = (id: string, pluginId: string, allowed: boolean): Promise<ConnectorImportPlugin[]> =>
+  authFetch(`/api/connectors/${encodeURIComponent(id)}/import-plugins/${encodeURIComponent(pluginId)}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ allowed }),
+  }).then((r) => okJson<ConnectorImportPlugin[]>(r, 'set plugin access'));
+
 /** Authenticated download of a produced workflow artifact (objectKey under workflow-artifacts/). */
 export async function downloadWorkflowArtifact(objectKey: string, fileName: string): Promise<void> {
   const path = objectKey.split('/').map(encodeURIComponent).join('/');

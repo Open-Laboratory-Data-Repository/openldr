@@ -101,6 +101,8 @@ export interface ImportStartInput {
 }
 
 export interface ImportService {
+  /** Installed, enabled plugins that can import, with the connector types each reads. */
+  importers(): Promise<Array<{ id: string; version: string; connectorTypes: string[] }>>;
   /** Let a plugin read one connector. Without this, start and checks refuse. */
   allow(pluginId: string, connectorId: string, actor: ImportActor): Promise<void>;
   revoke(pluginId: string, connectorId: string, actor: ImportActor): Promise<void>;
@@ -354,6 +356,20 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
   }
 
   return {
+    async importers() {
+      const out: Array<{ id: string; version: string; connectorTypes: string[] }> = [];
+      for (const row of await deps.plugins.list()) {
+        if (!row.enabled) continue;
+        try {
+          const plugin = await resolvePlugin(row.id);
+          out.push({ id: plugin.id, version: plugin.version, connectorTypes: [...plugin.source.connectorTypes] });
+        } catch {
+          // Not an importer: no import source, or no host:import capability.
+        }
+      }
+      return out;
+    },
+
     async allow(pluginId, connectorId, actor) {
       await resolvePlugin(pluginId);
       if (!(await deps.connectors.get(connectorId))) throw new Error(`connector ${connectorId} not found`);

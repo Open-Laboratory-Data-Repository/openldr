@@ -143,6 +143,8 @@ Saved, encrypted connections to external systems (databases, email, SFTP, plugin
 | `DELETE` | `/api/connectors/:id` | Delete a connector. |
 | `POST` | `/api/connectors/:id/test` | Test connectivity. |
 | `POST` | `/api/connectors/:id/diagnose` | Check a host connector step by step (settings, name, SQL Server Browser, port, login, version). Returns each step's status and a hint code. |
+| `GET` | `/api/connectors/:id/import-plugins` | List the installed import plugins that can read this connector's type, each with `allowed`. |
+| `PUT` | `/api/connectors/:id/import-plugins/:pluginId` | Allow or stop an import plugin reading this connector. Body `{ "allowed": true }`. Returns the updated list. |
 | `GET` | `/api/connectors/sink-plugins` | List installed sink plugins that can back a connector. |
 
 ## Marketplace

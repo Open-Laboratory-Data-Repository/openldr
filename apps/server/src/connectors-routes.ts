@@ -28,6 +28,8 @@ const updateInput = z.object({
   enabled: z.boolean().optional(),
 });
 
+const importAccessInput = z.object({ allowed: z.boolean() }).strict();
+
 /** Validate a connector baseUrl, IF PRESENT. Throws a clear error when it is unparseable,
  *  uses a non-http(s) scheme, or carries userinfo (credentials must not live in the URL).
  *  Private/loopback hosts and arbitrary ports are intentionally ALLOWED — on-prem/localhost
@@ -206,6 +208,45 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       metadata: { ok: result.ok, failedStep: steps.find((s) => s.status === 'fail')?.id ?? null },
     });
     return { ok: result.ok, steps };
+  });
+
+  // Which import plugins may read this connector. Only plugins whose import source names this
+  // connector's type are listed. Allowing is what lets a plugin's import run SELECTs here, so it
+  // sits behind connectors.manage. The import service writes the audit rows (import.allow / revoke).
+  async function importPluginsFor(connectorId: string, type: string | null | undefined): Promise<Array<{ id: string; version: string; allowed: boolean }>> {
+    if (!type) return [];
+    const out: Array<{ id: string; version: string; allowed: boolean }> = [];
+    for (const p of await ctx.imports.importers()) {
+      if (!p.connectorTypes.includes(type)) continue;
+      out.push({ id: p.id, version: p.version, allowed: (await ctx.imports.allowed(p.id)).includes(connectorId) });
+    }
+    return out;
+  }
+
+  app.get('/api/connectors/:id/import-plugins', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const connector = await connectors.get(id);
+    if (!connector) { reply.code(404); return { error: 'connector not found' }; }
+    return importPluginsFor(id, connector.type);
+  });
+
+  app.put('/api/connectors/:id/import-plugins/:pluginId', { preHandler: requireCapability('connectors.manage') }, async (req, reply) => {
+    const { id, pluginId } = req.params as { id: string; pluginId: string };
+    const parsed = importAccessInput.safeParse(req.body);
+    if (!parsed.success) { reply.code(400); return { error: 'invalid input' }; }
+    const connector = await connectors.get(id);
+    if (!connector) { reply.code(404); return { error: 'connector not found' }; }
+    const candidates = await importPluginsFor(id, connector.type);
+    if (!candidates.some((p) => p.id === pluginId)) { reply.code(400); return { error: 'this plugin cannot import from this connector' }; }
+    const actor = { type: 'user' as const, id: req.user?.id ?? null, name: req.user?.username ?? 'unknown' };
+    try {
+      if (parsed.data.allowed) await ctx.imports.allow(pluginId, id, actor);
+      else await ctx.imports.revoke(pluginId, id, actor);
+    } catch {
+      reply.code(400);
+      return { error: 'plugin access update failed' };
+    }
+    return importPluginsFor(id, connector.type);
   });
 
   // Live connection test: resolve → loadSink → health_check + pull_metadata (restricted to allowedHost).

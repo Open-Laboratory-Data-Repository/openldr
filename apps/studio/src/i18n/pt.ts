@@ -605,6 +605,14 @@ export const pt: EnShape = {
       fieldTrustServerCert: 'Confiar no certificado do servidor',
       fieldInstanceName: 'Nome da instância',
       fieldDomain: 'Domínio Windows',
+      pluginAccess: {
+        menu: "Acesso de plugins",
+        title: "Acesso de plugins para {{name}}",
+        description: "Plugins de importação que podem ler este conector. Um plugin autorizado executa aqui as suas próprias consultas só de leitura.",
+        empty: "Nenhum plugin instalado importa deste tipo de conector.",
+        allow: "Permitir {{plugin}}",
+        error: "Não foi possível ler ou guardar o acesso de plugins: {{error}}",
+      },
       diagnose: {
         menu: "Diagnosticar",
         title: "Diagnosticar {{name}}",

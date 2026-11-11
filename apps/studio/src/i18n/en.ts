@@ -607,6 +607,14 @@ export const en = {
       fieldTrustServerCert: 'Trust server certificate',
       fieldInstanceName: 'Instance name',
       fieldDomain: 'Windows domain',
+      pluginAccess: {
+        menu: "Plugin access",
+        title: "Plugin access for {{name}}",
+        description: "Import plugins that can read this connector. An allowed plugin runs its own read-only queries here.",
+        empty: "No installed plugin imports from this type of connector.",
+        allow: "Allow {{plugin}}",
+        error: "Plugin access could not be read or saved: {{error}}",
+      },
       diagnose: {
         menu: "Diagnose",
         title: "Diagnose {{name}}",
