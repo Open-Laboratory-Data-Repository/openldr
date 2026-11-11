@@ -3,7 +3,7 @@ import { lintFormSchema, seededStarterPacks, type FormField, type FormSchema, ty
 import type { RepeatNode } from './fieldTree';
 import { lookupFhirPath } from '@openldr/fhir/paths';
 import {
-  buildFieldFromElement, buildFieldFromPackEntry, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
+  buildFieldFromElement, buildFieldFromPackEntry, linkTestDetails, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
 } from './newFormFields';
 
 const f = (o: Partial<FormField> & Pick<FormField, 'id' | 'order'>): FormField => ({
@@ -136,6 +136,29 @@ describe('buildFieldFromPackEntry', () => {
 
   it('falls back to text when the entry names no type', () => {
     expect(buildFieldFromPackEntry(packEntry({ fieldType: null }), 'x').fieldType).toBe('text');
+  });
+});
+
+describe('linkTestDetails', () => {
+  const base = { description: null, required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' as const } };
+  const tests = { ...base, id: 'tests_2', fhirPath: 'ServiceRequest.code', displayLabel: 'Tests', fieldType: 'reference' as const };
+  const results = { ...base, id: 'results', fhirPath: null, displayLabel: 'Results', fieldType: 'testDetails' as const };
+
+  it('points a Results field at the Tests field, whatever id it got', () => {
+    // A pack entry carries no field ids, so Results added from the pack read no tests and always
+    // said "No tests chosen yet."
+    const linked = linkTestDetails([tests, results], 'ServiceRequest');
+    expect(linked.find((f) => f.id === 'results')?.referenceDependsOn).toBe('tests_2');
+  });
+
+  it('leaves a Results field that already points at a field on the form', () => {
+    const other = { ...tests, id: 'other' };
+    const linked = linkTestDetails([tests, other, { ...results, referenceDependsOn: 'other' }], 'ServiceRequest');
+    expect(linked.find((f) => f.id === 'results')?.referenceDependsOn).toBe('other');
+  });
+
+  it('changes nothing when the form has no Tests field yet', () => {
+    expect(linkTestDetails([results], 'ServiceRequest')).toEqual([results]);
   });
 });
 

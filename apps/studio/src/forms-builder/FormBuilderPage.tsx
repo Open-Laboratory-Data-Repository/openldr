@@ -6,7 +6,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { createForm, deleteForm, formQuestionnaireUrl, getForm, listFormVersions, loadStarterPack, publishForm, setFormStatus, updateForm, type FormDefinition } from '../api';
 import { createDefaultFormSchema, makeUniqueFieldId, newField, slugify } from './builderModel';
 import {
-  buildFieldFromElement, buildFieldFromPackEntry, buildGroupPart, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
+  buildFieldFromElement, buildFieldFromPackEntry, buildGroupPart, linkTestDetails, buildNamedSlot, groupIdForPath, insertFieldAfter, lastPartIdOf,
 } from './newFormFields';
 import { StarterPackChooser } from './StarterPackChooser';
 import type { RepeatNode } from './fieldTree';
@@ -308,7 +308,7 @@ export function FormBuilderPage(): JSX.Element {
         taken.add(id);
         return { ...buildFieldFromPackEntry(e, id), order: order++ };
       });
-      return { ...prev, fields: [...prev.fields, ...added] };
+      return { ...prev, fields: linkTestDetails([...prev.fields, ...added], prev.fhirResourceType) };
     });
   };
 
@@ -321,10 +321,10 @@ export function FormBuilderPage(): JSX.Element {
     const groupId = groupIdForPath(schema.fields, field.fhirPath);
     setSchema((prev) => {
       if (groupId) {
-        return { ...prev, fields: insertFieldAfter(prev.fields, lastPartIdOf(prev.fields, groupId), { ...field, groupId }) };
+        return { ...prev, fields: linkTestDetails(insertFieldAfter(prev.fields, lastPartIdOf(prev.fields, groupId), { ...field, groupId }), prev.fhirResourceType) };
       }
       const nextOrder = prev.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
-      return { ...prev, fields: [...prev.fields, { ...field, order: nextOrder }] };
+      return { ...prev, fields: linkTestDetails([...prev.fields, { ...field, order: nextOrder }], prev.fhirResourceType) };
     });
     setPendingNewFieldId(null);
     openEditor(field.id);

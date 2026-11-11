@@ -1,5 +1,5 @@
 import { lookupFhirPath, type FhirPathInfo } from '@openldr/fhir/paths';
-import { normalizeDiscriminator, toStoredDiscriminator, type FormField, type StarterPackEntry } from '@openldr/forms/pure';
+import { normalizeDiscriminator, resolveFhirPath, toStoredDiscriminator, type FormField, type StarterPackEntry } from '@openldr/forms/pure';
 import type { RepeatNode } from './fieldTree';
 import { codeOptionsFromLabel, elementDisplayName, fieldTypeForLeaf } from './fhirTypeMap';
 
@@ -149,4 +149,24 @@ export function buildFieldFromPackEntry(entry: StarterPackEntry, id: string): Fo
     if (options) field.valueSetOptions = options;
   }
   return field;
+}
+
+/** The FHIR path a Lab order binds its tests to. Structure, not vocabulary. */
+const ORDER_TESTS_PATH = 'ServiceRequest.code';
+
+/**
+ * Point each Results (testDetails) field at the form's Tests field. A starter pack stores no field
+ * ids, so a Results field added from a pack named no field to read, and always said "No tests
+ * chosen yet." A Results field that already points at a field on the form is left alone, and
+ * nothing changes while the form has no Tests field.
+ */
+export function linkTestDetails(fields: FormField[], resourceType: string | null | undefined): FormField[] {
+  const testsField = fields.find((f) => resolveFhirPath(f.fhirPath, resourceType) === ORDER_TESTS_PATH);
+  if (!testsField) return fields;
+  const ids = new Set(fields.map((f) => f.id));
+  return fields.map((f) =>
+    f.fieldType === 'testDetails' && !(f.referenceDependsOn && ids.has(f.referenceDependsOn))
+      ? { ...f, referenceDependsOn: testsField.id }
+      : f,
+  );
 }
