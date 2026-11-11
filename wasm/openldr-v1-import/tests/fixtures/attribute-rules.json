@@ -1,0 +1,125 @@
+{
+  "name": "attribute-rules",
+  "rules": [
+    {
+      "column": "LIMSPreReg_RegistrationDateTime",
+      "code": "prereg-registration-time",
+      "kind": "datetime"
+    },
+    {
+      "column": "LIMSPreReg_ReceivedDateTime",
+      "code": "prereg-received-time",
+      "kind": "datetime"
+    },
+    {
+      "column": "LIMSPreReg_RegistrationFacilityCode",
+      "code": "prereg-registration-facility",
+      "kind": "string"
+    },
+    {
+      "column": "LOINCPanelCode",
+      "code": "loinc-panel-code",
+      "kind": "string"
+    },
+    {
+      "column": "AdmitAttendDateTime",
+      "code": "admit-attend-time",
+      "kind": "datetime"
+    },
+    {
+      "column": "CollectionVolume",
+      "code": "collection-volume",
+      "kind": "number"
+    },
+    {
+      "column": "ICD10ClinicalInfoCodes",
+      "code": "icd10-clinical-info",
+      "kind": "string"
+    },
+    {
+      "column": "HL7SpecimenSourceCode",
+      "code": "hl7-specimen-source",
+      "kind": "string"
+    },
+    {
+      "column": "HL7SpecimenSiteCode",
+      "code": "hl7-specimen-site",
+      "kind": "string"
+    },
+    {
+      "column": "LIMSSpecimenSiteCode",
+      "code": "specimen-site-code",
+      "kind": "string"
+    },
+    {
+      "column": "LIMSSpecimenSiteDesc",
+      "code": "specimen-site-desc",
+      "kind": "string"
+    },
+    {
+      "column": "WorkUnits",
+      "code": "work-units",
+      "kind": "number"
+    },
+    {
+      "column": "CostUnits",
+      "code": "cost-units",
+      "kind": "number"
+    },
+    {
+      "column": "OrderingNotes",
+      "code": "ordering-notes",
+      "kind": "string"
+    },
+    {
+      "column": "EncryptedPatientID",
+      "code": "encrypted-patient-id",
+      "kind": "string"
+    },
+    {
+      "column": "HL7EthnicGroupCode",
+      "code": "ethnic-group",
+      "kind": "string"
+    },
+    {
+      "column": "Deceased",
+      "code": "deceased",
+      "kind": "boolean"
+    },
+    {
+      "column": "Newborn",
+      "code": "newborn",
+      "kind": "boolean"
+    },
+    {
+      "column": "HL7PatientClassCode",
+      "code": "patient-class",
+      "kind": "string"
+    },
+    {
+      "column": "ReferringRequestID",
+      "code": "referring-request-id",
+      "kind": "string"
+    },
+    {
+      "column": "Therapy",
+      "code": "therapy",
+      "kind": "string"
+    },
+    {
+      "column": "TargetTimeDays",
+      "code": "target-time-days",
+      "kind": "number"
+    },
+    {
+      "column": "TargetTimeMins",
+      "code": "target-time-mins",
+      "kind": "number"
+    },
+    {
+      "column": "Repeated",
+      "code": "repeated",
+      "kind": "number"
+    }
+  ]
+}

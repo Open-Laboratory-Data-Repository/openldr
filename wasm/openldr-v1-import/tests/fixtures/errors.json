@@ -1,0 +1,386 @@
+{
+  "name": "errors",
+  "input": {
+    "keys": [
+      "GOOD",
+      "NO-ROWS",
+      "NO-OBR",
+      "NO-OBX",
+      "___"
+    ],
+    "rows": {
+      "requests": [
+        {
+          "RequestID": "GOOD",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CD4",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "NO-OBR",
+          "OBRSetID": null,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "NO-OBX",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "___",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        }
+      ],
+      "results": [
+        {
+          "RequestID": "NO-OBX",
+          "OBRSetID": 1,
+          "OBXSetID": null,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "X",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": null,
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "NO-ROWS",
+          "OBRSetID": 1,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "X",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": null,
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        }
+      ],
+      "patients": [],
+      "ast": []
+    },
+    "options": {
+      "tz": "+02:00"
+    }
+  },
+  "expected": {
+    "groups": [
+      {
+        "key": "GOOD",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "GOOD"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "GOOD-spec",
+            "subject": {
+              "reference": "Patient/GOOD"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "GOOD-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/GOOD"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "GOOD"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "GOOD-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/GOOD"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "GOOD"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/GOOD-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/GOOD-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "NO-ROWS",
+        "resources": [],
+        "error": "NO_REQUEST_ROWS"
+      },
+      {
+        "key": "NO-OBR",
+        "resources": [],
+        "error": "NO_OBR_SET_ID"
+      },
+      {
+        "key": "NO-OBX",
+        "resources": [],
+        "error": "NO_OBX_ID"
+      },
+      {
+        "key": "___",
+        "resources": [],
+        "error": "BAD_REQUEST_ID"
+      }
+    ]
+  }
+}

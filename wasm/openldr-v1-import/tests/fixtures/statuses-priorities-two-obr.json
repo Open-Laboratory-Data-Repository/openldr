@@ -1,0 +1,1726 @@
+{
+  "name": "statuses-priorities-two-obr",
+  "input": {
+    "keys": [
+      "ST-F",
+      "ST-P",
+      "ST-C",
+      "ST-X",
+      "ST-R",
+      "ST-I",
+      "ST-OTHER",
+      "MULTI"
+    ],
+    "rows": {
+      "requests": [
+        {
+          "RequestID": "ST-F",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CD4",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": "R",
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "F",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "ST-P",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CD4",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": "U",
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "p",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "ST-C",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CD4",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": "S",
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "C",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "ST-X",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CD4",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": "Z",
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "X",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": "HAEM",
+          "LIMSRejectionDesc": "Haemolysed sample",
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "ST-R",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CD4",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "R",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": "QNS",
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "ST-I",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CD4",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "I",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": "Only a reason",
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "ST-OTHER",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "Q",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "MULTI",
+          "OBRSetID": 2,
+          "LIMSPanelCode": "FBC",
+          "LIMSPanelDesc": "Full blood count",
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": "FAC02",
+          "TestingFacilityCode": "LAB01",
+          "SpecimenDateTime": "2024-05-01T07:00:00.000",
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": "M",
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "MULTI",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CD4",
+          "LIMSPanelDesc": "CD4 count",
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": "FAC01",
+          "TestingFacilityCode": "LAB01",
+          "SpecimenDateTime": "2024-05-01T06:30:00.000",
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": "F",
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "MULTI",
+          "OBRSetID": 3,
+          "LIMSPanelCode": "EMPTY",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": "FAC01",
+          "TestingFacilityCode": "FAC01",
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        }
+      ],
+      "results": [
+        {
+          "RequestID": "MULTI",
+          "OBRSetID": 1,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "CD4A",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "512",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "MULTI",
+          "OBRSetID": 2,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": "g/dL",
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "HB",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "13.5",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "MULTI",
+          "OBRSetID": 2,
+          "OBXSetID": 2,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "WBC",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "6.1",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "MULTI",
+          "OBRSetID": 9,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "LOST",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "1",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "MULTI",
+          "OBRSetID": null,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "LOST2",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "2",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        }
+      ],
+      "patients": [],
+      "ast": []
+    },
+    "options": {
+      "tz": "+02:00"
+    }
+  },
+  "expected": {
+    "groups": [
+      {
+        "key": "ST-F",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ST-F"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ST-F-spec",
+            "subject": {
+              "reference": "Patient/ST-F"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ST-F-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ST-F"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-F"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "priority": "routine"
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ST-F-obr1",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/ST-F"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-F"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ST-F-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ST-F-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "ST-P",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ST-P"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ST-P-spec",
+            "subject": {
+              "reference": "Patient/ST-P"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ST-P-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ST-P"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-P"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "priority": "urgent"
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ST-P-obr1",
+            "status": "preliminary",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/ST-P"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-P"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ST-P-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ST-P-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "ST-C",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ST-C"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ST-C-spec",
+            "subject": {
+              "reference": "Patient/ST-C"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ST-C-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ST-C"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-C"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "priority": "stat"
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ST-C-obr1",
+            "status": "corrected",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/ST-C"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-C"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ST-C-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ST-C-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "ST-X",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ST-X"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ST-X-spec",
+            "subject": {
+              "reference": "Patient/ST-X"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ST-X-obr1",
+            "status": "revoked",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ST-X"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-X"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "extension": [
+              {
+                "url": "urn:openldr:ext:rejection",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCode": "HAEM"
+                  },
+                  {
+                    "url": "reason",
+                    "valueString": "Haemolysed sample"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ST-X-obr1",
+            "status": "cancelled",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/ST-X"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-X"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ST-X-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ST-X-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "ST-R",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ST-R"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ST-R-spec",
+            "subject": {
+              "reference": "Patient/ST-R"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ST-R-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ST-R"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-R"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "extension": [
+              {
+                "url": "urn:openldr:ext:rejection",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCode": "QNS"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ST-R-obr1",
+            "status": "registered",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/ST-R"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-R"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ST-R-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ST-R-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "ST-I",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ST-I"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ST-I-spec",
+            "subject": {
+              "reference": "Patient/ST-I"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ST-I-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ST-I"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-I"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "extension": [
+              {
+                "url": "urn:openldr:ext:rejection",
+                "extension": [
+                  {
+                    "url": "reason",
+                    "valueString": "Only a reason"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ST-I-obr1",
+            "status": "partial",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/ST-I"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-I"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ST-I-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ST-I-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "ST-OTHER",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ST-OTHER"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ST-OTHER-spec",
+            "subject": {
+              "reference": "Patient/ST-OTHER"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ST-OTHER-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ST-OTHER"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-OTHER"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ST-OTHER-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/ST-OTHER"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ST-OTHER"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ST-OTHER-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ST-OTHER-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "MULTI",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "MULTI",
+            "gender": "female"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "MULTI-spec",
+            "subject": {
+              "reference": "Patient/MULTI"
+            }
+          },
+          {
+            "resourceType": "Organization",
+            "id": "lab-LAB01",
+            "identifier": [
+              {
+                "system": "urn:openldr:default_lab",
+                "value": "LAB01"
+              }
+            ],
+            "name": "LAB01"
+          },
+          {
+            "resourceType": "Organization",
+            "id": "facility-FAC02",
+            "identifier": [
+              {
+                "system": "urn:openldr:default_fac",
+                "value": "FAC02"
+              }
+            ],
+            "name": "FAC02"
+          },
+          {
+            "resourceType": "Organization",
+            "id": "facility-FAC01",
+            "identifier": [
+              {
+                "system": "urn:openldr:default_fac",
+                "value": "FAC01"
+              }
+            ],
+            "name": "FAC01"
+          },
+          {
+            "resourceType": "Organization",
+            "id": "lab-FAC01",
+            "identifier": [
+              {
+                "system": "urn:openldr:default_lab",
+                "value": "FAC01"
+              }
+            ],
+            "name": "FAC01"
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "MULTI-obr2",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "FBC",
+                  "display": "Full blood count"
+                }
+              ],
+              "text": "Full blood count"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "MULTI"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "2"
+              }
+            ],
+            "contained": [
+              {
+                "resourceType": "PractitionerRole",
+                "id": "requester",
+                "organization": {
+                  "identifier": {
+                    "system": "urn:openldr:default_fac",
+                    "value": "FAC02"
+                  },
+                  "display": "FAC02"
+                }
+              }
+            ],
+            "requester": {
+              "reference": "#requester"
+            }
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "MULTI-obr2",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "FBC",
+                  "display": "Full blood count"
+                }
+              ],
+              "text": "Full blood count"
+            },
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "MULTI"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "2"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/MULTI-spec"
+              }
+            ],
+            "effectiveDateTime": "2024-05-01T07:00:00+02:00",
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/MULTI-obr2"
+              }
+            ],
+            "performer": [
+              {
+                "identifier": {
+                  "system": "urn:openldr:default_lab",
+                  "value": "LAB01"
+                },
+                "display": "LAB01"
+              }
+            ],
+            "result": [
+              {
+                "reference": "Observation/MULTI-obs-2"
+              },
+              {
+                "reference": "Observation/MULTI-obs-3"
+              }
+            ]
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "MULTI-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4",
+                  "display": "CD4 count"
+                }
+              ],
+              "text": "CD4 count"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "MULTI"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "contained": [
+              {
+                "resourceType": "PractitionerRole",
+                "id": "requester",
+                "organization": {
+                  "identifier": {
+                    "system": "urn:openldr:default_fac",
+                    "value": "FAC01"
+                  },
+                  "display": "FAC01"
+                }
+              }
+            ],
+            "requester": {
+              "reference": "#requester"
+            }
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "MULTI-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CD4",
+                  "display": "CD4 count"
+                }
+              ],
+              "text": "CD4 count"
+            },
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "MULTI"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/MULTI-spec"
+              }
+            ],
+            "effectiveDateTime": "2024-05-01T06:30:00+02:00",
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/MULTI-obr1"
+              }
+            ],
+            "performer": [
+              {
+                "identifier": {
+                  "system": "urn:openldr:default_lab",
+                  "value": "LAB01"
+                },
+                "display": "LAB01"
+              }
+            ],
+            "result": [
+              {
+                "reference": "Observation/MULTI-obs-1"
+              }
+            ]
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "MULTI-obr3",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "EMPTY"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "MULTI"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "3"
+              }
+            ],
+            "contained": [
+              {
+                "resourceType": "PractitionerRole",
+                "id": "requester",
+                "organization": {
+                  "identifier": {
+                    "system": "urn:openldr:default_fac",
+                    "value": "FAC01"
+                  },
+                  "display": "FAC01"
+                }
+              }
+            ],
+            "requester": {
+              "reference": "#requester"
+            }
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "MULTI-obr3",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "EMPTY"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "MULTI"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "3"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/MULTI-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/MULTI-obr3"
+              }
+            ],
+            "performer": [
+              {
+                "identifier": {
+                  "system": "urn:openldr:default_lab",
+                  "value": "FAC01"
+                },
+                "display": "FAC01"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "MULTI-obs-1",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "CD4A"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "1"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/MULTI-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/MULTI-spec"
+            },
+            "effectiveDateTime": "2024-05-01T07:00:00+02:00",
+            "valueQuantity": {
+              "value": 512
+            }
+          },
+          {
+            "resourceType": "Observation",
+            "id": "MULTI-obs-2",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "HB"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "1"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/MULTI-obr2"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/MULTI-spec"
+            },
+            "effectiveDateTime": "2024-05-01T07:00:00+02:00",
+            "valueQuantity": {
+              "value": 13.5,
+              "unit": "g/dL"
+            }
+          },
+          {
+            "resourceType": "Observation",
+            "id": "MULTI-obs-3",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "WBC"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/MULTI"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "2"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/MULTI-obr2"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/MULTI-spec"
+            },
+            "effectiveDateTime": "2024-05-01T07:00:00+02:00",
+            "valueQuantity": {
+              "value": 6.1
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

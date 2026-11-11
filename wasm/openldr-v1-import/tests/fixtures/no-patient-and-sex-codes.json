@@ -1,0 +1,884 @@
+{
+  "name": "no-patient-and-sex-codes",
+  "input": {
+    "keys": [
+      "SEX-M",
+      "SEX-F",
+      "SEX-U",
+      "SEX-I",
+      "SEX-X",
+      "SEX-NULL"
+    ],
+    "rows": {
+      "requests": [
+        {
+          "RequestID": "SEX-M",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": "M",
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "SEX-F",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": " f ",
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "SEX-U",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": "U",
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "SEX-I",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": "I",
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "SEX-X",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": "X",
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "SEX-NULL",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        }
+      ],
+      "results": [],
+      "patients": [
+        {
+          "RequestID": "SEX-M",
+          "SURNAME": null,
+          "FIRSTNAME": null,
+          "DOB": null,
+          "NATIONALID": null,
+          "MOBILE": null,
+          "TELHOME": null,
+          "EMAIL": null,
+          "HOSPID": null
+        },
+        {
+          "RequestID": "SEX-F",
+          "SURNAME": "  ",
+          "FIRSTNAME": "Only",
+          "DOB": "1899-12-30T00:00:00.000",
+          "NATIONALID": null,
+          "MOBILE": null,
+          "TELHOME": "0000000009",
+          "EMAIL": null,
+          "HOSPID": null
+        }
+      ],
+      "ast": []
+    },
+    "options": {
+      "tz": "+02:00"
+    }
+  },
+  "expected": {
+    "groups": [
+      {
+        "key": "SEX-M",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "SEX-M",
+            "gender": "male"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "SEX-M-spec",
+            "subject": {
+              "reference": "Patient/SEX-M"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "SEX-M-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/SEX-M"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-M"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "SEX-M-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/SEX-M"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-M"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/SEX-M-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/SEX-M-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "SEX-F",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "SEX-F",
+            "name": [
+              {
+                "given": [
+                  "Only"
+                ]
+              }
+            ],
+            "gender": "female",
+            "birthDate": "1899-12-30",
+            "telecom": [
+              {
+                "system": "phone",
+                "value": "0000000009"
+              }
+            ]
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "SEX-F-spec",
+            "subject": {
+              "reference": "Patient/SEX-F"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "SEX-F-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/SEX-F"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-F"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "SEX-F-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/SEX-F"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-F"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/SEX-F-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/SEX-F-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "SEX-U",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "SEX-U",
+            "gender": "unknown"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "SEX-U-spec",
+            "subject": {
+              "reference": "Patient/SEX-U"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "SEX-U-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/SEX-U"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-U"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "SEX-U-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/SEX-U"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-U"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/SEX-U-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/SEX-U-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "SEX-I",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "SEX-I",
+            "gender": "other"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "SEX-I-spec",
+            "subject": {
+              "reference": "Patient/SEX-I"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "SEX-I-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/SEX-I"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-I"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "SEX-I-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/SEX-I"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-I"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/SEX-I-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/SEX-I-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "SEX-X",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "SEX-X"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "SEX-X-spec",
+            "subject": {
+              "reference": "Patient/SEX-X"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "SEX-X-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/SEX-X"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-X"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "SEX-X-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/SEX-X"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-X"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/SEX-X-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/SEX-X-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "SEX-NULL",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "SEX-NULL"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "SEX-NULL-spec",
+            "subject": {
+              "reference": "Patient/SEX-NULL"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "SEX-NULL-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/SEX-NULL"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-NULL"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "SEX-NULL-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/SEX-NULL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "SEX-NULL"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/SEX-NULL-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/SEX-NULL-obr1"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

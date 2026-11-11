@@ -1,0 +1,979 @@
+{
+  "name": "attributes",
+  "input": {
+    "keys": [
+      "ATTR-ALL",
+      "ATTR-ZEROS",
+      "ATTR-BLANKS"
+    ],
+    "rows": {
+      "requests": [
+        {
+          "RequestID": "ATTR-ALL",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": "B20;Z21",
+          "Therapy": "ABC",
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": "I",
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": "2024-02-01T10:00:00.500",
+          "LIMSPreReg_ReceivedDateTime": "2024-02-01T11:30:00.000",
+          "LIMSPreReg_RegistrationFacilityCode": "PRE01",
+          "LOINCPanelCode": "20447-9",
+          "AdmitAttendDateTime": "2024-01-31T00:00:00.000",
+          "CollectionVolume": 2.5,
+          "HL7SpecimenSourceCode": "BLD",
+          "HL7SpecimenSiteCode": "ARM",
+          "LIMSSpecimenSiteCode": "LA",
+          "LIMSSpecimenSiteDesc": "Left arm",
+          "WorkUnits": 3,
+          "CostUnits": 12.75,
+          "OrderingNotes": "Handle with care",
+          "EncryptedPatientID": "ENC-TEST-0001",
+          "HL7EthnicGroupCode": "UNK",
+          "Deceased": true,
+          "Newborn": false,
+          "ReferringRequestID": "REF-0001",
+          "TargetTimeDays": 2,
+          "TargetTimeMins": 90,
+          "Repeated": 1
+        },
+        {
+          "RequestID": "ATTR-ZEROS",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": 0,
+          "AgeInDays": 0,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": 0,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": 0,
+          "CostUnits": 0,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": 0,
+          "Newborn": 1,
+          "ReferringRequestID": null,
+          "TargetTimeDays": 0,
+          "TargetTimeMins": 0,
+          "Repeated": 0
+        },
+        {
+          "RequestID": "ATTR-BLANKS",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": "  ",
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": " x ",
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": " ",
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": " ",
+          "TestedBy": "",
+          "AuthorisedBy": "  ",
+          "RegisteredBy": "  ",
+          "RequestTypeCode": " ",
+          "LIMSAnalyzerCode": "",
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": " ",
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": "   ",
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": "",
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        }
+      ],
+      "results": [],
+      "patients": [],
+      "ast": []
+    },
+    "options": {
+      "tz": "+02:00"
+    }
+  },
+  "expected": {
+    "groups": [
+      {
+        "key": "ATTR-ALL",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ATTR-ALL"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ATTR-ALL-spec",
+            "subject": {
+              "reference": "Patient/ATTR-ALL"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ATTR-ALL-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ATTR-ALL"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ATTR-ALL"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "extension": [
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "prereg-registration-time"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "2024-02-01T10:00:00"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "prereg-received-time"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "2024-02-01T11:30:00"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "prereg-registration-facility"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "PRE01"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "loinc-panel-code"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "20447-9"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "admit-attend-time"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "2024-01-31T00:00:00"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "collection-volume"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "2.5"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "icd10-clinical-info"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "B20;Z21"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "hl7-specimen-source"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "BLD"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "hl7-specimen-site"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "ARM"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "specimen-site-code"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "LA"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "specimen-site-desc"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "Left arm"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "work-units"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "3"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "cost-units"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "12.75"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "ordering-notes"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "Handle with care"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "encrypted-patient-id"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "ENC-TEST-0001"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "ethnic-group"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "UNK"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "deceased"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueBoolean": true
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "newborn"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueBoolean": false
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "patient-class"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "I"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "referring-request-id"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "REF-0001"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "therapy"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "ABC"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "target-time-days"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "2"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "target-time-mins"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "90"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "repeated"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ATTR-ALL-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/ATTR-ALL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ATTR-ALL"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ATTR-ALL-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ATTR-ALL-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "ATTR-ZEROS",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ATTR-ZEROS"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ATTR-ZEROS-spec",
+            "subject": {
+              "reference": "Patient/ATTR-ZEROS"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ATTR-ZEROS-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ATTR-ZEROS"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ATTR-ZEROS"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "extension": [
+              {
+                "url": "urn:openldr:ext:age-at-request",
+                "extension": [
+                  {
+                    "url": "years",
+                    "valueInteger": 0
+                  },
+                  {
+                    "url": "days",
+                    "valueInteger": 0
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "collection-volume"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "0"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "work-units"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "0"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "cost-units"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "0"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "deceased"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueBoolean": false
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "newborn"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueBoolean": true
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "target-time-days"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "0"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "target-time-mins"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "0"
+                  }
+                ]
+              },
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "repeated"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "0"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ATTR-ZEROS-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/ATTR-ZEROS"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ATTR-ZEROS"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ATTR-ZEROS-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ATTR-ZEROS-obr1"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "ATTR-BLANKS",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "ATTR-BLANKS"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "ATTR-BLANKS-spec",
+            "subject": {
+              "reference": "Patient/ATTR-BLANKS"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "ATTR-BLANKS-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/ATTR-BLANKS"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ATTR-BLANKS"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "extension": [
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "therapy"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "x"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "ATTR-BLANKS-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/ATTR-BLANKS"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "ATTR-BLANKS"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/ATTR-BLANKS-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/ATTR-BLANKS-obr1"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
