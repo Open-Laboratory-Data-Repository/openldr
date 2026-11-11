@@ -191,3 +191,14 @@ names the new files and gives the registry entry for the coordinator to add.
    network), or should the plugin only guide a run of the cdr CLI on a laptop?
 3. Preferences: per user, or one lab-wide look set by an admin, or both?
 4. Which slices do you want, and in what order?
+
+### Operator answers, 2026-11-11
+
+1. The connection works. The "OpenLDR v1 (Moz)" SQL Server connector tests OK. So for v1 the hard
+   part is not the connection; it is getting the data across. Slices 1 and 2 still help labs with
+   named instances or Windows logins, but they did not fix a failure the operator was seeing.
+2. The import runs inside CE, so there is one tool to manage. Slices 4 and 5 go ahead as designed.
+3. Not answered yet. The question was misread as being about connectors. It is about the studio
+   look (theme, sidebar, home page), not connectors. Connectors stay system-wide.
+4. Slices 1 and 2 were picked first and are built.
+
