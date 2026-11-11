@@ -3264,6 +3264,14 @@ export const deleteConnector = (id: string): Promise<void> =>
 export const testConnector = (id: string): Promise<ConnectorTestResult> =>
   authFetch(`/api/connectors/${encodeURIComponent(id)}/test`, { method: 'POST' }).then((r) => okJson<ConnectorTestResult>(r, 'test connector'));
 
+// Mirrors DiagnoseResult in packages/bootstrap/src/connector-diagnose.ts.
+export type DiagnoseStepId = 'config' | 'dns' | 'browser' | 'tcp' | 'login' | 'version';
+export type DiagnoseStatus = 'pass' | 'warn' | 'fail' | 'skip';
+export interface DiagnoseStep { id: DiagnoseStepId; status: DiagnoseStatus; detail?: string; hint?: string }
+export interface DiagnoseResult { ok: boolean; steps: DiagnoseStep[] }
+export const diagnoseConnector = (id: string): Promise<DiagnoseResult> =>
+  authFetch(`/api/connectors/${encodeURIComponent(id)}/diagnose`, { method: 'POST' }).then((r) => okJson<DiagnoseResult>(r, 'diagnose connector'));
+
 /** Authenticated download of a produced workflow artifact (objectKey under workflow-artifacts/). */
 export async function downloadWorkflowArtifact(objectKey: string, fileName: string): Promise<void> {
   const path = objectKey.split('/').map(encodeURIComponent).join('/');

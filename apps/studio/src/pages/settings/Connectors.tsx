@@ -22,6 +22,7 @@ import {
   ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
 } from '@/components/data-table';
 import { SettingsHeader } from './SettingsHeader';
+import { ConnectorDiagnoseSheet } from './ConnectorDiagnoseSheet';
 import {
   listConnectors, getConnectorConfig, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
   type Connector, type SinkPluginRef,
@@ -157,6 +158,7 @@ export function Connectors() {
   const [plugins, setPlugins] = useState<SinkPluginRef[]>([]);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [pendingRemove, setPendingRemove] = useState<Connector | null>(null);
+  const [diagnosing, setDiagnosing] = useState<Connector | null>(null);
   const [testResult, setTestResult] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -410,6 +412,12 @@ export function Connectors() {
                         >
                           {t('settings.connectors.test')}
                         </DropdownMenuItem>
+                        {/* Diagnosis probes a host and port; plugin connectors have neither. */}
+                        {c.type ? (
+                          <DropdownMenuItem data-testid={`diagnose-${c.id}`} onSelect={() => setDiagnosing(c)}>
+                            {t('settings.connectors.diagnose.menu')}
+                          </DropdownMenuItem>
+                        ) : null}
                         <DropdownMenuItem data-testid={`edit-${c.id}`} onSelect={() => openEdit(c)}>
                           {t('settings.connectors.edit')}
                         </DropdownMenuItem>
@@ -589,6 +597,8 @@ export function Connectors() {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <ConnectorDiagnoseSheet connector={diagnosing} onOpenChange={(o) => { if (!o) setDiagnosing(null); }} />
 
       <ConfirmDialog
         open={pendingRemove !== null}
