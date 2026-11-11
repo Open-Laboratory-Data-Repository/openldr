@@ -86,7 +86,7 @@ Se os números forem mais altos, o armazém já tinha outros dados. Os exemplos 
 | Analyte Volume vs Avg Value | Número de resultados face ao valor médio, por analito | Nenhum |
 | Recent Orders | Os 50 pedidos mais recentes | Period, Test, Priority |
 
-**Test** lista nomes de pedidos, como Full blood count. **Results Recorded** e **Results Trend** comparam-no com o nome do resultado. Num exame com um só resultado, como HIV viral load, os nomes coincidem. Num painel de exames, não coincidem. Full blood count dá Haemoglobin e White cell count, por isso esses dois widgets mostram 0 quando **Test** é Full blood count.
+**Test** lista nomes de pedidos, como Full blood count. **Results Recorded** e **Results Trend** contam os resultados dos pedidos desse exame. Um pedido de Full blood count tem dois resultados, Haemoglobin e White cell count, por isso contam-se os dois.
 
 ## Exemplo 1: filtrar o painel de exemplo
 
@@ -370,7 +370,6 @@ O PostgreSQL, o MySQL, o MariaDB e o SQL Server param todos o trabalho da base n
 - **Edit não aparece no menu.** A sua função não tem **Edit dashboards**.
 - **O SQL não se pode editar, ou guardar mostra `raw SQL widgets are disabled`.** Ative **SQL bruto no painel**. Veja [Ativar os widgets SQL](#ativar-os-widgets-sql).
 - **Um widget ignora a barra de filtros.** Os widgets do Builder ignoram-na sempre. Um widget SQL só segue um filtro quando o seu SQL usa os tokens e as suas variáveis estão ligadas em **Filters**.
-- **Results Recorded mostra 0 para um exame.** Esse exame é um painel de exames, e os seus resultados têm outros nomes. Veja [O que mostra o painel de exemplo](#o-que-mostra-o-painel-de-exemplo).
 - **Identificador da variável só guarda uma letra.** Cole o identificador inteiro de uma vez. É um problema conhecido.
 - **Breakdown não muda nada no meu gráfico.** Hoje só **Table** mostra uma divisão.
 - **Um widget mostra um erro de tempo ou de linhas.** Atingiu o tempo limite ou o limite de linhas. Veja [Limites e definições](#limites-e-definicoes).

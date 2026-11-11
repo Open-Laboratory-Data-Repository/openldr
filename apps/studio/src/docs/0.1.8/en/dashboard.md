@@ -84,7 +84,7 @@ If the numbers are higher, the warehouse already held other data. The examples s
 | Analyte Volume vs Avg Value | Result count against average value, per analyte | None |
 | Recent Orders | The 50 newest orders | Period, Test, Priority |
 
-**Test** lists order names, such as Full blood count. **Results Recorded** and **Results Trend** compare it with the result name. For a one-result test, such as HIV viral load, the names match. For a panel, they do not. Full blood count gives Haemoglobin and White cell count, so those two widgets show 0 when **Test** is Full blood count.
+**Test** lists order names, such as Full blood count. **Results Recorded** and **Results Trend** count the results of the orders for that test. A Full blood count order has two results, Haemoglobin and White cell count, so both are counted.
 
 ## Example 1: filter the sample dashboard
 
@@ -368,7 +368,6 @@ PostgreSQL, MySQL, MariaDB and SQL Server all stop the database work at the time
 - **Edit is missing from the menu.** Your role lacks **Edit dashboards**.
 - **The SQL cannot be edited, or saving says `raw SQL widgets are disabled`.** Turn on **Dashboard raw SQL**. See [Turn on SQL widgets](#turn-on-sql-widgets).
 - **A widget ignores the filter bar.** Builder widgets always do. A SQL widget follows a filter only when its SQL uses the tokens and its variables are bound in **Filters**.
-- **Results Recorded reads 0 for a test.** That test is a panel, and its results have other names. See [What the sample dashboard shows](#what-the-sample-dashboard-shows).
 - **Variable ID keeps only one letter.** Paste the whole ID at once. This is a known problem.
 - **A Breakdown makes no difference to my chart.** Only **Table** shows a breakdown today.
 - **A widget shows an error about time or rows.** It hit the timeout or the row cap. See [Limits and settings](#limits-and-settings).

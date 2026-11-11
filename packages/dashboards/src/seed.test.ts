@@ -33,6 +33,19 @@ describe('SAMPLE_DASHBOARD', () => {
       expect(vars?.period?.type).toBe('date-range');
     }
   });
+
+  it('matches the Test filter against order names, the values the filter offers', () => {
+    // The Test filter lists lab_requests.panel_desc. A widget that compares it with a result name
+    // (lab_results.observation_desc) reads 0 for every panel test.
+    const test = SAMPLE_DASHBOARD.filters.find((f) => f.id === 'test');
+    expect(test?.optionsSql).toContain('panel_desc');
+    const bound = SAMPLE_DASHBOARD.widgets.filter((w) => w.query.mode === 'sql' && w.query.sql.includes('{{test}}'));
+    expect(bound.length).toBeGreaterThan(0);
+    for (const w of bound) {
+      const sql = w.query.mode === 'sql' ? w.query.sql : '';
+      expect(sql, w.title).toContain('panel_desc = {{test}}');
+    }
+  });
 });
 
 describe('seedDefaultDashboard', () => {

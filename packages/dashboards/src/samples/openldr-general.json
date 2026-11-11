@@ -64,7 +64,7 @@
       "visual": { "yAxisKey": "value" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT COUNT(*) AS value FROM lab_results\nWHERE (status IS NULL OR status <> 'cancelled')\n[[AND substring(result_timestamp,1,10) >= {{period_from}}]]\n[[AND substring(result_timestamp,1,10) <= {{period_to}}]]\n[[AND observation_desc = {{test}}]]",
+        "sql": "SELECT COUNT(*) AS value FROM lab_results\nWHERE (status IS NULL OR status <> 'cancelled')\n[[AND substring(result_timestamp,1,10) >= {{period_from}}]]\n[[AND substring(result_timestamp,1,10) <= {{period_to}}]]\n[[AND request_id IN (SELECT id FROM lab_requests WHERE panel_desc = {{test}})]]",
         "variableBindings": { "period": "period", "test": "test" },
         "variables": {
           "period": { "type": "date-range", "label": "Period" },
@@ -183,7 +183,7 @@
       "visual": { "xAxisKey": "label", "yAxisKey": "value", "color": "#8b5cf6" },
       "query": {
         "mode": "sql",
-        "sql": "SELECT substring(result_timestamp,1,10) AS label, COUNT(*) AS value FROM lab_results\nWHERE (status IS NULL OR status <> 'cancelled')\n[[AND substring(result_timestamp,1,10) >= {{period_from}}]]\n[[AND substring(result_timestamp,1,10) <= {{period_to}}]]\n[[AND observation_desc = {{test}}]]\nGROUP BY substring(result_timestamp,1,10)\nORDER BY label",
+        "sql": "SELECT substring(result_timestamp,1,10) AS label, COUNT(*) AS value FROM lab_results\nWHERE (status IS NULL OR status <> 'cancelled')\n[[AND substring(result_timestamp,1,10) >= {{period_from}}]]\n[[AND substring(result_timestamp,1,10) <= {{period_to}}]]\n[[AND request_id IN (SELECT id FROM lab_requests WHERE panel_desc = {{test}})]]\nGROUP BY substring(result_timestamp,1,10)\nORDER BY label",
         "variableBindings": { "period": "period", "test": "test" },
         "variables": {
           "period": { "type": "date-range", "label": "Period" },

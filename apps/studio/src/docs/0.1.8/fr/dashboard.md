@@ -86,7 +86,7 @@ Si les chiffres sont plus élevés, l'entrepôt contenait déjà d'autres donné
 | Analyte Volume vs Avg Value | Nombre de résultats face à la valeur moyenne, par analyte | Aucun |
 | Recent Orders | Les 50 demandes les plus récentes | Period, Test, Priority |
 
-**Test** liste des noms de demandes, comme Full blood count. **Results Recorded** et **Results Trend** le comparent au nom du résultat. Pour un examen à un seul résultat, comme HIV viral load, les noms sont identiques. Pour un bilan, ils ne le sont pas. Full blood count donne Haemoglobin et White cell count, donc ces deux widgets affichent 0 quand **Test** vaut Full blood count.
+**Test** liste des noms de demandes, comme Full blood count. **Results Recorded** et **Results Trend** comptent les résultats des demandes de cet examen. Une demande Full blood count a deux résultats, Haemoglobin et White cell count, donc les deux sont comptés.
 
 ## Exemple 1 : filtrer le tableau de bord d'exemple
 
@@ -370,7 +370,6 @@ PostgreSQL, MySQL, MariaDB et SQL Server arrêtent tous le travail de la base au
 - **Edit n'apparaît pas dans le menu.** Votre rôle n'a pas **Edit dashboards**.
 - **Le SQL n'est pas modifiable, ou l'enregistrement affiche `raw SQL widgets are disabled`.** Activez **SQL brut pour les tableaux de bord**. Voir [Activer les widgets SQL](#activer-les-widgets-sql).
 - **Un widget ignore la barre de filtres.** Les widgets du Builder l'ignorent toujours. Un widget SQL ne suit un filtre que si son SQL utilise les jetons et si ses variables sont reliées dans **Filters**.
-- **Results Recorded affiche 0 pour un examen.** Cet examen est un bilan, et ses résultats portent d'autres noms. Voir [Ce que montre le tableau de bord d'exemple](#ce-que-montre-le-tableau-de-bord-d-exemple).
 - **Identifiant de variable ne garde qu'une lettre.** Collez l'identifiant entier d'un coup. C'est un problème connu.
 - **Breakdown ne change rien à mon graphique.** Seul **Table** affiche une répartition aujourd'hui.
 - **Un widget affiche une erreur de délai ou de lignes.** Il a atteint le délai ou le plafond de lignes. Voir [Limites et paramètres](#limites-et-parametres).
