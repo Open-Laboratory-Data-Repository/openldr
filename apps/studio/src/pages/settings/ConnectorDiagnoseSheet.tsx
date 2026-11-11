@@ -78,7 +78,8 @@ export function ConnectorDiagnoseSheet({ connector, onOpenChange }: {
             </div>
           ) : result ? (
             <>
-              <ol className="divide-y divide-border">
+              {/* Reset the browser's list padding so the dividers run to the pane edges. */}
+              <ol className="m-0 list-none divide-y divide-border p-0">
                 {result.steps.map((step) => (
                   <li key={step.id} className="flex gap-3 px-6 py-3" data-testid={`diagnose-step-${step.id}`} data-status={step.status}>
                     <span className="mt-0.5" aria-label={t(`settings.connectors.diagnose.status.${step.status}`)}>{ICON[step.status]}</span>
