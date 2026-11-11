@@ -373,8 +373,6 @@ PostgreSQL, MySQL, MariaDB et SQL Server arrêtent tous le travail de la base au
 - **Results Recorded affiche 0 pour un examen.** Cet examen est un bilan, et ses résultats portent d'autres noms. Voir [Ce que montre le tableau de bord d'exemple](#ce-que-montre-le-tableau-de-bord-d-exemple).
 - **Identifiant de variable ne garde qu'une lettre.** Collez l'identifiant entier d'un coup. C'est un problème connu.
 - **Breakdown ne change rien à mon graphique.** Seul **Table** affiche une répartition aujourd'hui.
-- **Orders by Status n'affiche aucun graphique.** C'est un problème connu de ce widget d'exemple. Les statuts apparaissent aussi dans le tableau **Recent Orders**.
-- **Certaines barres de Orders by Test sont coupées en haut.** C'est un problème connu d'échelle de ce widget d'exemple. Pointez une barre pour voir son vrai chiffre.
 - **Un widget affiche une erreur de délai ou de lignes.** Il a atteint le délai ou le plafond de lignes. Voir [Limites et paramètres](#limites-et-parametres).
 - **Un nouveau widget n'est pas visible.** Les nouveaux widgets vont en bas de la grille. Faites défiler vers le bas.
 

@@ -371,8 +371,6 @@ PostgreSQL, MySQL, MariaDB and SQL Server all stop the database work at the time
 - **Results Recorded reads 0 for a test.** That test is a panel, and its results have other names. See [What the sample dashboard shows](#what-the-sample-dashboard-shows).
 - **Variable ID keeps only one letter.** Paste the whole ID at once. This is a known problem.
 - **A Breakdown makes no difference to my chart.** Only **Table** shows a breakdown today.
-- **Orders by Status shows no chart.** This is a known problem with that sample widget. The statuses also show in the **Recent Orders** table.
-- **Some bars in Orders by Test are cut off at the top.** This is a known problem with that sample widget's scale. Point at a bar to see its real number.
 - **A widget shows an error about time or rows.** It hit the timeout or the row cap. See [Limits and settings](#limits-and-settings).
 - **A new widget is not on screen.** New widgets go to the bottom of the grid. Scroll down.
 

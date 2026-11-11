@@ -3,6 +3,7 @@ import {
   ScatterChart, Scatter, FunnelChart, Funnel, XAxis, YAxis, ZAxis, Tooltip, CartesianGrid, Legend,
 } from 'recharts';
 import type { ReportResult, WidgetConfig } from '../../api';
+import { numericRows } from './chartData';
 
 const COLORS = ['#4682B4', '#5A9BD6', '#22c55e', '#f59e0b', '#ef4444', '#898989'];
 
@@ -16,14 +17,17 @@ const TOOLTIP_PROPS = {
 } as const;
 
 export function ChartWidget({ config, result }: { config: WidgetConfig; result: ReportResult }) {
-  const rows = result.rows;
   // No data → render an empty-state message instead of an axes-only chart whose hover
   // cursor/tooltip would otherwise flash a white box.
-  if (!rows || rows.length === 0) {
+  if (!result.rows || result.rows.length === 0) {
     return <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">No data</div>;
   }
   const x = (config.visual.xAxisKey as string) ?? 'label';
   const y = (config.visual.yAxisKey as string) ?? 'value';
+  const size = config.visual.sizeKey as string | undefined;
+  // A scatter plot measures on both axes; every other chart measures on y only.
+  const measured = config.type === 'scatter-plot' ? [x, y, ...(size ? [size] : [])] : [y];
+  const rows = numericRows(result.rows as Record<string, unknown>[], measured);
   const color = (config.visual.color as string) ?? 'var(--brand)';
   switch (config.type) {
     case 'line-chart':

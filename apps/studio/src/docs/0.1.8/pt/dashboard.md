@@ -373,8 +373,6 @@ O PostgreSQL, o MySQL, o MariaDB e o SQL Server param todos o trabalho da base n
 - **Results Recorded mostra 0 para um exame.** Esse exame é um painel de exames, e os seus resultados têm outros nomes. Veja [O que mostra o painel de exemplo](#o-que-mostra-o-painel-de-exemplo).
 - **Identificador da variável só guarda uma letra.** Cole o identificador inteiro de uma vez. É um problema conhecido.
 - **Breakdown não muda nada no meu gráfico.** Hoje só **Table** mostra uma divisão.
-- **Orders by Status não mostra gráfico.** É um problema conhecido desse widget de exemplo. Os estados também aparecem na tabela **Recent Orders**.
-- **Algumas barras de Orders by Test estão cortadas no topo.** É um problema conhecido de escala desse widget de exemplo. Aponte para uma barra para ver o número real.
 - **Um widget mostra um erro de tempo ou de linhas.** Atingiu o tempo limite ou o limite de linhas. Veja [Limites e definições](#limites-e-definicoes).
 - **Um widget novo não está visível.** Os widgets novos vão para o fundo da grelha. Desça a página.
 
