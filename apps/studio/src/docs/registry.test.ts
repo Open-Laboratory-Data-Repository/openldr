@@ -47,6 +47,7 @@ describe('docs registry', () => {
     expect(DOC_GUIDES.map((guide) => guide.slug)).toEqual([
       'start-here',
       'user-preferences',
+      'layouts',
       'dashboard',
       'reports',
       'workflows',
@@ -71,6 +72,7 @@ describe('docs registry', () => {
       'connector-diagnose',
       'v1-import',
       'marketplace',
+      'plugin-sites',
       'auth-providers',
       'environment',
       'upgrading',
@@ -85,6 +87,7 @@ describe('docs registry', () => {
     ).toEqual({
       'start-here': ['dashboard', 'reports', 'advanced-docs'],
       'user-preferences': ['start-here'],
+      layouts: ['user-preferences', 'roles'],
       dashboard: ['reports', 'workflows', 'query', 'data-exposure', 'settings'],
       reports: ['dashboard', 'audit', 'report-designer', 'query'],
       workflows: ['report-pipeline', 'reports', 'connectors', 'audit'],
@@ -109,6 +112,7 @@ describe('docs registry', () => {
       'connector-diagnose': ['connectors'],
       'v1-import': ['connectors', 'connector-diagnose', 'marketplace'],
       marketplace: ['settings', 'connectors', 'forms'],
+      'plugin-sites': ['marketplace', 'dashboard'],
       'auth-providers': ['environment', 'users', 'sync'],
       environment: ['settings', 'connectors'],
       upgrading: ['settings', 'environment', 'workflows'],
