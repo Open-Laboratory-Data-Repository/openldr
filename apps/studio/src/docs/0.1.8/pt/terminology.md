@@ -130,7 +130,7 @@ Um exame do catálogo tem também uma categoria e tipos de amostra que esta pág
 
 ## Num telemóvel
 
-Num telemóvel, a lista de editores fica aberta e ocupa quase metade do ecrã, com nomes cortados. Recolha-a com o botão ao lado de **PUBLISHERS** para dar espaço à tabela. A tabela desliza para o lado até ao menu **⋯** de cada linha.
+Num telemóvel, a lista de editores começa recolhida, para deixar a largura à tabela. Abra-a com **Show publishers**, o botão no topo da lista, para escolher um editor, e depois recolha-a. A tabela desliza para o lado até ao menu **⋯** de cada linha.
 
 ## Resolução de problemas
 

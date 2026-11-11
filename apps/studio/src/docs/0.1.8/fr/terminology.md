@@ -130,7 +130,7 @@ Un examen du catalogue porte aussi une catégorie et des types de prélèvement 
 
 ## Sur un téléphone
 
-Sur un téléphone, la liste des éditeurs reste ouverte et prend presque la moitié de l'écran, avec des noms coupés. Repliez-la avec le bouton à côté de **PUBLISHERS** pour donner de la place au tableau. Le tableau défile sur le côté jusqu'au menu **⋯** de chaque ligne.
+Sur un téléphone, la liste des éditeurs démarre repliée, pour laisser la largeur au tableau. Ouvrez-la avec **Show publishers**, le bouton en haut de la liste, pour choisir un éditeur, puis repliez-la. Le tableau défile sur le côté jusqu'au menu **⋯** de chaque ligne.
 
 ## Dépannage
 

@@ -1,3 +1,4 @@
+import { isNarrowViewport } from '@/lib/viewport';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Library, MoreHorizontal, ChevronRight, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
@@ -122,7 +123,8 @@ export function Terminology(): JSX.Element {
   const [loading, setLoading] = useState(true);
 
   // ── navigation ──────────────────────────────────────────────────────────────
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  // Folded on a phone: open, the rail takes almost half a 375-pixel screen. Same rule as QueryPage.
+  const [railCollapsed, setRailCollapsed] = useState(() => isNarrowViewport());
   const [selectedPublisherId, setSelectedPublisherId] = useState('');
   const [selectedSystemId, setSelectedSystemId] = useState('');
   const [paneTab, setPaneTab] = useState<'systems' | 'valuesets'>('systems');

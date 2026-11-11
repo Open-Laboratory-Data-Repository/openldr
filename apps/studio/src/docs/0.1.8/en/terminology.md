@@ -135,7 +135,7 @@ A catalog test also carries a category and specimen types that this page does no
 
 ## On a phone
 
-On a phone the publishers list stays open and takes almost half the screen, with names cut short. Fold it with the button beside **PUBLISHERS** to give the table room. The table scrolls sideways to reach each row's **⋯** menu.
+On a phone the publishers list starts folded, so the table gets the width. Open it with **Show publishers**, the button at its top, to pick a publisher, then fold it again. The table scrolls sideways to reach each row's **⋯** menu.
 
 ## Troubleshooting
 

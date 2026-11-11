@@ -65,6 +65,21 @@ describe('Terminology page', () => {
     await waitFor(() => expect(screen.getByText(/Select a publisher to browse/i)).toBeInTheDocument());
   });
 
+  it('starts with the publisher rail folded on a phone', async () => {
+    // Open by default, the rail took 160 of a phone's 375 pixels and cut the names short.
+    const original = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query.includes('max-width'), media: query, onchange: null,
+      addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      render(<MemoryRouter><Terminology /></MemoryRouter>);
+      expect(await screen.findByRole('button', { name: 'Show publishers' })).toBeInTheDocument();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it('renders the publisher rail and a code-system', async () => {
     render(
       <MemoryRouter>
