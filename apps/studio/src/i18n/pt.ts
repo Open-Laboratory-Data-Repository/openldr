@@ -704,6 +704,18 @@ export const pt: EnShape = {
       categoryHost: 'Anfitrião',
     },
     marketplace: {
+      capability: {
+        readInput: 'Ler ficheiros de entrada: {{list}}',
+        emitFhir: 'Guardar estes registos: {{list}}',
+        netEgress: 'Ligar a estes servidores: {{list}}',
+        dataScope: 'Ler dados guardados: {{list}}',
+        hostReports: 'Ler e executar relatórios',
+        hostConnectors: 'Usar, testar e enviar através de conectores',
+        hostSchedule: 'Agendar as suas próprias tarefas',
+        hostFhir: 'Ler a lista de unidades de saúde',
+        hostImport: 'Ler os conectores de base de dados que um administrador autoriza, e guardar o que importa',
+        none: 'nenhum',
+      },
       heading: 'Marketplace',
       refresh: 'Atualizar',
       sourceLocal: 'Registo local',

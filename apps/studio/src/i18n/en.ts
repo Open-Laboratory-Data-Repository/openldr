@@ -706,6 +706,18 @@ export const en = {
       categoryHost: 'Host',
     },
     marketplace: {
+      capability: {
+        readInput: 'Read input files: {{list}}',
+        emitFhir: 'Save these records: {{list}}',
+        netEgress: 'Connect to these servers: {{list}}',
+        dataScope: 'Read stored data: {{list}}',
+        hostReports: 'Read and run reports',
+        hostConnectors: 'Use, test and push through connectors',
+        hostSchedule: 'Schedule its own jobs',
+        hostFhir: 'Read the facility list',
+        hostImport: 'Read the database connectors an admin allows, and save what it imports',
+        none: 'none',
+      },
       heading: 'Marketplace',
       refresh: 'Refresh',
       sourceLocal: 'Local registry',

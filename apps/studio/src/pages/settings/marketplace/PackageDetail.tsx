@@ -283,7 +283,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 <p className="text-[13px] text-muted-foreground">{t('settings.marketplace.noneCapabilities')}</p>
               ) : (
                 <ul className="list-disc space-y-1 pl-5 text-[13px] text-foreground/85">
-                  {capabilities.map((cap, i) => <li key={`${i}-${capabilityLine(cap)}`}>{capabilityLine(cap)}</li>)}
+                  {capabilities.map((cap, i) => <li key={`${i}-${capabilityLine(cap, t)}`}>{capabilityLine(cap, t)}</li>)}
                 </ul>
               )}
             </section>

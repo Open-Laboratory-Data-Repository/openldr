@@ -704,6 +704,18 @@ export const fr: EnShape = {
       categoryHost: 'Hôte',
     },
     marketplace: {
+      capability: {
+        readInput: 'Lire des fichiers d\'entrée : {{list}}',
+        emitFhir: 'Enregistrer ces données : {{list}}',
+        netEgress: 'Se connecter à ces serveurs : {{list}}',
+        dataScope: 'Lire des données enregistrées : {{list}}',
+        hostReports: 'Lire et exécuter des rapports',
+        hostConnectors: 'Utiliser, tester et envoyer via les connecteurs',
+        hostSchedule: 'Planifier ses propres tâches',
+        hostFhir: 'Lire la liste des établissements',
+        hostImport: 'Lire les connecteurs de base de données qu\'un administrateur autorise, et enregistrer ce qu\'elle importe',
+        none: 'aucun',
+      },
       heading: 'Marketplace',
       refresh: 'Actualiser',
       sourceLocal: 'Registre local',
