@@ -23,7 +23,7 @@ O painel fecha quando termina a sessão, e quando o plugin é desativado ou o pa
 
 ## Quem os vê
 
-Só vê o cartão e o painel de um plugin se puder ver o próprio plugin. Se um plugin for só para certos papéis, os outros papéis não veem nenhum dos dois.
+Só vê o cartão e o painel de um plugin se puder ver o próprio plugin. Se um plugin for só para certas funções, as outras funções não veem nenhum dos dois.
 
 ## Para administradores: desligar um cartão ou um painel
 
