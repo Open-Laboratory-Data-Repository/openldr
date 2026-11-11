@@ -1,45 +1,77 @@
 # Activity
 
-Activity groups workflow records by payload identifier so you can inspect the recorded processing stages. It is separate from [Audit](/docs/audit), which records user and configuration changes.
+**Activity** follows each payload as it moves through OpenLDR: received, checked, stored, sent on. A payload is one batch of data, such as one HTTP post to a webhook. Use it to answer "did that data arrive, and was it stored?".
 
-## Inspect a payload
+It is not [Audit](/docs/audit). Audit records what people changed. Activity records what happened to data.
 
-1. Open **Activity** from the main navigation. Your account needs permission to view Activity.
-2. Search using the payload identifier, source, status, or current stage. Use the table filters to narrow the loaded rows.
-3. Select a row to open its lifecycle details. Read each recorded stage, timestamp, and available detail. Keep the payload identifier when asking an administrator to investigate.
-4. Close the details, then choose **⋯ → Refresh** to reload the list. Reopen the row to fetch updated details.
-5. If the payload failed or seems incomplete, inspect the associated workflow's run history in [Workflows](/docs/workflows).
+This guide takes about 10 minutes. Select any picture or clip to enlarge it.
+
+![Activity after three posts to the Ingest webhook. Each one reached Persisted and is Complete.](activity-list.png)
+
+## Who can do what
+
+One permission covers this page: **View activity**. It is read-only. Nothing here changes or re-runs data.
+
+## Before you start
+
+A new install shows **No recent payloads.** Activity lists payloads that went through a workflow. The sample data loaded with `openldr ingest` does not, so it is not listed here.
+
+To see a payload, send one through the Ingest webhook. See [Workflows, Example 1 and 2](/docs/workflows#example-1-get-the-ingest-webhook-ready). It takes about five minutes and changes no counts.
+
+## Example 1: follow one payload
+
+![Selecting a payload to open its lifecycle.](activity-detail.mp4)
+
+1. Open **Activity**. The newest payloads are at the top.
+2. Find your payload. **Source** is **webhook**. **Stage** reads **Persisted**. **Status** reads **Complete**.
+3. Select the row. **Payload lifecycle** opens on the right.
+
+**Expected result:** two stages. **Received**, from the webhook, with the run id. Then **Persisted**, with **1 × Patient**: the one resource stored.
+
+Keep the payload identifier, the long id at the top, if you ask an administrator to look into it.
+
+To see the latest payloads, open the dots menu at the top right and select **Refresh**. Open a row again to fetch its latest details.
 
 ## Read stages and status
 
-| Stage | What the recorded stage means |
+| Stage | What it means |
 | --- | --- |
-| Received | An ingestion batch or workflow run records receipt. |
-| Validated | A workflow result contains a successful validation step. |
-| Persisted | A persistence event records stored resources. |
-| Pushed | A workflow result contains a successful sink or push step. |
+| Received | A batch or workflow run recorded that the data arrived. |
+| Validated | A workflow step checked the data and it passed. |
+| Persisted | The data was stored. The detail says how many of each resource. |
+| Pushed | A workflow step sent the data on, for example to another system. |
 
-The detail list shows recorded stages; do not assume all four are required for every workflow. The row's stage indicator is a summary, not proof of each earlier stage. A recorded push step does not prove that someone reviewed the data at its destination.
+The detail lists the stages that were recorded. Not every workflow records all four. The stage bar in the list is a summary, not proof of each earlier stage. A recorded push does not prove anyone checked the data at the other end.
 
-**Complete** means a persistence event exists and no associated workflow run is marked failed. It does not require a Pushed stage. **Failed** means an associated workflow run failed. **Stuck** means no persistence event or failed run establishes either of those states; inspect workflow history before concluding that processing stopped.
+| Status | What it means |
+| --- | --- |
+| Complete | The data was stored, and no workflow run for it failed. It does not need a Pushed stage. |
+| Failed | A workflow run for it failed. Open the workflow's **History**. |
+| Stuck | Neither of the above can be shown. Check the workflow's **History** before deciding that processing stopped. |
 
-## Empty results and limits
+## Find a payload
 
-The page loads the 200 most recent payload groups. Search, filters, sorting, and table pagination operate on that loaded set. They do not search all historical payloads.
+- **Search payloads…** matches the payload id, source, status or stage.
+- **Filter**, **Sort** and **Columns** work as on any table.
+- The page loads the 200 newest payloads. Search, filters, sorting and paging work on those 200 only. They do not search older history.
 
-An empty list is not proof that no data was received. Clear search and filters, refresh, and inspect Workflows for relevant runs. A payload with no corresponding workflow history may be absent from this list. If a loading error appears, retry Refresh and report the error to an administrator if it persists.
+## Troubleshooting
 
-If lifecycle details remain on Loading, close them, refresh the list, and reopen the row. The page may not distinguish a failed detail request from a pending one. This page has no retry-processing action; use the workflow's documented recovery procedure.
+- **The list is empty.** That does not prove nothing arrived. Clear search and filters, select **Refresh**, and check the workflow's **History**. Data loaded with `openldr ingest` is not listed. A payload with no workflow history may be missing too.
+- **A loading error appears.** Select **Refresh** again. If it stays, report the error to an administrator.
+- **The lifecycle panel stays on Loading.** Close it, select **Refresh**, and open the row again. The page cannot always tell a failed request from a slow one.
+- **A payload is Failed.** Open the workflow it went through, then **History**, and read the failed node's error. This page has no retry. Follow the workflow's own recovery steps.
 
-## Waiting for queued events
+## How queued events are handled
 
-Each event bus instance processes one event handler at a time. A slow handler can delay later events. Repeated queue notifications do not start additional handlers while its current batch runs. Pending events remain queued for a later batch. Separate server processes can still handle events concurrently.
+These notes are for administrators.
+
+- Each event bus instance runs one event handler at a time. A slow handler delays later events. More queue notifications do not start more handlers while a batch runs. Pending events wait for a later batch. Separate server processes can still handle events at the same time.
+- The worker renews leases for running events and for events waiting in its claimed batch. A replacement worker gets a new claim token. An older worker cannot then mark that claim complete, failed or retried.
+- After a crash, an expired claim counts as a failed attempt and can be retried. Handlers must cope with being run twice: a database outage or a paused process can let another worker run the same event.
+- Stop old workers before upgrading. Workers without claim-token checks cannot give this protection.
 
 ## Related guides
 
 - [Workflows](/docs/workflows)
 - [Audit](/docs/audit)
-
-## Queue ownership
-
-The worker renews leases for running events and events waiting in its claimed batch. A replacement worker gets a new claim token. An older worker cannot overwrite that claim with completion, failure, or retry updates. After a crash, an expired claim still counts as a failed attempt and can be retried. Handlers must tolerate repeated delivery: a database outage or paused process can still allow another worker to run the event. Stop old workers before upgrading; workers without claim-token checks cannot provide this protection.

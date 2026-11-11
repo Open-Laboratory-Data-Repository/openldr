@@ -57,6 +57,7 @@ export const TITLES: Record<string, string> = {
   dashboard: 'Dashboards',
   reports: 'Reports',
   query: 'Custom queries',
+  workflows: 'Workflows',
   'dashboard-refresh': 'Dashboard refresh',
 
   'dashboard-limits': 'Dashboard query limits',
@@ -93,6 +94,7 @@ export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'dashboard' },
   { slug: 'reports' },
   { slug: 'query' },
+  { slug: 'workflows' },
   { slug: 'dashboard-refresh' },
 
   { slug: 'dashboard-limits' },
@@ -130,6 +132,8 @@ export const SHARED_GUIDES: Record<string, string> = {
   dashboard: 'dashboard',
   reports: 'reports',
   query: 'query',
+  workflows: 'workflows',
+  activity: 'activity',
 };
 
 const guideFiles = import.meta.glob('../../../studio/src/docs/*/*/*.md', {

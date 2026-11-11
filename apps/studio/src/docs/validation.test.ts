@@ -261,11 +261,18 @@ describe('authored guide structure', () => {
     expect(broken).toEqual([]);
   });
 
+  // Two capture tools write into one folder. A shared name means one silently overwrites the other.
+  it('never gives a guide-script capture the same name as a manifest screenshot', () => {
+    const manifestNames = new Set(authoredScreenshotManifest.shots.map((shot) => shot.name));
+    const clashes = DOC_GUIDES.flatMap((g) => g.capturedNames ?? []).filter((name) => manifestNames.has(name));
+    expect(clashes).toEqual([]);
+  });
+
   // Long guides (those with captured screenshots and clips) teach through worked examples
   // instead of the short Outcome / Steps / Expected result template.
   it('gives every long guide examples, troubleshooting and related guides', () => {
     const long = DOC_GUIDES.filter((g) => (g.capturedNames ?? []).length > 0);
-    expect(long.map((g) => g.slug)).toEqual(expect.arrayContaining(['start-here', 'dashboard', 'reports', 'query']));
+    expect(long.map((g) => g.slug)).toEqual(expect.arrayContaining(['start-here', 'dashboard', 'reports', 'query', 'workflows', 'activity']));
     for (const g of long) {
       const content = resolve('en', g.slug)!.content;
       expect(content, `${g.slug} needs a worked example`).toMatch(/^## Example \d+: /m);

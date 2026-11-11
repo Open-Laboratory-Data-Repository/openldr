@@ -1,38 +1,77 @@
 # Activité
 
-Activité regroupe les exécutions de workflows par identifiant de données reçues. [Audit](/docs/audit) concerne les changements d'utilisateurs et de configuration.
+**Activité** suit chaque envoi de données, appelé charge, pendant son passage dans OpenLDR : reçue, vérifiée, enregistrée, transmise. Une charge est un lot de données, par exemple un envoi HTTP vers un webhook. Servez-vous-en pour répondre à « ces données sont-elles arrivées, et ont-elles été enregistrées ? ».
 
-## Examiner un traitement
+Ce n'est pas l'[Audit](/docs/audit). L'Audit enregistre ce que les personnes ont modifié. Activité enregistre ce qui est arrivé aux données.
 
-1. Ouvrez **Activité**. Votre compte doit disposer de la permission de consulter cette page.
-2. Recherchez un identifiant, une source, un statut ou une étape. Les filtres réduisent les lignes chargées.
-3. Sélectionnez une ligne pour lire les étapes, heures et détails enregistrés. Conservez l'identifiant pour une investigation.
-4. Fermez les détails, actualisez depuis le menu **⋯**, puis rouvrez la ligne pour obtenir les nouveaux détails.
-5. En cas d'échec ou de traitement incomplet, consultez l'historique du workflow dans [Workflows](/docs/workflows).
+Ce guide prend environ 10 minutes. Sélectionnez une image ou un clip pour l'agrandir.
 
-## Étapes et statuts
+![Activité après trois envois vers le webhook Ingest. Chacun a atteint Persistée et est Terminée.](activity-list.png)
 
-Les étapes représentent la réception, une validation réussie, un événement de persistance et une étape de sortie réussie. Toutes les étapes ne sont pas nécessaires à chaque workflow. L'indicateur de la ligne résume le parcours ; il ne prouve pas chaque étape précédente. Une sortie réussie ne prouve pas une vérification humaine à destination.
+## Qui peut faire quoi
 
-Le statut complet signifie qu'un événement de persistance existe sans exécution associée en échec. Il n'exige pas d'étape de sortie. Un statut d'échec indique une exécution échouée. Le statut bloqué signifie que les données enregistrées n'établissent ni l'un ni l'autre ; consultez l'historique avant de conclure que le traitement s'est arrêté.
+Une seule autorisation couvre cette page : **View activity**. Elle ne fait que lire. Rien ici ne modifie ni ne relance des données.
 
-## Résultats vides et limites
+## Avant de commencer
 
-La page charge les 200 groupes les plus récents. Recherche, filtres, tri et pagination portent uniquement sur ces groupes, pas sur tout l'historique.
+Une nouvelle installation affiche **Aucune charge récente.** Activité liste les charges passées par un flux de travail. Les données d'exemple chargées avec `openldr ingest` n'y passent pas, elles n'apparaissent donc pas ici.
 
-Une liste vide ne prouve pas l'absence de données reçues. Effacez recherche et filtres, actualisez, puis consultez les exécutions des workflows. Des données sans historique de workflow associé peuvent manquer dans la liste.
+Pour voir une charge, envoyez-en une par le webhook Ingest. Voir [Flux de travail, exemples 1 et 2](/docs/workflows#exemple-1-preparer-le-webhook-ingest). Cela prend environ cinq minutes et ne change aucun compte.
 
-Si les détails restent en chargement, fermez-les, actualisez et rouvrez la ligne. La page peut afficher le chargement après un échec de requête. Activité ne propose pas de relance du traitement ; suivez la procédure de récupération du workflow.
+## Exemple 1 : suivre une charge
 
-## Attente des événements en file
+![Sélectionner une charge pour ouvrir son cycle de vie.](activity-detail.mp4)
 
-Chaque instance du bus d'événements exécute un seul gestionnaire à la fois. Un gestionnaire lent peut retarder les événements suivants. Les notifications répétées ne lancent pas d'autres gestionnaires pendant le lot en cours. Les événements en attente restent en file pour un lot ultérieur. Des processus serveur distincts peuvent toujours traiter des événements simultanément.
+1. Ouvrez **Activité**. Les charges les plus récentes sont en haut.
+2. Trouvez votre charge. **Source** vaut **webhook**. **Étape** affiche **Persistée**. **Statut** affiche **Terminée**.
+3. Sélectionnez la ligne. **Cycle de vie de la charge** s'ouvre à droite.
+
+**Résultat attendu :** deux étapes. **Reçue**, depuis le webhook, avec l'identifiant de l'exécution. Puis **Persistée**, avec **1 × Patient** : la ressource enregistrée.
+
+Gardez l'identifiant de la charge, le long identifiant en haut, si vous demandez à un administrateur de regarder.
+
+Pour voir les dernières charges, ouvrez le menu à trois points en haut à droite et sélectionnez **Actualiser**. Rouvrez une ligne pour obtenir ses derniers détails.
+
+## Lire les étapes et le statut
+
+| Étape | Ce qu'elle veut dire |
+| --- | --- |
+| Reçue | Un lot ou une exécution de flux a noté l'arrivée des données. |
+| Validée | Une étape du flux a vérifié les données, et elles sont passées. |
+| Persistée | Les données ont été enregistrées. Le détail dit combien de chaque ressource. |
+| Envoyée | Une étape du flux a transmis les données, par exemple à un autre système. |
+
+Le détail liste les étapes enregistrées. Tous les flux n'enregistrent pas les quatre. La barre d'étapes de la liste est un résumé, pas la preuve de chaque étape précédente. Un envoi enregistré ne prouve pas que quelqu'un a vérifié les données à l'arrivée.
+
+| Statut | Ce qu'il veut dire |
+| --- | --- |
+| Terminée | Les données ont été enregistrées, et aucune exécution de flux pour elles n'a échoué. Pas besoin d'étape Envoyée. |
+| Échouée | Une exécution de flux pour elles a échoué. Ouvrez l'**History** du flux. |
+| Bloquée | Aucun des deux cas ne peut être montré. Vérifiez l'**History** du flux avant de conclure que le traitement s'est arrêté. |
+
+## Trouver une charge
+
+- **Rechercher des charges utiles…** trouve l'identifiant de la charge, la source, le statut ou l'étape.
+- **Filtrer**, **Trier** et **Colonnes** marchent comme sur n'importe quel tableau.
+- La page charge les 200 charges les plus récentes. Recherche, filtres, tri et pagination ne portent que sur ces 200. Ils ne cherchent pas dans l'historique plus ancien.
+
+## Dépannage
+
+- **La liste est vide.** Cela ne prouve pas que rien n'est arrivé. Effacez la recherche et les filtres, sélectionnez **Actualiser**, et vérifiez l'**History** du flux. Les données chargées avec `openldr ingest` n'apparaissent pas. Une charge sans historique de flux peut aussi manquer.
+- **Une erreur de chargement s'affiche.** Sélectionnez de nouveau **Actualiser**. Si elle reste, signalez l'erreur à un administrateur.
+- **Le panneau du cycle de vie reste en chargement.** Fermez-le, sélectionnez **Actualiser**, et rouvrez la ligne. La page ne distingue pas toujours une requête échouée d'une requête lente.
+- **Une charge est Échouée.** Ouvrez le flux par lequel elle est passée, puis **History**, et lisez l'erreur du nœud en échec. Cette page n'a pas de bouton pour relancer. Suivez la procédure de reprise du flux.
+
+## Gestion des événements en file
+
+Ces notes sont pour les administrateurs.
+
+- Chaque instance du bus d'événements traite un gestionnaire à la fois. Un gestionnaire lent retarde les événements suivants. D'autres notifications de file ne lancent pas d'autres gestionnaires pendant un lot. Les événements en attente patientent jusqu'à un lot suivant. Des processus serveur séparés peuvent quand même traiter des événements en même temps.
+- Le processus renouvelle ses baux pour les événements en cours et pour ceux qui attendent dans son lot réservé. Un processus de remplacement reçoit un nouveau jeton de réservation. Un ancien processus ne peut alors plus marquer cette réservation comme finie, échouée ou à réessayer.
+- Après un plantage, une réservation expirée compte comme une tentative échouée et peut être réessayée. Les gestionnaires doivent supporter d'être lancés deux fois : une panne de base ou un processus en pause peut laisser un autre processus traiter le même événement.
+- Arrêtez les anciens processus avant une mise à jour. Les processus sans vérification du jeton de réservation ne peuvent pas offrir cette protection.
 
 ## Guides associés
 
-- [Workflows](/docs/workflows)
+- [Flux de travail](/docs/workflows)
 - [Audit](/docs/audit)
-
-## Propriété des événements en file
-
-Le worker renouvelle les baux des événements en cours et de ceux qui attendent dans son lot. Un worker de remplacement reçoit un nouveau jeton. Un ancien worker ne peut plus modifier cet événement pour le terminer, le déclarer en échec ou le relancer. Après un arrêt brutal, un bail expiré compte toujours comme une tentative échouée et permet une reprise. Les traitements doivent accepter les livraisons répétées. Une panne de base ou un processus suspendu peut permettre une autre exécution. Arrêtez les anciens workers avant la mise à niveau. Les workers sans contrôle du jeton ne garantissent pas cette protection.

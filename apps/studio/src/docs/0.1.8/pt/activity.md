@@ -1,38 +1,77 @@
 # Atividade
 
-A Atividade agrupa execuções de workflows pelo identificador dos dados recebidos. A [Auditoria](/docs/audit) regista alterações de utilizadores e de configuração.
+**Atividade** acompanha cada envio de dados, chamado carga, enquanto passa pelo OpenLDR: recebida, verificada, guardada, enviada. Uma carga é um lote de dados, por exemplo um envio HTTP para um webhook. Use-a para responder a "estes dados chegaram, e foram guardados?".
 
-## Inspecionar um processamento
+Não é a [Auditoria](/docs/audit). A Auditoria regista o que as pessoas mudaram. A Atividade regista o que aconteceu aos dados.
 
-1. Abra **Atividade**. A conta deve ter permissão para consultar esta página.
-2. Pesquise por identificador, origem, estado ou etapa. Os filtros reduzem as linhas carregadas.
-3. Selecione uma linha para consultar etapas, horas e detalhes registados. Guarde o identificador para uma investigação.
-4. Feche os detalhes, atualize pelo menu **⋯** e volte a abrir a linha para obter os detalhes mais recentes.
-5. Se houver uma falha ou um processamento incompleto, consulte o histórico do workflow em [Workflows](/docs/workflows).
+Este guia leva cerca de 10 minutos. Selecione uma imagem ou um clip para o ampliar.
 
-## Etapas e estados
+![Atividade depois de três envios para o webhook Ingest. Cada um chegou a Persistida e está Concluída.](activity-list.png)
 
-As etapas representam receção, validação bem-sucedida, um evento de persistência e uma etapa de envio bem-sucedida. Nem todas são necessárias em cada workflow. O indicador da linha resume o percurso; não prova cada etapa anterior. Um envio bem-sucedido não prova uma revisão humana no destino.
+## Quem pode fazer o quê
 
-O estado completo significa que existe um evento de persistência e nenhuma execução associada falhou. Não exige uma etapa de envio. O estado de falha indica uma execução falhada. O estado bloqueado significa que os registos não estabelecem nenhum dos dois; consulte o histórico antes de concluir que o processamento parou.
+Uma só permissão cobre esta página: **View activity**. Só lê. Nada aqui altera ou volta a correr dados.
 
-## Resultados vazios e limites
+## Antes de começar
 
-A página carrega os 200 grupos mais recentes. Pesquisa, filtros, ordenação e paginação abrangem apenas esse conjunto, não todo o histórico.
+Uma instalação nova mostra **Nenhuma carga recente.** A Atividade lista cargas que passaram por um fluxo de trabalho. Os dados de exemplo carregados com `openldr ingest` não passam, por isso não aparecem aqui.
 
-Uma lista vazia não prova que não foram recebidos dados. Limpe a pesquisa e os filtros, atualize e consulte as execuções dos workflows. Dados sem histórico de workflow associado podem não aparecer na lista.
+Para ver uma carga, envie uma pelo webhook Ingest. Veja [Fluxos de trabalho, exemplos 1 e 2](/docs/workflows#exemplo-1-preparar-o-webhook-ingest). Leva cerca de cinco minutos e não muda nenhuma contagem.
 
-Se os detalhes continuarem a carregar, feche-os, atualize e abra novamente a linha. A página pode mostrar carregamento depois de uma falha no pedido. A Atividade não permite repetir o processamento; siga o procedimento de recuperação do workflow.
+## Exemplo 1: acompanhar uma carga
 
-## Espera dos eventos em fila
+![Selecionar uma carga para abrir o seu ciclo de vida.](activity-detail.mp4)
 
-Cada instância do barramento de eventos executa um único processador de eventos de cada vez. Um processador lento pode atrasar os eventos seguintes. As notificações repetidas não iniciam outros processadores durante o lote atual. Os eventos pendentes ficam em fila para um lote posterior. Processos de servidor separados podem continuar a tratar eventos em simultâneo.
+1. Abra **Atividade**. As cargas mais recentes estão no topo.
+2. Encontre a sua carga. **Origem** é **webhook**. **Etapa** mostra **Persistida**. **Status** mostra **Concluída**.
+3. Selecione a linha. **Ciclo de vida da carga** abre à direita.
+
+**Resultado esperado:** duas etapas. **Recebida**, do webhook, com o identificador da execução. Depois **Persistida**, com **1 × Patient**: o recurso guardado.
+
+Guarde o identificador da carga, o identificador longo no topo, se pedir a um administrador para investigar.
+
+Para ver as cargas mais recentes, abra o menu de três pontos no canto superior direito e selecione **Atualizar**. Abra de novo uma linha para obter os detalhes mais recentes.
+
+## Ler as etapas e o estado
+
+| Etapa | O que quer dizer |
+| --- | --- |
+| Recebida | Um lote ou uma execução de fluxo registou a chegada dos dados. |
+| Validada | Um passo do fluxo verificou os dados e passaram. |
+| Persistida | Os dados foram guardados. O detalhe diz quantos de cada recurso. |
+| Enviada | Um passo do fluxo enviou os dados, por exemplo para outro sistema. |
+
+O detalhe lista as etapas registadas. Nem todos os fluxos registam as quatro. A barra de etapas na lista é um resumo, não a prova de cada etapa anterior. Um envio registado não prova que alguém verificou os dados no destino.
+
+| Estado | O que quer dizer |
+| --- | --- |
+| Concluída | Os dados foram guardados, e nenhuma execução de fluxo para eles falhou. Não precisa da etapa Enviada. |
+| Falhou | Uma execução de fluxo para eles falhou. Abra o **History** do fluxo. |
+| Bloqueada | Não se consegue mostrar nenhum dos dois casos. Veja o **History** do fluxo antes de concluir que o tratamento parou. |
+
+## Encontrar uma carga
+
+- **Pesquisar cargas úteis…** encontra o identificador da carga, a origem, o estado ou a etapa.
+- **Filtrar**, **Ordenar** e **Colunas** funcionam como em qualquer tabela.
+- A página carrega as 200 cargas mais recentes. A pesquisa, os filtros, a ordenação e a paginação só funcionam nessas 200. Não procuram no histórico mais antigo.
+
+## Resolução de problemas
+
+- **A lista está vazia.** Isso não prova que nada chegou. Limpe a pesquisa e os filtros, selecione **Atualizar**, e veja o **History** do fluxo. Os dados carregados com `openldr ingest` não aparecem. Uma carga sem histórico de fluxo também pode faltar.
+- **Aparece um erro ao carregar.** Selecione **Atualizar** de novo. Se continuar, comunique o erro a um administrador.
+- **O painel do ciclo de vida fica a carregar.** Feche-o, selecione **Atualizar** e abra de novo a linha. A página nem sempre distingue um pedido falhado de um lento.
+- **Uma carga Falhou.** Abra o fluxo por onde passou, depois **History**, e leia o erro do nó que falhou. Esta página não tem botão para repetir. Siga o procedimento de recuperação do fluxo.
+
+## Como são tratados os eventos em fila
+
+Estas notas são para administradores.
+
+- Cada instância do barramento de eventos trata um gestor de cada vez. Um gestor lento atrasa os eventos seguintes. Mais notificações da fila não lançam mais gestores enquanto um lote corre. Os eventos pendentes esperam por um lote seguinte. Processos de servidor separados podem tratar eventos ao mesmo tempo.
+- O processo renova as reservas dos eventos a correr e dos que esperam no seu lote reservado. Um processo de substituição recebe um novo testemunho de reserva. Um processo antigo deixa de poder marcar essa reserva como terminada, falhada ou a repetir.
+- Depois de uma falha, uma reserva expirada conta como uma tentativa falhada e pode ser repetida. Os gestores têm de aguentar ser corridos duas vezes: uma falha da base ou um processo em pausa pode deixar outro processo correr o mesmo evento.
+- Pare os processos antigos antes de atualizar. Processos sem verificação do testemunho de reserva não dão esta proteção.
 
 ## Guias relacionados
 
-- [Workflows](/docs/workflows)
+- [Fluxos de trabalho](/docs/workflows)
 - [Auditoria](/docs/audit)
-
-## Propriedade dos eventos na fila
-
-O worker renova os prazos dos eventos em execução e dos que aguardam no seu lote. Um worker substituto recebe um novo token. Um worker anterior não pode alterar essa atribuição para concluir, falhar ou repetir o evento. Após uma interrupção, um prazo expirado continua a contar como tentativa falhada e permite nova tentativa. Os processos devem aceitar entregas repetidas. Uma falha da base de dados ou um processo suspenso pode permitir outra execução. Pare os workers antigos antes da atualização. Workers sem verificação do token não garantem esta proteção.
