@@ -207,6 +207,7 @@ export function WidgetEditorDialog({
       : { mode: 'builder', model: 'service_requests', metric: { key: 'count', label: 'Count', agg: 'count' }, filters: [] },
   );
   const [visual, setVisual] = useState<Visual>(initial?.visual ?? {});
+  const [refreshSec, setRefreshSec] = useState<number>(initial?.refreshIntervalSec ?? 0);
   const [bindings, setBindings] = useState<Record<string, string>>(initialBindings);
   const [varDefs, setVarDefs] = useState<Record<string, WidgetVariableDef>>(initialDefs);
   // SQL -> Builder import guard: set when the current sqlText can't be recognized as a builder
@@ -434,7 +435,7 @@ export function WidgetEditorDialog({
   const save = () => {
     const id = initial?.id ?? (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `w-${Math.round(performance.now())}`);
     const query = buildSaveQuery(mode, builderQuery, sqlText, bindings, varDefs);
-    onSave({ id, type, title, query, refreshIntervalSec: initial?.refreshIntervalSec ?? 0, visual });
+    onSave({ id, type, title, query, refreshIntervalSec: refreshSec, visual });
   };
 
   const columns = preview?.columns.map((c) => c.key) ?? [];
@@ -663,6 +664,18 @@ export function WidgetEditorDialog({
               )}
             </div>
             <div className={cn('min-h-0 min-w-0 overflow-y-auto rounded-md border border-border p-3 md:block md:flex-[2] md:rounded-t-none md:border-t-0', mobileTab === 'style' ? 'flex-1' : 'hidden')}>
+              {/* Widget-level, so it shows before the query has run. 0 turns automatic refresh off. */}
+              <div className="mb-3">
+                <Field label="Refresh every (seconds)">
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-8 text-xs"
+                    value={refreshSec}
+                    onChange={(e) => setRefreshSec(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  />
+                </Field>
+              </div>
               {columns.length > 0 ? (
                 <ConfigPanel widgetType={type} columns={columns} visual={visual} onVisualChange={setVisual} xKey={xKey} yKey={yKey} />
               ) : (

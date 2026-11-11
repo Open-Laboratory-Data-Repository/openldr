@@ -109,7 +109,7 @@ Pour effacer un filtre, ouvrez-le et choisissez **All**. Pour effacer **Period**
 
 Sélectionnez **Actualiser**, l'icône en forme de flèches, pour relancer tous les widgets tout de suite.
 
-Un widget peut aussi s'actualiser seul. Les widgets d'exemple s'actualisent toutes les 5 minutes. Les widgets que vous créez dans l'éditeur ne s'actualisent pas seuls, car l'éditeur n'a pas encore de réglage pour cela. Pour leur donner un intervalle, exportez le tableau de bord, réglez `refreshIntervalSec` sur ce widget dans le fichier, puis importez-le. Voir [Exporter, importer et copier](#exporter-importer-et-copier).
+Un widget peut aussi s'actualiser seul. Les widgets d'exemple s'actualisent toutes les 5 minutes. Pour en régler un, ouvrez le widget dans l'éditeur et tapez un nombre de secondes dans **Refresh every (seconds)**, au-dessus des options du graphique. Le champ s'affiche avant que la requête ait tourné. Sur un téléphone, il est dans l'onglet **Style**.
 
 Comment l'actualisation se comporte :
 
@@ -324,7 +324,6 @@ Le menu à trois points propose **Exporter** et **Importer**, en consultation co
 Servez-vous-en pour :
 
 - **Copier un tableau de bord** vers une autre installation, ou en garder une sauvegarde.
-- **Régler un intervalle d'actualisation.** Changez `refreshIntervalSec` sur un widget dans le fichier, puis importez.
 
 Importer un tableau de bord qui contient des widgets SQL échoue tant que **SQL brut pour les tableaux de bord** est désactivé, avec le message `raw SQL widgets are disabled`. Cela vaut aussi pour une copie du tableau de bord d'exemple. Activez d'abord le paramètre.
 

@@ -324,3 +324,19 @@ describe('WidgetEditorDialog', () => {
   // task's scope (WidgetEditorDialog.tsx only); flagged separately rather than fixed/mocked-around
   // here.
 });
+
+describe('refresh interval', () => {
+  it('saves the interval typed into Refresh every', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { status: 200 }));
+    const onSave = vi.fn();
+    render(<WidgetEditorDialog open initial={{ ...sqlWidget, refreshIntervalSec: 60 }} dashboardFilters={[]} onClose={() => {}} onSave={onSave} />);
+    const box = screen.getByLabelText('Refresh every (seconds)') as HTMLInputElement;
+    expect(box.value).toBe('60');
+    fireEvent.change(box, { target: { value: '300' } });
+    const trigger = screen.getByLabelText('Editor menu');
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: 'Save' })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ refreshIntervalSec: 300 }));
+  });
+});

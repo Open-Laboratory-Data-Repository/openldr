@@ -109,7 +109,7 @@ Para limpar um filtro, abra-o e escolha **All**. Para limpar **Period**, abra-o 
 
 Selecione **Atualizar**, o ícone com setas, para voltar a executar todos os widgets agora.
 
-Um widget também se pode atualizar sozinho. Os widgets de exemplo atualizam-se a cada 5 minutos. Os widgets que cria no editor não se atualizam sozinhos, porque o editor ainda não tem essa definição. Para lhes dar um intervalo, exporte o painel, defina `refreshIntervalSec` nesse widget no ficheiro e importe-o. Veja [Exportar, importar e copiar](#exportar-importar-e-copiar).
+Um widget também se pode atualizar sozinho. Os widgets de exemplo atualizam-se a cada 5 minutos. Para o definir, abra o widget no editor e escreva um número de segundos em **Refresh every (seconds)**, acima das opções do gráfico. O campo aparece antes de a consulta correr. Num telemóvel, está no separador **Style**.
 
 Como a atualização funciona:
 
@@ -324,7 +324,6 @@ O menu de três pontos tem **Exportar** e **Importar**, no modo de visualizaçã
 Use-os para:
 
 - **Copiar um painel** para outra instalação, ou guardar uma cópia de segurança.
-- **Definir um intervalo de atualização.** Mude `refreshIntervalSec` num widget no ficheiro e depois importe.
 
 Importar um painel com widgets SQL falha enquanto **SQL bruto no painel** estiver desativada, com a mensagem `raw SQL widgets are disabled`. Isto inclui uma cópia do painel de exemplo. Ative primeiro a definição.
 

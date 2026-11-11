@@ -107,7 +107,7 @@ To clear a filter, open it and choose **All**. To clear **Period**, open it and 
 
 Select **Refresh** to run every widget again now.
 
-A widget can also refresh by itself. The sample widgets refresh every 5 minutes. Widgets you build in the editor do not refresh by themselves, because the editor has no refresh setting yet. To give one an interval, export the dashboard, set `refreshIntervalSec` on that widget in the file, and import it. See [Export, import and copy](#export-import-and-copy).
+A widget can also refresh by itself. The sample widgets refresh every 5 minutes. To set one, open the widget in the editor and type a number of seconds in **Refresh every (seconds)**, above the chart options. It shows before the query has run. On a phone it is on the **Style** tab.
 
 How refresh behaves:
 
@@ -322,7 +322,6 @@ The **Dashboard menu** has **Export** and **Import** in view mode and in edit mo
 Use them to:
 
 - **Copy a dashboard** to another install, or keep a backup.
-- **Set a refresh interval.** Change `refreshIntervalSec` on a widget in the file, then import.
 
 Importing a dashboard that holds SQL widgets fails while **Dashboard raw SQL** is off, with the message `raw SQL widgets are disabled`. That includes a copy of the sample dashboard. Turn the setting on first.
 
