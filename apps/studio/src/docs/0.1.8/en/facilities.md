@@ -1,10 +1,165 @@
 # Facilities
 
-After Create or Save, the registry reloads the current page with its filters and sorting. A saved facility may belong on another page or fall outside the active filter. Search for its code to check it. Saving does not add an extra row beyond the page size.
+**Facilities** holds the facility registers this install knows: the national list of health facilities and laboratories, each with a code, a name, a type and where it is. Lab data names facilities by code. A register turns those codes into names and places, so reports can say "Sample District Hospital, Sample North" instead of `SAMPLE-HOSP-01`.
 
-Use Registry to add one facility or import a facility list. Use Observed to review facility
-codes received in results and their resolution. Adding a registry row and reviewing an observed
-code are separate tasks. The import instructions below cover uploading a whole list.
+The page has two tabs. **Registry** lists the facilities you added or imported. **Observed** lists the facility codes that arrived in lab data, and which facility each one resolves to. Adding a registry row and resolving an observed code are separate tasks.
+
+A fresh install has no register. This guide imports a small sample register and links the docs sample data to it. It takes about 20 minutes. Select any picture or clip to enlarge it.
+
+![Facilities, Registry, after the sample import: ten facilities with their code, name, region, district, status and source.](facilities-registry.png)
+
+## Who can do what
+
+| Permission | What it allows |
+| --- | --- |
+| **View facilities** | Open Facilities and read the registry and the Observed tab |
+| **Manage facilities** | Add, edit, import, delete, and link observed codes |
+
+Adding a new facility type during an import also needs **Manage terminology**.
+
+## Before you start
+
+The examples use two sample files. Both are made-up data for a test install.
+
+1. **The docs sample data**, for Example 2. See [Dashboards, Load the sample data](/docs/dashboard#load-the-sample-data). Its orders come from three facilities, and its reports from one laboratory.
+2. **The sample facility register**, a CSV of ten facilities. Download it from `https://openldr.online/docs-samples/openldr-sample-facilities.csv`. In a source checkout it is `apps/web/public/docs-samples/openldr-sample-facilities.csv`.
+
+Its first rows:
+
+```csv
+Facility Code,Facility Name,Facility Type,Ownership,Region,District,Operating Status,Phone
+SAMPLE-LAB,Sample Central Laboratory,Level IIA1 (Regional Laboratory),Public,Sample Region,Sample City,Operating,+000 100 0001
+SAMPLE-HOSP-01,Sample District Hospital,District Hospital,Public,Sample Region,Sample North,Operating,+000 100 0002
+SAMPLE-HC-01,Sample Health Centre North,Health Centre,Public,Sample Region,Sample North,Operating,+000 100 0003
+```
+
+Like most national exports, its headers are not OpenLDR's own field names, and some of its words are not OpenLDR's words. The examples show how to deal with both.
+
+> **Use a test install.** A register cannot be removed once registered. Facilities can be deleted, see [Deleting facilities in bulk](#deleting-facilities-in-bulk).
+
+## Example 1: import a facility register
+
+The import wizard has three steps: **Source**, **Mapping** and **Review**. Nothing is written before **Confirm import**.
+
+### Register the source and upload the file
+
+![Choosing the file, registering Sample facility register, and continuing to Mapping.](facilities-register.mp4)
+
+1. Open **Facilities**. Open the page's **⋯** menu and select **Import facilities**.
+2. Drop the sample CSV on **File**, or click to choose it.
+3. On a fresh install the sheet says **Register this file's source first**. Select **Register a source**.
+4. Fill in the register. Its canonical URI becomes its permanent identity, so use the one its publisher already uses:
+
+   | Field | Value |
+   | --- | --- |
+   | Canonical URI | `urn:openldr:cs:facility-register:sample` |
+   | Display name | `Sample facility register` |
+   | Code | `SAMPLE` |
+
+5. Open that sheet's **⋯** menu and select **Register**. **National system** now reads **Sample facility register**.
+6. Select **Continue**. The file uploads and the wizard moves to **Mapping**.
+
+### Fix the map and check the file
+
+![The suggested map, with Operating Status kept as extra data.](facilities-mapping.png)
+
+Mapping opens with a suggested map. Each of the file's headers sits beside the field it fills. Here the suggestion got seven of eight right. It left **Operating Status** as **Keep as extra data**, because no field is spelled like it.
+
+![Mapping Operating Status to status, fixing the country, and running Validate all.](facilities-check.mp4)
+
+1. Set **Operating Status** to `status`.
+2. Under **Fixed values**, the file has no country column, so give every row one. In **country**, type `Tanzania` and pick it. Use your own country in a real install.
+3. Select **Validate all**. The wizard reads the whole file and moves to **Review**.
+
+**Expected result:** **10 row(s) will be imported (0 skipped)** and **10 facility row(s) will be created**. A box headed **Values with no canonical mapping** lists words the file uses that OpenLDR does not know:
+
+- **Level:** 1 value, **Outreach Site**.
+- **Status:** 2 values, **Operating** and **Closed**.
+
+![Review, with three values that have no mapping yet.](facilities-review-values.png)
+
+**Health Centre**, **Dispensary** and the other types matched on their own, even where the spelling differs from OpenLDR's **Health Center**. See [Spelling is not your problem](#spelling-is-not-your-problem).
+
+### Decide the unknown values
+
+![Ignoring Outreach Site, mapping Operating to Active and Closed to Inactive, and checking again.](facilities-values.mp4)
+
+1. Select **Map these values**. Mapping opens again, with a pick list under each value.
+2. For **Outreach Site**, pick **Ignore this value**. It is imported exactly as written. You could also pick **Add "Outreach Site" as a new type…**.
+3. For **Operating**, pick **Active**. For **Closed**, pick **Inactive**.
+4. Select **Validate all** again.
+
+**Expected result:** Review shows the same counts, and no box of unknown values.
+
+![Review with nothing left to decide: 10 facilities will be created.](facilities-review.png)
+
+5. Select **Confirm import**. After a few seconds the registry lists the ten facilities.
+
+**Expected result:** ten rows, each with source **Imported**. **Sample Dispensary Lake** reads **Inactive**, the others **Active**.
+
+These value decisions are stored against the register. The next import of the same register does not ask again.
+
+## Example 2: link the codes in your lab data
+
+The docs sample data names four facilities by code: three that sent orders, and the laboratory that ran the tests. They arrived before the register existed, so nothing resolves them yet.
+
+![Observed: four codes from the sample data, all Not mapped.](facilities-observed.png)
+
+1. Open the **Observed** tab. It lists `SAMPLE-LAB` with 39 reports, `SAMPLE-HOSP-01` 23, `SAMPLE-HC-01` 22 and `SAMPLE-HC-02` 15. Each reads **Not mapped**.
+2. Open the page's **⋯** menu and select **Link matching codes**.
+3. Set **Register** to **Sample facility register**. The sheet shows **4 to link, 0 already linked, 0 kept, 0 with no match.** Nothing is written yet.
+4. Open the sheet's **⋯** menu and select **Link 4 codes**.
+
+![Linking the four codes to the sample register.](facilities-link.mp4)
+
+**Expected result:** **Linked 4 codes.** Each row now shows the facility it resolves to under **Resolves to**, with its type and place, and **via registry**.
+
+![Each observed code resolves to a facility in the register.](facilities-linked.png)
+
+Reports pick up the new links after the facility map rebuild that the action queues. The top of the page shows **Report facilities: Current** and when it was last built.
+
+## Example 3: read the register from a query
+
+The warehouse holds a copy of every register in the table `facility_registry`. Open **Query**, pick **Target Warehouse (Postgres)**, and run:
+
+```sql
+select facility_code, name, region, district, status
+from facility_registry
+where facility_system = 'urn:openldr:cs:facility-register:sample'
+order by facility_code
+```
+
+**Expected result:** ten rows, from `SAMPLE-DISP-01` to `SAMPLE-OUT-01`. `SAMPLE-DISP-03` reads `inactive`. See [Querying a register](#querying-a-register).
+
+## The same import from the command line
+
+The CLI imports the same file. It cannot register a source, so register it in the studio first. Two JSON files hold the decisions from Example 1.
+
+The column map, `columns.json`:
+
+```json
+{"columns":{"Facility Code":"national_code","Facility Name":"name","Facility Type":"level","Ownership":"ownership","Region":"region","District":"district","Operating Status":"status","Phone":"phone"},"constants":{"country":"TZA"}}
+```
+
+The value map, `values.json`:
+
+```json
+[{"field":"status","rawValue":"Operating","toCode":"active"},{"field":"status","rawValue":"Closed","toCode":"inactive"},{"field":"level","rawValue":"Outreach Site","ignore":true}]
+```
+
+```bash
+./openldr facilities import data/openldr-sample-facilities.csv \
+  --national-system urn:openldr:cs:facility-register:sample \
+  --column-map data/columns.json --value-map data/values.json
+```
+
+Without `--apply` it is a dry run. It prints `parsed 10 row(s), skipped 0` and how many rows it would create, change or leave alone. Add `--apply` to write. Then link the codes:
+
+```bash
+./openldr facilities link-matching --register urn:openldr:cs:facility-register:sample --apply
+```
+
+`--national-system` is free text on the command line. Spell it exactly as `openldr facilities import-sources` prints it. A mistyped register writes value mappings that nothing reads.
 
 ## Registering a facility by hand
 
@@ -25,6 +180,10 @@ code are separate tasks. The import instructions below cover uploading a whole l
    the registry table. If validation fails, correct the field errors or the message in
    the sheet, then save again. Reopen the row to check the recorded values.
 
+### After saving
+
+After Create or Save, the registry reloads the current page with its filters and sorting. A saved facility may belong on another page or fall outside the active filter. Search for its code to check it. Saving does not add an extra row beyond the page size.
+
 ### Codes and identity
 
 System and Facility code identify the site together. Use the register's exact code,
@@ -36,14 +195,14 @@ registered source. The internal record id stays unchanged. A later import finds 
 by its current System and Facility code; its conflict policy decides which values to keep.
 Do not delete and recreate a facility just to correct its code.
 
-## Outcome
+## Importing a national list: reference
 
 You can import a national facility list whose column headers and vocabulary do not match OpenLDR's
 own, using a column map and a value map, from either the import wizard or the `openldr` CLI.
 
-## Before you begin
+### Before you import your own list
 
-- Know which national register the file belongs to (its canonical URI, e.g. `urn:zm:mfl`) — every
+- Know which national register the file belongs to (its canonical URI, e.g. `urn:zm:mfl`). Every
   imported row's permanent id is derived from this plus the file's own code column, so the same
   register must always be named the same way.
 - Have the source file open somewhere so you can compare its header row to the contract fields below.
@@ -178,12 +337,12 @@ fix the map in place.
 OpenLDR's import contract has a fixed set of fields: `national_code` and `name` (required), plus
 `level`, `ownership`, `status`, `country`, `zone`, `region`, `district`, `council`, `ward`, `village`,
 `address`, `phone`, `latitude`, and `longitude` (optional). A national file almost never spells its
-columns this way — it might call the code column `MFL Code`, or the region column `Province`.
+columns this way. It might call the code column `MFL Code`, or the region column `Province`.
 
 A **column map** is the translation between the two. Its keys are **the file's own headers, exactly
-as they appear in the file** — not the contract's names. For every header you have three choices:
+as they appear in the file**, not the contract's names. For every header you have three choices:
 
-- **Map it** to one contract field. Two headers can never map to the same field — the parser cannot
+- **Map it** to one contract field. Two headers can never map to the same field. The parser cannot
   guess which one should win, so it refuses instead of guessing.
 - **Give it a fixed value.** Use this when the contract needs a field the file has no column for at
   all. A national file rarely carries its own country, for example, so `country` is usually a fixed
@@ -195,11 +354,11 @@ as they appear in the file** — not the contract's names. For every header you 
   value the list does not offer. The panel says so when you do, and that value is imported exactly
   as typed and turns up at Review to be mapped. If an install has no value list for a field, the
   panel says that too, and nothing is checked.
-- **Keep it as extra data.** The column still gets imported — carried into the record's `extras` —
+- **Keep it as extra data.** The column still gets imported, carried into the record's `extras`,
   but it is not treated as one of the contract fields.
 
 You do not have to decide every header. Leave one untouched and it still claims its field on its
-own, as long as it already spells a contract field's name exactly — the parser calls this a
+own, as long as it already spells a contract field's name exactly. The parser calls this a
 **passthrough** column. An untouched header that spells nothing on the contract is refused, unless
 you turn on **Allow unrecognized columns**, which carries it into `extras` the same way choosing
 "keep as extra data" does.
@@ -231,7 +390,7 @@ headers and propose a map offline, with no server round trip:
   a table, flags any collision the suggestion itself would cause, and tells you how to feed the
   result back in: `openldr facilities import <path> --column-map <file.json>`.
 
-Either way, review the suggestion — it is a starting point, not an answer you can skip checking.
+Either way, review the suggestion. It is a starting point, not an answer you can skip checking.
 
 ## Refusals, and how to repair them
 
@@ -240,8 +399,8 @@ pass repairs the file, rather than discovering issues one at a time. Four things
 
 | Reason | What it means | How to repair it |
 |---|---|---|
-| `duplicate_target` | Two headers claim the same contract field. A header claims a field by being mapped to it, **or just by spelling it** — a column called `Zone` claims `zone` even when the panel shows it as `Not mapped`. | Decide which header is correct for that field, and set the other one to `Not mapped`, which keeps its values as extra data. |
-| `constant_collision` | A fixed value and a mapped (or untouched, already-matching) header both claim the same field. | Keep only one of the two — either the fixed value or the column mapping — for that field. |
+| `duplicate_target` | Two headers claim the same contract field. A header claims a field by being mapped to it, **or just by spelling it**. A column called `Zone` claims `zone` even when the panel shows it as `Not mapped`. | Decide which header is correct for that field, and set the other one to `Not mapped`, which keeps its values as extra data. |
+| `constant_collision` | A fixed value and a mapped (or untouched, already-matching) header both claim the same field. | Keep only one of the two for that field: the fixed value or the column mapping. |
 | `unknown_target` | A header is mapped to a name that is not one of the contract fields. | Fix the typo, or map it to extra data instead if it does not belong to the contract at all. |
 | `missing_required` | `national_code` or `name` has neither a mapped column nor a fixed value. | Map a column, or supply a fixed value, for whichever required field is missing. |
 
@@ -257,8 +416,8 @@ controlled field (`level`, `status`, `country`) means. The two behave very diffe
 incomplete:
 
 - **An unmapped value imports anyway.** If a file spells a facility level as `"Health Centre"` and
-  your value set does not recognize that exact spelling, the row still imports — the raw text is
-  kept — and the value is reported so you can map it later. Nothing blocks on this.
+  your value set does not recognize that exact spelling, the row still imports, the raw text is
+  kept, and the value is reported so you can map it later. Nothing blocks on this.
 - **An unmapped required column blocks the whole import.** If `national_code` or `name` has nowhere
   to come from, the parser refuses to guess, and no records are written until you fix the map.
 
@@ -444,11 +603,6 @@ For example, the Mozambique facility register:
     where facility_system = 'urn:openldr:mz:facilities'
     order by facility_code
 
-## Related guides
-
-- [Terminology](/docs/terminology)
-- [Audit](/docs/audit)
-
 ## Deleting facilities in bulk
 
 The row menu deletes one facility. A national register runs to thousands, so a mis-mapped import
@@ -476,3 +630,25 @@ openldr facilities delete --where facilitySystem:eq:urn:zmb:mfl --force
 
 `--force` is required. So is either a `--where` or an explicit `--all`: forgetting the filter must
 never quietly mean the whole registry.
+
+## On a phone
+
+Facilities works on a phone. The registry and Observed tables are wider than the screen, so scroll them sideways to reach each row's **⋯** menu. The import wizard fills the screen.
+
+## Troubleshooting
+
+- **The import sheet says to register a source first.** This install has no register yet. Select **Register a source**.
+- **Continue is greyed out.** Pick the register under **National system** first.
+- **A column is kept as extra data.** No field is spelled like it. Set it to the field it fills, as with Operating Status in Example 1.
+- **The import is refused for a column.** See [Refusals, and how to repair them](#refusals-and-how-to-repair-them).
+- **Review lists values with no canonical mapping.** Select **Map these values** and decide each one, or confirm anyway. Unmapped values are imported exactly as written.
+- **An observed code stays Not mapped after Link matching codes.** The register has no row with exactly that code. The match is exact, including case and spaces.
+- **Reports still show codes instead of names.** Wait for the facility map rebuild, or run `openldr facilities publish --apply`.
+
+## Related guides
+
+- [Laboratory](/docs/laboratory)
+- [Terminology](/docs/terminology)
+- [Reports](/docs/reports)
+- [Custom Queries](/docs/query)
+- [Audit](/docs/audit)

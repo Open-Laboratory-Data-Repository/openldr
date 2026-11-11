@@ -227,10 +227,11 @@ export const DOC_GUIDES: DocGuide[] = [
     summary: 'Import a national facility list by mapping its columns and vocabulary onto the OpenLDR contract.',
     audience: ['lab-managers', 'administrators'],
     requiredRoles: [],
-    estimatedMinutes: 12,
+    estimatedMinutes: 20,
     difficulty: 'intermediate',
     relatedSlugs: ['terminology', 'audit'],
     screenshotNames: [],
+    capturedNames: ['facilities-registry.png', 'facilities-register.mp4', 'facilities-mapping.png', 'facilities-check.mp4', 'facilities-review-values.png', 'facilities-values.mp4', 'facilities-review.png', 'facilities-observed.png', 'facilities-link.mp4', 'facilities-linked.png'],
     status: 'published',
   },
   {

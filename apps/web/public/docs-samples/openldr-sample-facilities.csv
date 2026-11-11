@@ -1,0 +1,11 @@
+Facility Code,Facility Name,Facility Type,Ownership,Region,District,Operating Status,Phone
+SAMPLE-LAB,Sample Central Laboratory,Level IIA1 (Regional Laboratory),Public,Sample Region,Sample City,Operating,+000 100 0001
+SAMPLE-HOSP-01,Sample District Hospital,District Hospital,Public,Sample Region,Sample North,Operating,+000 100 0002
+SAMPLE-HC-01,Sample Health Centre North,Health Centre,Public,Sample Region,Sample North,Operating,+000 100 0003
+SAMPLE-HC-02,Sample Health Centre South,Health Centre,Public,Sample Region,Sample South,Operating,+000 100 0004
+SAMPLE-HC-03,Sample Health Centre East,Health Centre,Faith-based,Sample Region,Sample East,Operating,
+SAMPLE-DISP-01,Sample Dispensary Hill,Dispensary,Public,Sample Region,Sample North,Operating,
+SAMPLE-DISP-02,Sample Dispensary River,Dispensary,Private,Sample Region,Sample South,Operating,
+SAMPLE-DISP-03,Sample Dispensary Lake,Dispensary,Public,Sample Region,Sample East,Closed,
+SAMPLE-HP-01,Sample Health Post Valley,Health Post,Public,Sample Region,Sample East,Operating,
+SAMPLE-OUT-01,Sample Outreach Point,Outreach Site,Public,Sample Region,Sample South,Operating,

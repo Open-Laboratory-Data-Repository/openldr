@@ -1,10 +1,165 @@
 # Unidades
 
-Após Criar ou Guardar, o registo recarrega a página com os filtros e a ordenação atuais. A unidade pode pertencer a outra página ou ficar fora do filtro. Procure o código para a verificar. Guardar não acrescenta uma linha além do tamanho da página.
+**Unidades** guarda os registos de unidades que esta instalação conhece: a lista nacional de unidades de saúde e laboratórios, cada uma com um código, um nome, um tipo e um local. Os dados laboratoriais identificam as unidades pelo código. Um registo transforma esses códigos em nomes e locais, para que os relatórios digam "Sample District Hospital, Sample North" em vez de `SAMPLE-HOSP-01`.
 
-Use Registo para adicionar uma unidade ou importar uma lista. Use Observadas para rever os códigos
-recebidos nos resultados e a sua resolução. Adicionar uma linha ao registo e rever um código
-observado são tarefas distintas. As instruções de importação abaixo abrangem uma lista inteira.
+A página tem dois separadores. **Registo** lista as unidades adicionadas ou importadas. **Observadas** lista os códigos de unidade que chegaram nos dados laboratoriais, e a unidade a que cada um corresponde. Adicionar uma linha ao registo e resolver um código observado são tarefas distintas.
+
+Uma instalação nova não tem nenhum registo. Este guia importa um pequeno registo de exemplo e liga-lhe os dados de exemplo da documentação. Leva cerca de 20 minutos. Selecione uma imagem ou um clip para o ampliar.
+
+![Unidades, Registo, depois da importação de exemplo: dez unidades com código, nome, região, distrito, estado e origem.](facilities-registry.png)
+
+## Quem pode fazer o quê
+
+| Capacidade | O que permite |
+| --- | --- |
+| **View facilities** | Abrir Unidades e ler o registo e o separador Observadas |
+| **Manage facilities** | Adicionar, editar, importar, eliminar e ligar códigos observados |
+
+Adicionar um novo tipo de unidade durante uma importação também precisa de **Manage terminology**.
+
+## Antes de começar
+
+Os exemplos usam dois ficheiros de exemplo. Ambos são dados inventados, para uma instalação de teste.
+
+1. **Os dados de exemplo da documentação**, para o Exemplo 2. Veja [Painéis, Carregar os dados de exemplo](/docs/dashboard#carregar-os-dados-de-exemplo). Os pedidos vêm de três unidades, e os relatórios de um laboratório.
+2. **O registo de exemplo**, um CSV de dez unidades. Transfira-o de `https://openldr.online/docs-samples/openldr-sample-facilities.csv`. Numa cópia do código-fonte, é `apps/web/public/docs-samples/openldr-sample-facilities.csv`.
+
+As primeiras linhas:
+
+```csv
+Facility Code,Facility Name,Facility Type,Ownership,Region,District,Operating Status,Phone
+SAMPLE-LAB,Sample Central Laboratory,Level IIA1 (Regional Laboratory),Public,Sample Region,Sample City,Operating,+000 100 0001
+SAMPLE-HOSP-01,Sample District Hospital,District Hospital,Public,Sample Region,Sample North,Operating,+000 100 0002
+SAMPLE-HC-01,Sample Health Centre North,Health Centre,Public,Sample Region,Sample North,Operating,+000 100 0003
+```
+
+Como a maioria das exportações nacionais, os cabeçalhos não são os nomes de campo do OpenLDR, e algumas palavras não são as do OpenLDR. Os exemplos mostram como tratar as duas coisas.
+
+> **Use uma instalação de teste.** Um registo não pode ser retirado depois de registado. As unidades podem ser eliminadas, veja [Eliminar unidades em massa](#eliminar-unidades-em-massa).
+
+## Exemplo 1: importar um registo de unidades
+
+O assistente de importação tem três passos: **Origem**, **Mapeamento** e **Revisão**. Nada é escrito antes de **Confirmar importação**.
+
+### Registar a origem e carregar o ficheiro
+
+![Escolher o ficheiro, registar Sample facility register e passar ao Mapeamento.](facilities-register.mp4)
+
+1. Abra **Unidades**. Abra o menu **⋯** da página e selecione **Importar unidades**.
+2. Largue o CSV de exemplo em **Ficheiro**, ou clique para o escolher.
+3. Numa instalação nova, o painel diz **Registe primeiro a origem deste ficheiro**. Selecione **Registar uma fonte**.
+4. Preencha o registo. O URI canónico passa a ser a sua identidade permanente, por isso use o que o editor do registo já usa:
+
+   | Campo | Valor |
+   | --- | --- |
+   | URI canónico | `urn:openldr:cs:facility-register:sample` |
+   | Nome de exibição | `Sample facility register` |
+   | Código | `SAMPLE` |
+
+5. Abra o menu **⋯** desse painel e selecione **Registar**. **Registo nacional** mostra agora **Sample facility register**.
+6. Selecione **Continuar**. O ficheiro é carregado e o assistente passa ao **Mapeamento**.
+
+### Corrigir o mapeamento e verificar o ficheiro
+
+![O mapeamento sugerido, com Operating Status mantida como dado extra.](facilities-mapping.png)
+
+O Mapeamento abre com um mapeamento sugerido. Cada cabeçalho do ficheiro fica ao lado do campo que preenche. Aqui a sugestão acertou sete de oito. Deixou **Operating Status** em **Manter como dado extra**, porque nenhum campo se escreve assim.
+
+![Mapear Operating Status para status, fixar o país e executar Validar tudo.](facilities-check.mp4)
+
+1. Defina **Operating Status** como `status`.
+2. Em **Valores fixos**, o ficheiro não tem coluna de país, por isso dê um a cada linha. Em **country**, escreva `Tanzania` e escolha-o. Use o seu país numa instalação real.
+3. Selecione **Validar tudo**. O assistente lê o ficheiro todo e passa à **Revisão**.
+
+**Resultado esperado:** **10 linha(s) serão importadas (0 ignorada(s))** e **10 linha(s) de unidade serão criadas**. Uma caixa **Valores sem mapeamento canónico** lista as palavras do ficheiro que o OpenLDR não conhece:
+
+- **Level:** 1 valor, **Outreach Site**.
+- **Status:** 2 valores, **Operating** e **Closed**.
+
+![A Revisão, com três valores ainda sem mapeamento.](facilities-review-values.png)
+
+**Health Centre**, **Dispensary** e os outros tipos corresponderam sozinhos, mesmo quando a ortografia difere de **Health Center** do OpenLDR. Veja [A ortografia não é problema seu](#a-ortografia-nao-e-problema-seu).
+
+### Decidir os valores desconhecidos
+
+![Ignorar Outreach Site, mapear Operating para Active e Closed para Inactive, e verificar outra vez.](facilities-values.mp4)
+
+1. Selecione **Mapear estes valores**. O Mapeamento abre outra vez, com uma lista por baixo de cada valor.
+2. Para **Outreach Site**, escolha **Ignorar este valor**. É importado tal como está escrito. Também podia escolher **Adicionar "Outreach Site" como novo tipo…**.
+3. Para **Operating**, escolha **Active**. Para **Closed**, escolha **Inactive**.
+4. Selecione **Validar tudo** outra vez.
+
+**Resultado esperado:** a Revisão mostra os mesmos totais, sem caixa de valores desconhecidos.
+
+![A Revisão sem nada a decidir: serão criadas 10 unidades.](facilities-review.png)
+
+5. Selecione **Confirmar importação**. Ao fim de alguns segundos o registo lista as dez unidades.
+
+**Resultado esperado:** dez linhas, cada uma com a origem **Importada**. **Sample Dispensary Lake** mostra **Inactive**, as outras **Active**.
+
+Estas decisões de valores ficam guardadas com o registo. A próxima importação do mesmo registo não volta a perguntar.
+
+## Exemplo 2: ligar os códigos dos seus dados laboratoriais
+
+Os dados de exemplo identificam quatro unidades pelo código: três que enviaram pedidos, e o laboratório que fez os exames. Chegaram antes de o registo existir, por isso nada as resolve ainda.
+
+![Observadas: quatro códigos dos dados de exemplo, todos Não associada.](facilities-observed.png)
+
+1. Abra o separador **Observadas**. Lista `SAMPLE-LAB` com 39 relatórios, `SAMPLE-HOSP-01` 23, `SAMPLE-HC-01` 22 e `SAMPLE-HC-02` 15. Cada um mostra **Não associada**.
+2. Abra o menu **⋯** da página e selecione **Ligar códigos correspondentes**.
+3. Defina **Registo** como **Sample facility register**. O painel mostra os códigos a ligar: 4 a ligar, 0 já ligados, 0 mantidos, 0 sem correspondência. Nada é escrito ainda.
+4. Abra o menu **⋯** do painel e selecione **Ligar 4 códigos**.
+
+![Ligar os quatro códigos ao registo de exemplo.](facilities-link.mp4)
+
+**Resultado esperado:** **4 códigos ligados.** Cada linha mostra agora a unidade a que corresponde em **Resolve para**, com o tipo, o local e **via registo**.
+
+![Cada código observado corresponde a uma unidade do registo.](facilities-linked.png)
+
+Os relatórios apanham as novas ligações depois da reconstrução do mapa de unidades que a ação põe em fila. O topo da página mostra **Unidades dos relatórios** e a hora da última reconstrução.
+
+## Exemplo 3: ler o registo numa consulta
+
+O armazém guarda uma cópia de cada registo na tabela `facility_registry`. Abra **Consulta**, escolha **Target Warehouse (Postgres)** e execute:
+
+```sql
+select facility_code, name, region, district, status
+from facility_registry
+where facility_system = 'urn:openldr:cs:facility-register:sample'
+order by facility_code
+```
+
+**Resultado esperado:** dez linhas, de `SAMPLE-DISP-01` a `SAMPLE-OUT-01`. `SAMPLE-DISP-03` mostra `inactive`. Veja [Consultar um registo](#consultar-um-registo).
+
+## A mesma importação na linha de comandos
+
+A CLI importa o mesmo ficheiro. Não consegue registar uma fonte, por isso registe-a primeiro no studio. Dois ficheiros JSON guardam as decisões do Exemplo 1.
+
+O mapeamento de colunas, `columns.json`:
+
+```json
+{"columns":{"Facility Code":"national_code","Facility Name":"name","Facility Type":"level","Ownership":"ownership","Region":"region","District":"district","Operating Status":"status","Phone":"phone"},"constants":{"country":"TZA"}}
+```
+
+O mapeamento de valores, `values.json`:
+
+```json
+[{"field":"status","rawValue":"Operating","toCode":"active"},{"field":"status","rawValue":"Closed","toCode":"inactive"},{"field":"level","rawValue":"Outreach Site","ignore":true}]
+```
+
+```bash
+./openldr facilities import data/openldr-sample-facilities.csv \
+  --national-system urn:openldr:cs:facility-register:sample \
+  --column-map data/columns.json --value-map data/values.json
+```
+
+Sem `--apply` é um ensaio. Mostra `parsed 10 row(s), skipped 0` e quantas linhas criaria, alteraria ou deixaria como estão. Junte `--apply` para escrever. Depois ligue os códigos:
+
+```bash
+./openldr facilities link-matching --register urn:openldr:cs:facility-register:sample --apply
+```
+
+`--national-system` é texto livre na linha de comandos. Escreva-o exatamente como `openldr facilities import-sources` o mostra. Um registo mal escrito grava mapeamentos de valores que nada lê.
 
 ## Registar uma unidade manualmente
 
@@ -25,6 +180,10 @@ observado são tarefas distintas. As instruções de importação abaixo abrange
    do registo é atualizada. Se a validação falhar, corrija os erros dos campos ou a mensagem
    do painel e tente novamente. Reabra a linha para verificar os valores guardados.
 
+### Depois de guardar
+
+Após Criar ou Guardar, o registo recarrega a página com os filtros e a ordenação atuais. A unidade pode pertencer a outra página ou ficar fora do filtro. Procure o código para a verificar. Guardar não acrescenta uma linha além do tamanho da página.
+
 ### Códigos e identidade
 
 Sistema e Código da unidade identificam o local em conjunto. Use o código exato do registo,
@@ -36,13 +195,13 @@ registada ativa. O identificador interno permanece igual. Uma importação poste
 Sistema e Código atuais. A política de conflitos decide quais os valores a manter.
 Não elimine uma unidade apenas para corrigir o código.
 
-## Resultado
+## Importar uma lista nacional: referência
 
 Pode importar uma lista nacional de unidades cujos cabeçalhos de coluna e vocabulário não
 correspondem aos do OpenLDR, usando um mapeamento de colunas e um mapeamento de valores, a partir
 do assistente de importação ou da CLI `openldr`.
 
-## Antes de começar
+### Antes de importar a sua lista
 
 - Saiba a que registo nacional pertence o ficheiro (o seu URI canónico, por exemplo `urn:zm:mfl`).
   O identificador permanente de cada linha importada é derivado deste URI e da própria coluna de
@@ -254,7 +413,7 @@ erros um a um. Quatro coisas podem correr mal:
 
 | Motivo | O que significa | Como corrigir |
 |---|---|---|
-| `duplicate_target` | Dois cabeçalhos reivindicam o mesmo campo do contrato. Um cabeçalho reivindica um campo por estar mapeado para ele, **ou apenas por ter o seu nome** — uma coluna chamada `Zone` reivindica `zone` mesmo que o painel mostre `Não mapeado`. | Decida qual cabeçalho está correto para esse campo e coloque o outro em `Não mapeado`, o que mantém os seus valores como dado extra. |
+| `duplicate_target` | Dois cabeçalhos reivindicam o mesmo campo do contrato. Um cabeçalho reivindica um campo por estar mapeado para ele, **ou apenas por ter o seu nome**, uma coluna chamada `Zone` reivindica `zone` mesmo que o painel mostre `Não mapeado`. | Decida qual cabeçalho está correto para esse campo e coloque o outro em `Não mapeado`, o que mantém os seus valores como dado extra. |
 | `constant_collision` | Um valor fixo e um cabeçalho mapeado (ou não tratado, já correspondente) reclamam ambos o mesmo campo. | Mantenha apenas um dos dois, o valor fixo ou o mapeamento de coluna, para esse campo. |
 | `unknown_target` | Um cabeçalho está mapeado para um nome que não é um dos campos do contrato. | Corrija o erro de escrita, ou mapeie-o para dado extra se não pertencer de todo ao contrato. |
 | `missing_required` | `national_code` ou `name` não tem coluna mapeada nem valor fixo. | Mapeie uma coluna, ou forneça um valor fixo, para o campo obrigatório em falta. |
@@ -469,11 +628,6 @@ Por exemplo, o registo de unidades de Moçambique:
     where facility_system = 'urn:openldr:mz:facilities'
     order by facility_code
 
-## Guias relacionados
-
-- [Terminologia](/docs/terminology)
-- [Auditoria](/docs/audit)
-
 ## Eliminar unidades em massa
 
 O menu da linha elimina uma unidade. Um registo nacional tem milhares, por isso uma importação mal
@@ -502,3 +656,25 @@ openldr facilities delete --where facilitySystem:eq:urn:zmb:mfl --force
 
 `--force` é obrigatório, tal como um `--where` ou um `--all` explícito: esquecer o filtro nunca
 deve significar silenciosamente todo o registo.
+
+## Num telemóvel
+
+Unidades funciona num telemóvel. As tabelas Registo e Observadas são mais largas do que o ecrã: deslize-as para o lado para chegar ao menu **⋯** de cada linha. O assistente de importação ocupa o ecrã.
+
+## Resolução de problemas
+
+- **O painel de importação pede para registar primeiro uma fonte.** Esta instalação ainda não tem registo. Selecione **Registar uma fonte**.
+- **Continuar está desativado.** Escolha primeiro o registo em **Registo nacional**.
+- **Uma coluna fica como dado extra.** Nenhum campo se escreve assim. Defina-a como o campo que preenche, como Operating Status no Exemplo 1.
+- **A importação é recusada por causa de uma coluna.** Veja [Recusas, e como corrigi-las](#recusas-e-como-corrigi-las).
+- **A Revisão lista valores sem mapeamento canónico.** Selecione **Mapear estes valores** e decida cada um, ou confirme na mesma. Os valores sem mapeamento são importados tal como estão escritos.
+- **Um código observado continua Não associada depois de Ligar códigos correspondentes.** O registo não tem nenhuma linha com exatamente esse código. A correspondência é exata, incluindo maiúsculas e espaços.
+- **Os relatórios ainda mostram códigos em vez de nomes.** Espere pela reconstrução do mapa de unidades, ou execute `openldr facilities publish --apply`.
+
+## Guias relacionados
+
+- [Laboratório](/docs/laboratory)
+- [Terminologia](/docs/terminology)
+- [Relatórios](/docs/reports)
+- [Consultas personalizadas](/docs/query)
+- [Auditoria](/docs/audit)
