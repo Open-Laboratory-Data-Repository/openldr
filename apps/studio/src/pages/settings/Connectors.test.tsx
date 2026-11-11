@@ -286,6 +286,23 @@ describe('Connectors page', () => {
     expect(screen.getByTestId('connector-db-password')).toBeTruthy();
   });
 
+  it('type=Microsoft SQL renders instance and domain, and shows Encrypt on because the server encrypts when it is unset', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    await openAddConnector();
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /microsoft sql/i }));
+
+    expect(await screen.findByTestId('connector-db-instanceName')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-domain')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-encrypt').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('connector-db-trustServerCertificate').getAttribute('aria-checked')).toBe('false');
+  });
+
   it('type=Redis renders db+password, does NOT render database or user', async () => {
     (api.listConnectors as any).mockResolvedValue([]);
     (api.listSinkPlugins as any).mockResolvedValue([]);

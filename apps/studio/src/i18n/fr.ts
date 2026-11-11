@@ -603,6 +603,8 @@ export const fr: EnShape = {
       fieldSsl: 'Utiliser SSL',
       fieldEncrypt: 'Chiffrer',
       fieldTrustServerCert: 'Faire confiance au certificat serveur',
+      fieldInstanceName: "Nom d'instance",
+      fieldDomain: 'Domaine Windows',
       fieldAuthSource: 'Source d\'authentification',
       fieldDb: 'Index de base de données',
       fieldSecure: 'Utiliser TLS',

@@ -605,6 +605,8 @@ export const en = {
       fieldSsl: 'Use SSL',
       fieldEncrypt: 'Encrypt',
       fieldTrustServerCert: 'Trust server certificate',
+      fieldInstanceName: 'Instance name',
+      fieldDomain: 'Windows domain',
       fieldAuthSource: 'Auth source',
       fieldDb: 'DB index',
       fieldSecure: 'Use TLS',
