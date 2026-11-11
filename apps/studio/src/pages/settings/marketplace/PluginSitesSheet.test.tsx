@@ -57,6 +57,17 @@ describe('PluginSitesSheet', () => {
     expect(screen.getByTestId('plugin-site-widget')).toHaveAttribute('aria-checked', 'true');
   });
 
+  // PackageDetail builds the `plugin` prop inline, so every redraw passes a new object. The sheet
+  // must not read again (and flash its spinner) unless the plugin itself changed.
+  it('does not read again when the parent redraws with the same plugin', async () => {
+    vi.mocked(api.getPluginSites).mockResolvedValue(both);
+    const view = render(<PluginSitesSheet plugin={{ id: 'demo', label: 'Demo' }} onOpenChange={() => {}} />);
+    await screen.findByTestId('plugin-site-widget');
+    view.rerender(<PluginSitesSheet plugin={{ id: 'demo', label: 'Demo' }} onOpenChange={() => {}} />);
+    expect(screen.getByTestId('plugin-site-widget')).toBeTruthy();
+    expect(api.getPluginSites).toHaveBeenCalledTimes(1);
+  });
+
   it('closed when no plugin is given', () => {
     render(<PluginSitesSheet plugin={null} onOpenChange={() => {}} />);
     expect(screen.queryByTestId('plugin-site-widget')).toBeNull();

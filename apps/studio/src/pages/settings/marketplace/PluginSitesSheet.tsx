@@ -21,16 +21,19 @@ export function PluginSitesSheet({ plugin, onOpenChange }: {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Keyed on the id, not the object: the parent builds `plugin` inline, so it is a new object on
+  // every redraw, and reading again each time would blank the switches and flash the spinner.
+  const pluginId = plugin?.id ?? null;
   useEffect(() => {
-    if (!plugin) return;
+    if (!pluginId) return;
     let cancelled = false;
     setState(null);
     setError(null);
-    getPluginSites(plugin.id)
+    getPluginSites(pluginId)
       .then((s) => { if (!cancelled) setState(s); })
       .catch((e: unknown) => { if (!cancelled) { setState({ declared: {}, off: [] }); setError(e instanceof Error ? e.message : String(e)); } });
     return () => { cancelled = true; };
-  }, [plugin]);
+  }, [pluginId]);
 
   async function onToggle(site: PluginSiteKey, on: boolean) {
     if (!plugin) return;
