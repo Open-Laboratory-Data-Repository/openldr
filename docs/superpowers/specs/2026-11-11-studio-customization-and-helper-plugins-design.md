@@ -198,7 +198,14 @@ names the new files and gives the registry entry for the coordinator to add.
    part is not the connection; it is getting the data across. Slices 1 and 2 still help labs with
    named instances or Windows logins, but they did not fix a failure the operator was seeing.
 2. The import runs inside CE, so there is one tool to manage. Slices 4 and 5 go ahead as designed.
-3. Not answered yet. The question was misread as being about connectors. It is about the studio
-   look (theme, sidebar, home page), not connectors. Connectors stay system-wide.
+3. Theme is per user. That is already how it works: the header toggle saves light or dark per
+   browser (`ThemeProvider.tsx:5`), and language does the same (`openldr.lang`).
+   Checked in the running app on 2026-11-11, not only in code:
+   - Sidebar order is fixed in code (`AppShell.tsx:25`). No drag or reorder exists. Roles hide items.
+   - The first page is always the Dashboard (`App.tsx:41`). No setting exists.
+   - Sidebar collapse is saved per browser (`useSidebar.ts:3`).
+   So slice 6 would add three things: settings that follow the user to another device, a sidebar
+   the user can reorder or trim, and a choice of first page. No user action is broken without
+   them. Slices 6 and 9 are on hold until the operator names one of these as wanted.
 4. Slices 1 and 2 were picked first and are built.
 
