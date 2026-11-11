@@ -29,7 +29,8 @@ describe('DocsPage', () => {
   it('renders links to in-app pages the website lacks as plain text', () => {
     renderDocs('/docs/dashboard');
     const article = document.querySelector('.doc-markdown') as HTMLElement;
-    expect(within(article).queryByRole('link', { name: 'Reports' })).toBeNull();
+    expect(within(article).queryByRole('link', { name: 'Workflows' })).toBeNull();
+    expect(within(article).getAllByRole('link', { name: 'Reports' })[0]).toHaveAttribute('href', '/docs/reports');
     expect(within(article).getAllByRole('link', { name: 'Data exposure' })[0]).toHaveAttribute('href', '/docs/data-exposure');
   });
 

@@ -55,6 +55,8 @@ export const TITLES: Record<string, string> = {
   'query-export-import': 'Export and import queries',
   'query-groups': 'Query groups',
   dashboard: 'Dashboards',
+  reports: 'Reports',
+  query: 'Custom queries',
   'dashboard-refresh': 'Dashboard refresh',
 
   'dashboard-limits': 'Dashboard query limits',
@@ -89,6 +91,8 @@ export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'query-export-import' },
   { slug: 'query-groups' },
   { slug: 'dashboard' },
+  { slug: 'reports' },
+  { slug: 'query' },
   { slug: 'dashboard-refresh' },
 
   { slug: 'dashboard-limits' },
@@ -124,6 +128,8 @@ export const GUIDE_LOCALES: Array<{ id: GuideLocale; label: string }> = [
 /** Web slug → in-app guide slug, for the pages that show a shared long guide. */
 export const SHARED_GUIDES: Record<string, string> = {
   dashboard: 'dashboard',
+  reports: 'reports',
+  query: 'query',
 };
 
 const guideFiles = import.meta.glob('../../../studio/src/docs/*/*/*.md', {
