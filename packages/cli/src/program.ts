@@ -93,6 +93,12 @@ export function buildProgram(): Command {
       try { process.exitCode = await runConnectorUpdate(id, opts.file); }
       catch { process.stderr.write('Connector update failed. Check the connector ID and JSON patch.\n'); process.exitCode = 1; }
     });
+  connectors.command('diagnose <id>').description('Check a host connector step by step: name, SQL Browser, port, login, version')
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runConnectorDiagnose(id, opts); }
+      catch { process.stderr.write('Connector diagnosis unavailable. Check the connector ID; only host connectors can be diagnosed.\n'); process.exitCode = 1; }
+    });
 
   program
     .command('health')
@@ -1273,4 +1279,4 @@ export function buildProgram(): Command {
 
   return program;
 }
-import { runConnectorInspect, runConnectorUpdate } from './connectors';
+import { runConnectorInspect, runConnectorUpdate, runConnectorDiagnose } from './connectors';
