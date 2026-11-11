@@ -66,6 +66,15 @@ describe('PluginPanelHost', () => {
     expect(screen.queryByTestId('panel-frame')).toBeNull();
   });
 
+  it('Escape outside the panel leaves it open; Escape inside it closes it', () => {
+    render(app());
+    act(() => openPluginPanel('notes', 'Lab notes'));
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(getPluginPanel()).not.toBeNull();
+    fireEvent.keyDown(screen.getByTestId('panel-frame'), { key: 'Escape' });
+    expect(getPluginPanel()).toBeNull();
+  });
+
   it('closes on sign-out', () => {
     const view = render(app());
     act(() => openPluginPanel('notes', 'Lab notes'));

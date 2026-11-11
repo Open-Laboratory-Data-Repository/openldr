@@ -21,7 +21,7 @@ import {
 import { cn } from '@/lib/cn';
 import { listPluginUis, type PluginUiEntry } from '@/api';
 import { pluginIcon } from '@/plugins/icons';
-import { openPluginPanel, syncPluginPanel } from '@/plugins/pluginPanel';
+import { closePluginPanel, openPluginPanel, syncPluginPanel, usePluginPanel } from '@/plugins/pluginPanel';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
 
@@ -115,6 +115,9 @@ export function AppShell({
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const panelPlugins = pluginUis.filter((p) => p.sites?.panel);
+  // An open plugin side panel is fixed to the right edge. Pad the page by its width on desktop so it
+  // never covers page content or the ⋯ menus that sit at the right.
+  const panelOpen = usePluginPanel() !== null;
 
   const userTrigger = (
     <DropdownMenuTrigger asChild>
@@ -280,7 +283,8 @@ export function AppShell({
               variant="ghost"
               size="icon"
               className="-ml-1 md:hidden"
-              onClick={() => setMobileOpen(true)}
+              // On a phone an open plugin panel fills the screen and would cover the drawer.
+              onClick={() => { closePluginPanel(); setMobileOpen(true); }}
               aria-label={t('a11y.openMenu')}
             >
               <Menu className="h-5 w-5" />
@@ -342,7 +346,7 @@ export function AppShell({
             </Tooltip>
           </div>
         </header>
-        <main className={fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto p-6'}>{children}</main>
+        <main className={cn(fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto p-6', panelOpen && 'md:pr-96')}>{children}</main>
       </div>
     </div>
     </TooltipProvider>

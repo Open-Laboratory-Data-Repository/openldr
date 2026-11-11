@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 import type { PluginUiEntry } from '@/api';
@@ -50,5 +50,27 @@ describe('AppShell side panel menu', () => {
     list.entries = [entry('other', { panel: { title: 'Other' } })];
     shell();
     await waitFor(() => expect(getPluginPanel()).toBeNull());
+  });
+});
+
+describe('AppShell with a side panel open', () => {
+  beforeEach(() => closePluginPanel());
+
+  it('makes room for the panel on desktop, so it never covers the page or its menus', async () => {
+    list.entries = [entry('notes', { panel: { title: 'Lab notes' } })];
+    const { container, rerender } = shell();
+    const main = container.querySelector('main')!;
+    expect(main.className).not.toContain('md:pr-96');
+    act(() => openPluginPanel('notes', 'Lab notes'));
+    rerender(<MemoryRouter><AppShell title="Dashboard"><div>content</div></AppShell></MemoryRouter>);
+    expect(container.querySelector('main')!.className).toContain('md:pr-96');
+  });
+
+  it('opening the phone menu closes the panel, which would otherwise cover the drawer', async () => {
+    list.entries = [entry('notes', { panel: { title: 'Lab notes' } })];
+    shell();
+    act(() => openPluginPanel('notes', 'Lab notes'));
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+    expect(getPluginPanel()).toBeNull();
   });
 });
