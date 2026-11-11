@@ -47,3 +47,17 @@ openldr market sites <plugin-id> widget off
 ```
 
 La première commande liste la carte et le panneau de l'extension et indique si chacun est actif. La seconde en change un. Utilisez `widget` ou `panel`, et `on` ou `off`.
+
+## Essayer avec l'extension de test
+
+Le dépôt contient une extension de référence avec une carte et un panneau. Utilisez-la sur une installation de test, depuis une copie du code source. Sa construction demande Rust et la cible `wasm32-wasip1`. Voir **Construire des extensions** sur la page Développement du site web.
+
+1. Dans le dossier du dépôt, lancez `pnpm build:ui-reference`. La commande construit l'extension test-sink et place `plugin.wasm` et `manifest.json` dans `reference-plugins/ui-reference/`.
+2. Lancez `pnpm openldr plugin install reference-plugins/ui-reference/plugin.wasm`.
+3. Rechargez le studio.
+4. Ouvrez **Tableau de bord**. Une carte nommée **Reference card** apparaît sous les widgets.
+5. Sélectionnez **Panneaux latéraux**, le bouton des panneaux à côté de la cloche des notifications, puis choisissez **Reference panel**.
+
+**Résultat attendu :** la carte affiche **Drawn in: widget** et le panneau affiche **Drawn in: panel**. La barre latérale a aussi une entrée **Reference Plugin**, qui ouvre la page de l'extension.
+
+L'extension de référence ne nomme aucun éditeur, elle s'installe donc sans signature. Sa page utilise un texte foncé, difficile à lire avec le thème sombre. Pour la retirer, lancez `pnpm openldr plugin remove ui-reference`.
