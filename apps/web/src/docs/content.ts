@@ -64,6 +64,10 @@ export const TITLES: Record<string, string> = {
   'query-pagination': 'Query result paging',
 
   'connector-query-deadlines': 'Connector query deadlines',
+  'connector-diagnose': 'SQL Server connections and diagnosis',
+  'v1-import': 'Import from OpenLDR v1',
+  'setup-checks': 'Setup checks',
+  'user-preferences': 'User preferences',
   'report-schedules': 'Report schedules',
   laboratory: 'Laboratory setup',
   'data-exposure': 'Data exposure',
@@ -101,6 +105,10 @@ export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'query-pagination' },
 
   { slug: 'connector-query-deadlines' },
+  { slug: 'connector-diagnose' },
+  { slug: 'v1-import' },
+  { slug: 'setup-checks' },
+  { slug: 'user-preferences' },
   { slug: 'report-schedules' },
   { slug: 'laboratory' },
   { slug: 'data-exposure' },
@@ -140,6 +148,10 @@ export const SHARED_GUIDES: Record<string, string> = {
   'test-catalog': 'test-catalog',
   facilities: 'facilities',
   forms: 'forms',
+  'connector-diagnose': 'connector-diagnose',
+  'v1-import': 'v1-import',
+  'setup-checks': 'setup-checks',
+  'user-preferences': 'user-preferences',
 };
 
 const guideFiles = import.meta.glob('../../../studio/src/docs/*/*/*.md', {

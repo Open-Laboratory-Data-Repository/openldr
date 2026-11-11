@@ -1,27 +1,35 @@
 # Import from OpenLDR v1
 
-## Outcome
-
-You can copy requests, patients, results and AST results from an OpenLDR v1 SQL Server database into CE. The import runs on the CE server. You can stop it and carry on later.
-
-## Before you begin
-
-- You need the `lab_admin` role, and the `connectors.manage` capability to allow the connector.
-- The **OpenLDR v1 import** plugin is installed. Install it from **Settings > Marketplace**, or with `openldr plugin install` for a plugin file.
-- A Microsoft SQL connector points at the v1 database. See [Connect to SQL Server and diagnose a connection](/docs/connector-diagnose).
-- Know the UTC offset of the lab that wrote the v1 data, for example `+02:00`.
+The **OpenLDR v1 import** plugin copies requests, patients, results and AST results from an OpenLDR v1 SQL Server database into CE. The import runs on the CE server, page by page. You can stop it and carry on later, and running it again replaces records instead of duplicating them.
 
 The plugin never opens a database connection itself. It supplies read-only queries. CE runs them on a connector you allow, and saves what the plugin maps.
 
-## Allow the connector
+This guide takes about 10 minutes to read. An import of a large v1 database takes much longer. This guide has no pictures yet: the plugin's marketplace bundle is not published, and a v1 database is needed to show it working.
 
-1. Open **Settings > Connectors**.
-2. Open the **⋯** menu of the v1 SQL Server connector and choose **Plugin access**.
+## Who can do what
+
+| Permission | What it allows |
+| --- | --- |
+| **Manage connectors** | Allow or revoke the plugin's access to a connector |
+| Lab Admin role | Open the plugin's page, run checks, dry runs and imports |
+
+## Before you start
+
+- The **OpenLDR v1 import** plugin is installed. Install it from **Settings**, **Marketplace**, or with `openldr plugin install` for a plugin file. See [Marketplace](/docs/marketplace).
+- A Microsoft SQL connector points at the v1 database. See [Connect to SQL Server and diagnose a connection](/docs/connector-diagnose). Run **Diagnose** on it first: every step should pass.
+- Know the UTC offset of the lab that wrote the v1 data, for example `+02:00`.
+
+## Example 1: allow the plugin to read the v1 connector
+
+1. Open **Settings**, then **Connectors**.
+2. On the v1 SQL Server connector, open **⋯** and choose **Plugin access**.
 3. Turn on the switch for `openldr-v1-import`.
 
-Turn the switch off to stop the plugin reading that connector. Both changes are written to the audit log.
+**Expected result:** the switch stays on. Both allowing and revoking are written to the audit log, with who did it. Turn the switch off to stop the plugin reading that connector.
 
-## Run the import
+If the sheet says no installed plugin imports from this type of connector, the plugin is not installed, or the connector is not Microsoft SQL.
+
+## Example 2: check, try, then import
 
 Open **OpenLDR v1 import** in the sidebar. The page has five steps.
 
@@ -33,6 +41,19 @@ Open **OpenLDR v1 import** in the sidebar. The page has five steps.
 | 4. Dry run | CE reads and maps a few requests and saves nothing. |
 | 5. Import | Start the import, watch it, stop it, or resume it. |
 
+1. **Source.** Pick the v1 connector and select **Check connection**. Every step should pass.
+2. **Options.** Set **Site time zone**, for example `+02:00`. Leave the rest empty to import everything.
+3. **Checks.** **4 of 4** tables must be found: `Requests`, `LabResults`, `Patients` and `ASTResults`. If fewer are found, check the database name on the Options step.
+4. **Dry run.** Enter `100` and choose **Start dry run**. The page shows how many requests would be saved and how many failed, each failure with a reason. You can go on once the dry run has finished.
+5. **Import.** Choose **Start import**.
+
+**Expected result:** the page shows requests read, saved and failed, the number of records, and the speed. The counts move one page at a time. A page is 500 requests, so the numbers can stand still for a while.
+
+- You can leave the page. The import keeps running on the server. The page opens on the running import when you come back.
+- **Stop** ends the import after the page it is working on.
+- **Resume** carries on from the last request done. Use it after a stop, a failure, or a server restart.
+- A request imported before is replaced, not duplicated. Running the import again is safe.
+
 ### Options
 
 | Option | Meaning |
@@ -41,24 +62,6 @@ Open **OpenLDR v1 import** in the sidebar. The page has five steps.
 | Database | Leave empty to use the database set on the connector. |
 | From date, To date | Limit the import by registered date. Leave both empty to import everything. |
 | Panel codes | Comma-separated v1 panel codes. Leave empty for all panels. |
-
-### Checks
-
-The import needs four tables: `Requests`, `LabResults`, `Patients` and `ASTResults`. If the page shows fewer than 4 of 4, check the database name on the Options step.
-
-### Dry run
-
-Enter how many requests to try, from 1 to 5000, and choose **Start dry run**. The page shows how many requests would be saved and how many failed. Each failed request is listed with a reason. You can go on once the dry run has finished.
-
-### Import
-
-Choose **Start import**. The page shows requests read, saved and failed, the number of records, and the speed.
-
-- The counts move one page at a time. A page is 500 requests, so the numbers can stand still for a while.
-- You can leave the page. The import keeps running on the server. The page opens on the running import when you come back.
-- **Stop** ends the import after the page it is working on.
-- **Resume** carries on from the last request done. Use it after a stop, a failure, or a server restart.
-- A request imported before is replaced, not duplicated. Running the import again is safe.
 
 ## Failed requests
 
@@ -99,3 +102,25 @@ openldr import start --plugin openldr-v1-import --connector <connector-id> --opt
 ```
 
 `Ctrl+C` stops the import at the next page. Other commands: `openldr import status`, `stop`, `resume`, `failures`, `allowed` and `revoke`. Add `--json` for machine-readable output.
+
+## On a phone
+
+The plugin's page was built to fit a phone. Starting a long import is easier from a computer.
+
+## Troubleshooting
+
+- **The plugin is not in the sidebar.** Install it from the Marketplace.
+- **Plugin access lists nothing.** The connector is not Microsoft SQL, or the plugin is not installed.
+- **Check connection fails.** Run **Diagnose** on the connector and fix the step it names.
+- **Checks find fewer than 4 of 4 tables.** The database name is wrong. Set it on the Options step, or on the connector.
+- **The counts stand still.** A page is 500 requests. Wait for the next page before deciding it has stalled.
+- **The import refuses to start.** CE could not write its audit entry, and it refuses to allow, start or resume without one. Check the server log.
+- **Workflows did not run for imported records.** Expected. An import does not emit `data.persisted`.
+
+## Related guides
+
+- [Connect to SQL Server and diagnose a connection](/docs/connector-diagnose)
+- [Connectors](/docs/connectors)
+- [Marketplace](/docs/marketplace)
+- [Activity](/docs/activity)
+- [Audit](/docs/audit)
