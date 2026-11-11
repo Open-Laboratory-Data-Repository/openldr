@@ -5,6 +5,20 @@ import { workflowNodeDeclSchema } from './workflow-node';
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 
+/** Places outside its own page where a webview plugin may draw its one signed ui.html. The host
+ *  tells the page which place it is in (`openldr.site`). Optional with no default, so a manifest
+ *  without it parses exactly as before and existing signed bundles stay valid. */
+export const uiSitesSchema = z.object({
+  widget: z.object({
+    title: z.string().min(1).max(60),
+    height: z.enum(['small', 'medium', 'large']).default('medium'),
+  }).strict().optional(),
+  panel: z.object({ title: z.string().min(1).max(60) }).strict().optional(),
+}).strict();
+export type UiSites = z.infer<typeof uiSitesSchema>;
+export type PluginSite = keyof UiSites;
+export const PLUGIN_SITES: readonly PluginSite[] = ['widget', 'panel'];
+
 /** A plugin's UI contribution. Two tiers:
  *  - Webview: `entry`+`sha256` integrity-bind the single self-contained ui.html (body content +
  *    inline CSS/JS; the host wraps it in the document shell). Both fields must be provided together.
@@ -26,8 +40,11 @@ export const uiContributionSchema = z.object({
   // fetch its UI asset, or invoke ANY broker op (incl. storage.*/invoke). Empty/absent ⇒ any
   // authenticated user (back-compat). The broker enforces this independently of the per-op gate.
   requiredRoles: z.array(z.string().min(1)).optional(),
+  sites: uiSitesSchema.optional(),
 }).refine((u) => (u.entry === undefined) === (u.sha256 === undefined), {
   message: 'ui.entry and ui.sha256 must be provided together (webview tier) or both omitted (declarative tier)',
+}).refine((u) => u.sites === undefined || u.entry !== undefined, {
+  message: 'ui.sites needs the webview tier (ui.entry and ui.sha256)',
 });
 
 export type UiContribution = z.infer<typeof uiContributionSchema>;

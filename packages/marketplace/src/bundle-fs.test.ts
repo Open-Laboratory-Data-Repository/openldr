@@ -79,6 +79,34 @@ describe('bundle ui integrity', () => {
     }
   });
 
+  // ui.sites is part of the signed manifest: a signed bundle carrying it verifies, and adding a
+  // site after signing breaks the signature (a publisher cannot be given a panel they never shipped).
+  it('verifyBundle accepts signed ui.sites and rejects a site added after signing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'mkt-ui-sites-'));
+    try {
+      const kp = generatePublisherKeypair();
+      const wasmSha = sha256Hex(wasm);
+      const ui0 = { entry: 'ui.html', sha256: sha256Hex(ui), nav: { label: 'Demo' }, sites: { widget: { title: 'Today' } } };
+      const base = {
+        schemaVersion: 1, type: 'plugin', id: 'demo', version: '1.0.0',
+        publisher: { id: 'acme', name: 'Acme', keyFingerprint: kp.fingerprint },
+        compatibility: { ceVersion: '*' }, capabilities: [],
+        payload: { kind: 'plugin', wasmSha256: wasmSha, ui: ui0 },
+      };
+      const manifest = { ...base, signature: signManifest(base, wasmSha, kp.privateKeyDer) };
+      await writeFile(join(dir, 'plugin.wasm'), wasm);
+      await writeFile(join(dir, 'ui.html'), ui);
+      await writeFile(join(dir, 'publisher.pub'), Buffer.from(kp.publicKeyDer).toString('hex'));
+      await writeFile(join(dir, 'manifest.json'), JSON.stringify(manifest));
+      expect(verifyBundle(await readBundle(dir)).valid).toBe(true);
+      const widened = { ...manifest, payload: { ...base.payload, ui: { ...ui0, sites: { ...ui0.sites, panel: { title: 'Added' } } } } };
+      await writeFile(join(dir, 'manifest.json'), JSON.stringify(widened));
+      expect(verifyBundle(await readBundle(dir))).toMatchObject({ valid: false, reason: 'bad-signature' });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it('verifyBundle rejects a signed bundle whose ui.html has been tampered', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'mkt-ui-bad-'));
     try {

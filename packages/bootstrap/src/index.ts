@@ -2024,6 +2024,7 @@ export {
   getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema,
   type UserPreferences, type UserPreferencesPatch,
 } from './user-preferences';
+export { SITES_OFF_KEY, getSitesOff, setSiteOn, visibleSites } from './plugin-sites';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';
