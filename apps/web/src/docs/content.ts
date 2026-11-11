@@ -137,6 +137,7 @@ export const SHARED_GUIDES: Record<string, string> = {
   patients: 'patients',
   laboratory: 'laboratory',
   'data-exposure': 'data-exposure',
+  'test-catalog': 'test-catalog',
 };
 
 const guideFiles = import.meta.glob('../../../studio/src/docs/*/*/*.md', {

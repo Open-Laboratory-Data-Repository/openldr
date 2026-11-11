@@ -1,8 +1,108 @@
 # Catalogue des examens
 
-Le catalogue des examens est la liste nationale des examens. Chaque examen a un code, un nom, une catégorie, les types de prélèvement qu'il accepte et, s'il en a un, un code LOINC. Un examen sans code LOINC affiche **Sans LOINC**.
+Le **catalogue des examens** est la liste nationale des examens. Chaque examen a un code, un nom, une catégorie, les types de prélèvement qu'il accepte et, s'il en a un, un code LOINC. Un examen sans code LOINC affiche **Sans LOINC**.
 
-Ouvrez **Catalogue des examens** dans la barre latérale. Il faut la permission de consulter la Terminologie pour le voir, et celle de la gérer pour modifier quoi que ce soit.
+Le catalogue a trois rôles. Il décide des examens que propose le formulaire **Lab order**. Il permet aux rapports de compter un examen de la même façon, quel que soit son nom dans chaque système de laboratoire. Et il porte les paramètres de résultat et les intervalles de référence de chaque examen.
+
+Une installation neuve ne contient aucun examen. Ce guide charge une petite liste d'exemple, active quelques examens et y associe les données d'exemple de la documentation. Comptez 15 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+
+![Le catalogue après l'importation d'exemple : huit examens avec leur code, catégorie, types de prélèvement, code LOINC et activation dans ce laboratoire.](test-catalog-list.png)
+
+## Qui peut faire quoi
+
+| Capacité | Ce qu'elle permet |
+| --- | --- |
+| **Browse terminology** | Ouvrir **Catalogue des examens** dans la barre latérale et le lire |
+| **Manage terminology** | Ajouter, modifier, importer, activer et désactiver, retirer, et associer des codes |
+
+## Avant de commencer
+
+Les exemples utilisent deux fichiers d'exemple. Les deux sont des données inventées, pour une installation de test.
+
+1. **Les données d'exemple de la documentation**, pour les Exemples 3 et 4. Voir [Tableaux de bord, Charger les données d'exemple](/docs/dashboard#charger-les-donnees-d-exemple). Elles contiennent 60 demandes sur cinq examens.
+2. **La liste d'examens d'exemple**, un CSV de huit examens. Téléchargez-la depuis `https://openldr.online/docs-samples/openldr-sample-test-catalog.csv`. Dans une copie du code source, c'est `apps/web/public/docs-samples/openldr-sample-test-catalog.csv`.
+
+```csv
+code,name,short_name,loinc,category,specimen_types
+FBC,Full blood count,FBC,58410-2,Haematology,Blood
+MAL-RDT,Malaria rapid test,Malaria RDT,70569-9,Parasitology,Blood
+HIV-VL,HIV viral load,Viral load,20447-9,Molecular,Blood
+GLU,Blood glucose,Glucose,2345-7,Chemistry,Blood
+CREAT,Creatinine,,2160-0,Chemistry,Blood
+UA,Urinalysis,Urine dipstick,24356-8,Chemistry,Urine
+TB-XPERT,TB GeneXpert MTB/RIF,GeneXpert,,Molecular,Sputum
+CSF-CULT,CSF culture,,,Microbiology,CSF
+```
+
+> **Utilisez une installation de test.** Un examen peut être retiré, jamais supprimé. Les examens importés restent dans le catalogue.
+
+## Exemple 1 : importer une liste d'examens
+
+![Choisir le fichier, vérifier les colonnes, ajouter Parasitology comme nouvelle catégorie et arriver à la vérification.](test-catalog-import.mp4)
+
+1. Ouvrez **Catalogue des examens**. L'onglet **Tests** est vide.
+2. Ouvrez le menu **⋯** de la page et sélectionnez **Importer**.
+3. Déposez le CSV d'exemple sur le panneau, ou cliquez pour le choisir. Le panneau passe à **Étape 2 sur 4 : Colonnes**.
+4. Vérifiez la colonne de chaque champ. Tous les en-têtes de l'exemple correspondent à un champ, rien à changer. Ouvrez le menu **⋯** du panneau et sélectionnez **Suivant**.
+5. **Étape 3 sur 4 : Valeurs** liste le texte qui ne correspond à rien. Ici, c'est la catégorie **"Parasitology" (1 ligne)**. Réglez-la sur **Ajouter comme nouvelle catégorie**. Sélectionnez **Suivant**.
+6. **Étape 4 sur 4 : Vérification** montre les totaux.
+
+**Résultat attendu :** **Nouveaux 8**, **Modifiés 0**, **Inchangés 0**, **Refusés 0**, et **Catégories à ajouter : PARASITOLOGY (Parasitology)**. Une note dit que LOINC n'est pas chargé ici, et que seul le format des codes LOINC a été vérifié.
+
+![La vérification : 8 nouveaux examens et une catégorie à ajouter.](test-catalog-review.png)
+
+7. Ouvrez le menu **⋯** du panneau et sélectionnez **Appliquer**. **8 ajoutés, 0 modifiés.** s'affiche, avec les huit examens. Chacun affiche **Désactivé** sous **Activé ici**.
+
+Si vous aviez laissé Parasitology sur **Non choisi**, la vérification aurait montré 7 nouveaux et 1 refusé, avec la ligne 3, `MAL-RDT`, et la raison. Rien n'est écrit avant **Appliquer**, vous pouvez donc revenir avec **Retour** et corriger.
+
+Importez le même fichier une seconde fois et la vérification affiche **Inchangés 8**. Les examens correspondent par leur code.
+
+## Exemple 2 : activer des examens dans ce laboratoire
+
+Le formulaire Lab order ne propose que les examens activés ici. Activez les cinq examens des données d'exemple.
+
+![Ouvrir le menu de la ligne Full blood count et sélectionner Activer dans ce laboratoire.](test-catalog-switch-on.mp4)
+
+1. Sur la ligne **Full blood count**, ouvrez **⋯** et sélectionnez **Activer dans ce laboratoire**. **FBC est activé dans ce laboratoire.** s'affiche, et la ligne affiche **Activé**.
+2. Faites de même pour **Malaria rapid test**, **HIV viral load**, **Blood glucose** et **Creatinine**.
+
+**Résultat attendu :** cinq examens affichent **Activé**. Urinalysis, TB GeneXpert MTB/RIF et CSF culture restent **Désactivé**. Le champ **Tests** du Lab order liste maintenant les cinq. Voir [Formulaires](/docs/forms).
+
+En ligne de commande : `./openldr test-catalog enable FBC`.
+
+## Exemple 3 : associer les codes de demande du laboratoire
+
+Chaque système de laboratoire nomme ses examens à sa façon. Les données d'exemple demandent les examens par code LOINC, par exemple `58410-2` pour une numération formule sanguine. Associez chaque code à l'examen du catalogue qu'il désigne.
+
+![L'onglet Observés : cinq codes des données d'exemple, avec leur nombre de demandes, tous non associés.](test-catalog-observed.png)
+
+1. Ouvrez l'onglet **Observés**. Il liste les cinq codes de l'entrepôt, avec leur description et leur nombre de demandes : `58410-2` 18, `70569-9` 16, `20447-9` 11, `2345-7` 9, `2160-0` 6.
+2. Sur la ligne `58410-2`, ouvrez **⋯** et sélectionnez **Associer à un test du catalogue**.
+3. Sélectionnez **Choisir un test du catalogue**, tapez `Full blood count`, et choisissez **Full blood count (FBC, 58410-2)**.
+4. Ouvrez le menu **⋯** du panneau et sélectionnez **Enregistrer**. **58410-2 correspond désormais à Full blood count** s'affiche.
+5. Associez les quatre autres codes de la même façon.
+
+![Associer 58410-2 à Full blood count.](test-catalog-map.mp4)
+
+**Résultat attendu :** chaque ligne affiche son examen sous **Test du catalogue**, avec le code de l'examen et son code LOINC en dessous.
+
+![Les cinq codes associés.](test-catalog-mapped.png)
+
+## Exemple 4 : compter les demandes par examen du catalogue
+
+Les associations sont copiées dans la table `test_map` de l'entrepôt. Un rapport la joint pour compter les demandes par examen du catalogue, quel que soit le nom de l'examen dans chaque laboratoire. Ouvrez **Requête**, choisissez **Target Warehouse (Postgres)** et exécutez :
+
+```sql
+select tm.catalog_name, count(*)
+from lab_requests lr
+join test_map tm on tm.level = 'test'
+  and tm.source_system = lr.panel_system
+  and tm.source_code = lr.panel_code
+group by tm.catalog_name
+order by 2 desc
+```
+
+**Résultat attendu :** Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6. Cela fait 60 demandes. Voir [Requêtes personnalisées](/docs/query) pour l'enregistrer pour un rapport.
 
 ## Qui modifie quoi
 
@@ -48,6 +148,16 @@ Les examens sont rapprochés par leur code : importer deux fois le même fichier
 Choisissez **Exporter en CSV** dans le menu ⋯. Toute installation peut exporter, y compris un laboratoire qui reçoit le catalogue du site central. Le fichier contient les examens actifs dans les colonnes qu'un import lit : `code`, `name`, `short_name`, `loinc`, `category` et `specimen_types`. Modifiez-le dans un tableur et importez-le à nouveau. Une valeur qui commence par `=` ou `@` reçoit un `'` en tête, pour qu'un tableur ne l'exécute pas comme une formule.
 
 En ligne de commande : `openldr test-catalog import <fichier>` montre ce qui changerait, et `--apply` l'écrit. `openldr test-catalog export` écrit le CSV.
+
+En ligne de commande, le texte qui ne correspond à rien se règle avec `--value-map`, un fichier JSON. Pour la liste d'exemple :
+
+```json
+{"categories":[{"text":"Parasitology","kind":"new","code":"PARASITOLOGY","display":"Parasitology"}],"specimens":[]}
+```
+
+```bash
+./openldr test-catalog import data/openldr-sample-test-catalog.csv --value-map data/values.json --apply
+```
 
 ## La demande d'examens
 
@@ -126,3 +236,24 @@ where tm.loinc = '20447-9'
 ```
 
 Un pack de contenu peut fournir des correspondances de résultats avec une étape `result-mappings`. Chaque entrée nomme un code de laboratoire et un code LOINC, et l'installation associe le code au seul champ de résultat lié à ce code LOINC. Un code déjà associé ici est conservé.
+
+## Sur un téléphone
+
+Le catalogue fonctionne sur un téléphone. Le tableau est plus large que l'écran : faites-le défiler sur le côté pour atteindre le menu **⋯** de chaque ligne, au bout de la ligne. Le menu **⋯** de la page est à côté de la recherche. Le panneau d'importation remplit l'écran.
+
+## Dépannage
+
+- **L'importation refuse une ligne.** La vérification donne la ligne et la raison. En général, une catégorie ou un prélèvement est resté sur **Non choisi**. Revenez aux **Valeurs** avec **Retour** et choisissez.
+- **Un examen manque dans le Lab order.** Il est **Désactivé** dans ce laboratoire, ou retiré. Activez-le.
+- **Le champ Tests du Lab order est vide.** Aucun examen n'est activé. Un Lab order ne peut pas être envoyé sans examen.
+- **Un code est Ambigu.** Il a deux associations au catalogue. Les rapports l'écartent jusqu'à ce que vous l'associiez de nouveau.
+- **Un rapport compte 0 pour un examen.** Son code de laboratoire n'est pas associé. Vérifiez l'onglet **Observés** avec le filtre des codes non associés.
+- **Je ne peux pas modifier un examen.** Cette installation reçoit son catalogue du central. Vous pouvez encore activer ou désactiver les examens, restreindre les prélèvements et définir un nom local.
+- **L'onglet Observés dit que la copie de l'entrepôt n'est pas à jour.** Choisissez **Reconstruire la copie de l'entrepôt** dans le menu **⋯** de l'onglet.
+
+## Guides associés
+
+- [Formulaires](/docs/forms)
+- [Terminologie](/docs/terminology)
+- [Requêtes personnalisées](/docs/query)
+- [Rapports](/docs/reports)

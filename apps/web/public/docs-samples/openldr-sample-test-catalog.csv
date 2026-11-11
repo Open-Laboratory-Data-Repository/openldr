@@ -1,0 +1,9 @@
+code,name,short_name,loinc,category,specimen_types
+FBC,Full blood count,FBC,58410-2,Haematology,Blood
+MAL-RDT,Malaria rapid test,Malaria RDT,70569-9,Parasitology,Blood
+HIV-VL,HIV viral load,Viral load,20447-9,Molecular,Blood
+GLU,Blood glucose,Glucose,2345-7,Chemistry,Blood
+CREAT,Creatinine,,2160-0,Chemistry,Blood
+UA,Urinalysis,Urine dipstick,24356-8,Chemistry,Urine
+TB-XPERT,TB GeneXpert MTB/RIF,GeneXpert,,Molecular,Sputum
+CSF-CULT,CSF culture,,,Microbiology,CSF

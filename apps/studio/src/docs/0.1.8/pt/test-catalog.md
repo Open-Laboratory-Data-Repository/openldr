@@ -1,8 +1,108 @@
 # Catálogo de exames
 
-O catálogo de exames é a lista nacional de exames. Cada exame tem um código, um nome, uma categoria, os tipos de amostra que aceita e, quando o tem, um código LOINC. Um exame sem código LOINC mostra **Sem LOINC**.
+O **catálogo de exames** é a lista nacional de exames. Cada exame tem um código, um nome, uma categoria, os tipos de amostra que aceita e, quando o tem, um código LOINC. Um exame sem código LOINC mostra **Sem LOINC**.
 
-Abra **Catálogo de exames** na barra lateral. Precisa da permissão de ver a Terminologia para o ver, e da permissão de a gerir para alterar qualquer coisa.
+O catálogo tem três funções. Decide que exames o formulário **Lab order** oferece. Deixa os relatórios contar um exame da mesma forma, seja qual for o nome que cada sistema de laboratório lhe dá. E guarda os parâmetros de resultado e os intervalos de referência de cada exame.
+
+Uma instalação nova não traz exames. Este guia carrega uma pequena lista de exemplo, ativa alguns exames e associa-lhes os dados de exemplo da documentação. Leva cerca de 15 minutos. Selecione uma imagem ou um clip para o ampliar.
+
+![O catálogo depois da importação de exemplo: oito exames com código, categoria, tipos de amostra, código LOINC e se este laboratório os faz.](test-catalog-list.png)
+
+## Quem pode fazer o quê
+
+| Capacidade | O que permite |
+| --- | --- |
+| **Browse terminology** | Abrir **Catálogo de exames** na barra lateral e lê-lo |
+| **Manage terminology** | Adicionar, editar, importar, ativar e desativar, retirar e associar códigos |
+
+## Antes de começar
+
+Os exemplos usam dois ficheiros de exemplo. Ambos são dados inventados, para uma instalação de teste.
+
+1. **Os dados de exemplo da documentação**, para os Exemplos 3 e 4. Veja [Painéis, Carregar os dados de exemplo](/docs/dashboard#carregar-os-dados-de-exemplo). Têm 60 pedidos em cinco exames.
+2. **A lista de exames de exemplo**, um CSV de oito exames. Transfira-a de `https://openldr.online/docs-samples/openldr-sample-test-catalog.csv`. Numa cópia do código-fonte, é `apps/web/public/docs-samples/openldr-sample-test-catalog.csv`.
+
+```csv
+code,name,short_name,loinc,category,specimen_types
+FBC,Full blood count,FBC,58410-2,Haematology,Blood
+MAL-RDT,Malaria rapid test,Malaria RDT,70569-9,Parasitology,Blood
+HIV-VL,HIV viral load,Viral load,20447-9,Molecular,Blood
+GLU,Blood glucose,Glucose,2345-7,Chemistry,Blood
+CREAT,Creatinine,,2160-0,Chemistry,Blood
+UA,Urinalysis,Urine dipstick,24356-8,Chemistry,Urine
+TB-XPERT,TB GeneXpert MTB/RIF,GeneXpert,,Molecular,Sputum
+CSF-CULT,CSF culture,,,Microbiology,CSF
+```
+
+> **Use uma instalação de teste.** Um exame pode ser retirado, nunca apagado. Os exames importados ficam no catálogo.
+
+## Exemplo 1: importar uma lista de exames
+
+![Escolher o ficheiro, verificar as colunas, adicionar Parasitology como nova categoria e chegar à revisão.](test-catalog-import.mp4)
+
+1. Abra **Catálogo de exames**. O separador **Testes** está vazio.
+2. Abra o menu **⋯** da página e selecione **Importar**.
+3. Largue o CSV de exemplo no painel, ou clique para o escolher. O painel passa a **Passo 2 de 4: Colunas**.
+4. Verifique a coluna de cada campo. Todos os cabeçalhos do exemplo correspondem a um campo, não há nada a mudar. Abra o menu **⋯** do painel e selecione **Seguinte**.
+5. **Passo 3 de 4: Valores** lista o texto que não correspondeu a nada. Aqui é a categoria **"Parasitology" (1 linha)**. Defina-a como **Adicionar como nova categoria**. Selecione **Seguinte**.
+6. **Passo 4 de 4: Revisão** mostra os totais.
+
+**Resultado esperado:** **Novos 8**, **Alterados 0**, **Sem alteração 0**, **Recusados 0**, e **Categorias a adicionar: PARASITOLOGY (Parasitology)**. Uma nota diz que o LOINC não está carregado aqui, por isso só o formato dos códigos LOINC foi verificado.
+
+![A revisão: 8 exames novos e uma categoria a adicionar.](test-catalog-review.png)
+
+7. Abra o menu **⋯** do painel e selecione **Aplicar**. Aparece **8 adicionados, 0 alterados.**, e os oito exames. Cada um mostra **Desativado** em **Ativado aqui**.
+
+Se tivesse deixado Parasitology em **Sem escolha**, a revisão mostraria 7 novos e 1 recusado, com a linha 3, `MAL-RDT`, e o motivo. Nada é escrito antes de **Aplicar**, por isso pode **Voltar** e corrigir.
+
+Importe o mesmo ficheiro outra vez e a revisão mostra **Sem alteração 8**. Os exames correspondem pelo código.
+
+## Exemplo 2: ativar exames neste laboratório
+
+O formulário Lab order só oferece os exames ativados aqui. Ative os cinco exames dos dados de exemplo.
+
+![Abrir o menu da linha Full blood count e selecionar Ativar neste laboratório.](test-catalog-switch-on.mp4)
+
+1. Na linha **Full blood count**, abra **⋯** e selecione **Ativar neste laboratório**. Aparece **FBC está ativado neste laboratório.**, e a linha mostra **Ativado**.
+2. Faça o mesmo em **Malaria rapid test**, **HIV viral load**, **Blood glucose** e **Creatinine**.
+
+**Resultado esperado:** cinco exames mostram **Ativado**. Urinalysis, TB GeneXpert MTB/RIF e CSF culture ficam **Desativado**. O campo **Tests** do Lab order lista agora os cinco. Veja [Formulários](/docs/forms).
+
+Na linha de comandos: `./openldr test-catalog enable FBC`.
+
+## Exemplo 3: associar os códigos de pedido do laboratório
+
+Cada sistema de laboratório dá aos exames os seus próprios nomes. Os dados de exemplo pedem os exames pelo código LOINC, por exemplo `58410-2` para um hemograma. Associe cada código ao exame do catálogo que ele quer dizer.
+
+![O separador Observados: cinco códigos dos dados de exemplo, com o número de pedidos, todos sem associação.](test-catalog-observed.png)
+
+1. Abra o separador **Observados**. Lista os cinco códigos do armazém, com a descrição e o número de pedidos: `58410-2` 18, `70569-9` 16, `20447-9` 11, `2345-7` 9, `2160-0` 6.
+2. Na linha `58410-2`, abra **⋯** e selecione **Associar a um teste do catálogo**.
+3. Selecione **Escolher um teste do catálogo**, escreva `Full blood count` e escolha **Full blood count (FBC, 58410-2)**.
+4. Abra o menu **⋯** do painel e selecione **Guardar**. Aparece **58410-2 corresponde agora a Full blood count**.
+5. Associe os outros quatro códigos da mesma forma.
+
+![Associar 58410-2 a Full blood count.](test-catalog-map.mp4)
+
+**Resultado esperado:** cada linha mostra o seu exame em **Teste do catálogo**, com o código do exame e o código LOINC por baixo.
+
+![Os cinco códigos associados.](test-catalog-mapped.png)
+
+## Exemplo 4: contar pedidos por exame do catálogo
+
+As associações são copiadas para a tabela `test_map` do armazém. Um relatório junta-a para contar os pedidos por exame do catálogo, seja qual for o nome que cada laboratório deu ao exame. Abra **Consulta**, escolha **Target Warehouse (Postgres)** e execute:
+
+```sql
+select tm.catalog_name, count(*)
+from lab_requests lr
+join test_map tm on tm.level = 'test'
+  and tm.source_system = lr.panel_system
+  and tm.source_code = lr.panel_code
+group by tm.catalog_name
+order by 2 desc
+```
+
+**Resultado esperado:** Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6. São 60 pedidos. Veja [Consultas personalizadas](/docs/query) para a guardar para um relatório.
 
 ## Quem altera o quê
 
@@ -48,6 +148,16 @@ Os exames são comparados pelo código, por isso importar o mesmo ficheiro duas 
 Escolha **Exportar CSV** no menu ⋯. Qualquer instalação pode exportar, incluindo um laboratório que recebe o catálogo do nível central. O ficheiro tem os exames ativos nas colunas que uma importação lê: `code`, `name`, `short_name`, `loinc`, `category` e `specimen_types`. Edite-o numa folha de cálculo e importe-o de novo. Um valor que começa por `=` ou `@` recebe um `'` no início, para que uma folha de cálculo não o execute como fórmula.
 
 Na linha de comandos: `openldr test-catalog import <ficheiro>` mostra o que mudaria, e `--apply` escreve-o. `openldr test-catalog export` escreve o CSV.
+
+Na linha de comandos, o texto que não correspondeu a nada responde-se com `--value-map`, um ficheiro JSON. Para a lista de exemplo:
+
+```json
+{"categories":[{"text":"Parasitology","kind":"new","code":"PARASITOLOGY","display":"Parasitology"}],"specimens":[]}
+```
+
+```bash
+./openldr test-catalog import data/openldr-sample-test-catalog.csv --value-map data/values.json --apply
+```
 
 ## O pedido de exames
 
@@ -126,3 +236,24 @@ where tm.loinc = '20447-9'
 ```
 
 Um pacote de conteúdo pode trazer correspondências de resultados com um passo `result-mappings`. Cada entrada indica um código do laboratório e um código LOINC, e a instalação associa o código ao único campo de resultado ligado a esse código LOINC. Um código já associado aqui é mantido.
+
+## Num telemóvel
+
+O catálogo funciona num telemóvel. A tabela é mais larga do que o ecrã: deslize-a para o lado para chegar ao menu **⋯** de cada linha, no fim da linha. O menu **⋯** da página fica ao lado da pesquisa. O painel de importação ocupa o ecrã.
+
+## Resolução de problemas
+
+- **A importação recusa uma linha.** A revisão indica a linha e o motivo. Em geral, uma categoria ou amostra ficou em **Sem escolha**. Volte a **Valores** com **Voltar** e escolha.
+- **Falta um exame no Lab order.** Está **Desativado** neste laboratório, ou retirado. Ative-o.
+- **O campo Tests do Lab order está vazio.** Nenhum exame está ativado. Um Lab order não pode ser enviado sem exame.
+- **Um código está Ambíguo.** Tem duas associações ao catálogo. Os relatórios deixam-no de fora até o associar outra vez.
+- **Um relatório conta 0 para um exame.** O código do laboratório não está associado. Veja o separador **Observados** com o filtro dos códigos sem associação.
+- **Não consigo editar um exame.** Esta instalação recebe o catálogo do central. Pode na mesma ativar ou desativar exames, restringir amostras e definir um nome local.
+- **O separador Observados diz que a cópia do armazém está desatualizada.** Escolha **Reconstruir a cópia do armazém** no menu **⋯** do separador.
+
+## Guias relacionados
+
+- [Formulários](/docs/forms)
+- [Terminologia](/docs/terminology)
+- [Consultas personalizadas](/docs/query)
+- [Relatórios](/docs/reports)

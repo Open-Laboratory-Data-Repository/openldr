@@ -85,14 +85,12 @@ describe('DocsPage', () => {
     }
   });
 
-  it('renders the test catalog guide from its navigation entry in all three languages', () => {
+  it('shows the shared Test catalog guide with its examples', () => {
     renderDocs('/docs/test-catalog');
-
     expect(screen.getByRole('heading', { level: 1, name: 'Test catalog' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Test catalog' })).toHaveAttribute('aria-current', 'page');
-    for (const name of ['English', 'Français', 'Português']) {
-      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
-    }
+    const list = screen.getByRole('navigation', { name: 'On this page' });
+    expect(within(list).getByRole('link', { name: 'Example 1: import a test list' })).toHaveAttribute('href', '#example-1-import-a-test-list');
   });
 
   it('renders a professional docs shell for a public doc page', () => {

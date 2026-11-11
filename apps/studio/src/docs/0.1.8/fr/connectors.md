@@ -240,7 +240,7 @@ Un gestionnaire qui ne rend jamais la main peut faire attendre l'arrêt sans fin
 
 ## Sur un téléphone
 
-La liste des connecteurs défile sur le côté sur un téléphone. Le menu **⋯** est au bout de chaque ligne. Le formulaire **Ajouter un connecteur** remplit l'écran, avec les libellés à gauche de chaque champ.
+Sur un téléphone, le tableau des connecteurs est plus large que l'écran. Faites-le défiler sur le côté pour atteindre le menu **⋯** de chaque ligne, au bout de la ligne. Le formulaire **Ajouter un connecteur** remplit l'écran, avec les libellés à gauche de chaque champ.
 
 ## Dépannage
 

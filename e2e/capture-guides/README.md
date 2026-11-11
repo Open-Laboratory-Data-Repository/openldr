@@ -47,3 +47,8 @@ Chromium is not downloaded, point `CHROMIUM_PATH` at a Chromium you already have
 
 Each script puts back what it changed: the sample dashboard, settings it switched, and anything
 it created. Running it twice in a row gives the same pictures.
+
+One exception: `test-catalog.guide.ts` imports a sample test list and leaves it in place, because a
+test can be retired but not deleted, and the Lab order in the Forms guide needs those tests. It
+refuses to start unless the catalog is empty, so run it once per fresh install, before
+`forms.guide.ts`.

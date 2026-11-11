@@ -240,7 +240,7 @@ Um processador que nunca termina pode deixar a paragem à espera para sempre. D�
 
 ## Num telemóvel
 
-A lista de conectores desliza para o lado num telemóvel. O menu **⋯** fica no fim de cada linha. O painel **Adicionar conector** ocupa o ecrã, com as etiquetas à esquerda de cada campo.
+Num telemóvel, a tabela de conectores é mais larga do que o ecrã. Deslize-a para o lado para chegar ao menu **⋯** de cada linha, no fim da linha. O painel **Adicionar conector** ocupa o ecrã, com as etiquetas à esquerda de cada campo.
 
 ## Resolução de problemas
 

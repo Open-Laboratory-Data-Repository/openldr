@@ -240,7 +240,7 @@ A handler that never returns can keep shutdown waiting forever. Give active impo
 
 ## On a phone
 
-The connectors list scrolls sideways on a phone. The **⋯** menu sits at the end of each row. The **Add connector** sheet fills the screen, with labels to the left of each box.
+On a phone, the connectors table is wider than the screen. Scroll it sideways to reach each row's **⋯** menu, at the end of the row. The **Add connector** sheet fills the screen, with labels to the left of each box.
 
 ## Troubleshooting
 

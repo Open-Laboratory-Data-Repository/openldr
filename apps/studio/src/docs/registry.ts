@@ -240,10 +240,11 @@ export const DOC_GUIDES: DocGuide[] = [
     summary: 'Keep the national list of tests, and choose which of them this lab runs.',
     audience: ['lab-managers', 'administrators'],
     requiredRoles: [],
-    estimatedMinutes: 8,
+    estimatedMinutes: 15,
     difficulty: 'intermediate',
     relatedSlugs: ['terminology', 'facilities'],
     screenshotNames: [],
+    capturedNames: ['test-catalog-list.png', 'test-catalog-import.mp4', 'test-catalog-review.png', 'test-catalog-switch-on.mp4', 'test-catalog-observed.png', 'test-catalog-map.mp4', 'test-catalog-mapped.png'],
     status: 'published',
   },
   {

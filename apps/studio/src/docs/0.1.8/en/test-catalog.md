@@ -1,8 +1,108 @@
 # Test catalog
 
-The test catalog is the national list of tests. Each test has a code, a name, a category, the specimen types it accepts and, when it has one, a LOINC code. A test with no LOINC code shows **No LOINC**.
+The **test catalog** is the national list of tests. Each test has a code, a name, a category, the specimen types it accepts and, when it has one, a LOINC code. A test with no LOINC code shows **No LOINC**.
 
-Open **Test catalog** in the sidebar. You need the Terminology view permission to see it, and Terminology manage to change anything.
+The catalog does three jobs. It decides which tests the **Lab order** form offers. It lets reports count a test the same way whatever each lab system calls it. And it holds each test's result parameters and reference ranges.
+
+A fresh install ships no tests. This guide loads a small sample list, switches some tests on, and maps the docs sample data to it. It takes about 15 minutes. Select any picture or clip to enlarge it.
+
+![Test catalog after the sample import: eight tests with their code, category, specimen types, LOINC code and whether this lab runs them.](test-catalog-list.png)
+
+## Who can do what
+
+| Permission | What it allows |
+| --- | --- |
+| **Browse terminology** | Open **Test catalog** in the sidebar and read it |
+| **Manage terminology** | Add, edit, import, switch on and off, retire, and map codes |
+
+## Before you start
+
+The examples use two sample files. Both are made-up data for a test install.
+
+1. **The docs sample data**, for Example 3 and Example 4. See [Dashboards, Load the sample data](/docs/dashboard#load-the-sample-data). It holds 60 orders across five tests.
+2. **The sample test list**, a CSV of eight tests. Download it from `https://openldr.online/docs-samples/openldr-sample-test-catalog.csv`. In a source checkout it is `apps/web/public/docs-samples/openldr-sample-test-catalog.csv`.
+
+```csv
+code,name,short_name,loinc,category,specimen_types
+FBC,Full blood count,FBC,58410-2,Haematology,Blood
+MAL-RDT,Malaria rapid test,Malaria RDT,70569-9,Parasitology,Blood
+HIV-VL,HIV viral load,Viral load,20447-9,Molecular,Blood
+GLU,Blood glucose,Glucose,2345-7,Chemistry,Blood
+CREAT,Creatinine,,2160-0,Chemistry,Blood
+UA,Urinalysis,Urine dipstick,24356-8,Chemistry,Urine
+TB-XPERT,TB GeneXpert MTB/RIF,GeneXpert,,Molecular,Sputum
+CSF-CULT,CSF culture,,,Microbiology,CSF
+```
+
+> **Use a test install.** A test can be retired but never deleted. Imported tests stay in the catalog.
+
+## Example 1: import a test list
+
+![Choosing the file, checking the columns, adding Parasitology as a new category, and reaching the review.](test-catalog-import.mp4)
+
+1. Open **Test catalog**. The **Tests** tab is empty.
+2. Open the page's **⋯** menu and select **Import**.
+3. Drop the sample CSV on the sheet, or click to choose it. The sheet moves to **Step 2 of 4: Columns**.
+4. Check each field's column. Every header in the sample matches a field, so nothing needs changing. Open the sheet's **⋯** menu and select **Next**.
+5. **Step 3 of 4: Values** lists text that matched nothing. Here it is the category **"Parasitology" (1 row)**. Set it to **Add as a new category**. Select **Next**.
+6. **Step 4 of 4: Review** shows the counts.
+
+**Expected result:** **New 8**, **Changed 0**, **Unchanged 0**, **Refused 0**, and **Categories to add: PARASITOLOGY (Parasitology)**. A note says LOINC is not loaded here, so LOINC codes were checked for their format only.
+
+![The review: 8 new tests, and one category to add.](test-catalog-review.png)
+
+7. Open the sheet's **⋯** menu and select **Apply**. **8 added, 0 changed.** appears, and so do the eight tests. Each reads **Off** under **On at this lab**.
+
+Had you left Parasitology on **Not chosen**, the review would show 7 new and 1 refused, with row 3, `MAL-RDT`, and the reason. Nothing is written before **Apply**, so you can go **Back** and fix it.
+
+Import the same file again and the review shows **Unchanged 8**. Tests match on their code.
+
+## Example 2: switch tests on at this lab
+
+The Lab order form offers only tests switched on here. Switch on the five tests the sample data uses.
+
+![Opening the Full blood count row menu and selecting Switch on at this lab.](test-catalog-switch-on.mp4)
+
+1. On the **Full blood count** row, open **⋯** and select **Switch on at this lab**. **FBC is on at this lab.** appears, and the row reads **On**.
+2. Do the same for **Malaria rapid test**, **HIV viral load**, **Blood glucose** and **Creatinine**.
+
+**Expected result:** five tests read **On**. Urinalysis, TB GeneXpert MTB/RIF and CSF culture stay **Off**. The **Tests** field on the Lab order now lists the five. See [Forms](/docs/forms).
+
+From the command line, the same is `./openldr test-catalog enable FBC`.
+
+## Example 3: map the lab's order codes
+
+Every lab system names its tests its own way. The docs sample data orders tests by LOINC code, for example `58410-2` for a full blood count. Map each code to the catalog test it means.
+
+![The Observed tab: five codes from the sample data, with how many requests each has, all unmapped.](test-catalog-observed.png)
+
+1. Open the **Observed** tab. It lists the five codes in the warehouse, with their description and request count: `58410-2` 18, `70569-9` 16, `20447-9` 11, `2345-7` 9, `2160-0` 6.
+2. On the `58410-2` row, open **⋯** and select **Map to catalog test**.
+3. Select **Choose a catalog test**, type `Full blood count`, and pick **Full blood count (FBC, 58410-2)**.
+4. Open the sheet's **⋯** menu and select **Save**. **58410-2 now maps to Full blood count** appears.
+5. Map the other four codes the same way.
+
+![Mapping 58410-2 to Full blood count.](test-catalog-map.mp4)
+
+**Expected result:** every row shows its catalog test under **Catalog test**, with the test's code and LOINC code underneath.
+
+![All five codes mapped.](test-catalog-mapped.png)
+
+## Example 4: count orders by catalog test
+
+Mappings are copied to the warehouse table `test_map`. A report joins it to count orders by catalog test, whatever each lab called the test. Open **Query**, pick **Target Warehouse (Postgres)**, and run:
+
+```sql
+select tm.catalog_name, count(*)
+from lab_requests lr
+join test_map tm on tm.level = 'test'
+  and tm.source_system = lr.panel_system
+  and tm.source_code = lr.panel_code
+group by tm.catalog_name
+order by 2 desc
+```
+
+**Expected result:** Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6. That is 60 orders. See [Custom Queries](/docs/query) to save it for a report.
 
 ## Who changes what
 
@@ -48,6 +148,18 @@ Tests match on their code, so importing the same file twice changes nothing. A t
 Choose **Export CSV** from the ⋯ menu. Any install can export, a lab that receives central's catalog included. The file holds the active tests in the columns an import reads: `code`, `name`, `short_name`, `loinc`, `category` and `specimen_types`. Edit it in a spreadsheet and import it back. A value that starts with `=` or `@` gets a leading `'`, so a spreadsheet does not run it as a formula.
 
 From the command line: `openldr test-catalog import <file>` shows what would change, and `--apply` writes it. `openldr test-catalog export` writes the CSV.
+
+On the command line, text that matched nothing is answered with `--value-map`, a JSON file. For the sample list:
+
+```json
+{"categories":[{"text":"Parasitology","kind":"new","code":"PARASITOLOGY","display":"Parasitology"}],"specimens":[]}
+```
+
+```bash
+./openldr test-catalog import data/openldr-sample-test-catalog.csv --value-map data/values.json --apply
+```
+
+An answer can also name an existing category: `{"text":"Parasitology","kind":"existing","code":"MICRO"}`. `--column-map` names the column for each field when the headers differ.
 
 ## The Lab order
 
@@ -126,3 +238,24 @@ where tm.loinc = '20447-9'
 ```
 
 A content pack can ship result mappings with a `result-mappings` step. Each entry names a lab code and a LOINC code, and the install maps the code to the one result field linked to that LOINC code. A code already mapped here is kept.
+
+## On a phone
+
+The catalog works on a phone. The table is wider than the screen, so scroll it sideways to reach each row's **⋯** menu, at the end of the row. The page's own **⋯** menu sits beside the search box. The import sheet fills the screen.
+
+## Troubleshooting
+
+- **Import refuses a row.** The review gives the row and the reason. Usually a category or specimen was left on **Not chosen**. Go **Back** to **Values** and choose.
+- **A test is missing from the Lab order.** It is **Off** at this lab, or retired. Switch it on.
+- **The Tests field on the Lab order is empty.** No test is switched on. A Lab order cannot be submitted without one.
+- **A code reads Ambiguous.** It has two catalog mappings. Reports leave it out until you map it again.
+- **A report counts 0 for a test.** Its lab code is not mapped. Check the **Observed** tab with the **Unmapped** filter.
+- **I cannot edit a test.** This install receives its catalog from central. You can still switch tests on or off, narrow specimens and set a local name.
+- **The Observed tab says the warehouse copy is stale.** Choose **Rebuild warehouse copy** from the tab's **⋯** menu.
+
+## Related guides
+
+- [Forms](/docs/forms)
+- [Terminology](/docs/terminology)
+- [Custom Queries](/docs/query)
+- [Reports](/docs/reports)
