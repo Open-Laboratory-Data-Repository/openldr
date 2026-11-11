@@ -42,7 +42,10 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
     try {
       const r = await queryApi.run({ connectorId: tab.connectorId, sql: tab.sql, params: tab.params, values, limit: size, offset: p * size });
       setResult(r); setStatus('ok');
-    } catch (e) { setStatus('error'); setError((e as Error).message); }
+    } catch (e) {
+      // Drop the last good result: left on screen, it reads as the answer to the query that failed.
+      setResult(null); setStatus('error'); setError((e as Error).message);
+    }
   };
 
   const onRun = () => { if (tab.params.length > 0) setSheetOpen(true); else void execute({}, 0); };
@@ -127,7 +130,11 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
         window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
       }} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="min-h-0 min-w-0 flex-1"><ResultsGrid result={result} /></div>
+        {status === 'error' && error && !result ? (
+          <div role="alert" className="min-h-0 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-xs text-destructive">{error}</div>
+        ) : (
+          <div className="min-h-0 min-w-0 flex-1"><ResultsGrid result={result} /></div>
+        )}
         {result && (
           <TablePagination
             page={page}

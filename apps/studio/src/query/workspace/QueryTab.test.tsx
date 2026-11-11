@@ -30,6 +30,17 @@ describe('QueryTab', () => {
     // pagination summary the run produced (rowCount/ms) rather than a DOM cell.
     expect(await screen.findByText('1 rows · 3ms')).toBeInTheDocument();
   });
+
+  it('replaces the last good result with the error when a run fails', async () => {
+    render(<QueryTab tab={tab} />);
+    fireEvent.click(screen.getByRole('button', { name: /run/i }));
+    expect(await screen.findByText('1 rows · 3ms')).toBeInTheDocument();
+    vi.mocked(queryApi.run).mockRejectedValueOnce(new Error('relation "patientz" does not exist'));
+    fireEvent.click(screen.getByRole('button', { name: /run/i }));
+    // The old rows must not stay on screen as if they answered the new query.
+    expect(await screen.findByRole('alert')).toHaveTextContent('relation "patientz" does not exist');
+    expect(screen.queryByText('1 rows · 3ms')).not.toBeInTheDocument();
+  });
 });
 
 describe('saving named queries', () => {

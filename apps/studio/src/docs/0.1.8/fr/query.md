@@ -230,6 +230,7 @@ Sur un téléphone, l'Explorateur commence replié en une fine bande à gauche. 
 
 - **Exécuter est grisé.** Choisissez d'abord un connecteur et écrivez du SQL.
 - **« unbound parameter ».** Chaque `{{ param.x }}` du SQL demande un paramètre avec cet **ID de variable**.
+- **Une requête échoue.** L'erreur de la base de données remplace les résultats, en rouge, pour que d'anciennes lignes ne passent jamais pour la réponse. Corrigez le SQL et choisissez **Run** à nouveau.
 - **« required parameter » à l'exécution.** Remplissez chaque paramètre marqué **Requis**.
 - **La requête est refusée.** Seules les instructions `SELECT` s'exécutent. Tout ce qui modifie des données ou des tables est refusé.
 - **Une base SQL Server manque dans l'Explorateur.** La connexion du connecteur ne peut pas l'ouvrir, ou elle est hors ligne. Vérifiez les droits de la connexion sur le serveur.

@@ -230,6 +230,7 @@ Num telemóvel, o Explorador começa dobrado numa faixa estreita à esquerda. Se
 
 - **Executar está desativado.** Escolha primeiro um conector e escreva SQL.
 - **"unbound parameter".** Cada `{{ param.x }}` no SQL precisa de um parâmetro com esse **ID da variável**.
+- **Uma consulta falha.** O erro da base de dados substitui os resultados, a vermelho, para que linhas antigas nunca passem pela resposta. Corrija o SQL e escolha **Run** de novo.
 - **"required parameter" ao executar.** Preencha todos os parâmetros marcados como **Obrigatório**.
 - **A consulta é recusada.** Só correm instruções `SELECT`. Tudo o que altere dados ou tabelas é recusado.
 - **Falta uma base de dados SQL Server no Explorador.** O login do conector não a pode abrir, ou está offline. Verifique os acessos do login no servidor.

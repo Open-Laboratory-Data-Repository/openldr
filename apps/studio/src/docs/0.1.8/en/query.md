@@ -230,6 +230,7 @@ On a phone, the Explorer starts folded into a thin strip on the left. Select the
 
 - **Run is greyed out.** Choose a connector and write some SQL first.
 - **"unbound parameter".** Every `{{ param.x }}` in the SQL needs a parameter with that **Variable ID**.
+- **A query fails.** The database's error replaces the results, in red, so old rows never pass for the answer. Fix the SQL and select **Run** again.
 - **"required parameter" when running.** Fill every parameter marked **Required**.
 - **The query is refused.** Only `SELECT` statements run. Anything that changes data or tables is refused.
 - **A SQL Server database is missing from the Explorer.** The connector's login cannot open it, or it is offline. Check the login's access on the server.
