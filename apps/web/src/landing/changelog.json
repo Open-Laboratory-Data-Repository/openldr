@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "ff6eb8d9",
+          "type": "fix",
+          "scope": "layouts",
+          "title": "Two saves at the same instant answer 409, not 500"
+        },
+        {
+          "hash": "7a6208d8",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A saved start page the layout hides falls through to the layout's start page"
+        },
+        {
+          "hash": "b5fcb897",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The Places sheet reads its switches once per plugin, not on every redraw"
+        },
+        {
+          "hash": "fbb282ac",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A plugin change in Settings updates the sidebar and closes a stale side panel"
+        },
+        {
           "hash": "fdc02bb6",
           "type": "fix",
           "scope": "layouts",
