@@ -88,6 +88,49 @@ DEV_HOST=127.0.0.1
 | `pnpm openldr db seed` | Charge les formulaires, les flux de travail et la terminologie par défaut. |
 | `pnpm -C apps/studio test` | Lance seulement les tests de Studio. |
 
+## Construire des extensions
+
+Les extensions sont écrites en Rust et compilées en WebAssembly. Leur code source est dans `wasm/`.
+
+1. Installez Rust avec [rustup](https://rustup.rs).
+2. Ajoutez la cible WebAssembly : `rustup target add wasm32-wasip1`.
+3. Si un terminal indique que `cargo` est introuvable, chargez Rust dans ce terminal : `source "$HOME/.cargo/env"`.
+4. Construisez une extension :
+
+| Commande | Ce qu'elle construit |
+| --- | --- |
+| `pnpm build:test-sink` | La petite extension de test, dans `reference-plugins/test-sink/`. |
+| `pnpm build:ui-reference` | L'extension de test avec une page, une carte de tableau de bord et un panneau latéral, dans `reference-plugins/ui-reference/`. |
+| `pnpm build:plugins` | L'extension WHONET et les autres extensions de référence. L'extension WHONET demande aussi clang et un sysroot WASI. |
+
+Installez une extension construite avec `pnpm openldr plugin install reference-plugins/<name>/plugin.wasm`.
+
+Les tests Rust des extensions se lancent dans `wasm/`, par exemple `cargo test -p openldr-v1-import`. La porte de tests turbo ne les lance pas. Lancez-les vous-même quand vous modifiez une extension.
+
+### Carte et panneau latéral d'une extension
+
+Une extension qui a sa propre page (`ui.entry` dans son manifeste) peut aussi afficher cette page comme carte sur le tableau de bord et comme panneau latéral. Déclarez-les sous `ui.sites` :
+
+```json
+"ui": {
+  "entry": "ui.html",
+  "sha256": "<sha256 of ui.html>",
+  "nav": { "label": "Bench notes" },
+  "sites": {
+    "widget": { "title": "Today", "height": "small" },
+    "panel": { "title": "Bench notes" }
+  }
+}
+```
+
+- Les deux sont facultatifs. `height` vaut `small`, `medium` ou `large` : 160, 240 ou 360 px de haut. La valeur par défaut est `medium`.
+- Les titres font de 1 à 60 caractères.
+- `ui.sites` fait partie du manifeste signé, la signature le couvre donc. Les paquets signés avant son arrivée se vérifient toujours.
+- L'extension fournit un seul `ui.html`. Après `await openldr.ready`, lisez `openldr.site`. Sa valeur est `page`, `widget` ou `panel`. Affichez la vue de cet emplacement.
+- Chaque emplacement utilise les mêmes appels au broker, le même stockage et le même contrôle de rôle, `ui.requiredRoles`.
+
+La Documentation du studio explique ce que voient les utilisateurs, dans **Cartes et panneaux latéraux des extensions**.
+
 ## Contribuer
 
 Les contributions sont les bienvenues. Pour l'instant : forkez le dépôt, créez une branche de fonctionnalité, gardez les tests et les vérifications de types au vert (`pnpm test`, `pnpm typecheck`) et ouvrez une pull request vers `main` qui décrit la modification.

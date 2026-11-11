@@ -110,6 +110,49 @@ Vite config.
 | `pnpm openldr db seed` | Seed the default forms, workflows, and terminology. |
 | `pnpm -C apps/studio test` | Run just the Studio tests. |
 
+## Building plugins
+
+Plugins are written in Rust and compiled to WebAssembly. Their source is in `wasm/`.
+
+1. Install Rust with [rustup](https://rustup.rs).
+2. Add the WebAssembly target: `rustup target add wasm32-wasip1`.
+3. If a terminal says `cargo` is not found, load Rust into it: `source "$HOME/.cargo/env"`.
+4. Build a plugin:
+
+| Command | What it builds |
+| --- | --- |
+| `pnpm build:test-sink` | The small test plugin, in `reference-plugins/test-sink/`. |
+| `pnpm build:ui-reference` | The test plugin with a page, a dashboard card and a side panel, in `reference-plugins/ui-reference/`. |
+| `pnpm build:plugins` | The WHONET plugin and the other reference plugins. The WHONET plugin also needs clang and a WASI sysroot. |
+
+Install a built plugin with `pnpm openldr plugin install reference-plugins/<name>/plugin.wasm`.
+
+The plugins' Rust tests run in `wasm/`, for example `cargo test -p openldr-v1-import`. The turbo test gate does not run them, so run them yourself when you change a plugin.
+
+### A plugin's card and side panel
+
+A plugin with its own page (`ui.entry` in its manifest) can also draw that page as a card on the dashboard and as a side panel. Declare them under `ui.sites`:
+
+```json
+"ui": {
+  "entry": "ui.html",
+  "sha256": "<sha256 of ui.html>",
+  "nav": { "label": "Bench notes" },
+  "sites": {
+    "widget": { "title": "Today", "height": "small" },
+    "panel": { "title": "Bench notes" }
+  }
+}
+```
+
+- Both are optional. `height` is `small`, `medium` or `large`: 160, 240 or 360 px tall. The default is `medium`.
+- Titles are 1 to 60 characters.
+- `ui.sites` is part of the signed manifest, so the signature covers it. Bundles signed before it existed still verify.
+- The plugin ships one `ui.html`. After `await openldr.ready`, read `openldr.site`. It is `page`, `widget` or `panel`. Draw the view for that place.
+- Every place uses the same broker calls, the same storage and the same role gate, `ui.requiredRoles`.
+
+The studio's Docs explain what users see, in **Plugin cards and side panels**.
+
 ## Contributing
 
 Contributions are welcome. For now: fork the repo, create a feature branch, keep tests

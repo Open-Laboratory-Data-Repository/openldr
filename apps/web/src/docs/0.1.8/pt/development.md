@@ -115,6 +115,49 @@ por definir para manter a omissão, só localhost. Só são lidas as variáveis 
 | `pnpm openldr db seed` | Cria os formulários, fluxos de trabalho e terminologias por omissão. |
 | `pnpm -C apps/studio test` | Executa apenas os testes do Studio. |
 
+## Construir plugins
+
+Os plugins são escritos em Rust e compilados para WebAssembly. O código-fonte está em `wasm/`.
+
+1. Instale o Rust com o [rustup](https://rustup.rs).
+2. Adicione o destino WebAssembly: `rustup target add wasm32-wasip1`.
+3. Se um terminal disser que não encontra o `cargo`, carregue o Rust nesse terminal: `source "$HOME/.cargo/env"`.
+4. Construa um plugin:
+
+| Comando | O que constrói |
+| --- | --- |
+| `pnpm build:test-sink` | O pequeno plugin de teste, em `reference-plugins/test-sink/`. |
+| `pnpm build:ui-reference` | O plugin de teste com uma página, um cartão no painel e um painel lateral, em `reference-plugins/ui-reference/`. |
+| `pnpm build:plugins` | O plugin WHONET e os outros plugins de referência. O plugin WHONET precisa também do clang e de um sysroot WASI. |
+
+Instale um plugin construído com `pnpm openldr plugin install reference-plugins/<name>/plugin.wasm`.
+
+Os testes Rust dos plugins correm em `wasm/`, por exemplo `cargo test -p openldr-v1-import`. A barreira de testes do turbo não os corre, por isso corra-os quando alterar um plugin.
+
+### Cartão e painel lateral de um plugin
+
+Um plugin com página própria (`ui.entry` no manifesto) pode também mostrar essa página como cartão no painel e como painel lateral. Declare-os em `ui.sites`:
+
+```json
+"ui": {
+  "entry": "ui.html",
+  "sha256": "<sha256 of ui.html>",
+  "nav": { "label": "Bench notes" },
+  "sites": {
+    "widget": { "title": "Today", "height": "small" },
+    "panel": { "title": "Bench notes" }
+  }
+}
+```
+
+- Ambos são opcionais. `height` é `small`, `medium` ou `large`: 160, 240 ou 360 px de altura. O valor por omissão é `medium`.
+- Os títulos têm de 1 a 60 caracteres.
+- `ui.sites` faz parte do manifesto assinado, por isso a assinatura cobre-o. Os pacotes assinados antes de ele existir continuam a ser verificados.
+- O plugin traz um único `ui.html`. Depois de `await openldr.ready`, leia `openldr.site`. O valor é `page`, `widget` ou `panel`. Desenhe a vista desse lugar.
+- Todos os lugares usam as mesmas chamadas ao broker, o mesmo armazenamento e o mesmo controlo de funções, `ui.requiredRoles`.
+
+A Documentação do estúdio explica o que os utilizadores veem, em **Cartões e painéis laterais de plugins**.
+
 ## Contribuir
 
 As contribuições são bem-vindas. Por agora: faça um fork do repositório, crie um ramo de
