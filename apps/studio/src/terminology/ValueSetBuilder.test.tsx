@@ -60,6 +60,7 @@ describe('ValueSetBuilder live expansion', () => {
     // "This lab's tests" is worked out when read, so its stored expansion is empty, and the sheet
     // said "Expansion is empty" while forms offered 5 tests.
     vi.spyOn(api, 'listPublishers').mockResolvedValue([] as never);
+    vi.spyOn(api, 'listValueSets').mockResolvedValue([]);
     vi.spyOn(api, 'expandValueSet').mockResolvedValue({ codes: [], total: 0 });
     const live = vi.spyOn(api, 'expandValueSetByUrl').mockResolvedValue([
       { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC', display: 'Full blood count' },
