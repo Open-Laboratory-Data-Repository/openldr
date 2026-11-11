@@ -20,7 +20,14 @@ describe('DocsPage', () => {
   it('leaves the studio user guides to the in-app docs', () => {
     renderDocs('/docs/dashboard');
     const nav = screen.getByRole('navigation', { name: /public documentation/i });
-    for (const name of ['Dashboards', 'Reports', 'Custom queries', 'Workflows', 'Forms', 'Facilities', 'Test catalog', 'Patients', 'Activity and payload history', 'Laboratory setup', 'Data exposure', 'Setup checks', 'User preferences']) {
+    for (const name of [
+      'Dashboards', 'Reports', 'Custom queries', 'Workflows', 'Forms', 'Facilities', 'Test catalog', 'Patients',
+      'Activity and payload history', 'Laboratory setup', 'Data exposure', 'Setup checks', 'User preferences',
+      // Short pages about studio screens. The in-app guides hold the same text in en, fr and pt.
+      'Workflow canvas navigation', 'Workflow webhooks', 'Query names', 'Export and import queries', 'Query groups',
+      'Dashboard refresh', 'Dashboard query limits', 'Query result paging', 'Connector query deadlines',
+      'Report schedules', 'Marketplace permission checks',
+    ]) {
       expect(within(nav).queryByRole('link', { name })).toBeNull();
     }
     // An in-app slug is not a website page, so it falls back to Getting started.
@@ -38,17 +45,17 @@ describe('DocsPage', () => {
   });
 
   it('offers the language picker on every page', () => {
-    renderDocs('/docs/query-naming');
+    renderDocs('/docs/install');
     expect(screen.getByRole('combobox', { name: 'Documentation language' })).toBeInTheDocument();
   });
 
   it('opens the current documentation version and keeps the previous version selectable', () => {
-    renderDocs('/docs/query-naming');
+    renderDocs('/docs/requirements');
     expect(screen.getByLabelText('Documentation version')).toHaveTextContent('0.1.8');
     fireEvent.keyDown(screen.getByLabelText('Documentation version'), { key: 'Enter' });
     fireEvent.click(screen.getByRole('option', { name: '0.1.0' }));
     expect(screen.getByLabelText('Documentation version')).toHaveTextContent('0.1.0');
-    expect(screen.getByRole('heading', { level: 1, name: 'Query names' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Requirements' })).toBeInTheDocument();
   });
   it('shows authentication provider guidance in one language at a time, and switches', () => {
     renderDocs('/docs/auth-providers');
@@ -72,25 +79,7 @@ describe('DocsPage', () => {
   });
 
 
-  it('shows report schedules from its navigation entry in the reader\'s language only', () => {
-    renderDocs('/docs/report-schedules');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Report schedules' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Report schedules' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Schedule a report' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Planifier un rapport' })).toBeNull();
-  });
-
-  it('shows the marketplace permission guide in one language, including its marked paragraphs', () => {
-    renderDocs('/docs/marketplace-permissions');
-
-    expect(screen.getByRole('heading', { level: 1, name: 'Marketplace permission checks' })).toBeInTheDocument();
-    for (const name of ['English', 'Français', 'Português']) {
-      expect(screen.queryByRole('heading', { name })).toBeNull();
-    }
-    expect(screen.getByText(/A content pack needs the same marketplace manage permission/)).toBeInTheDocument();
-    expect(screen.queryByText(/Un pack de contenu exige/)).toBeNull();
-  });
 
 
   it('renders a professional docs shell for a public doc page', () => {

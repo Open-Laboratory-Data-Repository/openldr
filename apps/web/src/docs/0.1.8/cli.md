@@ -62,7 +62,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `fhir` | Validate FHIR R4 resources. |
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
-| `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see [Facilities](/docs/facilities)). |
+| `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see **Facilities** in the studio's Docs). |
 | `test-catalog` | The national test catalog: `list` the tests, `import` a list from CSV or Excel, `export` it as CSV, `enable` or `disable` one at this lab, and `retire` or `restore` one where this install owns the catalog. |
 | `query` | Custom queries: `export` them to a JSON file, `import` them from one (`--force` replaces existing names). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |

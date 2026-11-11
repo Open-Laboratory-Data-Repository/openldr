@@ -43,22 +43,9 @@ export const DEFAULT_DOC_VERSION: string =
 /** Page titles (stable across versions). */
 export const TITLES: Record<string, string> = {
   'getting-started': 'Getting started',
-  'marketplace-permissions': 'Marketplace permission checks',
   'load-data': 'Load & push data',
-  'workflow-navigation': 'Workflow canvas navigation',
-  'workflow-webhooks': 'Workflow webhooks',
-  'query-naming': 'Query names',
-  'query-export-import': 'Export and import queries',
-  'query-groups': 'Query groups',
-  'dashboard-refresh': 'Dashboard refresh',
-
-  'dashboard-limits': 'Dashboard query limits',
-  'query-pagination': 'Query result paging',
-
-  'connector-query-deadlines': 'Connector query deadlines',
   'connector-diagnose': 'SQL Server connections and diagnosis',
   'v1-import': 'Import from OpenLDR v1',
-  'report-schedules': 'Report schedules',
   requirements: 'Requirements',
   install: 'Install',
   upgrading: 'Planned upgrades',
@@ -72,27 +59,15 @@ export const TITLES: Record<string, string> = {
 /** Sidebar structure; `children` render indented under their parent. */
 export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'getting-started' },
-  { slug: 'load-data' },
-  { slug: 'workflow-navigation' },
-  { slug: 'workflow-webhooks' },
-  { slug: 'query-naming' },
-  { slug: 'query-export-import' },
-  { slug: 'query-groups' },
-  { slug: 'dashboard-refresh' },
-
-  { slug: 'dashboard-limits' },
-  { slug: 'query-pagination' },
-
-  { slug: 'connector-query-deadlines' },
-  { slug: 'connector-diagnose' },
-  { slug: 'v1-import' },
-  { slug: 'report-schedules' },
   { slug: 'requirements' },
   { slug: 'install', children: ['windows-server', 'upgrading'] },
   { slug: 'environment' },
   { slug: 'auth-providers' },
-  { slug: 'development' },
+  { slug: 'load-data' },
+  { slug: 'v1-import' },
+  { slug: 'connector-diagnose' },
   { slug: 'cli' },
+  { slug: 'development' },
 ];
 
 // The website's own pages only. The studio user guides (dashboards, reports, forms and the rest)

@@ -36,7 +36,7 @@ from inside the `openldr/` directory the installer created.
 
 - [Connector setup](#connector-setup) explains category selection and the initial enabled state in English, French, and Portuguese.
 
-- [Marketplace permission checks](/docs/marketplace-permissions) explain loading, unavailable, and confirmed permission lists in English, French, and Portuguese.
+- Marketplace permission checks are explained in the studio's Docs, under **Marketplace**.
 - [Development](/docs/development) — run OpenLDR from source with hot reload.
 - [Command-line interface (CLI)](/docs/cli) — the `openldr` operator command line.
 - [Environment variables](/docs/environment) — configure a deployment.
