@@ -1,73 +1,75 @@
 # Distributed Sync
 
-Distributed sync links many labs to one **central** OpenLDR server over intermittent, low-bandwidth links. Each lab runs a full OpenLDR CE instance, works offline, and reconciles opportunistically whenever a connection is available. Lab-owned operational data (patients, requests, results, specimens, reports) flows **up** to central, which keeps a read-only mirror; central-owned reference configuration (forms, dashboards, reports, allowlisted settings) and terminology flows **down** to every lab, which treats it as read-only. Every record carries the `site_id` of the lab that produced it.
+**Distributed sync** links many labs to one **central** OpenLDR server over slow or intermittent links. Each lab runs a full OpenLDR CE install, works offline, and catches up whenever a connection is there.
 
-## Outcome
+- **Up, lab to central.** Data the lab owns: patients, lab requests, lab results, specimens and diagnostic reports. Central keeps a read-only mirror and never edits it. The lab stays the source of truth.
+- **Down, central to lab.** Configuration central owns: forms, dashboards, report definitions and allowlisted settings, plus terminology (code systems and concept maps). Labs use these read-only.
+- **Site stamping.** Every record carries the `site_id` of the lab that made it. Central scopes and de-duplicates by it, so two labs never collide even when they use the same local identifiers.
 
-On a **central** server you can enroll a lab — minting its Keycloak client and one-time secret — then list, rotate, or revoke sites. On a **lab** server you can paste those credentials into the **Distributed sync** settings, choose a direction, watch live per-direction status, and trigger a sync on demand.
+This guide takes about 30 minutes and needs two installs: one central, one lab. The pictures come from a single install with sync switched off, so they show the pages, not a live link. Select any picture or clip to enlarge it.
 
-## How it flows
+![A lab's Distributed sync page, on its Settings tab.](sync-settings-tab.png)
 
-- **Up (lab → central):** operational FHIR the lab owns — patients, lab requests, lab results, specimens, diagnostic reports. Central stores a mirror it never edits; the lab remains the source of truth.
-- **Down (central → lab):** reference configuration central owns — forms, dashboards, report definitions, allowlisted settings — plus terminology (code systems and concept maps). Labs consume these read-only.
-- **Site stamping:** central scopes and de-duplicates by the originating `site_id`, so two labs never collide even when they create records with the same local identifiers.
+## Who can do what
 
-## Before you begin
+| Permission | What it allows |
+| --- | --- |
+| **View sync** | See sync status and the Activity tab |
+| **Manage sync** | Configure sync, enroll and manage sites, resolve divergences |
 
-- You need administrator access (`lab_admin`) on both the central and the lab server.
-- **Central** performs enrollment and holds the read-only mirror. **Labs** connect to central and push their own data.
-- Enrollment mints Keycloak clients, so the central Keycloak realm must grant the admin service account the `manage-clients` and `view-clients` roles. The realm export shipped with OpenLDR already includes them. A Keycloak container first started **before** distributed sync was added needs its realm re-imported (or those two client roles added by hand) — otherwise minting a client fails.
-- Use HTTPS for the central URL in production: the client secret is transmitted once at enrollment and lab tokens travel on every sync.
-- The lab reaches central **server-to-server over HTTPS**. If central presents a self-signed certificate — the installer default — the lab must be given central's public certificate to trust. A browser clicking through the warning is **not** enough: the lab's server process validates the certificate independently. Download it from central's Sites page and install it on the lab (see [Trust central's certificate](#on-a-lab-trust-central-s-certificate)).
+Both pages are under **Settings**: **Sites** on central, **Distributed sync** on a lab.
 
-## On central — enroll a lab
+## Before you start
 
-Enrollment creates a confidential Keycloak client (`sync-<siteId>`) with a `site_id` token mapper, generates its secret, and records a registry row. The secret is shown **once** and is never retrievable afterwards — if it is lost, rotate.
+- **Central** enrols labs and holds the mirror. **Labs** connect to central and push their own data.
+- Enrolment creates Keycloak clients, so the central Keycloak realm must give the admin service account the `manage-clients` and `view-clients` roles. The realm export shipped with OpenLDR includes them. A Keycloak container first started **before** distributed sync existed needs its realm imported again, or those two client roles added by hand. Otherwise creating the client fails.
+- Use HTTPS for the central URL in production. The client secret travels once at enrolment, and lab tokens travel on every sync.
+- The lab reaches central **server to server, over HTTPS**. If central uses a self-signed certificate, which is the installer default, the lab must be given central's public certificate to trust. A browser clicking through the warning is **not** enough: the lab's server checks the certificate on its own. See [Example 2](#example-2-trust-central-s-certificate-on-the-lab).
 
-### Using the Sites page
+## Example 1: enroll a lab on central
 
-![Enroll a site dialog with Site ID, Name, and Central URL](sync-enroll-site.png)
+Enrolment creates a confidential Keycloak client, `sync-<siteId>`, with a `site_id` token mapper. It generates the client's secret and adds a row to the sites list. The secret is shown **once** and can never be read again. If it is lost, rotate it.
 
-1. Open **Settings → Sites** (admin-only). Sites is a Settings page, not a top-level sidebar item.
-2. From the **⋯** menu (top right of the page) choose **Enroll site**, and fill in:
+![Central's Sites page and its menu: Enroll site, Download central certificate, Refresh.](sync-sites-menu.mp4)
+
+1. On central, open **Settings**, then **Sites**.
+2. Open the page's **⋯** menu and select **Enroll site**. Fill in:
 
    | Field | Notes |
    | --- | --- |
-   | Site ID | Stable identifier for the lab, e.g. `lab-site-01`. Lowercase letters, digits, and hyphens; 1–63 characters, not starting with a hyphen. Reused as the Keycloak client id and the registry key. |
-   | Name | Optional human-readable label. |
-   | Central URL | The public base URL the lab will reach this central server on, e.g. `https://central.example.org`. Required. |
+   | Site ID | A stable identifier for the lab, for example `lab-site-01`. Lowercase letters, digits and hyphens, 1 to 63 characters, not starting with a hyphen. It is also the Keycloak client id and the sites-list key. |
+   | Name | An optional readable label. |
+   | Central URL | The public address the lab will reach central on, for example `https://central.example.org`. Required. |
 
-3. **Enroll**. A one-time dialog reveals the values the lab operator needs: **client id**, **client secret**, **OIDC issuer**, and **central URL**. Copy them somewhere safe (each has a copy button) and hand them to the lab before closing — the secret is not shown again. The same dialog has a **Download central certificate** button, so you can grab central's certificate alongside the credentials in one step.
+   ![The Enroll site dialog with Site ID, Name and Central URL.](sync-enroll-site.png)
 
-The site appears in the table with an **active** badge. From its row menu you can **Rotate** (issue a new secret) or **Revoke** (delete the client and mark the row revoked).
+3. Select **Enroll**. A one-time dialog shows what the lab needs: **client id**, **client secret**, **OIDC issuer** and **central URL**. Copy each one with its button and hand them to the lab before you close it. The secret is not shown again. The same dialog has **Download central certificate**, so you can take the certificate in the same step.
+
+**Expected result:** the site is listed with an **active** badge. Its row menu offers **Rotate secret**, which issues a new secret, and **Revoke**, which deletes the client and marks the row revoked.
 
 ### Download central's certificate
 
-If the lab must trust a self-signed central (the installer default), give it central's public certificate. From the Sites page **⋯** menu choose **Download central certificate** — or use the **Download central certificate** button in the enroll dialog — to save `central-certificate.pem`. It is served from `GET /api/settings/sync/central-certificate` (admin-only). This is central's public TLS certificate, not a secret; the lab needs it to complete the HTTPS handshake for sync. Requires `TLS_CERT_PATH` to point at central's certificate — the installer sets this and mounts the certificate automatically.
+If the lab must trust a self-signed central, give it central's public certificate. Select **Download central certificate** in the Sites page's **⋯** menu, or in the enrol dialog, to save `central-certificate.pem`. It comes from `GET /api/settings/sync/central-certificate`, for administrators only. It is central's public TLS certificate, not a secret. It needs `TLS_CERT_PATH` to point at central's certificate. The installer sets that and mounts the certificate for you.
 
-### Using the CLI
+### From the command line, on central
 
-Run these on the central server:
-
-```
+```bash
 openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org
 openldr sync list
 openldr sync rotate lab-site-01
 openldr sync revoke lab-site-01
 ```
 
-`sync enroll` prints the client id, client secret, site id, central URL, and OIDC issuer once, with a warning that the secret will not be shown again. `--central-url` is required. `sync list` shows enrolled sites and their status but never a secret. `sync rotate` prints a new secret once; `sync revoke` deletes the client and marks the row revoked, and is safe to re-run. Add `--json` to any of them for machine-readable output.
+`sync enroll` prints the client id, client secret, site id, central URL and OIDC issuer once, with a warning that the secret will not be shown again. `--central-url` is required. `sync list` shows enrolled sites and their status, never a secret. `sync rotate` prints a new secret once. `sync revoke` deletes the client and marks the row revoked, and is safe to run twice. Add `--json` to any of them for machine-readable output.
 
-## On a lab — trust central's certificate
+## Example 2: trust central's certificate on the lab
 
-Skip this if central uses a certificate the lab already trusts (a real domain with a CA-issued/Let's Encrypt certificate). It is required when central uses a **self-signed** certificate — the installer default, and the usual case for a LAN or bare-IP central.
+Skip this if central has a certificate the lab already trusts, such as one from Let's Encrypt for a real domain. It is needed when central uses a **self-signed** certificate: the installer default, and the usual case for a central on a LAN or a bare IP address.
 
-**Why.** The lab's sync worker opens an HTTPS connection to central to fetch a token and push/pull data. Node.js (the lab server) verifies central's certificate against its trust store and rejects anything it doesn't trust — independently of any browser. So even though your browser can reach central after clicking through the warning, sync will fail until the lab trusts central's certificate.
+**Why.** The lab's sync worker opens an HTTPS connection to central to get a token and to push and pull data. Node.js, which runs the lab server, checks central's certificate against its own trust store and refuses anything it does not trust, whatever the browser says. So sync fails until the lab trusts central's certificate.
 
-**Where.** Install the `central-certificate.pem` you downloaded on the lab host and point the lab API at it:
-
-1. Copy `central-certificate.pem` to the lab, e.g. `config/nginx/certs/central/fullchain.pem` next to the lab's compose file.
-2. Mount it into the lab's `api` container (read-only) and set `NODE_EXTRA_CA_CERTS` to its in-container path. In the lab's `docker-compose.yml`, under the `api` service:
+1. Copy `central-certificate.pem` to the lab, for example to `config/nginx/certs/central/fullchain.pem` beside the lab's compose file.
+2. Mount it read-only into the lab's `api` container, and set `NODE_EXTRA_CA_CERTS` to its path inside the container. In the lab's `docker-compose.yml`, under the `api` service:
 
    ```yaml
    volumes:
@@ -76,83 +78,85 @@ Skip this if central uses a certificate the lab already trusts (a real domain wi
 
    and in the lab's `.env`:
 
-   ```
+   ```bash
    NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
    ```
 
 3. Recreate the lab API: `docker compose up -d api`.
 
-**Certificate must match central's address.** TLS also checks that the certificate is issued *for the address the lab connects to*. If central is reached by a bare IP (e.g. `https://10.0.0.5`), central's certificate must carry that IP as an **IP Subject Alternative Name** — a certificate that only lists it as a DNS name is rejected by Node with `ERR_TLS_CERT_ALTNAME_INVALID`. Regenerate central's certificate with an IP SAN if needed:
+**The certificate must match central's address.** TLS also checks that the certificate was issued for the address the lab connects to. If the lab reaches central by a bare IP, such as `https://10.0.0.5`, central's certificate must carry that IP as an **IP Subject Alternative Name**. A certificate that lists it only as a DNS name is refused with `ERR_TLS_CERT_ALTNAME_INVALID`. Make a new certificate with an IP SAN if needed:
 
-```
+```bash
 openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
   -keyout config/nginx/certs/privkey.pem -out config/nginx/certs/fullchain.pem \
   -subj "/CN=10.0.0.5" -addext "subjectAltName=IP:10.0.0.5,DNS:localhost,IP:127.0.0.1"
 ```
 
-then restart central's gateway (`docker compose restart gateway`), re-download the certificate, and repeat the steps above on the lab.
+Then restart central's gateway with `docker compose restart gateway`, download the certificate again, and repeat the steps above on the lab.
 
-## On a lab — connect to central
+## Example 3: connect the lab to central
 
-The lab operator takes the five values from enrollment — **client id**, **client secret**, **site id**, **central URL**, **OIDC issuer** — and enters them on the **Distributed sync** page's **Settings** tab.
+The lab operator takes the five values from enrolment (client id, client secret, site id, central URL and OIDC issuer) and enters them on the lab's **Distributed sync** page.
 
-![The Distributed Sync page under Settings, on its Settings tab](sync-settings-card.png)
-
-1. Open **Settings → Distributed sync** (admin-only). It is its own Settings page with two tabs — **Settings** (the configuration form) and **Activity** (live status and the recent-activity log). Stay on **Settings**.
+1. On the lab, open **Settings**, then **Distributed sync**. It has two tabs: **Settings**, the configuration, and **Activity**, live status and the recent events. Stay on **Settings**.
 2. Fill in the fields:
 
    | Field | Notes |
    | --- | --- |
-   | Enabled | Master switch. Off keeps the workers dormant. |
-   | Mode | **Push** (send operational data up only), **Pull** (receive reference config + terminology down only), or **Bidirectional** (both). |
-   | Central URL | The central server's base URL from enrollment, e.g. `https://central.example.org`. |
-   | Site ID | This lab's site id, e.g. `lab-site-01`. |
-   | OIDC issuer | The realm issuer from enrollment, e.g. `https://central.example.org/auth/realms/openldr`. |
-   | Client ID | The minted client, `sync-<siteId>`. |
-   | Client secret | The one-time secret from enrollment. Write-only and masked — leave it blank when editing other fields to keep the stored value. |
-   | Interval (minutes) | How often to sync, 1–1440. Defaults to 15. |
+   | Enable sync | The master switch. Off keeps both sync workers dormant. |
+   | Direction | **Push** sends lab data up only. **Pull** receives configuration and terminology down only. **Bidirectional** does both. |
+   | Central URL | Central's address from enrolment, for example `https://central.example.org`. |
+   | Site ID | This lab's site id, for example `lab-site-01`. |
+   | OIDC issuer URL | The realm issuer from enrolment, for example `https://central.example.org/auth/realms/openldr`. |
+   | Client ID | The created client, `sync-<siteId>`. |
+   | Client secret | The one-time secret from enrolment. Write-only and masked. Leave it blank when you edit other fields, to keep the stored value. |
+   | Sync interval (minutes) | How often to sync, 1 to 1440. 15 by default. |
 
-3. **Save**. When **Enabled** is on, the central URL, site id, OIDC issuer, and client id are all required. Saving takes effect immediately — toggling **Enabled**, switching mode, or changing any field starts, stops, or reconfigures the sync workers live, with **no server restart**.
+3. Select **Save**. With **Enable sync** on, the central URL, site id, OIDC issuer and client id are all required. Saving takes effect at once: switching sync on or off, changing direction or changing any field starts, stops or reconfigures the workers live, with **no restart**.
 
-### Watch activity
+### Watch it sync
 
-Switch to the **Activity** tab. A compact status strip (polled every few seconds) shows:
+![Opening the Activity tab.](sync-activity.mp4)
 
-- An **on/off** badge for the whole engine.
-- A **push** and a **pull** entry, each reading `running` or `idle`, the last synced sequence, and the last-synced time — or `not started` when that direction is disabled by the mode.
-- **Pending push** — the count of local changes still waiting to push up.
-- **Last checked** and **Last success** timestamps.
+Open the **Activity** tab. A status strip, refreshed every few seconds, shows:
 
-Below the strip, the **Recent activity** table lists each sync event newest-first — direction, event (`synced`, `failed`, `quarantined`, or `diverged`), record count, detail, and time. Click a row for the full error and metadata. Use **Sync now** to trigger a pass immediately instead of waiting for the interval; it reports whether a pass was triggered (and does nothing if sync is disabled).
+- An **on** or **off** badge for the whole engine.
+- A **push** and a **pull** line, each `running` or `idle`, with the last synced sequence and time. A direction the mode leaves out reads `not started`.
+- **Pending push**: how many local changes still wait to go up.
+- **Last checked** and **Last success**.
 
-### Using the CLI
+Below it, the **Recent activity** table lists each sync event newest first: direction, event (`synced`, `failed`, `quarantined` or `diverged`), record count, detail and time. Select a row for the full error and metadata. **Sync now** starts a pass straight away instead of waiting for the interval. It says whether a pass started, and does nothing while sync is off.
 
-On the lab server you can drive the same config and status from the command line:
+![The Activity tab on an install with sync off: not started, Pending push 0, Last checked never, and No sync activity yet.](sync-activity-tab.png)
 
-```
+**Expected result** with a live link: central lists the lab as **active** on Sites. On the lab, **Activity** shows the engine on, with the push and pull lines advancing and **Pending push** falling toward zero. Central's mirror gains the lab's records, stamped with its site id. The lab receives central's forms, dashboards, reports and terminology.
+
+### From the command line, on the lab
+
+```bash
 openldr settings sync show
 openldr settings sync set mode bidirectional
 openldr sync status
 openldr sync now
 ```
 
-`settings sync set <field> <value>` writes any one field: `enabled`, `mode`, `centralUrl`, `siteId`, `oidcIssuer`, `clientId`, `clientSecret`, or `intervalMinutes`. `sync status` prints the live workers, cursors, and pending backlog; `sync now` triggers a pass and fails if sync is disabled.
+`settings sync set <field> <value>` writes one field: `enabled`, `mode`, `centralUrl`, `siteId`, `oidcIssuer`, `clientId`, `clientSecret` or `intervalMinutes`. `sync status` prints the live workers, cursors and pending backlog. `sync now` starts a pass, and fails if sync is off.
 
-## Expected result
+## On a phone
 
-Central shows the lab as **active** on the Sites page. On the lab, the **Activity** tab shows the enabled engine with a push and/or pull line advancing, and **Pending push** trending toward zero as backlog clears. Central's mirror gains the lab's records (stamped with its site id); the lab receives central's forms, dashboards, reports, and terminology.
+Both pages work on a phone. The Activity table scrolls sideways to reach each event's detail.
 
 ## Troubleshooting
 
-- **Sync stays off / nothing happens:** confirm **Enabled** is on and the mode matches what you expect. Re-check the central URL, site id, OIDC issuer, and client id; if the secret was ever blanked, re-enter it (a blank field keeps the previous value, so a genuinely wrong secret needs a fresh paste).
-- **`503` "identity provider admin client is not configured" when enrolling (central):** the API has no Keycloak admin service-account credentials. Set `KEYCLOAK_ADMIN_CLIENT_ID` and `KEYCLOAK_ADMIN_CLIENT_SECRET` in central's `.env` and recreate the API. (The audit log stays empty because enrollment records its audit entry only after the mint succeeds.)
-- **`403` when enrolling (central):** the admin service account lacks `manage-clients`/`view-clients`. Re-import the central realm (or add those two client roles by hand), then retry.
-- **Enroll fails with `fetch failed: connect ECONNREFUSED 127.0.0.1:443` (central):** the API is trying to reach Keycloak at the public URL, which from inside the container is the API itself. Set `OIDC_INTERNAL_ISSUER_URL` to the in-cluster realm base (e.g. `http://keycloak:8080/auth/realms/openldr`) so server-side token/admin calls use the internal address, and recreate the API.
-- **Lab sync fails with `self-signed certificate`:** the lab doesn't trust central's certificate. Download it from central's Sites page and install it on the lab — see [Trust central's certificate](#on-a-lab-trust-central-s-certificate).
-- **Lab sync fails with `ERR_TLS_CERT_ALTNAME_INVALID` (IP not in cert):** the certificate is trusted but doesn't list the address the lab connects to. Regenerate central's certificate with an **IP Subject Alternative Name** for that IP, re-download it, and reinstall it on the lab (same section).
-- **Lost client secret:** it is unrecoverable by design. **Rotate** the site (Sites page row menu, or `openldr sync rotate <siteId>`) to issue a new one, and paste it into the lab's **Distributed sync** Settings tab.
-- **Lab tokens rejected at central:** the site was revoked, or the client id / OIDC issuer on the lab does not match what central minted. Confirm the site is active in `openldr sync list` and that the issuer URL points at the central realm.
-- **A revoked lab needs to return:** re-enroll the same site id on central; it reactivates the registry row and issues a new secret.
+- **Sync stays off, or nothing happens.** Check **Enable sync** is on and the direction is what you expect. Check the central URL, site id, OIDC issuer and client id. A blank secret field keeps the old value, so a wrong secret needs a fresh paste.
+- **`503` "identity provider admin client is not configured" when enrolling, on central.** The API has no Keycloak admin service-account credentials. Set `KEYCLOAK_ADMIN_CLIENT_ID` and `KEYCLOAK_ADMIN_CLIENT_SECRET` in central's `.env` and recreate the API. The audit log stays empty, because enrolment writes its audit entry only after the client is created.
+- **`403` when enrolling, on central.** The admin service account lacks `manage-clients` and `view-clients`. Import the central realm again, or add those two client roles by hand, then retry.
+- **Enrolment fails with `fetch failed: connect ECONNREFUSED 127.0.0.1:443`, on central.** The API is trying to reach Keycloak at the public address, which inside the container is the API itself. Set `OIDC_INTERNAL_ISSUER_URL` to the in-cluster realm, for example `http://keycloak:8080/auth/realms/openldr`, so server-side token and admin calls use the internal address. Recreate the API.
+- **Lab sync fails with `self-signed certificate`.** The lab does not trust central's certificate. See [Example 2](#example-2-trust-central-s-certificate-on-the-lab).
+- **Lab sync fails with `ERR_TLS_CERT_ALTNAME_INVALID`.** The certificate is trusted but does not list the address the lab connects to. Make central's certificate with an IP Subject Alternative Name for that address, download it again and reinstall it on the lab.
+- **Lost client secret.** It cannot be recovered, by design. Use **Rotate secret** on the site, from its row menu on Sites or with `openldr sync rotate <siteId>`, and paste the new secret on the lab's Settings tab.
+- **Lab tokens refused at central.** The site was revoked, or the lab's client id or OIDC issuer does not match what central created. Check the site is active in `openldr sync list`, and that the issuer points at central's realm.
+- **A revoked lab needs to come back.** Enroll the same site id again on central. It reactivates the row and issues a new secret.
 
 ## Related guides
 

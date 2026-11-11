@@ -378,10 +378,11 @@ export const DOC_GUIDES: DocGuide[] = [
     summary: 'Connect labs to a central server: enroll sites, choose a sync mode, and monitor replication.',
     audience: ['administrators'],
     requiredRoles: ['lab_admin'],
-    estimatedMinutes: 15,
+    estimatedMinutes: 30,
     difficulty: 'intermediate',
     relatedSlugs: ['settings', 'users', 'environment'],
     screenshotNames: ['sync-enroll-site.png', 'sync-settings-card.png'],
+    capturedNames: ['sync-settings-tab.png', 'sync-sites-menu.mp4', 'sync-activity.mp4', 'sync-activity-tab.png'],
     status: 'published',
   },
   {
