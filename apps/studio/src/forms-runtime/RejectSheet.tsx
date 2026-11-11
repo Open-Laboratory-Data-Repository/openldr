@@ -92,9 +92,6 @@ export function RejectSheet({ level, reasons, loading, error: loadError, onRejec
             </div>
           )}
           {error ? <p className="mt-2 text-xs text-destructive" role="alert">{error}</p> : null}
-          {/* The header menu carries the action per AGENTS.md section 5. This repeats it, because a
-              sheet whose only control is inside a menu reads as broken on a phone. */}
-          <Button className="mt-4" variant="outline" onClick={submit}>{t.reject}</Button>
         </div>
       </SheetContent>
     </Sheet>

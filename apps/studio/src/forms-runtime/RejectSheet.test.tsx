@@ -8,7 +8,18 @@ const reasons = [
   { system: 'urn:openldr:cs:reject-test', code: 'QNS', display: 'Insufficient volume' },
 ];
 
+async function rejectFromMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Reject actions' }));
+  await user.click(await screen.findByRole('menuitem', { name: /^reject$/i }));
+}
+
 describe('RejectSheet', () => {
+  it('keeps Reject in the ⋯ menu only, with no button beside it', () => {
+    render(<RejectSheet level="test" reasons={reasons} onReject={() => {}} onClose={() => {}} />);
+    expect(screen.queryByRole('button', { name: /^reject$/i })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reject actions' })).toBeInTheDocument();
+  });
+
   it('offers the reasons it was given, and names no value set of its own', async () => {
     render(<RejectSheet level="test" reasons={reasons} onReject={() => {}} onClose={() => {}} />);
     expect(await screen.findByText('Haemolysed')).toBeInTheDocument();
@@ -20,7 +31,7 @@ describe('RejectSheet', () => {
     const user = userEvent.setup();
     render(<RejectSheet level="test" reasons={reasons} onReject={onReject} onClose={() => {}} />);
     await user.click(await screen.findByText('Haemolysed'));
-    await user.click(screen.getByRole('button', { name: /^reject$/i }));
+    await rejectFromMenu(user);
     expect(onReject).toHaveBeenCalledWith({ system: 'urn:openldr:cs:reject-test', code: 'HAEM', display: 'Haemolysed' });
   });
 
@@ -28,7 +39,7 @@ describe('RejectSheet', () => {
     const onReject = vi.fn();
     const user = userEvent.setup();
     render(<RejectSheet level="test" reasons={reasons} onReject={onReject} onClose={() => {}} />);
-    await user.click(screen.getByRole('button', { name: /^reject$/i }));
+    await rejectFromMenu(user);
     expect(onReject).not.toHaveBeenCalled();
     expect(screen.getByText(/choose a reason/i)).toBeInTheDocument();
   });
@@ -36,7 +47,7 @@ describe('RejectSheet', () => {
   it('clears the message as soon as a reason is chosen', async () => {
     const user = userEvent.setup();
     render(<RejectSheet level="test" reasons={reasons} onReject={() => {}} onClose={() => {}} />);
-    await user.click(screen.getByRole('button', { name: /^reject$/i }));
+    await rejectFromMenu(user);
     await user.click(screen.getByText('Haemolysed'));
     expect(screen.queryByText(/choose a reason/i)).toBeNull();
   });
