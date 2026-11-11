@@ -777,6 +777,16 @@ export interface CurrentUser {
 }
 export const getMe = (): Promise<CurrentUser> =>
   authFetch('/api/me').then((res) => okJson<CurrentUser>(res, 'get current user'));
+
+/** The signed-in user's own studio preferences. Stored on the server so they follow the login.
+ *  Mirrors UserPreferences in packages/bootstrap/src/user-preferences.ts. */
+export interface UserPreferences { theme?: 'light' | 'dark'; sidebarCollapsed?: boolean; startPage?: string }
+/** A missing key is left alone; null clears it. */
+export type UserPreferencesPatch = { [K in keyof UserPreferences]?: UserPreferences[K] | null };
+export const getMyPreferences = (): Promise<UserPreferences> =>
+  authFetch('/api/me/preferences').then((res) => okJson<UserPreferences>(res, 'read preferences'));
+export const saveMyPreferences = (patch: UserPreferencesPatch): Promise<UserPreferences> =>
+  authFetch('/api/me/preferences', jbody(patch, 'PUT')).then((res) => okJson<UserPreferences>(res, 'save preferences'));
 export const resetUserPassword = (id: string, password: string, temporary: boolean): Promise<void> =>
   authFetch(`/api/users/${id}/reset-password`, jbody({ password, temporary }, 'POST')).then((r) => { if (!r.ok) throw new Error(`reset password failed: ${r.status}`); });
 export const sendUserResetEmail = (id: string): Promise<void> =>

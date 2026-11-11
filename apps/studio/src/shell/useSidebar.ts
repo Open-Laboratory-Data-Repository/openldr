@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { setUserPreference, useUserPreferences } from './userPreferences';
 
 const KEY = 'openldr-sidebar-collapsed';
 
@@ -10,19 +11,37 @@ function stored(): boolean {
   }
 }
 
+function store(collapsed: boolean): void {
+  try {
+    localStorage.setItem(KEY, String(collapsed));
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * `[collapsed, toggle]`. The user's saved state (server, see userPreferences) wins once it has
+ * loaded, so the sidebar looks the same on every device. localStorage is the first-paint cache
+ * and the fallback when nothing has loaded.
+ */
 export function useSidebar(): [boolean, () => void] {
-  const [collapsed, setCollapsed] = useState<boolean>(stored);
+  const { prefs } = useUserPreferences();
+  const [local, setLocal] = useState<boolean>(stored);
+  const saved = prefs.sidebarCollapsed;
+  const collapsed = saved ?? local;
+
+  // Keep the cache in step with the saved value, so the next page load paints it straight away.
+  useEffect(() => {
+    if (saved !== undefined) store(saved);
+  }, [saved]);
+
   return [
     collapsed,
-    () =>
-      setCollapsed((c) => {
-        const next = !c;
-        try {
-          localStorage.setItem(KEY, String(next));
-        } catch {
-          // ignore
-        }
-        return next;
-      }),
+    () => {
+      const next = !collapsed;
+      store(next);
+      setLocal(next);
+      void setUserPreference({ sidebarCollapsed: next });
+    },
   ];
 }

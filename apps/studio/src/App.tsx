@@ -32,13 +32,16 @@ import { DataExposure } from '@/pages/settings/DataExposure';
 import { Laboratory } from '@/pages/settings/Laboratory';
 import { CallbackPage } from './auth/CallbackPage';
 import { AccessDeniedPage } from './auth/AccessDeniedPage';
+import { StartPageGate, UserPreferencesSync } from './shell/UserPreferencesSync';
 
 export function App() {
   return (
+    <>
+    <UserPreferencesSync />
     <Routes>
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/access-denied" element={<RequireCapability><AccessDeniedPage /></RequireCapability>} />
-      <Route path="/" element={<RequireCapability cap="dashboards.view"><DashboardPage /></RequireCapability>} />
+      <Route path="/" element={<StartPageGate><RequireCapability cap="dashboards.view"><DashboardPage /></RequireCapability></StartPageGate>} />
       <Route path="/reports" element={<Reports />} />
       <Route path="/workflows" element={<RequireCapability cap="workflows.view"><WorkflowList /></RequireCapability>} />
       <Route path="/workflows/new" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
@@ -92,5 +95,6 @@ export function App() {
       <Route path="/docs/:slug" element={<Docs />} />
       <Route path="*" element={<AppShell title="Not found"><div className="card">Page not found.</div></AppShell>} />
     </Routes>
+    </>
   );
 }

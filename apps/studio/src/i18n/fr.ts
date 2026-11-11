@@ -779,6 +779,8 @@ export const fr: EnShape = {
     },
   },
   layout: {
+    startPage: "Page de démarrage",
+    startPageNotSaved: "La page de démarrage n'a pas pu être enregistrée.",
     settings: 'Paramètres',
     language: 'Langue',
   },

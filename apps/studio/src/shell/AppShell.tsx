@@ -8,7 +8,9 @@ import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
 import { useAuth } from '@/auth/AuthProvider';
 import { useTheme } from './useTheme';
+import { toast } from 'sonner';
 import { useSidebar } from './useSidebar';
+import { setUserPreference, useUserPreferences } from './userPreferences';
 import { Button } from '@/components/ui/button';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -22,7 +24,8 @@ import { pluginIcon } from '@/plugins/icons';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
 
-const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; caps?: string[] }[] = [
+// Exported for the first-page choice: StartPageGate only redirects to a page listed here.
+export const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; caps?: string[] }[] = [
   { to: '/', labelKey: 'nav.dashboard', end: true, icon: LayoutDashboard, caps: ['dashboards.view'] },
   { to: '/reports', labelKey: 'nav.reports', end: false, icon: FileText, caps: ['reports.view'] },
   { to: '/report-designer', labelKey: 'nav.reportDesigner', end: false, icon: PencilRuler, caps: ['reports.edit_templates'] },
@@ -86,6 +89,8 @@ export function AppShell({
 }) {
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
+  const { prefs } = useUserPreferences();
+  const startPage = prefs.startPage ?? '/';
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, signOut, hasCapability, authEnforced } = useAuth();
   const [pluginUis, setPluginUis] = useState<PluginUiEntry[]>([]);
@@ -217,6 +222,26 @@ export function AppShell({
                       disabled={i18n.language === l.code}
                     >
                       {l.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              {/* The page that opens after sign-in. Only pages in this user's sidebar are offered. */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger data-testid="start-page-menu">{t('layout.startPage')}</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-[70dvh] overflow-y-auto">
+                  {NAV.filter((n) => !n.caps || n.caps.some((c) => hasCapability(c))).map((n) => (
+                    <DropdownMenuItem
+                      key={n.to}
+                      data-testid={`start-page-${n.to}`}
+                      disabled={startPage === n.to}
+                      onClick={() => {
+                        void setUserPreference({ startPage: n.to === '/' ? null : n.to }).then((ok) => {
+                          if (!ok) toast.error(t('layout.startPageNotSaved'));
+                        });
+                      }}
+                    >
+                      {t(n.labelKey)}
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuSubContent>

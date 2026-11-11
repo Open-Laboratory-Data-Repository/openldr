@@ -779,6 +779,8 @@ export const pt: EnShape = {
     },
   },
   layout: {
+    startPage: "Página inicial",
+    startPageNotSaved: "Não foi possível guardar a página inicial.",
     settings: 'Definições',
     language: 'Idioma',
   },

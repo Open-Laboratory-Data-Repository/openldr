@@ -781,6 +781,8 @@ export const en = {
     },
   },
   layout: {
+    startPage: "Start page",
+    startPageNotSaved: "The start page could not be saved.",
     settings: 'Settings',
     language: 'Language',
   },
