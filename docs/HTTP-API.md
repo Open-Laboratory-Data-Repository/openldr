@@ -13,6 +13,7 @@ Source of truth: `apps/server/src/*.ts` (route registration in `apps/server/src/
 | `GET` | `/api/me` | Current authenticated user. Returns `401` when no user is available. |
 | `GET` | `/api/me/preferences` | The signed-in user's own studio preferences: `theme`, `sidebarCollapsed`, `startPage`. No capability needed. |
 | `PUT` | `/api/me/preferences` | Merge a patch into the signed-in user's preferences. A `null` value clears a key. Returns the merged result. |
+| `POST` | `/api/settings/setup-checks` | Run the setup checks (services, sign-in, secrets key, laboratory name, time zone, connectors, sync). Returns each check's status, a hint code and the studio page that fixes it. Same list as `openldr doctor`. |
 
 ## Reports
 

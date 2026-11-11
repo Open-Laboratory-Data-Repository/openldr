@@ -3282,6 +3282,19 @@ export interface DiagnoseResult { ok: boolean; steps: DiagnoseStep[] }
 export const diagnoseConnector = (id: string): Promise<DiagnoseResult> =>
   authFetch(`/api/connectors/${encodeURIComponent(id)}/diagnose`, { method: 'POST' }).then((r) => okJson<DiagnoseResult>(r, 'diagnose connector'));
 
+// Mirrors SetupReport in packages/bootstrap/src/setup-checks.ts. Studio cannot import bootstrap,
+// so the id and hint lists are repeated here; SetupChecks.test.tsx checks each has its strings.
+export const SETUP_CHECK_IDS = ['adapters', 'signIn', 'secretsKey', 'labName', 'timeZone', 'connectors', 'sync'] as const;
+export const SETUP_HINTS = [
+  'adapterDown', 'adapterDegraded', 'signInOff', 'secretsKeyMissing', 'labNameDefault', 'timeZoneEmpty',
+  'timeZoneSqlServer', 'connectorFailed', 'syncIncomplete', 'syncFailing', 'checkError',
+] as const;
+export type SetupStatus = 'pass' | 'warn' | 'fail' | 'skip';
+export interface SetupCheck { id: (typeof SETUP_CHECK_IDS)[number]; status: SetupStatus; detail?: string; hint?: (typeof SETUP_HINTS)[number]; fix?: string }
+export interface SetupReport { ok: boolean; checks: SetupCheck[] }
+export const runSetupChecks = (): Promise<SetupReport> =>
+  authFetch('/api/settings/setup-checks', { method: 'POST' }).then((r) => okJson<SetupReport>(r, 'run setup checks'));
+
 // Import plugins that can read a host connector, and whether an admin allowed each one.
 export interface ConnectorImportPlugin { id: string; version: string; allowed: boolean }
 export const listConnectorImportPlugins = (id: string): Promise<ConnectorImportPlugin[]> =>

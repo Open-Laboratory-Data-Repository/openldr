@@ -73,8 +73,9 @@ studio path such as `/settings/laboratory`. Same pattern as `connector-diagnose.
 2. **CLI.** `openldr doctor [--json]` in `packages/cli/src/doctor.ts`, registered in `program.ts`.
    Exit code 1 when a check failed. Read-only, but it opens test connections with stored
    credentials, so it writes one audit row `setup.check` as `cli`, like `connectors diagnose`.
-3. **Route.** `GET /api/settings/setup-checks`, capability `settings.view`, in
-   `apps/server/src/settings-routes.ts`. Audits `setup.check` with the outcome and the failed ids.
+3. **Route.** `POST /api/settings/setup-checks`, capability `settings.view`, in a new file
+   `apps/server/src/setup-routes.ts`. POST because it opens test connections and writes an audit
+   row. Audits `setup.check` with the outcome and the failed ids.
 4. **Studio.** Settings > Setup checks: a list like the diagnosis sheet, a fix link per row, Run
    again in the page's menu. `LoadingState` while it runs. Strings in en, fr, pt.
 5. **Docs.** New files `setup-checks.md` for studio (en, fr, pt) and web. Nav entries go to the
