@@ -19,7 +19,8 @@ import {
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
-import { listPluginUis, type PluginUiEntry } from '@/api';
+import { listPluginUis, type LayoutPreset, type PluginUiEntry } from '@/api';
+import { layoutInForce, useLayouts } from './layouts';
 import { pluginIcon } from '@/plugins/icons';
 import { closePluginPanel, openPluginPanel, syncPluginPanel, usePluginPanel } from '@/plugins/pluginPanel';
 import { NotificationBell } from './NotificationBell';
@@ -44,6 +45,15 @@ export const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon
   { to: '/activity', labelKey: 'nav.activity', end: false, icon: Activity, caps: ['activity.view'] },
   { to: '/docs', labelKey: 'nav.docs', end: false, icon: BookOpen },
 ];
+
+/** The sidebar pages this user sees: those their capabilities allow, then, under a layout, only
+ *  the ones it lists. Docs always shows. A layout only hides; it never adds a page. The first-page
+ *  choice and StartPageGate use this same list. */
+export function visibleNav(hasCapability: (c: string) => boolean, layout: LayoutPreset | null): typeof NAV {
+  return NAV
+    .filter((n) => !n.caps || n.caps.some((c) => hasCapability(c)))
+    .filter((n) => !layout || n.to === '/docs' || layout.pages.includes(n.to));
+}
 
 // One sidebar entry. Active state is computed with useMatch and passed to NavLink as a
 // STRING className. When collapsed the item is wrapped in a Tooltip via `asChild`, and
@@ -91,9 +101,13 @@ export function AppShell({
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
   const { prefs } = useUserPreferences();
-  const startPage = prefs.startPage ?? '/';
+  const { list: layoutList } = useLayouts();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, signOut, hasCapability, authEnforced } = useAuth();
+  const layout = layoutInForce(prefs, layoutList, user?.roles ?? []);
+  const roleDefault = layoutInForce({}, layoutList, user?.roles ?? []);
+  const nav = visibleNav(hasCapability, layout);
+  const startPage = prefs.startPage ?? layout?.startPage ?? '/';
   const [pluginUis, setPluginUis] = useState<PluginUiEntry[]>([]);
   const location = useLocation();
   // Close the mobile drawer whenever the route changes (covers nav links, the user-menu
@@ -199,7 +213,7 @@ export function AppShell({
         </div>
 
         <nav aria-label={t('a11y.primaryNav', { defaultValue: 'Primary' })} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {NAV.filter((n) => !n.caps || n.caps.some((c) => hasCapability(c))).map(({ to, labelKey, end, icon: Icon }) => (
+          {nav.map(({ to, labelKey, end, icon: Icon }) => (
             <SidebarNavItem key={to} to={to} end={end} icon={Icon} label={t(labelKey)} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
           ))}
           {pluginUis.map((p) => (
@@ -241,7 +255,7 @@ export function AppShell({
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger data-testid="start-page-menu">{t('layout.startPage')}</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="max-h-[70dvh] overflow-y-auto">
-                  {NAV.filter((n) => !n.caps || n.caps.some((c) => hasCapability(c))).map((n) => (
+                  {nav.map((n) => (
                     <DropdownMenuItem
                       key={n.to}
                       data-testid={`start-page-${n.to}`}
@@ -258,6 +272,38 @@ export function AppShell({
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+              {/* The sidebar layout: the role default, a named layout, or the full sidebar. */}
+              {layoutList.layouts.length > 0 && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger data-testid="layout-menu">{t('layout.layout')}</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-[70dvh] overflow-y-auto">
+                    <DropdownMenuItem
+                      data-testid="layout-pick-default"
+                      disabled={prefs.layout === undefined}
+                      onClick={() => void setUserPreference({ layout: null })}
+                    >
+                      {t('layout.layoutRoleDefault', { name: roleDefault?.name ?? t('layout.layoutFull') })}
+                    </DropdownMenuItem>
+                    {layoutList.layouts.map((l) => (
+                      <DropdownMenuItem
+                        key={l.id}
+                        data-testid={`layout-pick-${l.id}`}
+                        disabled={prefs.layout === l.id}
+                        onClick={() => void setUserPreference({ layout: l.id })}
+                      >
+                        {l.name}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuItem
+                      data-testid="layout-pick-full"
+                      disabled={prefs.layout === 'full'}
+                      onClick={() => void setUserPreference({ layout: 'full' })}
+                    >
+                      {t('layout.layoutFull')}
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
               <DropdownMenuSeparator />
               {/* TODO(phase3): generalize to "user can see >=1 Settings sub-nav section" once
                   General/Marketplace (broader-role) sections land; for SP-0 DHIS2 is admin-only. */}

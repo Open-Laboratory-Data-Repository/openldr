@@ -780,7 +780,7 @@ export const getMe = (): Promise<CurrentUser> =>
 
 /** The signed-in user's own studio preferences. Stored on the server so they follow the login.
  *  Mirrors UserPreferences in packages/bootstrap/src/user-preferences.ts. */
-export interface UserPreferences { theme?: 'light' | 'dark'; sidebarCollapsed?: boolean; startPage?: string; language?: 'en' | 'fr' | 'pt' }
+export interface UserPreferences { theme?: 'light' | 'dark'; sidebarCollapsed?: boolean; startPage?: string; language?: 'en' | 'fr' | 'pt'; /** A layout id, or 'full' for the full sidebar. Absent: the role default. */ layout?: string }
 /** A missing key is left alone; null clears it. */
 export type UserPreferencesPatch = { [K in keyof UserPreferences]?: UserPreferences[K] | null };
 export const getMyPreferences = (): Promise<UserPreferences> =>
@@ -1900,6 +1900,19 @@ export interface CapabilityGroup { key: string; label: string; capabilities: Cap
 export const getMyCapabilities = (): Promise<string[]> =>
   authFetch('/api/me/capabilities').then((r) => okJson<{ capabilities: string[] }>(r, 'get capabilities')).then((x) => x.capabilities);
 export const listRoles = (): Promise<RoleRecord[]> => apiGet('/api/roles', 'list roles');
+
+// ── Layout presets ──────────────────────────────────────────────────────────
+// Mirrors LayoutPreset / LayoutList in @openldr/bootstrap (layout-presets.ts).
+export interface LayoutPreset { id: string; name: string; startPage: string | null; pages: string[]; roles: string[] }
+export interface LayoutList { layouts: LayoutPreset[]; roleOrder: string[] }
+export interface LayoutInput { name: string; startPage: string | null; pages: string[]; roles: string[] }
+export const listLayouts = (): Promise<LayoutList> => apiGet('/api/layouts', 'list layouts');
+export const saveLayout = (id: string | null, input: LayoutInput): Promise<LayoutPreset> =>
+  authFetch(id ? `/api/layouts/${encodeURIComponent(id)}` : '/api/layouts', jbody(input, id ? 'PUT' : 'POST'))
+    .then((r) => okJson<LayoutPreset>(r, 'save layout'));
+export const deleteLayout = (id: string): Promise<void> =>
+  authFetch(`/api/layouts/${encodeURIComponent(id)}`, { method: 'DELETE' }).then((r) => okJson<unknown>(r, 'delete layout')).then(() => undefined);
+
 export const getRoleCatalog = (): Promise<{ groups: CapabilityGroup[] }> => apiGet('/api/roles/catalog', 'role catalog');
 export const getRole = (id: string): Promise<RoleRecord> => apiGet(`/api/roles/${id}`, 'get role');
 export const createRole = (input: { name: string; slug?: string; description?: string | null; capabilities: string[] }): Promise<RoleRecord> =>

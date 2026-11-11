@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/auth/AuthProvider';
 import { LoadingState } from '@/components/ui/spinner';
 import { hasStoredLanguage, isSupported, setLanguage } from '@/i18n/language';
-import { NAV } from './AppShell';
+import { visibleNav } from './AppShell';
+import { layoutInForce, loadLayouts, useLayouts } from './layouts';
 import { useThemeContext } from './ThemeProvider';
 import {
   loadUserPreferences, markStartPageUsed, noteEntryPath, setUserPreference, startPageUsed, useUserPreferences,
@@ -41,6 +42,7 @@ export function UserPreferencesSync() {
     applied.current = false;
     appliedLanguage.current = false;
     void loadUserPreferences();
+    void loadLayouts();
   }, [userId]);
 
   useEffect(() => {
@@ -79,7 +81,9 @@ export function UserPreferencesSync() {
  */
 export function StartPageGate({ children }: { children: ReactNode }) {
   const { user, hasCapability } = useAuth();
-  const { loaded, prefs } = useUserPreferences();
+  const { loaded: prefsLoaded, prefs } = useUserPreferences();
+  const { loaded: layoutsLoaded, list } = useLayouts();
+  const loaded = prefsLoaded && layoutsLoaded;
   // Fixed at first render: whether this mount is the app's first landing on `/`.
   const firstLanding = useRef(!startPageUsed()).current;
   const decided = Boolean(user) && loaded;
@@ -90,8 +94,9 @@ export function StartPageGate({ children }: { children: ReactNode }) {
   // No user: nothing to read. The route's own guard handles it.
   if (!firstLanding || !user) return <>{children}</>;
   if (!loaded) return <LoadingState className="h-dvh" />;
-  const target = prefs.startPage;
-  const reachable = target && target !== '/'
-    && NAV.some((n) => n.to === target && (!n.caps || n.caps.some((c) => hasCapability(c))));
+  // The user's own first page, else their layout's. Only a page in their sidebar counts.
+  const layout = layoutInForce(prefs, list, user.roles ?? []);
+  const target = prefs.startPage ?? layout?.startPage ?? undefined;
+  const reachable = target && target !== '/' && visibleNav(hasCapability, layout).some((n) => n.to === target);
   return reachable ? <Navigate to={target} replace /> : <>{children}</>;
 }
