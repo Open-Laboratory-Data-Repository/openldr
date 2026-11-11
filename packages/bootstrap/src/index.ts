@@ -1961,7 +1961,11 @@ export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { readAuthIssuerBinding, rebindAuthIssuer } from './auth-issuer-binding';
 export { createPluginTarget } from './connector-target';
-export { createConnectorDb, type ConnectorDb } from './connector-db';
+export { createConnectorDb, splitMssqlHost, type ConnectorDb } from './connector-db';
+export {
+  diagnoseConnector, classifyConnectError, DIAGNOSE_HINT_TEXT,
+  type DiagnoseResult, type DiagnoseStep, type DiagnoseStepId, type DiagnoseStatus, type DiagnoseHint, type DiagnoseDeps,
+} from './connector-diagnose';
 export { testConnector } from './connector-test';
 export * from './ingest-context';
 export * from './target-store';
