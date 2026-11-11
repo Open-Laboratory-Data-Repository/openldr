@@ -2,6 +2,9 @@ import type { AggregatedHealth } from '@openldr/core';
 import { testConnector } from './connector-test';
 import { LAB_IDENTITY_DEFAULTS } from './lab-identity-defaults';
 import type { SyncStatus } from './sync-handle';
+import type { Kysely } from 'kysely';
+import type { ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
+import { resolveObservedFacilities } from './facility-reconcile';
 
 // What a fresh install still needs before it is ready, as one list. An admin would otherwise open
 // every settings page to find out, and a headless operator has no single command that says so.
@@ -9,12 +12,12 @@ import type { SyncStatus } from './sync-handle';
 // (docs/superpowers/plans/2026-11-11-setup-checks.md) cites the line for each.
 // The studio translates the hint codes; the CLI prints SETUP_HINT_TEXT.
 
-export type SetupCheckId = 'adapters' | 'signIn' | 'secretsKey' | 'labName' | 'timeZone' | 'connectors' | 'sync';
+export type SetupCheckId = 'adapters' | 'signIn' | 'secretsKey' | 'labName' | 'timeZone' | 'connectors' | 'sync' | 'facilities';
 export type SetupStatus = 'pass' | 'warn' | 'fail' | 'skip';
 export type SetupHint =
   | 'adapterDown' | 'adapterDegraded' | 'signInOff' | 'secretsKeyMissing'
   | 'labNameDefault' | 'timeZoneEmpty' | 'timeZoneSqlServer'
-  | 'connectorFailed' | 'syncIncomplete' | 'syncFailing' | 'checkError';
+  | 'connectorFailed' | 'syncIncomplete' | 'syncFailing' | 'facilitiesUnmatched' | 'checkError';
 
 export interface SetupCheck {
   id: SetupCheckId;
@@ -43,6 +46,9 @@ export interface SetupCheckDeps {
   /** Resolves when the connector answers, rejects when it does not. */
   testConnector(type: string, config: Record<string, string>): Promise<void>;
   syncStatus(): Promise<SyncStatus>;
+  /** Facilities seen in the data (the Facilities page, Observed tab), and how many of them match
+   *  no facility in the register. */
+  observedFacilities(): Promise<{ total: number; unmatched: number }>;
 }
 
 export const SETUP_CHECK_TITLE: Record<SetupCheckId, string> = {
@@ -53,6 +59,7 @@ export const SETUP_CHECK_TITLE: Record<SetupCheckId, string> = {
   timeZone: 'Time zone',
   connectors: 'Connectors',
   sync: 'Sync with central',
+  facilities: 'Facilities in the data',
 };
 
 export const SETUP_HINT_TEXT: Record<SetupHint, string> = {
@@ -66,6 +73,7 @@ export const SETUP_HINT_TEXT: Record<SetupHint, string> = {
   connectorFailed: 'A connector does not answer. Open Settings, Connectors and run Test or Diagnose on it.',
   syncIncomplete: 'Sync is on but has no central URL or no site id. Finish it in Settings, Distributed sync, or turn sync off.',
   syncFailing: 'The last sync cycle failed. Open Settings, Distributed sync to see why.',
+  facilitiesUnmatched: 'Some facilities in the incoming data match no facility in the register, so reports cannot place their results. Open Facilities, Observed, and map each one to a register facility.',
   checkError: 'This check could not run. The server log has the reason.',
 };
 
@@ -130,9 +138,19 @@ async function sync(deps: SetupCheckDeps): Promise<SetupCheck> {
   return { id: 'sync', status: 'pass' };
 }
 
+// A facility code from a lab system that maps to nothing in the register: reports by region,
+// district or facility cannot place those results. The Observed tab lists them one by one; this
+// says how many there are, so a new install sees it without opening that page.
+async function facilities(deps: SetupCheckDeps): Promise<SetupCheck> {
+  const { total, unmatched } = await deps.observedFacilities();
+  if (total === 0) return { id: 'facilities', status: 'skip' };
+  if (unmatched > 0) return { id: 'facilities', status: 'warn', hint: 'facilitiesUnmatched', fix: '/facilities', detail: `${unmatched} of ${total}` };
+  return { id: 'facilities', status: 'pass', detail: `${total} of ${total}` };
+}
+
 const CHECKS: Array<[SetupCheckId, (deps: SetupCheckDeps) => Promise<SetupCheck>]> = [
   ['adapters', adapters], ['signIn', signIn], ['secretsKey', secretsKey], ['labName', labName],
-  ['timeZone', timeZone], ['connectors', connectors], ['sync', sync],
+  ['timeZone', timeZone], ['connectors', connectors], ['sync', sync], ['facilities', facilities],
 ];
 
 /** Run every check. One that throws reports as failed and never stops the others. */
@@ -159,6 +177,9 @@ export function setupCheckDeps(ctx: {
     getDecryptedConfig(id: string, key: string | undefined): Promise<Record<string, string>>;
   };
   sync: { status(): Promise<SyncStatus> };
+  internalDb: Kysely<InternalSchema>;
+  store: { db: unknown };
+  terminology: { admin: TerminologyAdminStore };
 }): SetupCheckDeps {
   return {
     cfg: ctx.cfg,
@@ -169,5 +190,14 @@ export function setupCheckDeps(ctx: {
     connectorConfig: (id) => ctx.connectors.getDecryptedConfig(id, ctx.cfg.SECRETS_ENCRYPTION_KEY),
     testConnector: async (type, config) => { await testConnector(type, config); },
     syncStatus: () => ctx.sync.status(),
+    observedFacilities: async () => {
+      // Same resolver as GET /api/facilities/observed, so the count matches that tab.
+      const rows = await resolveObservedFacilities({
+        internalDb: ctx.internalDb,
+        externalDb: ctx.store.db as Kysely<ExternalSchema>,
+        admin: ctx.terminology.admin,
+      });
+      return { total: rows.length, unmatched: rows.filter((r) => r.registryId === null).length };
+    },
   };
 }

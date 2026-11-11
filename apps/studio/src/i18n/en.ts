@@ -427,6 +427,7 @@ export const en = {
         timeZone: "Time zone",
         connectors: "Connectors",
         sync: "Sync with central",
+        facilities: "Facilities in the data",
       },
       hint: {
         adapterDown: "A service CE depends on is down. Run openldr health on the server to see which, then check that service and its settings.",
@@ -439,6 +440,7 @@ export const en = {
         connectorFailed: "A connector does not answer. Run Test or Diagnose on it.",
         syncIncomplete: "Sync is on but has no central URL or no site id. Finish the settings, or turn sync off.",
         syncFailing: "The last sync cycle failed. The sync page shows why.",
+        facilitiesUnmatched: "Some facilities in the incoming data match no facility in the register, so reports cannot place their results. Open Facilities, Observed, and map each one to a register facility.",
         checkError: "This check could not run. The server log has the reason.",
       },
     },

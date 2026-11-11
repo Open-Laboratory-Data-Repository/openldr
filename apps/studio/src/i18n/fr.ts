@@ -425,6 +425,7 @@ export const fr: EnShape = {
         timeZone: "Fuseau horaire",
         connectors: "Connecteurs",
         sync: "Synchronisation avec le central",
+        facilities: "Établissements dans les données",
       },
       hint: {
         adapterDown: "Un service dont CE dépend est arrêté. Lancez openldr health sur le serveur pour voir lequel, puis vérifiez ce service et ses paramètres.",
@@ -437,6 +438,7 @@ export const fr: EnShape = {
         connectorFailed: "Un connecteur ne répond pas. Lancez Tester ou Diagnostiquer dessus.",
         syncIncomplete: "La synchronisation est activée mais n’a pas d’URL du central ou pas d’identifiant de site. Complétez les paramètres, ou désactivez la synchronisation.",
         syncFailing: "Le dernier cycle de synchronisation a échoué. La page de synchronisation indique pourquoi.",
+        facilitiesUnmatched: "Certains établissements des données reçues ne correspondent à aucun établissement du registre, donc les rapports ne peuvent pas placer leurs résultats. Ouvrez Établissements, Observés, et associez chacun à un établissement du registre.",
         checkError: "Cette vérification n’a pas pu s’exécuter. Le journal du serveur en donne la raison.",
       },
     },

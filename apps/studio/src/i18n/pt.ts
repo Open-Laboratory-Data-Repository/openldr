@@ -425,6 +425,7 @@ export const pt: EnShape = {
         timeZone: "Fuso horário",
         connectors: "Conectores",
         sync: "Sincronização com o central",
+        facilities: "Unidades de saúde nos dados",
       },
       hint: {
         adapterDown: "Um serviço de que o CE depende está em baixo. Execute openldr health no servidor para ver qual, e verifique esse serviço e as suas definições.",
@@ -437,6 +438,7 @@ export const pt: EnShape = {
         connectorFailed: "Um conector não responde. Execute Testar ou Diagnosticar nele.",
         syncIncomplete: "A sincronização está ligada mas não tem URL do central ou identificador do local. Complete as definições, ou desligue a sincronização.",
         syncFailing: "O último ciclo de sincronização falhou. A página de sincronização mostra porquê.",
+        facilitiesUnmatched: "Algumas unidades de saúde nos dados recebidos não correspondem a nenhuma unidade do registo, por isso os relatórios não conseguem situar os seus resultados. Abra Unidades, Observadas, e associe cada uma a uma unidade do registo.",
         checkError: "Não foi possível executar esta verificação. O registo do servidor tem o motivo.",
       },
     },
