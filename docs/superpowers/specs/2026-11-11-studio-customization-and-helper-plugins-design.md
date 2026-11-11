@@ -160,6 +160,12 @@ Files outside my assigned area: slice 1 edits `packages/adapter-mssql-store`. Sl
 7 edit `apps/studio/src/shell/AppShell.tsx`. Slice 6 needs `packages/db` for migration 113.
 I will not touch these until the coordinator says yes.
 
+Docs: another session owns `apps/studio/src/docs`, `apps/web/src/docs`, and
+`apps/web/public/docs-images`. Each slice adds new doc files only and edits no existing
+page. Guides are listed by hand in `apps/studio/src/docs/registry.ts`, so a new file does
+not show up until it has an entry there. I will not edit `registry.ts`. Each slice report
+names the new files and gives the registry entry for the coordinator to add.
+
 ## 6. Non-goals
 
 - No direct database access from WASM. No `tds_fdw`.
