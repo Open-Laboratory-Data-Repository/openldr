@@ -2025,7 +2025,7 @@ export {
   type UserPreferences, type UserPreferencesPatch,
 } from './user-preferences';
 export {
-  listLayouts, saveLayout, deleteLayout, layoutInputSchema, LayoutError,
+  listLayouts, saveLayout, deleteLayout, layoutInputSchema, LayoutError, layoutErrorFromDb,
   type LayoutPreset, type LayoutList, type LayoutInput,
 } from './layout-presets';
 export {

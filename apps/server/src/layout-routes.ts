@@ -12,7 +12,7 @@ const EDIT = { preHandler: requireCapability('settings.edit_general') };
 
 function layoutError(err: unknown, reply: FastifyReply): { error: string } {
   if (err instanceof LayoutError) {
-    reply.code(err.code === 'not-found' ? 404 : err.code === 'duplicate-name' ? 409 : 400);
+    reply.code(err.code === 'not-found' ? 404 : err.code === 'duplicate-name' || err.code === 'conflict' ? 409 : 400);
     return { error: err.message };
   }
   throw err;

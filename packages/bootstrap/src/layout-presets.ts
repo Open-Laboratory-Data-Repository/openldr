@@ -36,7 +36,18 @@ export const layoutInputSchema = z.object({
 export type LayoutInput = z.infer<typeof layoutInputSchema>;
 
 export class LayoutError extends Error {
-  constructor(public readonly code: 'not-found' | 'duplicate-name' | 'unknown-role', message: string) { super(message); }
+  constructor(public readonly code: 'not-found' | 'duplicate-name' | 'unknown-role' | 'conflict', message: string) { super(message); }
+}
+
+/** A Postgres unique violation (23505) from two saves at the same instant, as a LayoutError: the
+ *  layout name index means the name is taken; anything else (one default per role) means another
+ *  save got there first. Null for any other error, which then propagates as it is. */
+export function layoutErrorFromDb(err: unknown): LayoutError | null {
+  const e = err as { code?: unknown; constraint?: unknown } | null;
+  if (!e || e.code !== '23505') return null;
+  return String(e.constraint ?? '').includes('name')
+    ? new LayoutError('duplicate-name', 'a layout with this name already exists')
+    : new LayoutError('conflict', 'another change to layouts was saved at the same time; try again');
 }
 
 /** A stored `pages` value. Anything that is not a list of studio paths is dropped, not thrown on. */
@@ -95,7 +106,7 @@ export async function saveLayout(db: Kysely<InternalSchema>, id: string | null, 
       await trx.insertInto('role_layout_defaults').values(roleIds.map((role_id) => ({ role_id, layout_id: lid }))).execute();
     }
     return lid;
-  });
+  }).catch((err: unknown) => { throw layoutErrorFromDb(err) ?? err; });
   return (await listLayouts(db)).layouts.find((l) => l.id === layoutId)!;
 }
 

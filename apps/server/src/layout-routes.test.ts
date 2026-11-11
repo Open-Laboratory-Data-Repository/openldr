@@ -81,4 +81,16 @@ describe('/api/layouts', () => {
     const withToken = await app.inject({ method: 'GET', url: '/api/layouts', headers: { authorization: 'Bearer abc' } });
     expect(withToken.json().myRoles).toEqual([]);
   });
+
+  // Two saves at the same instant: Postgres refuses the second with 23505. Answer 409, not 500.
+  it('answers 409 when Postgres refuses a save that raced another', async () => {
+    const raced = { code: '23505', constraint: 'role_layout_defaults_pkey' };
+    const internalDb = { transaction: () => ({ execute: async () => { throw raced; } }) };
+    const ctx = { cfg: {}, internalDb, roles: {}, users: { get: async () => undefined }, audit: { record: async () => {} }, logger: { warn() {}, error() {}, info() {}, debug() {} } };
+    const app = Fastify();
+    app.addHook('onRequest', async (req: any) => { req.user = { id: 'u1', username: 'admin', roles: [], capabilities: ['settings.edit_general'] }; });
+    registerLayoutRoutes(app, ctx as any);
+    const res = await app.inject({ method: 'POST', url: '/api/layouts', payload: bench });
+    expect(res.statusCode).toBe(409);
+  });
 });

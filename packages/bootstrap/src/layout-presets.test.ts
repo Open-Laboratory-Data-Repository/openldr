@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
 import type { Kysely } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
-import { deleteLayout, listLayouts, saveLayout, layoutInputSchema } from './layout-presets';
+import { deleteLayout, listLayouts, saveLayout, layoutInputSchema, layoutErrorFromDb } from './layout-presets';
 
 async function dbWithRoles(): Promise<Kysely<InternalSchema>> {
   const db = (await makeMigratedDb()) as unknown as Kysely<InternalSchema>;
@@ -74,5 +74,14 @@ describe('layout presets', () => {
     // A start page the layout hides would never open (studio only opens sidebar pages).
     expect(layoutInputSchema.safeParse({ ...bench, startPage: '/query' }).success).toBe(false);
     expect(layoutInputSchema.safeParse({ ...bench, startPage: null }).success).toBe(true);
+  });
+
+  // Two saves at the same instant can both pass the name check; Postgres then refuses the second
+  // with a unique violation (23505). That must answer as a known layout error (409), not a 500.
+  it('turns a Postgres unique violation into a layout error, and leaves other errors alone', () => {
+    expect(layoutErrorFromDb({ code: '23505', constraint: 'layout_presets_name_key' })).toMatchObject({ code: 'duplicate-name' });
+    expect(layoutErrorFromDb({ code: '23505', constraint: 'role_layout_defaults_pkey' })).toMatchObject({ code: 'conflict' });
+    expect(layoutErrorFromDb({ code: '23503' })).toBeNull();
+    expect(layoutErrorFromDb(new Error('boom'))).toBeNull();
   });
 });
