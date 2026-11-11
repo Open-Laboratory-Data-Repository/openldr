@@ -194,6 +194,7 @@ export async function buildApp(ctx: AppContext) {
     connectors: {
       list: () => ctx.connectors.list(),
       get: (id) => ctx.connectors.get(id),
+      databaseOf: async (id) => (await ctx.connectors.getDecryptedConfig(id, ctx.cfg.SECRETS_ENCRYPTION_KEY)).database ?? '',
     },
     datasets: {
       // WorkflowDatasetStore keys datasets by name and does not expose a separate id; use name as id.

@@ -1,7 +1,7 @@
 // apps/studio/src/query/workspace/TabBar.tsx
 import { X, Plus, Table2, Zap, Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { useQueryStore, type Tab } from '../store';
+import { browseSql, useQueryStore, type Tab } from '../store';
 
 function tabIcon(t: Tab) {
   if (t.kind === 'table') return <Table2 className="h-4 w-4 shrink-0" />;
@@ -9,16 +9,9 @@ function tabIcon(t: Tab) {
   return <Zap className="h-4 w-4 shrink-0" />;
 }
 
-/** A table tab is "dirty" when its inline SQL diverges from the default browse query
- * (quoted per the connector's dialect — `[schema].[table]` for SQL Server, backticks for
- * MySQL/MariaDB, ANSI double-quotes otherwise). */
+/** A table tab is "dirty" when its inline SQL diverges from the default browse query. */
 function isDirty(t: Tab): boolean {
-  if (t.kind !== 'table') return false;
-  const def =
-    t.type === 'microsoft-sql' ? `select * from [${t.schema}].[${t.table}]`
-    : t.type === 'mysql' ? `select * from \`${t.schema}\`.\`${t.table}\``
-    : `select * from "${t.schema}"."${t.table}"`;
-  return t.sql !== def;
+  return t.kind === 'table' && t.sql !== browseSql(t);
 }
 
 export function TabBar({ canQuery }: { canQuery: boolean }): JSX.Element {

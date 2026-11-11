@@ -195,6 +195,20 @@ O conteúdo escrito para um sistema de laboratório partilha-se com estes fichei
 
 Expanda **Conjuntos de dados** para consultar tabelas que um fluxo de trabalho construiu. Use-as para dados lentos ou complexos, para que um relatório leia uma tabela pronta em vez da fonte em direto. Veja [Fluxos de trabalho](/docs/workflows).
 
+## Bases de dados SQL Server
+
+Um conector SQL Server com o campo **Base de dados** em branco consegue ler todas as bases de dados que o seu login pode abrir. O Explorador mostra então mais um nível: o conector, as suas bases de dados, os esquemas e depois as tabelas. As bases de dados de sistema e as que o login não pode abrir não aparecem.
+
+Uma tabela aberta a partir daí usa o nome completo, como `select * from [OpenLDRData].[dbo].[Requests]`. Use também nomes completos nas suas consultas. Uma só consulta pode juntar tabelas de duas bases de dados do mesmo servidor. Os nomes de tabelas e colunas abaixo são só um exemplo:
+
+```sql
+select r.RequestID, t.Description
+from OpenLDRData.dbo.Requests r
+join OpenLDRDict.dbo.Tests t on t.TestCode = r.TestCode
+```
+
+Um conector com a base de dados preenchida mostra os esquemas dessa base, como antes. O PostgreSQL funciona de outra forma: uma ligação lê uma só base de dados. Crie um conector para cada base de dados PostgreSQL.
+
 ## Paginação e SQL Server
 
 Percorrer tabelas e os resultados das consultas funcionam com conectores PostgreSQL, MySQL ou MariaDB, e SQL Server.
@@ -218,6 +232,7 @@ Num telemóvel, o Explorador começa dobrado numa faixa estreita à esquerda. Se
 - **"unbound parameter".** Cada `{{ param.x }}` no SQL precisa de um parâmetro com esse **ID da variável**.
 - **"required parameter" ao executar.** Preencha todos os parâmetros marcados como **Obrigatório**.
 - **A consulta é recusada.** Só correm instruções `SELECT`. Tudo o que altere dados ou tabelas é recusado.
+- **Falta uma base de dados SQL Server no Explorador.** O login do conector não a pode abrir, ou está offline. Verifique os acessos do login no servidor.
 - **Não há conectores no Explorador.** Crie ou ative um conector de base de dados. Veja [Conectores](/docs/connectors).
 - **A lista de um parâmetro select está vazia.** O seu **SQL das opções** não devolveu linhas. Execute esse SQL num separador à parte para o verificar.
 - **As páginas repetem ou saltam linhas.** Junte um `ORDER BY` que acabe numa chave única. Veja [Paginação e SQL Server](#paginacao-e-sql-server).

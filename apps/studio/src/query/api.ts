@@ -16,10 +16,14 @@ async function j<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+const dbQuery = (database?: string): string => (database === undefined ? '' : `?database=${encodeURIComponent(database)}`);
+
 export const queryApi = {
   connectors: () => authFetch('/api/query/connectors').then(j<ConnectorRef[]>),
-  schemas: (id: string) => authFetch(`/api/query/connectors/${id}/schemas`).then(j<string[]>),
-  tables: (id: string, schema: string) => authFetch(`/api/query/connectors/${id}/schemas/${schema}/tables`).then(j<string[]>),
+  /** Databases to show under a connector, or null when the tree goes straight to schemas. */
+  databases: (id: string) => authFetch(`/api/query/connectors/${id}/databases`).then(j<{ databases: string[] | null }>).then((r) => r.databases),
+  schemas: (id: string, database?: string) => authFetch(`/api/query/connectors/${id}/schemas${dbQuery(database)}`).then(j<string[]>),
+  tables: (id: string, schema: string, database?: string) => authFetch(`/api/query/connectors/${id}/schemas/${schema}/tables${dbQuery(database)}`).then(j<string[]>),
   datasets: () => authFetch('/api/query/datasets').then(j<DatasetRef[]>),
   // The datasets/:name route returns { columns, rows, rowCount } with no `ms`, so omit it from the type.
   datasetRows: (name: string) => authFetch(`/api/query/datasets/${encodeURIComponent(name)}`).then(j<Omit<RunResult, 'ms'>>),

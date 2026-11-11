@@ -36,6 +36,7 @@ function makeDeps(): QueryRouteDeps {
     connectors: {
       async list() { return [{ id: 'c1', name: 'PG', type: 'postgres', enabled: true } as any]; },
       async get(id) { return id === 'c1' ? ({ id, name: 'PG', type: 'postgres', enabled: true } as any) : null; },
+      async databaseOf() { return ''; },
     },
     datasets: { async list() { return []; }, async getByName() { return null; } },
     runConnectorSql: async ({ sql }) => ({ columns: [{ key: 'n', label: 'n' }], rows: [{ n: 1 }], sql } as any),
@@ -557,5 +558,74 @@ describe('custom query groups', () => {
     expect(q.name).toBe('TB LAM');
     expect(q.groupId).toBeNull();
     expect(auditRecord).toHaveBeenCalledWith(expect.objectContaining({ action: 'customQueryGroup.delete', entityId: gid }));
+  });
+});
+
+describe('SQL Server database level', () => {
+  function mssqlDeps(database: string) {
+    const deps = makeDeps();
+    deps.connectors.get = async (id) => (id === 'c2' ? ({ id, name: 'SQLSvr', type: 'microsoft-sql', enabled: true } as any) : null);
+    deps.connectors.databaseOf = async () => database;
+    const seen: string[] = [];
+    deps.runConnectorSql = async ({ sql }) => {
+      seen.push(sql);
+      return { columns: [], rows: [{ name: 'OpenLDRData' }, { name: 'OpenLDRDict' }] };
+    };
+    return { deps, seen };
+  }
+
+  it('lists the databases the login can open when the connector names none', async () => {
+    const { deps, seen } = mssqlDeps('');
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c2/databases' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ databases: ['OpenLDRData', 'OpenLDRDict'] });
+    expect(seen[0]).toContain('sys.databases');
+    expect(seen[0]).toContain('database_id > 4');
+    expect(seen[0]).toContain('has_dbaccess(name) = 1');
+  });
+
+  it('returns null when the connector names a database, so the tree keeps its old shape', async () => {
+    const { deps, seen } = mssqlDeps('OpenLDRData');
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c2/databases' });
+    expect(res.json()).toEqual({ databases: null });
+    expect(seen).toEqual([]);
+  });
+
+  it('returns null for a postgres connector without reading its config', async () => {
+    const deps = makeDeps();
+    let read = false;
+    deps.connectors.databaseOf = async () => { read = true; return ''; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c1/databases' });
+    expect(res.json()).toEqual({ databases: null });
+    expect(read).toBe(false);
+  });
+
+  it('reads schemas and tables from the named database by its three-part name', async () => {
+    const { deps, seen } = mssqlDeps('');
+    const app = await build(deps);
+    await app.inject({ method: 'GET', url: '/api/query/connectors/c2/schemas?database=OpenLDRData' });
+    await app.inject({ method: 'GET', url: '/api/query/connectors/c2/schemas/dbo/tables?database=OpenLDRDict' });
+    expect(seen[0]).toContain('from [OpenLDRData].information_schema.schemata');
+    expect(seen[1]).toContain('from [OpenLDRDict].information_schema.tables');
+  });
+
+  it('keeps a database name with a closing bracket inside its brackets', async () => {
+    const { deps, seen } = mssqlDeps('');
+    const app = await build(deps);
+    await app.inject({ method: 'GET', url: `/api/query/connectors/c2/schemas?database=${encodeURIComponent('a]b')}` });
+    expect(seen[0]).toContain('from [a]]b].information_schema.schemata');
+  });
+
+  it('refuses a database name on a postgres connector', async () => {
+    const deps = makeDeps();
+    let ran = false;
+    deps.runConnectorSql = async () => { ran = true; return { columns: [], rows: [] }; };
+    const app = await build(deps);
+    const res = await app.inject({ method: 'GET', url: '/api/query/connectors/c1/schemas?database=other' });
+    expect(res.statusCode).toBe(400);
+    expect(ran).toBe(false);
   });
 });

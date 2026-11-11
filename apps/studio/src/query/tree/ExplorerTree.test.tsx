@@ -8,6 +8,7 @@ import type { CustomQuery } from '../custom-query-types';
 
 vi.mock('../api', () => ({ queryApi: {
   connectors: vi.fn(async () => [{ id: 'c1', name: 'PG', type: 'postgres' }]),
+  databases: vi.fn(async () => null),
   schemas: vi.fn(async () => ['public']),
   tables: vi.fn(async () => ['products']),
   datasets: vi.fn(async () => [{ id: 'd1', name: 'AMR', rowCount: 2 }]),
@@ -87,6 +88,34 @@ describe('ExplorerTree', () => {
     await screen.findByText('PG');
     fireEvent.click(screen.getByText('PG'));
     await waitFor(() => expect(queryApi.schemas).toHaveBeenCalledWith('c1'));
+  });
+
+  it('shows databases under a SQL Server connector with no database, and opens a table by its full name', async () => {
+    vi.mocked(queryApi.connectors).mockResolvedValueOnce([{ id: 'c2', name: 'OpenLDR v1', type: 'microsoft-sql' }]);
+    vi.mocked(queryApi.databases).mockResolvedValueOnce(['OpenLDRData', 'OpenLDRDict']);
+    vi.mocked(queryApi.schemas).mockResolvedValueOnce(['dbo']);
+    vi.mocked(queryApi.tables).mockResolvedValueOnce(['Requests']);
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Connectors'));
+    fireEvent.click(await screen.findByText('OpenLDR v1'));
+    fireEvent.click(await screen.findByText('OpenLDRDict'));
+    expect(queryApi.schemas).not.toHaveBeenCalledWith('c2');
+    fireEvent.click(await screen.findByText('dbo'));
+    expect(queryApi.schemas).toHaveBeenCalledWith('c2', 'OpenLDRDict');
+    fireEvent.click(await screen.findByText('Requests'));
+    expect(queryApi.tables).toHaveBeenCalledWith('c2', 'dbo', 'OpenLDRDict');
+    const tab = useQueryStore.getState().tabs[0];
+    expect(tab).toMatchObject({ kind: 'table', database: 'OpenLDRDict', sql: 'select * from [OpenLDRDict].[dbo].[Requests]' });
+  });
+
+  it('falls back to schemas when the database listing fails', async () => {
+    vi.mocked(queryApi.databases).mockRejectedValueOnce(new Error('permission denied'));
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<ExplorerTree />);
+    fireEvent.click(await screen.findByText('Connectors'));
+    fireEvent.click(await screen.findByText('PG'));
+    expect(await screen.findByText('public')).toBeInTheDocument();
+    err.mockRestore();
   });
 
   it('shows groups with a count, closed, and ungrouped queries below them', async () => {

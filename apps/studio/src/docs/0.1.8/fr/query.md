@@ -195,6 +195,20 @@ Le contenu écrit pour un système de laboratoire se partage avec ces fichiers. 
 
 Dépliez **Jeux de données** pour interroger les tables qu'un flux de travail a construites. Servez-vous-en pour des données lentes ou complexes, afin qu'un rapport lise une table prête au lieu de la source en direct. Voir [Flux de travail](/docs/workflows).
 
+## Bases SQL Server
+
+Un connecteur SQL Server dont le champ **Base de données** est vide peut lire toutes les bases que sa connexion peut ouvrir. L'Explorateur montre alors un niveau de plus : le connecteur, ses bases, leurs schémas, puis les tables. Les bases système et celles que la connexion ne peut pas ouvrir n'apparaissent pas.
+
+Une table ouverte depuis là utilise son nom complet, comme `select * from [OpenLDRData].[dbo].[Requests]`. Utilisez aussi les noms complets dans vos requêtes. Une même requête peut joindre des tables de deux bases du même serveur. Les noms de tables et de colonnes ci-dessous ne sont qu'un exemple :
+
+```sql
+select r.RequestID, t.Description
+from OpenLDRData.dbo.Requests r
+join OpenLDRDict.dbo.Tests t on t.TestCode = r.TestCode
+```
+
+Un connecteur avec une base renseignée montre les schémas de cette base, comme avant. PostgreSQL fonctionne autrement : une connexion lit une seule base. Créez un connecteur par base PostgreSQL.
+
 ## Pagination et SQL Server
 
 Le parcours des tables et les résultats des requêtes fonctionnent avec les connecteurs PostgreSQL, MySQL ou MariaDB, et SQL Server.
@@ -218,6 +232,7 @@ Sur un téléphone, l'Explorateur commence replié en une fine bande à gauche. 
 - **« unbound parameter ».** Chaque `{{ param.x }}` du SQL demande un paramètre avec cet **ID de variable**.
 - **« required parameter » à l'exécution.** Remplissez chaque paramètre marqué **Requis**.
 - **La requête est refusée.** Seules les instructions `SELECT` s'exécutent. Tout ce qui modifie des données ou des tables est refusé.
+- **Une base SQL Server manque dans l'Explorateur.** La connexion du connecteur ne peut pas l'ouvrir, ou elle est hors ligne. Vérifiez les droits de la connexion sur le serveur.
 - **Aucun connecteur dans l'Explorateur.** Créez ou activez un connecteur de base de données. Voir [Connecteurs](/docs/connectors).
 - **La liste d'un paramètre select est vide.** Son **SQL des options** n'a renvoyé aucune ligne. Exécutez ce SQL dans un onglet à part pour le vérifier.
 - **Des pages répètent ou sautent des lignes.** Ajoutez un `ORDER BY` qui finit par une clé unique. Voir [Pagination et SQL Server](#pagination-et-sql-server).

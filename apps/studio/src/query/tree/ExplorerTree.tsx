@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ChevronRight, ChevronDown, Plug, Package, Zap, Table2, Folder, MoreHorizontal } from 'lucide-react';
+import { ChevronRight, ChevronDown, Plug, Package, Zap, Table2, Folder, MoreHorizontal, Database } from 'lucide-react';
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors,
   type DragEndEvent, type DragStartEvent,
@@ -109,6 +109,22 @@ type NameSheet =
   | { kind: 'renameGroup'; group: CustomQueryGroup }
   | { kind: 'renameQuery'; query: CustomQuery };
 
+// ---- Where schemas come from ----
+
+/** A connector, or one database under a SQL Server connector whose own database is blank. */
+interface Scope { id: string; database?: string }
+
+/** Branch and cache key for a scope. A NUL byte cannot appear in a connector id or a database name. */
+const scopeKey = (s: Scope): string => (s.database === undefined ? s.id : `${s.id}\u0000${s.database}`);
+const scopeOf = (key: string): Scope => {
+  const nul = key.indexOf('\u0000');
+  return nul === -1 ? { id: key } : { id: key.slice(0, nul), database: key.slice(nul + 1) };
+};
+const fetchSchemas = (s: Scope): Promise<string[]> =>
+  (s.database === undefined ? queryApi.schemas(s.id) : queryApi.schemas(s.id, s.database));
+const fetchTables = (s: Scope, schema: string): Promise<string[]> =>
+  (s.database === undefined ? queryApi.tables(s.id, schema) : queryApi.tables(s.id, schema, s.database));
+
 export function ExplorerTree(): JSX.Element {
   const { t } = useTranslation();
   const openTableTab = useQueryStore((s) => s.openTableTab);
@@ -124,6 +140,9 @@ export function ExplorerTree(): JSX.Element {
   const [datasets, setDatasets] = useState<DatasetRef[]>([]);
   const [queries, setQueries] = useState<CustomQuery[]>([]);
   const [groups, setGroups] = useState<CustomQueryGroup[]>([]);
+  // Per connector: its databases, or null when the tree goes straight to schemas.
+  const [databases, setDatabases] = useState<Record<string, string[] | null>>({});
+  // Keyed by scopeKey, and tables by `${scopeKey}/${schema}`.
   const [schemas, setSchemas] = useState<Record<string, string[]>>({});
   const [tables, setTables] = useState<Record<string, string[]>>({});
 
@@ -155,27 +174,59 @@ export function ExplorerTree(): JSX.Element {
   const explorerRevision = useQueryStore((s) => s.explorerRevision);
   useEffect(() => {
     if (explorerRevision === 0) return;
-    setConnectors([]); setDatasets([]); setSchemas({}); setTables({});
+    setConnectors([]); setDatasets([]); setDatabases({}); setSchemas({}); setTables({});
     if (openBranch.connectors) queryApi.connectors().then(setConnectors).catch(onErr('connectors'));
     if (openBranch.datasets) queryApi.datasets().then(setDatasets).catch(onErr('datasets'));
     for (const [k, open] of Object.entries(openBranch)) {
       if (!open) continue;
-      if (k.startsWith('c:')) {
-        const id = k.slice(2);
-        queryApi.schemas(id).then((s) => setSchemas((m) => ({ ...m, [id]: s }))).catch(onErr('schemas'));
-      } else if (k.startsWith('s:')) {
+      if (k.startsWith('c:')) fetchDatabases(k.slice(2));
+      else if (k.startsWith('d:')) fetchSchemasInto(scopeOf(k.slice(2)));
+      else if (k.startsWith('s:')) {
+        // A schema name is a bare identifier, so the last slash always splits scope from schema.
         const key = k.slice(2);
-        const slash = key.indexOf('/');
-        queryApi.tables(key.slice(0, slash), key.slice(slash + 1)).then((tb) => setTables((m) => ({ ...m, [key]: tb }))).catch(onErr('tables'));
+        const slash = key.lastIndexOf('/');
+        fetchTablesInto(scopeOf(key.slice(0, slash)), key.slice(slash + 1));
       }
     }
   }, [explorerRevision]);
 
-  const loadSchemas = (id: string) => { toggle(`c:${id}`); if (!schemas[id]) queryApi.schemas(id).then((s) => setSchemas((m) => ({ ...m, [id]: s }))).catch(onErr('schemas')); };
-  const loadTables = (id: string, schema: string) => {
-    const key = `${id}/${schema}`; toggle(`s:${key}`);
-    if (!tables[key]) queryApi.tables(id, schema).then((tb) => setTables((m) => ({ ...m, [key]: tb }))).catch(onErr('tables'));
+  const fetchSchemasInto = (scope: Scope) => {
+    fetchSchemas(scope).then((sc) => setSchemas((m) => ({ ...m, [scopeKey(scope)]: sc }))).catch(onErr('schemas'));
   };
+  const fetchTablesInto = (scope: Scope, schema: string) => {
+    fetchTables(scope, schema).then((tb) => setTables((m) => ({ ...m, [`${scopeKey(scope)}/${schema}`]: tb }))).catch(onErr('tables'));
+  };
+  // A failed database listing falls back to the schemas of the connection's own database.
+  const fetchDatabases = (id: string) => {
+    queryApi.databases(id)
+      .catch((e: unknown) => { onErr('databases')(e); return null; })
+      .then((dbs) => {
+        setDatabases((m) => ({ ...m, [id]: dbs }));
+        if (dbs === null) fetchSchemasInto({ id });
+      });
+  };
+
+  const loadConnector = (id: string) => { toggle(`c:${id}`); if (!(id in databases)) fetchDatabases(id); };
+  const loadDatabase = (scope: Scope) => {
+    const key = scopeKey(scope); toggle(`d:${key}`);
+    if (!schemas[key]) fetchSchemasInto(scope);
+  };
+  const loadTables = (scope: Scope, schema: string) => {
+    const key = `${scopeKey(scope)}/${schema}`; toggle(`s:${key}`);
+    if (!tables[key]) fetchTablesInto(scope, schema);
+  };
+
+  const schemaRows = (c: ConnectorRef, scope: Scope, depth: number) => (schemas[scopeKey(scope)] ?? []).map((sc) => {
+    const key = `${scopeKey(scope)}/${sc}`;
+    return (
+      <div key={sc}>
+        <Row depth={depth} open={!!openBranch[`s:${key}`]} onClick={() => loadTables(scope, sc)} icon={<Package className="h-3.5 w-3.5" />} label={sc} />
+        {openBranch[`s:${key}`] && (tables[key] ?? []).map((tb) => (
+          <Row key={tb} depth={depth + 1} onClick={() => openTableTab({ connectorId: c.id, type: c.type ?? '', database: scope.database, schema: sc, table: tb })} icon={<Table2 className="h-3.5 w-3.5" />} label={tb} />
+        ))}
+      </div>
+    );
+  });
 
   // Deletes are confirmed via the shared shadcn ConfirmDialog rather than window.confirm.
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -269,15 +320,20 @@ export function ExplorerTree(): JSX.Element {
       <Row depth={0} open={!!openBranch.connectors} onClick={() => toggle('connectors')} icon={<Plug className="h-3.5 w-3.5" />} label={t('query.connectors')} />
       {openBranch.connectors && connectors.map((c) => (
         <div key={c.id}>
-          <Row depth={1} open={!!openBranch[`c:${c.id}`]} onClick={() => loadSchemas(c.id)} icon={<span>🗄</span>} label={c.name} />
-          {openBranch[`c:${c.id}`] && (schemas[c.id] ?? []).map((sc) => (
-            <div key={sc}>
-              <Row depth={2} open={!!openBranch[`s:${c.id}/${sc}`]} onClick={() => loadTables(c.id, sc)} icon={<Package className="h-3.5 w-3.5" />} label={sc} />
-              {openBranch[`s:${c.id}/${sc}`] && (tables[`${c.id}/${sc}`] ?? []).map((tb) => (
-                <Row key={tb} depth={3} onClick={() => openTableTab({ connectorId: c.id, type: c.type ?? '', schema: sc, table: tb })} icon={<Table2 className="h-3.5 w-3.5" />} label={tb} />
-              ))}
-            </div>
-          ))}
+          <Row depth={1} open={!!openBranch[`c:${c.id}`]} onClick={() => loadConnector(c.id)} icon={<span>🗄</span>} label={c.name} />
+          {openBranch[`c:${c.id}`] && (Array.isArray(databases[c.id])
+            // A SQL Server connector with a blank database: databases, then schemas, then tables.
+            ? (databases[c.id] ?? []).map((db) => {
+              const scope: Scope = { id: c.id, database: db };
+              const key = scopeKey(scope);
+              return (
+                <div key={db}>
+                  <Row depth={2} open={!!openBranch[`d:${key}`]} onClick={() => loadDatabase(scope)} icon={<Database className="h-3.5 w-3.5" />} label={db} />
+                  {openBranch[`d:${key}`] && schemaRows(c, scope, 3)}
+                </div>
+              );
+            })
+            : schemaRows(c, { id: c.id }, 2))}
         </div>
       ))}
 

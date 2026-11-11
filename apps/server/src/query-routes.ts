@@ -16,6 +16,8 @@ export interface QueryRouteDeps {
   connectors: {
     list(): Promise<{ id: string; name: string; type: string | null; enabled: boolean }[]>;
     get(id: string): Promise<{ id: string; name: string; type: string | null; enabled: boolean } | null>;
+    /** The database named in the connector's config, or '' when it is blank. */
+    databaseOf(id: string): Promise<string>;
   };
   datasets: {
     list(): Promise<{ id: string; name: string; rowCount: number; publishedTable?: string | null }[]>;
@@ -246,14 +248,46 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     return all.filter((c) => c.enabled && c.type && SQL_TYPES.has(c.type)).map((c) => ({ id: c.id, name: c.name, type: c.type }));
   });
 
+  // A SQL Server connector with a blank database lands in the login's default database, usually
+  // `master`. Its information_schema only covers that one database. So for that case the explorer
+  // lists databases first, then reads each one's information_schema by its three-part name.
+  const MSSQL_DBS = "select name from sys.databases where database_id > 4 and state_desc = 'ONLINE' and has_dbaccess(name) = 1 order by 1";
+  /** Bracket-quote a SQL Server database name. Doubling `]` keeps the whole name inside the brackets. */
+  const mssqlDb = (name: string): string => `[${name.replace(/]/g, ']]')}]`;
+
+  /** Reads the optional `?database=` param. Only a SQL Server connector can name one. */
+  function databaseParam(req: { query: unknown }, type: string | null): { prefix: string } | { error: string } {
+    const raw = (req.query as { database?: unknown } | undefined)?.database;
+    if (raw === undefined || raw === '') return { prefix: '' };
+    if (typeof raw !== 'string') return { error: 'invalid database name' };
+    if (type !== 'microsoft-sql') return { error: 'only a SQL Server connector can name a database' };
+    return { prefix: `${mssqlDb(raw)}.` };
+  }
+
+  // Returns the databases to show under a connector, or null when the tree should go straight to
+  // schemas: every non-SQL-Server connector, and a SQL Server connector that names a database.
+  app.get('/api/query/connectors/:id/databases', GUARD, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const c = await deps.connectors.get(id);
+    if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
+    if (c.type !== 'microsoft-sql') return { databases: null };
+    try {
+      if ((await deps.connectors.databaseOf(id)).trim()) return { databases: null };
+      const { rows } = await deps.runConnectorSql({ connectorId: id, sql: MSSQL_DBS });
+      return { databases: rows.map((r) => String(Object.values(r)[0])) };
+    } catch (e) { reply.code(400); return { error: (e as Error).message }; }
+  });
+
   app.get('/api/query/connectors/:id/schemas', GUARD, async (req, reply) => {
     const { id } = req.params as { id: string };
     const c = await deps.connectors.get(id);
     if (!c || !c.enabled) { reply.code(404); return { error: 'connector not found' }; }
+    const db = databaseParam(req, c.type);
+    if ('error' in db) { reply.code(400); return { error: db.error }; }
     try {
       const sysFilter = c.type === 'microsoft-sql' ? MSSQL_SYS : c.type === 'mysql' ? MYSQL_SYS : PG_SYS;
       const { rows } = await deps.runConnectorSql({ connectorId: id,
-        sql: `select schema_name from information_schema.schemata where ${sysFilter} order by 1` });
+        sql: `select schema_name from ${db.prefix}information_schema.schemata where ${sysFilter} order by 1` });
       // Read the single selected column positionally: MySQL's information_schema returns the column
       // UPPERCASE (`SCHEMA_NAME`), while Postgres/SQL Server return `schema_name` — a positional read
       // is dialect-agnostic (each query selects exactly one column).
@@ -269,9 +303,11 @@ export function registerQueryRoutes(app: FastifyInstance<any, any, any, any>, ct
     // defeatable under MySQL backslash-escaping. Keep the quote-double as defense-in-depth.
     if (!/^[A-Za-z0-9_]+$/.test(schema)) { reply.code(400); return { error: 'invalid schema name' }; }
     const safeSchema = schema.replace(/'/g, "''");
+    const db = databaseParam(req, c.type);
+    if ('error' in db) { reply.code(400); return { error: db.error }; }
     try {
       const { rows } = await deps.runConnectorSql({ connectorId: id,
-        sql: `select table_name from information_schema.tables where table_schema = '${safeSchema}' order by 1` });
+        sql: `select table_name from ${db.prefix}information_schema.tables where table_schema = '${safeSchema}' order by 1` });
       // Positional read — MySQL returns `TABLE_NAME` (uppercase), Postgres/SQL Server `table_name`.
       return rows.map((r) => String(Object.values(r)[0]));
     } catch (e) { reply.code(400); return { error: (e as Error).message }; }

@@ -27,6 +27,21 @@ describe('query store', () => {
     expect(s.tabs[0]).toMatchObject({ type: 'microsoft-sql', sql: 'select * from [public].[products]' });
   });
 
+  it('uses the full three-part name for a SQL Server table picked under a database', () => {
+    useQueryStore.getState().openTableTab({ connectorId: 'c2', type: 'microsoft-sql', database: 'OpenLDRData', schema: 'dbo', table: 'Requests' });
+    expect(useQueryStore.getState().tabs[0]).toMatchObject({ database: 'OpenLDRData', sql: 'select * from [OpenLDRData].[dbo].[Requests]' });
+  });
+
+  it('opens the same table name in two databases as two tabs', () => {
+    const open = useQueryStore.getState().openTableTab;
+    open({ connectorId: 'c2', type: 'microsoft-sql', database: 'OpenLDRData', schema: 'dbo', table: 'Codes' });
+    open({ connectorId: 'c2', type: 'microsoft-sql', database: 'OpenLDRDict', schema: 'dbo', table: 'Codes' });
+    open({ connectorId: 'c2', type: 'microsoft-sql', database: 'OpenLDRDict', schema: 'dbo', table: 'Codes' });
+    expect(useQueryStore.getState().tabs.map((t) => t.kind === 'table' && t.sql)).toEqual([
+      'select * from [OpenLDRData].[dbo].[Codes]', 'select * from [OpenLDRDict].[dbo].[Codes]',
+    ]);
+  });
+
   it('quotes mysql table identifiers with backticks', () => {
     useQueryStore.getState().openTableTab({ connectorId: 'c3', type: 'mysql', schema: 'openldr_target', table: 'patients' });
     const s = useQueryStore.getState();

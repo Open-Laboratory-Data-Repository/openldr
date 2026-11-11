@@ -7,6 +7,8 @@ const nextId = () => `t${++seq}`;
 
 export interface TableTab {
   id: string; kind: 'table'; connectorId: string; type: string; schema: string; table: string; title: string;
+  /** Set only for a table under a SQL Server connector with a blank database. */
+  database?: string;
   // Inline ad-hoc SQL for this table view: `sql` is the query the grid runs (defaults to a plain
   // browse SELECT); `showSql` toggles the inline editor's visibility.
   sql: string; showSql: boolean;
@@ -18,6 +20,18 @@ export interface QueryTab {
 }
 export type Tab = TableTab | DatasetTab | QueryTab;
 
+/** The default browse query for a table, quoted for the connector's dialect: `[schema].[table]` for
+ *  SQL Server, backticks for MySQL/MariaDB, ANSI double quotes otherwise. A SQL Server table picked
+ *  under a database gets the full `[database].[schema].[table]` name. */
+export function browseSql(t: { type: string; database?: string; schema: string; table: string }): string {
+  if (t.type === 'microsoft-sql') {
+    const db = t.database === undefined ? '' : `[${t.database.replace(/]/g, ']]')}].`;
+    return `select * from ${db}[${t.schema}].[${t.table}]`;
+  }
+  if (t.type === 'mysql') return `select * from \`${t.schema}\`.\`${t.table}\``;
+  return `select * from "${t.schema}"."${t.table}"`;
+}
+
 interface State {
   tabs: Tab[];
   activeId: string | null;
@@ -26,7 +40,7 @@ interface State {
   /** Counts Refresh clicks in the explorer menu. The explorer reloads every open branch on a change. */
   explorerRevision: number;
   refreshExplorer(): void;
-  openTableTab(t: { connectorId: string; type: string; schema: string; table: string }): void;
+  openTableTab(t: { connectorId: string; type: string; database?: string; schema: string; table: string }): void;
   openDatasetTab(d: { name: string }): void;
   openQueryTab(q: { title?: string; customQueryId?: string; connectorId?: string; sql?: string; params?: CustomQueryParam[] }): void;
   setActive(id: string): void;
@@ -41,15 +55,12 @@ export const useQueryStore = create<State>((set, get) => ({
   tabs: [], activeId: null, savedRevision: 0, explorerRevision: 0,
   refreshSavedQueries() { set((state) => ({ savedRevision: state.savedRevision + 1 })); },
   refreshExplorer() { set((state) => ({ savedRevision: state.savedRevision + 1, explorerRevision: state.explorerRevision + 1 })); },
-  openTableTab({ connectorId, type, schema, table }) {
-    const existing = get().tabs.find((t) => t.kind === 'table' && t.connectorId === connectorId && t.schema === schema && t.table === table);
+  openTableTab({ connectorId, type, database, schema, table }) {
+    const existing = get().tabs.find((t) => t.kind === 'table' && t.connectorId === connectorId
+      && t.database === database && t.schema === schema && t.table === table);
     if (existing) { set({ activeId: existing.id }); return; }
-    const sql =
-      type === 'microsoft-sql' ? `select * from [${schema}].[${table}]`
-      : type === 'mysql' ? `select * from \`${schema}\`.\`${table}\``
-      : `select * from "${schema}"."${table}"`;
     const tab: TableTab = { id: nextId(), kind: 'table', connectorId, type, schema, table, title: table,
-      sql, showSql: false };
+      ...(database === undefined ? {} : { database }), sql: browseSql({ type, database, schema, table }), showSql: false };
     set((s) => ({ tabs: [...s.tabs, tab], activeId: tab.id }));
   },
   openDatasetTab({ name }) {

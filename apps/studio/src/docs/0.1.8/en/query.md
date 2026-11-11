@@ -195,6 +195,20 @@ Content written for one lab system is shared as these files. They live in the op
 
 Expand **Datasets** to query tables a workflow has built. Use them for slow or complex data, so a report reads a ready table instead of the live source. See [Workflows](/docs/workflows).
 
+## SQL Server databases
+
+A SQL Server connector with a blank **Database** field can read every database its login can open. The Explorer then shows one more level: the connector, its databases, their schemas, then tables. System databases and databases the login cannot open are left out.
+
+A table opened from there uses its full name, such as `select * from [OpenLDRData].[dbo].[Requests]`. Use full names in your own queries too. One query can join tables from two databases on the same server. The table and column names here are only an example:
+
+```sql
+select r.RequestID, t.Description
+from OpenLDRData.dbo.Requests r
+join OpenLDRDict.dbo.Tests t on t.TestCode = r.TestCode
+```
+
+A connector with a database filled in shows that database's schemas, as before. PostgreSQL works differently: a connection reads one database. Make one connector for each PostgreSQL database.
+
 ## Paging and SQL Server
 
 Table browsing and query results work on PostgreSQL, MySQL or MariaDB, and SQL Server connectors.
@@ -218,6 +232,7 @@ On a phone, the Explorer starts folded into a thin strip on the left. Select the
 - **"unbound parameter".** Every `{{ param.x }}` in the SQL needs a parameter with that **Variable ID**.
 - **"required parameter" when running.** Fill every parameter marked **Required**.
 - **The query is refused.** Only `SELECT` statements run. Anything that changes data or tables is refused.
+- **A SQL Server database is missing from the Explorer.** The connector's login cannot open it, or it is offline. Check the login's access on the server.
 - **No connectors in the Explorer.** Make or turn on a database connector. See [Connectors](/docs/connectors).
 - **A select parameter's list is empty.** Its **Options SQL** returned no rows. Run that SQL in its own tab to check it.
 - **Pages repeat or skip rows.** Add an `ORDER BY` that ends with a unique key. See [Paging and SQL Server](#paging-and-sql-server).
