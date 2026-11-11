@@ -142,6 +142,15 @@ export function buildProgram(): Command {
     });
 
   program
+    .command('doctor')
+    .description('List what this install still needs before it is ready (the same checks as Settings, Setup checks)')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try { process.exitCode = await runDoctor(opts); }
+      catch (err) { process.stderr.write(`doctor failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+
+  program
     .command('health')
     .description('Probe every adapter (auth, blob, eventing, target-store)')
     .option('--json', 'emit machine-readable JSON', false)
@@ -1329,6 +1338,7 @@ export function buildProgram(): Command {
   return program;
 }
 import { runConnectorInspect, runConnectorUpdate, runConnectorDiagnose } from './connectors';
+import { runDoctor } from './doctor';
 import {
   runImportAllow, runImportAllowed, runImportFailures, runImportResume, runImportRevoke, runImportStart, runImportStatus, runImportStop,
 } from './import';

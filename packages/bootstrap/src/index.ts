@@ -1999,6 +1999,10 @@ export {
   type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
 } from './import-run';
 export {
+  runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,
+  type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,
+} from './setup-checks';
+export {
   getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema,
   type UserPreferences, type UserPreferencesPatch,
 } from './user-preferences';

@@ -29,7 +29,7 @@ Each check is kept only if something goes wrong today when it is not met. Proof 
 | Secrets key | `SECRETS_ENCRYPTION_KEY` is not set | a connector with a password cannot be saved or read | `packages/db/src/connector-store.ts:52` | warn |
 | Lab name | still the shipped default `OpenLDR`, or empty | reports print the product name as the issuing lab | `packages/bootstrap/src/lab-identity-defaults.ts:13` | warn |
 | Time zone | empty | the monthly transmission report counts days in UTC, a day off for evening arrivals | `packages/config/src/lab-identity.ts:85` | warn |
-| Connectors | an enabled database connector does not answer | imports and queries on it fail | `packages/bootstrap/src/connector-db.ts` (`testConnector`) | fail |
+| Connectors | an enabled database connector does not answer | imports and queries on it fail | `packages/bootstrap/src/connector-test.ts` (`testConnector`) | fail |
 | Sync | sync is on but has no central URL or site id, or its last cycle failed | results do not reach central | `packages/bootstrap/src/sync-handle.ts:34` | fail, or warn for a failed cycle |
 
 Rules:
