@@ -133,7 +133,14 @@ order by facility_code
 
 ## La même importation en ligne de commande
 
-La CLI importe le même fichier. Elle ne peut pas enregistrer un registre, enregistrez-le donc d'abord dans le studio. Deux fichiers JSON portent les décisions de l'Exemple 1.
+La CLI importe le même fichier. Sur une installation neuve, enregistrez d'abord le registre, avec les valeurs de l'Exemple 1. Passez cette étape s'il est déjà enregistré dans le studio :
+
+```bash
+./openldr facilities register-source --url urn:openldr:cs:facility-register:sample \
+  --name "Sample facility register" --code SAMPLE
+```
+
+Un registre existant est refusé, et le message le dit. Deux fichiers JSON portent les décisions de l'Exemple 1.
 
 La correspondance de colonnes, `columns.json` :
 
@@ -167,7 +174,8 @@ Sans `--apply`, c'est un essai à blanc. Il affiche `parsed 10 row(s), skipped 0
 2. Choisissez le champ System parmi les sources enregistrées. Le paramètre du laboratoire peut le préremplir.
    Système identifie le registre. Le nom affiché sélectionne son URI canonique.
    Un registre inconnu ou inactif est refusé. Si le registre manque, enregistrez une source
-   dans l'étape Source de l'assistant d'importation avant de continuer.
+   dans l'étape Source de l'assistant d'importation, ou avec `openldr facilities register-source`,
+   avant de continuer.
 3. Renseignez Facility code et Name dans le formulaire par défaut. Ce code identifie le site dans ce registre.
    Le formulaire contient un seul code, sans champs distincts Code national et Code local.
 4. Remplissez les champs obligatoires du formulaire d'établissement publié. Un administrateur

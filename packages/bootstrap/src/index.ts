@@ -2108,4 +2108,5 @@ export { createWebhookReceiptService } from './workflow-receipts';
 export type { WorkflowReceipt, WorkflowReceiptService } from '@openldr/workflows';
 export * from './custom-query-transfer';
 export * from './facility-register-file';
+export * from './facility-register-source-input';
 export * from './content-pack-install';

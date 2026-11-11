@@ -20,6 +20,8 @@ import {
   facilityXlsxToCsv, FacilityXlsxError,
   // The SAME cleanup helpers the delete route calls, in the same order — see runFacilitiesDelete.
   retireRegistryConcepts, reprojectAfterRegistryDelete, revalidateImportRun,
+  // The SAME schema `POST /api/facilities/import/sources` validates with. See runFacilitiesRegisterSource.
+  facilityRegisterSourceInputSchema,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
   type FacilityImportResult, type ColumnSuggestion, type ValueMappingEntry, type ControlledField,
 } from '@openldr/bootstrap';
@@ -1302,6 +1304,46 @@ export interface FacilitiesImportSourcesOpts {
  * spelling `--json` is swallowed by the parent and this function is handed `json: false`. Same
  * measured constraint as `import-run-cancel`; `facilities-import-cli-parsing.test.ts` pins it.
  */
+export interface FacilitiesRegisterSourceOpts {
+  url: string; name: string; code: string;
+  version?: string; jurisdiction?: string; contact?: string;
+  json: boolean;
+}
+
+/**
+ * Register a facility register, so `facilities import --national-system <url>` is allowed to name it.
+ * CLI parity for `POST /api/facilities/import/sources`: the same input schema and the same store
+ * `create`. Without it a headless lab could not start its first import. Audited as `cli`.
+ */
+export async function runFacilitiesRegisterSource(opts: FacilitiesRegisterSourceOpts): Promise<number> {
+  const { json, ...rest } = opts;
+  const parsed = facilityRegisterSourceInputSchema.safeParse(Object.fromEntries(Object.entries(rest).filter(([, v]) => v !== undefined)));
+  if (!parsed.success) {
+    const msg = 'url, name and code are required';
+    if (json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities register-source refused: ${msg}\n`);
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const created = await createFacilityRegisterSourceStore(ctx.internalDb).create(parsed.data);
+    await recordAuditEvent(ctx, { actorType: 'cli', actorId: null, actorName: 'cli' }, {
+      action: 'facility.register-source.create', entityType: 'facility_register', entityId: parsed.data.url,
+      metadata: { name: parsed.data.name, code: parsed.data.code },
+    });
+    if (json) process.stdout.write(JSON.stringify(created, null, 2) + '\n');
+    else process.stdout.write(`registered ${parsed.data.url} (${parsed.data.name}). Import with: openldr facilities import <file> --national-system ${parsed.data.url}\n`);
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities register-source failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
 export async function runFacilitiesImportSources(opts: FacilitiesImportSourcesOpts): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
@@ -1330,7 +1372,8 @@ function formatImportSourcesHuman(sources: FacilityRegisterSource[]): string {
   // say how to get one.
   if (sources.length === 0) {
     return 'no facility registers on this install — every facilities import will be refused until one exists.\n'
-      + 'Register one with POST /api/facilities/import/sources, or from the Facilities page: '
+      + 'Register one with `openldr facilities register-source --url <uri> --name <name> --code <code>`, '
+      + 'POST /api/facilities/import/sources, or from the Facilities page: '
       + 'the import sheet\'s ... menu, "Register a source".';
   }
   // `url` FIRST: it is the value `--national-system` takes, compared exactly and case-sensitively by

@@ -133,7 +133,14 @@ order by facility_code
 
 ## The same import from the command line
 
-The CLI imports the same file. It cannot register a source, so register it in the studio first. Two JSON files hold the decisions from Example 1.
+The CLI imports the same file. On a fresh install, register the source first, with the values from Example 1. Skip this if you already registered it in the studio:
+
+```bash
+./openldr facilities register-source --url urn:openldr:cs:facility-register:sample \
+  --name "Sample facility register" --code SAMPLE
+```
+
+An existing register is refused, and the message says so. Two JSON files hold the decisions from Example 1.
 
 The column map, `columns.json`:
 
@@ -167,7 +174,8 @@ Without `--apply` it is a dry run. It prints `parsed 10 row(s), skipped 0` and h
 2. Choose System from the registered sources. The laboratory setting may prefill it.
    System identifies the register. Its displayed name selects the register's canonical URI.
    An unknown or inactive register is refused. Register a source through the import
-   wizard's Source step first if the required register is missing.
+   wizard's Source step, or with `openldr facilities register-source`, if the required
+   register is missing.
 3. Enter Facility code and Name. Facility code is the site's code within that register.
    There is one code field, not separate National code and Local code fields.
 4. Complete the required fields shown by your published facility form. An administrator

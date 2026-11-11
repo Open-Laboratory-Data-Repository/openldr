@@ -33,7 +33,7 @@ import { runUpdateCheck, UPDATE_ERROR_EXIT } from './update';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
-  runFacilitiesImportSources,
+  runFacilitiesImportSources, runFacilitiesRegisterSource,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
   runFacilitiesDelete, runFacilitiesAddType, runFacilitiesLinkMatching,
 } from './facilities';
@@ -707,6 +707,19 @@ export function buildProgram(): Command {
   // B1 Task 11: CLI parity for `GET /api/facilities/import/sources`. A SIBLING of `import`, never
   // `facilities sources list` — commander parses a parent's declared options before dispatching to a
   // subcommand, so a nested spelling has `--json` swallowed by the parent. Read-only, so no --apply.
+  facilities
+    .command('register-source')
+    .description('Register a facility register, so `import --national-system <url>` may name it. Same check as the studio\'s "Register a source"')
+    .requiredOption('--url <uri>', 'canonical URI of the register (e.g. urn:tz:hfr)')
+    .requiredOption('--name <name>', 'display name')
+    .requiredOption('--code <code>', 'short code')
+    .option('--version <v>', 'release version')
+    .option('--jurisdiction <j>', 'country or area the register covers')
+    .option('--contact <c>', 'publisher contact')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { url: string; name: string; code: string; version?: string; jurisdiction?: string; contact?: string; json: boolean }) => {
+      process.exitCode = await runFacilitiesRegisterSource(opts);
+    });
   facilities
     .command('import-sources')
     .description('List the facility registers an import may name — the canonical URIs `import --national-system` accepts. Active registers only.')

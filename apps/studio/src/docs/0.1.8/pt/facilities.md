@@ -133,7 +133,14 @@ order by facility_code
 
 ## A mesma importação na linha de comandos
 
-A CLI importa o mesmo ficheiro. Não consegue registar uma fonte, por isso registe-a primeiro no studio. Dois ficheiros JSON guardam as decisões do Exemplo 1.
+A CLI importa o mesmo ficheiro. Numa instalação nova, registe primeiro a fonte, com os valores do Exemplo 1. Salte este passo se já a registou no studio:
+
+```bash
+./openldr facilities register-source --url urn:openldr:cs:facility-register:sample \
+  --name "Sample facility register" --code SAMPLE
+```
+
+Um registo que já existe é recusado, e a mensagem diz isso. Dois ficheiros JSON guardam as decisões do Exemplo 1.
 
 O mapeamento de colunas, `columns.json`:
 
@@ -167,7 +174,8 @@ Sem `--apply` é um ensaio. Mostra `parsed 10 row(s), skipped 0` e quantas linha
 2. Escolha o campo System entre as fontes registadas. A definição do laboratório pode preenchê-lo previamente.
    Sistema identifica o registo. O nome apresentado seleciona o URI canónico desse registo.
    Um registo desconhecido ou inativo é recusado. Se faltar o registo, registe uma fonte
-   no passo Origem do assistente de importação antes de continuar.
+   no passo Origem do assistente de importação, ou com `openldr facilities register-source`,
+   antes de continuar.
 3. Preencha Facility code e Name no formulário predefinido. O código identifica o local dentro desse registo.
    Existe um único campo de código, sem campos separados para Código nacional e Código local.
 4. Preencha os campos obrigatórios do formulário de unidade publicado. Um administrador pode

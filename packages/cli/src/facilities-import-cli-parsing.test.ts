@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => ({
   // `import-run-cancel` is: under a nested `facilities sources list --json`, commander hands the
   // parent's declared `--json` to the parent and the handler receives `json: false`.
   runFacilitiesImportSources: vi.fn().mockResolvedValue(0),
+  runFacilitiesRegisterSource: vi.fn().mockResolvedValue(0),
   // Task 9: same reasoning as every mock above — `runFacilitiesSuggestMap`/`runFacilitiesSuggestValues`
   // are already unit-tested in facilities.test.ts; this file isolates what commander itself resolves.
   runFacilitiesSuggestMap: vi.fn().mockResolvedValue(0),
@@ -58,6 +59,7 @@ vi.mock('./facilities', () => ({
   runFacilitiesImportRun: mocks.runFacilitiesImportRun,
   runFacilitiesImportRunCancel: mocks.runFacilitiesImportRunCancel,
   runFacilitiesImportSources: mocks.runFacilitiesImportSources,
+  runFacilitiesRegisterSource: mocks.runFacilitiesRegisterSource,
   runFacilitiesSuggestMap: mocks.runFacilitiesSuggestMap,
   runFacilitiesSuggestValues: mocks.runFacilitiesSuggestValues,
 }));
@@ -377,6 +379,12 @@ describe('facilities import-runs / import-run — commander parsing path', () =>
     expect(mocks.runFacilitiesImportSources).toHaveBeenCalledTimes(1);
     const [opts] = mocks.runFacilitiesImportSources.mock.calls[0] as [{ json: boolean }];
     expect(opts.json).toBe(true);
+  });
+
+  it('register-source hands its url, name, code and --json to the handler', async () => {
+    const program = buildProgram().exitOverride();
+    await program.parseAsync(['node', 'openldr', 'facilities', 'register-source', '--url', 'urn:tz:hfr', '--name', 'Tanzania HFR', '--code', 'HFR', '--json']);
+    expect(mocks.runFacilitiesRegisterSource).toHaveBeenCalledWith(expect.objectContaining({ url: 'urn:tz:hfr', name: 'Tanzania HFR', code: 'HFR', json: true }));
   });
 
   it('import-sources without --json resolves json false (proves the above is not vacuous)', async () => {

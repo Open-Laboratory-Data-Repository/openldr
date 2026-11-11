@@ -62,6 +62,7 @@ const mocks = vi.hoisted(() => ({
   registerStore: {
     getByUrl: vi.fn(),
     list: vi.fn(),
+    create: vi.fn(),
   },
   runStore: {
     startPreview: vi.fn(),
@@ -112,6 +113,7 @@ vi.mock('@openldr/bootstrap', async () => {
     // REAL, not mocked: `runFacilitiesAddType` catches it with `instanceof`, and the test constructs
     // one to reject with. Both sides need the SAME class reference, not a copy.
     FacilityTypeCollisionError: actual.FacilityTypeCollisionError,
+    facilityRegisterSourceInputSchema: actual.facilityRegisterSourceInputSchema,
     // The delete command's cleanup pair. Mocked rather than real: both reach into the terminology
     // admin store and the projection table, which this file's fake ctx does not model — the ORDER
     // they run in is what matters here, and the real behaviour is proven in bootstrap's own tests.
@@ -154,7 +156,7 @@ vi.mock('node:fs', () => ({
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportRunRevalidate,
-  runFacilitiesImportSources,
+  runFacilitiesImportSources, runFacilitiesRegisterSource,
   runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList, runFacilitiesDelete,
   runFacilitiesAddType, runFacilitiesLinkMatching,
 } from './facilities';
@@ -1791,6 +1793,25 @@ describe('facilities import-sources CLI', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('registers a facility source from the command line, audited as cli', async () => {
+    // `facilities import` refuses an unregistered register, and only the studio could register one,
+    // so a headless lab could not start its first import.
+    mocks.registerStore.create.mockResolvedValue(HFR_SOURCE);
+    const code = await runFacilitiesRegisterSource({ url: 'urn:tz:hfr', name: 'Tanzania HFR', code: 'HFR', json: true });
+    expect(code).toBe(0);
+    expect(mocks.registerStore.create).toHaveBeenCalledWith({ url: 'urn:tz:hfr', name: 'Tanzania HFR', code: 'HFR' });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(mocks.ctx, expect.objectContaining({ actorName: 'cli' }),
+      expect.objectContaining({ action: 'facility.register-source.create', entityId: 'urn:tz:hfr' }));
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so, and exits 1, when the register already exists', async () => {
+    mocks.registerStore.create.mockRejectedValue(new Error('a register with url urn:tz:hfr already exists'));
+    const code = await runFacilitiesRegisterSource({ url: 'urn:tz:hfr', name: 'Tanzania HFR', code: 'HFR', json: false });
+    expect(code).toBe(1);
+    expect(stderrSpy.mock.calls.map((c) => String(c[0])).join('')).toMatch(/already exists/);
   });
 
   it('prints every register with the URI --national-system takes', async () => {

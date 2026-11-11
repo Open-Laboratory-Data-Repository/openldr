@@ -23,8 +23,7 @@ import {
   facilityXlsxToCsv, facilityXlsxTooLarge, FacilityXlsxError, FACILITY_IMPORT_MAX_XLSX_BYTES,
   linkMatchingFacilityCodes,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
-  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult,
-} from '@openldr/bootstrap';
+  type ValueMappingEntry, type FacilityXlsxCsv, type LinkMatchingResult, facilityRegisterSourceInputSchema } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
@@ -277,15 +276,8 @@ const ImportSchema = z.object({
  *  null` for each of these, so `.nullable()` is required alongside `.optional()` here too — without
  *  it, a caller sending an explicit `null` (a legitimate way to say "no value" in JSON, distinct
  *  from omitting the key) would 400 here even though the store downstream is happy to accept it. */
-const SourceCreateSchema = z.object({
-  url: z.string().min(1),
-  name: z.string().min(1),
-  code: z.string().min(1),
-  version: z.string().optional().nullable(),
-  jurisdiction: z.string().optional().nullable(),
-  contact: z.string().optional().nullable(),
-  publisherId: z.string().optional().nullable(),
-});
+// The same schema `openldr facilities register-source` validates with.
+const SourceCreateSchema = facilityRegisterSourceInputSchema;
 
 // Task 6 (facility-import-mapping): the wizard's value panel body — one raw string -> canonical
 // code decision per entry, forwarded verbatim to Task 5's `saveFacilityValueMappings`. `field` is
