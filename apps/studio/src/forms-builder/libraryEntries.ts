@@ -42,13 +42,16 @@ export function packEntriesNotOnForm(
     const path = resolveFhirPath(f.fhirPath, resourceType);
     if (path) bound.add(`path:${path}|${discriminatorIdentity(f.fhirDiscriminator)}`);
     if (f.apiProperty) bound.add(`api:${f.apiProperty}`);
+    if (!path && !f.apiProperty) bound.add(`type:${f.fieldType}`);
   }
   return [...entries]
     .sort((a, b) => a.ord - b.ord)
     .filter((e) => {
+      // An entry with neither path nor API property, such as the Lab order's Results, is matched by
+      // its field type. Otherwise it would be offered again forever.
       const key = e.fhirPath
         ? `path:${e.fhirPath}|${discriminatorIdentity(e.discriminator)}`
-        : e.apiProperty ? `api:${e.apiProperty}` : null;
+        : e.apiProperty ? `api:${e.apiProperty}` : e.fieldType ? `type:${e.fieldType}` : null;
       return key === null || !bound.has(key);
     });
 }

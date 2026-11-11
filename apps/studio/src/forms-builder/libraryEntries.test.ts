@@ -64,6 +64,14 @@ describe('packEntriesNotOnForm', () => {
     expect(packEntriesNotOnForm([zone], [{ ...field('z', null), apiProperty: 'zone' }], 'Location')).toEqual([]);
   });
 
+  it('matches an entry with neither path nor API property by its field type', () => {
+    // The Lab order's Results has no path and no API property. It stayed under "Left out of the
+    // pack" after it was added.
+    const results = entry(0, null, { fieldType: 'testDetails' });
+    expect(packEntriesNotOnForm([results], [], 'ServiceRequest')).toEqual([results]);
+    expect(packEntriesNotOnForm([results], [{ ...field('r', null), fieldType: 'testDetails' }], 'ServiceRequest')).toEqual([]);
+  });
+
   it('keeps pack order, and a disabled field still counts as on the form', () => {
     const entries = [entry(2, 'Location.alias'), entry(0, 'Location.name'), entry(1, 'Location.status')];
     const fields = [{ ...field('s', 'Location.status'), enabled: false }];
