@@ -1,25 +1,84 @@
 # Marketplace
 
-La création et la modification d'un registre ouvrent un panneau latéral. Les libellés sont placés à côté des champs. Choisissez Enregistrer dans le menu ⋯ du panneau. Fermez le panneau sans enregistrer pour abandonner les modifications.
+Le **Marketplace** est l'endroit où les administrateurs trouvent et installent des compléments pour OpenLDR : des **plugins** qui lisent ou envoient des données (un import CSV, un lecteur HL7 v2, un envoi vers DHIS2), des **modèles de formulaires**, et des **packs de contenu** de données de référence comme des systèmes de codes, un registre d'établissements et des requêtes de rapports. Tout vient d'un **registre**, une liste publiée d'artefacts. Une installation neuve en a un, **Default registry**, sur GitHub.
 
-Le Marketplace permet aux administrateurs de consulter les paquets, leurs permissions et les registres.
+Comptez 10 minutes, avec un accès réseau à GitHub. Sélectionnez une image ou un clip pour l'agrandir.
 
-## Avant de commencer
+![Marketplace, Parcourir : les artefacts du registre par défaut, avec leur type, éditeur, version et état de signature.](marketplace-tour.png)
 
-Vous devez disposer des droits d'administration. Vérifiez la source du paquet avant toute installation.
+## Qui peut faire quoi
 
-![Paquets disponibles dans le Marketplace](marketplace-browse.png)
+| Capacité | Ce qu'elle permet |
+| --- | --- |
+| **View marketplace** | Ouvrir Paramètres, Marketplace, et parcourir les artefacts disponibles et installés |
+| **Manage marketplace** | Installer, activer, désactiver, supprimer, et gérer les registres |
 
-## Consulter et installer un paquet
+## Les trois onglets
 
-1. Ouvrez **Paramètres**, puis **Marketplace**.
-2. Dans **Parcourir**, ouvrez les détails du paquet.
-3. Choisissez la version souhaitée.
-4. Consultez les permissions, la compatibilité et la documentation.
-5. Ouvrez le menu des détails, puis choisissez **Installer**.
-6. Vérifiez les permissions dans la demande d'approbation avant de confirmer.
+- **Parcourir** liste ce que proposent les registres. **Tous les types** filtre par plugin, formulaire ou pack de contenu.
+- **Installés (N)** liste ce qu'a cette installation, avec l'état de chaque artefact.
+- **Registres** liste d'où viennent les artefacts.
 
-![Version, permissions et documentation du paquet](marketplace-detail.png)
+Chaque carte affiche **Non vérifié** tant que sa signature n'a pas été contrôlée. L'ouvrir contrôle la signature, et la carte passe à **Vérifié**.
+
+## Exemple 1 : lire un plugin avant de l'installer
+
+![Ouvrir tabular. Les détails, permissions et prérequis se chargent et il passe à Vérifié.](marketplace-read.mp4)
+
+1. Ouvrez **Paramètres**, puis **Marketplace**. **Parcourir** est ouvert.
+2. Sélectionnez **tabular**.
+
+**Résultat attendu :** après quelques secondes, la page affiche **Vérifié**, avec la description **CSV/Excel -> FHIR R4 ingestion plugin (configurable mapping)**. Elle montre :
+
+| Champ | Valeur |
+| --- | --- |
+| Entry point | `convert` |
+| Checksum (sha256) | l'empreinte du fichier, contrôlée avant exécution |
+| Sandbox | WASI enabled |
+| Memory limit | 256 MB |
+| Time limit | 30000 ms |
+| Permissions | `read-input`, `emit-fhir` (Patient, Specimen, Observation) |
+| Prérequis | Compatible with CE 0.1.11 |
+
+![Les détails de tabular : ce qu'il exécute, ce qu'il peut faire et ce dont il a besoin.](marketplace-read-full.png)
+
+Un plugin tourne dans un bac à sable avec une mémoire et un temps fixes. Ses permissions disent ce qu'il peut faire : `tabular` peut lire le fichier qu'on lui donne et écrire des patients, prélèvements et observations FHIR, rien d'autre.
+
+## Exemple 2 : l'installer
+
+![Ouvrir le menu, sélectionner Installer, lire les capacités et approuver.](marketplace-install.mp4)
+
+1. Sur la page **tabular**, ouvrez **⋯** et sélectionnez **Installer**.
+2. **Vérifier et approuver : tabular** liste la version et les **Capacités demandées**. Lisez-les.
+3. Sélectionnez **Approuver et installer**.
+
+**Résultat attendu :** l'onglet affiche **Installés (1)**, et **tabular** y est listé **Actif**.
+
+![tabular installé et Actif.](marketplace-installed.png)
+
+L'approbation porte sur les capacités de la version choisie. Choisir une autre version relance le contrôle.
+
+## Exemple 3 : le supprimer
+
+![Ouvrir le plugin installé, choisir Supprimer et confirmer.](marketplace-remove.mp4)
+
+1. Sur **Installés**, sélectionnez **tabular**. Ouvrez **⋯**. Il propose **Désactiver**, **Supprimer** et **Retour**.
+2. Sélectionnez **Supprimer**, puis **Supprimer** de nouveau dans **Supprimer tabular ?**. Cela désinstalle l'artefact de cette installation.
+
+**Résultat attendu :** **Installés (0)**.
+
+**Désactiver** garde un plugin installé mais l'empêche de se charger. **Rollback**, quand une version plus ancienne est installée, la remet active.
+
+## Registres
+
+![L'onglet Registres : Default registry, Distant (HTTP), sur GitHub.](marketplace-registry-list.png)
+
+1. Ouvrez l'onglet **Registres**. **Default registry** est un registre **Distant (HTTP)** à l'adresse `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main`.
+2. Pour en ajouter un, ouvrez le menu **⋯** de la page et sélectionnez **Ajouter un registre**. Remplissez **Nom**, **Type** et **Emplacement (URL ou répertoire)**, puis choisissez **Enregistrer** dans le menu **⋯** du panneau. Fermez le panneau sans enregistrer pour abandonner.
+
+![Le panneau Ajouter un registre.](marketplace-add-registry.png)
+
+Un registre peut être une adresse web ou un dossier du serveur. Un laboratoire sans Internet peut faire pointer un registre dossier vers une copie du marketplace.
 
 ## Comprendre les permissions
 
@@ -68,14 +127,35 @@ Choisissez **Détacher** pour oublier l'enregistrement d'installation. Tout ce q
 
 Dans la ligne de commande, `openldr market install <bundle-dir> --dry-run` exécute les contrôles et affiche les étapes, avec le nombre de codes que chaque étape de mise en correspondance des liens lierait. Elle n'écrit rien.
 
+## En ligne de commande
+
+La CLI installe depuis un dossier de bundle sur le serveur, pas depuis un registre.
+
+```bash
+./openldr market list
+./openldr market verify <bundle-dir>
+./openldr market install <bundle-dir> --dry-run
+./openldr market disable tabular
+./openldr market remove tabular
+```
+
+`verify` contrôle le manifeste, le fichier et la clé de l'éditeur d'un bundle. `install --dry-run` lance tous les contrôles sans rien écrire. `update` n'installe un pack de contenu que si le bundle est plus récent que celui installé. `rollback <id> <version>` réactive une version plus ancienne d'un plugin.
+
+## Sur un téléphone
+
+Le Marketplace fonctionne sur un téléphone. Les cartes s'empilent en une colonne. Sur la page d'un artefact, les détails, permissions et prérequis viennent d'abord, au-dessus de la description.
+
 ## Dépannage
 
-- Si l'installation échoue, vérifiez la compatibilité, les permissions et la disponibilité du registre.
-- Si un paquet manque, vérifiez que son registre est activé et accessible.
-- Si un paquet installé n'apparaît pas dans l'application, vérifiez son activation et sa compatibilité.
+- **Parcourir est vide.** Le registre est injoignable ou désactivé. Vérifiez **Registres**, et que le serveur joint l'adresse du registre.
+- **La carte reste Non vérifié.** Ouvrez-la. La signature se contrôle au chargement des détails.
+- **Les permissions affichent Permissions indisponibles.** Les détails n'ont pas pu être lus. Cela ne veut pas dire que l'artefact n'a besoin d'aucune permission. L'installation reste désactivée.
+- **L'installation échoue.** Vérifiez la compatibilité, les capacités et la disponibilité du registre.
+- **Un artefact installé n'apparaît pas ailleurs.** Vérifiez qu'il est actif et pris en charge par cette partie de l'application.
 
 ## Guides associés
 
 - [Paramètres](/docs/settings)
 - [Connecteurs](/docs/connectors)
 - [Formulaires](/docs/forms)
+- [Établissements](/docs/facilities)

@@ -1,46 +1,88 @@
 # Marketplace
 
-Registry creation and editing open in a side sheet. Labels sit beside the inputs. Choose Save from the sheet's ⋯ menu. Close the sheet without saving to discard edits.
+**Marketplace** is where administrators find and install extras for OpenLDR: **plugins** that read or send data (a CSV importer, an HL7 v2 reader, a DHIS2 sender), **form templates**, and **content packs** of reference data such as code systems, a facility register and report queries. Everything comes from a **registry**, a published list of artefacts. A fresh install has one, **Default registry**, on GitHub.
 
-Marketplace is where administrators browse available artifacts, inspect details, install approved packages, and manage registries.
+This guide takes about 10 minutes and needs network access to GitHub. Select any picture or clip to enlarge it.
 
-## Outcome
+![Marketplace, Browse: the artefacts in the default registry, each with its type, publisher, version and signature state.](marketplace-tour.png)
 
-You can use the Browse, Installed, and Registries views; inspect artifact details; compare versions and capabilities; approve an install; enable, disable, or remove installed artifacts; and create or edit a registry.
+## Who can do what
 
-![Marketplace browse view with available artifacts](marketplace-browse.png)
+| Permission | What it allows |
+| --- | --- |
+| **View marketplace** | Open Settings, Marketplace, and browse available and installed artefacts |
+| **Manage marketplace** | Install, enable, disable, remove, and manage registries |
 
-## Before you begin
+## The three tabs
 
-- You need administrator access.
-- Know whether you are installing a form, workflow, connector plugin, or another supported artifact type.
-- Confirm the artifact source is trusted before installing it.
+- **Browse** lists what the registries offer. **All types** filters by plugin, form or content pack.
+- **Installed (N)** lists what this install has, with each artefact's state.
+- **Registries** lists where artefacts come from.
 
-## Steps
+Each card shows **Unverified** until its signature has been checked. Opening it checks the signature and the card turns **Verified**.
 
-1. Open **Settings** and then **Marketplace**.
-2. Use **Installed** to review what is already available.
-3. Use **Browse** to see artifacts from configured registries.
-4. Select an artifact card to open details.
-5. Review version, compatibility, capabilities, documentation, and install action.
-6. Choose the version that matches your app and operational need.
-7. Approve installation when you are ready.
-8. Return to **Installed** to enable, disable, or remove artifacts when supported.
+## Example 1: read a plugin before installing it
 
-![Marketplace artifact detail with version, permissions, documentation, and requirements](marketplace-detail.png)
+![Opening tabular. The details, permissions and requirements load and it turns Verified.](marketplace-read.mp4)
 
-9. Open **Registries**.
-10. Select **Add registry**.
-11. Enter registry name, kind, location, and enabled state.
-12. Save the registry and refresh available packages if needed.
+1. Open **Settings**, then **Marketplace**. **Browse** is open.
+2. Select **tabular**.
 
-![Marketplace registries tab with add-registry form](marketplace-registries.png)
+**Expected result:** after a few seconds the page reads **Verified**, with the description **CSV/Excel -> FHIR R4 ingestion plugin (configurable mapping)**. It shows:
 
-## Expected result
+| Field | Value |
+| --- | --- |
+| Entry point | `convert` |
+| Checksum (sha256) | the file's hash, checked before it runs |
+| Sandbox | WASI enabled |
+| Memory limit | 256 MB |
+| Time limit | 30000 ms |
+| Permissions | `read-input`, `emit-fhir` (Patient, Specimen, Observation) |
+| Requirements | Compatible with CE 0.1.11 |
+
+![tabular's details: what it runs, what it may do, and what it needs.](marketplace-read-full.png)
+
+A plugin runs in a sandbox with fixed memory and time. Its permissions say what it may do: `tabular` may read the file it is given and write FHIR patients, specimens and observations, nothing else.
 
 While registry package details load, Permissions shows **Loading permissions** and Install stays disabled. If retrieval fails, it shows **Permissions unavailable**. Neither state means the package requests no permissions. **No special permissions requested** appears only when the loaded details confirm an empty list. Selecting another version starts this check again. The installation approval uses the permissions for that selected version. Installed packages without a registry reference can use their stored permission list.
 
 The selected artifact is installed or updated, and registries control which available artifacts appear for administrators.
+
+## Example 2: install it
+
+![Opening the menu, selecting Install, reading the capabilities and approving.](marketplace-install.mp4)
+
+1. On the **tabular** page, open **⋯** and select **Install**.
+2. **Review & approve: tabular** lists the version and the **Requested capabilities**. Read them.
+3. Select **Approve & install**.
+
+**Expected result:** the tab reads **Installed (1)**, and **tabular** is listed there as **Active**.
+
+![tabular installed and Active.](marketplace-installed.png)
+
+The approval is for the capabilities of the version you selected. Choosing another version starts the check again.
+
+## Example 3: remove it
+
+![Opening the installed plugin, choosing Remove and confirming.](marketplace-remove.mp4)
+
+1. On **Installed**, select **tabular**. Open **⋯**. It offers **Disable**, **Remove** and **Back**.
+2. Select **Remove**, then **Remove** again in **Remove tabular?**. This uninstalls it from this install.
+
+**Expected result:** **Installed (0)**.
+
+**Disable** keeps a plugin installed but stops it loading. **Rollback**, when an older version is installed, makes that version active again.
+
+## Registries
+
+![The Registries tab: Default registry, Remote (HTTP), on GitHub.](marketplace-registry-list.png)
+
+1. Open the **Registries** tab. **Default registry** is a **Remote (HTTP)** registry at `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main`.
+2. To add one, open the page's **⋯** menu and select **Add registry**. Fill in **Name**, **Type** and **Location (URL or directory)**, then choose **Save** from the sheet's **⋯** menu. Close the sheet without saving to discard it.
+
+![The Add registry sheet.](marketplace-add-registry.png)
+
+A registry can be a web address or a folder on the server. A lab without internet can point a folder registry at a copy of the marketplace.
 
 ## Content packs
 
@@ -71,19 +113,41 @@ Choose **Detach** to forget the install record. It keeps everything the pack wro
 
 From the command line, `openldr market install <bundle-dir> --dry-run` runs the checks and prints the steps, with how many codes each link-matching step would link. It writes nothing.
 
+## From the command line
+
+The CLI installs from a bundle folder on the server, not from a registry.
+
+```bash
+./openldr market list
+./openldr market verify <bundle-dir>
+./openldr market install <bundle-dir> --dry-run
+./openldr market disable tabular
+./openldr market remove tabular
+```
+
+`verify` checks a bundle's manifest, file and publisher key. `install --dry-run` runs every check and writes nothing. `update` installs a content pack only when the bundle is newer than the one installed. `rollback <id> <version>` activates an older version of a plugin.
+
+## Reading what an artefact can do
+
+Compatibility tells you whether the artifact can run in this app version. Capabilities tell you what it can do. Registry source determines trust and update availability. When diagnosing install failures, compare registry state, artifact type, version, and capability requirements before retrying.
+
+## On a phone
+
+Marketplace works on a phone. The cards stack in one column. On an artefact's page, the details, permissions and requirements come first, above its description.
+
 ## Troubleshooting
 
+- **Browse is empty.** The registry is unreachable or disabled. Check **Registries**, and that the server can reach the registry's address.
+- **The card stays Unverified.** Open it. The signature is checked when its details load.
+- **Permissions shows Permissions unavailable.** The details could not be fetched. This does not mean the artefact needs no permissions. Install stays disabled.
 - **Install fails:** inspect compatibility, capabilities, and registry availability.
 - **A package is missing:** check that the registry is enabled and reachable.
 - **The wrong version is installed:** open details and select the intended version if available.
 - **An installed artifact does not appear elsewhere:** confirm it is enabled and supported by that feature area.
-
-## Advanced web usage
-
-Compatibility tells you whether the artifact can run in this app version. Capabilities tell you what it can do. Registry source determines trust and update availability. When diagnosing install failures, compare registry state, artifact type, version, and capability requirements before retrying.
 
 ## Related guides
 
 - [Settings](/docs/settings)
 - [Connectors](/docs/connectors)
 - [Forms](/docs/forms)
+- [Facilities](/docs/facilities)

@@ -405,7 +405,7 @@ export const DOC_GUIDES: DocGuide[] = [
     summary: 'Browse, install, configure, update, and remove supported artifacts.',
     audience: ['administrators'],
     requiredRoles: ['lab_admin'],
-    estimatedMinutes: 15,
+    estimatedMinutes: 10,
     difficulty: 'intermediate',
     relatedSlugs: ['settings', 'connectors', 'forms'],
     screenshotNames: [
@@ -413,6 +413,7 @@ export const DOC_GUIDES: DocGuide[] = [
       'marketplace-detail.png',
       'marketplace-registries.png',
     ],
+    capturedNames: ['marketplace-tour.png', 'marketplace-read.mp4', 'marketplace-read-full.png', 'marketplace-install.mp4', 'marketplace-installed.png', 'marketplace-remove.mp4', 'marketplace-registry-list.png', 'marketplace-add-registry.png'],
     status: 'published',
   },
   {
