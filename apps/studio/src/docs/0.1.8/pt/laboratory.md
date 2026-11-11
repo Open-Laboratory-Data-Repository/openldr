@@ -54,7 +54,7 @@ Este exemplo precisa dos dados de exemplo da documentação. Veja [Painéis, Car
 
 São 3 das 10 linhas. Juntas, as linhas somam 60, o número de pedidos do exemplo.
 
-**Baixar** guarda um PDF com o mesmo cabeçalho. As saídas CSV e XLSX têm só os dados. Veja [Relatórios, Exemplo 1](/docs/reports#exemplo-1-executar-um-relatorio) para todos os passos.
+**Transferir** guarda um PDF com o mesmo cabeçalho. As saídas CSV e XLSX têm só os dados. Veja [Relatórios, Exemplo 1](/docs/reports#exemplo-1-executar-um-relatorio) para todos os passos.
 
 ### O cabeçalho nos seus modelos
 

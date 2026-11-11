@@ -48,7 +48,7 @@ SQL
 
 ### Adicionar o conector
 
-![Adicionar Warehouse (read only): Anfitrião, Postgres, o endereço, a base de dados, o utilizador e a palavra-passe, depois Salvar e Testar.](connectors-add.mp4)
+![Adicionar Warehouse (read only): Anfitrião, Postgres, o endereço, a base de dados, o utilizador e a palavra-passe, depois Guardar e Testar.](connectors-add.mp4)
 
 1. Em **Conectores**, abra o menu **⋯** da página e selecione **Adicionar conector**.
 2. Em **Nome**, escreva `Warehouse (read only)`. É o nome que se escolhe nos nós dos fluxos e nas consultas.
@@ -62,9 +62,9 @@ SQL
    | Porta | `5432` |
    | Base de dados | `openldr_target` |
    | Utilizador | `report_reader` |
-   | Senha | a palavra-passe que escolheu |
+   | Palavra-passe | a palavra-passe que escolheu |
 
-6. Abra o menu **⋯** do painel e selecione **Salvar**. Aparece **Salvo Warehouse (read only)**, e a linha nova. Começa ativada.
+6. Abra o menu **⋯** do painel e selecione **Guardar**. Aparece **Warehouse (read only) guardado**, e a linha nova. Começa ativada.
 7. Na linha dele, abra **⋯** e selecione **Testar**.
 
 **Resultado esperado:** **Ligação OK**.
@@ -101,11 +101,11 @@ Quando a palavra-passe de uma base de dados muda, atualize o conector. Aqui a pa
 
 ![O teste a falhar depois da mudança de palavra-passe.](connectors-test-failed.png)
 
-![Editar o conector, escrever a palavra-passe nova, salvar e testar outra vez.](connectors-rotate.mp4)
+![Editar o conector, escrever a palavra-passe nova, guardar e testar outra vez.](connectors-rotate.mp4)
 
-3. Na linha dele, abra **⋯** e selecione **Editar**. **Senha** está vazia e mostra **••• definido (deixe em branco para manter)**. A palavra-passe antiga nunca é mostrada.
-4. Escreva a palavra-passe nova em **Senha**. Deixe os outros campos como estão.
-5. Abra o menu **⋯** do painel e selecione **Salvar**.
+3. Na linha dele, abra **⋯** e selecione **Editar**. **Palavra-passe** está vazia e mostra **••• definido (deixe em branco para manter)**. A palavra-passe antiga nunca é mostrada.
+4. Escreva a palavra-passe nova em **Palavra-passe**. Deixe os outros campos como estão.
+5. Abra o menu **⋯** do painel e selecione **Guardar**.
 6. Teste outra vez.
 
 **Resultado esperado:** **Ligação OK**. Os fluxos, consultas e relatórios que usam o conector apanham a palavra-passe nova na próxima execução. Não é preciso mudar mais nada.
@@ -146,19 +146,19 @@ Defina **Categoria** como **Anfitrião** para estes. A lista **Tipo de base de d
 
 | Tipo | Usado por | Campos |
 | --- | --- | --- |
-| Postgres | Nó Postgres, consultas personalizadas, relatórios | Host, Porta (5432), Base de dados, Utilizador, Senha, Usar SSL |
-| MySQL / MariaDB | Nó MySQL, consultas personalizadas, relatórios | Host, Porta (3306), Base de dados, Utilizador, Senha, Usar SSL |
-| Microsoft SQL | Nó Microsoft SQL, consultas personalizadas, relatórios | Host, Porta (1433), Base de dados, Utilizador, Senha, Encriptar, Confiar no certificado do servidor |
+| Postgres | Nó Postgres, consultas personalizadas, relatórios | Host, Porta (5432), Base de dados, Utilizador, Palavra-passe, Usar SSL |
+| MySQL / MariaDB | Nó MySQL, consultas personalizadas, relatórios | Host, Porta (3306), Base de dados, Utilizador, Palavra-passe, Usar SSL |
+| Microsoft SQL | Nó Microsoft SQL, consultas personalizadas, relatórios | Host, Porta (1433), Base de dados, Utilizador, Palavra-passe, Encriptar, Confiar no certificado do servidor |
 | MongoDB | Nó MongoDB | Dados de ligação e base de dados |
-| Redis | Nó Redis | Host, Porta, Senha, Índice de BD |
-| SMTP Email | Nó Send Email | Host, Porta, Utilizador, Senha, Usar TLS |
-| IMAP Email | Nó Email Trigger | Host, Porta, Utilizador, Senha, Usar TLS |
+| Redis | Nó Redis | Host, Porta, Palavra-passe, Índice de BD |
+| SMTP Email | Nó Send Email | Host, Porta, Utilizador, Palavra-passe, Usar TLS |
+| IMAP Email | Nó Email Trigger | Host, Porta, Utilizador, Palavra-passe, Usar TLS |
 | Gmail, Microsoft Outlook | Nó Send Email | ID do cliente, Segredo do cliente, Token de atualização, e Inquilino no Outlook |
-| SFTP | Nós de transferência de ficheiros | Host, Porta, Utilizador, Senha |
+| SFTP | Nós de transferência de ficheiros | Host, Porta, Utilizador, Palavra-passe |
 
 No Microsoft SQL, ligue **Encriptar** para exigir TLS. Ligue **Confiar no certificado do servidor** só para um certificado autoassinado numa instalação de teste.
 
-Defina **Categoria** como **Plugin** para um destino fornecido por um plugin de saída instalado, como um envio para o DHIS2. Escolha o plugin em **Plugin de saída** e preencha **URL base**, **Usuário** e **Senha**. Se a lista disser que não há plugins de saída instalados, instale um a partir do [Marketplace](/docs/marketplace).
+Defina **Categoria** como **Plugin** para um destino fornecido por um plugin de saída instalado, como um envio para o DHIS2. Escolha o plugin em **Plugin de saída** e preencha **URL base**, **Utilizador** e **Palavra-passe**. Se a lista disser que não há plugins de saída instalados, instale um a partir do [Marketplace](/docs/marketplace).
 
 ## Conectores de e-mail
 
@@ -171,7 +171,7 @@ Use **Gmail** ou **Microsoft Outlook** só se já tiver uma aplicação Google C
 | Host | O servidor de e-mail, por exemplo `smtp.gmail.com` |
 | Porta | `587` com **Usar TLS** desligado (STARTTLS), ou `465` com **Usar TLS** ligado |
 | Utilizador | A conta que envia. É também o endereço do remetente |
-| Senha | A palavra-passe da conta, ou uma palavra-passe de aplicação no Gmail |
+| Palavra-passe | A palavra-passe da conta, ou uma palavra-passe de aplicação no Gmail |
 
 O destinatário define-se depois, no campo **To** do nó Send Email.
 
@@ -188,7 +188,7 @@ Com a verificação em dois passos ligada, o Gmail recusa a sua palavra-passe no
    | Host | `smtp.gmail.com` |
    | Porta | `587` |
    | Utilizador | `you@gmail.com` |
-   | Senha | a palavra-passe de aplicação de 16 caracteres |
+   | Palavra-passe | a palavra-passe de aplicação de 16 caracteres |
    | Usar TLS | Desligado |
 
 4. Salve, teste e escolha este conector no nó Send Email.
@@ -221,7 +221,7 @@ O id do conector está em `GET /api/connectors`.
 
 **Editar** mostra os campos normais guardados de um conector de anfitrião: host, porta, base de dados e utilizador quando o tipo os tem. Um segredo já definido fica em branco. Deixe-o em branco para o manter, mesmo que mude o host. Os URL, os campos desconhecidos e as definições de plugins não são mostrados.
 
-Num conector de plugin, preencha **URL base**, **Usuário** e **Senha** juntos, ou deixe os três em branco para manter os valores guardados.
+Num conector de plugin, preencha **URL base**, **Utilizador** e **Palavra-passe** juntos, ou deixe os três em branco para manter os valores guardados.
 
 ## Limite das consultas
 

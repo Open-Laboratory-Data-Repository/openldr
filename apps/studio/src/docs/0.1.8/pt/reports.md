@@ -1,16 +1,16 @@
 # Relatórios
 
-Um relatório é uma página imprimível de números do laboratório que pode voltar a executar sempre que precisar. Cada um junta duas partes. Um modelo do **Designer de relatórios** define o aspeto. Uma **consulta personalizada** vai buscar os dados. Executa um relatório com um intervalo de datas e outros filtros, lê-o como documento ou como planilha, transfere-o e agenda-o para correr sozinho.
+Um relatório é uma página imprimível de números do laboratório que pode voltar a executar sempre que precisar. Cada um junta duas partes. Um modelo do **Designer de relatórios** define o aspeto. Uma **consulta personalizada** vai buscar os dados. Executa um relatório com um intervalo de datas e outros filtros, lê-o como documento ou como folha de cálculo, transfere-o e agenda-o para correr sozinho.
 
 Este guia leva cerca de 30 minutos. Usa os dados de exemplo da documentação, por isso carregue-os primeiro. Selecione uma imagem ou um clip para o ampliar. Os nomes dos relatórios e dos seus filtros estão em inglês, porque vêm dos modelos.
 
-![Um relatório depois de executado. 1 Pesquisa na biblioteca. 2 Menu de ações do relatório. 3 Vista Documento. 4 Vista Planilha. 5 Baixar.](reports-tour.png)
+![Um relatório depois de executado. 1 Pesquisa na biblioteca. 2 Menu de ações do relatório. 3 Vista Documento. 4 Vista Folha de cálculo. 5 Transferir.](reports-tour.png)
 
 1. **Pesquisa.** Filtra a lista de relatórios pelo nome. Os relatórios estão agrupados por categoria.
-2. **Ações.** O menu de três pontos do relatório escolhido: **Atualizar**, **Parâmetros**, **Histórico**, **Agendamentos** e, para gestores, **Editar modelo**, **Despublicar** e **Excluir relatório**.
+2. **Ações.** O menu de três pontos do relatório escolhido: **Atualizar**, **Parâmetros**, **Histórico**, **Agendamentos** e, para gestores, **Editar modelo**, **Despublicar** e **Eliminar relatório**.
 3. **Documento.** O PDF imprimível.
-4. **Planilha.** As mesmas linhas numa tabela que pode filtrar, ordenar e exportar.
-5. **Baixar.** Guarda o PDF.
+4. **Folha de cálculo.** As mesmas linhas numa tabela que pode filtrar, ordenar e exportar.
+5. **Transferir.** Guarda o PDF.
 
 ## Quem pode fazer o quê
 
@@ -21,7 +21,7 @@ Os nomes das permissões aparecem em inglês.
 | View reports | Abrir **Relatórios** e ver a biblioteca. |
 | Run reports | Executar um relatório e ver o resultado. |
 | Export reports | Transferir o PDF, o CSV ou o XLSX, e os ficheiros guardados dos agendamentos. |
-| Edit report templates | Criar, alterar e excluir agendamentos. Usar **Editar modelo**, **Despublicar** e **Excluir relatório**. |
+| Edit report templates | Criar, alterar e eliminar agendamentos. Usar **Editar modelo**, **Despublicar** e **Eliminar relatório**. |
 
 Os relatórios novos não se criam nesta página. Um gestor de laboratório constrói um modelo no [Designer de relatórios](/docs/report-designer) e publica-o. Depois aparece na biblioteca.
 
@@ -59,18 +59,18 @@ Os filtros vêm dos parâmetros do modelo. Para juntar, tirar ou mudar o nome de
 
 ## Ler o resultado
 
-A vista de documento tem setas de página, zoom e **Baixar**. **Baixar** guarda o PDF e regista uma execução `pdf` no histórico.
+A vista de documento tem setas de página, zoom e **Transferir**. **Transferir** guarda o PDF e regista uma execução `pdf` no histórico.
 
-Selecione **Planilha** para ver as mesmas linhas numa tabela.
+Selecione **Folha de cálculo** para ver as mesmas linhas numa tabela.
 
-![A vista Planilha, com Filtrar, Ordenar, Colunas e as duas exportações.](reports-spreadsheet.png)
+![A vista Folha de cálculo, com Filtrar, Ordenar, Colunas e as duas exportações.](reports-spreadsheet.png)
 
 - **Filtrar.** Escolha uma coluna, um operador e um valor, depois **Aplicar**. Tire uma etiqueta de filtro para limpar uma regra, ou use **Limpar tudo**.
 - **Ordenar.** Muda a ordem.
 - **Colunas.** Esconde e mostra colunas.
 - **Exportar CSV** e **Exportar XLSX.** Transferem as linhas para outras ferramentas.
 
-Use a planilha quando precisar dos valores exatos, ou para levar as linhas para outra ferramenta.
+Use a folha de cálculo quando precisar dos valores exatos, ou para levar as linhas para outra ferramenta.
 
 ### O que quer dizer "Facility" nos relatórios incluídos
 
@@ -83,7 +83,7 @@ Abra o menu de três pontos e selecione **Histórico**.
 ![O histórico. Atividade lista cada execução, com o formato, as linhas, o utilizador e a hora.](reports-history.png)
 
 - **Atividade** lista as execuções feitas à mão. `preview` é uma execução nesta página. `pdf`, `csv` e `xlsx` são transferências.
-- **Execuções agendadas** lista as tentativas dos agendamentos, o estado e o ficheiro guardado. **Baixar**, junto a uma execução bem-sucedida, obtém o seu CSV, XLSX ou PDF.
+- **Execuções agendadas** lista as tentativas dos agendamentos, o estado e o ficheiro guardado. **Transferir**, junto a uma execução bem-sucedida, obtém o seu CSV, XLSX ou PDF.
 
 Use o histórico para comparar execuções e para ver se um resultado mudou depois de chegarem dados novos. Para saber quem mudou definições ou agendamentos, veja [Auditoria](/docs/audit).
 
@@ -111,13 +111,13 @@ Ponha o Test Volume a correr todas as segundas-feiras e a guardar um PDF.
 2. Selecione **Novo agendamento**.
 3. Defina **Frequência** como **Semanal**. Defina **Dia da semana** como **Mon**. Os dias aparecem em inglês.
 4. Defina **Formato de saída** como **PDF**. Deixe **Facility** em **Todos**.
-5. Abra o menu de três pontos do agendamento e selecione **Salvar**. Aparece a mensagem **Agendamento salvo.**
+5. Abra o menu de três pontos do agendamento e selecione **Guardar**. Aparece a mensagem **Agendamento guardado.**
 
 **Resultado esperado:** a lista mostra o agendamento semanal de segunda-feira, uma etiqueta **PDF**, um interruptor ligado e a **Próxima** execução.
 
-![O agendamento guardado, com o interruptor, Executar, Editar e Excluir.](reports-schedules.png)
+![O agendamento guardado, com o interruptor, Executar, Editar e Eliminar.](reports-schedules.png)
 
-Cada linha de agendamento tem um interruptor para o ligar e desligar, um botão de reprodução, **Executar**, um lápis para **Editar** e um caixote para **Excluir**.
+Cada linha de agendamento tem um interruptor para o ligar e desligar, um botão de reprodução, **Executar**, um lápis para **Editar** e um caixote para **Eliminar**.
 
 ### Frequência, hora e intervalo de datas
 
@@ -143,7 +143,7 @@ Um agendamento desligado pode continuar a mostrar **Próxima**. Essa data não q
 1. Ligue o agendamento e depois selecione **Executar**, o botão de reprodução.
 2. Uma mensagem diz que a execução foi posta na fila. Isso não quer dizer que correu bem. Um agendamento desligado mostra a mesma mensagem e não faz nada.
 3. Abra o menu de três pontos, **Histórico**, **Execuções agendadas**. As execuções automáticas e as lançadas à mão aparecem aqui quando terminam.
-4. Selecione **Baixar** junto a uma execução bem-sucedida. Precisa de **Export reports**.
+4. Selecione **Transferir** junto a uma execução bem-sucedida. Precisa de **Export reports**.
 5. Se a execução não aparecer, feche e volte a abrir **Execuções agendadas**. A lista não se atualiza sozinha.
 
 Uma execução falhada não tem ficheiro. Num computador, aponte para o estado **Falhou** para ler o erro. Corrija os filtros do agendamento e tente de novo. Uma execução agendada nunca substitui o que a página do relatório mostra.
@@ -154,7 +154,7 @@ Com **Edit report templates**, o menu de três pontos do relatório tem também:
 
 - **Editar modelo.** Abre o modelo no [Designer de relatórios](/docs/report-designer).
 - **Despublicar.** Tira o relatório da biblioteca e mantém o modelo.
-- **Excluir relatório.** Remove-o, depois de confirmar.
+- **Eliminar relatório.** Remove-o, depois de confirmar.
 
 ## Num telemóvel
 
@@ -178,7 +178,7 @@ Este relatório mostra, por laboratório, se chegaram dados ao OpenLDR em cada d
 - Os dias são contados no fuso horário definido em **Definições**, **Laboratório**, **Time zone**. O filtro **Time zone** da execução começa por essa definição e pode mudá-lo. Uma execução agendada ou pela linha de comandos não lê a definição. Dê-lhe o fuso diretamente.
 - **HVL/EID panel codes** recebe os códigos que o seu programa conta como carga viral ou diagnóstico precoce, em cada execução. O resto vai para a grelha Other.
 - Um laboratório que não enviou nada nesse mês não aparece na grelha.
-- A vista **Planilha** e o CSV são o resultado bruto da consulta. A primeira linha traz as datas das colunas, não um laboratório, e incluem a coluna de ordenação que a página esconde. Salte essa primeira linha quando levar o ficheiro para outra ferramenta.
+- A vista **Folha de cálculo** e o CSV são o resultado bruto da consulta. A primeira linha traz as datas das colunas, não um laboratório, e incluem a coluna de ordenação que a página esconde. Salte essa primeira linha quando levar o ficheiro para outra ferramenta.
 
 ## O Clinical Microbiology Report
 
@@ -196,7 +196,7 @@ Um sistema de laboratório divide muitas vezes um resultado de microbiologia em 
 - **Todos os relatórios de microbiologia têm a tabela de sensibilidades vazia.** Veja primeiro em **Terminologia** o conjunto de valores de interpretação do antibiograma. O relatório escolhe as sensibilidades desse conjunto. Se nunca foi carregado nesta instalação, todas as tabelas ficam vazias, como culturas sem antibiograma. Uma tabela vazia é um resultado. Todas vazias é um problema de instalação.
 - **Um antibiograma mostra uma coluna `(unmapped)`.** São resultados que o relatório não conseguiu ligar a um antibiótico, muitas vezes uma linha de resumo, um resultado para dois fármacos, ou um resultado de microscopia registado como S, I ou R. Aparecem para que a contagem se veja. Um número grande é um problema de qualidade dos dados a levar a quem configura o analisador.
 - **Falta um relatório em Specimen Turnaround Time.** Não tem amostra ligada, ou foi emitido antes de a amostra ser recebida. Nenhum dos casos dá um tempo de resposta.
-- **Permissão negada.** A sua função pode ver relatórios, mas não gerir agendamentos, editar modelos, nem despublicar ou excluir.
+- **Permissão negada.** A sua função pode ver relatórios, mas não gerir agendamentos, editar modelos, nem despublicar ou eliminar.
 - **Uma execução anterior falhou.** Abra **Histórico**, leia o erro, mude os filtros e execute de novo.
 - **Falta um relatório que esperava.** Pode estar despublicado ou ainda não ter sido criado. Veja o [Designer de relatórios](/docs/report-designer).
 - **O LIS Stakeholders Update não tem dados num dia em que um laboratório enviou.** Veja primeiro **Definições**, **Laboratório**, **Time zone**, ou o filtro **Time zone** da execução. Os dias são contados nesse fuso. Um fuso UTC numa instalação adiantada em relação a UTC pode passar uma chegada ao fim da tarde para o dia anterior.

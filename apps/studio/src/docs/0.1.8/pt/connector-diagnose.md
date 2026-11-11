@@ -42,11 +42,11 @@ Junte um conector para uma base v1 numa instância com nome, e veja o diagnósti
    | Host | `localhost\SQLEXPRESS` |
    | Base de dados | `OpenLDRData` |
    | Utilizador | `v1_reader` |
-   | Senha | a palavra-passe da conta |
+   | Palavra-passe | a palavra-passe da conta |
 
    ![O formulário Microsoft SQL.](connector-diagnose-form.png)
 
-4. Abra o menu **⋯** do painel e selecione **Salvar**.
+4. Abra o menu **⋯** do painel e selecione **Guardar**.
 5. Na linha nova, abra **⋯** e selecione **Diagnosticar**.
 
 ![Diagnosticar o conector novo. Para em SQL Server Browser.](connector-diagnose-browser.mp4)
@@ -69,7 +69,7 @@ Para retirar o exemplo, abra o menu **⋯** da linha e selecione **Remover**.
 | Base de dados | O nome da base de dados. |
 | Domínio Windows | Deixe vazio para um início de sessão SQL. Preencha para uma conta Windows, por exemplo `LAB`. |
 | Utilizador | O início de sessão SQL, ou o nome de utilizador Windows sem o domínio. |
-| Senha | A palavra-passe. Fica guardada encriptada. |
+| Palavra-passe | A palavra-passe. Fica guardada encriptada. |
 | Encriptar | Ligado por predefinição. Desligue-o para um SQL Server antigo (2008 ou 2012) que só oferece TLS antigo. |
 | Confiar no certificado do servidor | Ligue-o para um servidor da rede do laboratório que usa o seu próprio certificado. |
 
