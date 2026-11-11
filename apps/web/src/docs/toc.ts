@@ -11,7 +11,14 @@ export interface TocEntry {
 }
 
 export function slugify(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  // Accents come off first, so French and Portuguese headings get readable ids:
+  // "Données" becomes `donnees`, not `donn-es`.
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
 }
 
 /** Returns a function that turns heading text into a unique id, in the order it is called. */

@@ -20,6 +20,13 @@ describe('extractToc', () => {
     expect(plainHeading('Use **`{{period_from}}`** in [SQL](/docs/query)')).toBe('Use {{period_from}} in SQL');
   });
 
+  it('takes accents off French and Portuguese headings', () => {
+    expect(extractToc('## Exemple 1 : filtrer les données\n## Gráficos e opções\n').map((e) => e.id)).toEqual([
+      'exemple-1-filtrer-les-donnees',
+      'graficos-e-opcoes',
+    ]);
+  });
+
   it('wants a list only for pages with three or more sections', () => {
     expect(wantsToc(extractToc('## A\n## B\n'))).toBe(false);
     expect(wantsToc(extractToc('## A\n## B\n## C\n'))).toBe(true);

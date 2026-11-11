@@ -11,7 +11,14 @@ export interface TocEntry {
 }
 
 export function slugify(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  // Accents come off first, so French and Portuguese headings get readable ids:
+  // "Données" becomes `donnees`, not `donn-es`.
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
 }
 
 /** Returns a function that turns heading text into a unique id, in the order it is called. */
@@ -55,6 +62,22 @@ export function extractToc(markdown: string): TocEntry[] {
     if (level === 2 || level === 3) entries.push({ id, text, level });
   }
   return entries;
+}
+
+/** Every heading id on a page, all levels, in order. Used to check same-page `#` links. */
+export function allHeadingIds(markdown: string): string[] {
+  const nextId = headingIdMaker();
+  const ids: string[] = [];
+  let inFence = false;
+  for (const line of markdown.split('\n')) {
+    if (/^\s*```/.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    const match = !inFence && line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
+    if (match) ids.push(nextId(plainHeading(match[2])));
+  }
+  return ids;
 }
 
 /** Show the list only when a page is long enough to need it. */

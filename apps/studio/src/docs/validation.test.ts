@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DocGuide, DocSection } from './registry';
 import { DOC_GUIDES, list, resolve } from './registry';
 import { SCREENSHOTS } from './screenshots';
+import { allHeadingIds } from './toc';
 import screenshotManifest from './0.1.0/screenshot-manifest.json';
 import {
   markdownImages,
@@ -240,6 +241,21 @@ describe('authored guide structure', () => {
 
   it('keeps the entry and reports guides procedural', () => {
     expectStepGuideStructure(['start-here', 'reports']);
+  });
+
+  // A same-page link to a heading that does not exist scrolls nowhere, with no error.
+  it('points every same-page # link at a heading on that page, in every language', () => {
+    const broken: string[] = [];
+    for (const locale of ['en', 'fr', 'pt'] as const) {
+      for (const section of list(locale)) {
+        if (section.localeUsed !== locale) continue;
+        const ids = new Set(allHeadingIds(section.content));
+        for (const [, id] of section.content.matchAll(/\]\(#([^)]+)\)/g)) {
+          if (!ids.has(id)) broken.push(`${locale}/${section.slug}#${id}`);
+        }
+      }
+    }
+    expect(broken).toEqual([]);
   });
 
   // Long guides (those with captured screenshots and clips) teach through worked examples
