@@ -12,15 +12,14 @@ import {
 import {
   DOC_VERSIONS,
   DEFAULT_DOC_VERSION,
-  GUIDE_LOCALES,
+  DOC_LOCALES,
   NAV,
-  TITLES,
-  docBody,
-  guideBody,
+  docPage,
+  isDocSlug,
+  pageTitle,
   resolveMedia,
-  type GuideLocale,
+  type DocLocale,
 } from './content';
-import { selectLanguage } from './language';
 import { extractToc, headingIdMaker, wantsToc, type TocEntry } from './toc';
 
 function textContent(children: ReactNode): string {
@@ -33,7 +32,7 @@ function textContent(children: ReactNode): string {
 const LANGUAGE_KEY = 'openldr.docs.lang';
 
 /** The language last picked here, else the browser's when the docs are written in it, else English. */
-function initialLocale(): GuideLocale {
+function initialLocale(): DocLocale {
   try {
     const saved = window.localStorage.getItem(LANGUAGE_KEY);
     if (saved === 'en' || saved === 'fr' || saved === 'pt') return saved;
@@ -44,7 +43,7 @@ function initialLocale(): GuideLocale {
   return lang === 'fr' || lang === 'pt' ? lang : 'en';
 }
 
-function rememberLocale(locale: GuideLocale): void {
+function rememberLocale(locale: DocLocale): void {
   try {
     window.localStorage.setItem(LANGUAGE_KEY, locale);
   } catch {
@@ -52,24 +51,12 @@ function rememberLocale(locale: GuideLocale): void {
   }
 }
 
-/** Notes shown above a page that is not fully in the reader's language, in that language. */
-const NOTES: Record<GuideLocale, { englishOnly: string; partlyEnglish: string }> = {
-  en: { englishOnly: '', partlyEnglish: '' },
-  fr: {
-    englishOnly: "Cette page n'existe qu'en anglais pour le moment.",
-    partlyEnglish: "Certaines parties de cette page ne sont pas encore traduites et s'affichent en anglais.",
-  },
-  pt: {
-    englishOnly: 'Esta página ainda só existe em inglês.',
-    partlyEnglish: 'Algumas partes desta página ainda não estão traduzidas e aparecem em inglês.',
-  },
+/** Shown above a page that has no file in the reader's language, in that language. */
+const ENGLISH_ONLY: Record<DocLocale, string> = {
+  en: '',
+  fr: "Cette page n'existe qu'en anglais pour le moment.",
+  pt: 'Esta página ainda só existe em inglês.',
 };
-
-/** A guide's own `# Title`, so a translated guide shows a translated title. */
-function firstHeading(markdown: string): string | null {
-  const match = /^\s*#\s+(.+)$/m.exec(markdown);
-  return match ? match[1].trim() : null;
-}
 
 function scrollToHeading(id: string): void {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -201,10 +188,10 @@ function markdownComponents(): Components {
         );
       }
       if (href && href.startsWith('/')) {
-        // A shared guide links to in-app pages. The website only has some of them, so a link
-        // to one it lacks reads as plain text instead of landing on the wrong page.
+        // A link to a page only the in-app docs have reads as plain text instead of landing on
+        // the wrong page.
         const docsSlug = href.match(/^\/docs\/([^/#?]+)/)?.[1];
-        if (docsSlug && !TITLES[docsSlug]) return <span>{children}</span>;
+        if (docsSlug && !isDocSlug(docsSlug)) return <span>{children}</span>;
         return <Link to={href}>{children}</Link>;
       }
       return (
@@ -216,7 +203,7 @@ function markdownComponents(): Components {
   };
 }
 
-function NavLink({ slug, active, nested }: { slug: string; active: string; nested?: boolean }) {
+function NavLink({ slug, title, active, nested }: { slug: string; title: string; active: string; nested?: boolean }) {
   const isActive = slug === active;
   return (
     <Link
@@ -230,7 +217,7 @@ function NavLink({ slug, active, nested }: { slug: string; active: string; neste
           : 'text-muted-foreground hover:bg-accent hover:text-foreground',
       ].join(' ')}
     >
-      {TITLES[slug]}
+      {title}
     </Link>
   );
 }
@@ -262,23 +249,15 @@ function OnThisPage({ entries }: { entries: TocEntry[] }) {
 export function DocsPage() {
   const { page } = useParams();
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
-  const [locale, setLocale] = useState<GuideLocale>(initialLocale);
-  const key = page && TITLES[page] ? page : 'getting-started';
-  // A studio section shows its long guide, shared with the app, in the reader's language.
-  const guide = guideBody(key, version, locale);
-  // The site's own pages hold all three languages; keep only the reader's.
-  const own = guide ? null : docBody(key, version);
-  const view = useMemo(() => (own == null ? null : selectLanguage(own, locale)), [own, locale]);
-  const body = guide?.body ?? view?.markdown ?? null;
-  const note = locale === 'en'
-    ? ''
-    : guide
-      ? guide.localeUsed !== locale ? NOTES[locale].englishOnly : ''
-      : view && !view.translated ? NOTES[locale].englishOnly : view?.partlyEnglish ? NOTES[locale].partlyEnglish : '';
-  const title = guide && guide.localeUsed === locale && locale !== 'en' ? firstHeading(guide.body) ?? TITLES[key] : TITLES[key];
+  const [locale, setLocale] = useState<DocLocale>(initialLocale);
+  const key = page && isDocSlug(page) ? page : 'getting-started';
+  const doc = docPage(key, version, locale);
+  const body = doc?.body ?? null;
+  const note = doc && doc.localeUsed !== locale ? ENGLISH_ONLY[locale] : '';
+  const title = pageTitle(key, version, locale);
   const changeLocale = (value: string): void => {
-    setLocale(value as GuideLocale);
-    rememberLocale(value as GuideLocale);
+    setLocale(value as DocLocale);
+    rememberLocale(value as DocLocale);
   };
   const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)) : []), [body]);
   const showToc = wantsToc(toc);
@@ -327,7 +306,7 @@ export function DocsPage() {
             </span>
           </SelectTrigger>
           <SelectContent>
-            {GUIDE_LOCALES.map((option) => (
+            {DOC_LOCALES.map((option) => (
               <SelectItem key={option.id} value={option.id} className="text-xs">
                 {option.label}
               </SelectItem>
@@ -337,9 +316,9 @@ export function DocsPage() {
         <nav aria-label="Public documentation" className="mt-4 space-y-1 border-t border-border pt-4">
           {NAV.map((item) => (
             <div key={item.slug} className="space-y-1">
-              <NavLink slug={item.slug} active={key} />
+              <NavLink slug={item.slug} title={pageTitle(item.slug, version, locale)} active={key} />
               {item.children?.map((child) => (
-                <NavLink key={child} slug={child} active={key} nested />
+                <NavLink key={child} slug={child} title={pageTitle(child, version, locale)} active={key} nested />
               ))}
             </div>
           ))}

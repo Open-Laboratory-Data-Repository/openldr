@@ -47,3 +47,17 @@ openldr market sites <plugin-id> widget off
 ```
 
 The first command lists the plugin's card and panel and whether each is on. The second switches one. Use `widget` or `panel`, and `on` or `off`.
+
+## Try it with the test plugin
+
+The repository has a reference plugin with a card and a panel. Use it on a test install, from a source checkout. Building it needs Rust and the `wasm32-wasip1` target. See **Building plugins** on the website's Development page.
+
+1. In the repository folder, run `pnpm build:ui-reference`. It builds the test-sink plugin and puts `plugin.wasm` and `manifest.json` in `reference-plugins/ui-reference/`.
+2. Run `pnpm openldr plugin install reference-plugins/ui-reference/plugin.wasm`.
+3. Reload the studio.
+4. Open **Dashboard**. A card called **Reference card** sits under the widgets.
+5. Select **Side panels**, the panel button next to the notification bell, and choose **Reference panel**.
+
+**Expected result:** the card reads **Drawn in: widget** and the panel reads **Drawn in: panel**. The sidebar also has a **Reference Plugin** entry, which opens the plugin's own page.
+
+The reference plugin names no publisher, so it installs without a signature. Its page uses dark text, so it is hard to read in the dark theme. To remove it, run `pnpm openldr plugin remove ui-reference`.

@@ -159,6 +159,9 @@ code. Never duplicate. Destructive commands refuse without `--force`. Audit as
 
 **3. Docs.** In-app docs and web docs, in **en, fr, and pt**. A missing i18n key renders
 as literal braces, so a partial translation ships broken and the user sees it.
+In-app docs (`apps/studio/src/docs`) are a how-to user guide and follow
+`apps/studio/src/docs/HOW-TO-TEMPLATE.md`. Web docs (`apps/web/src/docs`) cover what OpenLDR is,
+install, setup and troubleshooting.
 
 **4. Mobile view.** People use `apps/studio` on phones over Tailscale.
 

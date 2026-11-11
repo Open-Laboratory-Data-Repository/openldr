@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const mocks = vi.hoisted(() => ({ createAppContext: vi.fn(), loadConfig: vi.fn(() => ({ config: true })) }));
 vi.mock('@openldr/config', () => ({ loadConfig: mocks.loadConfig }));
@@ -21,9 +23,16 @@ describe('renderUpdateCheck', () => {
     expect(text).toMatch(/schedule downtime/i);
     expect(text).toMatch(/pause senders/i);
     expect(text).toMatch(/verify backups/i);
-    expect(text).toContain('https://github.com/Open-Laboratory-Data-Repository/openldr/blob/main/apps/web/src/docs/0.1.0/upgrading.md');
+    expect(text).toContain('https://github.com/Open-Laboratory-Data-Repository/openldr/blob/main/apps/web/src/docs/0.1.8/en/upgrading.md');
     expect(text).not.toMatch(/docker compose (pull|up)/);
     expect(code).toBe(1);
+  });
+
+  it('links to an upgrade guide that exists in this repo', () => {
+    const { text } = renderUpdateCheck(state(), { json: false });
+    const path = /blob\/main\/(\S+\.md)/.exec(text)?.[1];
+    expect(path).toBeDefined();
+    expect(existsSync(fileURLToPath(new URL(`../../../${path}`, import.meta.url)))).toBe(true);
   });
 
   it('exits 0 and shows no commands when current', () => {
@@ -71,7 +80,7 @@ describe('renderUpdateCheck', () => {
     expect(text).toMatch(/schedule downtime/i);
     expect(text).toMatch(/pause senders/i);
     expect(text).toMatch(/verify backups/i);
-    expect(text).toContain('https://github.com/Open-Laboratory-Data-Repository/openldr/blob/main/apps/web/src/docs/0.1.0/upgrading.md');
+    expect(text).toContain('https://github.com/Open-Laboratory-Data-Repository/openldr/blob/main/apps/web/src/docs/0.1.8/en/upgrading.md');
     expect(text).not.toMatch(/docker compose (pull|up)/);
     expect(text).toMatch(/last check failed: update check timed out after 10000ms/);
     expect(code).toBe(1);

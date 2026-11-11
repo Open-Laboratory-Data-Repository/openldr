@@ -15,37 +15,58 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
-  it('shows the shared Dashboards guide with its clips and an On this page list', () => {
-    const { container } = renderDocs('/docs/dashboard');
-    expect(screen.getByRole('heading', { level: 1, name: 'Dashboards' })).toBeInTheDocument();
-    expect(container.querySelectorAll('.doc-markdown video').length).toBeGreaterThan(0);
-    const list = screen.getByRole('navigation', { name: 'On this page' });
-    const entry = within(list).getByRole('link', { name: 'Load the sample data' });
-    expect(entry).toHaveAttribute('href', '#load-the-sample-data');
-    expect(document.getElementById('load-the-sample-data')).not.toBeNull();
-    expect(screen.getByRole('combobox', { name: 'Documentation language' })).toBeInTheDocument();
-  });
 
-  it('renders links to in-app pages the website lacks as plain text', () => {
+
+  it('leaves the studio user guides to the in-app docs', () => {
     renderDocs('/docs/dashboard');
-    const article = document.querySelector('.doc-markdown') as HTMLElement;
-    expect(within(article).queryByRole('link', { name: 'Settings' })).toBeNull();
-    expect(within(article).getAllByRole('link', { name: 'Reports' })[0]).toHaveAttribute('href', '/docs/reports');
-    expect(within(article).getAllByRole('link', { name: 'Data exposure' })[0]).toHaveAttribute('href', '/docs/data-exposure');
+    const nav = screen.getByRole('navigation', { name: /public documentation/i });
+    for (const name of [
+      'Dashboards', 'Reports', 'Custom queries', 'Workflows', 'Forms', 'Facilities', 'Test catalog', 'Patients',
+      'Activity and payload history', 'Laboratory setup', 'Data exposure', 'Setup checks', 'User preferences',
+      // Short pages about studio screens. The in-app guides hold the same text in en, fr and pt.
+      'Workflow canvas navigation', 'Workflow webhooks', 'Query names', 'Export and import queries', 'Query groups',
+      'Dashboard refresh', 'Dashboard query limits', 'Query result paging', 'Connector query deadlines',
+      'Report schedules', 'Marketplace permission checks', 'Layouts', 'Plugin cards and side panels',
+    ]) {
+      expect(within(nav).queryByRole('link', { name })).toBeNull();
+    }
+    // An in-app slug is not a website page, so it falls back to Getting started.
+    expect(screen.getByRole('link', { name: 'Getting started' })).toHaveAttribute('aria-current', 'page');
+    expect(document.querySelector('.doc-markdown video')).toBeNull();
   });
 
-  it('offers the language picker on every page, not only the shared guides', () => {
-    renderDocs('/docs/query-naming');
+  it('renders links to pages only the in-app docs have as plain text', () => {
+    renderDocs('/docs/getting-started');
+    const article = document.querySelector('.doc-markdown') as HTMLElement;
+    for (const link of within(article).queryAllByRole('link')) {
+      const href = link.getAttribute('href') ?? '';
+      expect(href).not.toMatch(/^\/docs\/(dashboard|reports|query|workflows|forms|facilities|patients)$/);
+    }
+  });
+
+  it('translates the sidebar and the title with the page', () => {
+    window.localStorage.setItem('openldr.docs.lang', 'fr');
+    renderDocs('/docs/upgrading');
+    const nav = screen.getByRole('navigation', { name: /public documentation/i });
+    expect(within(nav).getByRole('link', { name: 'Mises à niveau planifiées' })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getByRole('link', { name: "Fournisseurs d'authentification" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Mises à niveau planifiées' })).toBeInTheDocument();
+    expect(screen.queryByText(/pas encore traduites|qu'en anglais/)).toBeNull();
+    window.localStorage.removeItem('openldr.docs.lang');
+  });
+
+  it('offers the language picker on every page', () => {
+    renderDocs('/docs/install');
     expect(screen.getByRole('combobox', { name: 'Documentation language' })).toBeInTheDocument();
   });
 
   it('opens the current documentation version and keeps the previous version selectable', () => {
-    renderDocs('/docs/query-naming');
+    renderDocs('/docs/requirements');
     expect(screen.getByLabelText('Documentation version')).toHaveTextContent('0.1.8');
     fireEvent.keyDown(screen.getByLabelText('Documentation version'), { key: 'Enter' });
     fireEvent.click(screen.getByRole('option', { name: '0.1.0' }));
     expect(screen.getByLabelText('Documentation version')).toHaveTextContent('0.1.0');
-    expect(screen.getByRole('heading', { level: 1, name: 'Query names' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Requirements' })).toBeInTheDocument();
   });
   it('shows authentication provider guidance in one language at a time, and switches', () => {
     renderDocs('/docs/auth-providers');
@@ -68,43 +89,9 @@ describe('DocsPage', () => {
     window.localStorage.removeItem('openldr.docs.lang');
   });
 
-  it('shows the shared Data exposure guide, with its limits one click away', () => {
-    renderDocs('/docs/data-exposure');
-    expect(screen.getByRole('heading', { level: 1, name: 'Data exposure' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Data exposure' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('combobox', { name: 'Documentation language' })).toBeInTheDocument();
-    const list = screen.getByRole('navigation', { name: 'On this page' });
-    expect(within(list).getByRole('link', { name: 'What it does not cover' })).toHaveAttribute('href', '#what-it-does-not-cover');
-    expect(document.getElementById('what-it-does-not-cover')).not.toBeNull();
-  });
 
-  it('shows report schedules from its navigation entry in the reader\'s language only', () => {
-    renderDocs('/docs/report-schedules');
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Report schedules' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Report schedules' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('heading', { name: 'Schedule a report' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Planifier un rapport' })).toBeNull();
-  });
 
-  it('shows the marketplace permission guide in one language, including its marked paragraphs', () => {
-    renderDocs('/docs/marketplace-permissions');
-
-    expect(screen.getByRole('heading', { level: 1, name: 'Marketplace permission checks' })).toBeInTheDocument();
-    for (const name of ['English', 'Français', 'Português']) {
-      expect(screen.queryByRole('heading', { name })).toBeNull();
-    }
-    expect(screen.getByText(/A content pack needs the same marketplace manage permission/)).toBeInTheDocument();
-    expect(screen.queryByText(/Un pack de contenu exige/)).toBeNull();
-  });
-
-  it('shows the shared Test catalog guide with its examples', () => {
-    renderDocs('/docs/test-catalog');
-    expect(screen.getByRole('heading', { level: 1, name: 'Test catalog' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Test catalog' })).toHaveAttribute('aria-current', 'page');
-    const list = screen.getByRole('navigation', { name: 'On this page' });
-    expect(within(list).getByRole('link', { name: 'Example 1: import a test list' })).toHaveAttribute('href', '#example-1-import-a-test-list');
-  });
 
   it('renders a professional docs shell for a public doc page', () => {
     renderDocs('/docs/install');
