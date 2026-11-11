@@ -781,6 +781,7 @@ export const fr: EnShape = {
   layout: {
     startPage: "Page de démarrage",
     startPageNotSaved: "La page de démarrage n'a pas pu être enregistrée.",
+    startPageSaved: "{{page}} s’ouvrira en premier après la connexion.",
     settings: 'Paramètres',
     language: 'Langue',
   },

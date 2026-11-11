@@ -781,6 +781,7 @@ export const pt: EnShape = {
   layout: {
     startPage: "Página inicial",
     startPageNotSaved: "Não foi possível guardar a página inicial.",
+    startPageSaved: "{{page}} abre primeiro depois de iniciar sessão.",
     settings: 'Definições',
     language: 'Idioma',
   },

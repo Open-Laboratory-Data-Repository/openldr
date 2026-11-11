@@ -783,6 +783,7 @@ export const en = {
   layout: {
     startPage: "Start page",
     startPageNotSaved: "The start page could not be saved.",
+    startPageSaved: "{{page}} will open first after you sign in.",
     settings: 'Settings',
     language: 'Language',
   },

@@ -237,7 +237,8 @@ export function AppShell({
                       disabled={startPage === n.to}
                       onClick={() => {
                         void setUserPreference({ startPage: n.to === '/' ? null : n.to }).then((ok) => {
-                          if (!ok) toast.error(t('layout.startPageNotSaved'));
+                          if (ok) toast.success(t('layout.startPageSaved', { page: t(n.labelKey) }));
+                          else toast.error(t('layout.startPageNotSaved'));
                         });
                       }}
                     >
