@@ -14,7 +14,7 @@ import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPlugin
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
 import { runWorkflowReceiptsList, runWorkflowReceiptShow } from './workflows';
-import { runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
+import { runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet } from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
@@ -1170,6 +1170,14 @@ export function buildProgram(): Command {
   user.command('activate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
     try { process.exitCode = await runUserSetStatus(id, 'active', opts); } catch (err) { process.stderr.write(`user activate failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
+  const userPrefs = user.command('preferences').description("A user's studio preferences: theme, sidebarCollapsed, startPage");
+  userPrefs.command('show <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runUserPreferencesShow(id, opts); } catch (err) { process.stderr.write(`user preferences show failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+  userPrefs.command('set <id> <key> <value>').description('Set one preference; the value "none" clears it').option('--json', 'emit JSON', false)
+    .action(async (id: string, key: string, value: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runUserPreferencesSet(id, key, value, opts); } catch (err) { process.stderr.write(`user preferences set failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
   user.command('deactivate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
     try { process.exitCode = await runUserSetStatus(id, 'disabled', opts); } catch (err) { process.stderr.write(`user deactivate failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });

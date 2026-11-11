@@ -35,3 +35,8 @@ it('says all checks passed when nothing failed', () => {
   expect(formatDiagnose({ ok: true, steps: [{ id: 'login', status: 'pass' }] })).toContain('All checks passed.');
 });
 
+it('offers show and set for a user\'s studio preferences', () => {
+  const user = buildProgram().commands.find((command) => command.name() === 'user')!;
+  const prefs = user.commands.find((command) => command.name() === 'preferences');
+  expect(prefs?.commands.map((command) => command.name())).toEqual(['show', 'set']);
+});

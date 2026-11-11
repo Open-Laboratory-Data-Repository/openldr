@@ -7,8 +7,8 @@ import { type Kysely, sql } from 'kysely';
 // (@openldr/bootstrap), which drops anything it does not know, so adding a setting later needs
 // no migration.
 //
-// No foreign key to users. A user can sign in through the identity provider before a local users
-// row exists, and their preferences must still save.
+// No foreign key to users, like notification_prefs (060). The dev-bypass fallback actor has the id
+// `dev:<username>` and no users row (auth-plugin.ts devActor), and its preferences must still save.
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema.createTable('user_preferences').ifNotExists()
     .addColumn('user_id', 'text', (c) => c.primaryKey())
