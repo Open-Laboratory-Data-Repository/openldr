@@ -11,7 +11,7 @@ const sqlFields = ['host', 'port', 'database', 'user', 'ssl'];
 const ordinaryFields: Record<string, readonly string[]> = {
   postgres: sqlFields,
   mysql: [...sqlFields, 'sslRejectUnauthorized'],
-  'microsoft-sql': ['host', 'port', 'database', 'user', 'encrypt', 'trustServerCertificate'],
+  'microsoft-sql': ['host', 'instanceName', 'port', 'database', 'domain', 'user', 'encrypt', 'trustServerCertificate'],
   mongodb: ['host', 'port', 'database', 'user', 'authSource'],
   redis: ['host', 'port', 'db'],
   smtp: ['host', 'port', 'user', 'secure'],

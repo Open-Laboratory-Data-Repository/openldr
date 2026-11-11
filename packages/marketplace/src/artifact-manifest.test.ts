@@ -241,4 +241,36 @@ describe('content-pack artifact manifest', () => {
   it('rejects a packSha256 that is not 64 hex', () => {
     expect(() => parseArtifactManifest({ ...pack, payload: { ...pack.payload, packSha256: 'abc' } })).toThrow();
   });
+
+  describe('importSource', () => {
+    const importing = {
+      ...base,
+      capabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }, { kind: 'host:import' }],
+      payload: {
+        kind: 'plugin', pluginKind: 'sink', wasmSha256: 'b'.repeat(64),
+        entrypoints: ['import_queries', 'import_checks', 'import_map'],
+        importSource: { connectorTypes: ['microsoft-sql'], entrypoints: { queries: 'import_queries', checks: 'import_checks', map: 'import_map' } },
+      },
+    };
+    it('leaves a manifest without it exactly as it was', () => {
+      const m = parseArtifactManifest(base);
+      expect(m.payload.kind === 'plugin' && 'importSource' in m.payload).toBe(false);
+    });
+    it('parses a plugin that can import', () => {
+      const m = parseArtifactManifest(importing);
+      expect(m.payload.kind === 'plugin' && m.payload.importSource?.connectorTypes).toEqual(['microsoft-sql']);
+    });
+    it('refuses it without the host:import capability', () => {
+      expect(() => parseArtifactManifest({ ...importing, capabilities: [{ kind: 'emit-fhir', resourceTypes: ['Patient'] }] })).toThrow(/host:import/);
+    });
+    it('refuses an import entrypoint the plugin does not export', () => {
+      expect(() => parseArtifactManifest({ ...importing, payload: { ...importing.payload, entrypoints: ['import_queries', 'import_checks'] } })).toThrow(/import_map/);
+    });
+    it('refuses an unknown connector type or an empty list', () => {
+      const bad = (connectorTypes: unknown) => ({ ...importing, payload: { ...importing.payload, importSource: { ...importing.payload.importSource, connectorTypes } } });
+      expect(() => parseArtifactManifest(bad(['oracle']))).toThrow();
+      expect(() => parseArtifactManifest(bad(['mysql']))).toThrow();
+      expect(() => parseArtifactManifest(bad([]))).toThrow();
+    });
+  });
 });

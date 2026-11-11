@@ -30,15 +30,19 @@ import { RequireCapability } from './auth/RequireCapability';
 import { Roles } from './pages/Roles';
 import { DataExposure } from '@/pages/settings/DataExposure';
 import { Laboratory } from '@/pages/settings/Laboratory';
+import { SetupChecks } from '@/pages/settings/SetupChecks';
 import { CallbackPage } from './auth/CallbackPage';
 import { AccessDeniedPage } from './auth/AccessDeniedPage';
+import { StartPageGate, UserPreferencesSync } from './shell/UserPreferencesSync';
 
 export function App() {
   return (
+    <>
+    <UserPreferencesSync />
     <Routes>
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/access-denied" element={<RequireCapability><AccessDeniedPage /></RequireCapability>} />
-      <Route path="/" element={<RequireCapability cap="dashboards.view"><DashboardPage /></RequireCapability>} />
+      <Route path="/" element={<StartPageGate><RequireCapability cap="dashboards.view"><DashboardPage /></RequireCapability></StartPageGate>} />
       <Route path="/reports" element={<Reports />} />
       <Route path="/workflows" element={<RequireCapability cap="workflows.view"><WorkflowList /></RequireCapability>} />
       <Route path="/workflows/new" element={<RequireCapability cap="workflows.view"><Workflows /></RequireCapability>} />
@@ -75,6 +79,7 @@ export function App() {
         <Route path="marketplace" element={<RequireCapability cap="marketplace.view"><Marketplace /></RequireCapability>} />
         <Route path="connectors" element={<RequireCapability cap="connectors.manage"><Connectors /></RequireCapability>} />
         <Route path="roles" element={<RequireCapability cap="roles.view"><Roles /></RequireCapability>} />
+        <Route path="setup" element={<RequireCapability cap="settings.view"><SetupChecks /></RequireCapability>} />
         <Route path="laboratory" element={<RequireCapability cap="settings.view"><Laboratory /></RequireCapability>} />
         <Route path="data-exposure" element={<RequireCapability cap="data_exposure.manage"><DataExposure /></RequireCapability>} />
       </Route>
@@ -92,5 +97,6 @@ export function App() {
       <Route path="/docs/:slug" element={<Docs />} />
       <Route path="*" element={<AppShell title="Not found"><div className="card">Page not found.</div></AppShell>} />
     </Routes>
+    </>
   );
 }

@@ -48,5 +48,16 @@ export function createMockOpenldr(opts: MockOptions): OpenLdrPluginApi {
       async list() { return []; },
       async remove() { return { ok: true }; },
     },
+    imports: {
+      async allowed() { return []; },
+      async diagnose() { return { ok: true, steps: [] }; },
+      async checks() { return []; },
+      async start() { return { id: 'mock-run', status: 'running' }; },
+      async status() { return null; },
+      async list() { return []; },
+      async failures() { return []; },
+      async stop() { return { id: 'mock-run', status: 'stopping' }; },
+      async resume() { return { id: 'mock-run', status: 'running' }; },
+    },
   };
 }

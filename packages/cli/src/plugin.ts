@@ -7,10 +7,14 @@ interface JsonOpt {
   json: boolean;
 }
 
-/** Read the ui.html bytes adjacent to a plugin manifest, when the manifest declares
- *  payload.ui.entry (webview tier). Rejects non-plain-filename entries (path traversal). */
-export function readAdjacentUi(manifest: { ui?: { entry?: string } }, manifestDir: string): Uint8Array | undefined {
-  const entry = manifest.ui?.entry;
+/** Read the ui.html bytes adjacent to a plugin manifest, when the manifest declares a page.
+ *  A full artifact manifest names it under payload.ui.entry; the older flat plugin manifest
+ *  under ui.entry. Rejects non-plain-filename entries (path traversal). */
+export function readAdjacentUi(
+  manifest: { ui?: { entry?: string }; payload?: { ui?: { entry?: string } } },
+  manifestDir: string,
+): Uint8Array | undefined {
+  const entry = manifest.payload?.ui?.entry ?? manifest.ui?.entry;
   if (!entry) return undefined;
   if (entry !== basename(entry) || entry === '') {
     throw new Error(`invalid ui entry '${entry}': must be a plain filename inside the plugin dir`);

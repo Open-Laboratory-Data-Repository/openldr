@@ -1,6 +1,174 @@
 {
-  "generatedAt": "2026-11-06",
+  "generatedAt": "2026-11-11",
   "days": [
+    {
+      "date": "2026-11-11",
+      "version": null,
+      "entries": [
+        {
+          "hash": "894db949",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The interface language follows the user"
+        },
+        {
+          "hash": "7c93d2d8",
+          "type": "feat",
+          "scope": "import",
+          "title": "Import runs show on Activity, and need an audit row to start"
+        },
+        {
+          "hash": "30e04db2",
+          "type": "feat",
+          "scope": "setup",
+          "title": "Setup checks page under Settings, and its route"
+        },
+        {
+          "hash": "ba461f60",
+          "type": "feat",
+          "scope": "setup",
+          "title": "Setup checks and the openldr doctor command"
+        },
+        {
+          "hash": "18c0d253",
+          "type": "fix",
+          "scope": "v1-import",
+          "title": "Page fits a phone, and Stop is not undone by a late progress answer"
+        },
+        {
+          "hash": "ec088fe0",
+          "type": "feat",
+          "scope": "v1-import",
+          "title": "The plugin's page in studio, a five-step import wizard"
+        },
+        {
+          "hash": "eddcab5d",
+          "type": "feat",
+          "scope": "import",
+          "title": "Allow a connector for an import plugin from the Connectors page"
+        },
+        {
+          "hash": "95247003",
+          "type": "feat",
+          "scope": "v1-import",
+          "title": "Build script and a WASM integration test against the golden files"
+        },
+        {
+          "hash": "407db987",
+          "type": "feat",
+          "scope": "v1-import",
+          "title": "Plugin crate with v1 queries, checks and the mapping ported to Rust"
+        },
+        {
+          "hash": "4a6264b8",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr import commands"
+        },
+        {
+          "hash": "f1fd4fa1",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Broker and SDK import ops; host-owned plugin data is out of a plugin's reach"
+        },
+        {
+          "hash": "3a94cc74",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Import run service with keyset paging, stop and resume"
+        },
+        {
+          "hash": "46d9fdec",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "ImportSource accepts SQL Server only until other dialects are handled"
+        },
+        {
+          "hash": "81b66907",
+          "type": "feat",
+          "scope": "marketplace",
+          "title": "Host:import capability and the importSource manifest field"
+        },
+        {
+          "hash": "29209ed6",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Load preferences fresh when the signed-in user changes; list the new routes"
+        },
+        {
+          "hash": "a7a399e4",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Confirm the start page pick with a toast"
+        },
+        {
+          "hash": "4838787a",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Theme, sidebar and first page follow the user"
+        },
+        {
+          "hash": "294ee959",
+          "type": "feat",
+          "scope": "server,cli",
+          "title": "Per-user preferences"
+        },
+        {
+          "hash": "55e8db89",
+          "type": "feat",
+          "scope": "db",
+          "title": "User_preferences table and shared read/write"
+        },
+        {
+          "hash": "159a8cd6",
+          "type": "fix",
+          "scope": "connectors",
+          "title": "Diagnosis checks the port the way the connection does, and hides config read errors"
+        },
+        {
+          "hash": "5aa05126",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Diagnosis step dividers run to the sheet edges"
+        },
+        {
+          "hash": "3bc0ba57",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Diagnose a connector from its menu"
+        },
+        {
+          "hash": "b540fad4",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr connectors diagnose"
+        },
+        {
+          "hash": "370d2ab0",
+          "type": "feat",
+          "scope": "server",
+          "title": "Connector diagnosis route"
+        },
+        {
+          "hash": "fcc10dd6",
+          "type": "feat",
+          "scope": "connectors",
+          "title": "Step-by-step connection diagnosis"
+        },
+        {
+          "hash": "690ef880",
+          "type": "fix",
+          "scope": "studio",
+          "title": "SQL Server form shows Encrypt on, adds instance and domain"
+        },
+        {
+          "hash": "44725ab9",
+          "type": "feat",
+          "scope": "connectors",
+          "title": "SQL Server named instances and Windows login"
+        }
+      ]
+    },
     {
       "date": "2026-11-06",
       "version": null,

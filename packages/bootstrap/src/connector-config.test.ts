@@ -46,3 +46,14 @@ it('omits plugin URL credentials and returns null for missing connectors', async
     expect(await inspectConnectorConfig(store, 'missing', key)).toBeNull();
   } finally { await db.destroy(); }
 });
+
+it('accepts the SQL Server instance name and Windows domain', async () => {
+  const db = await makeMigratedDb();
+  try {
+    const store = createConnectorStore(db);
+    const key = randomBytes(32).toString('base64');
+    await store.create({ id: 'ms', name: 'MS', type: 'microsoft-sql', kind: 'database', config: { host: 'LABSRV', password: 'p' } }, key);
+    await updateConnectorConfig(store, 'ms', { config: { instanceName: 'SQLEXPRESS', domain: 'LAB' } }, key);
+    expect((await inspectConnectorConfig(store, 'ms', key))?.config).toMatchObject({ instanceName: 'SQLEXPRESS', domain: 'LAB' });
+  } finally { await db.destroy(); }
+});

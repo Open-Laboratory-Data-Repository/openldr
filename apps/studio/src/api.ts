@@ -777,6 +777,16 @@ export interface CurrentUser {
 }
 export const getMe = (): Promise<CurrentUser> =>
   authFetch('/api/me').then((res) => okJson<CurrentUser>(res, 'get current user'));
+
+/** The signed-in user's own studio preferences. Stored on the server so they follow the login.
+ *  Mirrors UserPreferences in packages/bootstrap/src/user-preferences.ts. */
+export interface UserPreferences { theme?: 'light' | 'dark'; sidebarCollapsed?: boolean; startPage?: string; language?: 'en' | 'fr' | 'pt' }
+/** A missing key is left alone; null clears it. */
+export type UserPreferencesPatch = { [K in keyof UserPreferences]?: UserPreferences[K] | null };
+export const getMyPreferences = (): Promise<UserPreferences> =>
+  authFetch('/api/me/preferences').then((res) => okJson<UserPreferences>(res, 'read preferences'));
+export const saveMyPreferences = (patch: UserPreferencesPatch): Promise<UserPreferences> =>
+  authFetch('/api/me/preferences', jbody(patch, 'PUT')).then((res) => okJson<UserPreferences>(res, 'save preferences'));
 export const resetUserPassword = (id: string, password: string, temporary: boolean): Promise<void> =>
   authFetch(`/api/users/${id}/reset-password`, jbody({ password, temporary }, 'POST')).then((r) => { if (!r.ok) throw new Error(`reset password failed: ${r.status}`); });
 export const sendUserResetEmail = (id: string): Promise<void> =>
@@ -3263,6 +3273,36 @@ export const deleteConnector = (id: string): Promise<void> =>
   apiDelete(`/api/connectors/${encodeURIComponent(id)}`, 'delete connector');
 export const testConnector = (id: string): Promise<ConnectorTestResult> =>
   authFetch(`/api/connectors/${encodeURIComponent(id)}/test`, { method: 'POST' }).then((r) => okJson<ConnectorTestResult>(r, 'test connector'));
+
+// Mirrors DiagnoseResult in packages/bootstrap/src/connector-diagnose.ts.
+export type DiagnoseStepId = 'config' | 'dns' | 'browser' | 'tcp' | 'login' | 'version';
+export type DiagnoseStatus = 'pass' | 'warn' | 'fail' | 'skip';
+export interface DiagnoseStep { id: DiagnoseStepId; status: DiagnoseStatus; detail?: string; hint?: string }
+export interface DiagnoseResult { ok: boolean; steps: DiagnoseStep[] }
+export const diagnoseConnector = (id: string): Promise<DiagnoseResult> =>
+  authFetch(`/api/connectors/${encodeURIComponent(id)}/diagnose`, { method: 'POST' }).then((r) => okJson<DiagnoseResult>(r, 'diagnose connector'));
+
+// Mirrors SetupReport in packages/bootstrap/src/setup-checks.ts. Studio cannot import bootstrap,
+// so the id and hint lists are repeated here; SetupChecks.test.tsx checks each has its strings.
+export const SETUP_CHECK_IDS = ['adapters', 'signIn', 'secretsKey', 'labName', 'timeZone', 'connectors', 'sync'] as const;
+export const SETUP_HINTS = [
+  'adapterDown', 'adapterDegraded', 'signInOff', 'secretsKeyMissing', 'labNameDefault', 'timeZoneEmpty',
+  'timeZoneSqlServer', 'connectorFailed', 'syncIncomplete', 'syncFailing', 'checkError',
+] as const;
+export type SetupStatus = 'pass' | 'warn' | 'fail' | 'skip';
+export interface SetupCheck { id: (typeof SETUP_CHECK_IDS)[number]; status: SetupStatus; detail?: string; hint?: (typeof SETUP_HINTS)[number]; fix?: string }
+export interface SetupReport { ok: boolean; checks: SetupCheck[] }
+export const runSetupChecks = (): Promise<SetupReport> =>
+  authFetch('/api/settings/setup-checks', { method: 'POST' }).then((r) => okJson<SetupReport>(r, 'run setup checks'));
+
+// Import plugins that can read a host connector, and whether an admin allowed each one.
+export interface ConnectorImportPlugin { id: string; version: string; allowed: boolean }
+export const listConnectorImportPlugins = (id: string): Promise<ConnectorImportPlugin[]> =>
+  authFetch(`/api/connectors/${encodeURIComponent(id)}/import-plugins`).then((r) => okJson<ConnectorImportPlugin[]>(r, 'list import plugins'));
+export const setConnectorImportPlugin = (id: string, pluginId: string, allowed: boolean): Promise<ConnectorImportPlugin[]> =>
+  authFetch(`/api/connectors/${encodeURIComponent(id)}/import-plugins/${encodeURIComponent(pluginId)}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ allowed }),
+  }).then((r) => okJson<ConnectorImportPlugin[]>(r, 'set plugin access'));
 
 /** Authenticated download of a produced workflow artifact (objectKey under workflow-artifacts/). */
 export async function downloadWorkflowArtifact(objectKey: string, fileName: string): Promise<void> {

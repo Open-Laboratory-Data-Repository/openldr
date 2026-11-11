@@ -81,6 +81,8 @@ import { createPatientIdentifierSystems, type PatientIdentifierSystems } from '.
 import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
+import { createImportService, type ImportRun, type ImportService } from './import-run';
+import { diagnoseConnector } from './connector-diagnose';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
@@ -535,6 +537,8 @@ export interface AppContext {
   plugins: PluginRuntime;
   pluginData: PluginDataStore;
   pluginBroker: PluginBroker;
+  /** Plugin-driven imports from a host database connector (import-run.ts). */
+  imports: ImportService;
   connectors: ConnectorStore;
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
@@ -902,7 +906,16 @@ const reporting: ReportingApi = {
     const p = (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as { count?: number; resourceTypes?: string[] };
     return { at: String(row.created_at), count: p.count ?? 0, resourceTypes: p.resourceTypes ?? [] };
   };
-  const activity = createActivityService({ runs: workflowRuns, batches: ingestBatches, persistedEvent });
+  const activity = createActivityService({
+    runs: workflowRuns, batches: ingestBatches, persistedEvent,
+    // An import saves records without a workflow run, so Activity reads the import runs too.
+    // `imports` is created further down; this only runs once a request asks for the list.
+    importRuns: async () => {
+      const out: ImportRun[] = [];
+      for (const p of await imports.importers()) out.push(...await imports.list(p.id));
+      return out;
+    },
+  });
 
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: () => auth.healthCheck() });
@@ -1682,9 +1695,40 @@ const reporting: ReportingApi = {
   workflowServices.hostFileWrite = hostFiles.hostFileWrite;
   workflowServices.hostFileList = hostFiles.hostFileList;
   workflowServices.hostFileDelete = hostFiles.hostFileDelete;
+  // Imports driven by a plugin that declares an import source (import-run.ts). Shared by the
+  // broker (studio) and the CLI. Saves through the same path as the workflow Persist Store node.
+  const imports = createImportService({
+    plugins,
+    connectors: connectorStore,
+    secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
+    pluginData,
+    persist: workflowPersist,
+    // Not safeRecord: this one must throw. The import service refuses to allow, start or resume
+    // when the row cannot be written. The failure is logged here, as safeRecord would.
+    audit: async (e) => {
+      try {
+        await audit.record({
+          actorType: e.actor.type, actorId: e.actor.id, actorName: e.actor.name,
+          action: e.action, entityType: 'plugin', entityId: e.pluginId,
+          metadata: { ...(e.connectorId ? { connectorId: e.connectorId } : {}), ...(e.runId ? { runId: e.runId } : {}), ...(e.metadata ?? {}) },
+        });
+      } catch (err) {
+        logger.error({ action: e.action, error: err instanceof Error ? err.message : String(err) }, 'audit record failed');
+        throw err;
+      }
+    },
+  });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
+    imports,
+    // Step-by-step connection check for the import page. The broker only calls this for a
+    // connector the admin allowed for the calling plugin.
+    diagnoseConnector: async (id: string) => {
+      const c = await connectorStore.get(id);
+      if (!c || !c.type) throw new Error(`connector ${id} is not a host connector`);
+      return diagnoseConnector(c.type, await connectorStore.getDecryptedConfig(id, cfg.SECRETS_ENCRYPTION_KEY));
+    },
     schedules: createPluginScheduleApi(pluginData),
     reporting: {
       list: () => reporting.listAll(),
@@ -1782,6 +1826,7 @@ const reporting: ReportingApi = {
     plugins,
     pluginData,
     pluginBroker,
+    imports,
     connectors: connectorStore,
     appSettings,
     labIdentity,
@@ -1837,7 +1882,7 @@ export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
-export type { ActivityService, RecentPayload } from './activity-service';
+export type { ActivityService, ActivityImportRun, ActivityLifecycle, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
 export {
   servePull,
@@ -1961,8 +2006,24 @@ export { CE_VERSION } from './plugin-registry';
 export * from './db-context';
 export { readAuthIssuerBinding, rebindAuthIssuer } from './auth-issuer-binding';
 export { createPluginTarget } from './connector-target';
-export { createConnectorDb, type ConnectorDb } from './connector-db';
+export { createConnectorDb, splitMssqlHost, type ConnectorDb } from './connector-db';
+export {
+  diagnoseConnector, classifyConnectError, DIAGNOSE_HINT_TEXT,
+  type DiagnoseResult, type DiagnoseStep, type DiagnoseStepId, type DiagnoseStatus, type DiagnoseHint, type DiagnoseDeps,
+} from './connector-diagnose';
 export { testConnector } from './connector-test';
+export {
+  createImportService,
+  type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
+} from './import-run';
+export {
+  runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT,
+  type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,
+} from './setup-checks';
+export {
+  getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema,
+  type UserPreferences, type UserPreferencesPatch,
+} from './user-preferences';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';

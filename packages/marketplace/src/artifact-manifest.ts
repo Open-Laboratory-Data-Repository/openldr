@@ -32,6 +32,22 @@ export const uiContributionSchema = z.object({
 
 export type UiContribution = z.infer<typeof uiContributionSchema>;
 
+/** Declares that a plugin can drive an import: CE pages through a host database connector with
+ *  SQL from these entrypoints and saves what `map` returns. See packages/bootstrap import-run.ts. */
+export const importSourceSchema = z.object({
+  // Host connector types the plugin's SQL is written for. Only SQL Server so far: literal quoting
+  // and date handling in import-sql.ts are written and tested for it alone. Widen with those.
+  connectorTypes: z.array(z.enum(['microsoft-sql'])).min(1),
+  entrypoints: z.object({
+    queries: z.string().min(1),
+    checks: z.string().min(1).optional(),
+    map: z.string().min(1),
+  }),
+  // Stamped on every saved record as its source system. Defaults to the plugin id.
+  sourceSystem: z.string().min(1).max(64).optional(),
+});
+export type ImportSource = z.infer<typeof importSourceSchema>;
+
 const pluginPayload = z.object({
   kind: z.literal('plugin'),
   // Source/sink flavor. Named `pluginKind` because this object's own discriminator is
@@ -49,6 +65,9 @@ const pluginPayload = z.object({
   // Workflow-builder nodes this plugin contributes (SP-1). Part of the signed payload; absent
   // ⇒ no nodes, so existing signed plugin artifacts stay byte-identical and verify.
   workflowNodes: z.array(workflowNodeDeclSchema).optional(),
+  // Optional and part of the signed payload. Absent means the plugin cannot import, and existing
+  // signed plugin artifacts stay byte-identical and verify.
+  importSource: importSourceSchema.optional(),
 });
 const formPayload = z.object({ kind: z.literal('form-template'), questionnaireSha256: z.string().regex(HEX64) });
 const reportPayload = z.object({ kind: z.literal('report-template'), templateSha256: z.string().regex(HEX64) });
@@ -81,7 +100,22 @@ export const artifactManifestSchema = z.object({
 export type ArtifactManifest = z.infer<typeof artifactManifestSchema>;
 
 export function parseArtifactManifest(raw: unknown): ArtifactManifest {
-  return artifactManifestSchema.parse(raw);
+  const manifest = artifactManifestSchema.parse(raw);
+  // Cross-field rules for an importing plugin. Checked here, not as a schema refinement, so the
+  // payload stays a plain object schema for the discriminated union.
+  if (manifest.payload.kind === 'plugin' && manifest.payload.importSource) {
+    const { entrypoints } = manifest.payload.importSource;
+    if (!manifest.capabilities.some((c) => c.kind === 'host:import')) {
+      throw new Error(`artifact ${manifest.id}: payload.importSource requires the host:import capability`);
+    }
+    const exported = new Set(manifest.payload.entrypoints);
+    for (const name of [entrypoints.queries, entrypoints.checks, entrypoints.map]) {
+      if (name !== undefined && !exported.has(name)) {
+        throw new Error(`artifact ${manifest.id}: import entrypoint '${name}' is not in payload.entrypoints`);
+      }
+    }
+  }
+  return manifest;
 }
 
 /** Legacy plugin manifest shape (packages/plugins manifest.ts). A flat legacy manifest may

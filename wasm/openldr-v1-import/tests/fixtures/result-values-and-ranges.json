@@ -1,0 +1,809 @@
+{
+  "name": "result-values-and-ranges",
+  "input": {
+    "keys": [
+      "VAL"
+    ],
+    "rows": {
+      "requests": [
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CHEM",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": "2024-06-10T11:22:33.000",
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        }
+      ],
+      "results": [
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": "mmol/L",
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": "H",
+          "CodedValue": null,
+          "LIMSObservationCode": "A",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": ">10",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": "4.0-11.0",
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 2,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": " L ",
+          "CodedValue": null,
+          "LIMSObservationCode": "B",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": ".5",
+          "LIMSRptUnits": "g/L",
+          "LIMSRptFlag": null,
+          "LIMSRptRange": "see note",
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 3,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": 1.5,
+          "SIHiRange": 3,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "C",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "20.",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 4,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": 0,
+          "SIHiRange": 0,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "D",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "-3.25",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 5,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": 0,
+          "SIHiRange": 5,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "E",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "1,200",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 6,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "F",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": null,
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": "A",
+          "LIMSRptRange": null,
+          "LIMSCodedValue": "POS"
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 7,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "G",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": null,
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 8,
+          "OBXSubID": 2,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "   ",
+          "LIMSObservationDesc": "No code",
+          "LIMSRptResult": "<5",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": " -1.5 - 2 ",
+          "LIMSCodedValue": null
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 9,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": "NU",
+          "SIValue": 7.25,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": "c7",
+          "LIMSObservationCode": "H",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "7",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": "SEVEN"
+        },
+        {
+          "RequestID": "VAL",
+          "OBRSetID": 1,
+          "OBXSetID": 10,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "I",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "> 1000000",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": "10-20-30",
+          "LIMSCodedValue": null
+        }
+      ],
+      "patients": [],
+      "ast": []
+    },
+    "options": {
+      "tz": "+02:00"
+    }
+  },
+  "expected": {
+    "groups": [
+      {
+        "key": "VAL",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "VAL"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "VAL-spec",
+            "subject": {
+              "reference": "Patient/VAL"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "VAL-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CHEM"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "VAL"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "VAL-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CHEM"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "VAL"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/VAL-spec"
+              }
+            ],
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "result": [
+              {
+                "reference": "Observation/VAL-obs-1"
+              },
+              {
+                "reference": "Observation/VAL-obs-2"
+              },
+              {
+                "reference": "Observation/VAL-obs-3"
+              },
+              {
+                "reference": "Observation/VAL-obs-4"
+              },
+              {
+                "reference": "Observation/VAL-obs-5"
+              },
+              {
+                "reference": "Observation/VAL-obs-6"
+              },
+              {
+                "reference": "Observation/VAL-obs-7"
+              },
+              {
+                "reference": "Observation/VAL-obs-8"
+              },
+              {
+                "reference": "Observation/VAL-obs-9"
+              },
+              {
+                "reference": "Observation/VAL-obs-10"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-1",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "A"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "1"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueQuantity": {
+              "value": 10,
+              "comparator": ">",
+              "unit": "mmol/L"
+            },
+            "interpretation": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+                    "code": "H"
+                  }
+                ]
+              }
+            ],
+            "referenceRange": [
+              {
+                "low": {
+                  "value": 4,
+                  "unit": "mmol/L"
+                },
+                "high": {
+                  "value": 11,
+                  "unit": "mmol/L"
+                }
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-2",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "B"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "2"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueQuantity": {
+              "value": 0.5,
+              "unit": "g/L"
+            },
+            "interpretation": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+                    "code": "L"
+                  }
+                ]
+              }
+            ],
+            "referenceRange": [
+              {
+                "text": "see note"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-3",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "C"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "3"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueQuantity": {
+              "value": 20
+            },
+            "referenceRange": [
+              {
+                "low": {
+                  "value": 1.5
+                },
+                "high": {
+                  "value": 3
+                }
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-4",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "D"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "4"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueQuantity": {
+              "value": -3.25
+            }
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-5",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "E"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "5"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueString": "1,200",
+            "referenceRange": [
+              {
+                "low": {
+                  "value": 0
+                },
+                "high": {
+                  "value": 5
+                }
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-6",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "F"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "6"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "POS",
+                  "display": "POS"
+                }
+              ],
+              "text": "POS"
+            }
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-7",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "G"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "7"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00"
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-8",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "8"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueQuantity": {
+              "value": 5,
+              "comparator": "<"
+            },
+            "referenceRange": [
+              {
+                "low": {
+                  "value": -1.5
+                },
+                "high": {
+                  "value": 2
+                }
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-9",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "H"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "9"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueQuantity": {
+              "value": 7
+            }
+          },
+          {
+            "resourceType": "Observation",
+            "id": "VAL-obs-10",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "I"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/VAL"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "10"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/VAL-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/VAL-spec"
+            },
+            "effectiveDateTime": "2024-06-10T11:22:33+02:00",
+            "valueQuantity": {
+              "value": 1000000,
+              "comparator": ">"
+            },
+            "referenceRange": [
+              {
+                "text": "10-20-30"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

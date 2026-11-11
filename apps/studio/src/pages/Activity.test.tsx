@@ -88,4 +88,16 @@ describe('Activity page', () => {
     expect(await within(table).findByText('keep-me')).toBeInTheDocument();
     expect(within(table).queryByText('drop-me')).not.toBeInTheDocument();
   });
+
+  it('shows a running import with its own status word, not as stuck', async () => {
+    const api = await import('@/api');
+    (api.fetchActivity as any).mockResolvedValueOnce([
+      { correlationId: 'imp-1', workflowId: 'import:openldr-v1-import', source: 'import: openldr-v1-import', startedAt: '2026-07-03T12:00:00Z', currentStage: 'persisted', status: 'running' },
+    ]);
+    render(<MemoryRouter><Activity /></MemoryRouter>);
+    expect(await screen.findByText('import: openldr-v1-import')).toBeInTheDocument();
+    expect(screen.getByText('Running')).toBeInTheDocument();
+    expect(screen.queryByText('Stuck')).toBeNull();
+  });
 });
+

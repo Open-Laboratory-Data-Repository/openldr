@@ -31,6 +31,16 @@ export function buildPgUrl(config: Record<string, string>): string {
   return `postgresql://${user}:${pass}@${hostPart}:${port}/${dbName}${ssl}`;
 }
 
+/** Split the `SERVER\INSTANCE` form that SQL Server Management Studio shows into a host and an
+ *  instance name. An instance name given on its own wins over one typed into the host. */
+export function splitMssqlHost(host: string, instanceName?: string): { host: string; instanceName?: string } {
+  const slash = host.indexOf('\\');
+  const bareHost = slash === -1 ? host : host.slice(0, slash);
+  const fromHost = slash === -1 ? '' : host.slice(slash + 1).trim();
+  const instance = instanceName?.trim() || fromHost;
+  return instance ? { host: bareHost, instanceName: instance } : { host: bareHost };
+}
+
 function wrap(store: {
   db: Kysely<TargetSchema>;
   withRequestTimeout?<T>(timeoutMs: number, operation: () => Promise<T>): Promise<T>;
@@ -79,9 +89,13 @@ export function createConnectorDb(
     };
   }
   if (type === 'microsoft-sql') {
+    const { host, instanceName } = splitMssqlHost(config.host ?? 'localhost', config.instanceName);
     return wrap(createMssqlStore({
-      host: config.host ?? 'localhost',
-      port: validatePort(config.port, 1433),
+      host,
+      // A named instance gets its port from SQL Browser, so a stored port is not used or checked.
+      port: instanceName ? 1433 : validatePort(config.port, 1433),
+      ...(instanceName ? { instanceName } : {}),
+      ...(config.domain?.trim() ? { domain: config.domain.trim() } : {}),
       database: config.database ?? '',
       user: config.user ?? '',
       password: config.password ?? '',

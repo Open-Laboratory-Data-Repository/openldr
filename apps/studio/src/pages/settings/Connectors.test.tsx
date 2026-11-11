@@ -9,7 +9,7 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual,
     listConnectors: vi.fn(), getConnectorConfig: vi.fn(), listSinkPlugins: vi.fn(), createConnector: vi.fn(),
-    updateConnector: vi.fn(), deleteConnector: vi.fn(), testConnector: vi.fn() };
+    updateConnector: vi.fn(), deleteConnector: vi.fn(), testConnector: vi.fn(), diagnoseConnector: vi.fn() };
 });
 import * as api from '@/api';
 import { toast } from 'sonner';
@@ -284,6 +284,38 @@ describe('Connectors page', () => {
     // host/port/database/user/password should also render for mongodb
     expect(screen.getByTestId('connector-db-host')).toBeTruthy();
     expect(screen.getByTestId('connector-db-password')).toBeTruthy();
+  });
+
+  it('type=Microsoft SQL renders instance and domain, and shows Encrypt on because the server encrypts when it is unset', async () => {
+    (api.listConnectors as any).mockResolvedValue([]);
+    (api.listSinkPlugins as any).mockResolvedValue([]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+
+    await openAddConnector();
+    fireEvent.keyDown(screen.getByTestId('connector-category'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /host/i }));
+    fireEvent.keyDown(await screen.findByTestId('connector-type'), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('option', { name: /microsoft sql/i }));
+
+    expect(await screen.findByTestId('connector-db-instanceName')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-domain')).toBeTruthy();
+    expect(screen.getByTestId('connector-db-encrypt').getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByTestId('connector-db-trustServerCertificate').getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('offers Diagnose only for host connectors, and opens the diagnosis sheet', async () => {
+    (api.listConnectors as any).mockResolvedValue([conn, dbConn]);
+    (api as any).diagnoseConnector.mockResolvedValue({ ok: true, steps: [{ id: 'login', status: 'pass' }] });
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByTestId('actions-c1');
+    openRowActions('c1');
+    await screen.findByTestId('edit-c1');
+    expect(screen.queryByTestId('diagnose-c1')).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    openRowActions('c2');
+    fireEvent.click(await screen.findByTestId('diagnose-c2'));
+    expect(await screen.findByTestId('diagnose-step-login')).toBeTruthy();
+    expect((api as any).diagnoseConnector).toHaveBeenCalledWith('c2');
   });
 
   it('type=Redis renders db+password, does NOT render database or user', async () => {

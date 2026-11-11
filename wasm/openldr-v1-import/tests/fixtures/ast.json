@@ -1,0 +1,917 @@
+{
+  "name": "ast",
+  "input": {
+    "keys": [
+      "AST1"
+    ],
+    "rows": {
+      "requests": [
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 1,
+          "LIMSPanelCode": "CULT",
+          "LIMSPanelDesc": "Culture",
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": "2024-07-01T08:00:00.000",
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "F",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        },
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 2,
+          "LIMSPanelCode": "CULT2",
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": null,
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": "F",
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": null,
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        }
+      ],
+      "results": [
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 1,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "HL7ResultTypeCode": null,
+          "SIValue": null,
+          "SIUnits": null,
+          "SILoRange": null,
+          "SIHiRange": null,
+          "HL7AbnormalFlagCodes": null,
+          "CodedValue": null,
+          "LIMSObservationCode": "GRAM",
+          "LIMSObservationDesc": null,
+          "LIMSRptResult": "Gram negative rods",
+          "LIMSRptUnits": null,
+          "LIMSRptFlag": null,
+          "LIMSRptRange": null,
+          "LIMSCodedValue": null
+        }
+      ],
+      "patients": [],
+      "ast": [
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 1,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "LIMSSubstanceCode": "AMP",
+          "LIMSSubstanceName": "Ampicillin",
+          "ORGANISM": "Klebsiella pneumoniae",
+          "LIMSOrganismCode": "KPN",
+          "BreakpointType": "CLSI",
+          "Methodology": "Disk",
+          "Units": "mm",
+          "ASTValue": "12",
+          "ASTResult": "R"
+        },
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 1,
+          "OBXSetID": 1,
+          "OBXSubID": 2,
+          "LIMSSubstanceCode": "CIP",
+          "LIMSSubstanceName": "Ciprofloxacin",
+          "ORGANISM": "Klebsiella pneumoniae",
+          "LIMSOrganismCode": "KPN",
+          "BreakpointType": null,
+          "Methodology": null,
+          "Units": "ug/mL",
+          "ASTValue": "0.25",
+          "ASTResult": "s"
+        },
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 1,
+          "OBXSetID": 2,
+          "OBXSubID": 1,
+          "LIMSSubstanceCode": null,
+          "LIMSSubstanceName": "Gentamicin",
+          "ORGANISM": "Escherichia coli",
+          "LIMSOrganismCode": null,
+          "BreakpointType": null,
+          "Methodology": null,
+          "Units": " MM ",
+          "ASTValue": "<=1",
+          "ASTResult": "I"
+        },
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 1,
+          "OBXSetID": 2,
+          "OBXSubID": 2,
+          "LIMSSubstanceCode": "  ",
+          "LIMSSubstanceName": null,
+          "ORGANISM": "Escherichia coli",
+          "LIMSOrganismCode": null,
+          "BreakpointType": null,
+          "Methodology": null,
+          "Units": null,
+          "ASTValue": null,
+          "ASTResult": "N/A"
+        },
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 2,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "LIMSSubstanceCode": "MEM",
+          "LIMSSubstanceName": "Meropenem",
+          "ORGANISM": "  ",
+          "LIMSOrganismCode": null,
+          "BreakpointType": " EUCAST ",
+          "Methodology": null,
+          "Units": null,
+          "ASTValue": "-2",
+          "ASTResult": "S"
+        },
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 2,
+          "OBXSetID": 1,
+          "OBXSubID": 2,
+          "LIMSSubstanceCode": "VAN",
+          "LIMSSubstanceName": "Vancomycin",
+          "ORGANISM": "Staphylococcus aureus",
+          "LIMSOrganismCode": "SAU",
+          "BreakpointType": null,
+          "Methodology": null,
+          "Units": null,
+          "ASTValue": "1.",
+          "ASTResult": "S"
+        },
+        {
+          "RequestID": "AST1",
+          "OBRSetID": 7,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "LIMSSubstanceCode": "XXX",
+          "LIMSSubstanceName": null,
+          "ORGANISM": "Lost",
+          "LIMSOrganismCode": null,
+          "BreakpointType": null,
+          "Methodology": null,
+          "Units": null,
+          "ASTValue": null,
+          "ASTResult": null
+        },
+        {
+          "RequestID": "AST1",
+          "OBRSetID": null,
+          "OBXSetID": 1,
+          "OBXSubID": 1,
+          "LIMSSubstanceCode": "YYY",
+          "LIMSSubstanceName": null,
+          "ORGANISM": "Lost2",
+          "LIMSOrganismCode": null,
+          "BreakpointType": null,
+          "Methodology": null,
+          "Units": null,
+          "ASTValue": null,
+          "ASTResult": null
+        }
+      ]
+    },
+    "options": {
+      "tz": "+02:00"
+    }
+  },
+  "expected": {
+    "groups": [
+      {
+        "key": "AST1",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "AST1"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "AST1-spec",
+            "subject": {
+              "reference": "Patient/AST1"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "AST1-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CULT",
+                  "display": "Culture"
+                }
+              ],
+              "text": "Culture"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "AST1"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "AST1-obr1",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CULT",
+                  "display": "Culture"
+                }
+              ],
+              "text": "Culture"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "AST1"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/AST1-spec"
+              }
+            ],
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr1"
+              }
+            ],
+            "result": [
+              {
+                "reference": "Observation/AST1-obs-1"
+              },
+              {
+                "reference": "Observation/AST1-iso-1"
+              },
+              {
+                "reference": "Observation/AST1-iso-2"
+              }
+            ]
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "AST1-obr2",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CULT2"
+                }
+              ]
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "AST1"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "2"
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "AST1-obr2",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_test",
+                  "code": "CULT2"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "AST1"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "2"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/AST1-spec"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr2"
+              }
+            ],
+            "result": [
+              {
+                "reference": "Observation/AST1-iso-3"
+              },
+              {
+                "reference": "Observation/AST1-iso-4"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-obs-1",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_result",
+                  "code": "GRAM"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:obx-set-id",
+                "value": "1"
+              }
+            ],
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "valueString": "Gram negative rods"
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-iso-1",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "634-6",
+                  "display": "Bacteria identified"
+                }
+              ],
+              "text": "Bacteria identified"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_org",
+                  "code": "Escherichia coli",
+                  "display": "Escherichia coli"
+                }
+              ],
+              "text": "Escherichia coli"
+            },
+            "hasMember": [
+              {
+                "reference": "Observation/AST1-ast-3"
+              },
+              {
+                "reference": "Observation/AST1-ast-4"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-iso-2",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "634-6",
+                  "display": "Bacteria identified"
+                }
+              ],
+              "text": "Bacteria identified"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_org",
+                  "code": "KPN",
+                  "display": "Klebsiella pneumoniae"
+                }
+              ],
+              "text": "Klebsiella pneumoniae"
+            },
+            "hasMember": [
+              {
+                "reference": "Observation/AST1-ast-1"
+              },
+              {
+                "reference": "Observation/AST1-ast-2"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-iso-3",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "634-6",
+                  "display": "Bacteria identified"
+                }
+              ],
+              "text": "Bacteria identified"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr2"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_org",
+                  "code": "unknown"
+                }
+              ]
+            },
+            "hasMember": [
+              {
+                "reference": "Observation/AST1-ast-5"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-iso-4",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://loinc.org",
+                  "code": "634-6",
+                  "display": "Bacteria identified"
+                }
+              ],
+              "text": "Bacteria identified"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr2"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_org",
+                  "code": "SAU",
+                  "display": "Staphylococcus aureus"
+                }
+              ],
+              "text": "Staphylococcus aureus"
+            },
+            "hasMember": [
+              {
+                "reference": "Observation/AST1-ast-6"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-ast-1",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_abx",
+                  "code": "AMP",
+                  "display": "Ampicillin"
+                }
+              ],
+              "text": "Ampicillin"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "interpretation": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+                    "code": "R"
+                  }
+                ]
+              }
+            ],
+            "valueString": "12",
+            "method": {
+              "text": "DISK"
+            },
+            "component": [
+              {
+                "code": {
+                  "text": "Zone diameter"
+                },
+                "valueQuantity": {
+                  "value": 12
+                }
+              }
+            ],
+            "note": [
+              {
+                "text": "CLSI"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-ast-2",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_abx",
+                  "code": "CIP",
+                  "display": "Ciprofloxacin"
+                }
+              ],
+              "text": "Ciprofloxacin"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "interpretation": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+                    "code": "S"
+                  }
+                ]
+              }
+            ],
+            "valueString": "0.25",
+            "method": {
+              "text": "MIC"
+            },
+            "component": [
+              {
+                "code": {
+                  "text": "MIC"
+                },
+                "valueQuantity": {
+                  "value": 0.25
+                }
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-ast-3",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_abx",
+                  "code": "Gentamicin",
+                  "display": "Gentamicin"
+                }
+              ],
+              "text": "Gentamicin"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "interpretation": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+                    "code": "I"
+                  }
+                ]
+              }
+            ],
+            "valueString": "<=1",
+            "method": {
+              "text": "DISK"
+            }
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-ast-4",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_abx",
+                  "code": "unknown"
+                }
+              ]
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr1"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "method": {
+              "text": "MIC"
+            }
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-ast-5",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_abx",
+                  "code": "MEM",
+                  "display": "Meropenem"
+                }
+              ],
+              "text": "Meropenem"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr2"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "interpretation": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+                    "code": "S"
+                  }
+                ]
+              }
+            ],
+            "valueString": "-2",
+            "method": {
+              "text": "MIC"
+            },
+            "component": [
+              {
+                "code": {
+                  "text": "MIC"
+                },
+                "valueQuantity": {
+                  "value": -2
+                }
+              }
+            ],
+            "note": [
+              {
+                "text": "EUCAST"
+              }
+            ]
+          },
+          {
+            "resourceType": "Observation",
+            "id": "AST1-ast-6",
+            "status": "final",
+            "code": {
+              "coding": [
+                {
+                  "system": "urn:openldr:default_abx",
+                  "code": "VAN",
+                  "display": "Vancomycin"
+                }
+              ],
+              "text": "Vancomycin"
+            },
+            "subject": {
+              "reference": "Patient/AST1"
+            },
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/AST1-obr2"
+              }
+            ],
+            "specimen": {
+              "reference": "Specimen/AST1-spec"
+            },
+            "effectiveDateTime": "2024-07-01T08:00:00+02:00",
+            "interpretation": [
+              {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+                    "code": "S"
+                  }
+                ]
+              }
+            ],
+            "valueString": "1.",
+            "method": {
+              "text": "MIC"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

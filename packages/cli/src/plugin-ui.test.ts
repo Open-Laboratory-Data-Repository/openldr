@@ -23,4 +23,11 @@ describe('readAdjacentUi', () => {
   it('rejects a ui.entry that is not a plain filename (path traversal)', async () => {
     expect(() => readAdjacentUi({ ui: { entry: '../escape.html' } }, dir)).toThrow();
   });
+
+  it('reads the page named by a full artifact manifest, under payload.ui', async () => {
+    await writeFile(join(dir, 'ui.html'), '<div>artifact</div>');
+    const bytes = readAdjacentUi({ payload: { ui: { entry: 'ui.html' } } }, dir);
+    expect(bytes && new TextDecoder().decode(bytes)).toBe('<div>artifact</div>');
+    expect(() => readAdjacentUi({ payload: { ui: { entry: '../escape.html' } } }, dir)).toThrow();
+  });
 });

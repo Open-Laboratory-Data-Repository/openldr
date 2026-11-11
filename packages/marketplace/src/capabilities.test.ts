@@ -42,4 +42,7 @@ describe('host-service capabilities', () => {
     const caps = parseCapabilities([{ kind: 'host:fhir' }]);
     expect(caps[0].kind).toBe('host:fhir');
   });
+  it('accepts host:import, the gate for reading a granted connector and saving records', () => {
+    expect(parseCapabilities([{ kind: 'host:import' }])).toEqual([{ kind: 'host:import' }]);
+  });
 });

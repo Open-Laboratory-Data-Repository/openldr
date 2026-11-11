@@ -20,6 +20,10 @@ export const capabilitySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('host:connectors') }),
   z.object({ kind: z.literal('host:schedule') }),
   z.object({ kind: z.literal('host:fhir') }), // host:fhir — FHIR facility reads
+  // host:import: read from the database connectors an admin has allowed for this plugin, with
+  // SELECT statements the plugin's signed wasm supplies, and save the mapped records into CE.
+  // Enforced by the import service (packages/bootstrap import-run.ts) and the broker.
+  z.object({ kind: z.literal('host:import') }),
 ]);
 
 export type Capability = z.infer<typeof capabilitySchema>;

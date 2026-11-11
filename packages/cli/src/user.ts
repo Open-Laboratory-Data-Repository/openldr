@@ -1,4 +1,7 @@
-import { createAppContext, recordAuditEvent, setAccountStatus, AccountNotFoundError, listUserDirectory } from '@openldr/bootstrap';
+import {
+  createAppContext, recordAuditEvent, setAccountStatus, AccountNotFoundError, listUserDirectory,
+  getUserPreferences, saveUserPreferences, userPreferencesPatchSchema, type UserPreferencesPatch,
+} from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
@@ -109,3 +112,56 @@ export async function runUserDirectoryList(opts: JsonOpt & { offset?: string; li
     return 0;
   } finally { await ctx.close(); }
 }
+
+const PREFERENCE_KEYS = ['theme', 'sidebarCollapsed', 'startPage', 'language'];
+
+/** Turn `<key> <value>` from the command line into a patch. `none` clears the key. */
+export function parsePreferenceArg(key: string, value: string): UserPreferencesPatch {
+  if (!PREFERENCE_KEYS.includes(key)) throw new Error(`unknown preference "${key}" (use ${PREFERENCE_KEYS.join(', ')})`);
+  let parsed: unknown = value;
+  if (value === 'none') parsed = null;
+  else if (key === 'sidebarCollapsed' && (value === 'true' || value === 'false')) parsed = value === 'true';
+  const result = userPreferencesPatchSchema.safeParse({ [key]: parsed });
+  if (!result.success) throw new Error(`invalid value for ${key}: ${value}`);
+  return result.data;
+}
+
+export async function runUserPreferencesShow(id: string, opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    if (!(await ctx.users.get(id))) {
+      emit(opts.json, { error: 'user not found' }, `user ${id} not found`);
+      return 1;
+    }
+    const prefs = await getUserPreferences(ctx.internalDb, id);
+    const human = Object.entries(prefs).map(([k, v]) => `${k}=${String(v)}`).join('\n') || '(no preferences saved)';
+    emit(opts.json, prefs, human);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runUserPreferencesSet(id: string, key: string, value: string, opts: JsonOpt): Promise<number> {
+  // Parse before connecting, so a typo fails without opening the database.
+  const patch = parsePreferenceArg(key, value);
+  const ctx = await createAppContext(loadConfig());
+  try {
+    if (!(await ctx.users.get(id))) {
+      emit(opts.json, { error: 'user not found' }, `user ${id} not found`);
+      return 1;
+    }
+    const prefs = await saveUserPreferences(ctx.internalDb, id, patch);
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'user.preferences.update',
+      entityType: 'user',
+      entityId: id,
+      metadata: { keys: Object.keys(patch) },
+    });
+    emit(opts.json, prefs, `set ${key} for ${id}`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+

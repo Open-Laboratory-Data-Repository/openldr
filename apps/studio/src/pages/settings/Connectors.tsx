@@ -22,13 +22,16 @@ import {
   ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
 } from '@/components/data-table';
 import { SettingsHeader } from './SettingsHeader';
+import { ConnectorDiagnoseSheet } from './ConnectorDiagnoseSheet';
+import { ConnectorPluginAccessSheet } from './ConnectorPluginAccessSheet';
 import {
   listConnectors, getConnectorConfig, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
   type Connector, type SinkPluginRef,
 } from '@/api';
 
 type FieldKind = 'text' | 'number' | 'password' | 'boolean';
-interface TypeField { key: string; labelKey: string; kind: FieldKind }
+// defaultOn: the server treats an unset value as on, so the switch must show it on too.
+interface TypeField { key: string; labelKey: string; kind: FieldKind; defaultOn?: boolean }
 const HOST_TYPES: Array<{ value: string; label: string }> = [
   { value: 'postgres', label: 'Postgres' },
   { value: 'mysql', label: 'MySQL / MariaDB' },
@@ -56,11 +59,14 @@ const CONNECTOR_TYPE_FIELDS: Record<string, TypeField[]> = {
   mysql: SQL_FIELDS,
   'microsoft-sql': [
     { key: 'host', labelKey: 'settings.connectors.fieldHost', kind: 'text' },
+    { key: 'instanceName', labelKey: 'settings.connectors.fieldInstanceName', kind: 'text' },
     { key: 'port', labelKey: 'settings.connectors.fieldPort', kind: 'number' },
     { key: 'database', labelKey: 'settings.connectors.fieldDatabase', kind: 'text' },
+    { key: 'domain', labelKey: 'settings.connectors.fieldDomain', kind: 'text' },
     { key: 'user', labelKey: 'settings.connectors.fieldUser', kind: 'text' },
     { key: 'password', labelKey: 'settings.connectors.fieldPassword', kind: 'password' },
-    { key: 'encrypt', labelKey: 'settings.connectors.fieldEncrypt', kind: 'boolean' },
+    // connector-db.ts encrypts unless the value is exactly 'false'.
+    { key: 'encrypt', labelKey: 'settings.connectors.fieldEncrypt', kind: 'boolean', defaultOn: true },
     { key: 'trustServerCertificate', labelKey: 'settings.connectors.fieldTrustServerCert', kind: 'boolean' },
   ],
   mongodb: [
@@ -153,6 +159,8 @@ export function Connectors() {
   const [plugins, setPlugins] = useState<SinkPluginRef[]>([]);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [pendingRemove, setPendingRemove] = useState<Connector | null>(null);
+  const [diagnosing, setDiagnosing] = useState<Connector | null>(null);
+  const [pluginAccess, setPluginAccess] = useState<Connector | null>(null);
   const [testResult, setTestResult] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -406,6 +414,18 @@ export function Connectors() {
                         >
                           {t('settings.connectors.test')}
                         </DropdownMenuItem>
+                        {/* Diagnosis probes a host and port; plugin connectors have neither. */}
+                        {c.type ? (
+                          <DropdownMenuItem data-testid={`diagnose-${c.id}`} onSelect={() => setDiagnosing(c)}>
+                            {t('settings.connectors.diagnose.menu')}
+                          </DropdownMenuItem>
+                        ) : null}
+                        {/* Import plugins read host (database) connectors only. */}
+                        {c.type ? (
+                          <DropdownMenuItem data-testid={`plugin-access-${c.id}`} onSelect={() => setPluginAccess(c)}>
+                            {t('settings.connectors.pluginAccess.menu')}
+                          </DropdownMenuItem>
+                        ) : null}
                         <DropdownMenuItem data-testid={`edit-${c.id}`} onSelect={() => openEdit(c)}>
                           {t('settings.connectors.edit')}
                         </DropdownMenuItem>
@@ -520,7 +540,7 @@ export function Connectors() {
                             <div key={field.key} className="col-span-2 flex items-center gap-2">
                               <Switch
                                 data-testid={fieldId}
-                                checked={val === 'true'}
+                                checked={val === 'true' || (val === '' && Boolean(field.defaultOn))}
                                 onCheckedChange={(v) => setDraft({ ...draft, dbConfig: { ...draft.dbConfig, [field.key]: v ? 'true' : 'false' } })}
                                 aria-label={t(field.labelKey)}
                               />
@@ -585,6 +605,9 @@ export function Connectors() {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <ConnectorDiagnoseSheet connector={diagnosing} onOpenChange={(o) => { if (!o) setDiagnosing(null); }} />
+      <ConnectorPluginAccessSheet connector={pluginAccess} onOpenChange={(o) => { if (!o) setPluginAccess(null); }} />
 
       <ConfirmDialog
         open={pendingRemove !== null}

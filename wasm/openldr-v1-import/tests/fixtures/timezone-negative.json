@@ -1,0 +1,177 @@
+{
+  "name": "timezone-negative",
+  "input": {
+    "keys": [
+      "TZ2"
+    ],
+    "rows": {
+      "requests": [
+        {
+          "RequestID": "TZ2",
+          "OBRSetID": 1,
+          "LIMSPanelCode": null,
+          "LIMSPanelDesc": null,
+          "LIMSSpecimenSourceCode": null,
+          "LIMSSpecimenSourceDesc": null,
+          "RequestingFacilityCode": null,
+          "TestingFacilityCode": null,
+          "SpecimenDateTime": "2024-01-01T00:00:00.000",
+          "ReceivedDateTime": null,
+          "RegisteredDateTime": null,
+          "AnalysisDateTime": null,
+          "AuthorisedDateTime": null,
+          "ClinicalInfo": null,
+          "ICD10ClinicalInfoCodes": null,
+          "Therapy": null,
+          "HL7PriorityCode": null,
+          "AgeInYears": null,
+          "AgeInDays": null,
+          "HL7SexCode": null,
+          "HL7PatientClassCode": null,
+          "HL7SectionCode": null,
+          "HL7ResultStatusCode": null,
+          "AttendingDoctor": null,
+          "TestedBy": null,
+          "AuthorisedBy": null,
+          "RegisteredBy": null,
+          "RequestTypeCode": null,
+          "LIMSAnalyzerCode": null,
+          "LIMSRejectionCode": null,
+          "LIMSRejectionDesc": null,
+          "LIMSPointOfCareDesc": null,
+          "LIMSPreReg_RegistrationDateTime": "2023-12-31T18:00:00.000",
+          "LIMSPreReg_ReceivedDateTime": null,
+          "LIMSPreReg_RegistrationFacilityCode": null,
+          "LOINCPanelCode": null,
+          "AdmitAttendDateTime": null,
+          "CollectionVolume": null,
+          "HL7SpecimenSourceCode": null,
+          "HL7SpecimenSiteCode": null,
+          "LIMSSpecimenSiteCode": null,
+          "LIMSSpecimenSiteDesc": null,
+          "WorkUnits": null,
+          "CostUnits": null,
+          "OrderingNotes": null,
+          "EncryptedPatientID": null,
+          "HL7EthnicGroupCode": null,
+          "Deceased": null,
+          "Newborn": null,
+          "ReferringRequestID": null,
+          "TargetTimeDays": null,
+          "TargetTimeMins": null,
+          "Repeated": null
+        }
+      ],
+      "results": [],
+      "patients": [],
+      "ast": []
+    },
+    "options": {
+      "tz": "-05:00"
+    }
+  },
+  "expected": {
+    "groups": [
+      {
+        "key": "TZ2",
+        "resources": [
+          {
+            "resourceType": "Patient",
+            "id": "TZ2"
+          },
+          {
+            "resourceType": "Specimen",
+            "id": "TZ2-spec",
+            "subject": {
+              "reference": "Patient/TZ2"
+            }
+          },
+          {
+            "resourceType": "ServiceRequest",
+            "id": "TZ2-obr1",
+            "status": "completed",
+            "intent": "order",
+            "subject": {
+              "reference": "Patient/TZ2"
+            },
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "TZ2"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "extension": [
+              {
+                "url": "urn:openldr:ext:request-attribute",
+                "extension": [
+                  {
+                    "url": "code",
+                    "valueCoding": {
+                      "system": "urn:openldr:cs:request-attribute",
+                      "code": "prereg-registration-time"
+                    }
+                  },
+                  {
+                    "url": "value",
+                    "valueString": "2023-12-31T18:00:00"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "resourceType": "DiagnosticReport",
+            "id": "TZ2-obr1",
+            "status": "unknown",
+            "code": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/data-absent-reason",
+                  "code": "unknown"
+                }
+              ],
+              "text": "unknown"
+            },
+            "subject": {
+              "reference": "Patient/TZ2"
+            },
+            "identifier": [
+              {
+                "system": "urn:openldr:request-id",
+                "value": "TZ2"
+              },
+              {
+                "system": "urn:openldr:obr-set-id",
+                "value": "1"
+              }
+            ],
+            "specimen": [
+              {
+                "reference": "Specimen/TZ2-spec"
+              }
+            ],
+            "effectiveDateTime": "2024-01-01T00:00:00-05:00",
+            "basedOn": [
+              {
+                "reference": "ServiceRequest/TZ2-obr1"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

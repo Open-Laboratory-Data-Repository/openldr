@@ -774,6 +774,13 @@ export interface CustomQueriesTable {
   updated_at: Generated<Date>;
 }
 
+/** Per-user studio preferences (migration 113). `prefs` is read through parseStoredPreferences. */
+export interface UserPreferencesTable {
+  user_id: string;
+  prefs: unknown;
+  updated_at: Generated<Date>;
+}
+
 export interface CustomQueryGroupsTable {
   id: string;
   name: string;
@@ -1006,6 +1013,7 @@ export interface InternalSchema {
   workflow_datasets: WorkflowDatasetsTable;
   custom_queries: CustomQueriesTable;
   custom_query_groups: CustomQueryGroupsTable;
+  user_preferences: UserPreferencesTable;
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;

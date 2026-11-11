@@ -26,7 +26,16 @@ export type PluginBrokerOp =
   | { kind: 'fhir.facilities' }
   | { kind: 'schedule.register'; schedule: unknown }
   | { kind: 'schedule.list' }
-  | { kind: 'schedule.remove'; id: string };
+  | { kind: 'schedule.remove'; id: string }
+  | { kind: 'import.allowed' }
+  | { kind: 'import.diagnose'; connectorId: string }
+  | { kind: 'import.checks'; connectorId: string; options: Record<string, string> }
+  | { kind: 'import.start'; connectorId: string; options: Record<string, string>; pageSize?: number; limit?: number; dryRun?: boolean }
+  | { kind: 'import.status'; runId: string }
+  | { kind: 'import.list' }
+  | { kind: 'import.failures'; runId: string }
+  | { kind: 'import.stop'; runId: string }
+  | { kind: 'import.resume'; runId: string };
 
 export type PluginRpcResult = { ok: true; data: unknown } | { ok: false; error: string };
 
@@ -62,6 +71,19 @@ export interface OpenLdrPluginApi {
     register(schedule: unknown): Promise<unknown>;
     list(): Promise<unknown>;
     remove(id: string): Promise<unknown>;
+  };
+  /** Imports from a database connector an admin allowed for this plugin (needs host:import).
+   *  The page passes a connector and options only; the plugin's wasm supplies the SQL. */
+  imports: {
+    allowed(): Promise<unknown>;
+    diagnose(connectorId: string): Promise<unknown>;
+    checks(input: { connectorId: string; options: Record<string, string> }): Promise<unknown>;
+    start(input: { connectorId: string; options: Record<string, string>; pageSize?: number; limit?: number; dryRun?: boolean }): Promise<unknown>;
+    status(runId: string): Promise<unknown>;
+    list(): Promise<unknown>;
+    failures(runId: string): Promise<unknown>;
+    stop(runId: string): Promise<unknown>;
+    resume(runId: string): Promise<unknown>;
   };
 }
 
