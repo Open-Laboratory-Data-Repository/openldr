@@ -132,15 +132,23 @@ export interface ShotOptions {
   crop?: Locator;
   pad?: number;
   callouts?: Callout[];
+  /** Rest the mouse on this element instead of parking it, so its tooltip is in the picture. */
+  hover?: Locator;
 }
 
 /** Save a PNG of the page, or of one region of it. */
 export async function shot(page: Page, name: string, options: ShotOptions = {}): Promise<void> {
   // Park the mouse on the top bar, so no chart tooltip or hover colour ends up in the picture.
+  // With `hover`, rest it on that element instead and wait for its tooltip.
   const size = page.viewportSize() ?? VIEWPORT;
-  await page.mouse.move(size.width / 2, 8, { steps: 4 });
-  mouse = { x: size.width / 2, y: 8 };
-  await settle(page, 250);
+  if (options.hover) {
+    await point(page, options.hover);
+    await settle(page, 900);
+  } else {
+    await page.mouse.move(size.width / 2, 8, { steps: 4 });
+    mouse = { x: size.width / 2, y: 8 };
+    await settle(page, 250);
+  }
   await page.evaluate(() => {
     const dot = document.querySelector<HTMLElement>('[data-doc-cursor]');
     if (dot) dot.style.visibility = 'hidden';

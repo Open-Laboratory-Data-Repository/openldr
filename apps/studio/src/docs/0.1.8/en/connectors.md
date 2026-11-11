@@ -1,191 +1,263 @@
 # Connectors
 
-The Allowed plugin host column shows the network host permitted for a plugin connector. It is not the stored connection address. Host connectors do not use this plugin restriction. Open the row's Edit action to inspect their saved address and ordinary configuration.
+A **connector** is a saved connection to another system: a database, an email server, a file server, or a destination an installed plugin provides. Workflow nodes, Custom Queries and reports use a connector **by name**. None of them stores a password. The server supplies it when the work runs.
 
-Connectors are saved, encrypted connections to external systems — databases, email servers, file servers, and plugin destinations — that workflow nodes use **by reference**. A workflow node never stores a password itself; it points at a connector by name, and the server supplies the credentials at run time.
+This guide takes about 15 minutes. Select any picture or clip to enlarge it.
 
-## Outcome
+![Settings, Connectors on a fresh install: one connector, Target Warehouse (Postgres).](connectors-tour.png)
 
-You can list connectors, create database and email connectors, enter their configuration, save, edit, enable or disable, remove, and rotate credentials safely — and understand how workflow nodes pick them up.
+## Who can do what
 
-![Connectors list with configured destinations](connectors-list.png)
+One permission covers this page: **Manage connectors**. Without it, Connectors is not listed in Settings. The built-in **Administrator** role has it.
 
-## Where connectors live
+## What a fresh install has
 
-Open **Settings → Connectors**. The list shows each connector's name, type, and enabled state. Use the add action to create one, or the row actions to edit, enable/disable, or remove.
+One connector, **Target Warehouse (Postgres)**. It points at the lab warehouse, the database OpenLDR writes lab data into. The built-in reports and Custom Queries read through it. Do not remove it.
+
+The list shows each connector's **Name**, **Type**, **Allowed plugin host** and an **Enabled** switch. **Allowed plugin host** is the one network host a plugin connector may reach. It is not the saved connection address, and host connectors leave it empty. Open **Edit** to see a host connector's address.
+
+## Example 1: test the warehouse connector
+
+![Opening the row menu of Target Warehouse and selecting Test. Connection OK appears.](connectors-test.mp4)
+
+1. Open **Settings**, then **Connectors**.
+2. On the **Target Warehouse (Postgres)** row, open the **⋯** menu and select **Test**.
+
+**Expected result:** **Connection OK** under the row's menu. The test runs from the OpenLDR server, not from your browser, so it proves the server can reach the database.
+
+Each test is written to [Audit](/docs/audit) as `connector.test`, with the outcome.
+
+## Example 2: add a read-only connector for reports
+
+A report or a Custom Query needs to read lab data, not change it, and seldom needs patient names. Give it a database account that can only read the tables it needs. Then even a wrong query cannot change data or read a patient's name.
+
+This example makes an account that can read orders, results, specimens, reports and facilities, but not patients.
+
+### Make the database account
+
+On the server, as the user that runs OpenLDR, run this from the install folder. Replace the password with your own.
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T postgres psql -U openldr -d openldr_target <<'SQL'
+CREATE ROLE report_reader LOGIN PASSWORD 'choose-a-strong-password';
+GRANT CONNECT ON DATABASE openldr_target TO report_reader;
+GRANT USAGE ON SCHEMA public TO report_reader;
+GRANT SELECT ON lab_requests, lab_results, specimens, diagnostic_reports, facilities TO report_reader;
+SQL
+```
+
+### Add the connector
+
+![Adding Warehouse (read only): Host, Postgres, the address, database, user and password, then Save and Test.](connectors-add.mp4)
+
+1. On **Connectors**, open the page's **⋯** menu and select **Add connector**.
+2. In **Name**, type `Warehouse (read only)`. This is the name people pick in workflow nodes and queries.
+3. Set **Category** to **Host**. Leave **Plugin** for destinations an installed plugin provides.
+4. Set **Database type** to **Postgres**.
+5. Fill in the connection:
+
+   | Field | Value |
+   | --- | --- |
+   | Host | `postgres` |
+   | Port | `5432` |
+   | Database | `openldr_target` |
+   | User | `report_reader` |
+   | Password | the password you chose |
+
+6. Open the sheet's **⋯** menu and select **Save**. **Saved Warehouse (read only)** appears, and so does the new row. It starts enabled.
+7. On its row, open **⋯** and select **Test**.
+
+**Expected result:** **Connection OK**.
+
+The clip was made on a development install, where the database is at `localhost` port `5433`. On a standard install the server reaches it at `postgres` port `5432`, as in the table.
+
+### See what it can and cannot read
+
+![A new query on Warehouse (read only): orders count 60, then the patients table is refused.](connectors-readonly-query.mp4)
+
+1. Open **Query** and start a new query tab. See [Custom Queries, Example 2](/docs/query#example-2-write-a-query).
+2. Set **Connector** to **Warehouse (read only)**.
+3. Type `SELECT COUNT(*) AS orders FROM lab_requests` and select **Run**.
+4. Replace it with `SELECT COUNT(*) AS patients FROM patients` and select **Run**.
+
+**Expected result:** the first query returns **60**, the orders in the docs sample. The second fails. A red mark appears left of **Connector**. Point at it to read **permission denied for table patients**. The table below still shows the last result that worked, so check the mark, not the table. The account cannot read patient names, whatever query someone writes.
+
+![The red mark's message: permission denied for table patients.](connectors-readonly-denied.png)
+
+This is the way to keep columns private on connector paths. [Data exposure](/docs/data-exposure) does not cover connectors.
+
+## Example 3: change a password
+
+When a database password changes, update the connector. Here the password of `report_reader` changes first, so the connector stops working until it is updated.
+
+1. Change the password in the database:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml exec -T postgres psql -U openldr -d openldr_target \
+     -c "ALTER ROLE report_reader PASSWORD 'the-new-password'"
+   ```
+
+2. Test **Warehouse (read only)** again. It fails with **Test failed: password authentication failed for user "report_reader"**, because the connector still holds the old password.
+
+![The test failing after the password changed.](connectors-test-failed.png)
+
+![Editing the connector, typing the new password, saving and testing again.](connectors-rotate.mp4)
+
+3. On its row, open **⋯** and select **Edit**. **Password** is empty and reads **••• set (leave blank to keep)**. The old password is never shown.
+4. Type the new password in **Password**. Leave every other field as it is.
+5. Open the sheet's **⋯** menu and select **Save**.
+6. Test again.
+
+**Expected result:** **Connection OK**. Workflows, queries and reports that use the connector pick up the new password on their next run. Nothing else needs changing.
 
 ## How workflows use connectors
 
-A workflow **Database** node or **Send Email** node shows a **connector dropdown**, not credential fields. That dropdown is **filtered by type**:
+A workflow **Postgres**, **MySQL** or **Microsoft SQL** node, or a **Send Email** node, shows a connector list, not password fields. The list is filtered by type:
 
 - A **Postgres** node lists only Postgres connectors.
 - A **Send Email (SMTP)** node lists only SMTP connectors.
 
-So the order is always: **create the connector first**, then open the node and pick it. If a connector does not appear in a node's dropdown, it is either the wrong type or disabled.
+So create the connector first, then open the node and pick it. If a connector is missing from a node's list, it is the wrong type or it is disabled.
 
-## Security model
+**The connector's type sets the SQL dialect.** The node's label is only a label. The dialect comes from the connector you attach, so pick one whose type matches your real database.
 
-- Secret fields (passwords, tokens) are **encrypted at rest** with the server's encryption key and shown **masked**. You cannot read a secret back after saving.
-- **Rotate** a credential by editing the connector, replacing the secret, and saving. Dependent workflows use the new value on their next run.
-- **Disable** a connector to revoke its use everywhere without deleting it.
-- Never paste secrets into names, notes, screenshots, or workflow labels.
+See [Workflows](/docs/workflows) for a worked example with the warehouse connector.
 
-## Before you begin
+## Security
 
-- You need administrator access (`lab_admin`).
-- Know the address, port, database/mailbox, and credentials of the system you are connecting to.
-- For email, have the sending account's SMTP details (or an App Password — see below).
+- Passwords and tokens are encrypted at rest with the server's encryption key. After saving, they are never shown again.
+- To change a secret, edit the connector, type the new one, save and test, as in Example 3. Leave a secret blank to keep the stored one.
+- Switch off **Enabled** to stop a connector being used anywhere, without deleting it.
+- **Remove** in the row menu deletes the connector and its stored secrets. Anything that points at it fails until you point it elsewhere.
+- Give each connector a database account with only the rights it needs, as in Example 2.
+- Never put secrets in names, notes, screenshots or workflow labels.
+- Keep one connector per real destination. Then changing or disabling it has one clear effect.
 
-## Database connectors (Postgres, MySQL / MariaDB, Microsoft SQL)
+## Addresses are seen from the server
 
-Use these for the SQL nodes — source extracts, report queries, and any node that reads or writes an external database. In the type dropdown the MySQL option is labelled **MySQL / MariaDB** and serves both engines. (For non-SQL stores, **MongoDB** and **Redis** connectors are also available — see [Other connector types](#other-connector-types).)
+The host and port must be reachable **from the OpenLDR server**, not from your laptop.
 
-**Postgres / MySQL / MariaDB fields**
+- In a standard install, OpenLDR runs in Docker Compose. Use the service name and its internal port, for example `postgres` and `5432`.
+- If OpenLDR runs directly on a machine, use the address and published port you would use on that machine, for example `localhost` and `5433`.
 
-| Field | Notes |
+## Connector types
+
+Set **Category** to **Host** for these. The list under **Database type** holds the email and file services too, despite its label.
+
+| Type | Used by | Fields |
+| --- | --- | --- |
+| Postgres | Postgres node, Custom Queries, reports | Host, Port (5432), Database, User, Password, Use SSL |
+| MySQL / MariaDB | MySQL node, Custom Queries, reports | Host, Port (3306), Database, User, Password, Use SSL |
+| Microsoft SQL | Microsoft SQL node, Custom Queries, reports | Host, Port (1433), Database, User, Password, Encrypt, Trust server certificate |
+| MongoDB | MongoDB node | Connection details and database |
+| Redis | Redis node | Host, Port, Password, DB index |
+| SMTP Email | Send Email node | Host, Port, User, Password, Use TLS |
+| IMAP Email | Email Trigger node | Host, Port, User, Password, Use TLS |
+| Gmail, Microsoft Outlook | Send Email node | Client ID, Client secret, Refresh token, and Tenant for Outlook |
+| SFTP | File transfer nodes | Host, Port, User, Password |
+
+For Microsoft SQL, switch on **Encrypt** to require TLS. Switch on **Trust server certificate** only for a self-signed certificate in a test install.
+
+Set **Category** to **Plugin** for a destination an installed output plugin provides, such as a DHIS2 sink. Pick the plugin under **Sink plugin**, then fill **Base URL**, **Username** and **Password**. If the list says no sink plugins are installed, install one from the [Marketplace](/docs/marketplace) first.
+
+## Email connectors
+
+Use **SMTP Email** for the **Send Email** node. It works with any SMTP provider, including Gmail with an App Password, Outlook and Office 365, and relays such as smtp2go or Mailtrap.
+
+Use **Gmail** or **Microsoft Outlook** only if you already have a Google Cloud or Microsoft Entra app with a client ID, client secret and refresh token. That is more setup than most labs need. For Gmail, SMTP is simpler.
+
+| Field | Value |
 | --- | --- |
-| Host | Address of the database server (see the host/port note below). |
-| Port | Postgres `5432`, MySQL `3306`. |
-| Database | The database (schema) name. |
-| User | Database user. |
-| Password | Database password (masked). |
-| SSL | Turn on if the server requires TLS. |
+| Host | The mail server, for example `smtp.gmail.com` |
+| Port | `587` with **Use TLS** off (STARTTLS), or `465` with **Use TLS** on |
+| User | The sending account. It is also the sender address |
+| Password | The account password, or an App Password for Gmail |
 
-**Microsoft SQL fields**
+The recipient is set later, in the Send Email node's **To** field.
 
-| Field | Notes |
-| --- | --- |
-| Host | Address of the SQL Server. |
-| Port | Usually `1433`. |
-| Database | Database name. |
-| User / Password | SQL login. |
-| Encrypt | Turn on to require TLS (recommended). |
-| Trust server certificate | Turn on for self-signed certificates in test environments. |
+### Send from Gmail with an App Password
 
-**Host/port are from the server's point of view.** The address must be reachable **by the OpenLDR server process**, not your laptop:
+Once 2-Step Verification is on, Gmail refuses your normal password over SMTP with `534-5.7.9 Application-specific password required`. Use an **App Password** instead: a 16-character password Gmail makes for one app. It skips the second step for that app only, keeps your real password safe, and can be revoked at any time.
 
-- If OpenLDR runs directly on a machine, use the address and published port you would use there (e.g. `localhost` and `5433`).
-- If OpenLDR runs inside Docker Compose, use the database **service name** and its **internal** port (e.g. `postgres` and `5432`).
-
-**The connector's type sets the SQL dialect.** The Database node's label (Postgres vs Microsoft SQL) is cosmetic — the actual dialect comes from the connector you attach. Always pick a connector whose type matches your real database.
-
-## Email connectors (SMTP, Gmail, Outlook)
-
-Use these for the **Send Email** node.
-
-- **SMTP** — the general-purpose, recommended option. Works with any SMTP provider, **including Gmail** (via an App Password), Outlook/Office 365, and relays such as smtp2go or Mailtrap.
-- **Gmail / Outlook (OAuth2)** — only if you already have a Google Cloud or Microsoft Entra OAuth app (client ID, client secret, refresh token). This is more setup than most people need; prefer the SMTP option for Gmail.
-
-**SMTP fields**
-
-| Field | Notes |
-| --- | --- |
-| Host | The mail server, e.g. `smtp.gmail.com`. |
-| Port | `587` for STARTTLS (Secure off) or `465` for SSL (Secure on). |
-| User | The sending account / login. |
-| Password | The account password — **or an App Password** for Gmail. |
-| Secure | Off for port 587, On for port 465. |
-
-The sender address is the connector's **User**. The recipient is set later on the Send Email node's **To** field.
-
-### Send from Gmail (SMTP + App Password)
-
-Gmail will **reject your normal password** over SMTP once 2‑Step Verification is on — you will see `534-5.7.9 Application-specific password required`. The fix is an **App Password**: a 16‑character, single‑purpose password Gmail generates for one app. It bypasses the 2‑factor prompt for that app only, leaves your real password protected, and can be revoked at any time.
-
-1. Turn on **2‑Step Verification** at `myaccount.google.com` → Security. (App Passwords require it.)
-2. Go to `myaccount.google.com/apppasswords`, name it (e.g. `OpenLDR`), and **Create**. Copy the 16‑character code (shown like `abcd efgh ijkl mnop`).
-3. Open **Settings → Connectors**, then choose **Add connector** from the page menu. Set **Category** to **Host**, then select **SMTP Email** under **Database type**:
+1. Turn on **2-Step Verification** at `myaccount.google.com`, under Security. App Passwords need it.
+2. Go to `myaccount.google.com/apppasswords`, name it, for example `OpenLDR`, and select **Create**. Copy the 16-character code, shown like `abcd efgh ijkl mnop`.
+3. Add a connector with **Category** **Host** and **Database type** **SMTP Email**:
 
    | Field | Value |
    | --- | --- |
    | Host | `smtp.gmail.com` |
    | Port | `587` |
    | User | `you@gmail.com` |
-   | Password | *the 16‑character App Password* |
-   | Secure | Off |
+   | Password | the 16-character App Password |
+   | Use TLS | Off |
 
-4. Save, then pick this connector in the Send Email node.
+4. Save, test, and pick this connector in the Send Email node.
 
-If the App Passwords page says it is unavailable, 2‑Step Verification is not fully on, or (for Google Workspace accounts) an administrator has disabled App Passwords — in that case use a relay such as **Mailtrap** (captures mail for testing) or **smtp2go**.
+If the App Passwords page says it is unavailable, 2-Step Verification is not fully on, or a Google Workspace administrator has turned App Passwords off. Use a relay such as **Mailtrap** for testing, or **smtp2go**.
 
-**Common SMTP providers**
-
-| Provider | Host | Port | Secure |
+| Provider | Host | Port | Use TLS |
 | --- | --- | --- | --- |
-| Gmail | `smtp.gmail.com` | 587 | Off (App Password) |
+| Gmail | `smtp.gmail.com` | 587 | Off, with an App Password |
 | Outlook / Office 365 | `smtp.office365.com` | 587 | Off |
 | smtp2go | `mail.smtp2go.com` | 2525 or 587 | Off |
 | Mailtrap (testing) | `sandbox.smtp.mailtrap.io` | 587 | Off |
 
-## Other connector types
+## From the command line
 
-- **IMAP Email** — for the *Email Trigger* node, which starts a workflow when new mail arrives (host, port, user, password, TLS).
-- **SFTP** — for file-transfer nodes (host, port, user, password).
-- **MongoDB** — for reading or writing a MongoDB collection from a workflow node (connection URI and database).
-- **Redis** — for a Redis key/value store (host, port, password, database index).
-- **Plugin destinations** — connectors powered by an installed plugin (e.g. a DHIS2 sink). Select the plugin, then complete its configuration fields.
+The command line can read and change a host connector. Adding, testing and removing one is done in the studio.
 
-## Steps (create any connector)
+```bash
+./openldr connectors inspect <id>
+./openldr connectors update <id> --file patch.json
+```
 
-1. Open **Settings → Connectors**.
-2. Open the page's **⋯** menu and choose **Add connector**.
-3. Enter a clear **Name** you will recognise in workflow node dropdowns.
-4. Choose **Category**. The default is **Plugin**, which requires an installed output plugin. For a database, email server, or file server, choose **Host**.
-5. For **Host**, choose the service under **Database type**. Despite its label, this selector also includes email and file services. For **Plugin**, select the installed output plugin.
-6. Complete the connection fields for the selected service, then choose **Save** from the sheet's **⋯** menu.
-7. Check the saved-name notification and the new row. New connectors start enabled. There is no Enabled choice during creation. To disable one, turn off its **Enabled** switch in the list, or open **Edit** from its row menu and save with Enabled off.
-8. Open the row's **⋯** menu and choose **Test** to check the connection from the OpenLDR server.
-9. Select the enabled connector in a compatible workflow node when you are ready to use it.
+- `inspect` prints JSON with the ordinary `config` and a `secretsSet` true or false for each secret. It never prints a secret.
+- `update` takes a JSON patch. Omitted fields stay as stored, and blank secrets keep the stored one. Example: `{"config":{"host":"db.internal","port":"5432"}}`. A rename only: `{"name":"Lab database"}`.
+- Output and audit records never hold credential values. Protect any file that holds a new secret, and delete it after.
 
-If Plugin shows no installed output plugins, choose Host for a built-in service. For a plugin destination, install the required output plugin through [Marketplace](/docs/marketplace) first.
+The connector id is in `GET /api/connectors`.
 
-![Connector configuration form](connector-form.png)
+## Editing stored settings
 
-## Expected result
+**Edit** shows a host connector's stored ordinary fields: host, port, database and user where the type has them. A secret marked as set stays blank. Leave it blank to keep it, even when you change the host. URLs, unknown fields and plugin settings are not shown.
 
-The connector appears in the list and becomes selectable in every compatible workflow node.
+For a plugin connector, enter **Base URL**, **Username** and **Password** together, or leave all three blank to keep the stored values.
+
+## Query deadlines
+
+PostgreSQL, MySQL and Microsoft SQL connector queries have a 30-second limit. A slow query fails instead of keeping a workflow or report waiting forever. Connecting has its own 30-second limit. There is no timeout field in the connector form.
+
+- PostgreSQL and Microsoft SQL cancel the running request.
+- MySQL opens a second connection with the same account to stop the query. That can take one more second, and the account must be allowed to open another connection and end its own sessions.
+
+If a query hits the limit, narrow its date range or filters and check its plan in the database. If the error says `server cancellation failed`, OpenLDR closed its own connection but could not confirm the database stopped the query. Ask the database operator to check active queries.
+
+## Server shutdown
+
+On SIGTERM or SIGINT, the API stops taking requests and stops polling the queue. It waits for active requests, the claimed queue batch and the running projection cycle, then closes its databases. A second signal does not start a second shutdown.
+
+A handler that never returns can keep shutdown waiting forever. Give active imports enough time before the service manager forces the stop. After the worker stops, manual drains still work until the context closes.
+
+## On a phone
+
+The connectors list scrolls sideways on a phone. The **⋯** menu sits at the end of each row. The **Add connector** sheet fills the screen, with labels to the left of each box.
 
 ## Troubleshooting
 
-- **`534-5.7.9 Application-specific password required` (Gmail):** create and use an App Password (see above), not your login password.
-- **Invalid login / authentication failed:** wrong user or password/App Password; re-enter the secret.
-- **Connection refused or timeout:** wrong host/port, or the database/mail server is not reachable **from the OpenLDR server** (check Docker service names vs `localhost`).
-- **TLS/SSL error:** toggle SSL/Secure/Encrypt to match the server's requirement (587 → Secure off, 465 → Secure on).
-- **Connector missing from a node's dropdown:** its type does not match the node, or it is disabled.
-- **A workflow cannot use the connector:** confirm it is enabled and your role can use it.
-
-## Advanced web usage
-
-Rotate credentials by editing the connector, replacing secret values, saving, and testing before dependent workflows run again. Keep one connector per real destination so rotation and disabling have a clear, single effect.
+- **`534-5.7.9 Application-specific password required` (Gmail).** Use an App Password, not your login password.
+- **Invalid login, or authentication failed.** The user or password is wrong. Edit the connector and type the secret again.
+- **Connection refused, or a timeout.** The host or port is wrong, or the server cannot reach it. Check the Docker service name against `localhost`.
+- **TLS or SSL error.** Match **Use SSL**, **Use TLS** or **Encrypt** to what the server needs. For SMTP, 587 means **Use TLS** off and 465 means on.
+- **permission denied for table.** The database account lacks rights to that table. That may be on purpose, as in Example 2.
+- **A query fails but the old result is still on screen.** Query keeps the last result that worked. The red mark left of **Connector** holds the error. Point at it to read it.
+- **A connector is missing from a node's list.** Its type does not match the node, or it is disabled.
+- **The test passes but a workflow fails.** Open the workflow's **Runs** tab and read the node's error. See [Workflows, Example 3](/docs/workflows#example-3-read-the-run). The query or its rights are the usual cause.
 
 ## Related guides
 
 - [Workflows](/docs/workflows)
+- [Custom Queries](/docs/query)
+- [Data exposure](/docs/data-exposure)
 - [Scheduled reports with workflows](/docs/report-pipeline)
-- [Settings](/docs/settings)
 - [Marketplace](/docs/marketplace)
-
-## Edit stored host settings
-
-Choose **Edit** from the connector row's **⋯** menu. Host connectors show stored ordinary fields, including host, port, database, and user where applicable. A secret marked as set stays blank. Leave it blank to keep its stored value, including when changing the host. Enter a replacement secret only when needed. Choose **Save** from the sheet's **⋯** menu, then use the row's **Test** action.
-
-URLs, unknown configuration fields, and plugin configuration are not shown. Plugin editing keeps its existing requirement to enter base URL, username, and password together.
-
-For headless inspection, run `openldr connectors inspect <id>`. The JSON contains ordinary `config` and boolean `secretsSet` fields. To update a host connector, run `openldr connectors update <id> --file patch.json`. Example file: `{"config":{"host":"db.internal","port":"5432"}}`. Omitted fields remain stored. Blank secret fields keep existing secrets. A rename-only patch is `{"name":"Lab database"}`. Output and audit records exclude credential values. Protect files containing replacement secrets.
-
-## Database query deadlines
-
-PostgreSQL, MySQL, and Microsoft SQL connector queries have a 30-second execution limit. A slow query fails instead of keeping the workflow or report waiting indefinitely. PostgreSQL and Microsoft SQL cancel the active request. MySQL uses a second connection with the same credentials to terminate the query connection. MySQL cancellation may take one additional second. Connection setup has a separate 30-second limit.
-
-If a query exceeds this limit, narrow its date range or filters and check its database execution plan. Retry after correcting the query. There is no timeout field in the connector form.
-
-If the error says `server cancellation failed`, OpenLDR closed its local connection but could not confirm server cancellation. Ask the database operator to check active queries. The MySQL account must be able to open another connection and terminate its own sessions.
-
-## Server shutdown
-
-On SIGTERM or SIGINT, the API stops accepting requests and stops queue polling.
-It waits for active requests, the claimed queue batch, and the active projection cycle before closing their databases.
-Repeated signals do not start another shutdown.
-A handler that never returns can keep shutdown waiting indefinitely.
-Allow enough time for active imports before the service manager forces termination.
-Worker stop still permits later manual drains. Closing the context ends that access.
+- [Settings](/docs/settings)

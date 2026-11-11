@@ -389,6 +389,7 @@ export const DOC_GUIDES: DocGuide[] = [
     difficulty: 'intermediate',
     relatedSlugs: ['report-pipeline', 'settings', 'workflows', 'marketplace', 'query'],
     screenshotNames: ['connectors-list.png', 'connector-form.png'],
+    capturedNames: ['connectors-tour.png', 'connectors-test.mp4', 'connectors-add.mp4', 'connectors-readonly-query.mp4', 'connectors-readonly-denied.png', 'connectors-test-failed.png', 'connectors-rotate.mp4'],
     status: 'published',
   },
   {

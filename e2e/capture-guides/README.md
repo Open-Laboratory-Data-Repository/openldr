@@ -31,6 +31,9 @@ The docs tests fail if one is missing, or if a clip has no poster.
    bytes. Change it only together with the numbers in the guides.
 3. `AUTH_DEV_BYPASS=true` on that server, so the script is signed in as an administrator.
 4. ffmpeg with libx264. Set `FFMPEG_PATH` if it is not on `PATH`.
+5. For `connectors.guide.ts` only: `TARGET_DATABASE_URL` set to the warehouse database as this
+   machine reaches it. The script makes a read-only database account there, `docs_report_reader`,
+   and drops it at the end.
 
 ## Run it
 
