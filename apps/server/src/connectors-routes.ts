@@ -189,7 +189,14 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     const connector = await connectors.get(id);
     if (!connector) { reply.code(404); return { error: 'connector not found' }; }
     if (!connector.type) { reply.code(400); return { error: 'diagnosis is for host connectors' }; }
-    const config = await connectors.getDecryptedConfig(id, key());
+    let config: Record<string, string>;
+    try {
+      config = await connectors.getDecryptedConfig(id, key());
+    } catch {
+      // Same generic answer as GET /config: decrypt errors can quote stored text.
+      reply.code(400);
+      return { error: 'connector configuration unavailable' };
+    }
     const result = await diagnose(connector.type, config);
     // The engine already masks secrets; mask again here so a fake or a future engine cannot leak one.
     const mask = makeRedactor([config.password, config.clientSecret, config.refreshToken].filter((v): v is string => Boolean(v)));

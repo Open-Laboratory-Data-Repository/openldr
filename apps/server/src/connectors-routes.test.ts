@@ -340,6 +340,15 @@ describe('connector diagnosis route', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it('returns a generic error when the stored config cannot be read', async () => {
+    const store = fakeStore();
+    await store.create({ id: 'ms', name: 'DISA', type: 'microsoft-sql', kind: 'database', config: { host: 'h' } }, 'key');
+    store.getDecryptedConfig = async () => { throw new Error('bad ciphertext near credential-value'); };
+    const res = await diagApp(store, async () => ({ ok: true, steps: [] })).inject({ method: 'POST', url: '/api/connectors/ms/diagnose' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).not.toContain('credential-value');
+  });
+
   it('refuses a plugin connector', async () => {
     const store = fakeStore();
     await store.create({ id: 'sink', name: 'DHIS2', pluginId: 'dhis2-sink', kind: 'sink', config: {} }, 'key');

@@ -63,6 +63,18 @@ describe('diagnoseConnector', () => {
     expect(summary(r)[0]).toBe('config:fail:badPort');
   });
 
+  it('fails on a blank stored port, which the real connection also refuses', async () => {
+    const r = await diagnoseConnector('postgres', { ...pg, port: '' }, deps());
+    expect(summary(r)[0]).toBe('config:fail:badPort');
+  });
+
+  it('uses the default port when none is stored', async () => {
+    const tcpProbe = vi.fn(async () => {});
+    const { port: _omit, ...noPort } = pg;
+    await diagnoseConnector('postgres', noPort, deps({ tcpProbe }));
+    expect(tcpProbe).toHaveBeenCalledWith('db.lab', 5432, 5000);
+  });
+
   it('stops at a name that does not resolve', async () => {
     const r = await diagnoseConnector('postgres', pg, deps({ lookup: async () => { throw new Error('getaddrinfo ENOTFOUND db.lab'); } }));
     expect(summary(r)).toEqual(['config:pass', 'dns:fail:dnsFailed', 'tcp:skip', 'login:skip', 'version:skip']);

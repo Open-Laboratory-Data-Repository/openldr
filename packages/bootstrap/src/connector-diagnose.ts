@@ -175,7 +175,8 @@ export async function diagnoseConnector(
   if (ids.includes('config')) {
     if (!host) return fail('config', 'missingHost');
     if (!instance) {
-      try { port = validatePort(config.port || undefined, port); } catch { return fail('config', 'badPort', `port ${config.port}`); }
+      // Same check the real connection makes (connector-db.ts), so a port it would refuse fails here.
+      try { port = validatePort(config.port, port); } catch { return fail('config', 'badPort', `port ${config.port}`); }
     }
     const where = instance ? `${host}\\${instance}` : `${host}:${port}`;
     steps.push(LOCAL_HOSTS.has(host.toLowerCase())
