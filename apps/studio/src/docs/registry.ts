@@ -188,10 +188,11 @@ export const DOC_GUIDES: DocGuide[] = [
     summary: 'Design printable report templates, bind tables to queries, and publish them as reports.',
     audience: ['lab-managers', 'administrators'],
     requiredRoles: ['lab_admin', 'lab_manager'],
-    estimatedMinutes: 20,
+    estimatedMinutes: 15,
     difficulty: 'intermediate',
     relatedSlugs: ['reports', 'query', 'connectors'],
     screenshotNames: ['report-designer-canvas.png'],
+    capturedNames: ['report-designer-tour.png', 'report-designer-explore.mp4', 'report-designer-build.mp4', 'report-designer-bound.png', 'report-designer-publish.mp4', 'report-designer-create-report.mp4', 'report-designer-run.mp4', 'report-designer-report.png'],
     status: 'published',
   },
   {
