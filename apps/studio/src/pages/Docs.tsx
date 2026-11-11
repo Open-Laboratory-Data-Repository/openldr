@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, Download, ListTree } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '../shell/AppShell';
@@ -197,6 +197,13 @@ export function Docs() {
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [activeSlug]);
+  // A link such as /docs/dashboard#load-the-sample-data opens that page at that heading.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const frame = requestAnimationFrame(() => goToHeading(decodeURIComponent(hash.slice(1))));
+    return () => cancelAnimationFrame(frame);
+  }, [activeSlug, hash]);
   const toc = useMemo(() => (section ? extractToc(section.content) : []), [section?.content]);
   const showToc = wantsToc(toc);
   const activeHeading = useActiveHeading(contentRef, showToc ? toc : []);

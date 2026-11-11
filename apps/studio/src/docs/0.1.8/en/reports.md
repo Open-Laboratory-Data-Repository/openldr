@@ -1,115 +1,212 @@
 # Reports
 
-Reports are data-driven: each one links a printable **Report Designer** template (the layout) to a **Custom Query** (the data). Use them when you need a repeatable result that can be run, reviewed, exported, scheduled, and audited from the web interface.
+A report is a printable page of lab figures that you can run again whenever you need it. Each one joins two parts. A **Report Designer** template sets the layout. A **Custom Query** fetches the data. You run a report with a date range and other filters, read it as a document or a spreadsheet, download it, and schedule it to run by itself.
 
-## Outcome
+This guide takes about 30 minutes. It uses the docs sample data, so load that first. Select any picture or clip to enlarge it.
 
-You can browse the report library by category, select a report, fill in filters derived from its template, run it, switch between **Document** and **Spreadsheet**, review **Run History**, and open **Schedules** when your role allows schedule management.
+![A report after a run. 1 Search the library. 2 Report actions menu. 3 Document view. 4 Spreadsheet view. 5 Download.](reports-tour.png)
 
-![Report selected with spreadsheet results](reports-run-result.png)
+1. **Library search.** Filters the report list by name. Reports are grouped by category.
+2. **Actions.** The dots menu for the selected report: **Refresh**, **Parameters**, **Run History**, **Schedules**, and, for managers, **Edit template**, **Unpublish** and **Delete report**.
+3. **Document.** The printable PDF.
+4. **Spreadsheet.** The same rows as a table you can filter, sort and export.
+5. **Download.** Saves the PDF.
+
+## Who can do what
+
+| Permission | What it lets you do |
+| --- | --- |
+| View reports | Open **Reports** and see the library. |
+| Run reports | Run a report and see its result. |
+| Export reports | Download the PDF, CSV or XLSX, and download saved schedule outputs. |
+| Edit report templates | Make, change and delete schedules. Use **Edit template**, **Unpublish** and **Delete report**. |
+
+New reports are not made on this page. A lab manager builds a template in [Report Designer](/docs/report-designer) and publishes it. It then appears in the library.
+
+## Before you start
+
+The examples need the docs sample data. If **Total Orders** on the sample dashboard reads 0, load it first. See [Load the sample data](/docs/dashboard#load-the-sample-data).
+
+A new install ships ten reports in four categories:
+
+| Category | Reports | Works with the sample data |
+| --- | --- | --- |
+| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | No. They need microbiology results. |
+| Operational | Clinical Microbiology Report, LIS Stakeholders Update, Specimen Turnaround Time, Test Volume Over Time | Turnaround and Test Volume, yes |
+| Quality | Patient Demographics | Yes |
+| Regulatory | AMR GLASS RIS (stratified) | No. It needs microbiology results. |
+
+The AMR and microbiology reports read organisms and susceptibility results. The sample has none, so they come back empty. They fill once your lab system sends microbiology, for example through a WHONET export. See [Load and push data](https://openldr.online/#/docs/load-data) on the website.
+
+## Example 1: run a report
+
+Count the tests ordered each month in September and October 2026.
+
+![Selecting Test Volume Over Time, setting the date range and running it.](reports-run.mp4)
+
+1. Open **Reports**.
+2. In the library, under **Operational**, select **Test Volume Over Time**. The page says **Run the report to see results.**
+3. Open **Actions** and select **Parameters**. A side panel lists the report's filters. A star marks a required one.
+4. Select **Date range**. Go back to September 2026. Select 1 September, then 31 October.
+5. Leave **Facility** on **All**.
+6. Select **Run**. The panel closes and the report runs.
+
+**Expected result:** **Total tests** reads 60. The document has ten rows, one per test per month. In October: Blood glucose 3, Creatinine 5, Full blood count 8, HIV viral load 8, Malaria rapid test 8.
+
+The filters come from the template's parameters. To add, remove or rename one, change the template in [Report Designer](/docs/report-designer), not this page. A report remembers the last values you ran it with, in this browser.
+
+## Read the result
+
+The document view has page arrows, zoom and **Download**. **Download** saves the PDF and records a `pdf` run in the history.
+
+Select **Spreadsheet** to see the same rows as a table.
+
+![The Spreadsheet view, with Filter, Sort, Columns and the two exports.](reports-spreadsheet.png)
+
+- **Filter.** Choose a column, an operator and a value, then **Apply**. Remove a filter chip to clear one rule, or use **Clear all**.
+- **Sort.** Changes the order.
+- **Columns.** Hides and shows columns.
+- **Export CSV** and **Export XLSX.** Download the rows for other tools.
+
+Use the spreadsheet when you need exact values, or to feed the rows into another tool.
 
 ### What "Facility" means in the built-in reports
 
-The Facility picker and the facility columns in the built-in reports mean the **testing
-laboratory**: the lab that ran the test. They do not group by the clinic that sent the sample.
+The **Facility** filter and the facility columns in the built-in reports mean the **testing laboratory**, the lab that ran the test. They do not group by the clinic that sent the sample. On a new install the Facility list is empty until a facility register is loaded. See [Facilities](/docs/facilities).
 
-## Before you begin
+## Run history
 
-- Confirm the report you need has already been published. Reports are **not** created from this page — a Lab Admin or Lab Manager authors and publishes them from [Report Designer](/docs/report-designer).
-- Confirm the source data has been ingested and is visible to the web app.
-- Know the date window or facility filter you want to use.
-- Ask an administrator for report-management permission if you need **Schedules**.
+Open **Actions** and select **Run History**.
 
-## Steps
+![Run History. Activity lists each interactive run, with its format, rows, user and time.](reports-history.png)
 
-1. Open **Reports** from the main navigation.
-2. Browse the library, grouped by **Category**. Use the search box to filter by name, or star a report to pin it to the top.
-3. Select a report. Reports built from a template carry a **Template** badge.
-4. Open the report's **⋯** menu and choose **Parameters**. The filters are generated automatically from the parameters defined on the report's template (for example Date range or Facility). Leave optional filters blank when you want the broadest result.
-5. Select **Run** in the Parameters panel. The panel closes and the report runs.
-6. Read the **Document** tab for the formatted, printable PDF.
-7. Switch to **Spreadsheet** to inspect, sort, filter, and export rows as CSV or XLSX.
-8. Review the summary strip above the result, if the report defines one, for at-a-glance totals.
-9. Open the report's **⋯ Actions** menu and choose **Run History**. **Activity** lists interactive runs. **Scheduled Runs** lists completed schedule attempts, their status, and saved output.
-10. From the same **⋯ Actions** menu, open **Schedules** if your role allows recurring runs.
-11. If you manage reports, use the report's **⋯** menu for **Edit template** (jumps to the template in Report Designer), **Unpublish** (removes it from the library without deleting the template), or **Delete** (with confirmation).
+- **Activity** lists interactive runs. `preview` is a run on this page. `pdf`, `csv` and `xlsx` are downloads.
+- **Scheduled Runs** lists schedule attempts, their status, and the saved file. **Download** beside a good run fetches its CSV, XLSX or PDF.
 
-![Report history and schedules drawer](reports-history-schedules.png)
+Use the history to compare repeated runs, and to check whether a result changed after new data arrived. For who changed report settings or schedules, see [Audit](/docs/audit).
 
-## Schedule a report
+## Example 2: specimen turnaround time
 
-1. Select a report, then open its **⋯ → Schedules** menu. Your role needs permission to manage reports.
-2. Choose **New schedule**. Select Daily, Weekly, Monthly, or Quarterly. Weekly requires a weekday; Monthly offers days 1 through 28.
-3. Choose CSV, XLSX, or PDF. Check the saved filters, including any required facility or time zone. A new schedule starts with the report page's current filters, except its date range.
-4. In the side sheet, choose **Save** from the **⋯** menu and check the saved confirmation. The schedule appears with an enabled switch, **Next**, and **Last**.
-5. Use the pencil icon to edit its frequency, output format, or filters. Save the changes. Use the switch to disable it, or the delete icon and confirmation to remove it.
+See how long each test takes from specimen received to report issued.
 
-### Timing and date window
+![Specimen Turnaround Time for September and October 2026.](reports-turnaround.png)
 
-Every frequency uses 06:00 UTC. The schedule cannot select another hour or time zone. **Next** and **Last** display in your browser's local time zone. A report's Time zone filter controls its data calculation, not the scheduler's clock.
+1. In the library, select **Specimen Turnaround Time**.
+2. Open **Actions**, then **Parameters**. Set **Date range** to 1 September to 31 October 2026.
+3. Select **Run**.
 
-| Frequency | Next date when saved | Automatic report window |
+**Expected result:** **Reports** reads 39 and **Avg hours** reads 358.6. Blood glucose averages 137.7 hours, HIV viral load 288.0, Malaria rapid test 349.8, Full blood count 392.5 and Creatinine 615.0.
+
+Those hours are far longer than the hours each sample really took. This report measures from the patient's **earliest** received specimen to each report. The sample has patients with several orders over two months, so a later report is timed from the first specimen. Keep this in mind for patients with repeat tests, such as HIV viral load monitoring.
+
+## Example 3: schedule a report
+
+Make Test Volume run every Monday and save a PDF.
+
+![Opening Schedules, making a weekly PDF schedule and saving it.](reports-schedule.mp4)
+
+1. Select **Test Volume Over Time**. Open **Actions** and select **Schedules**. Your role needs **Edit report templates**.
+2. Select **New Schedule**.
+3. Set **Frequency** to **Weekly**. Set **Day of week** to **Mon**.
+4. Set **Output format** to **PDF**. Leave **Facility** on **All**.
+5. Open the schedule's own **Actions** menu and select **Save**. A **Schedule saved.** message appears.
+
+**Expected result:** the list shows **Weekly · Mon**, a **PDF** badge, an enabled switch, and the **Next** run.
+
+![The saved schedule, with its switch, Run now, edit and delete.](reports-schedules.png)
+
+Each schedule row has a switch to turn it on and off, a play button, **Run now**, a pencil to edit, and a bin to delete.
+
+### Frequency, time and date window
+
+- **Daily**, **Weekly**, **Monthly** or **Quarterly**. Weekly needs a day of the week. Monthly offers days 1 to 28.
+- Every schedule runs at 06:00 UTC. You cannot pick another hour or time zone.
+- **Next** and **Last** show in your browser's time zone.
+- A report's **Time zone** filter sets how its data is counted, not when the schedule runs.
+- A new schedule starts with the report page's current filters, except the date range.
+
+The date range is not saved. The scheduler works out the window when the run starts, including **Run now**:
+
+| Frequency | Next date when saved | Date window |
 | --- | --- | --- |
-| Daily | Tomorrow | Previous UTC day |
-| Weekly | Next selected weekday, never today | Previous seven UTC days, ending yesterday |
-| Monthly | Selected day in the next month | Previous calendar month in UTC |
-| Quarterly | First day of the next calendar quarter | Previous calendar quarter in UTC |
+| Daily | Tomorrow | The previous UTC day |
+| Weekly | The next chosen weekday, never today | The previous seven UTC days, ending yesterday |
+| Monthly | The chosen day next month | The previous calendar month in UTC |
+| Quarterly | The first day of the next calendar quarter | The previous calendar quarter in UTC |
 
-The scheduler calculates the window when execution starts, including **Run now**. Reports with a Date range parameter receive that window automatically. The schedule does not retain the date range selected on the report page. Other saved filters remain in use.
-
-A disabled schedule can still show **Next**. That stored timestamp does not mean it will execute. Check the enabled switch. **Last** can refer to a failed attempt; inspect its status in history.
+A disabled schedule can still show **Next**. That date does not mean it will run. Check the switch. **Last** can be a failed attempt. Check its status in the history.
 
 ### Run now and download the output
 
-1. Enable the schedule before selecting its play icon, **Run now**.
-2. A notification confirms the request was queued. This does not confirm successful generation. A disabled schedule can show the same notification but produces no run.
-3. Open the report's **⋯ → Run History → Scheduled Runs**. Automatic runs and **Run now** results appear here after completion. **Activity** contains interactive report runs.
-4. Check the status and use **Download** beside a successful output to retrieve its saved CSV, XLSX, or PDF. Downloading requires report-export permission.
-5. If the result is absent, leave and reopen **Scheduled Runs** to reload the list. The list does not refresh automatically.
+1. Turn the schedule on, then select **Run now**.
+2. A message says the run was queued. That does not mean it worked. A disabled schedule shows the same message and runs nothing.
+3. Open **Actions**, **Run History**, **Scheduled Runs**. Automatic runs and **Run now** results appear here when they finish.
+4. Select **Download** beside a successful run. You need **Export reports**.
+5. If the run is missing, close and reopen **Scheduled Runs**. The list does not refresh by itself.
 
-A failed run has no downloadable output. On desktop, hover over its failed status to read the error. Check the schedule's saved filters, correct them, and try **Run now** again. The schedule output does not replace the report page's current Document or Spreadsheet view.
+A failed run has no file. On a computer, point at its failed status to read the error. Fix the schedule's filters and try **Run now** again. A scheduled run never replaces what the report page shows.
 
-## Expected result
+## Manage a report
 
-The report run completes, the result appears in both the Document and Spreadsheet views, and the run is listed in **Run History**. If schedules are enabled for your role, schedule controls are available from the same report area.
+With **Edit report templates**, the report's **Actions** menu also has:
+
+- **Edit template.** Opens the template in [Report Designer](/docs/report-designer).
+- **Unpublish.** Removes the report from the library and keeps the template.
+- **Delete report.** Removes it, after you confirm.
+
+## On a phone
+
+On a phone, the library starts folded into a thin strip on the left. Select the panel button at the top of the strip to open it. Long names are cut short in the list. The full name shows once you select the report. Fold the library again to give the report the whole screen.
+
+![The report library opened on a phone.](reports-phone.png)
+
+## Limits
+
+Each stored report query returns at most 1,000 rows. Exactly 1,000 is accepted. If any query behind a PDF goes over, the whole PDF is refused. CSV and XLSX exports refuse too. Narrow the date range or other filters and run again. A `LIMIT` written in the saved SQL is kept on purpose.
+
+A scheduled run over the limit records a failure and saves no file. The CLI reports the error before writing the export. Earlier saved outputs are not made again.
+
+## The LIS Stakeholders Update
+
+This report shows, per testing laboratory, whether any data reached OpenLDR on each working day of a month.
+
+- Dates sit in the column header, day number over month, and repeat on every page.
+- A filled cell means data arrived that day. An empty cell means none did.
+- Weekends are left off. No public-holiday calendar applies, so a holiday still counts as a working day.
+- Days are counted in the time zone set at **Settings**, **Laboratory**, **Time zone**. The run's own **Time zone** filter starts from that setting, and you can change it. A scheduled or CLI run does not read the setting, so give it the zone directly.
+- **HVL/EID panel codes** takes the codes your programme counts as HVL or EID, on each run. Everything else falls into the Other grid.
+- A laboratory that sent nothing that month is not on the grid.
+- The **Spreadsheet** view and the CSV are the raw query result. Their first row carries the column dates, not a laboratory, and they include the sort column the page hides. Skip that first row when you feed the file to another tool.
+
+## The Clinical Microbiology Report
+
+This report takes the **lab number** as its Request ID: the number on the request form and the specimen label, as the lab system sends it, for example `TZDISATDS0013538`.
+
+A lab system often splits one microbiology result into several orders under one lab number. The culture that grew the organism is one order, the susceptibility panel another. The report reads every order under the lab number and prints one isolate with its susceptibilities on one page. A specimen that grew more than one organism is refused, not merged, because two antibiograms under one organism name would read as one isolate. A single order id also works.
 
 ## Troubleshooting
 
-- **Run is disabled:** a required filter is missing. Open **⋯ → Parameters** and fill in every filter marked required — most reports require a date range.
-- **"date range not selected", or a message naming a parameter:** the report ran without a value it needs. Open **⋯ → Parameters**, set it, and run again. The message names the parameter at fault.
-- **The result is empty:** widen the date range, remove optional filters, or confirm that the relevant data has been ingested.
-- **"no data for this report request" on the Clinical Microbiology Report:** the lab number carries no microbiology. A chemistry or serology request has no organism, and the report is refused rather than printed empty — a microbiology report with no organism reads like a negative culture. Check the request's panels in **Query** before assuming a fault.
-- **A microbiology report prints an organism but no susceptibilities:** that is usually a valid result. The culture grew something and no sensitivity testing was done on it. The organism band is the finding.
-- **Every microbiology report has an empty susceptibility table:** check **Terminology** for the AST interpretation value set before treating any of them as a clinical finding. The report selects susceptibilities from that value set, so if it never seeded on this install, no result qualifies and every table is empty — which looks exactly like a culture with no sensitivity testing. One empty table is a result; all of them is a seeding problem.
-- **An antibiogram shows an `(unmapped)` column:** those are susceptibility results the report could not attribute to a specific antibiotic — commonly a panel-level summary row, a single result reporting two drugs, or a microscopy finding recorded as S/I/R. They are shown rather than dropped so the count is visible; treat a large number as a data-quality signal worth raising with whoever configures the analyser.
-- **Permission denied:** your account can view reports but may not have permission to manage schedules, edit templates, or unpublish/delete.
-- **A previous run failed:** open **Run History**, inspect the error, adjust filters, and run again.
-- **A report you expect isn't in the library:** it may have been unpublished, or it hasn't been created yet — see [Report Designer](/docs/report-designer) to publish it.
-- **The LIS Stakeholders Update shows no data for a day you know a laboratory transmitted:** check **Settings ▸ Laboratory ▸ Time zone** first, or the **Time zone** filter on the run itself. Arrivals are bucketed by civil day, so a zone set to UTC on an installation running ahead of UTC can push a late-evening arrival to the previous day.
-- **On a SQL Server warehouse, the Time zone setting cannot be used:** **Settings ▸ Laboratory ▸ Time zone** accepts an IANA zone name only, and SQL Server takes Windows zone names instead. On that warehouse leave the setting empty and type the Windows zone name into the **Time zone** filter on each run. The setting is usable on Postgres and on MySQL/MariaDB.
-- **The run is refused with a message naming the Time zone filter:** the filter was given a signed offset such as `+3`, `+03:00` or `Etc/GMT+3`. Those are refused on purpose, because the database reads the sign the other way round — `+3` means three hours *behind* UTC, not ahead — so the grid would come out shifted by twice the offset with nothing on the page to show it. Type a named zone instead, such as `Africa/Nairobi`, or on a SQL Server warehouse the Windows zone name. A zone name the warehouse simply does not recognise is **not** refused here: the warehouse reports that one itself, clearly, and no wrong grid is produced.
-- **A laboratory is missing from the LIS Stakeholders Update grid entirely:** it sent nothing that month. The grid lists only laboratories that appear in the window, not every known laboratory. If *every* laboratory is missing, see the next bullet before concluding that.
-- **Every laboratory is missing on a MySQL or MariaDB warehouse:** the server's time-zone tables are probably not loaded. MySQL and MariaDB only understand a named zone once `mysql_tzinfo_to_sql` has been run against the server; until then every day bucket comes out empty, the grid draws its date header with no rows under it, and the run looks exactly like a month in which nothing arrived. Ask whoever administers the warehouse to load the zone tables. A Postgres or SQL Server warehouse is not affected.
-- **The HVL/EID grid is empty but the Other grid is not:** the codes in the **HVL/EID panel codes** filter do not match the codes this laboratory actually sends. The filter cannot have been blank — it is required, and a blank one refuses the run with a message naming it. To check, open **Query**, find a request you know is an HVL or EID test, and read the panel code recorded on it; that is the spelling the filter needs, punctuation and case included.
-
-## Advanced web usage
-
-- Use **Spreadsheet** when you need exact row values, sorting, filtering, or a CSV/XLSX export for downstream analysis.
-- Use **Run History** to compare repeated runs and confirm whether a result changed after new data arrived.
-- Use **Schedules** for recurring operational reports when the same filters should run on a predictable cadence.
-- The filters on this page come straight from the template's parameters — to add, remove, or rename a filter, edit the template's parameters in [Report Designer](/docs/report-designer), not this page.
-- The **Clinical Microbiology Report** takes the **lab number** as its Request ID — the number on the request form and the specimen label, as the LIS sends it (for example `TZDISATDS0013538`). A laboratory system usually splits one microbiology result into several orders under that one lab number: the culture that grew the organism is one order, the susceptibility panel another. The report reads every order under the lab number and prints one isolate with its susceptibilities on one page. A specimen that grew more than one organism is refused rather than merged, because merging two antibiograms under one organism name would read as a single isolate. A single order id also works if you have one.
-- Pair reports with [Audit](/docs/audit) when investigating who changed report settings or schedules.
-- The **LIS Stakeholders Update** shows, per testing laboratory, whether any data reached OpenLDR on each working day of a month. Dates sit in the column header, day number stacked over month, and repeat on every page, so a long run stays readable without scrolling back to page one. A filled cell means data arrived that day; an empty cell means none did. Weekends are left off the grid, and no public-holiday calendar applies, so a holiday still counts as a working day. Days are bucketed in the timezone set at **Settings ▸ Laboratory ▸ Time zone**. The run's own **Time zone** filter starts from that setting as a convenience default, but you can overwrite it, and a scheduled or CLI run does not read the setting at all — it must be given the zone directly. The **HVL/EID panel codes** filter takes the codes your programme counts as HVL/EID, entered fresh on each run; everything else falls into the Other grid. A laboratory that sent nothing that month does not appear on the grid at all. The **Spreadsheet** view and the CSV download are the raw query result, not the printed page: their first row carries the column dates rather than a laboratory, and they include the sort column the page hides. Skip that first row when feeding the file to anything downstream.
+- **Run is greyed out.** A required filter is empty. Open **Actions**, **Parameters**, and fill every filter marked with a star. Most reports need a date range.
+- **"date range not selected", or a message naming a parameter.** The report ran without a value it needs. Set it in **Parameters** and run again. The message names the parameter.
+- **The result is empty.** Widen the date range, clear optional filters, or check that the data is loaded. The AMR reports stay empty without microbiology data.
+- **"no data for this report request" on the Clinical Microbiology Report.** That lab number has no microbiology. A chemistry or serology request has no organism. The report refuses rather than printing an empty page, because a microbiology report with no organism reads like a negative culture. Check the request's panels in **Query** first.
+- **A microbiology report shows an organism but no susceptibilities.** Usually a real result. The culture grew something and no sensitivity testing was done.
+- **Every microbiology report has an empty susceptibility table.** Check **Terminology** for the AST interpretation value set first. The report picks susceptibilities from that value set. If it never loaded on this install, every table is empty, which looks like cultures with no sensitivity testing. One empty table is a result. All of them is a setup problem.
+- **An antibiogram shows an `(unmapped)` column.** These are susceptibility results the report could not tie to one antibiotic, often a panel summary row, one result reporting two drugs, or a microscopy finding recorded as S, I or R. They are shown so the count is visible. A large number is a data-quality problem to raise with whoever sets up the analyser.
+- **Turnaround hours look far too long.** See [Example 2](#example-2-specimen-turnaround-time). The report times each report from the patient's first specimen.
+- **Permission denied.** Your role can view reports but not manage schedules, edit templates, or unpublish and delete.
+- **A previous run failed.** Open **Run History**, read the error, change the filters, and run again.
+- **A report you expect is missing.** It may be unpublished, or not made yet. See [Report Designer](/docs/report-designer).
+- **The LIS Stakeholders Update has no data on a day you know a lab sent some.** Check **Settings**, **Laboratory**, **Time zone** first, or the run's **Time zone** filter. Days are counted in that zone, so a zone set to UTC on an install ahead of UTC can push a late-evening arrival to the previous day.
+- **On a SQL Server warehouse, the Time zone setting cannot be used.** That setting takes IANA zone names only, and SQL Server takes Windows zone names. On SQL Server, leave the setting empty and type the Windows zone name into each run's **Time zone** filter. The setting works on PostgreSQL and on MySQL or MariaDB.
+- **The run is refused with a message naming the Time zone filter.** The filter got a signed offset such as `+3`, `+03:00` or `Etc/GMT+3`. These are refused on purpose. The database reads the sign the other way round, so `+3` means three hours behind UTC, and the grid would shift by twice the offset with nothing on the page to show it. Type a named zone such as `Africa/Nairobi`, or the Windows zone name on SQL Server. A zone name the warehouse does not know is not refused here. The warehouse reports it clearly itself.
+- **A laboratory is missing from the LIS Stakeholders Update.** It sent nothing that month. If every laboratory is missing, see the next item first.
+- **Every laboratory is missing on a MySQL or MariaDB warehouse.** The server's time-zone tables are probably not loaded. Until someone runs `mysql_tzinfo_to_sql` on that server, every day comes out empty. The grid draws its date header with no rows, which looks like a month where nothing arrived. Ask the warehouse administrator to load the zone tables. PostgreSQL and SQL Server are not affected.
+- **The HVL/EID grid is empty but the Other grid is not.** The codes in **HVL/EID panel codes** do not match what this lab sends. The filter is required, so it was not blank. Open **Query**, find a request you know is an HVL or EID test, and read its panel code. That exact spelling, punctuation and case included, is what the filter needs.
 
 ## Related guides
 
 - [Report Designer](/docs/report-designer)
 - [Custom Queries](/docs/query)
-- [Dashboard](/docs/dashboard)
+- [Dashboards](/docs/dashboard)
 - [Audit](/docs/audit)
-
-
-## Report result limit
-
-Each stored report query can return up to 1,000 rows. Exactly 1,000 rows are accepted. If any query used by a PDF exceeds this limit, the whole PDF is refused. CSV and XLSX exports also refuse oversized results. Narrow the date range or other filters, then run again. A LIMIT written in the saved SQL remains intentional and is respected. Scheduled runs record a failure without saving an output file. The CLI reports the error before writing the export. Previously saved outputs are not regenerated.

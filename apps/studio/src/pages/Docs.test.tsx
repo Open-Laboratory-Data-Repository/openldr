@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import i18n from '@/i18n';
 import { Docs } from './Docs';
@@ -49,6 +49,8 @@ const registry = vi.hoisted(() => {
         ? '# Advanced Docs — Coming soon\n\nThe separate advanced web app does not exist yet.'
         : guide.slug === 'workflows'
           ? '# Workflows\n\nCreate workflow procedures for training.'
+        : guide.slug === 'audit'
+          ? '# Audit\n\n## First part\n\nOne.\n\n## Second part\n\nTwo.\n\n## Third part\n\nThree.'
         : `# ${guide.title}\n\nStep-by-step content for ${guide.title}.`,
     localeUsed: 'en',
   }));
@@ -142,6 +144,22 @@ describe('DocsLayout', () => {
   it('shows a not-found panel for an unknown or retired slug', () => {
     renderAt('/docs/dhis2');
     expect(screen.getByText(/not found/i)).toBeInTheDocument();
+  });
+
+  it('lists the sections of a long page on the right and opens a #heading link there', async () => {
+    const scrolled: string[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function scrollIntoView(this: Element) {
+      scrolled.push(this.id);
+    };
+    try {
+      renderAt('/docs/audit#third-part');
+      const list = screen.getByRole('navigation', { name: 'On this page' });
+      expect(within(list).getByRole('link', { name: 'Second part' })).toHaveAttribute('href', '#second-part');
+      await waitFor(() => expect(scrolled).toContain('third-part'));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 
   it('exposes a download menu in the toolbar', () => {

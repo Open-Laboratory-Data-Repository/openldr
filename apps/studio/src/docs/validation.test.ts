@@ -229,8 +229,11 @@ describe('authored guide structure', () => {
     '## Related guides',
   ];
 
+  // A guide that became a long guide (it has capturedNames) is checked by the long-guide test
+  // below instead, so it drops out of the short template as it is rewritten.
   function expectStepGuideStructure(slugs: string[]) {
-    for (const slug of slugs) {
+    const long = new Set(DOC_GUIDES.filter((g) => (g.capturedNames ?? []).length > 0).map((g) => g.slug));
+    for (const slug of slugs.filter((candidate) => !long.has(candidate))) {
       const resolved = resolve('en', slug);
       expect(resolved, `${slug} should resolve`).not.toBeNull();
       for (const heading of requiredHeadings) {
@@ -239,8 +242,8 @@ describe('authored guide structure', () => {
     }
   }
 
-  it('keeps the entry and reports guides procedural', () => {
-    expectStepGuideStructure(['start-here', 'reports']);
+  it('keeps the entry, dashboard, and reports guides procedural', () => {
+    expectStepGuideStructure(['start-here', 'dashboard', 'reports']);
   });
 
   // A same-page link to a heading that does not exist scrolls nowhere, with no error.
@@ -262,7 +265,7 @@ describe('authored guide structure', () => {
   // instead of the short Outcome / Steps / Expected result template.
   it('gives every long guide examples, troubleshooting and related guides', () => {
     const long = DOC_GUIDES.filter((g) => (g.capturedNames ?? []).length > 0);
-    expect(long.map((g) => g.slug)).toContain('dashboard');
+    expect(long.map((g) => g.slug)).toEqual(expect.arrayContaining(['dashboard', 'reports']));
     for (const g of long) {
       const content = resolve('en', g.slug)!.content;
       expect(content, `${g.slug} needs a worked example`).toMatch(/^## Example \d+: /m);
