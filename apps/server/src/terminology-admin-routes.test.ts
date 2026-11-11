@@ -731,3 +731,25 @@ describe('test mapping: mapping mutations ask for a test_map rebuild', () => {
     expect(requestRebuild).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('value set code counts', () => {
+  it('counts a set with no stored codes through the live expansion', async () => {
+    // A set that takes a whole code system, or that CE works out when read, keeps no stored codes,
+    // so the list said 0 while `openldr terminology expand` listed 4.
+    const { ctx } = fakeCtx();
+    (ctx.terminology.admin.valueSets as any).list = async () => [
+      { id: 'vs-stored', url: 'urn:stored', codeCount: 3 },
+      { id: 'vs-live', url: 'urn:live', codeCount: 0 },
+    ];
+    const expanded: string[] = [];
+    (ctx.terminology as any).ops = {
+      expand: async (url: string) => { expanded.push(url); return { expansion: { total: url === 'urn:live' ? 4 : 99 } }; },
+    };
+    const app = appWith(ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/terminology/valuesets' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().map((v: any) => [v.id, v.codeCount])).toEqual([['vs-stored', 3], ['vs-live', 4]]);
+    // Sets with stored codes keep their stored count; only the empty one is expanded.
+    expect(expanded).toEqual(['urn:live']);
+  });
+});

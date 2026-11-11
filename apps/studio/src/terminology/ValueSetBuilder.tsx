@@ -3,6 +3,7 @@ import { MoreHorizontal, Plus, Trash2 } from 'lucide-react';
 import {
   saveValueSet,
   expandValueSet,
+  expandValueSetByUrl,
   listPublishers,
   type ValueSet,
   type ValueSetInput,
@@ -97,11 +98,14 @@ export function ValueSetBuilder({
     },
   }), [url, title, version, status, publisherId, includes, excludes]);
 
-  const refreshPreview = useCallback(async (id: string) => {
+  const refreshPreview = useCallback(async (id: string, url: string) => {
     setPreviewBusy(true);
     try {
       const exp = await expandValueSet(id, true);
-      setPreview(exp?.codes ?? []);
+      const stored = exp?.codes ?? [];
+      // A set CE works out when read, such as the lab's tests, has nothing stored. Show the live
+      // codes instead, the ones forms and `openldr terminology expand` see.
+      setPreview(stored.length > 0 || !url ? stored : await expandValueSetByUrl(url));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -114,8 +118,8 @@ export function ValueSetBuilder({
   }, []);
 
   useEffect(() => {
-    if (valueSet?.id) void refreshPreview(valueSet.id);
-  }, [valueSet?.id, refreshPreview]);
+    if (valueSet?.id) void refreshPreview(valueSet.id, valueSet.url);
+  }, [valueSet?.id, valueSet?.url, refreshPreview]);
 
   const handleSave = async (): Promise<void> => {
     if (!composeInput.url) {
@@ -127,7 +131,7 @@ export function ValueSetBuilder({
       const saved = await saveValueSet(composeInput);
       setSavedId(saved.id);
       onSaved(saved);
-      await refreshPreview(saved.id);
+      await refreshPreview(saved.id, saved.url);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -188,7 +192,7 @@ export function ValueSetBuilder({
             )}
             <DropdownMenuItem onClick={onCancel}>Cancel</DropdownMenuItem>
             {savedId && (
-              <DropdownMenuItem disabled={previewBusy} onClick={() => void refreshPreview(savedId)}>Re-expand</DropdownMenuItem>
+              <DropdownMenuItem disabled={previewBusy} onClick={() => void refreshPreview(savedId, composeInput.url)}>Re-expand</DropdownMenuItem>
             )}
             {savedId && onExport && (
               <DropdownMenuItem onClick={() => onExport(savedId)}>Export</DropdownMenuItem>

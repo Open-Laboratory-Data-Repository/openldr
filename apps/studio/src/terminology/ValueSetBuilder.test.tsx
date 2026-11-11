@@ -52,3 +52,21 @@ describe('ValueSetBuilder', () => {
     expect(await screen.findByText('Yes')).toBeInTheDocument();
   });
 });
+
+describe('ValueSetBuilder live expansion', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it('shows the live codes when the stored expansion is empty', async () => {
+    // "This lab's tests" is worked out when read, so its stored expansion is empty, and the sheet
+    // said "Expansion is empty" while forms offered 5 tests.
+    vi.spyOn(api, 'listPublishers').mockResolvedValue([] as never);
+    vi.spyOn(api, 'expandValueSet').mockResolvedValue({ codes: [], total: 0 });
+    const live = vi.spyOn(api, 'expandValueSetByUrl').mockResolvedValue([
+      { system: 'urn:openldr:codesystem:test-catalog', code: 'FBC', display: 'Full blood count' },
+    ]);
+    render(<ValueSetBuilder valueSet={{ ...saved, compose: { include: [] } }} systems={[]} defaultPublisherId="pub-local" onSaved={() => {}} onCancel={() => {}} />);
+    expect(await screen.findByText('Full blood count')).toBeInTheDocument();
+    expect(live).toHaveBeenCalledWith('urn:openldr:vs:custom');
+    expect(screen.queryByText('Expansion is empty.')).toBeNull();
+  });
+});

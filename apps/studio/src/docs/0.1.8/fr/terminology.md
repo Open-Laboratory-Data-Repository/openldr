@@ -59,7 +59,7 @@ Pour retirer le motif, ouvrez le menu **⋯** de sa ligne dans la Terminologie e
 
 **Résultat attendu :** 17 value sets, comme **Biological Sex** (4 codes), **Country** (249), **Facility Type** (63), **Test rejection reasons** et **This lab's tests**.
 
-Un value set qui prend un système de codes entier, ou qu'OpenLDR calcule à la volée, affiche **0** sous **Codes** dans cette version, et son panneau dit **Expansion is empty**. **Test rejection reasons** et **This lab's tests** sont dans ce cas. Lisez la vraie liste en ligne de commande :
+Un value set qui prend un système de codes entier, ou qu'OpenLDR calcule à la volée, ne garde aucun code enregistré. **Codes** et son panneau montrent la liste calculée, celle que proposent les formulaires. **Test rejection reasons** et **This lab's tests** sont dans ce cas. La ligne de commande lit la même liste :
 
 ```bash
 ./openldr terminology expand urn:openldr:valueset:test-reject-reason
@@ -135,7 +135,7 @@ Sur un téléphone, la liste des éditeurs démarre repliée, pour laisser la la
 ## Dépannage
 
 - **Import terms s'arrête avec `line 3: displayName required`.** Cette ligne n'a pas de nom. Corrigez-la et importez à nouveau. Rien du fichier n'a été enregistré.
-- **Un value set affiche 0 code.** Il prend un système entier ou est calculé à la volée. Utilisez `openldr terminology expand <url>`.
+- **Un value set affiche 0 code.** Rien n'y est encore présent : son système de codes n'a pas de termes, ou aucun examen n'est activé dans ce laboratoire. `openldr terminology expand <url>` montre la même liste.
 - **Un nouveau terme n'apparaît pas dans un formulaire.** Rechargez le formulaire. Un value set avec une liste fixe de codes doit aussi recevoir le nouveau code.
 - **Forme de fichier non prise en charge.** Comparez votre fichier au modèle téléchargé.
 - **Code ou nom affiché manquant.** Corrigez le fichier source : les deux sont nécessaires.

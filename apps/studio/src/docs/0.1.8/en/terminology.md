@@ -61,7 +61,7 @@ To remove the reason, open its row's **⋯** menu in Terminology and select **De
 
 **Expected result:** 17 value sets, such as **Biological Sex** (4 codes), **Country** (249), **Facility Type** (63), **Test rejection reasons** and **This lab's tests**.
 
-A value set that takes a whole code system, or that OpenLDR works out on the fly, shows **0** under **Codes** in this release, and its sheet says **Expansion is empty**. **Test rejection reasons** and **This lab's tests** are like that. Read the real list from the command line:
+A value set that takes a whole code system, or that OpenLDR works out on the fly, keeps no stored codes. **Codes** and its sheet show the live list instead, the same list forms offer. **Test rejection reasons** and **This lab's tests** are like that. The command line reads the same list:
 
 ```bash
 ./openldr terminology expand urn:openldr:valueset:test-reject-reason
@@ -140,7 +140,7 @@ On a phone the publishers list starts folded, so the table gets the width. Open 
 ## Troubleshooting
 
 - **Import terms stops with `line 3: displayName required`.** That line has no name. Fix it and import again. Nothing from the file was saved.
-- **A value set shows 0 codes.** It takes a whole code system or is worked out on the fly. Use `openldr terminology expand <url>`.
+- **A value set shows 0 codes.** Nothing in it is held yet: its code system has no terms, or no test is switched on at this lab. `openldr terminology expand <url>` shows the same list.
 - **A new term does not show on a form.** Reload the form. A value set with a fixed list of codes needs the new code added to it too.
 - **Unsupported file shape:** reopen the import dialog and compare your file to the required columns and format guidance.
 - **Missing code or display name:** fix the source file before importing; both are needed for usable coded fields.

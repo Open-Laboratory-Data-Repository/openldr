@@ -364,7 +364,19 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
 
   app.get('/api/terminology/valuesets', async (req) => {
     const { publisherId } = req.query as { publisherId?: string };
-    return admin.valueSets.list(publisherId);
+    const sets = await admin.valueSets.list(publisherId);
+    // A set that takes a whole code system, or that CE works out when read (the lab's tests), keeps
+    // no stored codes, so its stored count is 0. Count those through the live expansion, the same
+    // one forms and `openldr terminology expand` use. A failed expansion keeps the stored 0.
+    return Promise.all(sets.map(async (vs) => {
+      if (vs.codeCount > 0) return vs;
+      try {
+        const live = await ctx.terminology.ops.expand(vs.url, { count: 0 });
+        return { ...vs, codeCount: live.expansion?.total ?? 0 };
+      } catch {
+        return vs;
+      }
+    }));
   });
   app.post('/api/terminology/valuesets', MANAGE, async (req, reply) => {
     const parsed = valueSetInput.safeParse(req.body);
