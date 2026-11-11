@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { DocsPage, stripLeadingH1 } from './DocsPage';
 
@@ -15,6 +15,29 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('shows the shared Dashboards guide with its clips and an On this page list', () => {
+    const { container } = renderDocs('/docs/dashboard');
+    expect(screen.getByRole('heading', { level: 1, name: 'Dashboards' })).toBeInTheDocument();
+    expect(container.querySelectorAll('.doc-markdown video').length).toBeGreaterThan(0);
+    const list = screen.getByRole('navigation', { name: 'On this page' });
+    const entry = within(list).getByRole('link', { name: 'Load the sample data' });
+    expect(entry).toHaveAttribute('href', '#load-the-sample-data');
+    expect(document.getElementById('load-the-sample-data')).not.toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Documentation language' })).toBeInTheDocument();
+  });
+
+  it('renders links to in-app pages the website lacks as plain text', () => {
+    renderDocs('/docs/dashboard');
+    const article = document.querySelector('.doc-markdown') as HTMLElement;
+    expect(within(article).queryByRole('link', { name: 'Reports' })).toBeNull();
+    expect(within(article).getAllByRole('link', { name: 'Data exposure' })[0]).toHaveAttribute('href', '/docs/data-exposure');
+  });
+
+  it('shows no language picker on a page that is not a shared guide', () => {
+    renderDocs('/docs/query-naming');
+    expect(screen.queryByRole('combobox', { name: 'Documentation language' })).toBeNull();
+  });
+
   it('opens the current documentation version and keeps the previous version selectable', () => {
     renderDocs('/docs/query-naming');
     expect(screen.getByLabelText('Documentation version')).toHaveTextContent('0.1.8');
@@ -102,7 +125,7 @@ describe('DocsPage', () => {
       adapters.scrollIntoView = scrollIntoView;
       window.location.hash = '#/docs/environment';
 
-      fireEvent.click(screen.getByRole('link', { name: 'Adapters' }));
+      fireEvent.click(within(document.querySelector('.doc-markdown') as HTMLElement).getByRole('link', { name: 'Adapters' }));
 
       expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
       expect(window.location.hash).toBe('#/docs/environment');
@@ -163,7 +186,7 @@ describe('DocsPage', () => {
       if (!adapters) throw new Error('Adapters heading was not rendered');
       adapters.scrollIntoView = vi.fn();
 
-      fireEvent.click(screen.getByRole('link', { name: 'Adapters' }));
+      fireEvent.click(within(document.querySelector('.doc-markdown') as HTMLElement).getByRole('link', { name: 'Adapters' }));
 
       expect(scrollTo).not.toHaveBeenCalled();
     } finally {

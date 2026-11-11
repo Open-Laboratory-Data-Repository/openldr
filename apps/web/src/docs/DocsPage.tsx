@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
+import { isValidElement, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,19 +12,31 @@ import {
 import {
   DOC_VERSIONS,
   DEFAULT_DOC_VERSION,
+  GUIDE_LOCALES,
   NAV,
   TITLES,
   docBody,
+  guideBody,
+  resolveMedia,
+  type GuideLocale,
 } from './content';
-
-function slugify(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
+import { extractToc, headingIdMaker, wantsToc, type TocEntry } from './toc';
 
 function textContent(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(textContent).join('');
   if (typeof children === 'string' || typeof children === 'number') return String(children);
+  if (isValidElement<{ children?: ReactNode }>(children)) return textContent(children.props.children);
   return '';
+}
+
+/** The reader's browser language when it is one the guides are written in, else English. */
+function browserLocale(): GuideLocale {
+  const lang = typeof navigator !== 'undefined' ? navigator.language.slice(0, 2) : 'en';
+  return lang === 'fr' || lang === 'pt' ? lang : 'en';
+}
+
+function scrollToHeading(id: string): void {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // The app runs under a HashRouter, so raw docs links can collide with client
@@ -55,25 +67,70 @@ export function stripLeadingH1(markdown: string): string {
  * available to key on — the node's identity is.)
  */
 function makeHeadingId(): (node: object | undefined, children: ReactNode) => string {
-  const used = new Map<string, number>();
+  // Same id rules as the "On this page" list (toc.ts), so every entry finds its heading.
+  const next = headingIdMaker();
   const assigned = new WeakMap<object, string>();
 
   return (node, children) => {
     const existing = node && assigned.get(node);
     if (existing) return existing;
 
-    const base = slugify(textContent(children));
-    const count = used.get(base) ?? 0;
-    used.set(base, count + 1);
-    const id = count === 0 ? base : `${base}-${count}`;
+    const id = next(textContent(children));
     if (node) assigned.set(node, id);
     return id;
   };
 }
 
+/** A clip (`x.mp4`) plays muted on a loop, with its `x.png` poster. A screenshot opens full size. */
+function DocMedia({ src, alt }: { src: string; alt: string }) {
+  const url = resolveMedia(src);
+  if (!url) {
+    return (
+      <span className="my-3 block rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+        {alt ? `Screenshot unavailable: ${alt}` : 'Screenshot unavailable'}
+      </span>
+    );
+  }
+  if (/\.mp4$/i.test(src)) {
+    const still = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return (
+      <span className="my-4 block">
+        <video
+          src={url}
+          poster={resolveMedia(src.replace(/\.mp4$/i, '.png')) ?? undefined}
+          autoPlay={!still}
+          loop
+          muted
+          playsInline
+          controls
+          preload={still ? 'none' : 'metadata'}
+          aria-label={alt}
+          className="block w-full rounded-md border border-border"
+        />
+        {alt ? <span className="mt-1.5 block text-xs text-muted-foreground">{alt}</span> : null}
+      </span>
+    );
+  }
+  return (
+    <span className="my-4 block">
+      <a href={url} target="_blank" rel="noreferrer noopener" aria-label={alt ? `Open full size: ${alt}` : 'Open full size'}>
+        <img src={url} alt={alt} className="block w-full rounded-md border border-border" />
+      </a>
+      {alt ? <span className="mt-1.5 block text-xs text-muted-foreground">{alt}</span> : null}
+    </span>
+  );
+}
+
 function markdownComponents(): Components {
   const headingId = makeHeadingId();
   return {
+    img({ src, alt }) {
+      return <DocMedia src={typeof src === 'string' ? src : ''} alt={alt ?? ''} />;
+    },
+    h4({ children, node }) {
+      return <h4 id={headingId(node, children)} className="scroll-mt-20">{children}</h4>;
+    },
     h1({ children, node }) {
       return <h1 id={headingId(node, children)} className="scroll-mt-20">{children}</h1>;
     },
@@ -108,6 +165,10 @@ function markdownComponents(): Components {
         );
       }
       if (href && href.startsWith('/')) {
+        // A shared guide links to in-app pages. The website only has some of them, so a link
+        // to one it lacks reads as plain text instead of landing on the wrong page.
+        const docsSlug = href.match(/^\/docs\/([^/#?]+)/)?.[1];
+        if (docsSlug && !TITLES[docsSlug]) return <span>{children}</span>;
         return <Link to={href}>{children}</Link>;
       }
       return (
@@ -138,11 +199,40 @@ function NavLink({ slug, active, nested }: { slug: string; active: string; neste
   );
 }
 
+function OnThisPage({ entries }: { entries: TocEntry[] }) {
+  return (
+    <ul className="m-0 list-none space-y-0.5 p-0">
+      {entries.map((entry) => (
+        <li key={entry.id}>
+          <a
+            href={`#${entry.id}`}
+            onClick={(event) => {
+              event.preventDefault();
+              scrollToHeading(entry.id);
+            }}
+            className={[
+              'block border-l-2 border-transparent py-1 text-xs text-muted-foreground no-underline hover:text-foreground',
+              entry.level === 3 ? 'pl-6 pr-2' : 'px-3',
+            ].join(' ')}
+          >
+            {entry.text}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function DocsPage() {
   const { page } = useParams();
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
+  const [locale, setLocale] = useState<GuideLocale>(browserLocale);
   const key = page && TITLES[page] ? page : 'getting-started';
-  const body = docBody(key, version);
+  // A studio section shows its long guide, shared with the app, in the reader's language.
+  const guide = guideBody(key, version, locale);
+  const body = guide?.body ?? docBody(key, version);
+  const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)) : []), [body]);
+  const showToc = wantsToc(toc);
 
   // Opening another page keeps the window's scroll position, which drops the reader into the
   // middle of the new page. Same-page anchor links do not change `key`, so their smooth scroll
@@ -152,7 +242,12 @@ export function DocsPage() {
   }, [key]);
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-8 px-6 py-10 lg:grid-cols-[16rem_minmax(0,1fr)]">
+    <div
+      className={[
+        'mx-auto grid gap-8 px-6 py-10 lg:grid-cols-[16rem_minmax(0,1fr)]',
+        showToc ? 'max-w-7xl xl:grid-cols-[16rem_minmax(0,1fr)_13rem]' : 'max-w-6xl',
+      ].join(' ')}
+    >
       <aside className="lg:sticky lg:top-20 lg:self-start">
         <div className="mb-4">
           <p className="text-xs font-semibold uppercase text-primary">Documentation</p>
@@ -175,6 +270,23 @@ export function DocsPage() {
             ))}
           </SelectContent>
         </Select>
+        {guide && (
+          <Select value={locale} onValueChange={(value) => setLocale(value as GuideLocale)}>
+            <SelectTrigger className="mt-2 h-8 w-full gap-1 px-2 text-xs" aria-label="Documentation language">
+              <span className="text-muted-foreground">Language</span>
+              <span className="ml-auto">
+                <SelectValue />
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              {GUIDE_LOCALES.map((option) => (
+                <SelectItem key={option.id} value={option.id} className="text-xs">
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <nav aria-label="Public documentation" className="mt-4 space-y-1 border-t border-border pt-4">
           {NAV.map((item) => (
             <div key={item.slug} className="space-y-1">
@@ -195,6 +307,18 @@ export function DocsPage() {
             {TITLES[key]}
           </h1>
         </div>
+        {guide && guide.localeUsed !== locale && (
+          <p className="mb-4 text-xs text-muted-foreground">Shown in English. Not yet translated.</p>
+        )}
+        {showToc && (
+          // Narrow screens have no right-hand column, so the list folds up above the article.
+          <details className="mb-6 rounded-md border border-border px-3 py-2 xl:hidden">
+            <summary className="cursor-pointer text-sm font-medium">On this page</summary>
+            <div className="mt-2">
+              <OnThisPage entries={toc} />
+            </div>
+          </details>
+        )}
         {body == null ? (
           <p className="text-muted-foreground">This page is not available for version {version}.</p>
         ) : (
@@ -205,6 +329,15 @@ export function DocsPage() {
           </div>
         )}
       </article>
+      {showToc && (
+        <nav
+          aria-label="On this page"
+          className="hidden max-h-[calc(100dvh-6rem)] overflow-y-auto xl:sticky xl:top-20 xl:block xl:self-start"
+        >
+          <p className="px-3 pb-2 text-xs font-semibold uppercase text-primary">On this page</p>
+          <OnThisPage entries={toc} />
+        </nav>
+      )}
     </div>
   );
 }

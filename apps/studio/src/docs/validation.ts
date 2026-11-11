@@ -143,12 +143,25 @@ export function validateDocs(
     }
   }
 
+  // Media made by the guide capture scripts (e2e/capture-guides). They are not in the static
+  // manifest, but each must be bundled, and each clip needs its PNG poster for PDF and Word.
+  for (const guide of guides) {
+    for (const name of guide.capturedNames ?? []) {
+      if (!availableNameSet.has(name)) {
+        errors.push(error('missing-captured-asset', `Captured media ${name} is not bundled.`, guide.slug));
+      }
+      if (/\.mp4$/i.test(name) && !availableNameSet.has(name.replace(/\.mp4$/i, '.png'))) {
+        errors.push(error('missing-clip-poster', `Clip ${name} has no PNG poster beside it.`, guide.slug));
+      }
+    }
+  }
+
   for (const section of sections) {
     if (hasDhis2(section.slug)) {
       errors.push(error('dhis2-reference', `Section ${section.slug} references DHIS2.`, section.slug));
     }
 
-    const declaredImages = new Set(section.screenshotNames);
+    const declaredImages = new Set([...section.screenshotNames, ...(section.capturedNames ?? [])]);
     for (const link of markdownLinks(section.content)) {
       if (hasDhis2(link)) {
         errors.push(error('dhis2-reference', `Link ${link} references DHIS2.`, section.slug));

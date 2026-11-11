@@ -24,6 +24,9 @@ export interface DocGuide {
   difficulty: DocDifficulty;
   relatedSlugs: string[];
   screenshotNames: string[];
+  /** Screenshots and clips made by a guide capture script (e2e/capture-guides/<slug>.guide.ts),
+   *  not by the static screenshot manifest. A clip `x.mp4` always has its poster `x.png`. */
+  capturedNames?: string[];
   status: DocStatus;
 }
 
@@ -56,15 +59,35 @@ export const DOC_GUIDES: DocGuide[] = [
   },
   {
     slug: 'dashboard',
-    title: 'Dashboard',
+    title: 'Dashboards',
     group: 'daily-work',
-    summary: 'Read dashboards, apply filters, and configure widgets.',
+    summary: 'Load sample data, read and filter dashboards, and build your own widgets with the Builder or SQL.',
     audience: ['all-users', 'lab-users', 'lab-managers'],
     requiredRoles: [],
-    estimatedMinutes: 10,
+    estimatedMinutes: 45,
     difficulty: 'beginner',
-    relatedSlugs: ['reports', 'workflows'],
+    relatedSlugs: ['reports', 'workflows', 'query', 'data-exposure', 'settings'],
     screenshotNames: ['dashboard-overview.png', 'dashboard-edit-widget.png'],
+    capturedNames: [
+      'dashboard-tour.png',
+      'dashboard-filters.mp4',
+      'dashboard-filters-result.png',
+      'dashboard-new-widget.mp4',
+      'dashboard-builder.png',
+      'dashboard-chart-types.png',
+      'dashboard-trend.mp4',
+      'dashboard-number.mp4',
+      'dashboard-layout.mp4',
+      'dashboard-filter-add.mp4',
+      'dashboard-filter-editor.png',
+      'dashboard-raw-sql-setting.png',
+      'dashboard-sql.mp4',
+      'dashboard-sql-variables.mp4',
+      'dashboard-filter-apply.mp4',
+      'dashboard-menu-edit.png',
+      'dashboard-delete-confirm.png',
+      'dashboard-phone.png',
+    ],
     status: 'published',
   },
   {

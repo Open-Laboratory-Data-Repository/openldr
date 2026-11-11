@@ -41,7 +41,8 @@ export function parseBlocks(md: string): Block[] {
     // Image (standalone line)
     const img = line.match(IMAGE_LINE);
     if (img) {
-      const src = (img[2].split('/').pop() ?? img[2]).trim();
+      // A clip (x.mp4) prints as its poster (x.png): PDF and Word cannot hold video.
+      const src = (img[2].split('/').pop() ?? img[2]).trim().replace(/\.mp4$/i, '.png');
       blocks.push({ type: 'image', src, alt: img[1].trim() });
       i++;
       continue;

@@ -54,7 +54,7 @@ export const TITLES: Record<string, string> = {
   'query-naming': 'Query names',
   'query-export-import': 'Export and import queries',
   'query-groups': 'Query groups',
-  dashboard: 'Create a dashboard',
+  dashboard: 'Dashboards',
   'dashboard-refresh': 'Dashboard refresh',
 
   'dashboard-limits': 'Dashboard query limits',
@@ -106,6 +106,75 @@ export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'development' },
   { slug: 'cli' },
 ];
+
+// --- Long guides shared with the in-app docs -------------------------------------------------
+//
+// A studio section's long guide is written once, per language, in the in-app docs
+// (apps/studio/src/docs/<version>/<locale>/<slug>.md). The web page for that section renders
+// the same file, so the two can never drift. Its screenshots and clips come from the same
+// folder too, so the website and the app show identical pictures.
+
+export type GuideLocale = 'en' | 'fr' | 'pt';
+export const GUIDE_LOCALES: Array<{ id: GuideLocale; label: string }> = [
+  { id: 'en', label: 'English' },
+  { id: 'fr', label: 'Français' },
+  { id: 'pt', label: 'Português' },
+];
+
+/** Web slug → in-app guide slug, for the pages that show a shared long guide. */
+export const SHARED_GUIDES: Record<string, string> = {
+  dashboard: 'dashboard',
+};
+
+const guideFiles = import.meta.glob('../../../studio/src/docs/*/*/*.md', {
+  query: '?raw',
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
+// GUIDES[version][locale][slug] = markdown
+const GUIDES: Record<string, Record<string, Record<string, string>>> = {};
+for (const [path, content] of Object.entries(guideFiles)) {
+  const match = path.match(/\/docs\/([^/]+)\/([^/]+)\/([^/]+)\.md$/);
+  if (!match) continue;
+  const [, version, locale, slug] = match;
+  ((GUIDES[version] ??= {})[locale] ??= {})[slug] = content;
+}
+
+/**
+ * The shared long guide for a web slug, in the reader's language. Falls back to English when a
+ * translation is missing, and to the newest older guide version when this version has none.
+ */
+export function guideBody(
+  slug: string,
+  version: string,
+  locale: GuideLocale,
+): { body: string; localeUsed: GuideLocale } | null {
+  const guideSlug = SHARED_GUIDES[slug];
+  if (!guideSlug) return null;
+  const versions = Object.keys(GUIDES).sort((a, b) => compareVersions(b, a));
+  const match = GUIDES[version] ? version : versions.find((v) => compareVersions(v, version) <= 0) ?? versions[0];
+  const bucket = (match && GUIDES[match]) || {};
+  const localized = bucket[locale]?.[guideSlug];
+  if (localized != null) return { body: localized, localeUsed: locale };
+  const english = bucket.en?.[guideSlug];
+  return english != null ? { body: english, localeUsed: 'en' } : null;
+}
+
+const mediaUrls = import.meta.glob('../../../studio/src/docs/0.1.0/screenshots/*.{png,mp4}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+}) as Record<string, string>;
+const MEDIA: Record<string, string> = Object.fromEntries(
+  Object.entries(mediaUrls).map(([path, url]) => [path.split('/').pop() ?? path, url]),
+);
+
+/** A guide's bare media name (`dashboard-tour.png`) → its bundled url. Absolute paths pass through. */
+export function resolveMedia(src: string): string | null {
+  if (/^https?:\/\//.test(src) || src.startsWith('/')) return src;
+  return MEDIA[src] ?? null;
+}
 
 /** Markdown body for a slug at a version, falling back to the newest authored version. */
 export function docBody(slug: string, version: string): string | null {

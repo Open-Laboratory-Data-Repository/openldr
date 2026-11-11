@@ -80,7 +80,7 @@ describe('docs registry', () => {
       Object.fromEntries(DOC_GUIDES.map((guide) => [guide.slug, guide.relatedSlugs])),
     ).toEqual({
       'start-here': ['dashboard', 'reports', 'advanced-docs'],
-      dashboard: ['reports', 'workflows'],
+      dashboard: ['reports', 'workflows', 'query', 'data-exposure', 'settings'],
       reports: ['dashboard', 'audit', 'report-designer', 'query'],
       workflows: ['report-pipeline', 'reports', 'connectors', 'audit'],
       'report-pipeline': ['workflows', 'connectors', 'reports'],

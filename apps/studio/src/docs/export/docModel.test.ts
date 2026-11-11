@@ -25,6 +25,12 @@ describe('parseBlocks', () => {
     ]);
   });
 
+  it('prints a clip as its PNG poster, since PDF and Word cannot hold video', () => {
+    expect(parseBlocks('![Filters](dashboard-filters.mp4)')).toEqual([
+      { type: 'image', src: 'dashboard-filters.png', alt: 'Filters' },
+    ]);
+  });
+
   it('parses an image to its basename + alt', () => {
     expect(parseBlocks('![Dashboard](dashboard.png)')).toEqual([
       { type: 'image', src: 'dashboard.png', alt: 'Dashboard' },

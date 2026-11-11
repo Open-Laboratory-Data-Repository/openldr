@@ -3,7 +3,10 @@ import { ZoomIn, ZoomOut, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 
-export interface LightboxImage { url: string; alt: string; }
+import { isClip } from './screenshots';
+
+/** A screenshot, or a clip (an MP4 url, with the poster shown before it plays). */
+export interface LightboxImage { url: string; alt: string; poster?: string }
 
 const MIN = 1;
 const MAX = 5;
@@ -29,6 +32,36 @@ export function Lightbox({ image, onClose }: { image: LightboxImage | null; onCl
   }, [open]);
 
   if (!image) return null;
+
+  // A clip plays at its own size with controls, so a reader can pause on a step. No zoom.
+  if (isClip(image.url)) {
+    return (
+      <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+        <DialogContent className="h-[90vh] w-[90vw] max-w-none">
+          <DialogTitle className="sr-only">{image.alt || 'Clip'}</DialogTitle>
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-3 py-2">
+            <span className="text-sm text-muted-foreground">{image.alt}</span>
+            <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center bg-[#0d0d0d] p-2">
+            <video
+              src={image.url}
+              poster={image.poster}
+              aria-label={image.alt}
+              controls
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="max-h-full max-w-full"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>

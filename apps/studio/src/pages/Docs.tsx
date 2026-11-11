@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { PanelLeftClose, PanelLeftOpen, Download } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, Download, ListTree } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AppShell } from '../shell/AppShell';
 import { isNarrowViewport, useIsNarrowViewport } from '@/lib/viewport';
@@ -38,6 +38,90 @@ import {
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { exportDocs, type ExportFormat, type ExportScope } from '../docs/export/download';
+import { extractToc, wantsToc, type TocEntry } from '../docs/toc';
+
+/**
+ * Scroll the reading pane to a heading. Same-page only, so the route never changes.
+ *
+ * Screenshots load lazily and have no size until they do, so a picture above the heading can
+ * load after the jump and push the heading down out of view. For a moment after the jump,
+ * any change in the article's size scrolls the heading back to the top.
+ */
+function goToHeading(id: string): void {
+  const heading = document.getElementById(id);
+  if (!heading) return;
+  heading.scrollIntoView({ block: 'start' });
+  const article = heading.closest('.doc-content');
+  if (!article || typeof ResizeObserver === 'undefined') return;
+  const observer = new ResizeObserver(() => heading.scrollIntoView({ block: 'start' }));
+  // The reader scrolling on their own ends it at once.
+  const stop = () => {
+    observer.disconnect();
+    for (const type of ['wheel', 'touchstart', 'keydown'] as const) window.removeEventListener(type, stop);
+  };
+  for (const type of ['wheel', 'touchstart', 'keydown'] as const) window.addEventListener(type, stop, { passive: true });
+  observer.observe(article);
+  window.setTimeout(stop, 1500);
+}
+
+/** The heading the reader is in: the last one whose top has scrolled past the pane's top. */
+function useActiveHeading(pane: RefObject<HTMLDivElement | null>, entries: TocEntry[]): string | null {
+  const [active, setActive] = useState<string | null>(entries[0]?.id ?? null);
+  useEffect(() => {
+    const el = pane.current;
+    if (!el || entries.length === 0) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const top = el.getBoundingClientRect().top + 24;
+      let current = entries[0].id;
+      for (const entry of entries) {
+        const heading = document.getElementById(entry.id);
+        if (heading && heading.getBoundingClientRect().top <= top) current = entry.id;
+      }
+      setActive(current);
+    };
+    const onScroll = () => { if (!frame) frame = requestAnimationFrame(update); };
+    update();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [pane, entries]);
+  return active;
+}
+
+/** The right-hand "On this page" list. Only on wide screens; narrow ones get the toolbar menu. */
+function OnThisPage({ entries, active }: { entries: TocEntry[]; active: string | null }) {
+  return (
+    <nav aria-label="On this page" className="sticky top-0 hidden max-h-[calc(100dvh-8rem)] w-56 shrink-0 self-start overflow-y-auto xl:block">
+      <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+        On this page
+      </div>
+      {entries.map((entry) => (
+        <a
+          key={entry.id}
+          href={`#${entry.id}`}
+          aria-current={entry.id === active ? 'location' : undefined}
+          onClick={(event) => {
+            event.preventDefault();
+            goToHeading(entry.id);
+          }}
+          className={`block border-l-2 py-1 text-xs no-underline transition-colors ${
+            entry.level === 3 ? 'pl-6 pr-3' : 'px-3'
+          } ${
+            entry.id === active
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {entry.text}
+        </a>
+      ))}
+    </nav>
+  );
+}
 
 const AUDIENCE_LABELS: Record<DocAudience, string> = {
   'all-users': 'All users',
@@ -113,6 +197,9 @@ export function Docs() {
   useEffect(() => {
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [activeSlug]);
+  const toc = useMemo(() => (section ? extractToc(section.content) : []), [section?.content]);
+  const showToc = wantsToc(toc);
+  const activeHeading = useActiveHeading(contentRef, showToc ? toc : []);
   const navSections = useMemo(() => {
     if (!query.trim()) return sections;
     return hits
@@ -258,6 +345,27 @@ export function Docs() {
                 ))}
               </SelectContent>
             </Select>
+            {showToc && (
+              // Narrow screens have no room for the right-hand list, so it lives here instead.
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="On this page" className="xl:hidden">
+                    <ListTree className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="max-h-[70dvh] max-w-[80vw] overflow-y-auto">
+                  {toc.map((entry) => (
+                    <DropdownMenuItem
+                      key={entry.id}
+                      className={entry.level === 3 ? 'pl-6 text-xs' : 'text-sm'}
+                      onSelect={() => goToHeading(entry.id)}
+                    >
+                      {entry.text}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Download documentation">
@@ -287,6 +395,8 @@ export function Docs() {
             </DropdownMenu>
           </div>
           <div ref={contentRef} className="flex-1 overflow-y-auto p-6">
+            <div className="flex gap-8">
+            <div className="min-w-0 flex-1">
             {!section ? (
               <p className="text-sm text-muted-foreground">
                 Documentation page not found.{' '}
@@ -358,6 +468,9 @@ export function Docs() {
                 )}
               </>
             )}
+            </div>
+            {showToc && <OnThisPage entries={toc} active={activeHeading} />}
+            </div>
           </div>
         </section>
       </div>

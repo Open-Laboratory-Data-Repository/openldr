@@ -1,17 +1,40 @@
-import type { ReactNode } from 'react';
+import { isValidElement, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { resolveImg } from './screenshots';
+import { isClip, posterName, resolveImg } from './screenshots';
 import type { LightboxImage } from './Lightbox';
-
-function slugify(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
+import { headingIdMaker } from './toc';
 
 function text(children: ReactNode): string {
-  return Array.isArray(children) ? children.map(text).join('') : String(children ?? '');
+  if (Array.isArray(children)) return children.map(text).join('');
+  if (typeof children === 'string' || typeof children === 'number') return String(children);
+  if (isValidElement<{ children?: ReactNode }>(children)) return text(children.props.children);
+  return '';
+}
+
+/** Readers who ask their system for less motion get a still poster and play controls. */
+function prefersReducedMotion(): boolean {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Heading ids, shared with the "On this page" list (toc.ts). Keyed on the heading's AST node,
+ * because StrictMode renders each heading twice with the same node; a plain counter would count
+ * each heading twice and every anchor would point at nothing. Same fix as apps/web DocsPage.
+ */
+function makeHeadingId(): (node: object | undefined, children: ReactNode) => string {
+  const next = headingIdMaker();
+  const assigned = new WeakMap<object, string>();
+  return (node, children) => {
+    const existing = node && assigned.get(node);
+    if (existing) return existing;
+    const id = next(text(children));
+    if (node) assigned.set(node, id);
+    return id;
+  };
 }
 
 export function DocMarkdown({
@@ -21,11 +44,39 @@ export function DocMarkdown({
   content: string;
   onImageClick: (image: LightboxImage) => void;
 }) {
+  const headingId = makeHeadingId();
   const components: Components = {
     img(props) {
       const src = typeof props.src === 'string' ? props.src : '';
       const url = resolveImg(src);
       const alt = props.alt ?? '';
+      if (url && isClip(src)) {
+        const poster = resolveImg(posterName(src)) ?? undefined;
+        const still = prefersReducedMotion();
+        return (
+          <span className="my-4 block">
+            <button
+              type="button"
+              onClick={() => onImageClick({ url, alt, poster })}
+              aria-label={alt ? `Enlarge: ${alt}` : 'Enlarge clip'}
+              className="group block w-full max-w-2xl cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-ring"
+            >
+              <video
+                src={url}
+                poster={poster}
+                autoPlay={!still}
+                loop
+                muted
+                playsInline
+                preload={still ? 'none' : 'metadata'}
+                aria-label={alt}
+                className="block w-full"
+              />
+            </button>
+            {alt ? <span className="mt-1.5 block text-xs text-muted-foreground">{alt}</span> : null}
+          </span>
+        );
+      }
       if (!url) {
         if (import.meta.env.DEV) console.warn(`[docs] unresolved image: ${src}`);
         return (
@@ -60,9 +111,19 @@ export function DocMarkdown({
       }
       return <a href={href}>{props.children}</a>;
     },
-    h1: (p) => <h1 id={slugify(text(p.children))}>{p.children}</h1>,
-    h2: (p) => <h2 id={slugify(text(p.children))}>{p.children}</h2>,
-    h3: (p) => <h3 id={slugify(text(p.children))}>{p.children}</h3>,
+    // Every level takes an id, in page order, so the ids match extractToc() in toc.ts.
+    h1: ({ node, children }) => <h1 id={headingId(node, children)} className="scroll-mt-4">{children}</h1>,
+    h2: ({ node, children }) => <h2 id={headingId(node, children)} className="scroll-mt-4">{children}</h2>,
+    h3: ({ node, children }) => <h3 id={headingId(node, children)} className="scroll-mt-4">{children}</h3>,
+    h4: ({ node, children }) => <h4 id={headingId(node, children)} className="scroll-mt-4">{children}</h4>,
+    h5: ({ node, children }) => <h5 id={headingId(node, children)} className="scroll-mt-4">{children}</h5>,
+    h6: ({ node, children }) => <h6 id={headingId(node, children)} className="scroll-mt-4">{children}</h6>,
+    // Wide reference tables scroll inside themselves instead of pushing the page sideways.
+    table: ({ children }) => (
+      <div className="max-w-full overflow-x-auto">
+        <table>{children}</table>
+      </div>
+    ),
   };
 
   return <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{content}</ReactMarkdown>;
