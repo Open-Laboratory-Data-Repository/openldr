@@ -1220,7 +1220,7 @@ export function buildProgram(): Command {
   user.command('activate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
     try { process.exitCode = await runUserSetStatus(id, 'active', opts); } catch (err) { process.stderr.write(`user activate failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
-  const userPrefs = user.command('preferences').description("A user's studio preferences: theme, sidebarCollapsed, startPage");
+  const userPrefs = user.command('preferences').description("A user's studio preferences: theme, sidebarCollapsed, startPage, language");
   userPrefs.command('show <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
     try { process.exitCode = await runUserPreferencesShow(id, opts); } catch (err) { process.stderr.write(`user preferences show failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });

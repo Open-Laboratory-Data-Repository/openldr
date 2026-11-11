@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
-import '@/i18n';
+import i18n from '@/i18n';
+import { setLanguage } from '@/i18n/language';
 
 let caps: string[] | 'all' = 'all';
 let mockUser: { id: string; username: string } | null = { id: 'u1', username: 'amina' };
@@ -24,10 +25,11 @@ import { AppShell } from './AppShell';
 import { loadUserPreferences } from './userPreferences';
 import { noteEntryPath, resetUserPreferencesForTest, startPageUsed } from './userPreferences';
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
   resetUserPreferencesForTest();
   localStorage.clear();
+  await i18n.changeLanguage('en');
   document.documentElement.setAttribute('data-theme', 'dark');
   caps = 'all';
   mockUser = { id: 'u1', username: 'amina' };
@@ -122,6 +124,60 @@ describe('theme follows the user', () => {
     (api.getMyPreferences as any).mockResolvedValue({});
     app('/');
     await waitFor(() => expect(api.saveMyPreferences).toHaveBeenCalledWith({ theme: 'dark' }));
+  });
+});
+
+describe('language follows the user', () => {
+  const savedLanguage = () => (api.saveMyPreferences as any).mock.calls.map((c: any[]) => c[0]).filter((p: any) => 'language' in p);
+
+  it('applies the saved language over the one this browser had', async () => {
+    (api.getMyPreferences as any).mockResolvedValue({ language: 'fr', theme: 'dark' });
+    app('/');
+    await waitFor(() => expect(i18n.language).toBe('fr'));
+    // This browser remembers it too, so the next page load starts in French.
+    expect(localStorage.getItem('openldr.lang')).toBe('fr');
+    expect(savedLanguage()).toEqual([]);
+  });
+
+  it('saves a language picked after loading', async () => {
+    (api.getMyPreferences as any).mockResolvedValue({ language: 'en', theme: 'dark' });
+    app('/');
+    await screen.findByTestId('dashboard');
+    await act(async () => { await setLanguage('pt'); });
+    await waitFor(() => expect(savedLanguage()).toEqual([{ language: 'pt' }]));
+  });
+
+  it('saves a language this browser had already chosen, when the user has none saved', async () => {
+    await setLanguage('fr');
+    (api.getMyPreferences as any).mockResolvedValue({ theme: 'dark' });
+    app('/');
+    await waitFor(() => expect(savedLanguage()).toEqual([{ language: 'fr' }]));
+  });
+
+  it('does not save the default language of a browser where none was ever chosen', async () => {
+    (api.getMyPreferences as any).mockResolvedValue({ theme: 'dark' });
+    app('/');
+    await screen.findByTestId('dashboard');
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(savedLanguage()).toEqual([]);
+    expect(i18n.language).toBe('en');
+  });
+
+  it("applies the next user's language, not the last user's", async () => {
+    (api.getMyPreferences as any).mockResolvedValue({ language: 'fr', theme: 'dark' });
+    const view = app('/');
+    await waitFor(() => expect(i18n.language).toBe('fr'));
+    mockUser = { id: 'u2', username: 'joao' };
+    (api.getMyPreferences as any).mockResolvedValue({ language: 'pt', theme: 'dark' });
+    view.rerender(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <UserPreferencesSync />
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+    await waitFor(() => expect(i18n.language).toBe('pt'));
+    expect(savedLanguage()).toEqual([]);
   });
 });
 

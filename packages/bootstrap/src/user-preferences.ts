@@ -2,7 +2,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import type { InternalSchema } from '@openldr/db';
 
-// Per-user studio preferences: theme, sidebar state and first page. Shared by the
+// Per-user studio preferences: theme, sidebar state, first page and language. Shared by the
 // /api/me/preferences route and the `openldr user preferences` CLI, so both read and write the
 // same way.
 
@@ -11,17 +11,22 @@ export interface UserPreferences {
   sidebarCollapsed?: boolean;
   /** A studio path such as `/reports`. Studio decides whether the user may open it. */
   startPage?: string;
+  /** The studio interface language. One of the languages studio ships. */
+  language?: 'en' | 'fr' | 'pt';
 }
 
 // A path inside studio only: one leading slash, never `//host` or a scheme.
 const startPage = z.string().max(200).regex(/^\/(?!\/)[A-Za-z0-9/_.:-]*$/);
 const theme = z.enum(['light', 'dark']);
+// The languages studio ships (apps/studio/src/i18n/language.ts). A new one is added in both places.
+const language = z.enum(['en', 'fr', 'pt']);
 
 /** A change to apply. A missing key is left alone; null clears it. */
 export const userPreferencesPatchSchema = z.object({
   theme: theme.nullable().optional(),
   sidebarCollapsed: z.boolean().nullable().optional(),
   startPage: startPage.nullable().optional(),
+  language: language.nullable().optional(),
 }).strict();
 export type UserPreferencesPatch = z.infer<typeof userPreferencesPatchSchema>;
 
@@ -40,6 +45,8 @@ export function parseStoredPreferences(raw: unknown): UserPreferences {
   if (typeof row.sidebarCollapsed === 'boolean') out.sidebarCollapsed = row.sidebarCollapsed;
   const s = startPage.safeParse(row.startPage);
   if (s.success) out.startPage = s.data;
+  const l = language.safeParse(row.language);
+  if (l.success) out.language = l.data;
   return out;
 }
 

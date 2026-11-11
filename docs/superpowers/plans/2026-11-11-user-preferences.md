@@ -122,3 +122,30 @@ export function resetUserPreferencesForTest(): void;
 - [ ] New files: `apps/studio/src/docs/0.1.8/{en,fr,pt}/user-preferences.md`,
   `apps/web/src/docs/0.1.8/user-preferences.md`. Add nav entries to the hand-over note.
 - [ ] Full forced gate at `--concurrency=2`, both halves. Quote the output.
+
+## Added later the same day: language follows the user
+
+The operator picked this from the follow-up list ("Language follows user").
+
+Gap, checked: the language was saved to this browser only (`apps/studio/src/i18n/language.ts`,
+`setLanguage` wrote `openldr.lang` to localStorage and nothing else), and `UserPreferences` had no
+language key (`packages/bootstrap/src/user-preferences.ts`).
+
+What changed:
+
+- `language` (`en`, `fr` or `pt`) is a saved preference. No migration: the row is JSON.
+- `openldr user preferences set <id> language fr` works, and `none` clears it.
+- Studio applies the saved language after sign-in and saves a language the user picks.
+
+One rule differs from the theme. With nothing saved, a browser's theme is saved so it travels.
+For language, only a language that was **picked** in that browser is saved. A browser where none
+was picked shows English by default, and saving that default would overwrite, at the next sign-in
+elsewhere, the language the user chose on another device.
+
+Proof: 1 new store test, 2 changed CLI tests, 5 new studio tests (saved language applied; a pick
+is saved; an earlier pick in this browser is saved; the default is not saved; the next user's
+language is applied). On a throwaway CE: picking French saved `{"language":"fr"}`; after clearing
+the browser's storage and reloading, studio opened in French.
+
+HONEST NON-PROOF: two real browsers or devices were not used. Clearing one browser's storage
+stood in for a second browser.

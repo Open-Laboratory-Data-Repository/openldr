@@ -43,6 +43,8 @@ describe('user preferences CLI', () => {
     expect(parsePreferenceArg('sidebarCollapsed', 'true')).toEqual({ sidebarCollapsed: true });
     expect(parsePreferenceArg('startPage', '/reports')).toEqual({ startPage: '/reports' });
     expect(parsePreferenceArg('startPage', 'none')).toEqual({ startPage: null });
+    expect(parsePreferenceArg('language', 'pt')).toEqual({ language: 'pt' });
+    expect(parsePreferenceArg('language', 'none')).toEqual({ language: null });
   });
 
   it('refuses an unknown key or a bad value', () => {
@@ -50,6 +52,7 @@ describe('user preferences CLI', () => {
     expect(() => parsePreferenceArg('theme', 'purple')).toThrow(/invalid value/);
     expect(() => parsePreferenceArg('sidebarCollapsed', 'yes')).toThrow(/invalid value/);
     expect(() => parsePreferenceArg('startPage', 'https://evil.test')).toThrow(/invalid value/);
+    expect(() => parsePreferenceArg('language', 'de')).toThrow(/invalid value/);
   });
 
   it('sets a preference, audits it as the cli, and shows it', async () => {

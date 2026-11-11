@@ -113,7 +113,7 @@ export async function runUserDirectoryList(opts: JsonOpt & { offset?: string; li
   } finally { await ctx.close(); }
 }
 
-const PREFERENCE_KEYS = ['theme', 'sidebarCollapsed', 'startPage'];
+const PREFERENCE_KEYS = ['theme', 'sidebarCollapsed', 'startPage', 'language'];
 
 /** Turn `<key> <value>` from the command line into a patch. `none` clears the key. */
 export function parsePreferenceArg(key: string, value: string): UserPreferencesPatch {

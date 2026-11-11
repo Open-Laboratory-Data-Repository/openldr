@@ -1,7 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/auth/AuthProvider';
 import { LoadingState } from '@/components/ui/spinner';
+import { hasStoredLanguage, isSupported, setLanguage } from '@/i18n/language';
 import { NAV } from './AppShell';
 import { useThemeContext } from './ThemeProvider';
 import {
@@ -20,6 +22,9 @@ export function UserPreferencesSync() {
   const { loaded, prefs } = useUserPreferences();
   const theme = themeCtx?.theme;
   const setTheme = themeCtx?.setTheme;
+  // useTranslation re-renders this component when the language changes.
+  const { i18n } = useTranslation();
+  const language = i18n.language;
 
   // Only the path the app opened on matters, so this runs once.
   const entryPath = useRef(location.pathname);
@@ -28,11 +33,13 @@ export function UserPreferencesSync() {
   // First pass after a load: the saved theme wins over this browser's. After that, a change made
   // here is saved. A user with no saved theme gets this browser's theme saved, so it travels from now on.
   const applied = useRef(false);
+  const appliedLanguage = useRef(false);
 
   useEffect(() => {
     if (!userId) return;
-    // A different user's saved theme must be applied, not overwritten with the last user's.
+    // A different user's saved theme and language must be applied, not overwritten with the last user's.
     applied.current = false;
+    appliedLanguage.current = false;
     void loadUserPreferences();
   }, [userId]);
 
@@ -44,6 +51,24 @@ export function UserPreferencesSync() {
     }
     if (theme !== prefs.theme) void setUserPreference({ theme });
   }, [loaded, prefs.theme, theme, setTheme]);
+
+  // Language works like the theme, with one difference. A browser where no language was ever
+  // picked shows the default, and a default is not a choice: saving it would overwrite, at the
+  // next sign-in elsewhere, the language the user did pick on another device. So with nothing
+  // saved, only a language that was picked in this browser is saved.
+  useEffect(() => {
+    if (!loaded || !isSupported(language)) return;
+    if (!appliedLanguage.current) {
+      appliedLanguage.current = true;
+      if (prefs.language) {
+        if (prefs.language !== language) void setLanguage(prefs.language);
+        return;
+      }
+      if (hasStoredLanguage()) void setUserPreference({ language });
+      return;
+    }
+    if (language !== prefs.language) void setUserPreference({ language });
+  }, [loaded, prefs.language, language]);
 
   return null;
 }

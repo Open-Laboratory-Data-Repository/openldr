@@ -8,7 +8,7 @@ export const SUPPORTED_LANGUAGES = [
 ] as const;
 export type LanguageCode = (typeof SUPPORTED_LANGUAGES)[number]['code'];
 
-function isSupported(v: string | null): v is LanguageCode {
+export function isSupported(v: string | null | undefined): v is LanguageCode {
   return v === 'en' || v === 'fr' || v === 'pt';
 }
 
@@ -17,6 +17,11 @@ export function getStoredLanguage(): LanguageCode {
     const v = localStorage.getItem(STORAGE_KEY);
     return isSupported(v) ? v : 'en';
   } catch { return 'en'; }
+}
+
+/** True when a language was picked in this browser at some point, as opposed to the default. */
+export function hasStoredLanguage(): boolean {
+  try { return isSupported(localStorage.getItem(STORAGE_KEY)); } catch { return false; }
 }
 
 export async function setLanguage(code: LanguageCode): Promise<void> {

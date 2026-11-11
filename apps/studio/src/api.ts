@@ -780,7 +780,7 @@ export const getMe = (): Promise<CurrentUser> =>
 
 /** The signed-in user's own studio preferences. Stored on the server so they follow the login.
  *  Mirrors UserPreferences in packages/bootstrap/src/user-preferences.ts. */
-export interface UserPreferences { theme?: 'light' | 'dark'; sidebarCollapsed?: boolean; startPage?: string }
+export interface UserPreferences { theme?: 'light' | 'dark'; sidebarCollapsed?: boolean; startPage?: string; language?: 'en' | 'fr' | 'pt' }
 /** A missing key is left alone; null clears it. */
 export type UserPreferencesPatch = { [K in keyof UserPreferences]?: UserPreferences[K] | null };
 export const getMyPreferences = (): Promise<UserPreferences> =>

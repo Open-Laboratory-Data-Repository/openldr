@@ -48,6 +48,16 @@ describe('user preferences', () => {
     expect(userPreferencesPatchSchema.safeParse({ startPage }).success).toBe(true);
   });
 
+  it('saves a language, and accepts only the ones studio has', async () => {
+    const db = await makeMigratedDb();
+    expect(await saveUserPreferences(db, 'u1', { language: 'fr' })).toEqual({ language: 'fr' });
+    expect(await saveUserPreferences(db, 'u1', { language: null })).toEqual({});
+    for (const language of ['en', 'fr', 'pt']) expect(userPreferencesPatchSchema.safeParse({ language }).success).toBe(true);
+    for (const language of ['de', 'FR', 'fr-FR', '']) expect(userPreferencesPatchSchema.safeParse({ language }).success).toBe(false);
+    expect(parseStoredPreferences({ language: 'pt', theme: 'dark' })).toEqual({ language: 'pt', theme: 'dark' });
+    expect(parseStoredPreferences({ language: 'de' })).toEqual({});
+  });
+
   it('refuses a key it does not know', () => {
     expect(userPreferencesPatchSchema.safeParse({ accent: 'red' }).success).toBe(false);
   });

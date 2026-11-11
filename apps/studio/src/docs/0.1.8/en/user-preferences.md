@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Your theme, your sidebar state and your start page are saved to your account. They follow you to any browser, computer or phone you sign in on.
+Your theme, your sidebar state, your start page and your language are saved to your account. They follow you to any browser, computer or phone you sign in on.
 
 ## What is saved
 
@@ -11,6 +11,7 @@ Your theme, your sidebar state and your start page are saved to your account. Th
 | Theme | Use the sun or moon button in the page header, or press `d`. |
 | Sidebar open or collapsed | Use the collapse button at the top of the sidebar (desktop only). |
 | Start page | Open the user menu at the bottom of the sidebar, choose **Start page**, and pick a page. |
+| Language | Open the user menu at the bottom of the sidebar, choose **Language**, and pick one. |
 
 Each change is saved as you make it. There is no Save button.
 
@@ -28,6 +29,8 @@ The start page is the page that opens after you sign in. It is the Dashboard unl
 
 The first time you sign in on a new browser, OpenLDR loads your saved preferences and applies them. If you have never saved a theme, the theme that browser shows becomes your saved theme.
 
+Language works the same way, with one difference. A language you picked in that browser before becomes your saved language. A browser where you never picked one shows English, and that is not saved, so it cannot replace the language you chose on another device.
+
 ## For administrators
 
 Preferences belong to each user. They are not a lab-wide setting, and no role or capability is needed to use them. An administrator can read or fix one user's preferences from the command line:
@@ -40,4 +43,4 @@ openldr user preferences show <user-id>
 openldr user preferences set <user-id> startPage none
 ```
 
-The keys are `theme` (`light` or `dark`), `sidebarCollapsed` (`true` or `false`) and `startPage` (a page path such as `/reports`). The value `none` clears a key. Get the user id from `openldr user list`.
+The keys are `theme` (`light` or `dark`), `sidebarCollapsed` (`true` or `false`), `startPage` (a page path such as `/reports`) and `language` (`en`, `fr` or `pt`). The value `none` clears a key. Get the user id from `openldr user list`.

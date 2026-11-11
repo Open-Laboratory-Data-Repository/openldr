@@ -2,7 +2,7 @@
 
 ## Résultat
 
-Votre thème, l'état de votre barre latérale et votre page de démarrage sont enregistrés dans votre compte. Ils vous suivent sur chaque navigateur, ordinateur ou téléphone où vous vous connectez.
+Votre thème, l'état de votre barre latérale, votre page de démarrage et votre langue sont enregistrés dans votre compte. Ils vous suivent sur chaque navigateur, ordinateur ou téléphone où vous vous connectez.
 
 ## Ce qui est enregistré
 
@@ -11,6 +11,7 @@ Votre thème, l'état de votre barre latérale et votre page de démarrage sont 
 | Thème | Utilisez le bouton soleil ou lune dans l'en-tête de la page, ou appuyez sur `d`. |
 | Barre latérale ouverte ou réduite | Utilisez le bouton de réduction en haut de la barre latérale (ordinateur seulement). |
 | Page de démarrage | Ouvrez le menu utilisateur en bas de la barre latérale, choisissez **Page de démarrage**, puis une page. |
+| Langue | Ouvrez le menu utilisateur en bas de la barre latérale, choisissez **Langue**, puis une langue. |
 
 Chaque changement est enregistré au moment où vous le faites. Il n'y a pas de bouton Enregistrer.
 
@@ -28,6 +29,8 @@ La page de démarrage est la page qui s'ouvre après la connexion. C'est le Tabl
 
 La première fois que vous vous connectez sur un nouveau navigateur, OpenLDR charge vos préférences enregistrées et les applique. Si vous n'avez jamais enregistré de thème, le thème affiché par ce navigateur devient votre thème enregistré.
 
+La langue fonctionne de la même façon, avec une différence. Une langue que vous aviez déjà choisie dans ce navigateur devient votre langue enregistrée. Un navigateur où vous n'en avez jamais choisi affiche l'anglais, et ce choix par défaut n'est pas enregistré : il ne peut donc pas remplacer la langue choisie sur un autre appareil.
+
 ## Pour les administrateurs
 
 Les préférences appartiennent à chaque utilisateur. Ce n'est pas un réglage du laboratoire, et aucun rôle ni aucune capacité n'est nécessaire pour les utiliser. Un administrateur peut lire ou corriger les préférences d'un utilisateur en ligne de commande :
@@ -40,4 +43,4 @@ openldr user preferences show <user-id>
 openldr user preferences set <user-id> startPage none
 ```
 
-Les clés sont `theme` (`light` ou `dark`), `sidebarCollapsed` (`true` ou `false`) et `startPage` (un chemin de page comme `/reports`). La valeur `none` efface une clé. Trouvez l'identifiant de l'utilisateur avec `openldr user list`.
+Les clés sont `theme` (`light` ou `dark`), `sidebarCollapsed` (`true` ou `false`), `startPage` (un chemin de page comme `/reports`) et `language` (`en`, `fr` ou `pt`). La valeur `none` efface une clé. Trouvez l'identifiant de l'utilisateur avec `openldr user list`.
