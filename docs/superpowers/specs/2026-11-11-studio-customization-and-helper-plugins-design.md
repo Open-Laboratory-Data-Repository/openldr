@@ -207,5 +207,9 @@ names the new files and gives the registry entry for the coordinator to add.
    So slice 6 would add three things: settings that follow the user to another device, a sidebar
    the user can reorder or trim, and a choice of first page. No user action is broken without
    them. Slices 6 and 9 are on hold until the operator names one of these as wanted.
+   Follow-up the same day: the operator wants the theme and the sidebar to travel with the login,
+   and a choice of first page. Sidebar reorder was not asked for. Slice 6 is built to that scope:
+   plan `docs/superpowers/plans/2026-11-11-user-preferences.md`, migration `113_user_preferences`.
+   Slice 9 (presets) stays on hold.
 4. Slices 1 and 2 were picked first and are built.
 
