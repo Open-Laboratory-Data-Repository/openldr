@@ -2021,7 +2021,7 @@ export {
   type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,
 } from './setup-checks';
 export {
-  getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema,
+  getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema, studioPathSchema,
   type UserPreferences, type UserPreferencesPatch,
 } from './user-preferences';
 export {
