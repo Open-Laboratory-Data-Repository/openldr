@@ -407,10 +407,12 @@ export async function parseTerminologyTermsStream(input: NodeJS.ReadableStream, 
     const lines = readLines(input);
     let first = '';
     let lineNumber = 0;
-    for await (const line of lines) {
+    // Read the first line with next(), not `for await` plus `break`: a break closes the generator,
+    // and the loops below would then get no lines at all.
+    for (let next = await lines.next(); !next.done; next = await lines.next()) {
       lineNumber += 1;
-      if (!line.trim()) continue;
-      first = line;
+      if (!next.value.trim()) continue;
+      first = next.value;
       break;
     }
     if (first.includes('code,') && first.includes('display')) {

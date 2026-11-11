@@ -81,7 +81,7 @@ O menu **⋯** da página, em **Term**, tem **Import terms…** e **Download tem
 
 `code` e `displayName` são obrigatórios. `shortName`, `class`, `unit`, `status` e `metadata` são opcionais. As linhas vazias e as que começam por `//` são ignoradas. Um CSV com as colunas `code` e `display` também é lido.
 
-> **Problema conhecido nesta versão.** Num sistema de códigos local, como REJECT-TEST, **Import terms…** diz que correu bem mas não importa nada, seja o ficheiro CSV ou JSON por linha. Adicione os termos um a um, como no Exemplo 2, até ser corrigido. LOINC, SNOMED CT e RxNorm carregam-se pela sua própria importação de distribuição e não são afetados.
+Uma linha sem `code` ou sem `displayName` para a importação. A mensagem indica a linha, e nada é importado.
 
 Os grandes sistemas externos carregam-se na linha de comandos:
 
@@ -134,7 +134,7 @@ Num telemóvel, a lista de editores fica aberta e ocupa quase metade do ecrã, c
 
 ## Resolução de problemas
 
-- **Import terms diz que correu bem mas nenhum termo aparece.** Veja o problema conhecido em [Importar termos](#importar-termos).
+- **Import terms para com `line 3: displayName required`.** Essa linha não tem nome. Corrija-a e importe de novo. Nada do ficheiro foi guardado.
 - **Um value set mostra 0 códigos.** Leva um sistema inteiro ou é calculado na hora. Use `openldr terminology expand <url>`.
 - **Um termo novo não aparece num formulário.** Recarregue o formulário. Um value set com uma lista fixa de códigos precisa também do código novo.
 - **Formato de ficheiro não suportado.** Compare o ficheiro com o modelo transferido.

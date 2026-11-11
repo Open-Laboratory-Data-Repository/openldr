@@ -171,3 +171,31 @@ describe('parseTerminologyTermsStream', () => {
     ]);
   });
 });
+
+describe('parseTerminologyTermsStream for a local code system', () => {
+  const system = 'urn:openldr:cs:reject-test';
+
+  it('reads every row of a CSV upload, not only the header', async () => {
+    const rows = await parseTerminologyTermsStream(Readable.from([
+      'code,display\n',
+      'HAEM,Haemolysed\n',
+      'CLOT,Clotted\n',
+    ]), system, 'REJECT-TEST');
+    expect(rows.map((r) => r.code)).toEqual(['HAEM', 'CLOT']);
+  });
+
+  it('reads every line of a JSONL upload, not only the first', async () => {
+    const rows = await parseTerminologyTermsStream(Readable.from([
+      '{"code":"HAEM","display":"Haemolysed"}\n',
+      '{"code":"CLOT","display":"Clotted"}\n',
+    ]), system, 'REJECT-TEST');
+    expect(rows.map((r) => r.code)).toEqual(['HAEM', 'CLOT']);
+  });
+
+  it('reads the downloaded template the same way the text import does', async () => {
+    const body = terminologyImportTemplate('REJECT-TEST').body;
+    const streamed = await parseTerminologyTermsStream(Readable.from([body]), system, 'REJECT-TEST');
+    expect(streamed.length).toBeGreaterThan(0);
+    expect(streamed).toEqual(parseTerminologyTerms(body, system, 'REJECT-TEST'));
+  });
+});

@@ -83,7 +83,7 @@ The page's **⋯** menu, under **Term**, has **Import terms…** and **Download 
 
 `code` and `displayName` are required. `shortName`, `class`, `unit`, `status` and `metadata` are optional. Blank lines and lines starting `//` are skipped. A CSV with `code` and `display` columns is also read.
 
-> **Known problem in this release.** For a local code system, such as REJECT-TEST, **Import terms…** reports success but imports nothing, whether the file is CSV or one-JSON-per-line. Add terms one at a time, as in Example 2, until it is fixed. LOINC, SNOMED CT and RxNorm load through their own distribution import and are not affected.
+A line with no `code` or no `displayName` stops the import. The message names the line, and nothing is imported.
 
 Large external systems are loaded from the command line:
 
@@ -139,7 +139,7 @@ On a phone the publishers list stays open and takes almost half the screen, with
 
 ## Troubleshooting
 
-- **Import terms reports success but no term appears.** See the known problem under [Importing terms](#importing-terms).
+- **Import terms stops with `line 3: displayName required`.** That line has no name. Fix it and import again. Nothing from the file was saved.
 - **A value set shows 0 codes.** It takes a whole code system or is worked out on the fly. Use `openldr terminology expand <url>`.
 - **A new term does not show on a form.** Reload the form. A value set with a fixed list of codes needs the new code added to it too.
 - **Unsupported file shape:** reopen the import dialog and compare your file to the required columns and format guidance.
