@@ -1967,6 +1967,10 @@ export {
   type DiagnoseResult, type DiagnoseStep, type DiagnoseStepId, type DiagnoseStatus, type DiagnoseHint, type DiagnoseDeps,
 } from './connector-diagnose';
 export { testConnector } from './connector-test';
+export {
+  getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema,
+  type UserPreferences, type UserPreferencesPatch,
+} from './user-preferences';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';
