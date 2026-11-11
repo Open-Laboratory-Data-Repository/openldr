@@ -13,6 +13,11 @@ export interface MssqlStoreConfig {
   password: string;
   encrypt: boolean;
   trustServerCertificate: boolean;
+  /** Named instance (the part after the backslash in `SERVER\SQLEXPRESS`). Tedious finds its
+   *  port through SQL Browser on UDP 1434, and refuses a port alongside it. */
+  instanceName?: string;
+  /** Windows (NTLM) domain. When set, the user logs in as `domain\user` instead of a SQL login. */
+  domain?: string;
 }
 
 export interface MssqlStoreDeps {
@@ -28,7 +33,11 @@ export interface MssqlStore extends TargetStorePort {
 export function buildMssqlDialectConfig(
   cfg: MssqlStoreConfig,
   Request: typeof tedious.Request,
+  Connection: typeof tedious.Connection = tedious.Connection,
 ): ConstructorParameters<typeof MssqlDialect>[0] {
+  const authentication = cfg.domain
+    ? { type: 'ntlm' as const, options: { userName: cfg.user, password: cfg.password, domain: cfg.domain } }
+    : { type: 'default' as const, options: { userName: cfg.user, password: cfg.password } };
   return {
     // SET LOCK_TIMEOUT and SET ROWCOUNT are session-scoped in SQL Server. Reset them before
     // another caller receives the pooled connection, including after a cancelled request.
@@ -38,11 +47,12 @@ export function buildMssqlDialectConfig(
       ...tedious,
       Request,
       connectionFactory: () =>
-        new tedious.Connection({
+        new Connection({
           server: cfg.host,
-          authentication: { type: 'default', options: { userName: cfg.user, password: cfg.password } },
+          authentication,
           options: {
-            port: cfg.port,
+            // Tedious throws when both are set, so an instance name replaces the port.
+            ...(cfg.instanceName ? { instanceName: cfg.instanceName } : { port: cfg.port }),
             database: cfg.database,
             encrypt: cfg.encrypt,
             trustServerCertificate: cfg.trustServerCertificate,

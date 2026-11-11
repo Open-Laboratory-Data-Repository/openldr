@@ -3,7 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 // Captures what the mysql arm does to its pool. mysql2 is mocked at the module boundary because the
 // thing under test happens at POOL CONSTRUCTION, before any connection exists, and there is no
 // server here to open one against.
-const { poolOn, poolQuery, mssqlWithRequestTimeout } = vi.hoisted(() => ({
+const { poolOn, poolQuery, mssqlWithRequestTimeout, mssqlCreate } = vi.hoisted(() => ({
+  mssqlCreate: vi.fn(),
   poolOn: vi.fn(),
   poolQuery: vi.fn(),
   mssqlWithRequestTimeout: vi.fn(async (timeoutMs: number) => {
@@ -14,14 +15,14 @@ vi.mock('mysql2', () => ({
   createPool: () => ({ on: poolOn, query: poolQuery, getConnection: vi.fn(), end: vi.fn() }),
 }));
 vi.mock('@openldr/adapter-mssql-store', () => ({
-  createMssqlStore: () => ({
+  createMssqlStore: (cfg: unknown) => (mssqlCreate(cfg), {
     db: {},
     withRequestTimeout: mssqlWithRequestTimeout,
     close: vi.fn(),
   }),
 }));
 
-import { createConnectorDb, buildPgUrl } from './connector-db';
+import { createConnectorDb, buildPgUrl, splitMssqlHost } from './connector-db';
 
 describe('createConnectorDb', () => {
   it.each([0, -1, 30_001, Infinity, 1.5])('rejects a disabled or excessive query deadline: %s', (queryTimeoutMs) => {
@@ -94,5 +95,31 @@ describe('createConnectorDb — mysql', () => {
       query: (statement, cb) => { seen.push(statement); cb(null); },
     });
     expect(seen).toEqual(['set collation_connection = @@collation_database']);
+  });
+});
+
+describe('splitMssqlHost', () => {
+  it('splits the SERVER\\INSTANCE form SSMS shows', () => {
+    expect(splitMssqlHost('LABSRV\\SQLEXPRESS')).toEqual({ host: 'LABSRV', instanceName: 'SQLEXPRESS' });
+  });
+  it('leaves a plain host alone', () => {
+    expect(splitMssqlHost('LABSRV')).toEqual({ host: 'LABSRV' });
+  });
+  it('lets an explicit instance name win over one in the host', () => {
+    expect(splitMssqlHost('LABSRV\\A', 'B')).toEqual({ host: 'LABSRV', instanceName: 'B' });
+  });
+  it('ignores a blank instance after the backslash', () => {
+    expect(splitMssqlHost('LABSRV\\ ')).toEqual({ host: 'LABSRV' });
+  });
+});
+
+describe('microsoft-sql instance and Windows login', () => {
+  it('passes instance and domain through, and does not validate a port when an instance is set', () => {
+    mssqlCreate.mockClear();
+    createConnectorDb('microsoft-sql', { host: 'LABSRV\\SQLEXPRESS', port: 'not-a-port', database: 'd', user: 'u', password: 'p', domain: 'LAB' });
+    expect(mssqlCreate).toHaveBeenCalledWith(expect.objectContaining({ host: 'LABSRV', instanceName: 'SQLEXPRESS', domain: 'LAB' }));
+  });
+  it('still validates the port when there is no instance', () => {
+    expect(() => createConnectorDb('microsoft-sql', { host: 'LABSRV', port: 'not-a-port' })).toThrow(/invalid connector port/);
   });
 });

@@ -27,3 +27,28 @@ describe('createMssqlStore', () => {
     await store.close();
   });
 });
+
+describe('buildMssqlDialectConfig connection options', () => {
+  // Records the config tedious would receive, without opening a socket.
+  function captured(extra: Record<string, unknown>) {
+    const seen: Array<Record<string, any>> = [];
+    class FakeConnection { constructor(c: Record<string, any>) { seen.push(c); } }
+    const dialect = buildMssqlDialectConfig({ ...cfg, ...extra }, tedious.Request, FakeConnection as unknown as typeof tedious.Connection);
+    (dialect as unknown as { tedious: { connectionFactory: () => unknown } }).tedious.connectionFactory();
+    return seen[0];
+  }
+  it('uses a SQL login when no domain is set', () => {
+    expect(captured({}).authentication).toEqual({ type: 'default', options: { userName: 'sa', password: 'x' } });
+  });
+  it('uses a Windows (NTLM) login when a domain is set', () => {
+    expect(captured({ domain: 'LAB' }).authentication).toEqual({ type: 'ntlm', options: { userName: 'sa', password: 'x', domain: 'LAB' } });
+  });
+  it('passes the instance name and drops the port, which tedious refuses together', () => {
+    const c = captured({ instanceName: 'SQLEXPRESS' });
+    expect(c.options.instanceName).toBe('SQLEXPRESS');
+    expect(c.options).not.toHaveProperty('port');
+  });
+  it('keeps the port when there is no instance name', () => {
+    expect(captured({}).options.port).toBe(1433);
+  });
+});
