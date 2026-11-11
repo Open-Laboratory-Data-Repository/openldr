@@ -11,6 +11,8 @@ Source of truth: `apps/server/src/*.ts` (route registration in `apps/server/src/
 | `GET` | `/health` | Run all registered health checks. Returns `503` when health status is down. |
 | `GET` | `/api/config` | Browser-facing feature/auth/OIDC configuration. |
 | `GET` | `/api/me` | Current authenticated user. Returns `401` when no user is available. |
+| `GET` | `/api/me/preferences` | The signed-in user's own studio preferences: `theme`, `sidebarCollapsed`, `startPage`. No capability needed. |
+| `PUT` | `/api/me/preferences` | Merge a patch into the signed-in user's preferences. A `null` value clears a key. Returns the merged result. |
 
 ## Reports
 
@@ -140,6 +142,7 @@ Saved, encrypted connections to external systems (databases, email, SFTP, plugin
 | `PUT` | `/api/connectors/:id` | Update a connector; blank secret keeps the stored value. |
 | `DELETE` | `/api/connectors/:id` | Delete a connector. |
 | `POST` | `/api/connectors/:id/test` | Test connectivity. |
+| `POST` | `/api/connectors/:id/diagnose` | Check a host connector step by step (settings, name, SQL Server Browser, port, login, version). Returns each step's status and a hint code. |
 | `GET` | `/api/connectors/sink-plugins` | List installed sink plugins that can back a connector. |
 
 ## Marketplace

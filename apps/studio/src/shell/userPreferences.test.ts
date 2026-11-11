@@ -27,6 +27,19 @@ describe('user preferences store', () => {
     expect(getUserPreferencesState()).toEqual({ loaded: true, prefs: { theme: 'dark', startPage: '/reports' } });
   });
 
+  it('drops the last values while a second load runs, so one user never sees another\'s', async () => {
+    (api.getMyPreferences as any).mockResolvedValue({ theme: 'dark' });
+    await loadUserPreferences();
+    let release: (v: unknown) => void = () => {};
+    (api.getMyPreferences as any).mockReturnValue(new Promise((r) => { release = r; }));
+    const second = loadUserPreferences();
+    expect(getUserPreferencesState()).toEqual({ loaded: false, prefs: {} });
+    expect(await setUserPreference({ theme: 'light' })).toBe(false);
+    release({ theme: 'light' });
+    await second;
+    expect(getUserPreferencesState()).toEqual({ loaded: true, prefs: { theme: 'light' } });
+  });
+
   it('counts as loaded when the request fails, and then saves nothing', async () => {
     (api.getMyPreferences as any).mockRejectedValue(new Error('offline'));
     await loadUserPreferences();

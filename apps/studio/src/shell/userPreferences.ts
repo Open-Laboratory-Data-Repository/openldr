@@ -38,6 +38,9 @@ export function useUserPreferences(): State {
 
 /** Read the user's preferences. Never throws: on failure the app carries on with local values. */
 export async function loadUserPreferences(): Promise<void> {
+  // A load for a different user must not leave the last user's values in place while it runs.
+  synced = false;
+  if (state.loaded) set({ loaded: false, prefs: {} });
   try {
     const prefs = await getMyPreferences();
     synced = true;

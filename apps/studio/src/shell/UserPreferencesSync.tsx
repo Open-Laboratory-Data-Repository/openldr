@@ -25,13 +25,17 @@ export function UserPreferencesSync() {
   const entryPath = useRef(location.pathname);
   useEffect(() => { noteEntryPath(entryPath.current); }, []);
 
-  useEffect(() => {
-    if (userId) void loadUserPreferences();
-  }, [userId]);
-
   // First pass after a load: the saved theme wins over this browser's. After that, a change made
   // here is saved. A user with no saved theme gets this browser's theme saved, so it travels from now on.
   const applied = useRef(false);
+
+  useEffect(() => {
+    if (!userId) return;
+    // A different user's saved theme must be applied, not overwritten with the last user's.
+    applied.current = false;
+    void loadUserPreferences();
+  }, [userId]);
+
   useEffect(() => {
     if (!loaded || !theme || !setTheme) return;
     if (!applied.current) {
