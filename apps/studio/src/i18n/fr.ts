@@ -941,6 +941,8 @@ export const fr: EnShape = {
       complete: 'Terminée',
       stuck: 'Bloquée',
       failed: 'Échouée',
+      running: 'En cours',
+      stopped: 'Arrêtée',
     },
   },
   audit: {

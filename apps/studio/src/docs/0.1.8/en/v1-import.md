@@ -73,6 +73,15 @@ A failed request does not stop the import. The page lists the first 100 with a r
 | `SAVE_FAILED` | CE could not save the request. |
 | `INVALID_RESOURCE` | The plugin returned a record CE does not accept. |
 
+## Audit and Activity
+
+- Every import run shows on the **Activity** page as one entry. It has the plugin, who started it, and how many requests were imported and failed. Its status is Running, Stopped, Complete or Failed. A dry run saves nothing and is not listed.
+- The **Audit** page records each allow, revoke, start, stop, resume and finish, with who did it.
+- CE writes the audit entry first. If it cannot be written, CE refuses to allow a connector, or to start or resume an import.
+- Every imported record keeps the run's id, the plugin and its version, and the source system.
+
+An import does not start a workflow run for each request. Workflows that react to the `data.persisted` event do not run for imported records.
+
 ## From the command line
 
 A headless server runs the same import:

@@ -81,7 +81,7 @@ import { createPatientIdentifierSystems, type PatientIdentifierSystems } from '.
 import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
-import { createImportService, type ImportService } from './import-run';
+import { createImportService, type ImportRun, type ImportService } from './import-run';
 import { diagnoseConnector } from './connector-diagnose';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -906,7 +906,16 @@ const reporting: ReportingApi = {
     const p = (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as { count?: number; resourceTypes?: string[] };
     return { at: String(row.created_at), count: p.count ?? 0, resourceTypes: p.resourceTypes ?? [] };
   };
-  const activity = createActivityService({ runs: workflowRuns, batches: ingestBatches, persistedEvent });
+  const activity = createActivityService({
+    runs: workflowRuns, batches: ingestBatches, persistedEvent,
+    // An import saves records without a workflow run, so Activity reads the import runs too.
+    // `imports` is created further down; this only runs once a request asks for the list.
+    importRuns: async () => {
+      const out: ImportRun[] = [];
+      for (const p of await imports.importers()) out.push(...await imports.list(p.id));
+      return out;
+    },
+  });
 
   const health = new HealthRegistry();
   health.register({ name: 'auth', check: () => auth.healthCheck() });
@@ -1694,11 +1703,20 @@ const reporting: ReportingApi = {
     secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
     pluginData,
     persist: workflowPersist,
-    audit: (e) => safeRecord(audit, logger, {
-      actorType: e.actor.type, actorId: e.actor.id, actorName: e.actor.name,
-      action: e.action, entityType: 'plugin', entityId: e.pluginId,
-      metadata: { ...(e.connectorId ? { connectorId: e.connectorId } : {}), ...(e.runId ? { runId: e.runId } : {}), ...(e.metadata ?? {}) },
-    }),
+    // Not safeRecord: this one must throw. The import service refuses to allow, start or resume
+    // when the row cannot be written. The failure is logged here, as safeRecord would.
+    audit: async (e) => {
+      try {
+        await audit.record({
+          actorType: e.actor.type, actorId: e.actor.id, actorName: e.actor.name,
+          action: e.action, entityType: 'plugin', entityId: e.pluginId,
+          metadata: { ...(e.connectorId ? { connectorId: e.connectorId } : {}), ...(e.runId ? { runId: e.runId } : {}), ...(e.metadata ?? {}) },
+        });
+      } catch (err) {
+        logger.error({ action: e.action, error: err instanceof Error ? err.message : String(err) }, 'audit record failed');
+        throw err;
+      }
+    },
   });
   const pluginBroker = createPluginBroker({
     plugins,
@@ -1864,7 +1882,7 @@ export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
 export type { ReportCategoriesService } from './report-categories';
 export { createActivityService } from './activity-service';
-export type { ActivityService, RecentPayload } from './activity-service';
+export type { ActivityService, ActivityImportRun, ActivityLifecycle, RecentPayload } from './activity-service';
 export { getSyncConfig, setSyncConfig, readSigningKeys } from './sync-settings';
 export {
   servePull,

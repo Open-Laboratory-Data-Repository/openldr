@@ -73,6 +73,15 @@ Une demande en échec n'arrête pas l'import. La page liste les 100 premières a
 | `SAVE_FAILED` | CE n'a pas pu enregistrer la demande. |
 | `INVALID_RESOURCE` | Le plugin a renvoyé un enregistrement que CE n'accepte pas. |
 
+## Audit et Activité
+
+- Chaque import apparaît sur la page **Activité** comme une seule entrée. Elle indique le plugin, qui l'a lancé, et combien de demandes ont été importées ou ont échoué. Son état est En cours, Arrêtée, Terminée ou Échec. Un essai à blanc n'enregistre rien et n'est pas listé.
+- La page **Audit** enregistre chaque autorisation, retrait, lancement, arrêt, reprise et fin, avec son auteur.
+- CE écrit d'abord l'entrée d'audit. Si elle ne peut pas être écrite, CE refuse d'autoriser un connecteur, de lancer ou de reprendre un import.
+- Chaque enregistrement importé garde l'identifiant de l'import, le plugin et sa version, et le système source.
+
+Un import ne lance pas un flux de travail pour chaque demande. Les flux qui réagissent à l'événement `data.persisted` ne s'exécutent pas pour les enregistrements importés.
+
 ## En ligne de commande
 
 Un serveur sans écran lance le même import :

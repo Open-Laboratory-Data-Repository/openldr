@@ -83,7 +83,10 @@ export interface ImportServiceDeps {
   pluginData: PluginDataStore;
   /** CE's shared save path for FHIR resources. Throws when a resource is invalid. */
   persist(resources: unknown[], provenance: Provenance): Promise<unknown>;
-  audit?(event: ImportAuditEvent): Promise<void>;
+  /** Writes one audit row, and throws when it cannot. Required: `allow`, `start` and `resume`
+   *  refuse to act when their row cannot be written, so no plugin reads a connector or saves
+   *  records without the audit log showing it. */
+  audit(event: ImportAuditEvent): Promise<void>;
   /** Injectable for tests; defaults to the real connector connection. */
   createDb?: (type: string, config: Record<string, string>) => ConnectorDb;
   now?: () => Date;
@@ -162,8 +165,21 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
   /** How the last few runs driven here ended, so `wait` still answers just after one finishes. */
   const ended = new Map<string, ImportRun>();
 
+  /** For events that record something already done (stop, revoke, finish). A failure here
+   *  cannot undo it, so it is swallowed; the sink logs it. */
   const audit = async (event: ImportAuditEvent): Promise<void> => {
-    try { await deps.audit?.(event); } catch { /* an audit failure must not stop an import */ }
+    try { await deps.audit(event); } catch { /* see above */ }
+  };
+
+  /** For events that open the door to reading or writing (allow, start, resume). Called BEFORE
+   *  the change is made. If the row cannot be written, the action is refused. The sink's own
+   *  error text is not passed on: it can name hosts. */
+  const auditOrRefuse = async (event: ImportAuditEvent): Promise<void> => {
+    try {
+      await deps.audit(event);
+    } catch {
+      throw new Error('the audit log could not be written, so nothing was changed');
+    }
   };
 
   async function resolvePlugin(pluginId: string): Promise<ResolvedPlugin> {
@@ -373,8 +389,8 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     async allow(pluginId, connectorId, actor) {
       await resolvePlugin(pluginId);
       if (!(await deps.connectors.get(connectorId))) throw new Error(`connector ${connectorId} not found`);
+      await auditOrRefuse({ action: 'import.allow', pluginId, connectorId, actor });
       await deps.pluginData.put(pluginId, ALLOWED, connectorId, { connectorId, allowedBy: actor.name, allowedAt: now().toISOString() });
-      await audit({ action: 'import.allow', pluginId, connectorId, actor });
     },
 
     async revoke(pluginId, connectorId, actor) {
@@ -437,11 +453,11 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
         cursor: null, counts: { keys: 0, imported: 0, failed: 0, resources: 0 }, failuresStored: 0,
         startedAt: at, updatedAt: at, finishedAt: null, lastError: null, startedBy: input.actor.name,
       };
-      await save(run);
-      await audit({
+      await auditOrRefuse({
         action: 'import.start', pluginId: run.pluginId, connectorId: run.connectorId, runId: run.id, actor: input.actor,
         metadata: { dryRun: run.dryRun, pageSize, limit },
       });
+      await save(run);
       launch(run, input.actor);
       return { ...run };
     },
@@ -488,8 +504,8 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
       await resolveConnector(plugin, stored.connectorId);
       await assertNoActiveRun(pluginId, stored.connectorId, runId);
       const run: ImportRun = { ...stored, status: 'running', finishedAt: null, lastError: null, pluginVersion: plugin.version };
+      await auditOrRefuse({ action: 'import.resume', pluginId, connectorId: run.connectorId, runId, actor, metadata: { cursor: run.cursor } });
       await save(run);
-      await audit({ action: 'import.resume', pluginId, connectorId: run.connectorId, runId, actor, metadata: { cursor: run.cursor } });
       launch(run, actor);
       return { ...run };
     },

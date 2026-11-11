@@ -73,6 +73,15 @@ Um pedido com falha não para a importação. A página lista os primeiros 100 c
 | `SAVE_FAILED` | O CE não conseguiu guardar o pedido. |
 | `INVALID_RESOURCE` | O plugin devolveu um registo que o CE não aceita. |
 
+## Auditoria e Atividade
+
+- Cada importação aparece na página **Atividade** como uma única entrada. Mostra o plugin, quem a iniciou, e quantos pedidos foram importados ou falharam. O estado é Em curso, Parada, Concluída ou Falhou. Um ensaio não guarda nada e não é listado.
+- A página **Auditoria** regista cada autorização, remoção, início, paragem, retoma e fim, com quem o fez.
+- O CE escreve primeiro a entrada de auditoria. Se não puder ser escrita, o CE recusa autorizar um conector, e iniciar ou retomar uma importação.
+- Cada registo importado guarda o identificador da importação, o plugin e a sua versão, e o sistema de origem.
+
+Uma importação não inicia um fluxo de trabalho para cada pedido. Os fluxos que reagem ao evento `data.persisted` não correm para os registos importados.
+
 ## Na linha de comandos
 
 Um servidor sem ecrã executa a mesma importação:

@@ -5,6 +5,22 @@ import { buildLifecycle, type Lifecycle, type LifecycleRun } from '@openldr/work
  *  reads `result.results` defensively, so the loose shape is safe. */
 export type ActivityRun = Omit<LifecycleRun, 'result'> & { result?: unknown };
 
+/** An import run (import-run.ts), as much of it as Activity shows. An import saves records through
+ *  the same save step as the ingest workflow, but starts no workflow run, so without this it
+ *  would never appear here. */
+export interface ActivityImportRun {
+  id: string;
+  pluginId: string;
+  pluginVersion: string;
+  status: string;
+  dryRun: boolean;
+  counts: { keys: number; imported: number; failed: number; resources: number };
+  startedAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  startedBy: string;
+}
+
 export interface ActivityDeps {
   runs: {
     listByCorrelation(id: string): Promise<ActivityRun[]>;
@@ -13,13 +29,41 @@ export interface ActivityDeps {
   batches: { get(batchId: string): Promise<{ created_at?: unknown; source?: unknown; status?: unknown } | null | undefined> };
   /** Reads the data.persisted event for a batch from outbox_events (null if not yet persisted). */
   persistedEvent(correlationId: string): Promise<{ at: string; count: number; resourceTypes: string[] } | null>;
+  /** Every import run. Optional so older callers and tests need not supply it. */
+  importRuns?: () => Promise<ActivityImportRun[]>;
 }
 
 export interface RecentPayload { correlationId: string; workflowId: string; source: string | null; startedAt: string; currentStage: string; status: string; }
 
+/** A payload's lifecycle, or an import run's. An import can also be running or stopped, which a
+ *  workflow payload cannot. */
+export type ActivityLifecycle = Omit<Lifecycle, 'status'> & { status: Lifecycle['status'] | 'running' | 'stopped' };
+
 export interface ActivityService {
-  getLifecycle(correlationId: string): Promise<Lifecycle | null>;
+  getLifecycle(correlationId: string): Promise<ActivityLifecycle | null>;
   listRecent(opts?: { limit?: number; offset?: number }): Promise<RecentPayload[]>;
+}
+
+function importStatus(status: string): ActivityLifecycle['status'] {
+  if (status === 'completed') return 'complete';
+  if (status === 'failed') return 'failed';
+  return status === 'running' || status === 'stopping' ? 'running' : 'stopped';
+}
+
+/** One import run as a lifecycle: who started it, then what it has saved so far. */
+function importLifecycle(run: ActivityImportRun): ActivityLifecycle {
+  const stages: ActivityLifecycle['stages'] = [
+    { stage: 'received', status: 'ok', at: run.startedAt, detail: `import: ${run.pluginId} ${run.pluginVersion}, started by ${run.startedBy}` },
+  ];
+  if (run.counts.imported > 0 || run.status === 'failed') {
+    stages.push({
+      stage: 'persisted', status: run.status === 'failed' ? 'failed' : 'ok',
+      // A run that has not finished is dated by its last saved page.
+      at: run.finishedAt ?? run.updatedAt,
+      detail: `${run.counts.imported} imported, ${run.counts.failed} failed, ${run.counts.resources} resources`,
+    });
+  }
+  return { correlationId: run.id, status: importStatus(run.status), stages, runIds: [] };
 }
 
 export function createActivityService(deps: ActivityDeps): ActivityService {
@@ -33,21 +77,62 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
       : null;
     return buildLifecycle({ correlationId, runs: runs as LifecycleRun[], persistedEvent, ingestBatch });
   }
+  /** Import runs that saved, or are saving, records. A dry run saves nothing and is left out.
+   *  Activity must keep working when these cannot be read, so a failure reads as none. */
+  async function importRuns(): Promise<ActivityImportRun[]> {
+    if (!deps.importRuns) return [];
+    try {
+      return (await deps.importRuns()).filter((r) => !r.dryRun);
+    } catch {
+      return [];
+    }
+  }
+
+  async function workflowPayload(h: { correlationId: string; latestAt: string; workflowId: string }): Promise<RecentPayload> {
+    const lc = await assemble(h.correlationId);
+    const last = lc?.stages[lc.stages.length - 1];
+    // Source = how the payload arrived (the `received` stage detail = webhook/ingest source),
+    // not the last stage's detail (which for a persisted payload is a resource count).
+    const received = lc?.stages.find((s) => s.stage === 'received');
+    return { correlationId: h.correlationId, workflowId: h.workflowId,
+      source: received?.detail ?? null, startedAt: h.latestAt,
+      currentStage: last?.stage ?? 'received', status: lc?.status ?? 'stuck' };
+  }
+
+  function importPayload(run: ActivityImportRun): RecentPayload {
+    const lc = importLifecycle(run);
+    return { correlationId: run.id, workflowId: `import:${run.pluginId}`, source: `import: ${run.pluginId}`,
+      startedAt: run.startedAt, currentStage: lc.stages[lc.stages.length - 1].stage, status: lc.status };
+  }
+
   return {
-    getLifecycle: assemble,
+    async getLifecycle(correlationId) {
+      const payload = await assemble(correlationId);
+      if (payload) return payload;
+      const run = (await importRuns()).find((r) => r.id === correlationId);
+      return run ? importLifecycle(run) : null;
+    },
     async listRecent(opts) {
-      const heads = await deps.runs.listCorrelations(opts);
-      const out: RecentPayload[] = [];
-      for (const h of heads) {
-        const lc = await assemble(h.correlationId);
-        const last = lc?.stages[lc.stages.length - 1];
-        // Source = how the payload arrived (the `received` stage detail = webhook/ingest source),
-        // not the last stage's detail (which for a persisted payload is a resource count).
-        const received = lc?.stages.find((s) => s.stage === 'received');
-        out.push({ correlationId: h.correlationId, workflowId: h.workflowId,
-          source: received?.detail ?? null, startedAt: h.latestAt,
-          currentStage: last?.stage ?? 'received', status: lc?.status ?? 'stuck' });
+      const imports = await importRuns();
+      if (imports.length === 0) {
+        const out: RecentPayload[] = [];
+        for (const h of await deps.runs.listCorrelations(opts)) out.push(await workflowPayload(h));
+        return out;
       }
+      // Two sources, one page. Ask the store for enough rows to cover the page once the import
+      // runs are merged in, order both by time, then cut the page. Only the rows on the page are
+      // assembled, which is the costly part.
+      const offset = opts?.offset ?? 0;
+      const limit = opts?.limit;
+      const heads = await deps.runs.listCorrelations(limit === undefined ? opts : { limit: offset + limit, offset: 0 });
+      const merged = [
+        ...heads.map((h) => ({ at: h.latestAt, head: h, run: undefined as ActivityImportRun | undefined })),
+        ...imports.map((run) => ({ at: run.startedAt, head: undefined, run })),
+      // Compare as times, not text: the two sources need not format a timestamp the same way.
+      ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+      const page = limit === undefined ? merged : merged.slice(offset, offset + limit);
+      const out: RecentPayload[] = [];
+      for (const e of page) out.push(e.run ? importPayload(e.run) : await workflowPayload(e.head!));
       return out;
     },
   };

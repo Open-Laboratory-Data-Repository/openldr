@@ -63,6 +63,8 @@ interface Harness {
   setQueries(q: unknown): void;
   setMapper(fn: (input: { keys: string[] }) => unknown): void;
   clock: { now: number };
+  /** Make the audit sink throw for this action, as when the audit store is down. */
+  failAuditOn(action: ImportAuditEvent['action'] | null): void;
 }
 
 let internalDb: Awaited<ReturnType<typeof makeMigratedDb>>;
@@ -71,6 +73,7 @@ async function harness(keys: string[]): Promise<Harness> {
   const source = fakeSource(keys);
   const audited: ImportAuditEvent[] = [];
   const mapInputs: Harness['mapInputs'] = [];
+  let auditFails: ImportAuditEvent['action'] | null = null;
   let currentManifest: unknown = manifest();
   let queries: unknown = { keyQuery: { sql: KEY_SQL }, detailQueries: [{ name: 'requests', sql: REQ_SQL }, { name: 'results', sql: RES_SQL }] };
   let mapper = (input: { keys: string[] }): unknown => ({
@@ -96,13 +99,14 @@ async function harness(keys: string[]): Promise<Harness> {
     secretsKey: 'k',
     pluginData: createPluginDataStore(internalDb),
     persist,
-    audit: async (e) => { audited.push(e); },
+    audit: async (e) => { if (e.action === auditFails) throw new Error('audit store down'); audited.push(e); },
     createDb: () => source.db,
     now: () => new Date(clock.now),
   });
   await svc.allow('v1-import', 'c1', ADMIN);
   return {
     svc, source, persist, invoke, audited, mapInputs, clock,
+    failAuditOn: (action) => { auditFails = action; },
     setManifest: (m) => { currentManifest = m; },
     setQueries: (q) => { queries = q; },
     setMapper: (fn) => { mapper = fn; },
@@ -363,4 +367,51 @@ describe('import run: who may read what', () => {
     h.setManifest(manifest({ importSource: undefined }));
     expect(await h.svc.importers()).toEqual([]);
   });
+
+  // The operator's rule: a plugin may not write records unless the audit log shows it.
+  describe('audit is required before anything is written', () => {
+    it('refuses to start when the start cannot be audited, and saves nothing', async () => {
+      const h = await harness(keysOf(3));
+      h.failAuditOn('import.start');
+      await expect(h.svc.start({ pluginId: 'v1-import', connectorId: 'c1', options: {}, actor: ADMIN }))
+        .rejects.toThrow(/audit log could not be written/);
+      expect(await h.svc.list('v1-import')).toEqual([]);
+      expect(h.persist).not.toHaveBeenCalled();
+      // The driver's own error text is not passed on.
+      await expect(h.svc.start({ pluginId: 'v1-import', connectorId: 'c1', options: {}, actor: ADMIN })).rejects.not.toThrow(/audit store down/);
+    });
+
+    it('refuses to resume when the resume cannot be audited, and leaves the run as it was', async () => {
+      const h = await harness(keysOf(4));
+      const run = await h.svc.start({ pluginId: 'v1-import', connectorId: 'c1', options: {}, pageSize: 2, limit: 2, actor: ADMIN });
+      await h.svc.wait(run.id);
+      // A limit-reached run is complete; make a resumable one by stopping a fresh run at once.
+      const second = await h.svc.start({ pluginId: 'v1-import', connectorId: 'c1', options: {}, pageSize: 1, actor: ADMIN });
+      await h.svc.stop('v1-import', second.id, ADMIN);
+      const stopped = await h.svc.wait(second.id);
+      expect(stopped.status).toBe('stopped');
+      const savedBefore = h.persist.mock.calls.length;
+      h.failAuditOn('import.resume');
+      await expect(h.svc.resume('v1-import', second.id, ADMIN)).rejects.toThrow(/audit log could not be written/);
+      expect((await h.svc.get('v1-import', second.id))?.status).toBe('stopped');
+      expect(h.persist.mock.calls.length).toBe(savedBefore);
+    });
+
+    it('refuses to allow a connector when that cannot be audited', async () => {
+      const h = await harness(keysOf(1));
+      await h.svc.revoke('v1-import', 'c1', ADMIN);
+      h.failAuditOn('import.allow');
+      await expect(h.svc.allow('v1-import', 'c1', ADMIN)).rejects.toThrow(/audit log could not be written/);
+      expect(await h.svc.allowed('v1-import')).toEqual([]);
+    });
+
+    it('still finishes a run whose finish cannot be audited: the records are already saved', async () => {
+      const h = await harness(keysOf(2));
+      h.failAuditOn('import.finish');
+      const run = await h.svc.start({ pluginId: 'v1-import', connectorId: 'c1', options: {}, actor: ADMIN });
+      const done = await h.svc.wait(run.id);
+      expect(done).toMatchObject({ status: 'completed', counts: { imported: 2 } });
+    });
+  });
 });
+

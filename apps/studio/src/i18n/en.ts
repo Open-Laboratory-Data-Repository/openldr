@@ -951,6 +951,8 @@ export const en = {
       complete: 'Complete',
       stuck: 'Stuck',
       failed: 'Failed',
+      running: 'Running',
+      stopped: 'Stopped',
     },
   },
   audit: {
