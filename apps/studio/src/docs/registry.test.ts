@@ -138,10 +138,11 @@ describe('docs registry', () => {
   });
 
   it('falls back to English markdown after metadata lookup', () => {
-    const fr = resolve('fr', 'report-pipeline');
-    const en = resolve('en', 'report-pipeline');
+    // sync has no French page yet, so it shows the English one.
+    const fr = resolve('fr', 'sync');
+    const en = resolve('en', 'sync');
     expect(fr).toMatchObject({
-      slug: 'report-pipeline',
+      slug: 'sync',
       localeUsed: 'en',
     });
     expect(fr!.content).toBe(en!.content);

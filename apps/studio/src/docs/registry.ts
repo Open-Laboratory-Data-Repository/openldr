@@ -150,10 +150,11 @@ export const DOC_GUIDES: DocGuide[] = [
     summary: 'Query a database on a schedule, fill an Excel template, and email the report — with two workflows.',
     audience: ['lab-managers', 'administrators'],
     requiredRoles: ['lab_admin', 'lab_manager'],
-    estimatedMinutes: 15,
+    estimatedMinutes: 20,
     difficulty: 'intermediate',
     relatedSlugs: ['workflows', 'connectors', 'reports'],
     screenshotNames: ['report-materialize-builder.png', 'report-excel-template.png'],
+    capturedNames: ['report-pipeline-build.mp4', 'report-pipeline-materialize-config.png', 'report-pipeline-run.mp4', 'report-pipeline-output.png', 'report-pipeline-datasets.png', 'report-pipeline-query.mp4', 'report-pipeline-query-result.png'],
     status: 'published',
   },
   {
