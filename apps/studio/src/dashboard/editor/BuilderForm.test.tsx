@@ -285,3 +285,17 @@ describe('BuilderForm user-defined joins', () => {
     expect(screen.getByLabelText('Remove join u1')).toBeInTheDocument();
   });
 });
+
+describe('BuilderForm dashboard filters', () => {
+  it('lists each dashboard filter with the field it drives', () => {
+    const bound = { ...base, variableBindings: { priority: 'prio' } } as typeof base;
+    render(<BuilderForm models={models} value={bound} dashboardFilters={[{ id: 'prio', label: 'Prio filter', type: 'text' }]} onChange={vi.fn()} />);
+    expect(screen.getByText('Dashboard filters')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Follow Prio filter' })).toHaveTextContent('Priority');
+  });
+
+  it('shows no dashboard filter block when the dashboard has no filters', () => {
+    render(<BuilderForm models={models} value={base} dashboardFilters={[]} onChange={vi.fn()} />);
+    expect(screen.queryByText('Dashboard filters')).not.toBeInTheDocument();
+  });
+});

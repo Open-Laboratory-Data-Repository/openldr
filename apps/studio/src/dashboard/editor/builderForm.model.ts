@@ -2,7 +2,7 @@
 // they're unit-testable without jsdom or Radix — see BuilderForm.tsx, which is a thin shadcn
 // shell over these functions.
 
-import type { QueryModel, UserJoin, WidgetQuery, WidgetVariableDef } from '../../api';
+import type { DashboardFilterDef, ModelDimension, QueryModel, UserJoin, WidgetQuery, WidgetVariableDef } from '../../api';
 import { pruneDimensions, type TreeGroup } from './conditionTree.model';
 import { toBuilderMetrics, type Measure } from './measures.model';
 
@@ -221,4 +221,25 @@ export function removeUserJoinPatch(value: BuilderQuery, id: string): BuilderQue
     adhocDimensions: (value.adhocDimensions ?? []).filter((d) => d.join !== id),
   };
   return clearDimensionRefs(next, removedKeys);
+}
+
+/**
+ * Bind a dashboard filter to one field of a Builder widget, or unbind it with an empty `dimKey`.
+ * Bindings are keyed by field, `{ [dimKey]: filterId }`, because that is how bindQuery and
+ * bindFilterTree read them at run time. A filter is bound to at most one field.
+ */
+export function setFilterBindingPatch(value: BuilderQuery, filterId: string, dimKey: string): BuilderQuery {
+  const next: Record<string, string> = {};
+  for (const [dim, id] of Object.entries(value.variableBindings ?? {})) {
+    if (id !== filterId && dim !== dimKey) next[dim] = id;
+  }
+  if (dimKey) next[dimKey] = filterId;
+  const { variableBindings: _old, ...rest } = value;
+  return Object.keys(next).length ? { ...rest, variableBindings: next } : (rest as BuilderQuery);
+}
+
+/** The fields a dashboard filter can drive: date fields for a date or date-range filter, the rest otherwise. */
+export function bindableDimensions(filter: DashboardFilterDef, dims: ModelDimension[]): ModelDimension[] {
+  const wantsDate = filter.type === 'date' || filter.type === 'date-range';
+  return dims.filter((d) => (d.kind === 'date') === wantsDate);
 }

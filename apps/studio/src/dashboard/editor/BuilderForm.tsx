@@ -29,6 +29,8 @@ import {
   removeUserJoinPatch,
   uniqueJoinId,
   type BuilderQuery,
+  setFilterBindingPatch,
+  bindableDimensions,
 } from './builderForm.model';
 
 // Radix Select renders `<SelectItem value="">` as an error, so "no selection" is modeled with
@@ -390,7 +392,37 @@ export function BuilderForm({ models, value, dashboardFilters = [], joinableTabl
 
   // Every block below Data, each preceded by a hairline divider (which also serves as the
   // divider under Data's action row). One leading divider per block — no doubled or trailing hairlines.
+  // One picker per dashboard filter: the field it narrows. The bindings ride on the saved query
+  // and bindQuery applies them at run time, replacing any rule of this widget on that field.
+  const boundField = (filterId: string) =>
+    Object.entries(value.variableBindings ?? {}).find(([, id]) => id === filterId)?.[0] ?? NONE;
+  const filterBindings = dashboardFilters.length > 0 ? (
+    <div key="__dashboard_filters__" className="mx-1 rounded-md border border-border bg-card p-3">
+      <span className="text-sm font-medium">Dashboard filters</span>
+      <p className="mb-2 text-[11px] text-muted-foreground">Pick the field each filter narrows. Leave it unused to ignore that filter.</p>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2">
+        {dashboardFilters.map((f) => (
+          <Fragment key={f.id}>
+            <span className="text-xs text-muted-foreground">{f.label}</span>
+            <Select value={boundField(f.id)} onValueChange={(key) => onChange(setFilterBindingPatch(value, f.id, key === NONE ? '' : key))}>
+              <SelectTrigger aria-label={`Follow ${f.label}`} className="h-8 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NONE}>(not used)</SelectItem>
+                {bindableDimensions(f, filterDimOptions).map((d) => (
+                  <SelectItem key={d.key} value={d.key}>{d.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
   const blocks: ReactNode[] = [...visibleBlocks];
+  if (filterBindings) blocks.push(filterBindings);
   if (showAddTiles) blocks.push(addTilesRow);
 
   return (

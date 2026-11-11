@@ -249,7 +249,7 @@ Filter types:
 
 A text filter can fill its list from **Options SQL**. The sample's **Test** filter uses `SELECT DISTINCT panel_desc FROM lab_requests WHERE panel_desc IS NOT NULL ORDER BY panel_desc`. Any filter can have a **Default value**.
 
-> **Filters reach SQL widgets only.** A dashboard filter changes a widget only when that widget's SQL uses the filter's tokens. Builder widgets keep their own conditions and ignore the filter bar. The next example shows how to connect a filter.
+> **A filter changes only the widgets bound to it.** A SQL widget is bound when its SQL uses the filter's tokens and its variables are set in **Filters**. A Builder widget is bound in the **Dashboard filters** block of the Builder: pick the field each filter narrows, such as **Authored** for **Period**. A bound filter replaces that widget's own condition on the same field. The next example shows how to connect a filter to SQL.
 
 ## Example 5: a widget written in SQL
 
@@ -308,7 +308,7 @@ Only filters of the same type appear in **Dashboard Filter**. **Test Value** let
 
 Select **Period** and choose 1 to 31 October 2026.
 
-**Expected result:** Orders by requesting site changes to 12, 11 and 9. The Builder widgets do not change.
+**Expected result:** Orders by requesting site changes to 12, 11 and 9. The Builder widgets do not change, because none is bound to **Period**.
 
 A red variable chip above the SQL means that variable cannot resolve. Either its type no longer matches the bound filter, or a date range is written as `{{period}}` instead of `{{period_from}}` and `{{period_to}}`. Open **Filters** in the **Editor menu** to read the message.
 
@@ -365,7 +365,7 @@ PostgreSQL, MySQL, MariaDB and SQL Server all stop the database work at the time
 - **No dashboard appears.** None exists yet. The empty page offers **New dashboard** and **Import dashboard**.
 - **Edit is missing from the menu.** Your role lacks **Edit dashboards**.
 - **The SQL cannot be edited, or saving says `raw SQL widgets are disabled`.** Turn on **Dashboard raw SQL**. See [Turn on SQL widgets](#turn-on-sql-widgets).
-- **A widget ignores the filter bar.** Builder widgets always do. A SQL widget follows a filter only when its SQL uses the tokens and its variables are bound in **Filters**.
+- **A widget ignores the filter bar.** It is not bound to that filter. For a Builder widget, pick a field in its **Dashboard filters** block. A SQL widget follows a filter only when its SQL uses the tokens and its variables are bound in **Filters**.
 - **A Breakdown makes no difference to my chart.** Only **Table** shows a breakdown today.
 - **A widget shows an error about time or rows.** It hit the timeout or the row cap. See [Limits and settings](#limits-and-settings).
 - **A new widget is not on screen.** New widgets go to the bottom of the grid. Scroll down.

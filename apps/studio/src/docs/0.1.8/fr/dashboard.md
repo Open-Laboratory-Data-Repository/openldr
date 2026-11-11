@@ -251,7 +251,7 @@ Types de filtres :
 
 Un filtre texte peut remplir sa liste avec **SQL des options**. Le filtre **Test** de l'exemple utilise `SELECT DISTINCT panel_desc FROM lab_requests WHERE panel_desc IS NOT NULL ORDER BY panel_desc`. Tout filtre peut avoir une **Valeur par défaut**.
 
-> **Les filtres n'atteignent que les widgets SQL.** Un filtre du tableau de bord ne change un widget que si le SQL de ce widget utilise les jetons du filtre. Les widgets du Builder gardent leurs propres conditions et ignorent la barre de filtres. L'exemple suivant montre comment relier un filtre.
+> **Un filtre ne change que les widgets qui lui sont reliés.** Un widget SQL est relié quand son SQL utilise les jetons du filtre et que ses variables sont réglées dans **Filters**. Un widget du Builder se relie dans le bloc **Dashboard filters** du Builder : choisissez le champ que chaque filtre restreint, par exemple **Authored** pour **Period**. Un filtre relié remplace la condition du widget sur ce même champ. L'exemple suivant montre comment relier un filtre au SQL.
 
 ## Exemple 5 : un widget écrit en SQL
 
@@ -310,7 +310,7 @@ Seuls les filtres du même type apparaissent dans **Dashboard Filter**. **Test V
 
 Sélectionnez **Period** et choisissez du 1er au 31 octobre 2026.
 
-**Résultat attendu :** Orders by requesting site passe à 12, 11 et 9. Les widgets du Builder ne changent pas.
+**Résultat attendu :** Orders by requesting site passe à 12, 11 et 9. Les widgets du Builder ne changent pas, car aucun n'est relié à **Period**.
 
 Une pastille de variable rouge au-dessus du SQL veut dire que la variable ne peut pas être résolue. Soit son type ne correspond plus au filtre relié, soit une plage de dates est écrite `{{period}}` au lieu de `{{period_from}}` et `{{period_to}}`. Ouvrez **Filters** dans l'**Editor menu** pour lire le message.
 
@@ -367,7 +367,7 @@ PostgreSQL, MySQL, MariaDB et SQL Server arrêtent tous le travail de la base au
 - **Aucun tableau de bord n'apparaît.** Il n'en existe encore aucun. La page vide propose **Nouveau tableau de bord** et **Importer**.
 - **Edit n'apparaît pas dans le menu.** Votre rôle n'a pas **Edit dashboards**.
 - **Le SQL n'est pas modifiable, ou l'enregistrement affiche `raw SQL widgets are disabled`.** Activez **SQL brut pour les tableaux de bord**. Voir [Activer les widgets SQL](#activer-les-widgets-sql).
-- **Un widget ignore la barre de filtres.** Les widgets du Builder l'ignorent toujours. Un widget SQL ne suit un filtre que si son SQL utilise les jetons et si ses variables sont reliées dans **Filters**.
+- **Un widget ignore la barre de filtres.** Il n'est pas relié à ce filtre. Pour un widget du Builder, choisissez un champ dans son bloc **Dashboard filters**. Un widget SQL ne suit un filtre que si son SQL utilise les jetons et si ses variables sont reliées dans **Filters**.
 - **Breakdown ne change rien à mon graphique.** Seul **Table** affiche une répartition aujourd'hui.
 - **Un widget affiche une erreur de délai ou de lignes.** Il a atteint le délai ou le plafond de lignes. Voir [Limites et paramètres](#limites-et-parametres).
 - **Un nouveau widget n'est pas visible.** Les nouveaux widgets vont en bas de la grille. Faites défiler vers le bas.

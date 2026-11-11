@@ -251,7 +251,7 @@ Tipos de filtro:
 
 Um filtro de texto pode preencher a sua lista com **SQL das opções**. O filtro **Test** do exemplo usa `SELECT DISTINCT panel_desc FROM lab_requests WHERE panel_desc IS NOT NULL ORDER BY panel_desc`. Qualquer filtro pode ter um **Valor predefinido**.
 
-> **Os filtros só chegam aos widgets SQL.** Um filtro do painel só muda um widget quando o SQL desse widget usa os tokens do filtro. Os widgets do Builder mantêm as suas próprias condições e ignoram a barra de filtros. O exemplo seguinte mostra como ligar um filtro.
+> **Um filtro só muda os widgets ligados a ele.** Um widget SQL fica ligado quando o seu SQL usa os tokens do filtro e as suas variáveis estão definidas em **Filters**. Um widget do Builder liga-se no bloco **Dashboard filters** do Builder: escolha o campo que cada filtro restringe, por exemplo **Authored** para **Period**. Um filtro ligado substitui a condição do widget nesse mesmo campo. O exemplo seguinte mostra como ligar um filtro ao SQL.
 
 ## Exemplo 5: um widget escrito em SQL
 
@@ -310,7 +310,7 @@ Só aparecem em **Dashboard Filter** os filtros do mesmo tipo. **Test Value** pe
 
 Selecione **Period** e escolha de 1 a 31 de outubro de 2026.
 
-**Resultado esperado:** Orders by requesting site passa a 12, 11 e 9. Os widgets do Builder não mudam.
+**Resultado esperado:** Orders by requesting site passa a 12, 11 e 9. Os widgets do Builder não mudam, porque nenhum está ligado a **Period**.
 
 Uma etiqueta de variável vermelha por cima do SQL quer dizer que a variável não se resolve. Ou o seu tipo já não coincide com o filtro ligado, ou um intervalo de datas está escrito como `{{period}}` em vez de `{{period_from}}` e `{{period_to}}`. Abra **Filters** no **Editor menu** para ler a mensagem.
 
@@ -367,7 +367,7 @@ O PostgreSQL, o MySQL, o MariaDB e o SQL Server param todos o trabalho da base n
 - **Não aparece nenhum painel.** Ainda não existe nenhum. A página vazia oferece **Novo painel** e **Importar**.
 - **Edit não aparece no menu.** A sua função não tem **Edit dashboards**.
 - **O SQL não se pode editar, ou guardar mostra `raw SQL widgets are disabled`.** Ative **SQL bruto no painel**. Veja [Ativar os widgets SQL](#ativar-os-widgets-sql).
-- **Um widget ignora a barra de filtros.** Os widgets do Builder ignoram-na sempre. Um widget SQL só segue um filtro quando o seu SQL usa os tokens e as suas variáveis estão ligadas em **Filters**.
+- **Um widget ignora a barra de filtros.** Não está ligado a esse filtro. Num widget do Builder, escolha um campo no bloco **Dashboard filters**. Um widget SQL só segue um filtro quando o seu SQL usa os tokens e as suas variáveis estão ligadas em **Filters**.
 - **Breakdown não muda nada no meu gráfico.** Hoje só **Table** mostra uma divisão.
 - **Um widget mostra um erro de tempo ou de linhas.** Atingiu o tempo limite ou o limite de linhas. Veja [Limites e definições](#limites-e-definicoes).
 - **Um widget novo não está visível.** Os widgets novos vão para o fundo da grelha. Desça a página.

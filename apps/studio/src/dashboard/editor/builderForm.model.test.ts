@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, removeAdhocDimensionPatch, adhocKey, makeAdhocDimension, setRelationshipColumnsPatch, removeRelationshipPatch, addUserJoinPatch, removeUserJoinPatch, setUserJoinKeysPatch, uniqueJoinId, type BuilderQuery } from './builderForm.model';
-import type { QueryModel, WidgetVariableDef } from '../../api';
+import { setModelPatch, setMetricPatch, setDimensionPatch, setGrainPatch, setBreakdownPatch, setFiltersPatch, setLimitPatch, setFilterTreePatch, buildSaveQuery, shouldRestoreEjected, measuresOf, setMeasuresPatch, removeAdhocDimensionPatch, adhocKey, makeAdhocDimension, setRelationshipColumnsPatch, removeRelationshipPatch, addUserJoinPatch, removeUserJoinPatch, setUserJoinKeysPatch, uniqueJoinId, setFilterBindingPatch, bindableDimensions, type BuilderQuery } from './builderForm.model';
+import type { QueryModel, WidgetVariableDef, ModelDimension } from '../../api';
 
 const models: QueryModel[] = [
   {
@@ -341,5 +341,34 @@ describe('user join patches', () => {
     expect(next.userJoins ?? []).toHaveLength(0);
     expect((next.adhocDimensions ?? []).some((d: any) => d.join === 'u1')).toBe(false);
     expect(next.dimension).toBeUndefined();
+  });
+});
+
+describe('dashboard filter bindings for a Builder widget', () => {
+  const q = { mode: 'builder', model: 'service_requests', metric: { key: 'count', label: 'Count', agg: 'count' }, filters: [] } as unknown as BuilderQuery;
+  const dims = [
+    { key: 'authored_on', label: 'Ordered', column: 'authored_at', kind: 'date' },
+    { key: 'priority', label: 'Priority', column: 'priority', kind: 'string' },
+  ] as unknown as ModelDimension[];
+
+  it('binds a dashboard filter to a field, keyed by the field as bindQuery reads it', () => {
+    const next = setFilterBindingPatch(q, 'period', 'authored_on');
+    expect(next.variableBindings).toEqual({ authored_on: 'period' });
+  });
+
+  it('moves a filter to another field instead of binding it twice', () => {
+    const once = setFilterBindingPatch(q, 'prio', 'priority');
+    const moved = setFilterBindingPatch(once, 'prio', 'authored_on');
+    expect(moved.variableBindings).toEqual({ authored_on: 'prio' });
+  });
+
+  it('unbinds a filter, and drops the empty bindings object', () => {
+    const bound = setFilterBindingPatch(q, 'period', 'authored_on');
+    expect(setFilterBindingPatch(bound, 'period', '').variableBindings).toBeUndefined();
+  });
+
+  it('offers date fields to a date filter, and the other fields to a text filter', () => {
+    expect(bindableDimensions({ id: 'period', label: 'Period', type: 'date-range' }, dims).map((d) => d.key)).toEqual(['authored_on']);
+    expect(bindableDimensions({ id: 'prio', label: 'Priority', type: 'text' }, dims).map((d) => d.key)).toEqual(['priority']);
   });
 });
