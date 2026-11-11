@@ -148,8 +148,22 @@ describe('first page under a layout', () => {
     expect(await screen.findByTestId('reports')).toBeTruthy();
   });
 
-  it('shows the Dashboard when the start page is not in the layout', async () => {
+  // A saved start page the layout hides cannot open; the layout's own start page is next in line.
+  it("falls through to the layout's start page when the user's own is not in the layout", async () => {
     await load({ startPage: '/reports' });
+    gate();
+    expect(await screen.findByTestId('forms')).toBeTruthy();
+  });
+
+  it('shows the Dashboard when neither start page is in the sidebar', async () => {
+    // Data shows only Reports and has no start page; the saved /query is hidden by it.
+    await load({ layout: 'data', startPage: '/query' });
+    gate();
+    expect(await screen.findByTestId('dashboard')).toBeTruthy();
+  });
+
+  it("an explicit Dashboard pick wins over the layout's start page", async () => {
+    await load({ startPage: '/' });
     gate();
     expect(await screen.findByTestId('dashboard')).toBeTruthy();
   });

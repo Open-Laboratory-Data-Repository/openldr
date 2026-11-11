@@ -94,9 +94,12 @@ export function StartPageGate({ children }: { children: ReactNode }) {
   // No user: nothing to read. The route's own guard handles it.
   if (!firstLanding || !user) return <>{children}</>;
   if (!loaded) return <LoadingState className="h-dvh" />;
-  // The user's own first page, else their layout's. Only a page in their sidebar counts.
+  // The user's own first page, else their layout's: the first of those that is in their sidebar.
+  // An explicit '/' (Dashboard picked under a layout) stops there.
   const layout = layoutInForce(prefs, list);
-  const target = prefs.startPage ?? layout?.startPage ?? undefined;
-  const reachable = target && target !== '/' && visibleNav(hasCapability, layout).some((n) => n.to === target);
-  return reachable ? <Navigate to={target} replace /> : <>{children}</>;
+  if (prefs.startPage === '/') return <>{children}</>;
+  const shown = visibleNav(hasCapability, layout);
+  const target = [prefs.startPage, layout?.startPage ?? undefined]
+    .find((p): p is string => !!p && p !== '/' && shown.some((n) => n.to === p));
+  return target ? <Navigate to={target} replace /> : <>{children}</>;
 }
