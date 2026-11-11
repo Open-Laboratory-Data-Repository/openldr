@@ -88,15 +88,15 @@ GROUP BY priority
 ORDER BY orders DESC
 ```
 
-2. Selecione o botão **Parâmetros**, o ícone de controlos deslizantes à direita da barra do separador. Abre-se a janela **Parâmetros**.
-3. Selecione **Adicionar**.
+2. Selecione o botão **Parâmetros**, o ícone de controlos deslizantes à direita da barra do separador. Abre-se o painel lateral **Parâmetros**.
+3. Abra o menu **⋯** do painel lateral e selecione **Adicionar**.
 4. Em **ID da variável**, escreva `test`. Tem de coincidir com o nome em `{{ param.test }}`.
 5. Em **Etiqueta**, escreva `Test`. É o que as pessoas veem quando a executam.
 6. Defina **Tipo** como **select**. Aparece uma caixa **SQL das opções**. Escreva `SELECT DISTINCT panel_desc FROM lab_requests ORDER BY 1`. A primeira coluna enche a lista.
 7. Marque **Obrigatório**.
-8. Selecione **Guardar**.
+8. Abra o menu **⋯** do painel lateral e selecione **Guardar**. Cada parâmetro tem também o seu menu **⋯**, para o mover para cima ou para baixo ou o remover.
 
-![A janela Parâmetros com um parâmetro select.](query-params-sheet.png)
+![O painel lateral Parâmetros com um parâmetro select.](query-params-sheet.png)
 
 Tipos de parâmetro:
 

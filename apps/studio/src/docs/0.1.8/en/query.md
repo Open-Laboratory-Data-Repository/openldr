@@ -88,15 +88,15 @@ GROUP BY priority
 ORDER BY orders DESC
 ```
 
-2. Select the **Parameters** button, the sliders icon at the right of the tab's toolbar. The **Parameters** window opens.
-3. Select **Add**.
+2. Select the **Parameters** button, the sliders icon at the right of the tab's toolbar. The **Parameters** sheet opens.
+3. Open the sheet's **⋯** menu and select **Add**.
 4. In **Variable ID**, enter `test`. It must match the name inside `{{ param.test }}`.
 5. In **Label**, type `Test`. That is what people see when they run it.
 6. Set **Type** to **select**. An **Options SQL** box appears. Type `SELECT DISTINCT panel_desc FROM lab_requests ORDER BY 1`. Its first column fills the list.
 7. Tick **Required**.
-8. Select **Save**.
+8. Open the sheet's **⋯** menu and select **Save**. Each parameter also has its own **⋯** menu, to move it up or down or remove it.
 
-![The Parameters window with one select parameter.](query-params-sheet.png)
+![The Parameters sheet with one select parameter.](query-params-sheet.png)
 
 Parameter types:
 

@@ -2133,7 +2133,12 @@ export const fr: EnShape = {
     optionsSql: 'SQL des options',
     optionsSqlPlaceholder: 'SELECT name FROM … — la première colonne remplit la liste déroulante',
     required: 'Requis',
-    empty: 'Aucun paramètre pour le moment. Ajoutez-en un ci-dessous.',
+    empty: 'Aucun paramètre pour le moment. Ajoutez-en un depuis le menu ⋯.',
+    actions: 'Actions des paramètres',
+    rowActions: 'Actions pour {{id}}',
+    moveUp: 'Monter',
+    moveDown: 'Descendre',
+    remove: 'Supprimer',
     invalid: 'Les identifiants de paramètre doivent être uniques et non vides',
   },
   workflows: {

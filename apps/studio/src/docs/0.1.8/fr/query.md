@@ -88,15 +88,15 @@ GROUP BY priority
 ORDER BY orders DESC
 ```
 
-2. Sélectionnez le bouton **Paramètres**, l'icône de curseurs à droite de la barre de l'onglet. La fenêtre **Paramètres** s'ouvre.
-3. Sélectionnez **Ajouter**.
+2. Sélectionnez le bouton **Paramètres**, l'icône de curseurs à droite de la barre de l'onglet. Le volet **Paramètres** s'ouvre.
+3. Ouvrez le menu **⋯** du volet et sélectionnez **Ajouter**.
 4. Dans **ID de variable**, saisissez `test`. Il doit correspondre au nom dans `{{ param.test }}`.
 5. Dans **Libellé**, tapez `Test`. C'est ce que voient les personnes qui l'exécutent.
 6. Réglez **Type** sur **select**. Une zone **SQL des options** apparaît. Tapez `SELECT DISTINCT panel_desc FROM lab_requests ORDER BY 1`. Sa première colonne remplit la liste.
 7. Cochez **Requis**.
-8. Sélectionnez **Enregistrer**.
+8. Ouvrez le menu **⋯** du volet et sélectionnez **Enregistrer**. Chaque paramètre a aussi son propre menu **⋯**, pour le monter, le descendre ou le supprimer.
 
-![La fenêtre Paramètres avec un paramètre select.](query-params-sheet.png)
+![Le volet Paramètres avec un paramètre select.](query-params-sheet.png)
 
 Types de paramètres :
 

@@ -2133,7 +2133,12 @@ export const pt: EnShape = {
     optionsSql: 'SQL das opções',
     optionsSqlPlaceholder: 'SELECT name FROM … — a primeira coluna preenche a lista pendente',
     required: 'Obrigatório',
-    empty: 'Ainda não há parâmetros. Adicione um abaixo.',
+    empty: 'Ainda não há parâmetros. Adicione um no menu ⋯.',
+    actions: 'Ações dos parâmetros',
+    rowActions: 'Ações para {{id}}',
+    moveUp: 'Mover para cima',
+    moveDown: 'Mover para baixo',
+    remove: 'Remover',
     invalid: 'Os identificadores de parâmetro devem ser únicos e não vazios',
   },
   workflows: {

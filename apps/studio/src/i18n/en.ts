@@ -2247,7 +2247,12 @@ export const en = {
     optionsSql: 'Options SQL',
     optionsSqlPlaceholder: 'SELECT name FROM … — first column populates the dropdown',
     required: 'Required',
-    empty: 'No parameters yet. Add one below.',
+    empty: 'No parameters yet. Add one from the ⋯ menu.',
+    actions: 'Parameter actions',
+    rowActions: 'Actions for {{id}}',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    remove: 'Remove',
     invalid: 'Parameter ids must be unique and non-empty',
   },
   // Workflow builder — write-only secret fields (SEC-06): the webhook trigger secret
