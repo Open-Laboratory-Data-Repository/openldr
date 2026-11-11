@@ -1,5 +1,105 @@
 # Formulaires
 
+Les **formulaires** sont les écrans de saisie à la main : une demande d'examens à la réception, un dossier patient, un établissement. Chaque formulaire se construit dans le **Form Builder** à partir de champs, et chaque champ peut correspondre à un élément FHIR, pour que la saisie devienne un vrai enregistrement. Un formulaire passe de **Draft** à **Published** puis **Archived**, pour être conçu sans risque avant que quelqu'un l'utilise.
+
+Une installation neuve contient quatre formulaires publiés : **Lab order**, **Patient**, **Users** et **Facility**. Ce guide saisit une demande d'examens avec le formulaire fourni, puis construit et publie votre propre formulaire. Comptez 15 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+
+Le Form Builder et ses menus sont en anglais à l'écran, ce guide garde donc leurs libellés anglais.
+
+![Formulaires : les quatre formulaires fournis, avec leur type FHIR, nombre de champs, version et statut.](forms-tour.png)
+
+## Qui peut faire quoi
+
+| Capacité | Ce qu'elle permet |
+| --- | --- |
+| **Use forms** | Ouvrir les formulaires et lire leur définition |
+| **Submit forms** | Remplir un formulaire avec **View/Run** et l'envoyer. L'envoi écrit des données cliniques |
+| **Edit forms** | Créer et modifier des formulaires dans le builder, et les exporter |
+| **Publish forms** | Publier une nouvelle version |
+
+## Avant de commencer
+
+L'Exemple 1 a besoin de trois choses sur l'installation :
+
+1. **Les données d'exemple de la documentation**, pour leurs patients. Voir [Tableaux de bord, Charger les données d'exemple](/docs/dashboard#charger-les-donnees-d-exemple).
+2. **Des examens activés dans ce laboratoire.** Le champ **Tests** du Lab order ne liste qu'eux. Suivez d'abord [Catalogue des examens, Exemples 1 et 2](/docs/test-catalog#exemple-2-activer-des-examens-dans-ce-laboratoire).
+3. **Le workflow Ingest actif.** Il l'est sur une installation neuve. Un formulaire envoyé passe par lui. Voir [Workflows](/docs/workflows).
+
+> **Utilisez une installation de test.** Envoyer un formulaire écrit une vraie demande, qui ne peut pas être supprimée. Après l'Exemple 1, les données d'exemple comptent 61 demandes, et non 60.
+
+## Exemple 1 : saisir une demande d'examens
+
+![Ouvrir le Lab order, choisir le patient, l'examen, son prélèvement et la priorité.](forms-lab-order.mp4)
+
+1. Ouvrez **Formulaires**. Sur la ligne **Lab order**, ouvrez **⋯** et sélectionnez **View/Run**.
+2. Dans **Patient**, tapez `Chausiku` et choisissez **Demo Chausiku**, né le 1994-05-14. Les noms s'affichent nom de famille en premier.
+3. Dans **Tests**, tapez `Full` et choisissez **Full blood count**. Une ligne apparaît sous **Results** : **FBC Full blood count**, **Type de prélèvement non défini**.
+4. Sélectionnez cette ligne. Dans le panneau, réglez le type de prélèvement sur **Blood**, puis fermez le panneau. La ligne affiche **Blood**.
+5. Réglez **Priority** sur **Routine**.
+
+![La demande prête à être envoyée.](forms-lab-order-filled.png)
+
+6. Ouvrez le menu **⋯** de la page et sélectionnez **Submit**.
+
+![Envoyer depuis le menu de la page. Response captured s'affiche.](forms-lab-order-submit.mp4)
+
+**Résultat attendu :** un bandeau vert **Response captured** en haut. La demande passe par le workflow Ingest jusqu'à l'entrepôt, avec le code d'examen `58410-2` et la priorité `routine`. Dans [Patients](/docs/patients), Chausiku Demo a maintenant cinq demandes.
+
+Le formulaire reste rempli après l'envoi. N'envoyez pas de nouveau, sauf pour une seconde demande.
+
+**Referring Facility** est un champ de texte libre sur le Lab order fourni, même si son aide parle de recherche. Laissez-le vide, ou tapez un nom. Voir [Limites](#limites).
+
+## Exemple 2 : construire un formulaire depuis un pack de départ
+
+Construisez un formulaire plus court pour les demandes de charge virale à partir du pack Lab order, prévisualisez-le et publiez-le.
+
+![Nommer le formulaire, choisir R4 et ServiceRequest, garder cinq champs du pack et les ajouter.](forms-build.mp4)
+
+1. Sur **Formulaires**, ouvrez le menu **⋯** de la page et sélectionnez **New**. Le **Form Builder** s'ouvre.
+2. Dans **Form name**, tapez `Quick viral load request`.
+3. Réglez **FHIR Version** sur **R4 (most common)**.
+4. Réglez **Resource Type** sur **ServiceRequest**. Tapez pour filtrer la longue liste. Le **Lab order pack** s'ouvre de lui-même, avec **9 of 9 selected**. Chaque entrée dit pourquoi elle est là.
+5. Décochez **Requesting Clinician**, **Clinical Notes**, **Referring Facility** et **Order rejection**.
+6. Ouvrez le menu **⋯** du pack et sélectionnez **Add 5 fields**.
+
+**Résultat attendu :** le builder liste **5 fields (5 enabled)** : Patient, Tests, Results, Priority, et Reference Number sous `identifier`. La **Library** à droite liste les entrées du pack laissées de côté, et tous les autres éléments ServiceRequest, à ajouter d'un clic. Une note indique que la soumission est configurée.
+
+![Le builder avec cinq champs, et la Library à côté.](forms-builder.png)
+
+### Le prévisualiser
+
+![Ouvrir Preview depuis le menu du builder et le remplir de valeurs d'exemple.](forms-preview.mp4)
+
+1. Ouvrez **Builder actions**, le **⋯** en haut à droite, et sélectionnez **Preview**. Le formulaire s'ouvre dans un panneau, exactement comme un utilisateur le voit.
+2. Ouvrez le menu **⋯** du panneau et sélectionnez **Fill example**. Chaque champ reçoit une valeur d'exemple. **Reset**, dans le même menu, les efface.
+
+![L'aperçu avec des valeurs d'exemple.](forms-preview-filled.png)
+
+L'aperçu n'envoie jamais rien.
+
+### Le publier
+
+![Publier depuis le menu du builder.](forms-publish.mp4)
+
+1. Fermez l'aperçu. Ouvrez **Builder actions** et sélectionnez **Publish**. Publish enregistre d'abord le formulaire, il n'y a donc pas d'étape d'enregistrement à part.
+
+**Résultat attendu :** un message le confirme, et la pastille d'état à côté du nom passe au vert avec **v1**. Sur **Formulaires**, **Quick viral load request** est listé **Published**, avec **5** champs.
+
+![Le nouveau formulaire dans la liste, Published.](forms-list-published.png)
+
+Pour le retirer, ouvrez le menu **⋯** de sa ligne et sélectionnez **Delete**.
+
+## Le cycle de vie
+
+- **Save draft**, dans **Builder actions**, enregistre sans rien publier.
+- **Publish** enregistre le formulaire à l'écran, puis le publie.
+- **Compare** montre les changements entre deux versions.
+- **Versions** liste chaque version publiée, la plus récente d'abord, avec sa date. Elle est grisée tant que le formulaire n'a jamais été enregistré.
+- **Restore**, dans les actions d'une version, la remet en place. Cela remplace le formulaire en cours d'édition, et un formulaire publié repasse tout de suite en brouillon. Il disparaît de View/Run jusqu'à la prochaine publication. Undo dans le builder ne change que l'écran : enregistrez pour l'écrire.
+- Décocher un champ dans la liste le désactive : il n'est ni affiché, ni validé, et ne recueille aucune réponse. Il reste dans le formulaire pour être réactivé.
+- Le menu de chaque ligne de la liste duplique, compare, publie, archive, exporte (aussi en paquet marketplace) ou supprime le formulaire.
+- **Version label** est une légende libre. Le numéro de version est donné à la publication et s'affiche à côté du statut.
+
 ## Conditions de soumission
 
 La publication permet le partage et les éditeurs intégrés. Elle ne garantit pas les soumissions View/Run. La saisie prend actuellement en charge ServiceRequest et les champs de réponse actifs avec Observation Extract et au moins un code. Un formulaire texte personnalisé sans extraction ne peut pas être soumis. Les modèles Patient et Facility restent utilisables dans leurs éditeurs dédiés.
@@ -125,3 +225,46 @@ Une demande refusée est marquée comme refusée, avec le code et le texte du mo
 Chaque résultat écrit est lié à sa demande, pour que les rapports puissent joindre un résultat à la demande dont il vient.
 
 Une demande envoyée écrit un enregistrement de résultat par valeur saisie. Les résultats se saisissent avec la demande, en une seule fois. Il n'existe pas encore de moyen de rouvrir une demande envoyée pour les ajouter plus tard.
+
+## Validation des chemins FHIR
+
+Quand un formulaire correspond à un type de ressource FHIR, le builder vérifie le chemin FHIR de chaque champ dans la liste des éléments. Un badge rouge est une erreur qui bloque la publication. Un badge jaune est un avertissement qui ne la bloque pas, mais à revoir. Le builder ne vérifie que neuf types de ressource courants. Les autres types n'ont aucun badge, car leurs chemins ne sont pas vérifiés.
+
+- **unknown-fhir-path (erreur).** Le chemin n'est pas un élément de ce type de ressource. En général une faute de frappe : vérifiez l'orthographe et la profondeur.
+- **facility-admin-order (erreur).** Les niveaux administratifs de l'établissement sont liés aux parties d'adresse FHIR dans le mauvais ordre. FHIR Address a quatre niveaux, le registre six. Zone est le niveau sans place : effacez le chemin FHIR du champ Zone et laissez-le sans correspondance. Un formulaire Facility enregistré par une ancienne migration peut encore lier Zone à `address.district`. Aucune migration ne le corrige : effacez ce chemin à la main.
+- **fhir-path-cardinality (avertissement).** Le chemin passe par un élément répétable sans discriminateur. Ajoutez un discriminateur FHIR au champ pour choisir l'occurrence.
+- **fhir-path-type-mismatch (avertissement).** Un champ simple est lié à un élément FHIR structuré qu'une seule valeur ne peut pas remplir. Changez le type de champ, ou liez un chemin plus précis.
+
+## En ligne de commande
+
+- `openldr forms lint` donne les mêmes constats sans le studio. Passez un id de formulaire pour n'en vérifier qu'un, et `--json` pour une sortie structurée. La commande sort en erreur dès qu'une erreur existe.
+- `openldr forms versions <id>` liste les versions publiées d'un formulaire, la plus récente d'abord.
+- `openldr forms restore <id> <version> --force` remet une version publiée à la place du brouillon. Elle refuse sans `--force`.
+
+## Limites
+
+- **Referring Facility sur le Lab order fourni est du texte libre.** Son aide parle de rechercher un établissement, mais le champ n'a aucune source où chercher.
+- **La saisie affiche chaque groupe une seule fois.** Ajouter des entrées à un groupe pendant la saisie n'est pas encore possible.
+- **Une demande envoyée ne se modifie pas.** Les résultats se saisissent avec la demande, en une fois.
+- **Le Form Builder n'est pas traduit.** Ses libellés restent en anglais.
+
+## Sur un téléphone
+
+Les formulaires fonctionnent sur un téléphone. **View/Run** place chaque libellé au-dessus de son champ. L'aperçu du builder s'ouvre aussi en panneau. Un téléphone n'a pas de touche Maj ou Ctrl, donc dans le builder on sélectionne un champ à la fois. Sous 980 pixels de large, **Form** et **Library** deviennent des onglets.
+
+## Dépannage
+
+- **Le champ Tests du Lab order est vide.** Aucun examen n'est activé dans ce laboratoire. Voir [Catalogue des examens](/docs/test-catalog).
+- **La recherche de patient ne trouve personne.** Elle demande une partie du nom, un identifiant ou un téléphone. Sans **View patient identifiers**, elle ne trouve qu'un identifiant exact. Voir [Patients](/docs/patients).
+- **L'envoi échoue.** Lisez le message. Un champ obligatoire est vide, ou le workflow Ingest est désactivé.
+- **L'envoi semble ne rien faire.** Chaque action se confirme par un message. Sans message, l'action n'a pas eu lieu.
+- **Publish n'est pas disponible.** Complétez les métadonnées obligatoires ou corrigez un champ mal configuré.
+- **Un champ désactivé apparaît encore.** Vérifiez que sa case est décochée, puis enregistrez.
+
+## Guides associés
+
+- [Catalogue des examens](/docs/test-catalog)
+- [Patients](/docs/patients)
+- [Terminologie](/docs/terminology)
+- [Workflows](/docs/workflows)
+- [Marketplace](/docs/marketplace)

@@ -51,4 +51,7 @@ it created. Running it twice in a row gives the same pictures.
 One exception: `test-catalog.guide.ts` imports a sample test list and leaves it in place, because a
 test can be retired but not deleted, and the Lab order in the Forms guide needs those tests. It
 refuses to start unless the catalog is empty, so run it once per fresh install, before
-`forms.guide.ts`.
+`forms.guide.ts`. `facilities.guide.ts` is the same: a register cannot be removed.
+
+Run `forms.guide.ts` last. It submits a real Lab order, which makes the sample's 60 orders 61, and
+the other guides quote 60. Set `GUIDE_SKIP_ORDER=1` to rerun it without a second order.

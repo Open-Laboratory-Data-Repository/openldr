@@ -201,10 +201,11 @@ export const DOC_GUIDES: DocGuide[] = [
     summary: 'Build, publish, and use forms for structured data capture.',
     audience: ['lab-users', 'lab-managers'],
     requiredRoles: [],
-    estimatedMinutes: 18,
+    estimatedMinutes: 15,
     difficulty: 'intermediate',
     relatedSlugs: ['terminology', 'marketplace'],
     screenshotNames: ['forms-list.png', 'form-builder.png', 'form-capture.png'],
+    capturedNames: ['forms-tour.png', 'forms-lab-order.mp4', 'forms-lab-order-filled.png', 'forms-lab-order-submit.mp4', 'forms-build.mp4', 'forms-builder.png', 'forms-preview.mp4', 'forms-preview-filled.png', 'forms-publish.mp4', 'forms-list-published.png'],
     status: 'published',
   },
   {

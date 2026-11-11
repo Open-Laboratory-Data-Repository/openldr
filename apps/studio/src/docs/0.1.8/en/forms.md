@@ -1,20 +1,103 @@
 # Forms
 
-Forms create structured web capture screens for operational or clinical data. They move through Draft, Published, and Archived states so teams can design safely before users submit data.
+**Forms** are the screens people use to enter data by hand: a lab order at reception, a patient record, a facility. Each form is built in the **Form Builder** from fields, and each field can map to a FHIR element, so what is typed becomes a proper record. A form moves from **Draft** to **Published** to **Archived**, so you can design it safely before anyone uses it.
 
-## Outcome
+A fresh install ships four published forms: **Lab order**, **Patient**, **Users** and **Facility**. This guide takes a lab order with the shipped form, then builds and publishes a form of your own. It takes about 15 minutes. Select any picture or clip to enlarge it.
+
+![Forms: the four shipped forms, with their FHIR type, number of fields, version and status.](forms-tour.png)
+
+## Who can do what
+
+| Permission | What it allows |
+| --- | --- |
+| **Use forms** | Open forms and read their definitions |
+| **Submit forms** | Fill a form with **View/Run** and submit it. Submitting writes clinical records |
+| **Edit forms** | Create and change forms in the builder, and export them |
+| **Publish forms** | Publish a new version |
+
+## Before you start
+
+Example 1 needs three things on the install:
+
+1. **The docs sample data**, for its patients. See [Dashboards, Load the sample data](/docs/dashboard#load-the-sample-data).
+2. **Tests switched on at this lab.** The Lab order's **Tests** field lists only those. Follow [Test catalog, Examples 1 and 2](/docs/test-catalog#example-2-switch-tests-on-at-this-lab) first.
+3. **The Ingest workflow enabled.** It is on a fresh install. A submitted form goes through it. See [Workflows](/docs/workflows).
+
+> **Use a test install.** Submitting a form writes a real order. It cannot be deleted. After Example 1 the sample data holds 61 orders, not 60.
+
+## Example 1: take a lab order
+
+![Opening the Lab order, choosing the patient, the test, its specimen and the priority.](forms-lab-order.mp4)
+
+1. Open **Forms**. On the **Lab order** row, open **⋯** and select **View/Run**.
+2. In **Patient**, type `Chausiku` and pick **Demo Chausiku**, born 1994-05-14. Names show surname first.
+3. In **Tests**, type `Full` and pick **Full blood count**. A row appears under **Results**: **FBC Full blood count**, **Specimen type not set**.
+4. Select that row. In the sheet, set **Specimen type** to **Blood**, then close the sheet. The row now reads **Blood**.
+5. Set **Priority** to **Routine**.
+
+![The order ready to submit.](forms-lab-order-filled.png)
+
+6. Open the page's **⋯** menu and select **Submit**.
+
+![Submitting from the page menu. Response captured appears.](forms-lab-order-submit.mp4)
+
+**Expected result:** a green **Response captured** at the top. The order goes through the Ingest workflow into the warehouse, with test code `58410-2` and priority `routine`. Open [Patients](/docs/patients) and Chausiku Demo now has five requests.
+
+The form stays filled after submitting. Do not submit again unless you mean a second order.
+
+**Referring Facility** is a free-text box on the shipped Lab order, even though its hint says to search. Leave it empty, or type a name. See [Limits](#limits).
+
+## Example 2: build a form from a starter pack
+
+Build a shorter order form for viral load requests from the Lab order starter pack, preview it, and publish it.
+
+![Naming the form, choosing R4 and ServiceRequest, keeping five fields from the pack, and adding them.](forms-build.mp4)
+
+1. On **Forms**, open the page's **⋯** menu and select **New**. The **Form Builder** opens.
+2. In **Form name**, type `Quick viral load request`.
+3. Set **FHIR Version** to **R4 (most common)**.
+4. Set **Resource Type** to **ServiceRequest**. Type to filter the long list. The **Lab order pack** opens by itself, with **9 of 9 selected**. Each entry says why it is there.
+5. Untick **Requesting Clinician**, **Clinical Notes**, **Referring Facility** and **Order rejection**.
+6. Open the pack's **⋯** menu and select **Add 5 fields**.
+
+**Expected result:** the builder lists **5 fields (5 enabled)**: Patient, Tests, Results, Priority, and Reference Number under `identifier`. The **Library** on the right lists the pack entries you left out, and every other ServiceRequest element, ready to add with one click. A note says **Submission is configured**.
+
+![The builder with five fields, and the Library beside them.](forms-builder.png)
+
+### Preview it
+
+![Opening Preview from the builder menu and filling it with example values.](forms-preview.mp4)
+
+1. Open **Builder actions**, the **⋯** at the top right, and select **Preview**. The form opens in a sheet, exactly as a user sees it.
+2. Open the sheet's **⋯** menu and select **Fill example**. Each field gets an example value. **Reset** in the same menu clears them.
+
+![Preview with example values.](forms-preview-filled.png)
+
+Preview never submits anything.
+
+### Publish it
+
+![Publishing from the builder menu.](forms-publish.mp4)
+
+1. Close the preview. Open **Builder actions** and select **Publish**. Publish saves the form first, so there is no separate save step.
+
+**Expected result:** a message confirms it, and the status dot beside the name turns green with **v1**. Back on **Forms**, **Quick viral load request** is listed as **Published**, with **5** fields.
+
+![The new form in the list, Published.](forms-list-published.png)
+
+To remove it again, open its row's **⋯** menu and select **Delete**.
+
+## The whole lifecycle, step by step
 
 You can create a form, configure metadata, add fields, preview, save a draft, publish, compare versions, submit a response, and manage the form lifecycle.
 
-![Forms list with state and actions](forms-list.png)
-
-## Before you begin
+### Before you build your own form
 
 - Know whether the form should be a custom form or aligned to a FHIR resource type.
 - Decide which pages users should see when opening, submitting, or reviewing the form.
 - Prepare terminology bindings if coded answers are required.
 
-## Steps
+### Steps
 
 1. Open **Forms**.
 2. Review the list and state badges: Draft, Published, or Archived.
@@ -122,11 +205,11 @@ You can create a form, configure metadata, add fields, preview, save a draft, pu
 - **Edit visibility** opens the same rule editor a field has. Only enabled fields can be used in a condition. Data entry hides the section while its rule is not met.
 - A field or section with a visibility rule shows a branch icon.
 
-## Expected result
+### Expected result
 
 The form is saved as a draft during design, published when ready, and available from **View/Run**. Submission also requires a supported extraction configuration.
 
-## Troubleshooting
+### Builder troubleshooting
 
 - **Publish is unavailable:** finish required form metadata or fix invalid field configuration.
 - **A required field blocks submission:** confirm the field type, validation rule, and conditional visibility.
@@ -190,11 +273,6 @@ current draft. It refuses without `--force`.
 - Use repeatable fields for repeated observations instead of creating many near-duplicate fields.
 - Treat published versions as user-facing contracts; create a new version when changing meaning, not just wording.
 
-## Related guides
-
-- [Terminology](/docs/terminology)
-- [Marketplace](/docs/marketplace)
-
 ## Submission eligibility
 
 Publishing makes a form available for sharing and embedded editors. It does not guarantee View/Run submissions. Capture currently supports ServiceRequest forms and enabled answer fields with Observation Extract and at least one code. A plain custom text form without extraction cannot submit. Patient and Facility templates can still serve their dedicated editors.
@@ -203,7 +281,7 @@ The builder and capture page show eligibility before entry. For observations, op
 
 Eligibility checks configuration only. Required answers, reference validation, and the enabled ingest workflow must still succeed.
 
-## Example: submit a lab request
+## Building a lab request form by hand
 
 Use a test installation with an existing patient, loaded LOINC terminology, and an enabled ingest workflow. You need permission to edit and publish forms and submit responses.
 
@@ -245,3 +323,30 @@ A rejected order is marked as rejected, with its reason code and text. The reaso
 Each result written is linked to its order, so reports can join a result to the order it came from.
 
 A submitted order writes one result record per value typed. Results are typed with the order, in one pass. There is no way yet to reopen a submitted order and add them later.
+
+## Limits
+
+- **Referring Facility on the shipped Lab order is free text.** Its hint says to search facilities by name or code, but the field has no source to search, so it takes typed text.
+- **Data entry shows every group once.** Adding more entries to a group during data entry is not available yet.
+- **A submitted order cannot be edited.** Results are typed with the order, in one pass.
+- **Searchable** and most **Depends On** settings are saved and exported, but data entry does not use them yet.
+
+## On a phone
+
+Forms works on a phone. **View/Run** stacks each label above its box. The builder's preview opens as a sheet on a phone too. A phone has no Shift or Ctrl key, so in the builder you select one field at a time. When the builder is narrower than 980 pixels, **Form** and **Library** become tabs.
+
+## Troubleshooting
+
+- **The Tests field on the Lab order is empty.** No test is switched on at this lab. See [Test catalog](/docs/test-catalog).
+- **The patient search finds nobody.** Search needs part of the name, an identifier or a phone number. Without **View patient identifiers** it matches an exact identifier only. See [Patients](/docs/patients).
+- **Submit fails.** Read the message. A required field is empty, or the Ingest workflow is off.
+- **Submit seemed to do nothing.** Every action confirms itself with a message. If none appeared, it did not run.
+- **The form says it is not configured for submission.** See [Submission eligibility](#submission-eligibility).
+
+## Related guides
+
+- [Test catalog](/docs/test-catalog)
+- [Patients](/docs/patients)
+- [Terminology](/docs/terminology)
+- [Workflows](/docs/workflows)
+- [Marketplace](/docs/marketplace)
