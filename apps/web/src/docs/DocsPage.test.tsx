@@ -34,9 +34,9 @@ describe('DocsPage', () => {
     expect(within(article).getAllByRole('link', { name: 'Data exposure' })[0]).toHaveAttribute('href', '/docs/data-exposure');
   });
 
-  it('shows no language picker on a page that is not a shared guide', () => {
+  it('offers the language picker on every page, not only the shared guides', () => {
     renderDocs('/docs/query-naming');
-    expect(screen.queryByRole('combobox', { name: 'Documentation language' })).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Documentation language' })).toBeInTheDocument();
   });
 
   it('opens the current documentation version and keeps the previous version selectable', () => {
@@ -47,15 +47,27 @@ describe('DocsPage', () => {
     expect(screen.getByLabelText('Documentation version')).toHaveTextContent('0.1.0');
     expect(screen.getByRole('heading', { level: 1, name: 'Query names' })).toBeInTheDocument();
   });
-  it('renders authentication provider guidance in three languages', () => {
+  it('shows authentication provider guidance in one language at a time, and switches', () => {
     renderDocs('/docs/auth-providers');
     expect(screen.getByRole('heading', { level: 1, name: 'Authentication providers' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Authentication providers' })).toHaveAttribute('aria-current', 'page');
+    // The page's own English section, with no language headings and no French or Portuguese copy.
+    expect(screen.getByRole('heading', { name: 'Choose authentication and administration' })).toBeInTheDocument();
     for (const name of ['English', 'Français', 'Português']) {
-      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name })).toBeNull();
     }
-    expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(3);
+    expect(screen.queryByRole('heading', { name: "Choisir l'authentification et l'administration" })).toBeNull();
+    expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
+
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Documentation language' }), { key: 'Enter' });
+    fireEvent.click(screen.getByRole('option', { name: 'Français' }));
+    expect(screen.getByRole('heading', { name: "Choisir l'authentification et l'administration" })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Choose authentication and administration' })).toBeNull();
+    expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(1);
+    expect(window.localStorage.getItem('openldr.docs.lang')).toBe('fr');
+    window.localStorage.removeItem('openldr.docs.lang');
   });
+
   it('shows the shared Data exposure guide, with its limits one click away', () => {
     renderDocs('/docs/data-exposure');
     expect(screen.getByRole('heading', { level: 1, name: 'Data exposure' })).toBeInTheDocument();
@@ -66,23 +78,24 @@ describe('DocsPage', () => {
     expect(document.getElementById('what-it-does-not-cover')).not.toBeNull();
   });
 
-  it('renders report schedules from its navigation entry in all three languages', () => {
+  it('shows report schedules from its navigation entry in the reader\'s language only', () => {
     renderDocs('/docs/report-schedules');
 
     expect(screen.getByRole('heading', { level: 1, name: 'Report schedules' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Report schedules' })).toHaveAttribute('aria-current', 'page');
-    for (const name of ['English', 'Français', 'Português']) {
-      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
-    }
+    expect(screen.getByRole('heading', { name: 'Schedule a report' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Planifier un rapport' })).toBeNull();
   });
 
-  it('renders the marketplace permission guide in all three languages', () => {
+  it('shows the marketplace permission guide in one language, including its marked paragraphs', () => {
     renderDocs('/docs/marketplace-permissions');
 
     expect(screen.getByRole('heading', { level: 1, name: 'Marketplace permission checks' })).toBeInTheDocument();
     for (const name of ['English', 'Français', 'Português']) {
-      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name })).toBeNull();
     }
+    expect(screen.getByText(/A content pack needs the same marketplace manage permission/)).toBeInTheDocument();
+    expect(screen.queryByText(/Un pack de contenu exige/)).toBeNull();
   });
 
   it('shows the shared Test catalog guide with its examples', () => {

@@ -20,6 +20,7 @@ import {
   resolveMedia,
   type GuideLocale,
 } from './content';
+import { selectLanguage } from './language';
 import { extractToc, headingIdMaker, wantsToc, type TocEntry } from './toc';
 
 function textContent(children: ReactNode): string {
@@ -29,10 +30,45 @@ function textContent(children: ReactNode): string {
   return '';
 }
 
-/** The reader's browser language when it is one the guides are written in, else English. */
-function browserLocale(): GuideLocale {
+const LANGUAGE_KEY = 'openldr.docs.lang';
+
+/** The language last picked here, else the browser's when the docs are written in it, else English. */
+function initialLocale(): GuideLocale {
+  try {
+    const saved = window.localStorage.getItem(LANGUAGE_KEY);
+    if (saved === 'en' || saved === 'fr' || saved === 'pt') return saved;
+  } catch {
+    // Storage can be blocked. The browser's language still works.
+  }
   const lang = typeof navigator !== 'undefined' ? navigator.language.slice(0, 2) : 'en';
   return lang === 'fr' || lang === 'pt' ? lang : 'en';
+}
+
+function rememberLocale(locale: GuideLocale): void {
+  try {
+    window.localStorage.setItem(LANGUAGE_KEY, locale);
+  } catch {
+    // Not remembered, but the page still switches.
+  }
+}
+
+/** Notes shown above a page that is not fully in the reader's language, in that language. */
+const NOTES: Record<GuideLocale, { englishOnly: string; partlyEnglish: string }> = {
+  en: { englishOnly: '', partlyEnglish: '' },
+  fr: {
+    englishOnly: "Cette page n'existe qu'en anglais pour le moment.",
+    partlyEnglish: "Certaines parties de cette page ne sont pas encore traduites et s'affichent en anglais.",
+  },
+  pt: {
+    englishOnly: 'Esta página ainda só existe em inglês.',
+    partlyEnglish: 'Algumas partes desta página ainda não estão traduzidas e aparecem em inglês.',
+  },
+};
+
+/** A guide's own `# Title`, so a translated guide shows a translated title. */
+function firstHeading(markdown: string): string | null {
+  const match = /^\s*#\s+(.+)$/m.exec(markdown);
+  return match ? match[1].trim() : null;
 }
 
 function scrollToHeading(id: string): void {
@@ -226,11 +262,24 @@ function OnThisPage({ entries }: { entries: TocEntry[] }) {
 export function DocsPage() {
   const { page } = useParams();
   const [version, setVersion] = useState(DEFAULT_DOC_VERSION);
-  const [locale, setLocale] = useState<GuideLocale>(browserLocale);
+  const [locale, setLocale] = useState<GuideLocale>(initialLocale);
   const key = page && TITLES[page] ? page : 'getting-started';
   // A studio section shows its long guide, shared with the app, in the reader's language.
   const guide = guideBody(key, version, locale);
-  const body = guide?.body ?? docBody(key, version);
+  // The site's own pages hold all three languages; keep only the reader's.
+  const own = guide ? null : docBody(key, version);
+  const view = useMemo(() => (own == null ? null : selectLanguage(own, locale)), [own, locale]);
+  const body = guide?.body ?? view?.markdown ?? null;
+  const note = locale === 'en'
+    ? ''
+    : guide
+      ? guide.localeUsed !== locale ? NOTES[locale].englishOnly : ''
+      : view && !view.translated ? NOTES[locale].englishOnly : view?.partlyEnglish ? NOTES[locale].partlyEnglish : '';
+  const title = guide && guide.localeUsed === locale && locale !== 'en' ? firstHeading(guide.body) ?? TITLES[key] : TITLES[key];
+  const changeLocale = (value: string): void => {
+    setLocale(value as GuideLocale);
+    rememberLocale(value as GuideLocale);
+  };
   const toc = useMemo(() => (body ? extractToc(stripLeadingH1(body)) : []), [body]);
   const showToc = wantsToc(toc);
 
@@ -270,23 +319,21 @@ export function DocsPage() {
             ))}
           </SelectContent>
         </Select>
-        {guide && (
-          <Select value={locale} onValueChange={(value) => setLocale(value as GuideLocale)}>
-            <SelectTrigger className="mt-2 h-8 w-full gap-1 px-2 text-xs" aria-label="Documentation language">
-              <span className="text-muted-foreground">Language</span>
-              <span className="ml-auto">
-                <SelectValue />
-              </span>
-            </SelectTrigger>
-            <SelectContent>
-              {GUIDE_LOCALES.map((option) => (
-                <SelectItem key={option.id} value={option.id} className="text-xs">
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select value={locale} onValueChange={changeLocale}>
+          <SelectTrigger className="mt-2 h-8 w-full gap-1 px-2 text-xs" aria-label="Documentation language">
+            <span className="text-muted-foreground">Language</span>
+            <span className="ml-auto">
+              <SelectValue />
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {GUIDE_LOCALES.map((option) => (
+              <SelectItem key={option.id} value={option.id} className="text-xs">
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <nav aria-label="Public documentation" className="mt-4 space-y-1 border-t border-border pt-4">
           {NAV.map((item) => (
             <div key={item.slug} className="space-y-1">
@@ -304,12 +351,10 @@ export function DocsPage() {
           {/* The page's own h1. The sidebar's "Documentation" is a label, not a heading, so the
               open doc's title is the top of the outline. */}
           <h1 id="doc-title" className="mt-1 text-3xl font-semibold">
-            {TITLES[key]}
+            {title}
           </h1>
         </div>
-        {guide && guide.localeUsed !== locale && (
-          <p className="mb-4 text-xs text-muted-foreground">Shown in English. Not yet translated.</p>
-        )}
+        {note && <p className="mb-4 text-xs text-muted-foreground">{note}</p>}
         {showToc && (
           // Narrow screens have no right-hand column, so the list folds up above the article.
           <details className="mb-6 rounded-md border border-border px-3 py-2 xl:hidden">
