@@ -1083,9 +1083,12 @@ describe('forms routes', () => {
     const serviceRequest = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'ServiceRequest');
     expect(serviceRequest.code.coding).toEqual([
       { system: 'http://loinc.org', code: '25836-8' },
-      { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL' },
-      { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4' },
+      { system: 'urn:openldr:codesystem:test-catalog', code: 'HIVVL', display: 'Viral load' },
+      { system: 'urn:openldr:codesystem:test-catalog', code: 'CD4', display: 'CD4 count' },
     ]);
+    // The warehouse keeps the first coding, the nameless LOINC link, so the order's name rides on
+    // code.text (lab_requests.panel_desc).
+    expect(serviceRequest.code.text).toBe('Viral load');
   });
 
   it('does not ask the catalog when no answer is a catalog test', async () => {

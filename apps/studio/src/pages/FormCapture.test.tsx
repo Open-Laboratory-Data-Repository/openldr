@@ -119,6 +119,14 @@ const referenceForm: api.FormDefinition = {
  * Uses the Radix jsdom pattern: pointerDown on trigger, Enter fallback, then
  * pointerMove + click the item.
  */
+/** Reject lives only in the reject sheet's ⋯ menu (AGENTS.md section 5). */
+function rejectFromSheetMenu() {
+  const trigger = screen.getByRole('button', { name: 'Reject actions' });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByRole('menuitem', { name: 'Reject' })) fireEvent.keyDown(trigger, { key: 'Enter' });
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }));
+}
+
 function clickActionsMenuItem(itemText: string) {
   const trigger = screen.getByRole('button', { name: /form actions/i });
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
@@ -293,7 +301,7 @@ describe('FormCapture order rejection (2026-10-11 spec)', () => {
 
     clickActionsMenuItem('Reject order');
     fireEvent.click(await screen.findByText('Wrong patient'));
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    rejectFromSheetMenu();
 
     expect(await screen.findByText('Order rejected: Wrong patient')).toBeInTheDocument();
     expect(api.catalogResultParams).toHaveBeenCalledWith([], null);
@@ -310,7 +318,7 @@ describe('FormCapture order rejection (2026-10-11 spec)', () => {
 
     clickActionsMenuItem('Reject order');
     fireEvent.click(await screen.findByText('Wrong patient'));
-    fireEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    rejectFromSheetMenu();
     await screen.findByText('Order rejected: Wrong patient');
 
     clickActionsMenuItem('Submit');
