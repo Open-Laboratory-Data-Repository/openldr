@@ -175,10 +175,9 @@ names the new files and gives the registry entry for the coordinator to add.
 
 ## 7. Left to the builder
 
-- The PDK language for the v1 plugin. The v1 mapping is TypeScript, so the Extism JS PDK
-  is the first thing to try. The builder must check that the existing plugins' source
-  (not found in this repo; only `reference-plugins/ui-reference` is tracked) does not
-  already fix a language.
+- The PDK language for the v1 plugin. Corrected 2026-11-11: the existing plugins are Rust
+  crates in `wasm/` (`wasm/Cargo.toml`), which this draft first said were not in the repo. The
+  v1 plugin is a Rust crate too. See `docs/superpowers/plans/2026-11-11-v1-import.md`.
 - Exact hint wording for each diagnosis step.
 - Page size for `sources.read`.
 
