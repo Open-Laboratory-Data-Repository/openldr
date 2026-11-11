@@ -25,15 +25,26 @@ export interface CardEntry {
   error?: string | null;
 }
 
-/** Render one capability as a human-readable line for the Permissions list. */
-export function capabilityLine(cap: unknown): string {
+// i18n key per capability kind. i18next reads ':' as a namespace separator, so the kinds are not
+// used as keys directly.
+const CAPABILITY_KEY: Record<string, string> = {
+  'read-input': 'readInput', 'emit-fhir': 'emitFhir', 'net-egress': 'netEgress', 'data-scope': 'dataScope',
+  'host:reports': 'hostReports', 'host:connectors': 'hostConnectors', 'host:schedule': 'hostSchedule',
+  'host:fhir': 'hostFhir', 'host:import': 'hostImport',
+};
+
+/** One capability as a plain sentence for the Permissions list and the install consent, with its
+ *  code after it so an administrator can still match it to the manifest. An unknown kind shows its
+ *  code alone. */
+export function capabilityLine(cap: unknown, t: (key: string, opts?: Record<string, unknown>) => string): string {
   if (typeof cap !== 'object' || cap === null) return String(cap);
   const c = cap as Record<string, unknown>;
-  const parts: string[] = [];
-  if (typeof c.kind === 'string') parts.push(c.kind);
-  if (Array.isArray(c.resourceTypes)) parts.push(`(${(c.resourceTypes as string[]).join(', ')})`);
-  if (Array.isArray(c.allowedHosts)) parts.push(`(${(c.allowedHosts as string[]).join(', ') || 'none'})`);
-  return parts.join(' ') || JSON.stringify(cap);
+  if (typeof c.kind !== 'string') return JSON.stringify(cap);
+  const key = CAPABILITY_KEY[c.kind];
+  if (!key) return c.kind;
+  const items = (Array.isArray(c.resourceTypes) ? c.resourceTypes : Array.isArray(c.allowedHosts) ? c.allowedHosts : Array.isArray(c.formats) ? c.formats : []) as string[];
+  const list = items.length ? items.join(', ') : t('settings.marketplace.capability.none');
+  return `${t(`settings.marketplace.capability.${key}`, { list, interpolation: { escapeValue: false } })} (${c.kind})`;
 }
 
 export function availableToEntry(b: AvailableArtifact, installed: Map<string, InstalledArtifact>): CardEntry {

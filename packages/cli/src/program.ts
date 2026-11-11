@@ -3,6 +3,7 @@ import { loadConfig } from '@openldr/config';
 import { createAppContext } from '@openldr/bootstrap';
 import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
+import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
 import { runAuthRebindIssuer } from './auth';
@@ -20,6 +21,8 @@ import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runTerminologyReproject, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
+import { runMarketSites } from './market-sites';
+import { runLayoutsList, runLayoutsSet, runLayoutsDelete } from './layouts';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet, runSettingsLabShow, runSettingsLabSet } from './settings';
 import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelete, runRolesGrant, runRolesRevoke, runRolesDoctor, runUserAssignRole, runUserUnassignRole } from './roles';
@@ -61,6 +64,9 @@ import { setActorOverride } from './cli-actor';
 //    defaults (e.g. `facilities import`'s `--apply` default) without any shared state between
 //    tests and without triggering a real parse of the test runner's own argv.
 export function buildProgram(): Command {
+  // Results go to stdout and `--json` output is piped into other tools, so logs go to stderr.
+  // Set before any command builds a context, since each context makes its logger at that point.
+  sendLogsToStderr();
   const program = new Command();
   program.name('openldr').description('OpenLDR CE operator CLI');
   program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');
@@ -1220,7 +1226,7 @@ export function buildProgram(): Command {
   user.command('activate <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
     try { process.exitCode = await runUserSetStatus(id, 'active', opts); } catch (err) { process.stderr.write(`user activate failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
-  const userPrefs = user.command('preferences').description("A user's studio preferences: theme, sidebarCollapsed, startPage, language");
+  const userPrefs = user.command('preferences').description("A user's studio preferences: theme, sidebarCollapsed, startPage, language, layout (a layout id, or full)");
   userPrefs.command('show <id>').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
     try { process.exitCode = await runUserPreferencesShow(id, opts); } catch (err) { process.stderr.write(`user preferences show failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
@@ -1252,6 +1258,24 @@ export function buildProgram(): Command {
         process.stderr.write(`export failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
+    });
+
+  const layouts = program.command('layouts').description('Studio layouts: which sidebar pages show and the first page, with a default per role');
+  layouts.command('list').description('List layouts and the roles that use each as their default').option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try { process.exitCode = await runLayoutsList(opts); } catch (err) { process.stderr.write(`layouts list failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  layouts.command('set <name>').description('Create a layout, or replace the one with this name')
+    .requiredOption('--pages <paths>', 'sidebar pages to show, comma separated (for example /forms,/patients)')
+    .option('--start-page <path>', 'the page that opens first; none clears it')
+    .option('--roles <slugs>', 'roles that use this layout as their default, comma separated')
+    .option('--json', 'emit JSON', false)
+    .action(async (name: string, opts: { pages: string; startPage?: string; roles?: string; json: boolean }) => {
+      try { process.exitCode = await runLayoutsSet(name, opts); } catch (err) { process.stderr.write(`layouts set failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  layouts.command('delete <name>').description('Delete a layout for everyone').option('--force', 'confirm the delete', false)
+    .action(async (name: string, opts: { force: boolean }) => {
+      try { process.exitCode = await runLayoutsDelete(name, opts); } catch (err) { process.stderr.write(`layouts delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
   const market = program.command('market').description('Plugin/artifact marketplace');
@@ -1311,6 +1335,13 @@ export function buildProgram(): Command {
     .option('--json', 'emit JSON', false)
     .action(async (id: string, opts: { json: boolean }) => {
       try { process.exitCode = await runMarketDisable(id, opts); } catch (err) { process.stderr.write(`market disable failed: ${String(err)}\n`); process.exitCode = 1; }
+    });
+  market
+    .command('sites <id> [site] [state]')
+    .description('Show a plugin\'s dashboard card and side panel, or switch one on or off (site: widget|panel, state: on|off)')
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, site: string | undefined, state: string | undefined, opts: { json: boolean }) => {
+      try { process.exitCode = await runMarketSites(id, site, state, opts); } catch (err) { process.stderr.write(`market sites failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   market
     .command('remove <id> [version]')

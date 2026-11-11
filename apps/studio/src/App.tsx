@@ -26,11 +26,13 @@ import { Workflows } from './workflows/page';
 import { QueryPage } from './query/QueryPage';
 import { WorkflowList } from './workflows/WorkflowList';
 import { PluginContainer } from './plugins/PluginContainer';
+import { PluginPanelHost } from './plugins/PluginPanelHost';
 import { RequireCapability } from './auth/RequireCapability';
 import { Roles } from './pages/Roles';
 import { DataExposure } from '@/pages/settings/DataExposure';
 import { Laboratory } from '@/pages/settings/Laboratory';
 import { SetupChecks } from '@/pages/settings/SetupChecks';
+import { Layouts } from '@/pages/settings/Layouts';
 import { CallbackPage } from './auth/CallbackPage';
 import { AccessDeniedPage } from './auth/AccessDeniedPage';
 import { StartPageGate, UserPreferencesSync } from './shell/UserPreferencesSync';
@@ -39,6 +41,8 @@ export function App() {
   return (
     <>
     <UserPreferencesSync />
+    {/* Outside <Routes> so a plugin side panel stays open, without reloading, across pages. */}
+    <PluginPanelHost />
     <Routes>
       <Route path="/auth/callback" element={<CallbackPage />} />
       <Route path="/access-denied" element={<RequireCapability><AccessDeniedPage /></RequireCapability>} />
@@ -65,7 +69,7 @@ export function App() {
         path="/settings"
         element={
           <RequireCapability
-            caps={['settings.view', 'notifications.view', 'sync.view', 'sync.manage', 'marketplace.view', 'connectors.manage', 'roles.view', 'data_exposure.manage']}
+            caps={['settings.view', 'notifications.view', 'sync.view', 'sync.manage', 'marketplace.view', 'connectors.manage', 'roles.view', 'data_exposure.manage', 'settings.edit_general']}
           >
             <SettingsShell />
           </RequireCapability>
@@ -80,6 +84,7 @@ export function App() {
         <Route path="connectors" element={<RequireCapability cap="connectors.manage"><Connectors /></RequireCapability>} />
         <Route path="roles" element={<RequireCapability cap="roles.view"><Roles /></RequireCapability>} />
         <Route path="setup" element={<RequireCapability cap="settings.view"><SetupChecks /></RequireCapability>} />
+        <Route path="layouts" element={<RequireCapability cap="settings.edit_general"><Layouts /></RequireCapability>} />
         <Route path="laboratory" element={<RequireCapability cap="settings.view"><Laboratory /></RequireCapability>} />
         <Route path="data-exposure" element={<RequireCapability cap="data_exposure.manage"><DataExposure /></RequireCapability>} />
       </Route>

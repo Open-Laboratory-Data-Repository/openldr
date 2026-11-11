@@ -152,7 +152,7 @@ export function Marketplace() {
                   <div className="text-muted-foreground">{t('settings.marketplace.noneCapabilities')}</div>
                 ) : (
                   <ul className="list-disc pl-5 text-muted-foreground">
-                    {consent.capabilities.map((cap, i) => <li key={i}>{capabilityLine(cap)}</li>)}
+                    {consent.capabilities.map((cap, i) => <li key={i}>{capabilityLine(cap, t)}</li>)}
                   </ul>
                 )}
               </div>

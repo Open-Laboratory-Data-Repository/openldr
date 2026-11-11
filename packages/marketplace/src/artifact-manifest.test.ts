@@ -274,3 +274,32 @@ describe('content-pack artifact manifest', () => {
     });
   });
 });
+
+describe('ui sites', () => {
+  const WASM = 'b'.repeat(64);
+  const withUi = (ui: Record<string, unknown>) => ({
+    schemaVersion: 1, type: 'plugin', id: 'sited', version: '1.0.0', compatibility: { ceVersion: '*' },
+    payload: { kind: 'plugin', wasmSha256: WASM, ui },
+  });
+  const web = { entry: 'ui.html', sha256: 'a'.repeat(64), nav: { label: 'Web' } };
+
+  it('a ui block without sites has no sites key (existing bundles unchanged)', () => {
+    const m = parseArtifactManifest(withUi(web));
+    if (m.payload.kind !== 'plugin') throw new Error('plugin');
+    expect(m.payload.ui && 'sites' in m.payload.ui).toBe(false);
+  });
+  it('parses a widget and a panel; widget height defaults to medium', () => {
+    const m = parseArtifactManifest(withUi({ ...web, sites: { widget: { title: 'Today' }, panel: { title: 'Notes' } } }));
+    if (m.payload.kind !== 'plugin') throw new Error('plugin');
+    expect(m.payload.ui?.sites).toEqual({ widget: { title: 'Today', height: 'medium' }, panel: { title: 'Notes' } });
+  });
+  it('rejects sites on a declarative-only ui (sites need the webview page)', () => {
+    expect(() => parseArtifactManifest(withUi({ nav: { label: 'Cfg' }, declarative: { type: 'object' }, sites: { panel: { title: 'P' } } }))).toThrow();
+  });
+  it('rejects an unknown site', () => {
+    expect(() => parseArtifactManifest(withUi({ ...web, sites: { toast: { title: 'T' } } }))).toThrow();
+  });
+  it('rejects a bad widget height', () => {
+    expect(() => parseArtifactManifest(withUi({ ...web, sites: { widget: { title: 'T', height: 'huge' } } }))).toThrow();
+  });
+});

@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { CE_VERSION, type AppContext } from '@openldr/bootstrap';
 import { generatePublisherKeypair, packBundle, signManifest, keyFingerprint } from '@openldr/marketplace';
 import { createPluginRuntime } from '@openldr/plugins';
-import { createRegistryStore } from '@openldr/db';
+import { createRegistryStore, createAppSettingsStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { registerMarketplaceRoutes } from './marketplace-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
@@ -98,6 +98,7 @@ function fakePlugins() {
 function fakeCtx(plugins: unknown, cfg: Record<string, unknown>, internalDb: unknown, marketplaceForms?: unknown, audited?: unknown[], marketplacePacks?: unknown): AppContext {
   return {
     cfg, plugins, internalDb, logger: { error() {}, warn() {}, info() {}, debug() {} },
+    appSettings: createAppSettingsStore(internalDb as never),
     audit: { record: async (e: unknown) => { audited?.push(e); } },
     numberSettings: { get: async () => 67_108_864, all: async () => [], set: async () => 0, invalidate: () => {} },
     marketplaceForms: marketplaceForms ?? { install: async () => ({ id: 'x', version: '1', targetFormId: 'form-1' }), detach: async () => {}, list: async () => [] },
@@ -576,5 +577,56 @@ describe('marketplace routes', () => {
       expect(asset.headers['content-type']).toContain('text/html');
       expect(asset.body).toBe('<div>panel</div>');
     });
+  });
+});
+
+describe('marketplace routes: plugin sites', () => {
+  const sitedRuntime = () => ({
+    ...fakePlugins().runtime,
+    list: async () => [{
+      id: 'sited', version: '1.0.0', sha256: 'a', status: 'installed', enabled: true, active: true, approvedBy: 'admin',
+      manifest: { type: 'plugin', payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: 'Sited' }, sites: { widget: { title: 'Today' } } } } },
+    }],
+  });
+
+  it('GET shows the declared sites and which are off', async () => {
+    const { app } = await appWith({}, sitedRuntime());
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/sited/sites' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ declared: { widget: { title: 'Today', height: 'medium' } }, off: [] });
+  });
+
+  it('PUT switches a site off, audits it, and GET then shows it off', async () => {
+    const { app, audited } = await appWith({}, sitedRuntime());
+    const put = await app.inject({ method: 'PUT', url: '/api/marketplace/sited/sites', payload: { site: 'widget', on: false } });
+    expect(put.statusCode).toBe(200);
+    expect(put.json().off).toEqual(['widget']);
+    expect(audited).toEqual([expect.objectContaining({ action: 'plugin.sites.update', entityType: 'plugin', entityId: 'sited', metadata: { site: 'widget', on: false } })]);
+    expect((await app.inject({ method: 'GET', url: '/api/marketplace/sited/sites' })).json().off).toEqual(['widget']);
+  });
+
+  it('PUT for a site the plugin does not declare is 400', async () => {
+    const { app } = await appWith({}, sitedRuntime());
+    const res = await app.inject({ method: 'PUT', url: '/api/marketplace/sited/sites', payload: { site: 'panel', on: false } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'site not declared' });
+  });
+
+  it('a bad body is 400', async () => {
+    const { app } = await appWith({}, sitedRuntime());
+    const res = await app.inject({ method: 'PUT', url: '/api/marketplace/sited/sites', payload: { site: 'toast', on: 'no' } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('an unknown plugin is 404', async () => {
+    const { app } = await appWith({}, sitedRuntime());
+    expect((await app.inject({ method: 'GET', url: '/api/marketplace/nope/sites' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'PUT', url: '/api/marketplace/nope/sites', payload: { site: 'widget', on: true } })).statusCode).toBe(404);
+  });
+
+  it('403 without marketplace.manage', async () => {
+    const { app } = await appWith({}, sitedRuntime(), { roles: [], capabilities: ['marketplace.view'] });
+    expect((await app.inject({ method: 'GET', url: '/api/marketplace/sited/sites' })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'PUT', url: '/api/marketplace/sited/sites', payload: { site: 'widget', on: false } })).statusCode).toBe(403);
   });
 });

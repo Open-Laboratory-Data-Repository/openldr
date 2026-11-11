@@ -9,10 +9,12 @@ export const SheetClose = DialogPrimitive.Close;
 
 export const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }
->(({ className, children, hideClose, ...props }, ref) => (
+  // hideOverlay: for a non-modal sheet (Sheet modal={false}) that sits beside the page while the
+  // user keeps working in it, such as a plugin's side panel. No dimmed backdrop over the page.
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean; hideOverlay?: boolean }
+>(({ className, children, hideClose, hideOverlay, ...props }, ref) => (
   <DialogPrimitive.Portal>
-    <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" />
+    {hideOverlay ? null : <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" />}
     <DialogPrimitive.Content
       ref={ref}
       className={cn(

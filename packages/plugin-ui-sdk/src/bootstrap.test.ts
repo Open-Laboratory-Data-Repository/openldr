@@ -51,6 +51,29 @@ describe('SDK_BOOTSTRAP_V1', () => {
     expect(api.capabilities).toEqual(['host:connectors']);
   });
 
+  it('openldr.site is page until init, then the place the host drew it in; junk falls back to page', async () => {
+    const boot = () => {
+      let handler: ((ev: unknown) => void) | undefined;
+      const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      new Function('window', SDK_BOOTSTRAP_V1)(win);
+      const api = (win as unknown as { openldr: Record<string, unknown> }).openldr;
+      const init = (context: Record<string, unknown>) =>
+        handler!({ data: { type: 'openldr:init', context }, ports: [{ start: () => {}, postMessage: () => {}, onmessage: null }] });
+      return { api, init };
+    };
+    const a = boot();
+    expect(a.api.site).toBe('page');
+    a.init({ pluginId: 'p' });
+    expect(a.api.site).toBe('page');
+    const b = boot();
+    b.init({ pluginId: 'p', site: 'widget' });
+    expect(b.api.site).toBe('widget');
+    const c = boot();
+    c.init({ pluginId: 'p', site: 'toast' });
+    expect(c.api.site).toBe('page');
+  });
+
   it('updates api.theme when the host posts an openldr:theme message', () => {
     let handler: ((ev: unknown) => void) | undefined;
     const win = { addEventListener: (t: string, h: (ev: unknown) => void) => { if (t === 'message') handler = h; } };

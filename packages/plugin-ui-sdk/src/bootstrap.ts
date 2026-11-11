@@ -64,6 +64,7 @@ function pluginBootstrapV1(): void {
     capabilities: [] as string[],
     theme: 'light',
     locale: 'en',
+    site: 'page',
     ready,
     storage: {
       get: (c: string, k: string) => call({ kind: 'storage.get', collection: c, key: k }),
@@ -132,11 +133,13 @@ function pluginBootstrapV1(): void {
       else w.reject(new Error(m.result?.error ?? 'plugin host call failed'));
     };
     port.start();
-    const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; locale?: string };
+    const ctx = (data.context ?? {}) as { pluginId?: string; capabilities?: string[]; theme?: string; locale?: string; site?: string };
     api.pluginId = ctx.pluginId ?? '';
     api.capabilities = ctx.capabilities ?? [];
     applyTheme(ctx.theme ?? 'light');
     api.locale = ctx.locale ?? 'en';
+    // Where the host drew this page: its own page, a dashboard card, or the side panel.
+    api.site = ctx.site === 'widget' || ctx.site === 'panel' ? ctx.site : 'page';
     resolveReady();
   });
 }

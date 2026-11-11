@@ -2021,9 +2021,17 @@ export {
   type SetupCheck, type SetupCheckDeps, type SetupCheckId, type SetupHint, type SetupReport, type SetupStatus,
 } from './setup-checks';
 export {
-  getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema,
+  getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema, studioPathSchema,
   type UserPreferences, type UserPreferencesPatch,
 } from './user-preferences';
+export {
+  listLayouts, saveLayout, deleteLayout, layoutInputSchema, LayoutError,
+  type LayoutPreset, type LayoutList, type LayoutInput,
+} from './layout-presets';
+export {
+  SITES_OFF_KEY, getSitesOff, setSiteOn, visibleSites, declaredSites, readPluginSites, updatePluginSite, PluginSitesError,
+  type PluginSitesState, type PluginSitesDeps,
+} from './plugin-sites';
 export * from './ingest-context';
 export * from './target-store';
 export * from './terminology-context';

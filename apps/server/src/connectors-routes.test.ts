@@ -224,7 +224,10 @@ describe('connectors routes', () => {
   });
 
   describe('host (database) connectors', () => {
-    const pgBody = { name: 'PG One', type: 'postgres', config: { host: 'db.example', port: '5432', database: 'ldr', user: 'admin', password: 'secret' } };
+    // A refused local port, not a made-up host name. The test endpoint makes a real connection, and
+    // a name like db.example waited on DNS and the connect timeout (over 5s run alone). Port 1 on
+    // the loopback address is refused at once, which is all the SELECT 1 test below needs.
+    const pgBody = { name: 'PG One', type: 'postgres', config: { host: '127.0.0.1', port: '1', database: 'ldr', user: 'admin', password: 'secret' } };
 
     it('creates a host connector with type+kind:database, no pluginId', async () => {
       const store = fakeStore();

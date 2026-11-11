@@ -14,7 +14,7 @@ vi.mock('@/auth/AuthProvider', () => ({
 }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, getMyPreferences: vi.fn(), saveMyPreferences: vi.fn(), listPluginUis: vi.fn().mockResolvedValue([]) };
+  return { ...actual, getMyPreferences: vi.fn(), saveMyPreferences: vi.fn(), listPluginUis: vi.fn().mockResolvedValue([]), listLayouts: vi.fn().mockResolvedValue({ layouts: [], roleOrder: [] }) };
 });
 import * as api from '@/api';
 import { ThemeProvider } from './ThemeProvider';

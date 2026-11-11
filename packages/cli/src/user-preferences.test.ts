@@ -45,6 +45,9 @@ describe('user preferences CLI', () => {
     expect(parsePreferenceArg('startPage', 'none')).toEqual({ startPage: null });
     expect(parsePreferenceArg('language', 'pt')).toEqual({ language: 'pt' });
     expect(parsePreferenceArg('language', 'none')).toEqual({ language: null });
+    // `full` is the full sidebar; `none` clears the pick, as for every key, so the role default applies.
+    expect(parsePreferenceArg('layout', 'full')).toEqual({ layout: 'full' });
+    expect(parsePreferenceArg('layout', 'none')).toEqual({ layout: null });
   });
 
   it('refuses an unknown key or a bad value', () => {

@@ -5,7 +5,12 @@ export interface PluginInitContext {
   theme: 'light' | 'dark';
   locale: string;
   sessionId: string;
+  /** Where the host draws this page. Absent means its own page. */
+  site?: PluginSiteName;
 }
+
+/** The places a plugin's one ui.html can be drawn in. */
+export type PluginSiteName = 'page' | 'widget' | 'panel';
 
 /** Operations the plugin may request (mirror of the host broker's BrokerOp). */
 export type PluginBrokerOp =
@@ -45,6 +50,8 @@ export interface OpenLdrPluginApi {
   readonly capabilities: readonly string[];
   readonly theme: 'light' | 'dark';
   readonly locale: string;
+  /** Where the host drew this page: 'page', 'widget' (dashboard card) or 'panel' (side panel). */
+  readonly site: PluginSiteName;
   readonly ready: Promise<void>;
   storage: {
     get(collection: string, key: string): Promise<unknown>;

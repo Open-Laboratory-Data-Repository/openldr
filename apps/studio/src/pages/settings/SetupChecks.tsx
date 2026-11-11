@@ -15,8 +15,9 @@ const ICON: Record<SetupStatus, JSX.Element> = {
   skip: <MinusCircle className="h-4 w-4 shrink-0 text-muted-foreground" />,
 };
 
-// The settings page each fix path opens, by its sub-nav label.
+// The page each fix path opens, by its sub-nav or sidebar label.
 const FIX_LABEL: Record<string, string> = {
+  '/facilities': 'nav.facilities',
   '/settings/laboratory': 'settings.subNav.laboratory',
   '/settings/connectors': 'settings.subNav.connectors',
   '/settings/sync': 'settings.subNav.sync',

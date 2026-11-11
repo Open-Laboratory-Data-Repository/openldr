@@ -118,6 +118,19 @@ const CONNECTOR_TYPE_FIELDS: Record<string, TypeField[]> = {
   ],
 };
 
+/** SQL Server Management Studio shows a named instance as `SERVER\INSTANCE`, and that is what
+ *  people paste into Host. Split it in the form the way CE reads it when it connects
+ *  (`splitMssqlHost` in packages/bootstrap/src/connector-db.ts): Host keeps the server, and an
+ *  Instance name already given wins over one typed into Host. */
+export function splitMssqlHostField(config: Record<string, string>): Record<string, string> {
+  const host = config.host ?? '';
+  const slash = host.indexOf('\\');
+  if (slash === -1) return config;
+  const fromHost = host.slice(slash + 1).trim();
+  const instance = (config.instanceName ?? '').trim() || fromHost;
+  return { ...config, host: host.slice(0, slash).trim(), ...(instance ? { instanceName: instance } : {}) };
+}
+
 interface DraftState {
   id: string | null; // null = create
   category: 'plugin' | 'database';
@@ -204,11 +217,13 @@ export function Connectors() {
     setBusy(true);
     try {
       if (draft.category === 'database') {
+        // Saved straight from the Host box, without leaving it first, still gets the split.
+        const dbConfig = draft.type === 'microsoft-sql' ? splitMssqlHostField(draft.dbConfig) : draft.dbConfig;
         // DB path: require first field of the active type's schema on create; on edit blank = keep
         const typeFields = CONNECTOR_TYPE_FIELDS[draft.type] ?? SQL_FIELDS;
         const firstKey = (CONNECTOR_TYPE_FIELDS[draft.type] ?? [])[0]?.key;
-        const requiredFilled = firstKey ? Boolean(String(draft.dbConfig[firstKey] ?? '').trim()) : true;
-        const anyFilled = Object.values(draft.dbConfig).some(Boolean);
+        const requiredFilled = firstKey ? Boolean(String(dbConfig[firstKey] ?? '').trim()) : true;
+        const anyFilled = Object.values(dbConfig).some(Boolean);
         if (draft.id === null ? !requiredFilled : (anyFilled && !requiredFilled)) {
           toast.error(t('settings.connectors.partialSecrets'));
           return;
@@ -216,7 +231,7 @@ export function Connectors() {
         const config: Record<string, string> = {};
         if (requiredFilled) {
           for (const field of typeFields) {
-            const val = draft.dbConfig[field.key];
+            const val = dbConfig[field.key];
             if (val !== undefined && (val !== '' || (field.kind !== 'password' && draft.originalConfig?.[field.key] !== undefined))) config[field.key] = val;
           }
         }
@@ -304,7 +319,11 @@ export function Connectors() {
       accessor: (c) => c.type ?? c.pluginId,
       enumOptions: typeOptions.map((v) => ({ value: v, label: v })),
     },
-    { id: 'host', labelKey: 'settings.connectors.colHost', type: 'text', defaultVisible: true, cellClassName: 'text-muted-foreground', accessor: (c) => c.allowedHost ?? '—' },
+    // Hidden below `sm`: with it the row was 459px on a 375px phone and the ⋯ menu sat off-screen.
+    {
+      id: 'host', labelKey: 'settings.connectors.colHost', type: 'text', defaultVisible: true,
+      headClassName: 'hidden sm:table-cell', cellClassName: 'hidden text-muted-foreground sm:table-cell', accessor: (c) => c.allowedHost ?? '—',
+    },
     {
       id: 'enabled', labelKey: 'settings.connectors.colEnabled', type: 'enum', defaultVisible: true,
       accessor: (c) => <Switch checked={c.enabled} onCheckedChange={(v) => void onToggle(c, v)} aria-label={t('settings.connectors.enabledLabel')} />,
@@ -560,6 +579,9 @@ export function Connectors() {
                               autoComplete={field.kind === 'password' ? 'new-password' : 'off'}
                               value={val}
                               onChange={(e) => setDraft({ ...draft, dbConfig: { ...draft.dbConfig, [field.key]: e.target.value } })}
+                              onBlur={field.key === 'host' && draft.type === 'microsoft-sql'
+                                ? () => setDraft((d) => (d ? { ...d, dbConfig: splitMssqlHostField(d.dbConfig) } : d))
+                                : undefined}
                               placeholder={field.kind === 'password' && isEdit && draft.secretsSet?.[field.key] ? t('settings.connectors.secretSet') : undefined}
                             />
                           </Fragment>
