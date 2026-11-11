@@ -56,14 +56,14 @@ describe('DocsPage', () => {
     }
     expect(screen.getAllByText('openldr user assign-role SUBJECT lab_admin')).toHaveLength(3);
   });
-  it('renders data exposure scope and navigation in all three languages', () => {
+  it('shows the shared Data exposure guide, with its limits one click away', () => {
     renderDocs('/docs/data-exposure');
     expect(screen.getByRole('heading', { level: 1, name: 'Data exposure' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Data exposure' })).toHaveAttribute('aria-current', 'page');
-    for (const name of ['English', 'Français', 'Português']) {
-      expect(screen.getByRole('heading', { name })).toBeInTheDocument();
-    }
-    expect(screen.getAllByRole('link', { name: 'Environment variables' }).every((link) => link.getAttribute('href') === '/docs/environment')).toBe(true);
+    expect(screen.getByRole('combobox', { name: 'Documentation language' })).toBeInTheDocument();
+    const list = screen.getByRole('navigation', { name: 'On this page' });
+    expect(within(list).getByRole('link', { name: 'What it does not cover' })).toHaveAttribute('href', '#what-it-does-not-cover');
+    expect(document.getElementById('what-it-does-not-cover')).not.toBeNull();
   });
 
   it('renders report schedules from its navigation entry in all three languages', () => {

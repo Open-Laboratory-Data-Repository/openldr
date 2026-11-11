@@ -135,6 +135,8 @@ export const SHARED_GUIDES: Record<string, string> = {
   workflows: 'workflows',
   activity: 'activity',
   patients: 'patients',
+  laboratory: 'laboratory',
+  'data-exposure': 'data-exposure',
 };
 
 const guideFiles = import.meta.glob('../../../studio/src/docs/*/*/*.md', {
