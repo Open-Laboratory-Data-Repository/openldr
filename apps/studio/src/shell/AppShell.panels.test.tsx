@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 import type { PluginUiEntry } from '@/api';
 import { getPluginPanel, openPluginPanel, closePluginPanel } from '@/plugins/pluginPanel';
+import { notifyPluginsChanged } from '@/plugins/pluginEvents';
 
 const list = vi.hoisted(() => ({ entries: [] as unknown[] }));
 vi.mock('@/api', async (orig) => {
@@ -72,5 +73,21 @@ describe('AppShell with a side panel open', () => {
     act(() => openPluginPanel('notes', 'Lab notes'));
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
     expect(getPluginPanel()).toBeNull();
+  });
+});
+
+describe('AppShell after plugins change in Settings', () => {
+  beforeEach(() => closePluginPanel());
+
+  // Settings keeps one AppShell across its pages, so it does not remount after a change there.
+  it('re-reads the plugin list on a change signal: the sidebar entry goes and the panel closes', async () => {
+    list.entries = [entry('notes', { panel: { title: 'Lab notes' } })];
+    shell();
+    await screen.findByRole('link', { name: /notes/ });
+    act(() => openPluginPanel('notes', 'Lab notes'));
+    list.entries = [];
+    act(() => notifyPluginsChanged());
+    await waitFor(() => expect(getPluginPanel()).toBeNull());
+    expect(screen.queryByRole('link', { name: /notes/ })).toBeNull();
   });
 });

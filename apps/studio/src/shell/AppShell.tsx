@@ -23,6 +23,7 @@ import { listPluginUis, type LayoutPreset, type PluginUiEntry } from '@/api';
 import { layoutInForce, useLayouts } from './layouts';
 import { pluginIcon } from '@/plugins/icons';
 import { closePluginPanel, openPluginPanel, syncPluginPanel, usePluginPanel } from '@/plugins/pluginPanel';
+import { onPluginsChanged } from '@/plugins/pluginEvents';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
 
@@ -115,16 +116,22 @@ export function AppShell({
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
   useEffect(() => {
     let cancelled = false;
-    void listPluginUis()
-      .then((list) => {
-        if (cancelled) return;
-        const entries = Array.isArray(list) ? list : [];
-        setPluginUis(entries);
-        // Close an open side panel whose plugin no longer offers one (disabled, removed, switched off).
-        syncPluginPanel(entries);
-      })
-      .catch(() => { if (!cancelled) setPluginUis([]); });
-    return () => { cancelled = true; };
+    const read = () => {
+      void listPluginUis()
+        .then((list) => {
+          if (cancelled) return;
+          const entries = Array.isArray(list) ? list : [];
+          setPluginUis(entries);
+          // Close an open side panel whose plugin no longer offers one (disabled, removed, switched off).
+          syncPluginPanel(entries);
+        })
+        .catch(() => { if (!cancelled) setPluginUis([]); });
+    };
+    read();
+    // Settings keeps this shell mounted across its pages, so a plugin change made there must ask
+    // for a fresh list rather than wait for the next mount.
+    const off = onPluginsChanged(read);
+    return () => { cancelled = true; off(); };
   }, []);
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();

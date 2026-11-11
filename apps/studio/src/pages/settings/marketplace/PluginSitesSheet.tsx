@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { LoadingState } from '@/components/ui/spinner';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { getPluginSites, setPluginSite, type PluginSiteKey, type PluginSitesState } from '@/api';
+import { notifyPluginsChanged } from '@/plugins/pluginEvents';
 
 const SITES: PluginSiteKey[] = ['widget', 'panel'];
 
@@ -37,6 +38,7 @@ export function PluginSitesSheet({ plugin, onOpenChange }: {
     setError(null);
     try {
       setState(await setPluginSite(plugin.id, site, on));
+      notifyPluginsChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

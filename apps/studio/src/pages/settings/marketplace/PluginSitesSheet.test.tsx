@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@/i18n';
 import * as api from '@/api';
 import { PluginSitesSheet } from './PluginSitesSheet';
+import { onPluginsChanged } from '@/plugins/pluginEvents';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -31,6 +32,20 @@ describe('PluginSitesSheet', () => {
     fireEvent.click(await screen.findByTestId('plugin-site-panel'));
     await waitFor(() => expect(screen.getByTestId('plugin-site-panel')).toHaveAttribute('aria-checked', 'false'));
     expect(api.setPluginSite).toHaveBeenCalledWith('demo', 'panel', false);
+  });
+
+  it('tells the shell the plugins changed after a saved switch, and not after a failed one', async () => {
+    const heard = vi.fn();
+    const off = onPluginsChanged(heard);
+    vi.mocked(api.getPluginSites).mockResolvedValue(both);
+    vi.mocked(api.setPluginSite).mockRejectedValueOnce(new Error('403')).mockResolvedValueOnce({ ...both, off: ['panel'] });
+    render(<PluginSitesSheet plugin={{ id: 'demo', label: 'Demo' }} onOpenChange={() => {}} />);
+    fireEvent.click(await screen.findByTestId('plugin-site-panel'));
+    await screen.findByTestId('plugin-sites-error');
+    expect(heard).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('plugin-site-panel'));
+    await waitFor(() => expect(heard).toHaveBeenCalledTimes(1));
+    off();
   });
 
   it('a failed save shows the error and leaves the switch as it was', async () => {

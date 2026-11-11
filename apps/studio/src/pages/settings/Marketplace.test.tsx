@@ -17,6 +17,7 @@ vi.mock('@/api', async (orig) => {
 import * as api from '@/api';
 import { toast } from 'sonner';
 import { Marketplace } from './Marketplace';
+import { onPluginsChanged } from '@/plugins/pluginEvents';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -144,6 +145,25 @@ describe('Marketplace', () => {
     if (!screen.queryByText('Disable')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
     fireEvent.click(await screen.findByText('Disable'));
     await waitFor(() => expect(api.setArtifactEnabled).toHaveBeenCalledWith('whonet-sqlite', false));
+  });
+
+  // Settings keeps one AppShell, so its plugin list (sidebar entries, open side panel) is only as
+  // fresh as the last signal. A disable must send one.
+  it('tells the shell the plugins changed after a disable', async () => {
+    const heard = vi.fn();
+    const off = onPluginsChanged(heard);
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([{ id: 'whonet-sqlite', version: '1.0.0', active: true, enabled: true, approvedBy: 'admin', type: 'plugin', publisher: null, capabilities: [], legacy: false }]);
+    (api.setArtifactEnabled as any).mockResolvedValue(undefined);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Installed \(1\)/ }), { button: 0 });
+    fireEvent.click(await screen.findByTestId('card-whonet-sqlite'));
+    const menuTrigger = await screen.findByTestId('detail-menu');
+    fireEvent.pointerDown(menuTrigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Disable')) fireEvent.keyDown(menuTrigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Disable'));
+    await waitFor(() => expect(heard).toHaveBeenCalled());
+    off();
   });
 
   it('detaches an installed form-template from its detail menu', async () => {

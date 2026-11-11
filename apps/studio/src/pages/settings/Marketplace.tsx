@@ -13,6 +13,7 @@ import {
 } from '@/api';
 import { MarketplaceTabs } from './marketplace/MarketplaceTabs';
 import { capabilityLine, packFailureText, type CardEntry } from './marketplace/util';
+import { notifyPluginsChanged } from '@/plugins/pluginEvents';
 import { PayloadPreview } from './marketplace/PayloadPreview';
 
 export function Marketplace() {
@@ -59,6 +60,7 @@ export function Marketplace() {
         toast.success(t('settings.marketplace.installedToast', { id: consent.entry.id }));
       }
       setConsent(null);
+      notifyPluginsChanged();
       await load();
     } catch (e) {
       toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) }));
@@ -73,12 +75,12 @@ export function Marketplace() {
   }, [t, load]);
 
   const onToggleEnabled = useCallback(async (id: string, enabled: boolean) => {
-    try { await setArtifactEnabled(id, enabled); await load(); }
+    try { await setArtifactEnabled(id, enabled); notifyPluginsChanged(); await load(); }
     catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [t, load]);
 
   const onRollback = useCallback(async (id: string, version: string) => {
-    try { await rollbackArtifact(id, version); toast.success(t('settings.marketplace.installedToast', { id })); await load(); }
+    try { await rollbackArtifact(id, version); notifyPluginsChanged(); toast.success(t('settings.marketplace.installedToast', { id })); await load(); }
     catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [t, load]);
 
@@ -98,7 +100,7 @@ export function Marketplace() {
     if (!pendingRemove) return;
     const entry = pendingRemove;
     setPendingRemove(null);
-    try { await removeArtifact(entry.id); await load(); }
+    try { await removeArtifact(entry.id); notifyPluginsChanged(); await load(); }
     catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [pendingRemove, t, load]);
 
