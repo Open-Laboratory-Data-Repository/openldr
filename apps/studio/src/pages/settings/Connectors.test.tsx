@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
@@ -112,6 +112,21 @@ describe('Connectors page', () => {
     render(<MemoryRouter><Connectors /></MemoryRouter>);
     expect(await screen.findByText('Prod DHIS2')).toBeTruthy();
     expect(screen.getByText('dhis2.example.org')).toBeTruthy();
+  });
+
+  // Phone: the five columns came to 459px in a 375px screen, so the ⋯ actions sat off-screen behind
+  // a sideways scroll. The host column is the least needed on a phone, so it hides below `sm`.
+  // HONEST NON-PROOF: jsdom applies no media queries. This pins the classes; the width was checked
+  // in a browser at 375x812.
+  it('hides the allowed-host column on a phone so the row fits without scrolling sideways', async () => {
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    const head = await screen.findByRole('columnheader', { name: 'Allowed plugin host' });
+    expect(head.className).toContain('hidden');
+    expect(head.className).toContain('sm:table-cell');
+    const row = (await screen.findAllByRole('row'))[1]!;
+    const hostCell = within(row).getAllByRole('cell')[2]!;
+    expect(hostCell.className).toContain('hidden');
+    expect(hostCell.className).toContain('sm:table-cell');
   });
 
   it('renders the standard table toolbar with the chips row', async () => {

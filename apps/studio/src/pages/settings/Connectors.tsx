@@ -304,7 +304,11 @@ export function Connectors() {
       accessor: (c) => c.type ?? c.pluginId,
       enumOptions: typeOptions.map((v) => ({ value: v, label: v })),
     },
-    { id: 'host', labelKey: 'settings.connectors.colHost', type: 'text', defaultVisible: true, cellClassName: 'text-muted-foreground', accessor: (c) => c.allowedHost ?? '—' },
+    // Hidden below `sm`: with it the row was 459px on a 375px phone and the ⋯ menu sat off-screen.
+    {
+      id: 'host', labelKey: 'settings.connectors.colHost', type: 'text', defaultVisible: true,
+      headClassName: 'hidden sm:table-cell', cellClassName: 'hidden text-muted-foreground sm:table-cell', accessor: (c) => c.allowedHost ?? '—',
+    },
     {
       id: 'enabled', labelKey: 'settings.connectors.colEnabled', type: 'enum', defaultVisible: true,
       accessor: (c) => <Switch checked={c.enabled} onCheckedChange={(v) => void onToggle(c, v)} aria-label={t('settings.connectors.enabledLabel')} />,
