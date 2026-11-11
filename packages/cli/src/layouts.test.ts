@@ -37,7 +37,8 @@ describe('openldr layouts', () => {
     expect(await runLayoutsList({ json: true })).toBe(0);
     expect(JSON.parse(String(out.mock.calls[0]![0]))).toEqual({ layouts: [bench], roleOrder: ['bench'] });
     expect(await runLayoutsList({ json: false })).toBe(0);
-    expect(String(out.mock.calls[1]![0])).toBe('Bench\tstart /forms\t2 pages\troles bench\n');
+    // The id is shown: `openldr user preferences set <user> layout <id>` needs it.
+    expect(String(out.mock.calls[1]![0])).toBe('Bench\tl1\tstart /forms\t2 pages\troles bench\n');
   });
 
   it('set creates a layout by name, with pages, start page and roles from the flags', async () => {

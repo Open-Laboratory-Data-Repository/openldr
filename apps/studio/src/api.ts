@@ -1904,7 +1904,9 @@ export const listRoles = (): Promise<RoleRecord[]> => apiGet('/api/roles', 'list
 // ── Layout presets ──────────────────────────────────────────────────────────
 // Mirrors LayoutPreset / LayoutList in @openldr/bootstrap (layout-presets.ts).
 export interface LayoutPreset { id: string; name: string; startPage: string | null; pages: string[]; roles: string[] }
-export interface LayoutList { layouts: LayoutPreset[]; roleOrder: string[] }
+/** `myRoles`: the signed-in user's role slugs from user_roles (what the Roles page assigns). The
+ *  sign-in token's roles are not used: they are empty on OIDC and go stale on Keycloak. */
+export interface LayoutList { layouts: LayoutPreset[]; roleOrder: string[]; myRoles?: string[] }
 export interface LayoutInput { name: string; startPage: string | null; pages: string[]; roles: string[] }
 export const listLayouts = (): Promise<LayoutList> => apiGet('/api/layouts', 'list layouts');
 export const saveLayout = (id: string | null, input: LayoutInput): Promise<LayoutPreset> =>

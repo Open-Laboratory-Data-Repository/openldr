@@ -63,4 +63,4 @@ Pour fixer le choix d'un utilisateur :
 openldr user preferences set <user-id> layout full
 ```
 
-Utilisez l'id d'une disposition, `full` pour la barre latérale complète, ou `none` pour revenir à la valeur par défaut du rôle.
+Utilisez l'id d'une disposition, `full` pour la barre latérale complète, ou `none` pour revenir à la valeur par défaut du rôle. `openldr layouts list` affiche l'id de chaque disposition.

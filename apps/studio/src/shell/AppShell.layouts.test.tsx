@@ -4,7 +4,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import '@/i18n';
 
 let caps: string[] | 'all' = 'all';
-const mockUser = { id: 'u1', username: 'amina', roles: ['tech'] };
+// The token's roles are deliberately wrong: role defaults must follow myRoles from the server.
+const mockUser = { id: 'u1', username: 'amina', roles: ['from_token'] };
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({
     user: mockUser, loading: false, signOut: vi.fn(), authEnforced: true,
@@ -26,7 +27,7 @@ const data = { id: 'data', name: 'Data', startPage: null, pages: ['/reports'], r
 
 async function load(prefs: api.UserPreferences) {
   vi.mocked(api.getMyPreferences).mockResolvedValue(prefs);
-  vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [bench, data], roleOrder: ['tech'] });
+  vi.mocked(api.listLayouts).mockResolvedValue({ layouts: [bench, data], roleOrder: ['tech'], myRoles: ['tech'] });
   await act(async () => { await loadUserPreferences(); await loadLayouts(); });
 }
 const shell = () => render(<MemoryRouter><AppShell title="T"><div /></AppShell></MemoryRouter>);
@@ -97,6 +98,21 @@ describe('sidebar under a layout', () => {
     expect((await screen.findByTestId('layout-pick-default')).textContent).toMatch(/Bench/);
     fireEvent.click(screen.getByTestId('layout-pick-default'));
     await waitFor(() => expect(api.saveMyPreferences).toHaveBeenCalledWith({ layout: null }));
+  });
+
+  // Picking Dashboard used to clear the saved start page, and the layout's start page then took
+  // over again: the user could never choose the Dashboard. Under a layout with a start page it is
+  // saved as '/'. With no layout start page it still clears, as before.
+  it("picking Dashboard sticks even when the layout has its own start page", async () => {
+    vi.mocked(api.getMyPreferences).mockResolvedValue({});
+    vi.mocked(api.listLayouts).mockResolvedValue({
+      layouts: [{ id: 'lab', name: 'Lab', startPage: '/forms', pages: ['/', '/forms'], roles: ['tech'] }], roleOrder: ['tech'], myRoles: ['tech'],
+    });
+    await act(async () => { await loadUserPreferences(); await loadLayouts(); });
+    shell();
+    await openUserSub('start-page-menu');
+    fireEvent.click(await screen.findByTestId('start-page-/'));
+    await waitFor(() => expect(api.saveMyPreferences).toHaveBeenCalledWith({ startPage: '/' }));
   });
 
   it('has no Layout submenu when no layouts exist', async () => {

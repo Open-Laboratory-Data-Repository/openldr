@@ -31,7 +31,7 @@ The start page only opens if it is in your sidebar. The **Start page** list offe
 2. Open the ⋯ menu at the top right and choose **New layout**.
 3. Give it a **Name**.
 4. Tick the **Pages** it shows.
-5. Pick a **Start page** from the ticked pages, or leave it on Dashboard.
+5. Pick a **Start page** from the ticked pages, or leave it on Dashboard. A start page must be one of the layout's pages.
 6. Under **Default for roles**, tick each role that should get this layout by default. A role has one default. Ticking a role here moves it off any other layout.
 7. Open the sheet's ⋯ menu and choose **Save**.
 
@@ -63,4 +63,4 @@ To set one user's pick:
 openldr user preferences set <user-id> layout full
 ```
 
-Use a layout id, `full` for the full sidebar, or `none` to go back to the role default.
+Use a layout id, `full` for the full sidebar, or `none` to go back to the role default. `openldr layouts list` shows each layout's id.

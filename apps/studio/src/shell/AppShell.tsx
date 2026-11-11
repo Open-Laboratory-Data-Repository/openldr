@@ -104,8 +104,8 @@ export function AppShell({
   const { list: layoutList } = useLayouts();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, signOut, hasCapability, authEnforced } = useAuth();
-  const layout = layoutInForce(prefs, layoutList, user?.roles ?? []);
-  const roleDefault = layoutInForce({}, layoutList, user?.roles ?? []);
+  const layout = layoutInForce(prefs, layoutList);
+  const roleDefault = layoutInForce({}, layoutList);
   const nav = visibleNav(hasCapability, layout);
   const startPage = prefs.startPage ?? layout?.startPage ?? '/';
   const [pluginUis, setPluginUis] = useState<PluginUiEntry[]>([]);
@@ -261,7 +261,9 @@ export function AppShell({
                       data-testid={`start-page-${n.to}`}
                       disabled={startPage === n.to}
                       onClick={() => {
-                        void setUserPreference({ startPage: n.to === '/' ? null : n.to }).then((ok) => {
+                        // Dashboard clears the saved page, unless a layout start page would then
+                        // take over: then '/' is saved, so the Dashboard really opens first.
+                        void setUserPreference({ startPage: n.to === '/' && !layout?.startPage ? null : n.to }).then((ok) => {
                           if (ok) toast.success(t('layout.startPageSaved', { page: t(n.labelKey) }));
                           else toast.error(t('layout.startPageNotSaved'));
                         });

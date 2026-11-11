@@ -17,10 +17,21 @@ function layoutError(err: unknown, reply: FastifyReply): { error: string } {
   throw err;
 }
 
-export function registerLayoutRoutes(app: FastifyInstance<any, any, any, any>, ctx: Pick<AppContext, 'internalDb' | 'audit' | 'logger'>): void {
+export function registerLayoutRoutes(app: FastifyInstance<any, any, any, any>, ctx: Pick<AppContext, 'internalDb' | 'audit' | 'logger' | 'users' | 'roles'>): void {
+  // The caller's role slugs, for picking their role's default layout. From user_roles, which the
+  // Roles page writes and capabilities come from. Not req.user.roles: those are the sign-in token's
+  // roles, empty on an OIDC install and stale on Keycloak once roles change in studio
+  // (auth-plugin.ts). The subject is found as auth-plugin.ts finds it. A caller with no users row
+  // (the dev sign-in) falls back to the token's roles.
+  async function myRoles(user: { id: string; roles: string[] }): Promise<string[]> {
+    const u = await ctx.users.get(user.id).catch(() => undefined);
+    if (!u) return user.roles ?? [];
+    return (await ctx.roles.rolesForUser(u.subject ?? u.id)).map((r) => r.slug);
+  }
+
   app.get('/api/layouts', async (req, reply) => {
     if (!req.user) { reply.code(401); return { error: 'authentication required' }; }
-    return listLayouts(ctx.internalDb);
+    return { ...(await listLayouts(ctx.internalDb)), myRoles: await myRoles(req.user) };
   });
 
   app.post('/api/layouts', EDIT, async (req, reply) => {

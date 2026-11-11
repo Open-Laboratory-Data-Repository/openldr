@@ -45,8 +45,10 @@ export function resetLayoutsForTest(): void {
 
 /** The layout in force for this user, or null for the full sidebar. The user's own pick wins;
  *  `full` is the full sidebar; otherwise the default of the user's first role that has one, in
- *  Roles page order. A picked layout that no longer exists falls through to the role default. */
-export function layoutInForce(prefs: UserPreferences, list: LayoutList, userRoles: string[]): LayoutPreset | null {
+ *  Roles page order. A picked layout that no longer exists falls through to the role default.
+ *  The user's roles are `list.myRoles` from the server, never the sign-in token's roles. */
+export function layoutInForce(prefs: UserPreferences, list: LayoutList): LayoutPreset | null {
+  const userRoles = list.myRoles ?? [];
   if (prefs.layout === 'full') return null;
   const picked = prefs.layout ? list.layouts.find((l) => l.id === prefs.layout) : undefined;
   if (picked) return picked;

@@ -30,7 +30,9 @@ export const layoutInputSchema = z.object({
   pages: z.array(studioPathSchema).min(1).max(50)
     .refine((p) => new Set(p).size === p.length, { message: 'a page is listed twice' }),
   roles: z.array(z.string().min(1).max(100)).max(100),
-}).strict();
+}).strict()
+  // Studio only opens a start page that is in the sidebar, so one the layout hides would never open.
+  .refine((l) => l.startPage === null || l.pages.includes(l.startPage), { message: 'the start page must be one of the pages' });
 export type LayoutInput = z.infer<typeof layoutInputSchema>;
 
 export class LayoutError extends Error {

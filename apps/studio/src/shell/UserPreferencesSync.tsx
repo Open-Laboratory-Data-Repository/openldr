@@ -95,7 +95,7 @@ export function StartPageGate({ children }: { children: ReactNode }) {
   if (!firstLanding || !user) return <>{children}</>;
   if (!loaded) return <LoadingState className="h-dvh" />;
   // The user's own first page, else their layout's. Only a page in their sidebar counts.
-  const layout = layoutInForce(prefs, list, user.roles ?? []);
+  const layout = layoutInForce(prefs, list);
   const target = prefs.startPage ?? layout?.startPage ?? undefined;
   const reachable = target && target !== '/' && visibleNav(hasCapability, layout).some((n) => n.to === target);
   return reachable ? <Navigate to={target} replace /> : <>{children}</>;

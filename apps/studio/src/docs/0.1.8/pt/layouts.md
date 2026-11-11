@@ -63,4 +63,4 @@ Para definir a escolha de um utilizador:
 openldr user preferences set <user-id> layout full
 ```
 
-Use o id de uma disposição, `full` para a barra lateral completa, ou `none` para voltar à predefinição da função.
+Use o id de uma disposição, `full` para a barra lateral completa, ou `none` para voltar à predefinição da função. `openldr layouts list` mostra o id de cada disposição.

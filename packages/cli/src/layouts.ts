@@ -19,7 +19,7 @@ export async function runLayoutsList(opts: { json: boolean }): Promise<number> {
     const all = await listLayouts(ctx.internalDb);
     if (opts.json) process.stdout.write(JSON.stringify(all, null, 2) + '\n');
     else process.stdout.write(all.layouts.length
-      ? all.layouts.map((l) => `${l.name}\tstart ${l.startPage ?? '-'}\t${l.pages.length} pages\troles ${l.roles.join(',') || '-'}`).join('\n') + '\n'
+      ? all.layouts.map((l) => `${l.name}\t${l.id}\tstart ${l.startPage ?? '-'}\t${l.pages.length} pages\troles ${l.roles.join(',') || '-'}`).join('\n') + '\n'
       : '(no layouts)\n');
     return 0;
   } catch (err) {

@@ -71,5 +71,8 @@ describe('layout presets', () => {
     expect(layoutInputSchema.safeParse({ ...bench, name: '  ' }).success).toBe(false);
     expect(layoutInputSchema.safeParse({ ...bench, extra: 1 }).success).toBe(false);
     expect(layoutInputSchema.safeParse({ ...bench, pages: Array.from({ length: 51 }, (_, i) => `/p${i}`) }).success).toBe(false);
+    // A start page the layout hides would never open (studio only opens sidebar pages).
+    expect(layoutInputSchema.safeParse({ ...bench, startPage: '/query' }).success).toBe(false);
+    expect(layoutInputSchema.safeParse({ ...bench, startPage: null }).success).toBe(true);
   });
 });
