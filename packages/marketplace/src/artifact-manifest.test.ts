@@ -269,6 +269,7 @@ describe('content-pack artifact manifest', () => {
     it('refuses an unknown connector type or an empty list', () => {
       const bad = (connectorTypes: unknown) => ({ ...importing, payload: { ...importing.payload, importSource: { ...importing.payload.importSource, connectorTypes } } });
       expect(() => parseArtifactManifest(bad(['oracle']))).toThrow();
+      expect(() => parseArtifactManifest(bad(['mysql']))).toThrow();
       expect(() => parseArtifactManifest(bad([]))).toThrow();
     });
   });

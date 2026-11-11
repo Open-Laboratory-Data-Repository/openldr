@@ -35,8 +35,9 @@ export type UiContribution = z.infer<typeof uiContributionSchema>;
 /** Declares that a plugin can drive an import: CE pages through a host database connector with
  *  SQL from these entrypoints and saves what `map` returns. See packages/bootstrap import-run.ts. */
 export const importSourceSchema = z.object({
-  // Host connector types the plugin's SQL is written for.
-  connectorTypes: z.array(z.enum(['microsoft-sql', 'postgres', 'mysql'])).min(1),
+  // Host connector types the plugin's SQL is written for. Only SQL Server so far: literal quoting
+  // and date handling in import-sql.ts are written and tested for it alone. Widen with those.
+  connectorTypes: z.array(z.enum(['microsoft-sql'])).min(1),
   entrypoints: z.object({
     queries: z.string().min(1),
     checks: z.string().min(1).optional(),
