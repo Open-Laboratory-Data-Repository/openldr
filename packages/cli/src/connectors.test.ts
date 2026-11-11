@@ -40,3 +40,10 @@ it('offers show and set for a user\'s studio preferences', () => {
   const prefs = user.commands.find((command) => command.name() === 'preferences');
   expect(prefs?.commands.map((command) => command.name())).toEqual(['show', 'set']);
 });
+
+it('offers the import commands', () => {
+  const imports = buildProgram().commands.find((command) => command.name() === 'import')!;
+  expect(imports.commands.map((command) => command.name())).toEqual(['allow', 'revoke', 'allowed', 'start', 'resume', 'status', 'stop', 'failures']);
+  const start = imports.commands.find((command) => command.name() === 'start')!;
+  expect(start.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--connector']);
+});

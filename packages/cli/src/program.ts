@@ -100,6 +100,47 @@ export function buildProgram(): Command {
       catch { process.stderr.write('Connector diagnosis unavailable. Check the connector ID; only host connectors can be diagnosed.\n'); process.exitCode = 1; }
     });
 
+  const imports = program.command('import').description('Import from a database connector with a plugin that declares an import source');
+  imports.command('allow <plugin> <connector>').description('Let a plugin read one database connector')
+    .action(async (plugin: string, connector: string) => {
+      try { process.exitCode = await runImportAllow(plugin, connector); } catch (err) { process.stderr.write(`import allow failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  imports.command('revoke <plugin> <connector>').description('Stop a plugin reading a database connector')
+    .action(async (plugin: string, connector: string) => {
+      try { process.exitCode = await runImportRevoke(plugin, connector); } catch (err) { process.stderr.write(`import revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  imports.command('allowed <plugin>').description('List the connectors a plugin may read').option('--json', 'emit JSON', false)
+    .action(async (plugin: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runImportAllowed(plugin, opts); } catch (err) { process.stderr.write(`import allowed failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  imports.command('start').description('Start an import and wait for it. Ctrl+C stops it at the next page; it can be resumed')
+    .requiredOption('--plugin <id>', 'the importing plugin')
+    .requiredOption('--connector <id>', 'the database connector to read (must be allowed for the plugin)')
+    .option('--option <name=value...>', 'a plugin option, repeatable (for example tz=+02:00)')
+    .option('--limit <n>', 'stop after this many source records')
+    .option('--page-size <n>', 'source records per page, 1 to 2000 (default 500)')
+    .option('--dry-run', 'read and map, save nothing', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { plugin: string; connector: string; option?: string[]; limit?: string; pageSize?: string; dryRun: boolean; json: boolean }) => {
+      try { process.exitCode = await runImportStart(opts); } catch (err) { process.stderr.write(`import start failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  imports.command('resume <plugin> <run>').description('Carry on a stopped, failed or interrupted import from where it stopped').option('--json', 'emit JSON', false)
+    .action(async (plugin: string, run: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runImportResume(plugin, run, opts); } catch (err) { process.stderr.write(`import resume failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  imports.command('status <plugin> [run]').description('Show one import run, or every run of a plugin').option('--json', 'emit JSON', false)
+    .action(async (plugin: string, run: string | undefined, opts: { json: boolean }) => {
+      try { process.exitCode = await runImportStatus(plugin, run, opts); } catch (err) { process.stderr.write(`import status failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  imports.command('stop <plugin> <run>').description('Stop a running import at its next page')
+    .action(async (plugin: string, run: string) => {
+      try { process.exitCode = await runImportStop(plugin, run); } catch (err) { process.stderr.write(`import stop failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  imports.command('failures <plugin> <run>').description('List the source records that failed, with an error code each').option('--json', 'emit JSON', false)
+    .action(async (plugin: string, run: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runImportFailures(plugin, run, opts); } catch (err) { process.stderr.write(`import failures failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+
   program
     .command('health')
     .description('Probe every adapter (auth, blob, eventing, target-store)')
@@ -1288,3 +1329,6 @@ export function buildProgram(): Command {
   return program;
 }
 import { runConnectorInspect, runConnectorUpdate, runConnectorDiagnose } from './connectors';
+import {
+  runImportAllow, runImportAllowed, runImportFailures, runImportResume, runImportRevoke, runImportStart, runImportStatus, runImportStop,
+} from './import';
