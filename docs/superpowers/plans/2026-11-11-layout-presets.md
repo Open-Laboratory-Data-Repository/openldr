@@ -152,3 +152,61 @@ Shared files this slice touches outside the plugin area: `packages/db` (migratio
 1. Ship no layouts, as planned, or seed the three examples from the design (Bench, Data, Admin)?
 2. A user with several roles: is "first role in Roles page order" the right tie-break?
 3. Who may edit layouts: `settings.edit_general` (planned), or `roles.manage`?
+
+---
+
+## As built (2026-11-11)
+
+Commits on `claude/ui-plugins-2-daf625`: `68df5f4c` tables and shared logic; `4c21827f` routes and
+CLI; `0fd9c946` studio; `468c30d4` docs; `ac028c3d` fixes from the branch review; the next commit
+keeps the dev sign-in's roles.
+
+The operator approved the plan as written, so the three questions took their planned answers: no
+shipped layouts, the first role in Roles page order, and `settings.edit_general`.
+
+Changes from the plan:
+
+- `GET /api/layouts` returns `{ layouts, roleOrder, myRoles }`, not a bare list. Studio needs the
+  role order, and a user without `roles.view` cannot read the Roles list. `myRoles` is the caller's
+  roles from `user_roles`. The review found that `req.user.roles` holds the sign-in token's roles,
+  which are empty on an OIDC install and stale on Keycloak (`apps/server/src/auth-plugin.ts:131`).
+  The dev sign-in (bypass on, no bearer token, the same test `auth-plugin.ts` uses) has no
+  `user_roles` rows, so it uses its `AUTH_DEV_ROLES`; so does a caller with no users row. Found on
+  the throwaway CE after the first fix: the dev sign-in got no roles. `bearer` in
+  `auth-plugin.ts` is now exported for this.
+- The user's full-sidebar pick is stored as `full`, not `none`. The CLI already uses `none` to
+  clear any preference key.
+- `openldr layouts set` on an existing name keeps the start page and roles that are not given.
+- Docs always shows under a layout and is not offered in the editor.
+- A start page must be one of the layout's pages. The editor clears it when its page is unticked;
+  the API and CLI refuse it.
+- Picking Dashboard as start page saves `/` when a layout start page would otherwise take over.
+  With no layout start page it still clears the key, as in slice 6.
+- The `/settings` route gate also admits `settings.edit_general`.
+
+### Proof, by layer
+
+| Layer | What ran |
+| --- | --- |
+| Migration | pg-mem test: unique name, one default per role, cascades. Real Postgres 16 (throwaway): migration ran at boot; deleting a role that was a default removed the default (psql). |
+| Shared logic | 6 tests: create, update, role moved between layouts, Roles page order, duplicate name, unknown role, unknown id, delete, input rules including the start page rule. |
+| Preferences | `layout` saved, cleared, junk dropped; CLI `layout full` and `layout none`. |
+| Routes | 5 tests: 401, 403, create, list, update, delete, audit rows, 400, 404, 409, `myRoles` from `user_roles` with a wrong token role, the dev sign-in's roles, and a bearer token never treated as the dev sign-in. Real server: the dev sign-in got `myRoles: ["lab_admin"]` and its role default cut the sidebar and opened Forms; a start page outside the pages got 400. |
+| CLI | 6 command tests and 3 registration tests. Real run: `layouts set`, `layouts list`, `layouts delete` refusing without `--force`. |
+| Studio | `layoutInForce` 6, store 1, sidebar and menus 7, first page 3, Layouts page 6. |
+| Browser, throwaway CE | A role default layout cut the sidebar to its pages plus Docs and opened its start page on first load. Full sidebar from the Layout submenu saved `full` and showed every page. Settings, Layouts listed both layouts; editing one and ticking a role saved through the sheet's ⋯ menu. |
+| Phone, 375x812 | Layouts table fits, ⋯ at 359px. Editor sheet has no sideways scroll. Layout submenu opens on a tap and sits inside the screen. |
+
+Full forced gate: see the hand-over note for the run on the final commit.
+
+HONEST NON-PROOF:
+
+- `myRoles` from `user_roles` is proven by a route test over pg-mem with the real role store. It
+  was not run with a real Keycloak or OIDC sign-in; the throwaway CE uses the dev sign-in, which
+  takes the fallback.
+- The phone checks used touch-type events in a desktop browser, not a real phone.
+
+Deferred minors from the branch review:
+
+- A personal start page that the layout hides lands on the Dashboard, not on the layout's start page.
+- Two admins creating a layout with the same name at the same instant: the second gets a 500, not a 409.

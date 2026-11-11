@@ -18,7 +18,7 @@ declare module 'fastify' {
   }
 }
 
-function bearer(req: FastifyRequest): string | null {
+export function bearer(req: FastifyRequest): string | null {
   const h = req.headers.authorization;
   if (h && h.startsWith('Bearer ')) { const t = h.slice('Bearer '.length).trim(); if (t) return t; }
   const url = req.raw.url ?? '';

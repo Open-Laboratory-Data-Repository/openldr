@@ -6,13 +6,13 @@ import { registerLayoutRoutes } from './layout-routes';
 
 // Layer under test: the routes plus the shared store, over pg-mem. Not real Postgres, not the
 // auth plugin (the user is injected).
-async function build(caps: string[] | null, tokenRoles: string[] = []) {
+async function build(caps: string[] | null, tokenRoles: string[] = [], devBypass = false) {
   const internalDb = await makeMigratedDb();
   const roles = createRoleStore(internalDb as never);
   await internalDb.insertInto('roles').values([{ id: 'rb', slug: 'bench', name: 'Bench staff', description: null, is_system: false }] as never).execute();
   const audited: Array<{ action: string; entityId?: string; metadata?: unknown }> = [];
   const ctx = {
-    internalDb, roles, audit: { record: async (e: any) => { audited.push(e); } }, logger: { warn() {}, error() {}, info() {}, debug() {} },
+    cfg: { AUTH_DEV_BYPASS: devBypass }, internalDb, roles, audit: { record: async (e: any) => { audited.push(e); } }, logger: { warn() {}, error() {}, info() {}, debug() {} },
     // u1 signs in as subject sub-1; 'dev:x' has no users row, like the dev sign-in.
     users: { get: async (id: string) => (id === 'u1' ? { id: 'u1', subject: 'sub-1' } : undefined) },
   };
@@ -70,5 +70,15 @@ describe('/api/layouts', () => {
     const { app, roles } = await build([], ['lab_admin']);
     await roles.assignRole('sub-1', 'rb');
     expect((await app.inject({ method: 'GET', url: '/api/layouts' })).json().myRoles).toEqual(['bench']);
+  });
+
+  // The dev sign-in (bypass on, no bearer token) has a users row but no user_roles rows: its roles
+  // come from AUTH_DEV_ROLES and it holds every capability (auth-plugin.ts devActor). Use those.
+  it('uses the dev sign-in roles when the dev bypass signed the request in', async () => {
+    const { app } = await build([], ['lab_admin'], true);
+    expect((await app.inject({ method: 'GET', url: '/api/layouts' })).json().myRoles).toEqual(['lab_admin']);
+    // A real bearer token is never the dev actor, even with the bypass on.
+    const withToken = await app.inject({ method: 'GET', url: '/api/layouts', headers: { authorization: 'Bearer abc' } });
+    expect(withToken.json().myRoles).toEqual([]);
   });
 });

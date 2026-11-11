@@ -1,8 +1,9 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { deleteLayout, layoutInputSchema, LayoutError, listLayouts, saveLayout } from '@openldr/bootstrap';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
+import { bearer } from './auth-plugin';
 
 // Layout presets: named sidebars and first pages, with a default per role. Any signed-in user may
 // read the list, because the user menu offers it. Changing one needs settings.edit_general. A
@@ -17,13 +18,15 @@ function layoutError(err: unknown, reply: FastifyReply): { error: string } {
   throw err;
 }
 
-export function registerLayoutRoutes(app: FastifyInstance<any, any, any, any>, ctx: Pick<AppContext, 'internalDb' | 'audit' | 'logger' | 'users' | 'roles'>): void {
+export function registerLayoutRoutes(app: FastifyInstance<any, any, any, any>, ctx: Pick<AppContext, 'cfg' | 'internalDb' | 'audit' | 'logger' | 'users' | 'roles'>): void {
   // The caller's role slugs, for picking their role's default layout. From user_roles, which the
   // Roles page writes and capabilities come from. Not req.user.roles: those are the sign-in token's
   // roles, empty on an OIDC install and stale on Keycloak once roles change in studio
-  // (auth-plugin.ts). The subject is found as auth-plugin.ts finds it. A caller with no users row
-  // (the dev sign-in) falls back to the token's roles.
-  async function myRoles(user: { id: string; roles: string[] }): Promise<string[]> {
+  // (auth-plugin.ts). The subject is found as auth-plugin.ts finds it. The dev sign-in (bypass on,
+  // no bearer token, the same test auth-plugin.ts uses) has no user_roles rows: its roles are
+  // AUTH_DEV_ROLES, already on req.user. So does a caller with no users row.
+  async function myRoles(req: FastifyRequest, user: { id: string; roles: string[] }): Promise<string[]> {
+    if (ctx.cfg.AUTH_DEV_BYPASS && !bearer(req)) return user.roles ?? [];
     const u = await ctx.users.get(user.id).catch(() => undefined);
     if (!u) return user.roles ?? [];
     return (await ctx.roles.rolesForUser(u.subject ?? u.id)).map((r) => r.slug);
@@ -31,7 +34,7 @@ export function registerLayoutRoutes(app: FastifyInstance<any, any, any, any>, c
 
   app.get('/api/layouts', async (req, reply) => {
     if (!req.user) { reply.code(401); return { error: 'authentication required' }; }
-    return { ...(await listLayouts(ctx.internalDb)), myRoles: await myRoles(req.user) };
+    return { ...(await listLayouts(ctx.internalDb)), myRoles: await myRoles(req, req.user) };
   });
 
   app.post('/api/layouts', EDIT, async (req, reply) => {
