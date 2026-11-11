@@ -17,6 +17,7 @@ import { PayloadPreview } from './PayloadPreview';
 import { RequirementsChecklist } from './RequirementsChecklist';
 import { ReadmeMarkdown } from './ReadmeMarkdown';
 import { capabilityLine, packFailureText, type CardEntry } from './util';
+import { PluginSitesSheet } from './PluginSitesSheet';
 
 interface PackageDetailProps {
   entry: CardEntry;
@@ -69,6 +70,10 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
   const capabilities = (entry.ref ? detail?.capabilities ?? [] : detail?.capabilities ?? entry.capabilities) as unknown[];
   const publisher = detail?.publisher ?? entry.publisher;
   const installableType = entry.type === 'plugin' || entry.type === 'form-template' || entry.type === 'content-pack';
+  // A plugin that declares a dashboard card or a side panel gets a "Places" item to switch them.
+  const pluginUi = entry.payload?.ui as { nav?: { label?: string }; sites?: { widget?: unknown; panel?: unknown } } | undefined;
+  const declaresSites = entry.type === 'plugin' && Boolean(pluginUi?.sites?.widget || pluginUi?.sites?.panel);
+  const [sitesOpen, setSitesOpen] = useState(false);
   const isPack = entry.type === 'content-pack';
   const packPayload = detail?.payload ?? entry.payload ?? null;
   // For registry items, detail must be loaded so the acknowledged capabilities are the real,
@@ -177,6 +182,11 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                     </>
                   ) : (
                     <>
+                      {declaresSites ? (
+                        <DropdownMenuItem data-testid="detail-places" onSelect={() => setSitesOpen(true)}>
+                          {t('plugins.sites.menu')}
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem onSelect={() => onToggleEnabled(entry.id, !entry.enabled)}>
                         {entry.enabled ? t('settings.marketplace.disable') : t('settings.marketplace.enable')}
                       </DropdownMenuItem>
@@ -273,7 +283,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 <p className="text-[13px] text-muted-foreground">{t('settings.marketplace.noneCapabilities')}</p>
               ) : (
                 <ul className="list-disc space-y-1 pl-5 text-[13px] text-foreground/85">
-                  {capabilities.map((cap, i) => <li key={`${i}-${capabilityLine(cap)}`}>{capabilityLine(cap)}</li>)}
+                  {capabilities.map((cap, i) => <li key={`${i}-${capabilityLine(cap, t)}`}>{capabilityLine(cap, t)}</li>)}
                 </ul>
               )}
             </section>
@@ -287,6 +297,10 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
           </div>
         </div>
       </div>
+      <PluginSitesSheet
+        plugin={sitesOpen ? { id: entry.id, label: pluginUi?.nav?.label ?? entry.id } : null}
+        onOpenChange={(o) => { if (!o) setSitesOpen(false); }}
+      />
     </div>
   );
 }

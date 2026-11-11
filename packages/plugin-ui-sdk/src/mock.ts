@@ -1,10 +1,11 @@
-import type { OpenLdrPluginApi } from './types';
+import type { OpenLdrPluginApi, PluginSiteName } from './types';
 
 export interface MockOptions {
   pluginId: string;
   capabilities?: string[];
   theme?: 'light' | 'dark';
   locale?: string;
+  site?: PluginSiteName;
   reports?: unknown[];
 }
 
@@ -17,6 +18,7 @@ export function createMockOpenldr(opts: MockOptions): OpenLdrPluginApi {
     capabilities: opts.capabilities ?? [],
     theme: opts.theme ?? 'light',
     locale: opts.locale ?? 'en',
+    site: opts.site ?? 'page',
     ready: Promise.resolve(),
     storage: {
       async get(c, key) { return mem.has(k(c, key)) ? mem.get(k(c, key)) : null; },

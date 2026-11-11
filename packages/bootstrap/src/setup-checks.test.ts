@@ -21,6 +21,7 @@ function deps(over: Partial<SetupCheckDeps> = {}): SetupCheckDeps {
     connectorConfig: async () => ({ host: 'db' }),
     testConnector: async () => {},
     syncStatus: async () => syncOff as never,
+    observedFacilities: async () => ({ total: 0, unmatched: 0 }),
     ...over,
   };
 }
@@ -35,8 +36,8 @@ async function check(id: SetupCheckId, over: Partial<SetupCheckDeps> = {}) {
 describe('setup checks', () => {
   it('reports every check, in a fixed order, and is ok on a ready install', async () => {
     const report = await runSetupChecks(deps());
-    expect(report.checks.map((c) => c.id)).toEqual(['adapters', 'signIn', 'secretsKey', 'labName', 'timeZone', 'connectors', 'sync']);
-    expect(report.checks.map((c) => c.status)).toEqual(['pass', 'pass', 'pass', 'pass', 'pass', 'skip', 'skip']);
+    expect(report.checks.map((c) => c.id)).toEqual(['adapters', 'signIn', 'secretsKey', 'labName', 'timeZone', 'connectors', 'sync', 'facilities']);
+    expect(report.checks.map((c) => c.status)).toEqual(['pass', 'pass', 'pass', 'pass', 'pass', 'skip', 'skip', 'skip']);
     expect(report.ok).toBe(true);
   });
 
@@ -136,13 +137,21 @@ describe('setup checks', () => {
     expect(recovered.check).toEqual({ id: 'sync', status: 'pass' });
   });
 
+  it('warns when facilities seen in the data have no match in the register, with the count and a link', async () => {
+    expect((await check('facilities')).check).toEqual({ id: 'facilities', status: 'skip' });
+    expect((await check('facilities', { observedFacilities: async () => ({ total: 12, unmatched: 0 }) })).check)
+      .toEqual({ id: 'facilities', status: 'pass', detail: '12 of 12' });
+    expect((await check('facilities', { observedFacilities: async () => ({ total: 12, unmatched: 3 }) })).check)
+      .toEqual({ id: 'facilities', status: 'warn', hint: 'facilitiesUnmatched', fix: '/facilities', detail: '3 of 12' });
+  });
+
   it('reports a check that throws as failed and still runs the others', async () => {
     const report = await runSetupChecks(deps({
       health: async () => { throw new Error('boom at 10.1.2.3'); },
       labIdentity: async () => { throw new Error('db gone'); },
     }));
     expect(report.checks.map((c) => `${c.id}:${c.status}`)).toEqual([
-      'adapters:fail', 'signIn:pass', 'secretsKey:pass', 'labName:fail', 'timeZone:fail', 'connectors:skip', 'sync:skip',
+      'adapters:fail', 'signIn:pass', 'secretsKey:pass', 'labName:fail', 'timeZone:fail', 'connectors:skip', 'sync:skip', 'facilities:skip',
     ]);
     expect(report.checks[0]).toEqual({ id: 'adapters', status: 'fail', hint: 'checkError' });
     expect(JSON.stringify(report)).not.toContain('10.1.2.3');

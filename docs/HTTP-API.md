@@ -11,8 +11,12 @@ Source of truth: `apps/server/src/*.ts` (route registration in `apps/server/src/
 | `GET` | `/health` | Run all registered health checks. Returns `503` when health status is down. |
 | `GET` | `/api/config` | Browser-facing feature/auth/OIDC configuration. |
 | `GET` | `/api/me` | Current authenticated user. Returns `401` when no user is available. |
-| `GET` | `/api/me/preferences` | The signed-in user's own studio preferences: `theme`, `sidebarCollapsed`, `startPage`, `language`. No capability needed. |
+| `GET` | `/api/me/preferences` | The signed-in user's own studio preferences: `theme`, `sidebarCollapsed`, `startPage`, `language`, `layout` (a layout id, or `full` for the full sidebar). No capability needed. |
 | `PUT` | `/api/me/preferences` | Merge a patch into the signed-in user's preferences. A `null` value clears a key. Returns the merged result. |
+| `GET` | `/api/layouts` | Layout presets: `{ layouts, roleOrder }`. Each layout has `id`, `name`, `startPage`, `pages` and `roles` (slugs that default to it). `roleOrder` lists the roles that have a default, in Roles page order. `myRoles` is the caller's own role slugs from `user_roles`, not from the sign-in token. Any signed-in user. |
+| `POST` | `/api/layouts` | Create a layout: `{ name, startPage, pages, roles }`. `startPage` is null or one of `pages`. Needs `settings.edit_general`. 400 bad input or unknown role, 409 duplicate name. Audited as `layout.create`. |
+| `PUT` | `/api/layouts/:id` | Replace a layout. A role named in `roles` moves here from any other layout. 404 unknown id. Audited as `layout.update`. |
+| `DELETE` | `/api/layouts/:id` | Delete a layout and its role defaults. 404 unknown id. Audited as `layout.delete`. |
 | `POST` | `/api/settings/setup-checks` | Run the setup checks (services, sign-in, secrets key, laboratory name, time zone, connectors, sync). Returns each check's status, a hint code and the studio page that fixes it. Same list as `openldr doctor`. |
 
 ## Reports
@@ -161,6 +165,8 @@ Saved, encrypted connections to external systems (databases, email, SFTP, plugin
 | `GET` | `/api/marketplace/publish/status` | Show publish configuration/status. |
 | `POST` | `/api/marketplace/publish` | Publish a staged bundle. |
 | `POST` | `/api/marketplace/:id/enable` | Enable an installed artifact. |
+| `GET` | `/api/marketplace/:id/sites` | A plugin's dashboard card and side panel: `{ declared, off }`. Needs `marketplace.manage`. 404 for an unknown plugin. |
+| `PUT` | `/api/marketplace/:id/sites` | Switch one site on or off, lab-wide. Body `{ site: 'widget' \| 'panel', on: boolean }`. 400 `site not declared` when the manifest has no such site. Audited as `plugin.sites.update`. Returns the `GET` shape. |
 | `POST` | `/api/marketplace/:id/disable` | Disable an installed artifact. |
 | `POST` | `/api/marketplace/:id/rollback` | Roll back an installed artifact. |
 | `POST` | `/api/marketplace/:id/detach` | Detach an installed form/template from runtime use. |
@@ -174,7 +180,7 @@ Saved, encrypted connections to external systems (databases, email, SFTP, plugin
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/plugins/ui` | List UI surfaces contributed by installed plugins (webviews, settings panels). |
+| `GET` | `/api/plugins/ui` | List UI surfaces contributed by installed plugins (webviews, settings panels). One entry per plugin, the active version. Each entry has `sites` (`widget`, `panel`), minus any an admin switched off. |
 
 ## Terminology
 

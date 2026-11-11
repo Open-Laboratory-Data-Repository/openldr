@@ -781,6 +781,22 @@ export interface UserPreferencesTable {
   updated_at: Generated<Date>;
 }
 
+/** Named studio layouts (migration 114). `pages` is a JSON array of studio paths. */
+export interface LayoutPresetsTable {
+  id: string;
+  name: string;
+  start_page: string | null;
+  pages: unknown;
+  updated_at: Generated<Date>;
+  updated_by: string | null;
+}
+
+/** The default layout of a role (migration 114). At most one per role. */
+export interface RoleLayoutDefaultsTable {
+  role_id: string;
+  layout_id: string;
+}
+
 export interface CustomQueryGroupsTable {
   id: string;
   name: string;
@@ -1014,6 +1030,8 @@ export interface InternalSchema {
   custom_queries: CustomQueriesTable;
   custom_query_groups: CustomQueryGroupsTable;
   user_preferences: UserPreferencesTable;
+  layout_presets: LayoutPresetsTable;
+  role_layout_defaults: RoleLayoutDefaultsTable;
   connectors: ConnectorsTable;
   registries: RegistriesTable;
   plugin_data: PluginDataTable;

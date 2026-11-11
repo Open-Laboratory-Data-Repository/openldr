@@ -26,7 +26,7 @@ describe('DocsPage', () => {
       // Short pages about studio screens. The in-app guides hold the same text in en, fr and pt.
       'Workflow canvas navigation', 'Workflow webhooks', 'Query names', 'Export and import queries', 'Query groups',
       'Dashboard refresh', 'Dashboard query limits', 'Query result paging', 'Connector query deadlines',
-      'Report schedules', 'Marketplace permission checks',
+      'Report schedules', 'Marketplace permission checks', 'Layouts', 'Plugin cards and side panels',
     ]) {
       expect(within(nav).queryByRole('link', { name })).toBeNull();
     }

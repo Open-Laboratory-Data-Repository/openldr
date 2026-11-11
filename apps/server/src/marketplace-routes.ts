@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { CE_VERSION } from '@openldr/bootstrap';
+import { CE_VERSION, readPluginSites, updatePluginSite, PluginSitesError } from '@openldr/bootstrap';
 import {
   verifyBundle, readGrant, isCompatible, readBundle,
   LocalRegistrySource, HttpRegistrySource, type RegistrySource, type Capability,
@@ -358,6 +358,39 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
   app.post('/api/marketplace/:id/disable', MANAGE, async (req) => {
     await ctx.plugins.setEnabled((req.params as { id: string }).id, false, { actor: actor(req) });
     return { ok: true };
+  });
+
+  // Dashboard card and side panel: which a plugin declares, and which an admin switched off.
+  // Lab-wide. Switching a site off only hides that place; the plugin's page keeps working.
+  const sitesDeps = { plugins: ctx.plugins, appSettings: ctx.appSettings };
+  function sitesError(err: unknown, reply: { code(n: number): unknown }): { error: string } {
+    if (err instanceof PluginSitesError) {
+      reply.code(err.code === 'not-found' ? 404 : 400);
+      return { error: err.code === 'not-found' ? 'plugin not found' : 'site not declared' };
+    }
+    throw err;
+  }
+
+  app.get('/api/marketplace/:id/sites', MANAGE, async (req, reply) => {
+    try {
+      return await readPluginSites(sitesDeps, (req.params as { id: string }).id);
+    } catch (err) {
+      return sitesError(err, reply);
+    }
+  });
+
+  const sitePut = z.object({ site: z.enum(['widget', 'panel']), on: z.boolean() }).strict();
+  app.put('/api/marketplace/:id/sites', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const p = sitePut.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: 'invalid site change' }; }
+    try {
+      const state = await updatePluginSite(sitesDeps, id, p.data.site, p.data.on, req.user?.username ?? null);
+      await recordAudit(ctx, req, { action: 'plugin.sites.update', entityType: 'plugin', entityId: id, metadata: { site: p.data.site, on: p.data.on } });
+      return state;
+    } catch (err) {
+      return sitesError(err, reply);
+    }
   });
 
   app.post('/api/marketplace/:id/rollback', MANAGE, async (req, reply) => {

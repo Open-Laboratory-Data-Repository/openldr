@@ -6,10 +6,100 @@
       "version": null,
       "entries": [
         {
+          "hash": "fdc02bb6",
+          "type": "fix",
+          "scope": "layouts",
+          "title": "The dev sign-in keeps its role default; plan as built"
+        },
+        {
+          "hash": "ac028c3d",
+          "type": "fix",
+          "scope": "layouts",
+          "title": "Role defaults follow user_roles, Dashboard pick sticks, start page must be a layout page"
+        },
+        {
+          "hash": "0fd9c946",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Layout presets: admin page, role defaults, and the user's pick"
+        },
+        {
+          "hash": "4c21827f",
+          "type": "feat",
+          "scope": "server,cli",
+          "title": "Layout presets"
+        },
+        {
+          "hash": "68df5f4c",
+          "type": "feat",
+          "scope": "db",
+          "title": "Layout presets and role defaults"
+        },
+        {
           "hash": "b00a5608",
           "type": "feat",
           "scope": "web-docs",
           "title": "One language at a time, picked in the docs sidebar"
+        },
+        {
+          "hash": "de67381a",
+          "type": "feat",
+          "scope": "setup",
+          "title": "Setup check for facilities in the data that match nothing in the register"
+        },
+        {
+          "hash": "32d7beef",
+          "type": "fix",
+          "scope": "studio",
+          "title": "SQL Server SERVER\\INSTANCE in Host fills Instance name in the form"
+        },
+        {
+          "hash": "c9593cab",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Connectors table fits a phone; the host column hides below sm"
+        },
+        {
+          "hash": "be7ef1bb",
+          "type": "fix",
+          "scope": "import",
+          "title": "Allowing a connector the plugin cannot read is refused up front, from the CLI too"
+        },
+        {
+          "hash": "db91703a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Marketplace permissions and install consent name each capability in plain words"
+        },
+        {
+          "hash": "7740b118",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Logs go to stderr, so --json output on stdout parses at log level info"
+        },
+        {
+          "hash": "b6ddbf22",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Side panel no longer covers the page, the phone menu, or closes on a stray Escape"
+        },
+        {
+          "hash": "20a29954",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Plugin card on the dashboard and a side panel"
+        },
+        {
+          "hash": "de822da8",
+          "type": "feat",
+          "scope": "server,cli",
+          "title": "List plugin sites and switch them off"
+        },
+        {
+          "hash": "5d5355a8",
+          "type": "feat",
+          "scope": "plugins",
+          "title": "Ui.sites in the manifest and the sites-off list"
         },
         {
           "hash": "894db949",

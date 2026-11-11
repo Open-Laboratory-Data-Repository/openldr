@@ -1,4 +1,4 @@
-import { pino, type Logger } from 'pino';
+import { pino, destination, type Logger } from 'pino';
 
 export type { Logger };
 
@@ -26,8 +26,21 @@ export function redactUrl(url: string): string {
   return out.startsWith('/api/patients') ? out.replace(/(?<=[?&]search=)[^&]*/g, '[redacted]') : out;
 }
 
+// Where every logger made after this point writes: 1 is stdout, 2 is stderr. The server keeps
+// stdout. The CLI prints its results on stdout (`--json` output is meant to be piped), so it moves
+// logs to stderr before it builds a context; otherwise an info line lands in front of the JSON.
+let logFd: 1 | 2 = 1;
+
+export function sendLogsToStderr(): void {
+  logFd = 2;
+}
+
+export function logDestinationFd(): 1 | 2 {
+  return logFd;
+}
+
 export function createLogger(opts?: { level?: string; name?: string }): Logger {
-  return pino({
+  const options = {
     name: opts?.name ?? 'openldr',
     level: opts?.level ?? process.env.LOG_LEVEL ?? 'info',
     redact: { paths: redactPaths, censor: '[redacted]' },
@@ -48,5 +61,6 @@ export function createLogger(opts?: { level?: string; name?: string }): Logger {
         };
       },
     },
-  });
+  };
+  return logFd === 2 ? pino(options, destination({ fd: 2, sync: true })) : pino(options);
 }

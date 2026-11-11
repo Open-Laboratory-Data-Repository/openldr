@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { NavLink, useNavigate, useMatch, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, type LucideIcon,
+  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, PanelRight, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
@@ -19,8 +19,10 @@ import {
   DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/cn';
-import { listPluginUis, type PluginUiEntry } from '@/api';
+import { listPluginUis, type LayoutPreset, type PluginUiEntry } from '@/api';
+import { layoutInForce, useLayouts } from './layouts';
 import { pluginIcon } from '@/plugins/icons';
+import { closePluginPanel, openPluginPanel, syncPluginPanel, usePluginPanel } from '@/plugins/pluginPanel';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
 
@@ -43,6 +45,15 @@ export const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon
   { to: '/activity', labelKey: 'nav.activity', end: false, icon: Activity, caps: ['activity.view'] },
   { to: '/docs', labelKey: 'nav.docs', end: false, icon: BookOpen },
 ];
+
+/** The sidebar pages this user sees: those their capabilities allow, then, under a layout, only
+ *  the ones it lists. Docs always shows. A layout only hides; it never adds a page. The first-page
+ *  choice and StartPageGate use this same list. */
+export function visibleNav(hasCapability: (c: string) => boolean, layout: LayoutPreset | null): typeof NAV {
+  return NAV
+    .filter((n) => !n.caps || n.caps.some((c) => hasCapability(c)))
+    .filter((n) => !layout || n.to === '/docs' || layout.pages.includes(n.to));
+}
 
 // One sidebar entry. Active state is computed with useMatch and passed to NavLink as a
 // STRING className. When collapsed the item is wrapped in a Tooltip via `asChild`, and
@@ -90,9 +101,13 @@ export function AppShell({
   const [theme, toggleTheme] = useTheme();
   const [collapsed, toggleSidebar] = useSidebar();
   const { prefs } = useUserPreferences();
-  const startPage = prefs.startPage ?? '/';
+  const { list: layoutList } = useLayouts();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, signOut, hasCapability, authEnforced } = useAuth();
+  const layout = layoutInForce(prefs, layoutList);
+  const roleDefault = layoutInForce({}, layoutList);
+  const nav = visibleNav(hasCapability, layout);
+  const startPage = prefs.startPage ?? layout?.startPage ?? '/';
   const [pluginUis, setPluginUis] = useState<PluginUiEntry[]>([]);
   const location = useLocation();
   // Close the mobile drawer whenever the route changes (covers nav links, the user-menu
@@ -101,12 +116,22 @@ export function AppShell({
   useEffect(() => {
     let cancelled = false;
     void listPluginUis()
-      .then((list) => { if (!cancelled) setPluginUis(Array.isArray(list) ? list : []); })
+      .then((list) => {
+        if (cancelled) return;
+        const entries = Array.isArray(list) ? list : [];
+        setPluginUis(entries);
+        // Close an open side panel whose plugin no longer offers one (disabled, removed, switched off).
+        syncPluginPanel(entries);
+      })
       .catch(() => { if (!cancelled) setPluginUis([]); });
     return () => { cancelled = true; };
   }, []);
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const panelPlugins = pluginUis.filter((p) => p.sites?.panel);
+  // An open plugin side panel is fixed to the right edge. Pad the page by its width on desktop so it
+  // never covers page content or the ⋯ menus that sit at the right.
+  const panelOpen = usePluginPanel() !== null;
 
   const userTrigger = (
     <DropdownMenuTrigger asChild>
@@ -188,7 +213,7 @@ export function AppShell({
         </div>
 
         <nav aria-label={t('a11y.primaryNav', { defaultValue: 'Primary' })} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {NAV.filter((n) => !n.caps || n.caps.some((c) => hasCapability(c))).map(({ to, labelKey, end, icon: Icon }) => (
+          {nav.map(({ to, labelKey, end, icon: Icon }) => (
             <SidebarNavItem key={to} to={to} end={end} icon={Icon} label={t(labelKey)} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
           ))}
           {pluginUis.map((p) => (
@@ -230,13 +255,15 @@ export function AppShell({
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger data-testid="start-page-menu">{t('layout.startPage')}</DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="max-h-[70dvh] overflow-y-auto">
-                  {NAV.filter((n) => !n.caps || n.caps.some((c) => hasCapability(c))).map((n) => (
+                  {nav.map((n) => (
                     <DropdownMenuItem
                       key={n.to}
                       data-testid={`start-page-${n.to}`}
                       disabled={startPage === n.to}
                       onClick={() => {
-                        void setUserPreference({ startPage: n.to === '/' ? null : n.to }).then((ok) => {
+                        // Dashboard clears the saved page, unless a layout start page would then
+                        // take over: then '/' is saved, so the Dashboard really opens first.
+                        void setUserPreference({ startPage: n.to === '/' && !layout?.startPage ? null : n.to }).then((ok) => {
                           if (ok) toast.success(t('layout.startPageSaved', { page: t(n.labelKey) }));
                           else toast.error(t('layout.startPageNotSaved'));
                         });
@@ -247,6 +274,38 @@ export function AppShell({
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+              {/* The sidebar layout: the role default, a named layout, or the full sidebar. */}
+              {layoutList.layouts.length > 0 && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger data-testid="layout-menu">{t('layout.layout')}</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-[70dvh] overflow-y-auto">
+                    <DropdownMenuItem
+                      data-testid="layout-pick-default"
+                      disabled={prefs.layout === undefined}
+                      onClick={() => void setUserPreference({ layout: null })}
+                    >
+                      {t('layout.layoutRoleDefault', { name: roleDefault?.name ?? t('layout.layoutFull') })}
+                    </DropdownMenuItem>
+                    {layoutList.layouts.map((l) => (
+                      <DropdownMenuItem
+                        key={l.id}
+                        data-testid={`layout-pick-${l.id}`}
+                        disabled={prefs.layout === l.id}
+                        onClick={() => void setUserPreference({ layout: l.id })}
+                      >
+                        {l.name}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuItem
+                      data-testid="layout-pick-full"
+                      disabled={prefs.layout === 'full'}
+                      onClick={() => void setUserPreference({ layout: 'full' })}
+                    >
+                      {t('layout.layoutFull')}
+                    </DropdownMenuItem>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
               <DropdownMenuSeparator />
               {/* TODO(phase3): generalize to "user can see >=1 Settings sub-nav section" once
                   General/Marketplace (broader-role) sections land; for SP-0 DHIS2 is admin-only. */}
@@ -272,7 +331,8 @@ export function AppShell({
               variant="ghost"
               size="icon"
               className="-ml-1 md:hidden"
-              onClick={() => setMobileOpen(true)}
+              // On a phone an open plugin panel fills the screen and would cover the drawer.
+              onClick={() => { closePluginPanel(); setMobileOpen(true); }}
               aria-label={t('a11y.openMenu')}
             >
               <Menu className="h-5 w-5" />
@@ -294,6 +354,30 @@ export function AppShell({
                 <TooltipContent side="bottom" className="max-w-xs">{t('a11y.devBypassTooltip')}</TooltipContent>
               </Tooltip>
             )}
+            {/* Plugin side panels. The panel itself lives above the routes (PluginPanelHost). */}
+            {panelPlugins.length > 0 && (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label={t('plugins.sites.openPanel')} data-testid="plugin-panel-menu">
+                        <PanelRight className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{t('plugins.sites.openPanel')}</TooltipContent>
+                </Tooltip>
+                {/* No focus return to the button on close: focus belongs in the panel that just
+                    opened, and a refocused button reopens its tooltip over the header. */}
+                <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+                  {panelPlugins.map((p) => (
+                    <DropdownMenuItem key={p.id} onClick={() => openPluginPanel(p.id, p.sites!.panel!.title)}>
+                      {p.sites!.panel!.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {hasCapability('notifications.view') && <NotificationBell />}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -310,7 +394,7 @@ export function AppShell({
             </Tooltip>
           </div>
         </header>
-        <main className={fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto p-6'}>{children}</main>
+        <main className={cn(fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto p-6', panelOpen && 'md:pr-96')}>{children}</main>
       </div>
     </div>
     </TooltipProvider>

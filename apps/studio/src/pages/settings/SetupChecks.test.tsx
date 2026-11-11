@@ -36,6 +36,14 @@ describe('SetupChecks', () => {
     expect(screen.getByTestId('setup-summary').textContent).toMatch(/1 failed, 1 warning/);
   });
 
+  it('names the Facilities page on the facilities check link, not Settings', async () => {
+    (api.runSetupChecks as any).mockResolvedValue({ ok: true, checks: [{ id: 'facilities', status: 'warn', hint: 'facilitiesUnmatched', fix: '/facilities', detail: '2 of 2' }] });
+    page();
+    const link = await screen.findByTestId('setup-fix-facilities');
+    expect(link.getAttribute('href')).toBe('/facilities');
+    expect(link.textContent).toBe('Open Facilities');
+  });
+
   it('shows the advice and a link to the page that fixes it', async () => {
     (api.runSetupChecks as any).mockResolvedValue(report);
     page();

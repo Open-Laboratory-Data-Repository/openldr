@@ -13,13 +13,20 @@ export interface UserPreferences {
   startPage?: string;
   /** The studio interface language. One of the languages studio ships. */
   language?: 'en' | 'fr' | 'pt';
+  /** The layout this user picked (layout_presets.id), or `full` for the full sidebar. Absent means
+   *  their role's default layout. */
+  layout?: string;
 }
 
 // A path inside studio only: one leading slash, never `//host` or a scheme.
 const startPage = z.string().max(200).regex(/^\/(?!\/)[A-Za-z0-9/_.:-]*$/);
+/** The same rule, for other code that stores studio paths (layout presets). */
+export const studioPathSchema = startPage;
 const theme = z.enum(['light', 'dark']);
 // The languages studio ships (apps/studio/src/i18n/language.ts). A new one is added in both places.
 const language = z.enum(['en', 'fr', 'pt']);
+// A layout id or `full`. Not checked against the table: studio falls back when the id is gone.
+const layout = z.string().min(1).max(100).regex(/^[A-Za-z0-9_-]+$/);
 
 /** A change to apply. A missing key is left alone; null clears it. */
 export const userPreferencesPatchSchema = z.object({
@@ -27,6 +34,7 @@ export const userPreferencesPatchSchema = z.object({
   sidebarCollapsed: z.boolean().nullable().optional(),
   startPage: startPage.nullable().optional(),
   language: language.nullable().optional(),
+  layout: layout.nullable().optional(),
 }).strict();
 export type UserPreferencesPatch = z.infer<typeof userPreferencesPatchSchema>;
 
@@ -47,6 +55,8 @@ export function parseStoredPreferences(raw: unknown): UserPreferences {
   if (s.success) out.startPage = s.data;
   const l = language.safeParse(row.language);
   if (l.success) out.language = l.data;
+  const lay = layout.safeParse(row.layout);
+  if (lay.success) out.layout = lay.data;
   return out;
 }
 

@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
-import type { AppContext } from '@openldr/bootstrap';
+import { declaredSites, getSitesOff, visibleSites, type AppContext } from '@openldr/bootstrap';
 
 interface UiPluginRow {
   id: string;
   version: string;
   enabled: boolean;
+  active?: boolean;
   manifest: {
     payload?: {
       kind?: string;
@@ -31,7 +32,11 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
     if (!ctx.cfg.PLUGIN_UI_ENABLED) return [];
     const userRoles = req.user.roles;
     const rows = (await ctx.plugins.list()) as unknown as UiPluginRow[];
+    const off = await getSitesOff(ctx.appSettings);
     return rows
+      // The store lists every installed version. Only the active one is the plugin's UI, or a
+      // plugin with two versions shows twice (two nav entries, two dashboard cards).
+      .filter((r) => r.active !== false)
       .filter((r) => r.enabled && r.manifest.payload?.kind === 'plugin' && r.manifest.payload.ui)
       // Authorization boundary: hide a plugin's nav entry from callers lacking its required roles
       // (so e.g. a lab_technician never sees the lab_admin-gated DHIS2 entry).
@@ -46,6 +51,8 @@ export function registerPluginUiRoutes(app: FastifyInstance<any, any, any, any>,
           hasWebview: ui.entry !== undefined,
           hasDeclarative: ui.declarative !== undefined,
           declarative: ui.declarative ?? null,
+          // Dashboard card and side panel, minus any an admin switched off.
+          sites: visibleSites(declaredSites(r.manifest as Record<string, unknown>), off, r.id),
         };
       });
   });

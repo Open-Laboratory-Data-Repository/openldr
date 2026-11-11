@@ -8,6 +8,9 @@ vi.mock('./market', async () => {
   return { ...actual, runMarketInstall: installSpy, runMarketUpdate: updateSpy };
 });
 
+const sitesSpy = vi.hoisted(() => vi.fn(async () => 0));
+vi.mock('./market-sites', () => ({ runMarketSites: sitesSpy }));
+
 import { buildProgram } from './program';
 
 describe('market install and update flags', () => {
@@ -32,5 +35,19 @@ describe('market install and update flags', () => {
     await buildProgram().parseAsync(['node', 'openldr', 'market', 'install', '/some/dir', '--force']);
     expect(installSpy).toHaveBeenCalledWith('/some/dir', expect.objectContaining({ force: true }));
     expect(updateSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('market sites', () => {
+  beforeEach(() => { sitesSpy.mockClear(); process.exitCode = undefined; });
+
+  it('with only an id, shows the sites', async () => {
+    await buildProgram().parseAsync(['node', 'openldr', 'market', 'sites', 'demo', '--json']);
+    expect(sitesSpy).toHaveBeenCalledWith('demo', undefined, undefined, expect.objectContaining({ json: true }));
+  });
+
+  it('with a site and a state, passes both through', async () => {
+    await buildProgram().parseAsync(['node', 'openldr', 'market', 'sites', 'demo', 'panel', 'off']);
+    expect(sitesSpy).toHaveBeenCalledWith('demo', 'panel', 'off', expect.objectContaining({ json: false }));
   });
 });

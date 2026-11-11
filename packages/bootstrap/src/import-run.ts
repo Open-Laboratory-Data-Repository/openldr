@@ -387,8 +387,14 @@ export function createImportService(deps: ImportServiceDeps): ImportService {
     },
 
     async allow(pluginId, connectorId, actor) {
-      await resolvePlugin(pluginId);
-      if (!(await deps.connectors.get(connectorId))) throw new Error(`connector ${connectorId} not found`);
+      const plugin = await resolvePlugin(pluginId);
+      const c = await deps.connectors.get(connectorId);
+      if (!c) throw new Error(`connector ${connectorId} not found`);
+      // Refuse a connector the plugin cannot read now, not at its first run. A disabled connector of
+      // the right type may still be allowed, ready for when it is enabled.
+      if (!c.type || !(plugin.source.connectorTypes as string[]).includes(c.type)) {
+        throw new Error(`plugin ${plugin.id} imports from ${plugin.source.connectorTypes.join(', ')} connectors only`);
+      }
       await auditOrRefuse({ action: 'import.allow', pluginId, connectorId, actor });
       await deps.pluginData.put(pluginId, ALLOWED, connectorId, { connectorId, allowedBy: actor.name, allowedAt: now().toISOString() });
     },
