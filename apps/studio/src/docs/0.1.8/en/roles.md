@@ -1,96 +1,94 @@
 # Roles
 
-Administrators use **Settings → Roles** to control exactly what each account can see and do, capability by capability.
+A **role** is a named set of **capabilities**. A capability is one narrow permission, such as **Run reports** or **Edit workflows**. Each person gets one role, and the server checks the role's capabilities before every page and every action.
 
-> **Authentication vs. authorization:** Keycloak still handles sign-in — it verifies who a user is. OpenLDR owns *what a signed-in user can do*: every role, every capability, and every user-to-role assignment lives in the OpenLDR database, not in Keycloak. This means access control keeps working the same way regardless of which identity provider is connected.
+Sign-in is handled by the identity provider, usually Keycloak. Roles are not. Every role, capability and assignment lives in the OpenLDR database, so access control works the same whatever identity provider is connected.
 
-## Outcome
+This guide takes about 10 minutes. Select any picture or clip to enlarge it.
 
-You can see the built-in system roles, inspect the capabilities each one grants, create a custom role from the capability grid, and understand how roles reach a user's account.
+![Settings, Roles: the five built-in roles.](roles-tour.png)
 
-## Before you begin
+## Who can do what
 
-- You need the **Manage roles** capability (granted to Administrator by default).
-- Know which capabilities the person's job actually requires — grant the smallest set that lets them work.
+You need **Manage roles** to create, change or delete roles. **View roles** lets you open them and read their capabilities. Administrator has both.
 
-## What a capability is
+## The built-in roles
 
-A **capability** is a single, narrow permission such as *Run reports*, *Edit workflows*, or *Manage users*. Capabilities are grouped by area (Dashboards, Reports, Forms, Workflows, Query, Users, Roles, Terminology, Marketplace, Connectors, Sync, Settings, Observability, Audit) and are the only thing the server checks before it lets a request through — every page and every action is gated behind one or more capabilities.
+| Role | What it is for |
+| --- | --- |
+| Administrator | Every capability. **Locked**: it cannot be changed or deleted, so someone can always recover access. |
+| Lab Manager | Dashboards, reports, forms, workflows, terminology and the query workbench. No users or settings. |
+| Data Analyst | View dashboards, run and export reports, use the query workbench. Nothing to change. |
+| System Auditor | Read-only across the main areas, plus the audit log. |
+| Lab Technician | Bench data entry: open and submit forms only. |
 
-A **role** is a named, reusable bundle of capabilities. Studio's user editor assigns one role per user. Choose a role containing the capabilities needed for that person's work.
+Built-in roles other than Administrator can have their capabilities changed. A role cannot be deleted while people still have it.
 
-## Built-in system roles
+Capabilities are grouped by area: Dashboards, Reports, Forms, Workflows, Query, Users, Facilities, Patients, Roles, Terminology, Marketplace, Connectors, Sync, Settings, Observability and Audit.
 
-OpenLDR ships five system roles, each a starting point you can assign as-is or copy the idea from when building a custom role:
+## Example 1: make a read-only role
 
-- **Administrator** — every capability in the catalog. This role is **locked**: its capability set cannot be edited or removed, so there is always at least one account that can recover access.
-- **Lab Manager** — manage dashboards, reports, forms, and workflows, plus terminology and the query workbench. No user administration or settings access.
-- **Data Analyst** — view dashboards, run and export reports, use the query workbench. Read-oriented, no editing capabilities.
-- **System Auditor** — read-only oversight across the main workspaces, plus the audit log.
-- **Lab Technician** — data entry only: open and submit forms, nothing else.
+Make a role for someone who only reads dashboards and runs reports.
 
-System roles other than Administrator can be edited (their capability set adjusted) but not deleted while users remain assigned, and Administrator can never be edited or deleted — it is permanently locked.
+![Creating Dashboard viewer with three capabilities.](roles-create.mp4)
 
-## Steps: create a custom role
+1. Open **Settings**, then **Roles**.
+2. Open the dots menu at the top right and select **Create role**.
+3. In **Name**, type `Dashboard viewer`. **Slug** fills itself. You can change it before saving, and it is fixed after.
+4. In **Description**, type what the role is for, such as `Reads dashboards and runs reports. Changes nothing.`
+5. Under **Capabilities**, turn on **View dashboards**, **View reports** and **Run reports**. The counter above the list shows how many are on.
+6. Open the sheet's dots menu and select **Create**.
 
-1. Open **Settings → Roles**.
-2. Select **Create Role**.
-3. Enter a **Name**; a URL-safe **Slug** is derived automatically (you can adjust it before saving — it becomes fixed once the role is created).
-4. Add an optional **Description** so other administrators know when to use this role.
-5. In the capability grid, tick each capability the role should grant. Capabilities are grouped by area to make related permissions easy to find.
-6. Select **Create** to save the role.
+**Expected result:** a **Saved Dashboard viewer** message, and the role in the list with **0 members**.
 
-To change an existing non-locked role, open its row (or its **⋯ → Edit** action), adjust capabilities, and save. Roles that still have members can be edited but not deleted; remove all members first if you need to delete a role.
+To give the role to someone, see [Users and Roles, Example 1](/docs/users#example-1-give-someone-a-role).
 
-## Assign roles to users
-
-Role assignment happens on the user's own record, not on the role:
-
-1. Open **Users**.
-2. Open the **Actions** menu for the account and choose **Edit**.
-3. Wait for the role list to load, then open **Role** and select one role. This is a single-choice selector. Selecting another role replaces the selection; it does not add a second role.
-4. Save and check for the success notification. Reopen the user's record to verify the saved Role selection.
-
-Editing the user requires **Manage users**. Saving the role assignment also requires **Manage roles**. If role assignment fails, the editor stays open and shows an error. Resolve it before treating the update as complete.
-
-If no available role has the required capabilities, create or adjust a role in **Settings → Roles**, then return to Users to assign it. Changing a shared role's capabilities affects everyone assigned that role.
-
-## Expected result
-
-The Roles list shows each role's name, description, and member count. Reopening a user in Studio shows the selected role. That role defines the capabilities assigned through this editor.
-
-## Troubleshooting
-
-- **Can't edit a role's capabilities:** the role is locked (Administrator) or you lack the **Manage roles** capability — you can still open it to inspect its capabilities.
-- **Can't delete a role:** it is a locked system role, or it still has members; reassign or remove those members first.
-- **A user still has old access after a role change:** ask them to sign out and back in, or wait for their session to refresh.
-- **A newly created user seems to have no access:** confirm at least one role was assigned — an account with zero roles has zero capabilities.
-
-## Advanced web usage
-
-Create roles for distinct jobs and assign the appropriate one to each user. The audit log records role changes and user assignments. The `openldr roles` CLI commands support scripted or headless administration.
+To change a role later, open its row menu and select **Edit**. **Delete** removes a role with no members. Changing a shared role changes it for everyone who has it.
 
 ## How capabilities reach an existing install
 
-New OpenLDR versions add capabilities. Roles live in the database, so a role created by an earlier
-version does not automatically know about a capability introduced later. OpenLDR reconciles this on
-every start:
+New versions add capabilities. Roles live in the database, so a role made by an older version does not know a newer capability on its own. OpenLDR sorts this out at every start:
 
-- **Administrator** is always brought up to the full capability list. The role is locked and is
-  defined as "every capability", so there is no customisation to preserve — if a release adds a
-  capability, the Administrator role has it after the next restart.
-- **The other built-in roles** receive a capability **only the first time that capability exists**.
-  After that, OpenLDR never re-grants it. If you remove a capability from Lab Manager, it stays
-  removed across restarts and upgrades.
-- **Custom roles you create are never modified.** If a new capability is relevant to one of your own
-  roles, grant it yourself in Settings → Roles.
+- **Administrator** always gets the full list after the next restart. It is locked and means "every capability", so there is nothing to preserve.
+- **The other built-in roles** get a new capability only the first time it exists. After that, OpenLDR never grants it again. If you remove a capability from Lab Manager, it stays removed across restarts and upgrades.
+- **Roles you made are never changed.** Grant a new capability to them yourself.
 
-A capability granted this way is recorded in the audit log as `role.capability.backfill`, so an
-upgrade that widens a role leaves a trace.
+A capability granted this way is recorded in the audit log as `role.capability.backfill`.
 
-To see how your install compares with the built-in definitions, run `openldr roles doctor`. It
-reports, per built-in role, which capabilities are held, which you have deliberately removed, and
-which are still pending — plus any capability keys left behind by a retired feature.
+To compare your install with the built-in definitions:
+
+```bash
+./openldr roles doctor
+```
+
+It lists, per built-in role, the capabilities held, those you removed on purpose, and those still pending, plus capability keys left by a retired feature.
+
+## From the command line
+
+```bash
+./openldr roles list
+./openldr roles show <slug>
+./openldr roles create <name>
+./openldr roles grant <slug> <capability>
+./openldr roles revoke <slug> <capability>
+./openldr roles delete <slug>
+./openldr user assign-role <subject> <slug>
+```
+
+`roles create` also takes `--slug`, `--desc`, and `--caps` with capabilities separated by commas. For example, the role from Example 1:
+
+```bash
+./openldr roles create "Dashboard viewer" --slug dashboard_viewer \
+  --desc "Reads dashboards and runs reports. Changes nothing." \
+  --caps dashboards.view,reports.view,reports.run
+```
+
+## Troubleshooting
+
+- **A role's capabilities cannot be changed.** It is Administrator, which is locked, or you lack **Manage roles**. You can still open it to read its capabilities.
+- **A role cannot be deleted.** It is a locked built-in role, or people still have it. Give them another role first.
+- **Someone still has old access after a role change.** Ask them to sign out and in again, or wait for their session to refresh.
+- **A new account can do nothing.** It has no role yet. An account with no role has no capabilities.
 
 ## Related guides
 

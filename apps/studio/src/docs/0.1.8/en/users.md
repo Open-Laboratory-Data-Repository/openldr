@@ -1,76 +1,116 @@
 # Users and Roles
 
-Administrators use **Users and Roles** to control account access, feature visibility, and role-based permissions.
+**Users** lists who can sign in, their status, and their role. Administrators use it to add people, give each one a role, and turn access on and off.
 
-## Outcome
+Sign-in itself is handled by the identity provider, usually Keycloak. OpenLDR decides what a signed-in person can do, through their role. Roles are covered in [Roles](/docs/roles).
 
-You can search the user list, create a user, edit profile fields, assign roles, enable or disable access, use reset actions, and understand why a user can or cannot see a feature.
+This guide takes about 15 minutes. Select any picture to enlarge it.
 
-![Users list with search and account state](users-list.png)
+![Users: the accounts from the identity provider, with search, status and columns.](users-tour.png)
 
-## Before you begin
+## Who can do what
 
-- You need the Lab Admin role.
-- Know which role provides the capabilities the user needs for their work.
-- Confirm whether identity details are managed locally or by an external identity provider.
+| Permission | What it lets you do |
+| --- | --- |
+| View users | Open **Users** and see accounts. |
+| Manage users | Create, edit, enable and disable accounts. |
+| Reset passwords | Reset a password or send a reset email. |
+| Force logout | End all of a person's active sessions. |
+| Manage roles | Needed as well to save a role on a user. |
 
-## Steps
+Administrator has all of these.
 
-1. Open **Users**.
-2. Search by username, display name, or email.
-3. Select the create action to add a new user when needed.
-4. Enter profile fields such as username, display name, and email.
-5. On the row for the account you want to change, open its **Actions** menu (the **⋯** button, labelled *Actions for &lt;username&gt;*) and choose **Edit**.
-6. Wait for **Role** to load, then select one role. Studio offers a single-choice selector, not role checkboxes. Choosing another role replaces the selection. See [Roles](/docs/roles) for role definitions and assignment permissions.
-7. Enable or disable the account state.
-8. Use reset actions only when the UI shows they are available for the account type.
-9. Save and check for the success notification. Reopen the account to verify its Role selection. If the editor reports a role-assignment error, resolve it before treating the update as complete.
+## The list
 
-![User editor with profile and role selection](user-edit-roles.png)
+1. Open **Users**. It starts with active accounts.
+2. Type in **Search username, name or email**. Search covers the whole directory, not just the page you see.
+3. **Status** switches between **Active**, disabled, and all accounts.
+4. **Columns** chooses what the list shows.
 
-## Expected result
+The list is in the identity provider's order. Each page holds at most 100 accounts. The footer shows the range on screen without a total, such as **1–2 (total unknown)**, because the provider does not give one. Use **Next** for more. Column filters and sorting are not available, because the provider does not support them. Accounts added or removed while you page can shift the pages.
 
-The user record reflects the updated profile, selected role, and status. The selected role defines the capabilities assigned through Studio's user editor.
+The dots menu at the top right has **New user** and **Refresh**.
+
+## Example 1: give someone a role
+
+![A user's row menu: Edit, Disable, Reset password, Send reset email, Force sign-out.](users-row-menu.png)
+
+1. On the person's row, open the dots menu, **Actions for** their username.
+2. Select **Edit**. The **Edit user** sheet opens.
+
+![The Edit user sheet: role, first name, last name and email.](users-edit-sheet.png)
+
+3. Wait for **Role** to load, then choose one role. Each person has one role. Choosing another replaces it.
+4. Change **First name**, **Last name** or **Email** if needed.
+5. Open the sheet's dots menu and save.
+6. Check for the success message. Open the person again to see the saved role.
+
+If the sheet shows a role-assignment error, it stays open. Fix the error before you treat the change as done.
+
+Pick the role with the fewest capabilities that still lets the person do their work. If no role fits, make one first. See [Roles, Example 1](/docs/roles#example-1-make-a-read-only-role).
+
+## Example 2: add a person
+
+1. Open the dots menu at the top right and select **New user**.
+2. Fill in the username, name and email.
+3. Choose a role.
+4. Save, and check for the success message.
+
+A new account with no role can do nothing. Always give it a role.
+
+## Disable or enable access
+
+Open the person's row menu and select **Disable**, or **Enable** on a disabled account.
+
+- Disabling writes a local block in OpenLDR first, then updates the identity provider.
+- The person's next request returns `403 account disabled`, even with a token issued before. A screen already open in their browser can stay visible.
+- Accounts that never signed in get the local block too.
+- Enabling updates the provider first, then lifts the local block.
+- If either step fails, the action reports an error. A failed disable can leave the provider enabled while OpenLDR still blocks access. A failed enable can leave the provider enabled while the local block stays. Fix the connection and repeat the same action.
+- If another status change for that account is still running, the reply is `409`. Wait and retry. This also applies when Studio and the CLI change the same account at once.
+
+The audit log records `user.status` for success and `user.status.failed` for failures.
+
+## Passwords and sessions
+
+- **Reset password** sets a new password for the person.
+- **Send reset email** emails them a reset link.
+- **Force sign-out** ends all their sessions at once.
+
+These depend on the identity provider. They can be missing for accounts it does not let OpenLDR manage.
+
+## On a phone
+
+The user list works on a phone.
+
+![Users on a phone.](users-phone.png)
+
+## From the command line
+
+```bash
+./openldr users list
+./openldr user deactivate <local-id>
+./openldr user activate <local-id>
+./openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+```
+
+- `users list` lists local accounts and their local ids.
+- `deactivate` and `activate` update both systems for a linked account, using its provider subject. An account made only in OpenLDR changes locally. The audit log names the actor `cli`.
+- `directory-list` reads the provider directory. Its JSON has `rows`, `offset`, `limit`, `total: null` and `hasMore`. Add `limit` to `offset` while `hasMore` is true. Leave out `--enabled` for both statuses.
+
+When provider administration is not set up, the list shows local accounts. Local search matches username, display name and email anywhere in the text, and results are in username and id order.
 
 ## Troubleshooting
 
-- **Permission denied:** check whether the user has the role required by the page or action.
-- **A page is hidden:** feature visibility follows assigned roles and enabled application areas.
-- **Reset actions are missing:** the account may be controlled by an identity provider.
-- **A disabled user can still see an old screen:** already-loaded content can remain visible. The next authenticated API request is blocked.
-
-## Advanced web usage
-
-Choose the role with the fewest capabilities that still lets the user complete their work. Local profile fields can usually be edited in the app. Identity-provider-controlled actions may be unavailable depending on the account source.
+- **Permission denied.** The person's role lacks the capability the page or action needs.
+- **A page is missing from someone's menu.** Their role does not include it.
+- **Reset actions are missing.** The account may be controlled by the identity provider.
+- **A disabled person can still see an old screen.** Already-loaded content stays. Their next request is blocked.
+- **Someone still has old access after a role change.** Ask them to sign out and in again, or wait for their session to refresh.
+- **A new account can do nothing.** It has no role yet.
 
 ## Related guides
 
 - [Roles](/docs/roles)
 - [Audit](/docs/audit)
 - [Settings](/docs/settings)
-
-## Disable or enable access
-
-Open the account row's **Actions** menu to disable or enable it. Disabling writes the local access block before updating the identity provider. The next authenticated API request returns `403 account disabled`, including requests with an already-issued token. A screen already loaded in the browser may remain visible.
-
-Accounts that have never signed in also receive a local block. Enabling updates the provider first, then lifts that block. If either write fails, the action reports an error. A failed disable can leave the provider enabled while OpenLDR blocks access. A failed enable can leave the provider enabled while the local block remains. Restore the failing connection and retry the same action. Audit records use `user.status.failed` for failures and `user.status` for success.
-
-For the CLI, use `openldr user deactivate <local-id>` or `openldr user activate <local-id>`. Find the local ID with `openldr users list`. Linked accounts update both systems using their provider subject. Accounts created only in the local store change locally. CLI status audit records identify the actor as `cli`.
-
-If another status change is in progress for this account, the API returns `409`. Wait for that action to finish, then retry. This also applies when Studio and the CLI change the same account.
-
-## Directory pages
-
-Users starts with active accounts. Search matches provider usernames, names, and email addresses across the directory. Select All statuses to include disabled accounts. Changing search, status, or page size returns to the first page.
-
-Use Next to reach accounts beyond the first 100. Each request returns at most 100 accounts. The footer shows the visible range without claiming a total. Columns remain configurable. Arbitrary column filters and sorting are unavailable because the provider does not support them. The provider controls order. Accounts added or removed between requests can shift pages.
-
-For headless access, run:
-
-```sh
-openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
-```
-
-The JSON contains `rows`, `offset`, `limit`, `total: null`, and `hasMore`. Add `limit` to `offset` while `hasMore` is true. Omit `--enabled` to include both statuses. `openldr user list` still lists local accounts.
-
-When provider administration is unconfigured, directory listing uses local accounts. Local search matches username, display name, and email as substrings. Local results use username and ID order. Provider search follows the identity provider's search rules.

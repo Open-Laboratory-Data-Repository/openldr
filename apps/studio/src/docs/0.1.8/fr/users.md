@@ -1,52 +1,118 @@
 # Utilisateurs et rôles
 
-L'éditeur d'utilisateur de Studio attribue un seul rôle. Ce rôle regroupe les permissions nécessaires au travail de la personne.
+**Utilisateurs** liste les personnes qui peuvent se connecter, leur statut et leur rôle. Les administrateurs s'en servent pour ajouter des personnes, donner un rôle à chacune, et activer ou désactiver un accès.
 
-![Liste des utilisateurs](users-list.png)
+La connexion elle-même est gérée par le fournisseur d'identité, en général Keycloak. OpenLDR décide de ce qu'une personne connectée peut faire, par son rôle. Les rôles sont décrits dans [Rôles](/docs/roles).
 
-## Attribuer un rôle
+Ce guide prend environ 15 minutes. Sélectionnez une image pour l'agrandir.
 
-1. Ouvrez **Utilisateurs** et recherchez le compte.
-2. Ouvrez le menu **⋯** de sa ligne et choisissez **Modifier**.
-3. Attendez le chargement des rôles, puis ouvrez **Rôle** et sélectionnez un rôle.
-4. Le choix est unique. Sélectionner un autre rôle remplace la sélection ; cela n'ajoute pas un second rôle.
-5. Enregistrez et vérifiez la notification de réussite.
-6. Rouvrez le compte pour vérifier le rôle enregistré.
+![Utilisateurs : les comptes du fournisseur d'identité, avec recherche, statut et colonnes.](users-tour.png)
 
-![Éditeur d'utilisateur et sélection du rôle](user-edit-roles.png)
+## Qui peut faire quoi
 
-La modification du compte nécessite la permission de gérer les utilisateurs. L'attribution du rôle nécessite aussi la permission de gérer les rôles. Si l'attribution échoue, l'éditeur reste ouvert et affiche une erreur. Corrigez cette erreur avant de considérer la modification comme terminée.
+Les noms des autorisations s'affichent en anglais.
 
-Si aucun rôle ne convient, créez ou ajustez un rôle dans **Paramètres → Rôles**. Modifier les permissions d'un rôle partagé affecte tous les utilisateurs auxquels il est attribué.
+| Autorisation | Ce qu'elle permet |
+| --- | --- |
+| View users | Ouvrir **Utilisateurs** et voir les comptes. |
+| Manage users | Créer, modifier, activer et désactiver des comptes. |
+| Reset passwords | Réinitialiser un mot de passe ou envoyer un e-mail de réinitialisation. |
+| Force logout | Fermer toutes les sessions actives d'une personne. |
+| Manage roles | Nécessaire aussi pour enregistrer un rôle sur un utilisateur. |
+
+L'administrateur les a toutes.
+
+## La liste
+
+1. Ouvrez **Utilisateurs**. La liste commence par les comptes actifs.
+2. Tapez dans **Rechercher un identifiant, nom ou e-mail**. La recherche porte sur tout l'annuaire, pas seulement la page affichée.
+3. **Statut** passe des comptes **Actif** aux comptes désactivés, ou à **Tous les statuts**.
+4. **Colonnes** choisit ce que la liste affiche.
+
+La liste suit l'ordre du fournisseur d'identité. Chaque page contient au plus 100 comptes. Le bas de page montre la plage affichée sans total, comme **1–2 (total inconnu)**, car le fournisseur n'en donne pas. Utilisez **Suivant** pour la suite. Les filtres et le tri par colonne ne sont pas disponibles, car le fournisseur ne les gère pas. Des comptes ajoutés ou retirés pendant que vous paginez peuvent décaler les pages.
+
+Le menu à trois points en haut à droite a **Nouvel utilisateur** et **Actualiser**.
+
+## Exemple 1 : donner un rôle à quelqu'un
+
+![Le menu d'une ligne : Modifier, Désactiver, Réinitialiser le mot de passe, Envoyer un e-mail de réinitialisation, Forcer la déconnexion.](users-row-menu.png)
+
+1. Sur la ligne de la personne, ouvrez le menu à trois points.
+2. Sélectionnez **Modifier**. La fiche **Modifier l'utilisateur** s'ouvre.
+
+![La fiche Modifier l'utilisateur : rôle, prénom, nom et e-mail.](users-edit-sheet.png)
+
+3. Attendez le chargement de **Rôle**, puis choisissez un rôle. Chaque personne a un seul rôle. En choisir un autre le remplace.
+4. Changez **Prénom**, **Nom de famille** ou **E-mail** si besoin.
+5. Ouvrez le menu à trois points de la fiche et enregistrez.
+6. Vérifiez le message de réussite. Rouvrez la personne pour voir le rôle enregistré.
+
+Si la fiche affiche une erreur d'attribution de rôle, elle reste ouverte. Corrigez l'erreur avant de considérer le changement comme fait.
+
+Choisissez le rôle qui a le moins de capacités tout en permettant à la personne de travailler. Si aucun rôle ne convient, créez-en un d'abord. Voir [Rôles, exemple 1](/docs/roles#exemple-1-creer-un-role-en-lecture-seule).
+
+## Exemple 2 : ajouter une personne
+
+1. Ouvrez le menu à trois points en haut à droite et sélectionnez **Nouvel utilisateur**.
+2. Remplissez l'identifiant, le nom et l'e-mail.
+3. Choisissez un rôle.
+4. Enregistrez, et vérifiez le message de réussite.
+
+Un nouveau compte sans rôle ne peut rien faire. Donnez-lui toujours un rôle.
+
+## Désactiver ou activer un accès
+
+Ouvrez le menu de la ligne et sélectionnez **Désactiver**, ou **Activer** sur un compte désactivé.
+
+- La désactivation écrit d'abord un blocage local dans OpenLDR, puis met à jour le fournisseur d'identité.
+- La requête suivante de la personne renvoie `403 account disabled`, même avec un jeton émis avant. Un écran déjà ouvert dans son navigateur peut rester visible.
+- Les comptes qui ne se sont jamais connectés reçoivent aussi le blocage local.
+- L'activation met d'abord à jour le fournisseur, puis lève le blocage local.
+- Si une étape échoue, l'action signale une erreur. Une désactivation ratée peut laisser le fournisseur actif alors qu'OpenLDR bloque l'accès. Une activation ratée peut laisser le fournisseur actif alors que le blocage local reste. Réparez la connexion et refaites la même action.
+- Si un autre changement de statut de ce compte est en cours, la réponse est `409`. Attendez et réessayez. C'est aussi le cas quand Studio et la ligne de commande changent le même compte en même temps.
+
+Le journal d'audit note `user.status` en cas de réussite et `user.status.failed` en cas d'échec.
+
+## Mots de passe et sessions
+
+- **Réinitialiser le mot de passe** donne un nouveau mot de passe à la personne.
+- **Envoyer un e-mail de réinitialisation** lui envoie un lien de réinitialisation.
+- **Forcer la déconnexion** ferme toutes ses sessions d'un coup.
+
+Ces actions dépendent du fournisseur d'identité. Elles peuvent manquer pour des comptes qu'il ne laisse pas gérer par OpenLDR.
+
+## Sur un téléphone
+
+La liste des utilisateurs marche sur un téléphone.
+
+![Utilisateurs sur un téléphone.](users-phone.png)
+
+## En ligne de commande
+
+```bash
+./openldr users list
+./openldr user deactivate <local-id>
+./openldr user activate <local-id>
+./openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+```
+
+- `users list` liste les comptes locaux et leurs identifiants locaux.
+- `deactivate` et `activate` mettent à jour les deux systèmes pour un compte lié, par son identifiant chez le fournisseur. Un compte créé seulement dans OpenLDR change localement. Le journal d'audit nomme l'auteur `cli`.
+- `directory-list` lit l'annuaire du fournisseur. Son JSON contient `rows`, `offset`, `limit`, `total: null` et `hasMore`. Ajoutez `limit` à `offset` tant que `hasMore` est vrai. Omettez `--enabled` pour les deux statuts.
+
+Quand l'administration du fournisseur n'est pas configurée, la liste montre les comptes locaux. La recherche locale trouve l'identifiant, le nom affiché et l'e-mail n'importe où dans le texte, et les résultats sont triés par identifiant.
+
+## Dépannage
+
+- **Accès refusé.** Le rôle de la personne n'a pas la capacité demandée par la page ou l'action.
+- **Une page manque dans le menu de quelqu'un.** Son rôle ne la comprend pas.
+- **Les actions de réinitialisation manquent.** Le compte est peut-être géré par le fournisseur d'identité.
+- **Une personne désactivée voit encore un ancien écran.** Le contenu déjà chargé reste. Sa requête suivante est bloquée.
+- **Quelqu'un garde son ancien accès après un changement de rôle.** Demandez-lui de se déconnecter puis de se reconnecter, ou attendez que sa session se renouvelle.
+- **Un nouveau compte ne peut rien faire.** Il n'a pas encore de rôle.
 
 ## Guides associés
 
 - [Rôles](/docs/roles)
 - [Audit](/docs/audit)
 - [Paramètres](/docs/settings)
-
-## Désactiver ou réactiver un compte
-
-Ouvrez le menu **Actions** de la ligne du compte pour le désactiver ou le réactiver. La désactivation bloque d'abord l'accès local, puis met à jour le fournisseur d'identité. La prochaine requête API authentifiée reçoit `403 account disabled`, même avec un jeton déjà émis. Une page déjà chargée peut rester visible.
-
-Le blocage couvre aussi les comptes qui ne se sont jamais connectés. La réactivation met d'abord à jour le fournisseur, puis lève le blocage local. Si une écriture échoue, l'action affiche une erreur. Le fournisseur peut alors autoriser le compte tandis qu'OpenLDR maintient le blocage. Rétablissez la connexion défaillante et répétez la même action. L'audit enregistre `user.status.failed` en cas d'échec et `user.status` en cas de réussite.
-
-Dans la CLI, utilisez `openldr user deactivate <local-id>` ou `openldr user activate <local-id>`. Trouvez l'identifiant local avec `openldr users list`. Les comptes liés modifient les deux systèmes à partir de leur identifiant fournisseur. Les comptes uniquement locaux changent seulement dans OpenLDR. L'audit des changements CLI indique l'acteur `cli`.
-
-Si une autre modification du statut de ce compte est en cours, l'API renvoie `409`. Attendez la fin de cette action, puis réessayez. Cela s'applique aussi aux modifications simultanées depuis Studio et la CLI.
-
-## Pages de l'annuaire
-
-La page Utilisateurs affiche les comptes actifs au départ. La recherche porte sur les identifiants, noms et adresses e-mail de tout l'annuaire du fournisseur. Choisissez Tous les statuts pour inclure les comptes désactivés. Changer la recherche, le statut ou la taille de page revient à la première page.
-
-Utilisez Suivant pour atteindre les comptes au-delà des 100 premiers. Chaque requête retourne au plus 100 comptes. Le pied de page indique la plage visible sans annoncer de total. Les colonnes restent configurables. Les filtres de colonnes et le tri libre sont indisponibles car le fournisseur ne les prend pas en charge. Le fournisseur contrôle l'ordre. Ajouter ou supprimer un compte entre deux requêtes peut décaler les pages.
-
-Depuis la ligne de commande :
-
-```sh
-openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
-```
-
-Le JSON contient `rows`, `offset`, `limit`, `total: null` et `hasMore`. Ajoutez `limit` à `offset` tant que `hasMore` vaut true. Omettez `--enabled` pour inclure les deux statuts. `openldr user list` conserve la liste des comptes locaux.
-
-Si l'administration du fournisseur n'est pas configurée, la liste utilise les comptes locaux. La recherche locale trouve les fragments dans l'identifiant, le nom et l'e-mail. Les résultats locaux suivent l'ordre identifiant puis ID. La recherche du fournisseur suit ses propres règles.

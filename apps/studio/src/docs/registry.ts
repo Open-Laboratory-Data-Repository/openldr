@@ -279,6 +279,7 @@ export const DOC_GUIDES: DocGuide[] = [
     difficulty: 'intermediate',
     relatedSlugs: ['roles', 'audit', 'settings'],
     screenshotNames: ['users-list.png', 'user-edit-roles.png'],
+    capturedNames: ['users-tour.png', 'users-row-menu.png', 'users-edit-sheet.png', 'users-phone.png'],
     status: 'published',
   },
   {
@@ -292,6 +293,7 @@ export const DOC_GUIDES: DocGuide[] = [
     difficulty: 'intermediate',
     relatedSlugs: ['users', 'audit', 'settings'],
     screenshotNames: [],
+    capturedNames: ['roles-tour.png', 'roles-create.mp4'],
     status: 'published',
   },
   {
