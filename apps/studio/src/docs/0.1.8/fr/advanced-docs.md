@@ -1,13 +1,17 @@
 # Déploiement et documentation technique
 
-Les guides de déploiement, de configuration et de développement se trouvent sur le
-[site OpenLDR](https://github.com/Open-Laboratory-Data-Repository/openldr).
+Ce manuel intégré couvre les tâches faites dans l'application par un utilisateur connecté. Le déploiement, la configuration et le développement sont documentés sur le **site OpenLDR**, dans sa section Docs :
 
-`openldr db reproject --force` reconstruit les tables de lecture depuis les ressources FHIR canoniques,
-y compris le registre des arrivées `ingest_events`. La commande exige `--force`.
-`openldr terminology reproject` est obsolète et effectue la même reconstruction.
-Le registre conserve chaque arrivée par ressource et version.
-Le champ `created_at` des tables de lecture indique leur première écriture, pas l'arrivée des données.
+- **Requirements & Install** : ce qu'il faut, et l'installeur en une ligne (y compris un domaine public avec un certificat Let's Encrypt).
+- **Environment variables** : chaque valeur du fichier `.env` du déploiement.
+- **Windows Server (WSL2)** : le déploiement sur Windows Server avec WSL2.
+- **Development** : lancer OpenLDR depuis les sources, avec rechargement à chaud.
+- **Command-line interface (CLI)** : la ligne de commande `openldr` de l'opérateur (base de données, terminologie, ingestion, plugins, rapports, utilisateurs, marketplace).
+  - **`openldr db reproject --force`** reconstruit tout le modèle de lecture de l'entrepôt depuis le stockage FHIR canonique, y compris le registre des arrivées `ingest_events`. Il refuse sans `--force`, car il réécrit chaque ligne projetée.
+  - **`openldr terminology reproject` est obsolète** et fait exactement la même chose. Il l'a toujours fait : malgré son nom, il n'a jamais reconstruit que `terminology_codes`. Utilisez `db reproject`.
+  - **`ingest_events` est le registre de l'arrivée des données dans OpenLDR.** Une ligne par arrivée de chaque ressource clinique, par ressource et version, reconstruite depuis le stockage canonique. La colonne `created_at` de `lab_requests`, `specimens` et des autres tables projetées n'est **pas** une heure d'arrivée : elle note la première écriture de la ligne par la projection, garde un seul horodatage quel que soit le nombre de corrections, et repart à zéro pour toute ligne réinsérée. Pour savoir « quand ces données nous sont arrivées », lisez `ingest_events`.
+
+Tout cela se trouve sur le site du projet et dans le dépôt des sources : <https://github.com/Open-Laboratory-Data-Repository/openldr>.
 
 ## Nouvelles tentatives de projection
 

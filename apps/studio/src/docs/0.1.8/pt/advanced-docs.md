@@ -1,13 +1,17 @@
-# Implantação e documentação técnica
+# Documentação de implementação e técnica
 
-Os guias de implantação, configuração e desenvolvimento estão no
-[site OpenLDR](https://github.com/Open-Laboratory-Data-Repository/openldr).
+Este manual integrado cobre as tarefas feitas na aplicação por um utilizador com sessão iniciada. A implementação, a configuração e o desenvolvimento estão documentados no **site do OpenLDR**, na secção Docs:
 
-`openldr db reproject --force` reconstrói as tabelas de leitura a partir dos recursos FHIR canónicos,
-incluindo o registo de chegadas `ingest_events`. O comando exige `--force`.
-`openldr terminology reproject` está obsoleto e executa a mesma reconstrução.
-O registo conserva cada chegada por recurso e versão.
-O campo `created_at` das tabelas de leitura indica a primeira escrita, não a chegada dos dados.
+- **Requirements & Install**: o que é preciso, e o instalador numa linha (incluindo um domínio público com um certificado Let's Encrypt).
+- **Environment variables**: cada valor do ficheiro `.env` da implementação.
+- **Windows Server (WSL2)**: a implementação em Windows Server com WSL2.
+- **Development**: correr o OpenLDR a partir do código-fonte, com recarregamento automático.
+- **Command-line interface (CLI)**: a linha de comandos `openldr` do operador (base de dados, terminologia, ingestão, plugins, relatórios, utilizadores, marketplace).
+  - **`openldr db reproject --force`** reconstrói todo o modelo de leitura do armazém a partir do armazenamento FHIR canónico, incluindo o registo de chegadas `ingest_events`. Recusa sem `--force`, porque reescreve todas as linhas projetadas.
+  - **`openldr terminology reproject` está obsoleto** e faz exatamente o mesmo. Sempre fez: apesar do nome, nunca reconstruiu só `terminology_codes`. Use `db reproject`.
+  - **`ingest_events` é o registo de quando os dados chegaram ao OpenLDR.** Uma linha por chegada de cada recurso clínico, por recurso e versão, reconstruída a partir do armazenamento canónico. A coluna `created_at` de `lab_requests`, `specimens` e das outras tabelas projetadas **não** é uma hora de chegada: regista a primeira escrita da linha pela projeção, guarda um só momento por mais correções que o recurso tenha, e volta a zero para qualquer linha reinserida. Para saber "quando é que isto nos chegou", leia `ingest_events`.
+
+Tudo isto está no site do projeto e no repositório do código-fonte: <https://github.com/Open-Laboratory-Data-Repository/openldr>.
 
 ## Novas tentativas de projeção
 
