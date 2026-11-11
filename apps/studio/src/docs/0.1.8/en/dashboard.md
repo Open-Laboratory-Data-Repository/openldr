@@ -132,7 +132,7 @@ Build a bar chart of orders per test with the **Builder**. No SQL needed.
 
 **Expected result:** the bar chart sits on the grid. Full blood count is the tallest bar, at 18.
 
-There is no rename yet. Every new dashboard is called **New dashboard**, then **New dashboard (2)**, and so on. To rename one, see [Export, import and copy](#export-import-and-copy).
+Every new dashboard is called **New dashboard**, then **New dashboard (2)**, and so on. To give it a name, open the **Dashboard menu**, select **Rename**, type the name, then select **Save** in the sheet's **⋯** menu. **Rename** waits while unsaved edits are pending. The sample dashboard keeps its own name: OpenLDR restores it when the server restarts.
 
 ### The widget editor
 
@@ -322,7 +322,6 @@ The **Dashboard menu** has **Export** and **Import** in view mode and in edit mo
 Use them to:
 
 - **Copy a dashboard** to another install, or keep a backup.
-- **Rename a dashboard.** Export it, change `"name"` in the file, import it, then delete the old one.
 - **Set a refresh interval.** Change `refreshIntervalSec` on a widget in the file, then import.
 
 Importing a dashboard that holds SQL widgets fails while **Dashboard raw SQL** is off, with the message `raw SQL widgets are disabled`. That includes a copy of the sample dashboard. Turn the setting on first.

@@ -192,3 +192,33 @@ it('blocks widget and filter editors while dashboard creation is pending', async
   finish(Response.json(JSON.parse(body)));
   await waitFor(() => expect(useDashboardStore.getState().current?.name).toBe('New dashboard (2)'));
 });
+
+describe('renaming a dashboard', () => {
+  it('saves the new name from the Dashboard menu and shows it in the selector', async () => {
+    const saved: unknown[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url: any, init: any) => {
+      if (String(url) === '/api/dashboards/d1' && init?.method === 'PUT') {
+        const body = JSON.parse(String(init.body));
+        saved.push(body);
+        return Promise.resolve(Response.json(body));
+      }
+      if (String(url) === '/api/dashboards') return Promise.resolve(Response.json([overview]));
+      if (String(url).endsWith('/models')) return Promise.resolve(Response.json([]));
+      return Promise.resolve(Response.json({ dashboardSqlEnabled: false }));
+    });
+    render(<MemoryRouter><DashboardPage /></MemoryRouter>);
+    await screen.findByText('New dashboard');
+    openDashboardMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+    const input = await screen.findByLabelText('Name');
+    fireEvent.change(input, { target: { value: 'Ward A' } });
+    const trigger = screen.getByRole('button', { name: 'Name actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: 'Save' })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
+    await waitFor(() => expect(saved).toEqual([expect.objectContaining({ id: 'd1', name: 'Ward A' })]));
+    await waitFor(() => expect(useDashboardStore.getState().current?.name).toBe('Ward A'));
+    expect(useDashboardStore.getState().dirty).toBe(false);
+    expect(screen.getByRole('combobox', { name: 'Dashboard' })).toHaveTextContent('Ward A');
+  });
+});

@@ -134,7 +134,7 @@ Construa um gráfico de barras dos pedidos por exame com o **Builder**. Não pre
 
 **Resultado esperado:** o gráfico de barras aparece na grelha. Full blood count é a barra mais alta, com 18.
 
-Ainda não é possível mudar o nome de um painel. Cada painel novo chama-se **Novo painel**, depois **Novo painel (2)**, e assim por diante. Para mudar o nome, veja [Exportar, importar e copiar](#exportar-importar-e-copiar).
+Cada painel novo chama-se **Novo painel**, depois **Novo painel (2)**, e assim por diante. Para lhe dar um nome, abra o **Dashboard menu**, escolha **Mudar o nome**, escreva o nome e escolha **Guardar** no menu **⋯** do painel lateral. **Mudar o nome** espera enquanto houver alterações por guardar. O painel de exemplo mantém o seu nome: o OpenLDR repõe-no quando o servidor reinicia.
 
 ### O editor de widgets
 
@@ -324,7 +324,6 @@ O menu de três pontos tem **Exportar** e **Importar**, no modo de visualizaçã
 Use-os para:
 
 - **Copiar um painel** para outra instalação, ou guardar uma cópia de segurança.
-- **Mudar o nome de um painel.** Exporte-o, mude `"name"` no ficheiro, importe-o e depois elimine o antigo.
 - **Definir um intervalo de atualização.** Mude `refreshIntervalSec` num widget no ficheiro e depois importe.
 
 Importar um painel com widgets SQL falha enquanto **SQL bruto no painel** estiver desativada, com a mensagem `raw SQL widgets are disabled`. Isto inclui uma cópia do painel de exemplo. Ative primeiro a definição.

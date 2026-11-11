@@ -134,7 +134,7 @@ Construisez un graphique en barres des demandes par examen avec le **Builder**. 
 
 **Résultat attendu :** le graphique en barres apparaît sur la grille. Full blood count est la barre la plus haute, à 18.
 
-Il n'est pas encore possible de renommer un tableau de bord. Chaque nouveau tableau de bord s'appelle **Nouveau tableau de bord**, puis **Nouveau tableau de bord (2)**, et ainsi de suite. Pour en renommer un, voir [Exporter, importer et copier](#exporter-importer-et-copier).
+Chaque nouveau tableau de bord s'appelle **Nouveau tableau de bord**, puis **Nouveau tableau de bord (2)**, et ainsi de suite. Pour lui donner un nom, ouvrez le **Dashboard menu**, choisissez **Renommer**, tapez le nom, puis choisissez **Enregistrer** dans le menu **⋯** du volet. **Renommer** attend tant que des modifications ne sont pas enregistrées. Le tableau de bord d'exemple garde son nom : OpenLDR le rétablit au redémarrage du serveur.
 
 ### L'éditeur de widget
 
@@ -324,7 +324,6 @@ Le menu à trois points propose **Exporter** et **Importer**, en consultation co
 Servez-vous-en pour :
 
 - **Copier un tableau de bord** vers une autre installation, ou en garder une sauvegarde.
-- **Renommer un tableau de bord.** Exportez-le, changez `"name"` dans le fichier, importez-le, puis supprimez l'ancien.
 - **Régler un intervalle d'actualisation.** Changez `refreshIntervalSec` sur un widget dans le fichier, puis importez.
 
 Importer un tableau de bord qui contient des widgets SQL échoue tant que **SQL brut pour les tableaux de bord** est désactivé, avec le message `raw SQL widgets are disabled`. Cela vaut aussi pour une copie du tableau de bord d'exemple. Activez d'abord le paramètre.

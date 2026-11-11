@@ -23,6 +23,7 @@ import { exportDashboard, importDashboard, uniqueName } from './io';
 import { WidgetEditorDialog } from './editor/WidgetEditorDialog';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { QueryNameSheet } from '../query/workspace/QueryNameSheet';
 
 function defaultsFor(filters: DashboardFilterDef[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -51,6 +52,7 @@ export function DashboardPage() {
   const [createError, setCreateError] = useState<string>();
   const [createdName, setCreatedName] = useState<string>();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   // Bumping this remounts the widget grid, which re-runs every widget's query — a refresh.
   const [refreshKey, setRefreshKey] = useState(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -263,6 +265,10 @@ export function DashboardPage() {
                 {t(creating ? 'dashboard.creating' : 'dashboard.newDashboard')}
               </DropdownMenuItem>
               {dirty && <p className="max-w-56 px-2 py-1 text-xs text-muted-foreground">{t('dashboard.waitForSave')}</p>}
+              <DropdownMenuItem disabled={creating || dirty} onSelect={() => setRenameOpen(true)}>
+                <Pencil className="mr-2 h-4 w-4" />
+                {t('dashboard.rename')}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               {editing ? (
                 <>
@@ -379,6 +385,20 @@ export function DashboardPage() {
           filters={current.filters}
           onClose={() => setFilterEditorOpen(false)}
           onSave={(f) => setCurrent({ ...current, filters: f })}
+        />
+      )}
+      {renameOpen && current && (
+        <QueryNameSheet
+          initialName={current.name}
+          title={t('dashboard.renameTitle')}
+          description={t('dashboard.renameDescription')}
+          onClose={() => setRenameOpen(false)}
+          onSave={async (name) => {
+            // Saved at once, not through the edit-mode auto-save, so a rename outside edit mode sticks.
+            const saved = await saveDashboard({ ...current, name });
+            setCurrent(saved);
+            setAll((prev) => prev.map((d) => (d.id === saved.id ? saved : d)));
+          }}
         />
       )}
       <ConfirmDialog
