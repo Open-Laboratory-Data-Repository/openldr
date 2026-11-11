@@ -161,6 +161,8 @@ Saved, encrypted connections to external systems (databases, email, SFTP, plugin
 | `GET` | `/api/marketplace/publish/status` | Show publish configuration/status. |
 | `POST` | `/api/marketplace/publish` | Publish a staged bundle. |
 | `POST` | `/api/marketplace/:id/enable` | Enable an installed artifact. |
+| `GET` | `/api/marketplace/:id/sites` | A plugin's dashboard card and side panel: `{ declared, off }`. Needs `marketplace.manage`. 404 for an unknown plugin. |
+| `PUT` | `/api/marketplace/:id/sites` | Switch one site on or off, lab-wide. Body `{ site: 'widget' \| 'panel', on: boolean }`. 400 `site not declared` when the manifest has no such site. Audited as `plugin.sites.update`. Returns the `GET` shape. |
 | `POST` | `/api/marketplace/:id/disable` | Disable an installed artifact. |
 | `POST` | `/api/marketplace/:id/rollback` | Roll back an installed artifact. |
 | `POST` | `/api/marketplace/:id/detach` | Detach an installed form/template from runtime use. |
@@ -174,7 +176,7 @@ Saved, encrypted connections to external systems (databases, email, SFTP, plugin
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/plugins/ui` | List UI surfaces contributed by installed plugins (webviews, settings panels). |
+| `GET` | `/api/plugins/ui` | List UI surfaces contributed by installed plugins (webviews, settings panels). One entry per plugin, the active version. Each entry has `sites` (`widget`, `panel`), minus any an admin switched off. |
 
 ## Terminology
 

@@ -20,6 +20,7 @@ import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runTerminologyReproject, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketUpdate, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
+import { runMarketSites } from './market-sites';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet, runSettingsLabShow, runSettingsLabSet } from './settings';
 import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelete, runRolesGrant, runRolesRevoke, runRolesDoctor, runUserAssignRole, runUserUnassignRole } from './roles';
@@ -1311,6 +1312,13 @@ export function buildProgram(): Command {
     .option('--json', 'emit JSON', false)
     .action(async (id: string, opts: { json: boolean }) => {
       try { process.exitCode = await runMarketDisable(id, opts); } catch (err) { process.stderr.write(`market disable failed: ${String(err)}\n`); process.exitCode = 1; }
+    });
+  market
+    .command('sites <id> [site] [state]')
+    .description('Show a plugin\'s dashboard card and side panel, or switch one on or off (site: widget|panel, state: on|off)')
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string, site: string | undefined, state: string | undefined, opts: { json: boolean }) => {
+      try { process.exitCode = await runMarketSites(id, site, state, opts); } catch (err) { process.stderr.write(`market sites failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   market
     .command('remove <id> [version]')

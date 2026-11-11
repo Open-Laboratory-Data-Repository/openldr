@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppSettingRecord, AppSettingStore } from '@openldr/db';
-import { SITES_OFF_KEY, getSitesOff, setSiteOn, visibleSites } from './plugin-sites';
+import { SITES_OFF_KEY, getSitesOff, readPluginSites, setSiteOn, updatePluginSite, visibleSites } from './plugin-sites';
 
 function fakeStore(initial: Record<string, string> = {}): AppSettingStore & { data: Map<string, string> } {
   const data = new Map(Object.entries(initial));
@@ -49,5 +49,29 @@ describe('plugin sites off list', () => {
     expect(visibleSites(declared, new Set(['demo:widget']), 'demo')).toEqual({ panel: { title: 'Notes' } });
     expect(visibleSites(declared, new Set(['other:widget']), 'demo')).toEqual(declared);
     expect(visibleSites(undefined, new Set(), 'demo')).toEqual({});
+  });
+});
+
+describe('readPluginSites / updatePluginSite', () => {
+  const row = (id: string, version: string, active: boolean, sites?: unknown) => ({
+    id, version, active,
+    manifest: { payload: { kind: 'plugin', ui: { entry: 'ui.html', sha256: 'x', nav: { label: id }, ...(sites ? { sites } : {}) } } },
+  });
+  const deps = (rows: ReturnType<typeof row>[], store = fakeStore()) => ({ plugins: { list: async () => rows }, appSettings: store });
+
+  it('reads the active version, with the widget height filled in', async () => {
+    const d = deps([row('demo', '2.0.0', true, { widget: { title: 'New' } }), row('demo', '1.0.0', false, { panel: { title: 'Old' } })]);
+    expect(await readPluginSites(d, 'demo')).toEqual({ declared: { widget: { title: 'New', height: 'medium' } }, off: [] });
+  });
+
+  it('an unknown plugin is not-found', async () => {
+    await expect(readPluginSites(deps([]), 'nope')).rejects.toMatchObject({ code: 'not-found' });
+  });
+
+  it('switching off a declared site returns it in off; an undeclared site is not-declared', async () => {
+    const d = deps([row('demo', '1.0.0', true, { widget: { title: 'W' } })]);
+    expect(await updatePluginSite(d, 'demo', 'widget', false, 'admin')).toEqual({ declared: { widget: { title: 'W', height: 'medium' } }, off: ['widget'] });
+    await expect(updatePluginSite(d, 'demo', 'panel', false, 'admin')).rejects.toMatchObject({ code: 'not-declared' });
+    expect((await readPluginSites(d, 'demo')).off).toEqual(['widget']);
   });
 });
