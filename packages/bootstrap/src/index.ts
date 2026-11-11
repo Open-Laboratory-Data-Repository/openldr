@@ -2096,7 +2096,7 @@ export async function dangerFactoryReset(ctx: AppContext): Promise<void> {
   });
   ctx.featureFlags.invalidate();
 }
-export { inspectConnectorConfig, updateConnectorConfig, hostConnectorPatchSchema, type ConnectorConfigView } from './connector-config';
+export { inspectConnectorConfig, updateConnectorConfig, hostConnectorPatchSchema, hostConnectorCreateSchema, createHostConnector, testHostConnector, removeConnector, type ConnectorConfigView, type HostConnectorInput } from './connector-config';
 
 export { setAccountStatus, AccountNotFoundError } from './account-status';
 

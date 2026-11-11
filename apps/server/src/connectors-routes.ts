@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { createPluginTarget, testConnector, inspectConnectorConfig, updateConnectorConfig, diagnoseConnector, type DiagnoseResult } from '@openldr/bootstrap';
+import { createPluginTarget, inspectConnectorConfig, updateConnectorConfig, diagnoseConnector, createHostConnector, testHostConnector, removeConnector, type DiagnoseResult } from '@openldr/bootstrap';
 import type { ConnectorStore } from '@openldr/db';
 import { makeRedactor, redact } from '@openldr/core';
 import { requireCapability } from './rbac';
@@ -106,11 +106,12 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
     const parsed = createInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: 'invalid connector input' }; }
     const { name, pluginId, type, config, allowedHost } = parsed.data;
-    const id = randomUUID();
     if (type) {
-      // Host (database) connector — no plugin, no baseUrl validation, no egress pin.
+      // Host (database) connector — no plugin, no baseUrl validation, no egress pin. Same code as
+      // `openldr connectors add`.
+      let id: string;
       try {
-        await connectors.create({ id, name, type, kind: 'database', config }, key());
+        id = await createHostConnector(connectors, { name, type, config }, key());
       } catch (e) {
         reply.code(400);
         return { error: redact(e instanceof Error ? e.message : String(e)) };
@@ -122,6 +123,7 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
       return connectors.get(id);
     }
     // Plugin (sink) connector path — pluginId is guaranteed by the XOR refine.
+    const id = randomUUID();
     if (config?.baseUrl !== undefined) {
       try { validateConnectorBaseUrl(config.baseUrl); }
       catch (e) { reply.code(400); return { error: redact(e instanceof Error ? e.message : 'invalid connector baseUrl') }; }
@@ -174,8 +176,8 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
 
   app.delete('/api/connectors/:id', { preHandler: requireCapability('connectors.manage') }, async (req) => {
     const { id } = req.params as { id: string };
-    const existing = await connectors.get(id);
-    await connectors.remove(id);
+    // Same code as `openldr connectors remove`.
+    const existing = await removeConnector(connectors, id);
     await recordAudit(ctx, req, {
       action: 'connector.delete', entityType: 'connector', entityId: id,
       metadata: { name: existing?.name, pluginId: existing?.pluginId },
@@ -262,12 +264,12 @@ export function registerConnectorsRoutes(app: FastifyInstance<any, any, any, any
         metadata: { outcome, pluginId: connector.pluginId, host: connector.allowedHost, ...(detail ? { detail } : {}) },
       });
     // Host (database) connector — probe by type (SELECT 1 / mongo ping / redis PING).
+    // Same code as `openldr connectors test`.
     if (connector.type) {
       try {
-        const config = await connectors.getDecryptedConfig(id, key());
-        await testConnector(connector.type, config);
-        await auditTest('ok');
-        return { ok: true };
+        const result = await testHostConnector(connectors, id, key());
+        await auditTest(result.ok ? 'ok' : 'failed', result.ok ? undefined : 'error');
+        return result.ok ? result : { ok: false, error: redact(result.error) };
       } catch (e) {
         await auditTest('failed', 'error');
         return { ok: false, error: redact(e instanceof Error ? e.message : String(e)) };

@@ -204,18 +204,26 @@ If the App Passwords page says it is unavailable, 2-Step Verification is not ful
 
 ## From the command line
 
-The command line can read and change a host connector. Adding, testing and removing one is done in the studio.
+The command line can list, add, read, change, test and remove a database connector. Plugin connectors, such as DHIS2, are added and tested in the studio.
 
 ```bash
+./openldr connectors list
+./openldr connectors add --file new.json
 ./openldr connectors inspect <id>
 ./openldr connectors update <id> --file patch.json
+./openldr connectors test <id>
+./openldr connectors remove <id> --force
 ```
 
+- `list` prints each connector's id, type or plugin, name, and whether it is on. Add `--json` for JSON. It prints no settings.
+- `add` reads `{"name", "type", "config"}` and prints the new id. Example: `{"name":"Reports DB","type":"postgres","config":{"host":"db.internal","port":"5432","database":"lab","user":"reader","password":"..."}}`. Only the type's own fields are accepted, the same as in the studio.
+- `test` opens a test connection with the stored credentials. It prints `Connection OK` or the error, and exits 1 when it fails.
+- `remove` refuses without `--force`. Anything that uses the connector stops working.
 - `inspect` prints JSON with the ordinary `config` and a `secretsSet` true or false for each secret. It never prints a secret.
 - `update` takes a JSON patch. Omitted fields stay as stored, and blank secrets keep the stored one. Example: `{"config":{"host":"db.internal","port":"5432"}}`. A rename only: `{"name":"Lab database"}`.
 - Output and audit records never hold credential values. Protect any file that holds a new secret, and delete it after.
 
-The connector id is in `GET /api/connectors`.
+The connector id is in `openldr connectors list`.
 
 ## Editing stored settings
 

@@ -105,6 +105,29 @@ export function buildProgram(): Command {
       try { process.exitCode = await runConnectorDiagnose(id, opts); }
       catch { process.stderr.write('Connector diagnosis unavailable. Check the connector ID; only host connectors can be diagnosed.\n'); process.exitCode = 1; }
     });
+  connectors.command('list').description('List connectors: id, type or plugin, name, on or off. No settings or secrets')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try { process.exitCode = await runConnectorList(opts); }
+      catch { process.stderr.write('Connector list unavailable.\n'); process.exitCode = 1; }
+    });
+  connectors.command('add').description('Add a database connector from a JSON file: {"name", "type", "config"}. Prints the new id')
+    .requiredOption('--file <path>', 'JSON file with name, type (postgres, mysql, microsoft-sql, ...) and config')
+    .action(async (opts: { file: string }) => {
+      try { process.exitCode = await runConnectorAdd(opts.file); }
+      catch { process.stderr.write('Connector add failed. Check the type and the config fields in the JSON file.\n'); process.exitCode = 1; }
+    });
+  connectors.command('test <id>').description('Open a test connection to a database connector with its stored credentials')
+    .action(async (id: string) => {
+      try { process.exitCode = await runConnectorTest(id); }
+      catch { process.stderr.write('Connector test unavailable. Check the connector ID; only database connectors can be tested here.\n'); process.exitCode = 1; }
+    });
+  connectors.command('remove <id>').description('Remove a connector. Refuses without --force')
+    .option('--force', 'confirm the removal', false)
+    .action(async (id: string, opts: { force: boolean }) => {
+      try { process.exitCode = await runConnectorRemove(id, opts); }
+      catch { process.stderr.write('Connector remove failed.\n'); process.exitCode = 1; }
+    });
 
   const imports = program.command('import').description('Import from a database connector with a plugin that declares an import source');
   imports.command('allow <plugin> <connector>').description('Let a plugin read one database connector')
@@ -1368,7 +1391,7 @@ export function buildProgram(): Command {
 
   return program;
 }
-import { runConnectorInspect, runConnectorUpdate, runConnectorDiagnose } from './connectors';
+import { runConnectorInspect, runConnectorUpdate, runConnectorDiagnose, runConnectorList, runConnectorAdd, runConnectorTest, runConnectorRemove } from './connectors';
 import { runDoctor } from './doctor';
 import {
   runImportAllow, runImportAllowed, runImportFailures, runImportResume, runImportRevoke, runImportStart, runImportStatus, runImportStop,

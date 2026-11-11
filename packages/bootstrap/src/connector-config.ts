@@ -1,4 +1,6 @@
-import type { ConnectorPatch, ConnectorStore } from '@openldr/db';
+import { randomUUID } from 'node:crypto';
+import type { ConnectorPatch, ConnectorRecord, ConnectorStore } from '@openldr/db';
+import { testConnector } from './connector-test';
 import { z } from 'zod';
 
 export const hostConnectorPatchSchema = z.object({
@@ -64,4 +66,49 @@ export async function updateConnectorConfig(store: ConnectorStore, id: string, p
     config[field] = value;
   }
   await store.update(id, { ...patch, config }, key);
+}
+
+/** A database (host) connector from the CLI or the route: a name, one of the supported types, and
+ *  its settings. The route keeps its own plugin (sink) path. */
+export const hostConnectorCreateSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().min(1),
+  config: z.record(z.string()),
+}).strict();
+export type HostConnectorInput = z.infer<typeof hostConnectorCreateSchema>;
+
+/** Add a database connector. Only the type's own settings and secret are accepted, so a URL or an
+ *  unknown key never lands in the sealed config. Returns the new id. */
+export async function createHostConnector(store: ConnectorStore, input: HostConnectorInput, key: string | undefined): Promise<string> {
+  const fields = ordinaryFields[input.type];
+  if (!fields) throw new Error('unsupported connector configuration type');
+  const allowed = new Set([...fields, ...secretFields(input.type)]);
+  if (Object.keys(input.config).some((field) => !allowed.has(field))) throw new Error('unsupported connector configuration field');
+  const id = randomUUID();
+  await store.create({ id, name: input.name, type: input.type, kind: 'database', config: input.config }, key);
+  return id;
+}
+
+/** Open a test connection to a database connector with its stored credentials. Changes nothing. */
+export async function testHostConnector(
+  store: ConnectorStore, id: string, key: string | undefined,
+  test: (type: string, config: Record<string, string>) => Promise<unknown> = testConnector,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const record = await store.get(id);
+  if (!record) throw new Error('connector not found');
+  if (!record.type) throw new Error('host connector required');
+  try {
+    await test(record.type, await store.getDecryptedConfig(id, key));
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** Remove a connector. Returns what was removed, or null when there was nothing to remove. */
+export async function removeConnector(store: ConnectorStore, id: string): Promise<ConnectorRecord | null> {
+  const existing = await store.get(id);
+  if (!existing) return null;
+  await store.remove(id);
+  return existing;
 }

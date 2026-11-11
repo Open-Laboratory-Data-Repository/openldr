@@ -68,13 +68,24 @@ function appWith(store: ConnectorStore, ctx: AppContext = fakeCtx(), roles: stri
 const newBody = { name: 'DHIS2 Demo', pluginId: 'dhis2-sink', config: { baseUrl: 'https://dhis2.example/dhis', username: 'admin', password: 'district' } };
 
 describe('connectors routes', () => {
-  it('does not copy arbitrary config keys into create audit metadata', async () => {
+  it('refuses an unknown config key on create, and audits nothing about it', async () => {
+    // Create shares createHostConnector with `openldr connectors add`, which accepts only the
+    // type's own settings, as update already did.
     const audited: AuditRecord[] = [];
     const response = await appWith(fakeStore(), fakeCtx({ audited })).inject({ method: 'POST', url: '/api/connectors', payload: {
       name: 'PG', type: 'postgres', config: { host: 'db', password: 'hidden', 'unknown-private-key': 'hidden' },
     } });
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(400);
     expect(JSON.stringify(audited)).not.toContain('unknown-private-key');
+  });
+
+  it('creates a database connector with its own settings', async () => {
+    const audited: AuditRecord[] = [];
+    const response = await appWith(fakeStore(), fakeCtx({ audited })).inject({ method: 'POST', url: '/api/connectors', payload: {
+      name: 'PG', type: 'postgres', config: { host: 'db', password: 'hidden' },
+    } });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.stringify(audited)).not.toContain('hidden');
   });
 
   it('does not return decrypted parser errors during a host edit', async () => {

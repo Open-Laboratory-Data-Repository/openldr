@@ -1,11 +1,11 @@
 import { expect, it } from 'vitest';
 import { buildProgram } from './program';
-import { formatDiagnose } from './connectors';
+import { formatDiagnose, runConnectorRemove } from './connectors';
 
 it('offers scoped connector inspection and updates from a JSON file', () => {
   const connector = buildProgram().commands.find((command) => command.name() === 'connectors');
   expect(connector).toBeDefined();
-  expect(connector!.commands.map((command) => command.name())).toEqual(['inspect', 'update', 'diagnose']);
+  expect(connector!.commands.map((command) => command.name())).toEqual(['inspect', 'update', 'diagnose', 'list', 'add', 'test', 'remove']);
   expect(connector!.commands[1].options.some((option) => option.long === '--file' && option.mandatory)).toBe(true);
 });
 
@@ -46,4 +46,22 @@ it('offers the import commands', () => {
   expect(imports.commands.map((command) => command.name())).toEqual(['allow', 'revoke', 'allowed', 'start', 'resume', 'status', 'stop', 'failures']);
   const start = imports.commands.find((command) => command.name() === 'start')!;
   expect(start.options.filter((option) => option.mandatory).map((option) => option.long)).toEqual(['--plugin', '--connector']);
+});
+
+it('adds a connector from a JSON file, and removes one only with --force', () => {
+  const connector = buildProgram().commands.find((command) => command.name() === 'connectors')!;
+  const add = connector.commands.find((command) => command.name() === 'add')!;
+  expect(add.options.some((option) => option.long === '--file' && option.mandatory)).toBe(true);
+  const remove = connector.commands.find((command) => command.name() === 'remove')!;
+  expect(remove.options.some((option) => option.long === '--force')).toBe(true);
+});
+
+it('refuses to remove a connector without --force, before it touches the database', async () => {
+  const stderr: string[] = [];
+  const write = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: string) => { stderr.push(String(chunk)); return true; }) as typeof process.stderr.write;
+  try {
+    expect(await runConnectorRemove('pg', { force: false })).toBe(1);
+  } finally { process.stderr.write = write; }
+  expect(stderr.join('')).toMatch(/--force/);
 });

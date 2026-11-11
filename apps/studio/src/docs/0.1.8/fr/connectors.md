@@ -204,18 +204,26 @@ Si la page des mots de passe d'application dit qu'ils ne sont pas disponibles, l
 
 ## En ligne de commande
 
-La ligne de commande peut lire et changer un connecteur hôte. Ajouter, tester et supprimer un connecteur se fait dans le studio.
+La ligne de commande peut lister, ajouter, lire, changer, tester et supprimer un connecteur de base de données. Les connecteurs de plugin, comme DHIS2, s'ajoutent et se testent dans le studio.
 
 ```bash
+./openldr connectors list
+./openldr connectors add --file new.json
 ./openldr connectors inspect <id>
 ./openldr connectors update <id> --file patch.json
+./openldr connectors test <id>
+./openldr connectors remove <id> --force
 ```
 
+- `list` affiche l'id, le type ou le plugin, le nom de chaque connecteur, et s'il est activé. Ajoutez `--json` pour du JSON. Il n'affiche aucun paramètre.
+- `add` lit `{"name", "type", "config"}` et affiche le nouvel id. Exemple : `{"name":"Reports DB","type":"postgres","config":{"host":"db.internal","port":"5432","database":"lab","user":"reader","password":"..."}}`. Seuls les champs propres au type sont acceptés, comme dans le studio.
+- `test` ouvre une connexion de test avec les identifiants enregistrés. Il affiche `Connection OK` ou l'erreur, et se termine avec le code 1 en cas d'échec.
+- `remove` refuse sans `--force`. Tout ce qui utilise le connecteur cesse de fonctionner.
 - `inspect` affiche du JSON avec la `config` ordinaire et un `secretsSet` vrai ou faux pour chaque secret. Il n'affiche jamais de secret.
 - `update` prend un correctif JSON. Les champs absents restent tels qu'enregistrés, et un secret vide garde celui enregistré. Exemple : `{"config":{"host":"db.internal","port":"5432"}}`. Un simple renommage : `{"name":"Lab database"}`.
 - La sortie et les enregistrements d'audit ne contiennent jamais de valeur de secret. Protégez tout fichier qui contient un nouveau secret, et supprimez-le ensuite.
 
-L'id du connecteur figure dans `GET /api/connectors`.
+L'id du connecteur figure dans `openldr connectors list`.
 
 ## Modifier les paramètres enregistrés
 

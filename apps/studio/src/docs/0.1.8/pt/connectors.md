@@ -204,18 +204,26 @@ Se a página das palavras-passe de aplicação disser que não estão disponíve
 
 ## Na linha de comandos
 
-A linha de comandos pode ler e mudar um conector de anfitrião. Adicionar, testar e remover um conector faz-se no studio.
+A linha de comandos pode listar, adicionar, ler, mudar, testar e remover um conector de base de dados. Os conectores de plugin, como o DHIS2, adicionam-se e testam-se no studio.
 
 ```bash
+./openldr connectors list
+./openldr connectors add --file new.json
 ./openldr connectors inspect <id>
 ./openldr connectors update <id> --file patch.json
+./openldr connectors test <id>
+./openldr connectors remove <id> --force
 ```
 
+- `list` mostra o id, o tipo ou plugin, o nome de cada conector, e se está ativo. Junte `--json` para JSON. Não mostra definições.
+- `add` lê `{"name", "type", "config"}` e mostra o id novo. Exemplo: `{"name":"Reports DB","type":"postgres","config":{"host":"db.internal","port":"5432","database":"lab","user":"reader","password":"..."}}`. Só aceita os campos do próprio tipo, como no studio.
+- `test` abre uma ligação de teste com as credenciais guardadas. Mostra `Connection OK` ou o erro, e sai com o código 1 se falhar.
+- `remove` recusa sem `--force`. Tudo o que usa o conector deixa de funcionar.
 - `inspect` mostra JSON com a `config` normal e um `secretsSet` verdadeiro ou falso para cada segredo. Nunca mostra um segredo.
 - `update` recebe uma correção JSON. Os campos omitidos ficam como estão, e um segredo em branco mantém o guardado. Exemplo: `{"config":{"host":"db.internal","port":"5432"}}`. Só mudar o nome: `{"name":"Lab database"}`.
 - A saída e os registos de auditoria nunca têm valores de segredos. Proteja qualquer ficheiro com um segredo novo, e apague-o depois.
 
-O id do conector está em `GET /api/connectors`.
+O id do conector está em `openldr connectors list`.
 
 ## Editar as definições guardadas
 
