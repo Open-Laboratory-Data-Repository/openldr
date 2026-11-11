@@ -5,6 +5,7 @@ import { readGrant, type Capability } from '@openldr/marketplace';
 import type { PluginDataStore } from '@openldr/db';
 import type { PluginPolicy } from './policy';
 import { policyAllows } from './policy';
+import { HOST_COLLECTION_PREFIX, type ImportActor, type ImportService } from './import-run';
 
 /** The caller principal (the authenticated host user forwarding on the plugin's behalf). */
 export interface BrokerPrincipal {
@@ -45,7 +46,18 @@ export type BrokerOp =
   | { kind: 'fhir.facilities' }
   | { kind: 'schedule.register'; schedule: unknown }
   | { kind: 'schedule.list' }
-  | { kind: 'schedule.remove'; id: string };
+  | { kind: 'schedule.remove'; id: string }
+  // Imports (host:import). The page names a connector and options only. SQL never comes from
+  // the page: the import service asks the plugin's signed wasm for it.
+  | { kind: 'import.allowed' }
+  | { kind: 'import.diagnose'; connectorId: string }
+  | { kind: 'import.checks'; connectorId: string; options: Record<string, string> }
+  | { kind: 'import.start'; connectorId: string; options: Record<string, string>; pageSize?: number; limit?: number; dryRun?: boolean }
+  | { kind: 'import.status'; runId: string }
+  | { kind: 'import.list' }
+  | { kind: 'import.failures'; runId: string }
+  | { kind: 'import.stop'; runId: string }
+  | { kind: 'import.resume'; runId: string };
 
 export type BrokerResult = { ok: true; data: unknown } | { ok: false; error: string };
 
@@ -56,6 +68,8 @@ export const DEFAULT_MAX_DOC_BYTES = 8 * 1024 * 1024;
 
 const STR = z.string().min(1).max(256);
 const ID = z.string().min(1).max(256);
+// The import service checks option names and sizes again; this only bounds the wire shape.
+const IMPORT_OPTIONS = z.record(z.string().max(64), z.string().max(1000));
 
 /** Build the discriminated-union op schema. `maxDocBytes` bounds any persisted/forwarded
  *  arbitrary-object payload (doc/mapping/schedule/input) by its serialized byte size. */
@@ -93,6 +107,18 @@ export function buildBrokerOpSchema(maxDocBytes: number) {
     z.object({ kind: z.literal('schedule.register'), schedule: docBound('schedule') }),
     z.object({ kind: z.literal('schedule.list') }),
     z.object({ kind: z.literal('schedule.remove'), id: ID }),
+    z.object({ kind: z.literal('import.allowed') }),
+    z.object({ kind: z.literal('import.diagnose'), connectorId: ID }),
+    z.object({ kind: z.literal('import.checks'), connectorId: ID, options: IMPORT_OPTIONS }),
+    z.object({
+      kind: z.literal('import.start'), connectorId: ID, options: IMPORT_OPTIONS,
+      pageSize: z.number().int().positive().optional(), limit: z.number().int().positive().optional(), dryRun: z.boolean().optional(),
+    }),
+    z.object({ kind: z.literal('import.status'), runId: ID }),
+    z.object({ kind: z.literal('import.list') }),
+    z.object({ kind: z.literal('import.failures'), runId: ID }),
+    z.object({ kind: z.literal('import.stop'), runId: ID }),
+    z.object({ kind: z.literal('import.resume'), runId: ID }),
   ]);
 }
 
@@ -103,6 +129,9 @@ function gateFor(op: BrokerOp): string | undefined {
     case 'connectors.list': case 'connectors.test': case 'connectors.metadata': case 'connectors.push': case 'connectors.validate': return 'host:connectors';
     case 'fhir.facilities': return 'host:fhir';
     case 'schedule.register': case 'schedule.list': case 'schedule.remove': return 'host:schedule';
+    case 'import.allowed': case 'import.diagnose': case 'import.checks': case 'import.start': case 'import.status':
+    case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
+      return 'host:import';
     default: return undefined; // storage.*, invoke
   }
 }
@@ -137,6 +166,9 @@ function rolesFor(op: BrokerOp): string[] {
     case 'connectors.push': case 'connectors.validate':
     // Schedule register/list/remove mirror the native lab_admin-gated schedule routes.
     case 'schedule.register': case 'schedule.list': case 'schedule.remove':
+    // Imports read a database connector and write records: admin only, like the connector routes.
+    case 'import.allowed': case 'import.diagnose': case 'import.checks': case 'import.start': case 'import.status':
+    case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume':
       return ['lab_admin'];
     // storage.*, invoke, reports.*, fhir.* — reports/fhir reads are broadly readable (native routes have no role gate).
     default: return [];
@@ -167,6 +199,10 @@ export interface PluginBrokerDeps {
   facilities?: () => Promise<unknown>;
   /** Plugin-scoped schedule registry (wired in Task 4; undefined until then). */
   schedules?: { register(pluginId: string, schedule: unknown): Promise<unknown>; list(pluginId: string): Promise<unknown>; remove(pluginId: string, id: string): Promise<unknown> };
+  /** The import service (import-run.ts). When absent, import ops return a structured error. */
+  imports?: Pick<ImportService, 'allowed' | 'checks' | 'start' | 'get' | 'list' | 'failures' | 'stop' | 'resume'>;
+  /** Step-by-step check of a host connector (connector-diagnose.ts), by connector id. */
+  diagnoseConnector?: (id: string) => Promise<unknown>;
   policy: () => PluginPolicy;
   /** Max serialized byte size of a persisted/forwarded plugin doc. Defaults to DEFAULT_MAX_DOC_BYTES. */
   maxDocBytes?: number;
@@ -251,6 +287,13 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           return deny(op.kind, `operation ${op.kind} requires one of roles: ${need.join(', ')}`);
         }
 
+        // 3b. Collections starting with `__` belong to the host (import runs, failures and the
+        // list of connectors an admin allowed). A plugin page must not read or forge them.
+        if ((op.kind === 'storage.get' || op.kind === 'storage.put' || op.kind === 'storage.delete' || op.kind === 'storage.list')
+          && op.collection.startsWith(HOST_COLLECTION_PREFIX)) {
+          return deny(op.kind, `collection ${op.collection} is reserved for the host`);
+        }
+
         // 4. Dispatch. Storage is namespaced by the trusted pluginId argument.
         // Stamp wasm-invoking / egress ops in the in-flight registry (pluginId + op kind +
         // entrypoint) so a process-FATAL plugin crash mid-dispatch leaves a culprit trail the
@@ -316,6 +359,45 @@ export function createPluginBroker(deps: PluginBrokerDeps): PluginBroker {
           case 'schedule.remove': {
             if (!deps.schedules) return { ok: false, error: 'schedule unavailable' };
             return { ok: true, data: await deps.schedules.remove(pluginId, op.id) };
+          }
+          case 'import.allowed': case 'import.diagnose': case 'import.checks': case 'import.start': case 'import.status':
+          case 'import.list': case 'import.failures': case 'import.stop': case 'import.resume': {
+            const imports = deps.imports;
+            if (!imports) return { ok: false, error: 'imports are unavailable' };
+            const actor: ImportActor = { type: 'user', id: principal.id, name: principal.username ?? principal.id };
+            switch (op.kind) {
+              case 'import.allowed': {
+                // Names for the page's connector picker. Only the connectors allowed for this plugin.
+                const out: Array<{ id: string; name: string; type: string | null }> = [];
+                for (const id of await imports.allowed(pluginId)) {
+                  const c = (await deps.connectors.get(id)) as { name?: string; type?: string | null } | null;
+                  if (c) out.push({ id, name: c.name ?? id, type: c.type ?? null });
+                }
+                return { ok: true, data: out };
+              }
+              case 'import.diagnose': {
+                if (!deps.diagnoseConnector) return { ok: false, error: 'import.diagnose is unavailable' };
+                // The result names the host and port, so it is only for a connector the admin allowed.
+                if (!(await imports.allowed(pluginId)).includes(op.connectorId)) {
+                  return deny(op.kind, `connector ${op.connectorId} is not allowed for plugin ${pluginId}`);
+                }
+                return { ok: true, data: await deps.diagnoseConnector(op.connectorId) };
+              }
+              case 'import.checks': return { ok: true, data: await imports.checks({ pluginId, connectorId: op.connectorId, options: op.options }) };
+              case 'import.start': return { ok: true, data: await imports.start({
+                pluginId, connectorId: op.connectorId, options: op.options,
+                ...(op.pageSize !== undefined ? { pageSize: op.pageSize } : {}),
+                ...(op.limit !== undefined ? { limit: op.limit } : {}),
+                ...(op.dryRun !== undefined ? { dryRun: op.dryRun } : {}),
+                actor,
+              }) };
+              case 'import.status': return { ok: true, data: await imports.get(pluginId, op.runId) };
+              case 'import.list': return { ok: true, data: await imports.list(pluginId) };
+              case 'import.failures': return { ok: true, data: await imports.failures(pluginId, op.runId) };
+              case 'import.stop': return { ok: true, data: await imports.stop(pluginId, op.runId, actor) };
+              case 'import.resume': return { ok: true, data: await imports.resume(pluginId, op.runId, actor) };
+            }
+            return { ok: false, error: 'unknown operation' };
           }
           default: return { ok: false, error: `unknown operation` };
         }

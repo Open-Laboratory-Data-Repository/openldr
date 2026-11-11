@@ -81,6 +81,8 @@ import { createPatientIdentifierSystems, type PatientIdentifierSystems } from '.
 import { createPatientIndex, type PatientIndex } from './patient-index';
 import { createPatientDuplicates, type PatientDuplicates } from './patient-duplicates';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
+import { createImportService, type ImportService } from './import-run';
+import { diagnoseConnector } from './connector-diagnose';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
 import { createPluginNodeService } from './plugin-node-service';
@@ -535,6 +537,8 @@ export interface AppContext {
   plugins: PluginRuntime;
   pluginData: PluginDataStore;
   pluginBroker: PluginBroker;
+  /** Plugin-driven imports from a host database connector (import-run.ts). */
+  imports: ImportService;
   connectors: ConnectorStore;
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
@@ -1682,9 +1686,31 @@ const reporting: ReportingApi = {
   workflowServices.hostFileWrite = hostFiles.hostFileWrite;
   workflowServices.hostFileList = hostFiles.hostFileList;
   workflowServices.hostFileDelete = hostFiles.hostFileDelete;
+  // Imports driven by a plugin that declares an import source (import-run.ts). Shared by the
+  // broker (studio) and the CLI. Saves through the same path as the workflow Persist Store node.
+  const imports = createImportService({
+    plugins,
+    connectors: connectorStore,
+    secretsKey: cfg.SECRETS_ENCRYPTION_KEY,
+    pluginData,
+    persist: workflowPersist,
+    audit: (e) => safeRecord(audit, logger, {
+      actorType: e.actor.type, actorId: e.actor.id, actorName: e.actor.name,
+      action: e.action, entityType: 'plugin', entityId: e.pluginId,
+      metadata: { ...(e.connectorId ? { connectorId: e.connectorId } : {}), ...(e.runId ? { runId: e.runId } : {}), ...(e.metadata ?? {}) },
+    }),
+  });
   const pluginBroker = createPluginBroker({
     plugins,
     pluginData,
+    imports,
+    // Step-by-step connection check for the import page. The broker only calls this for a
+    // connector the admin allowed for the calling plugin.
+    diagnoseConnector: async (id: string) => {
+      const c = await connectorStore.get(id);
+      if (!c || !c.type) throw new Error(`connector ${id} is not a host connector`);
+      return diagnoseConnector(c.type, await connectorStore.getDecryptedConfig(id, cfg.SECRETS_ENCRYPTION_KEY));
+    },
     schedules: createPluginScheduleApi(pluginData),
     reporting: {
       list: () => reporting.listAll(),
@@ -1782,6 +1808,7 @@ const reporting: ReportingApi = {
     plugins,
     pluginData,
     pluginBroker,
+    imports,
     connectors: connectorStore,
     appSettings,
     labIdentity,
@@ -1967,6 +1994,10 @@ export {
   type DiagnoseResult, type DiagnoseStep, type DiagnoseStepId, type DiagnoseStatus, type DiagnoseHint, type DiagnoseDeps,
 } from './connector-diagnose';
 export { testConnector } from './connector-test';
+export {
+  createImportService,
+  type ImportService, type ImportRun, type ImportStatus, type ImportActor, type ImportAuditEvent, type ImportStartInput,
+} from './import-run';
 export {
   getUserPreferences, saveUserPreferences, parseStoredPreferences, userPreferencesPatchSchema,
   type UserPreferences, type UserPreferencesPatch,

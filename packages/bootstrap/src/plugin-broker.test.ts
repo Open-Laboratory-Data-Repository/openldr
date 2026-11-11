@@ -33,6 +33,8 @@ function broker(opts: {
   schedules?: any;
   requiredRoles?: string[];
   maxDocBytes?: number;
+  imports?: any;
+  diagnoseConnector?: any;
 }) {
   const data = memData();
   const manifest: any = opts.caps === undefined ? {} : { capabilities: opts.caps };
@@ -52,6 +54,8 @@ function broker(opts: {
     connectorValidate: opts.connectorValidate,
     facilities: opts.facilities,
     schedules: opts.schedules,
+    imports: opts.imports,
+    diagnoseConnector: opts.diagnoseConnector,
     maxDocBytes: opts.maxDocBytes,
     logger: { warn: (obj: unknown, msg: string) => { logged.push({ obj, msg }); } },
     policy: () => ({ uiEnabled: opts.uiEnabled ?? true, egressEnabled: opts.egressEnabled ?? true }),
@@ -499,3 +503,108 @@ describe('plugin broker', () => {
     });
   });
 });
+
+describe('plugin broker: imports', () => {
+  const admin = { id: 'u1', roles: ['lab_admin'], username: 'amina' };
+  const IMPORT_CAPS = [{ kind: 'host:import' }];
+  function fakeImports() {
+    const calls: Array<[string, unknown[]]> = [];
+    const rec = (name: string, result: unknown) => async (...args: unknown[]) => { calls.push([name, args]); return result; };
+    return {
+      calls,
+      api: {
+        allowed: rec('allowed', ['c1']),
+        checks: rec('checks', [{ id: 'requests', value: 7 }]),
+        start: rec('start', { id: 'r1', status: 'running' }),
+        get: rec('get', { id: 'r1', status: 'running' }),
+        list: rec('list', []),
+        failures: rec('failures', []),
+        stop: rec('stop', { id: 'r1', status: 'stopping' }),
+        resume: rec('resume', { id: 'r1', status: 'running' }),
+      },
+    };
+  }
+
+  it('keeps host-owned collections out of reach of plugin storage ops', async () => {
+    const { b, data } = broker({ caps: [] });
+    await data.store.put('p1', '__import-allowed', 'c1', { connectorId: 'c1' });
+    for (const op of [
+      { kind: 'storage.get', collection: '__import-allowed', key: 'c1' },
+      { kind: 'storage.put', collection: '__import-runs', key: 'r1', doc: { status: 'completed' } },
+      { kind: 'storage.delete', collection: '__import-allowed', key: 'c1' },
+      { kind: 'storage.list', collection: '__import-failures' },
+    ]) {
+      const res = await b.handle('p1', admin, op);
+      expect(res).toEqual({ ok: false, error: expect.stringMatching(/reserved/) });
+    }
+    expect(await data.store.get('p1', '__import-allowed', 'c1')).toEqual({ connectorId: 'c1' });
+    expect(await data.store.get('p1', '__import-runs', 'r1')).toBeNull();
+  });
+
+  it('refuses import ops without the host:import capability or the lab_admin role', async () => {
+    const imports = fakeImports();
+    const noCap = broker({ caps: [], imports: imports.api });
+    expect(await noCap.b.handle('p1', admin, { kind: 'import.list' })).toEqual({ ok: false, error: expect.stringMatching(/host:import/) });
+    const withCap = broker({ caps: IMPORT_CAPS, imports: imports.api });
+    expect(await withCap.b.handle('p1', { id: 'u2', roles: ['lab_tech'] }, { kind: 'import.list' })).toEqual({ ok: false, error: expect.stringMatching(/lab_admin/) });
+    expect(imports.calls).toEqual([]);
+  });
+
+  it('starts an import as the signed-in user, and a plugin page cannot pass SQL', async () => {
+    const imports = fakeImports();
+    const { b } = broker({ caps: IMPORT_CAPS, imports: imports.api });
+    const res = await b.handle('p1', admin, {
+      kind: 'import.start', connectorId: 'c1', options: { tz: '+02:00' }, pageSize: 200, limit: 1000, dryRun: true,
+      sql: 'SELECT * FROM secrets', keyQuery: { sql: 'SELECT 1' },
+    });
+    expect(res).toEqual({ ok: true, data: { id: 'r1', status: 'running' } });
+    expect(imports.calls).toEqual([['start', [{
+      pluginId: 'p1', connectorId: 'c1', options: { tz: '+02:00' }, pageSize: 200, limit: 1000, dryRun: true,
+      actor: { type: 'user', id: 'u1', name: 'amina' },
+    }]]]);
+  });
+
+  it('passes the other import ops through, always for the calling plugin', async () => {
+    const imports = fakeImports();
+    const { b } = broker({ caps: IMPORT_CAPS, imports: imports.api, connectors: { list: async () => [], get: async (id: string) => ({ id, name: 'v1 (Moz)', type: 'microsoft-sql', enabled: true }) } });
+    const actor = { type: 'user', id: 'u1', name: 'amina' };
+    expect(await b.handle('p1', admin, { kind: 'import.allowed' })).toEqual({ ok: true, data: [{ id: 'c1', name: 'v1 (Moz)', type: 'microsoft-sql' }] });
+    await b.handle('p1', admin, { kind: 'import.checks', connectorId: 'c1', options: {} });
+    await b.handle('p1', admin, { kind: 'import.status', runId: 'r1' });
+    await b.handle('p1', admin, { kind: 'import.list' });
+    await b.handle('p1', admin, { kind: 'import.failures', runId: 'r1' });
+    await b.handle('p1', admin, { kind: 'import.stop', runId: 'r1' });
+    await b.handle('p1', admin, { kind: 'import.resume', runId: 'r1' });
+    expect(imports.calls).toEqual([
+      ['allowed', ['p1']],
+      ['checks', [{ pluginId: 'p1', connectorId: 'c1', options: {} }]],
+      ['get', ['p1', 'r1']],
+      ['list', ['p1']],
+      ['failures', ['p1', 'r1']],
+      ['stop', ['p1', 'r1', actor]],
+      ['resume', ['p1', 'r1', actor]],
+    ]);
+  });
+
+  it('diagnoses only a connector the admin allowed for this plugin', async () => {
+    const imports = fakeImports();
+    const diagnosed: string[] = [];
+    const { b } = broker({ caps: IMPORT_CAPS, imports: imports.api, diagnoseConnector: async (id: string) => { diagnosed.push(id); return { ok: true, steps: [] }; } });
+    expect(await b.handle('p1', admin, { kind: 'import.diagnose', connectorId: 'other' })).toEqual({ ok: false, error: expect.stringMatching(/not allowed/) });
+    expect(await b.handle('p1', admin, { kind: 'import.diagnose', connectorId: 'c1' })).toEqual({ ok: true, data: { ok: true, steps: [] } });
+    expect(diagnosed).toEqual(['c1']);
+  });
+
+  it('says so when imports are not wired', async () => {
+    const { b } = broker({ caps: IMPORT_CAPS });
+    expect(await b.handle('p1', admin, { kind: 'import.list' })).toEqual({ ok: false, error: 'imports are unavailable' });
+  });
+
+  it('returns the reason when the import service refuses', async () => {
+    const imports = fakeImports();
+    imports.api.start = async () => { throw new Error('connector c9 is not allowed for plugin p1'); };
+    const { b } = broker({ caps: IMPORT_CAPS, imports: imports.api });
+    expect(await b.handle('p1', admin, { kind: 'import.start', connectorId: 'c9', options: {} })).toEqual({ ok: false, error: 'connector c9 is not allowed for plugin p1' });
+  });
+});
+

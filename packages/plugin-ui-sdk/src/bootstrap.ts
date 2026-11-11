@@ -93,6 +93,19 @@ function pluginBootstrapV1(): void {
       list: () => call({ kind: 'schedule.list' }),
       remove: (id: string) => call({ kind: 'schedule.remove', id }),
     },
+    imports: {
+      allowed: () => call({ kind: 'import.allowed' }),
+      diagnose: (connectorId: string) => call({ kind: 'import.diagnose', connectorId }),
+      checks: (input: { connectorId: string; options: Record<string, string> }) =>
+        call({ kind: 'import.checks', connectorId: input.connectorId, options: input.options }),
+      start: (input: { connectorId: string; options: Record<string, string>; pageSize?: number; limit?: number; dryRun?: boolean }) =>
+        call({ kind: 'import.start', connectorId: input.connectorId, options: input.options, pageSize: input.pageSize, limit: input.limit, dryRun: input.dryRun }),
+      status: (runId: string) => call({ kind: 'import.status', runId }),
+      list: () => call({ kind: 'import.list' }),
+      failures: (runId: string) => call({ kind: 'import.failures', runId }),
+      stop: (runId: string) => call({ kind: 'import.stop', runId }),
+      resume: (runId: string) => call({ kind: 'import.resume', runId }),
+    },
   };
   (window as unknown as { openldr: unknown }).openldr = api;
 

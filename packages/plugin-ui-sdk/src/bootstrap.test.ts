@@ -10,6 +10,13 @@ describe('SDK_BOOTSTRAP_V1', () => {
     expect(SDK_BOOTSTRAP_V1).toMatch(/ready/);
     expect(SDK_BOOTSTRAP_V1).toMatch(/ports\[0\]/);
   });
+  it('carries the import calls, and none of them takes SQL', () => {
+    for (const kind of ['import.allowed', 'import.diagnose', 'import.checks', 'import.start', 'import.status', 'import.list', 'import.failures', 'import.stop', 'import.resume']) {
+      expect(SDK_BOOTSTRAP_V1).toContain(kind);
+    }
+    const imports = SDK_BOOTSTRAP_V1.slice(SDK_BOOTSTRAP_V1.indexOf('imports:'));
+    expect(imports).not.toMatch(/sql/i);
+  });
 
   it('defines window.openldr SYNCHRONOUSLY (before any openldr:init) so screens never race the injection', () => {
     // Run the bootstrap IIFE against a controlled fake window, capturing the message handler.
