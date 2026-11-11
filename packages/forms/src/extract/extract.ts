@@ -188,6 +188,7 @@ export const ServiceRequestExtractor: ResourceExtractor = {
     if (ctx.authored) request.authoredOn = ctx.authored
 
     const codings: Coding[] = []
+    let orderText: string | undefined
     walkResponse(response.item, (item) => {
       const meta = index.get(item.linkId)
       const path = meta?.fhirPath
@@ -198,14 +199,15 @@ export const ServiceRequestExtractor: ResourceExtractor = {
 
       // The ordered test(s) → ServiceRequest.code. An answer carries its own system: a catalog test
       // since the Lab order moved to the lab's test list (test catalog S4), LOINC before that. An answer
-      // naming no system predates both and was always LOINC. Display comes from the Questionnaire
-      // answerOption.
+      // naming no system predates both and was always LOINC. Display comes from the answer itself
+      // (a picked test carries its name), else from the Questionnaire answerOption.
       if (path === 'ServiceRequest.code') {
         for (const answer of item.answer ?? []) {
           const code = answer.valueCoding?.code ?? answer.valueString
           if (!code) continue
           const system = answer.valueCoding?.system || LOINC
-          const display = meta?.answerOptions?.find((o) => o.code === code)?.display
+          const display = answer.valueCoding?.display || meta?.answerOptions?.find((o) => o.code === code)?.display
+          if (display && orderText === undefined) orderText = display
           const before = ctx.codingBefore?.get(`${system}|${code}`)
           if (before) codings.push(before)
           codings.push({ system, code, ...(display ? { display } : {}) })
@@ -225,7 +227,9 @@ export const ServiceRequestExtractor: ResourceExtractor = {
       }
       if (path === 'ServiceRequest.priority') request.priority = String(value) as ServiceRequest['priority']
     })
-    if (codings.length) request.code = { coding: codings }
+    // code.text names the order after its first test. The warehouse reads text before the first
+    // coding's display, and that first coding is often a LOINC link with no name of its own.
+    if (codings.length) request.code = { coding: codings, ...(orderText ? { text: orderText } : {}) }
 
     const rejection = orderRejectionOf(response, questionnaire)
     if (!rejection) return [request]

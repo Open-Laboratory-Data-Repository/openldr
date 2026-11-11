@@ -144,9 +144,19 @@ describe('ServiceRequestExtractor tests codings (test catalog S4)', () => {
   const codings = (model: ReturnType<typeof order>, answers: Record<string, unknown>, extra: object = {}) =>
     (ServiceRequestExtractor.extract(toQuestionnaireResponse(model, answers as never), toQuestionnaire(model), { ...ctx, ...extra })[0] as any).code?.coding
 
-  it('writes a catalog test under its own system, not as LOINC', () => {
+  it('writes a catalog test under its own system, not as LOINC, with its name', () => {
     expect(codings(order('reference'), { tests: [{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }] }))
-      .toEqual([{ system: CATALOG, code: 'HIVVL' }])
+      .toEqual([{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }])
+  })
+
+  it('names the order after its first test, so the warehouse keeps a test name', () => {
+    // The warehouse keeps the first coding, which is the LOINC link and carries no name, so
+    // panel_desc came out empty for every order taken in the studio. code.text is read first.
+    const codingBefore = new Map([[`${CATALOG}|HIVVL`, { system: 'http://loinc.org', code: '25836-8' }]])
+    const model = order('reference')
+    const answers = { tests: [{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }, { system: CATALOG, code: 'CD4', display: 'CD4 count' }] }
+    const request = ServiceRequestExtractor.extract(toQuestionnaireResponse(model, answers as never), toQuestionnaire(model), { ...ctx, codingBefore })[0] as any
+    expect(request.code.text).toBe('Viral load')
   })
 
   it('writes the coding the context names in front of the test, test by test', () => {
@@ -155,14 +165,14 @@ describe('ServiceRequestExtractor tests codings (test catalog S4)', () => {
       tests: [{ system: CATALOG, code: 'HIVVL', display: 'Viral load' }, { system: CATALOG, code: 'CD4', display: 'CD4 count' }],
     }, { codingBefore })).toEqual([
       { system: 'http://loinc.org', code: '25836-8' },
-      { system: CATALOG, code: 'HIVVL' },
-      { system: CATALOG, code: 'CD4' },
+      { system: CATALOG, code: 'HIVVL', display: 'Viral load' },
+      { system: CATALOG, code: 'CD4', display: 'CD4 count' },
     ])
   })
 
   it('keeps a LOINC answer as LOINC, and an answer that names no system as LOINC', () => {
     expect(codings(order('reference'), { tests: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }] }))
-      .toEqual([{ system: 'http://loinc.org', code: '718-7' }])
+      .toEqual([{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }])
     expect(codings(order('text'), { tests: '718-7' })).toEqual([{ system: 'http://loinc.org', code: '718-7' }])
   })
 })
