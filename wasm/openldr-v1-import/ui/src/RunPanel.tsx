@@ -13,6 +13,10 @@ export function RunPanel({ run, onChange, pollMs }: { run: ImportRun; onChange: 
   const [busy, setBusy] = useState(false);
   const active = isActive(run.status);
 
+  // Counts Stop and Resume presses. A progress read that was asked for before a press can answer
+  // after it, with the older status; such an answer is dropped.
+  const actions = useRef(0);
+
   useEffect(() => {
     if (!active) return;
     let cancelled = false;
@@ -20,9 +24,14 @@ export function RunPanel({ run, onChange, pollMs }: { run: ImportRun; onChange: 
     const timer = setInterval(() => {
       if (inFlight) return;
       inFlight = true;
+      const asked = actions.current;
       api.status(run.id)
-        .then((next) => { if (!cancelled) { setPollFailed(false); if (next) onChange(next); } })
-        .catch(() => { if (!cancelled) setPollFailed(true); })
+        .then((next) => {
+          if (cancelled || asked !== actions.current) return;
+          setPollFailed(false);
+          if (next) onChange(next);
+        })
+        .catch(() => { if (!cancelled && asked === actions.current) setPollFailed(true); })
         .finally(() => { inFlight = false; });
     }, pollMs);
     return () => { cancelled = true; clearInterval(timer); };
@@ -45,8 +54,12 @@ export function RunPanel({ run, onChange, pollMs }: { run: ImportRun; onChange: 
   async function act(call: (id: string) => Promise<ImportRun>) {
     setBusy(true);
     setActionError(null);
+    actions.current += 1;
     try {
-      onChange(await call(run.id));
+      const next = await call(run.id);
+      // Count again, so a read asked for while the press was in flight is dropped too.
+      actions.current += 1;
+      onChange(next);
     } catch (e) {
       setActionError(errorText(e));
     } finally {

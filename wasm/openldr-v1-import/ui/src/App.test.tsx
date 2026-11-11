@@ -196,6 +196,25 @@ describe('import step', () => {
     expect(stop).toHaveBeenCalledWith('r1');
   });
 
+  it('ignores a progress answer that was asked for before Stop was pressed', async () => {
+    const live = run({ counts: { keys: 500, imported: 500, failed: 0, resources: 7000 } });
+    // The first progress read hangs until the test lets it go, after Stop has answered.
+    let release: (r: unknown) => void = () => {};
+    const slow = new Promise((resolve) => { release = resolve; });
+    // Later reads never answer, so nothing else can correct the status during the test.
+    const status = vi.fn().mockReturnValueOnce(slow).mockReturnValue(new Promise(() => {}));
+    setup({ list: async () => [live], status, stop: async () => ({ ...live, status: 'stopping' }) });
+    render(<App pollMs={5} />);
+    await screen.findByTestId('run-stop');
+    await waitFor(() => expect(status).toHaveBeenCalledTimes(1));
+    click('run-stop');
+    await waitFor(() => expect(screen.getByTestId('run-status').textContent).toMatch(/Stopping/));
+    release(live); // the stale answer still says running
+    await new Promise((r) => setTimeout(r, 30));
+    expect(screen.getByTestId('run-status').textContent).toMatch(/Stopping/);
+    expect(screen.queryByTestId('run-stop')).toBeNull();
+  });
+
   it('offers Resume for a stopped run and carries on from it', async () => {
     const stopped = run({ status: 'stopped', counts: { keys: 300, imported: 300, failed: 0, resources: 4000 } });
     const resume = vi.fn(async () => ({ ...stopped, status: 'running' }));

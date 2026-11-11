@@ -93,11 +93,12 @@ export function App({ pollMs = 2000 }: { pollMs?: number }) {
               class={`v1i-step${i === step ? ' v1i-step-on' : ''}`}
               data-testid={`step-${i}`}
               aria-current={i === step ? 'step' : undefined}
+              aria-label={`${i + 1}. ${t(`step.${name}`)}`}
               disabled={i > reached}
               onClick={() => setStep(i)}
             >
               <span class="v1i-step-n">{i + 1}</span>
-              {t(`step.${name}`)}
+              <span class="v1i-step-label">{t(`step.${name}`)}</span>
             </button>
           </li>
         ))}

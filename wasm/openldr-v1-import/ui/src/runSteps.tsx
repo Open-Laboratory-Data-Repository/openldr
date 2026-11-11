@@ -91,6 +91,8 @@ export function ImportStep({ connectorId, connectorName, options, run, onRun, po
           <div key={k}><dt>{t(`options.${k}`)}</dt><dd class="v1i-wrap">{v}</dd></div>
         ))}
       </dl>
+      {/* The last run comes first, so Resume reads before starting over. */}
+      {run ? <RunPanel run={run} onChange={onRun} pollMs={pollMs} /> : null}
       {!active ? (
         <div class="v1i-block">
           <button
@@ -105,7 +107,6 @@ export function ImportStep({ connectorId, connectorName, options, run, onRun, po
         </div>
       ) : null}
       {error ? <p class="v1i-error v1i-wrap" data-testid="start-error">{t('run.startError', { error })}</p> : null}
-      {run ? <RunPanel run={run} onChange={onRun} pollMs={pollMs} /> : null}
     </section>
   );
 }
