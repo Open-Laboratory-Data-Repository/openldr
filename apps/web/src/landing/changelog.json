@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "f37702ef",
+          "type": "feat",
+          "scope": "docs",
+          "title": "Publish preferences guide under Personal settings"
+        },
+        {
           "hash": "dac33f47",
           "type": "fix",
           "scope": "docs",
