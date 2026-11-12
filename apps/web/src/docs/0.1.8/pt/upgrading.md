@@ -65,6 +65,16 @@ Este comando substitui o arranque da API. Não inicia dependências nem atende p
 
 Se a migração falhar, pare aqui. Algumas alterações do esquema podem já estar gravadas. Não inicie binários antigos nesse esquema. Investigue a falha ou restaure em conjunto bases, ficheiros, configuração, chaves e imagens da mesma cópia. Se o tráfego já retomou, reconcilie os envios e efeitos externos antes de restaurar um estado anterior.
 
+## Instalações que usam o Keycloak
+
+Faça isto antes de arrancar o novo ficheiro compose. Se o serviço `keycloak` do `docker-compose.yml` para o qual está a passar tiver uma linha `profiles`, acrescente esta linha ao ficheiro `.env` da instalação:
+
+```sh
+COMPOSE_PROFILES=keycloak
+```
+
+Sem ela, o Keycloak não arranca e ninguém consegue iniciar sessão. Se o `.env` já tiver uma linha `COMPOSE_PROFILES`, acrescente-lhe `keycloak` depois de uma vírgula. Voltar a executar o instalador de uma linha acrescenta a linha por si. Uma instalação com início de sessão local não tem nada a fazer aqui.
+
 ## Verificar antes de retomar o tráfego
 
 Inicie primeiro os serviços existentes de armazenamento e identidade, depois os serviços aplicacionais da versão escolhida. Preserve as versões dos motores de bases. Verifique `docker compose ps`, a saúde da API e os registos. Leia dados representativos no Studio ou na CLI. Verifique os recibos webhook e as execuções associadas antes de reabrir o tráfego.

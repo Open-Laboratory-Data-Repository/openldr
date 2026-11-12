@@ -5,7 +5,7 @@ qualquer sistema com Docker e o plugin Compose.
 
 ## Software
 
-- **Docker** 24+ com o plugin Compose (`docker compose`).
+- **Docker** 24+ com o plugin Compose (`docker compose`), na versão 2.20 ou posterior. O instalador para com um Compose mais antigo. Verifique o seu com `docker compose version`.
 - **OpenSSL** (para o certificado autoassinado que o instalador gera). Vem instalado por
   omissão no Linux e no macOS.
 - **curl** (Linux/macOS) ou PowerShell 5+ (Windows) para executar o instalador de uma linha.

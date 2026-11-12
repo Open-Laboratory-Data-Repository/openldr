@@ -65,6 +65,16 @@ This command overrides the API start command. It does not start dependencies or 
 
 If migration fails, stop here. Some schema changes may already have committed. Do not start old binaries against that schema. Diagnose the failure, or restore the matching database, blob, configuration, keys and image snapshot together. If traffic was reopened, reconcile deliveries and external effects before restoring an older snapshot.
 
+## Installs that use Keycloak
+
+Do this before you start the new compose file. If the `keycloak` service in the `docker-compose.yml` you are moving to has a `profiles` line, add this line to the install's `.env`:
+
+```sh
+COMPOSE_PROFILES=keycloak
+```
+
+Without it Keycloak does not start, and nobody can sign in. If `.env` already has a `COMPOSE_PROFILES` line, add `keycloak` to it after a comma. Re-running the one-line installer adds the line for you. An install that uses local sign-in has nothing to do here.
+
 ## Check before resuming traffic
 
 Start the existing storage and identity services first, then the pinned new application services. Preserve their database engine versions. Check `docker compose ps`, API health and logs. Read representative saved data through Studio or the CLI. Check workflow receipts and their linked runs before reopening incoming traffic.

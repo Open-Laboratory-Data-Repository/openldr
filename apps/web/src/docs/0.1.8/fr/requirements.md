@@ -4,7 +4,7 @@ OpenLDR est livré sous forme d'images de conteneurs **Linux**. Il fonctionne pa
 
 ## Logiciels
 
-- **Docker** 24+ avec le plugin Compose (`docker compose`).
+- **Docker** 24+ avec le plugin Compose (`docker compose`), en version 2.20 ou plus récente. L'installateur s'arrête sur un Compose plus ancien. Vérifiez le vôtre avec `docker compose version`.
 - **OpenSSL** (pour le certificat auto-signé que génère l'installateur). Présent par défaut sous Linux et macOS.
 - **curl** (Linux/macOS) ou PowerShell 5+ (Windows) pour lancer l'installateur en une ligne.
 
