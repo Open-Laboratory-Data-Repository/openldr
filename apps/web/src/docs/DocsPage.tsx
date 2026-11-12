@@ -25,6 +25,7 @@ import { InstallResultIllustration } from './InstallResultIllustration';
 import { InstallGuideIllustration } from './InstallGuideIllustration';
 import { INSTALL_PLATFORM_MARKER, installMarkdown, installScene, type InstallPlatform } from './installGuide';
 import { useWebsiteTheme } from '@/components/useWebsiteTheme';
+import { hasWebFocus, WebFocusedScreenshot } from './WebFocusedScreenshot';
 import { OPERATOR_PLATFORM_MARKER, OPERATOR_PAGES, operatorExample, operatorMarkdown, operatorText } from './operatorGuide';
 import { SERVER_COMMANDS, serverMarkdown, serverScene, serverPlatform } from './serverGuide';
 
@@ -123,6 +124,7 @@ function InstallCapture({ src, alt }: { src: string; alt: string }) {
 }
 
 function DocMedia({ src, alt, platform, locale }: { src: string; alt: string; platform: InstallPlatform; locale: DocLocale }) {
+  if (hasWebFocus(src)) return <WebFocusedScreenshot src={src} alt={alt} />;
   if (src === 'guide:install-result') return <InstallResultIllustration alt={alt} locale={locale} />;
   const example = operatorExample(src);
   if (example?.file) return null;

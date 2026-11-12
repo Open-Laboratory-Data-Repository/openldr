@@ -1,146 +1,184 @@
 # Load & push data
 
-Once OpenLDR is running, you need to get lab data into it. OpenLDR has **no generic FHIR
-ingest endpoint** — there is no `POST /fhir` you can send resources to. Data comes in through
-one of the paths below. Which one you use depends mostly on how you installed.
+<!-- operator-platform -->
 
-> **Where's the `openldr` CLI?** Both install types have it. The one-line Docker installer
-> writes an `openldr` wrapper into the install directory — run it there as `./openldr …`
-> (`.\openldr.ps1` on Windows). From a clone of the repository, run `pnpm openldr …` instead.
-> You do not need the CLI to get started either way: the installer sets `MIGRATE_ON_START=true`
-> and `SEED_ON_START=true`, so the stack migrates and seeds itself on first boot, and the
-> **HTTP webhook** below works on any install.
->
-> One difference matters for file arguments. The wrapper runs the CLI inside the `api`
-> container, which only sees the `data` directory, so put files in `./data` and name them with
-> the `data/` prefix. A source checkout uses ordinary host paths. See [the CLI page](/docs/cli).
+Run maintenance on the OpenLDR host, from your installed Compose folder. The examples use `~/Downloads/openldr_ce` on Linux/macOS and `C:\openldr_ce` in PowerShell. Replace these paths with your installation. The blue prompt is already shown by the terminal. Type the command only. File illustrations show text to edit in the named file. Pictures are examples, not proof that maintenance succeeded. Sample data is optional.
 
-## 1. Push over HTTP with a workflow webhook (works on any install)
+## Find a workflow
 
-The inbound HTTP path is a **workflow** with a **Webhook** trigger. The request body is handed
-to the workflow as its input, and **what gets stored is whatever the workflow does with it** —
-so you control the exact shape (a form submission, a vendor payload, or a FHIR Bundle you
-normalise inside the workflow).
+Use this to open an existing definition before inspecting or changing it.
 
-A fresh install ships **one** ingestion webhook workflow, **Ingest** (`wf-ingest`), that routes
-by the **shape** of the posted body. **A fresh install ships it enabled** — hand capture on the
-**Forms** page submits through it, so it is install-critical rather than optional. (On an
-**upgraded** install it may have been left disabled by an earlier version; see *Upgrading an
-existing install?* below.) Its HTTP endpoint is still closed to anyone without the per-install
-secret:
+### 1. Open Workflows
 
-| Workflow | Webhook path | Expects | Behavior |
-|---|---|---|---|
-| **Ingest** | `ingest` | a FHIR transaction **Bundle**, a **bare array** of FHIR resources, or a plain `{…}` object of **form answers** | a **Switch** node checks the shape: Bundle/array → **Unwrap FHIR Bundle** (one item per resource, references resolved); object → **Form Validate** against the seeded "Lab order" form. Both branches persist through the same **Persist / Store** |
+Select **Workflows** in the main menu.
 
-To use it:
+![Open Workflows from the main menu.](/docs-images/operator/workflows-guide-open-page.png)
 
-1. In the app, open **Workflows** and open **Ingest**.
-2. Open its **Webhook** trigger. A saved secret cannot be read back, so select **Replace secret**,
-   copy the new secret, then save the workflow. Ingest is a system workflow, so confirm with
-   **Save anyway**. The trigger has a fixed URL path (`ingest`).
-3. Send the payload from your external system:
+### 2. Find the workflow
 
-```bash
-curl -X POST https://your-host/api/workflows/hooks/ingest \
-  -H "Content-Type: application/json" \
-  -H "X-Webhook-Token: <the-webhook-secret>" \
-  -d @order.json
+Use **Search workflows** to filter names. Clear the search to restore the list.
+
+![Search filters the workflow names.](/docs-images/operator/workflows-guide-search.png)
+
+### 3. Open its row
+
+Select the workflow name. This example opens the shipped **Ingest** workflow.
+
+![Open the shipped Ingest workflow.](/docs-images/operator/workflows-guide-ingest-row.png)
+
+### 4. Fit the canvas
+
+Select **Fit View** at the bottom left. Use the plus and minus controls to zoom. Pan moves the canvas; Select draws a selection box.
+
+![Fit view brings the nodes into the canvas.](/docs-images/operator/workflows-guide-fit.png)
+
+## Set the Ingest webhook secret
+
+Use this when an authorised sender needs a credential you can copy. A saved secret cannot be revealed. Coordinate rotation with the senders first.
+
+### 1. Select Ingest received
+
+Select the first node, **Ingest received**.
+
+![Select the webhook trigger Ingest received.](/docs-images/operator/workflows-guide-trigger.png)
+
+### 2. Open its settings
+
+Select the gear labelled **Configure** above the selected node.
+
+![Configure opens the selected node settings.](/docs-images/operator/workflows-guide-configure.png)
+
+### 3. Generate a new secret
+
+Under **Secret**, select **Replace secret**. An unsaved value instead offers **Regenerate**.
+
+![Replace secret generates a value you must copy before saving.](/docs-images/operator/workflows-guide-replace-secret.png)
+
+### 4. Copy the new value
+
+Copy the new secret and keep it with your sender credentials. The URL and Header fields show where and how to send it.
+
+![Copy the new secret before saving. The saved value cannot be revealed.](/docs-images/operator/workflows-guide-copy-secret.png)
+
+### 5. Save the workflow
+
+Select **Save** in the toolbar.
+
+![Save stores the workflow and its new secret.](/docs-images/operator/workflows-guide-save.png)
+
+### 6. Confirm the system change
+
+Check the system-workflow warning, then select **Save anyway** when you intend the change.
+
+![System workflows require an explicit Save anyway confirmation.](/docs-images/operator/workflows-guide-confirm-save.png)
+
+**Expected result:** The Workflow saved message confirms the write. Senders must use the newly saved secret.
+
+![The workflow saved message confirms this write.](/docs-images/operator/workflows-guide-saved.png)
+
+## Send your payload over HTTPS
+
+Use the saved webhook URL and secret. Ingest accepts a FHIR Bundle, a resource array or supported form answers. A CLI file import accepts a Bundle or single resource, not that raw array. There is no generic POST /fhir ingest endpoint. Put your approved payload in data/your-payload.json.
+
+### 1. Post with the saved secret and a request key
+
+Replace host, saved secret and request key. Each new logical request needs its own key. Retries of that same request use the same key and same body. Never expose the secret in a public screenshot. Sending writes data according to the workflow; run only when intended.
+
+```sh
+{{operator:data-post}}
 ```
 
-**Security:** the secret is sent in the `X-Webhook-Token` header and checked in constant time on
-the server. Always POST over **HTTPS** so the token isn't exposed, treat the secret like a
-password, and rotate it by editing the workflow's webhook trigger. A wrong or missing token is
-rejected with `401`; an unknown path returns `404`.
+![Post with the saved secret and a request key.](guide:operator-data-post)
 
-You can also build your own webhook workflow (**Webhook → transform/validate → Persist / Store**)
-for any other payload shape — **Ingest** just covers the common cases out of the box.
+### 2. Poll an accepted request until it finishes
 
-> **Upgrading an existing install?** Workflows are seeded by id and never overwritten, so an
-> upgrade keeps the `wf-ingest` row you already have — including your edits to its graph.
->
-> - **Enabled state.** Earlier versions shipped `wf-ingest` **disabled**. Because hand capture now
->   submits through it, a disabled `wf-ingest` would make every form submission fail with
->   *"capture pipeline unavailable"*. The server therefore **enables it for you on startup** if it
->   finds it disabled — a one-flag change that leaves your node graph, name and webhook secret
->   untouched. Nothing else about the workflow is re-seeded. If you genuinely want it off, you
->   must also stop using hand capture, since the two cannot be separated.
-> - **Your edits.** A customised `wf-ingest` graph is never overwritten by an upgrade. If you need
->   the shipped graph back, use **Reset to default** on the workflow's ⋯ menu.
-> - **Retired workflows.** On a deployment that predates the unified wiring, the old
->   `wf-ingest-form` / `wf-ingest-raw` remain (disabled) and can be deleted manually, and the
->   pre-existing reactive companion keeps listening on the old event source.
+HTTP 202 means accepted, not completed. Use the response statusUrl or replace REQUEST_ID here. The saved secret is required to poll. A completed run can return HTTP 200; 500 means failure, and interrupted or cancelled receipts return 409. Investigate uncertain effects before resubmitting. Missing/wrong secrets return 401 and unknown paths return 404.
 
-### Post pre-built FHIR (the CDR toolchain)
-
-The **Ingest** workflow's FHIR branch is the front door for a system that already emits FHIR
-resources — most notably the **CDR toolchain**, which posts a **FHIR transaction Bundle**. Current
-CDR toolchain versions **default** their target path (`OPENLDR_CE_HOOK_PATH`) to the unified
-webhook (`/api/workflows/hooks/ingest`), so no path config is needed out of the box. An **older
-toolchain — or one whose `.env` still pins the retired `cdr-ingest` path** — must set
-`OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest` (the **full** path, not bare `ingest`) to target
-it. The pipeline is **Webhook → Switch → Unwrap FHIR Bundle → Persist / Store → Log**:
-
-- The request body is a **FHIR transaction Bundle** (or a bare array of FHIR resources). **Unwrap
-  FHIR Bundle** resolves internal references and unwraps it into **one item per resource**,
-  because **Persist / Store persists one FHIR resource per input item** — the same write path
-  (and **validation strictness gate**) the CLI uses.
-- **One webhook handles tests and questionnaires together.** Persist stores every resource, and the
-  projection routes each by `resourceType` (`Observation` → `lab_results`, `ServiceRequest` →
-  `lab_requests`, `QuestionnaireResponse` → `questionnaire_responses`, …).
-
-To point the CDR toolchain at a deployment, copy the **Ingest** webhook secret and set:
-
-```bash
-OPENLDR_CE_URL=https://your-host        # base URL of the CE deployment
-OPENLDR_CE_WEBHOOK_TOKEN=<the-secret>   # the Ingest webhook secret you copied
-OPENLDR_CE_TIMEZONE=+03:00              # UTC offset for DISA's unzoned timestamps (per country)
-# OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest  # optional — this is already the default
+```sh
+{{operator:data-poll}}
 ```
 
-`OPENLDR_CE_TIMEZONE` is **required** and has no safe default: DISA stores local wall-clock times
-with no zone, so an omitted offset would silently shift every clinical timestamp. Set it to the
-deployment's country (Tanzania `+03:00`; Mozambique/Zambia `+02:00`).
+![Poll an accepted request until it finishes.](guide:operator-data-poll)
 
-> **A Bundle or array is what the webhook wants — but not what the CLI wants.** The `ingest`
-> webhook's FHIR branch accepts a transaction **Bundle** or a bare **array** of resources. The
-> `openldr ingest` **CLI** below is narrower: it takes a FHIR **Bundle** (or one bare resource),
-> not an array. Send each payload to the path that matches its shape.
+### 3. Inspect the recorded receipt on the host
 
-If you just have a Bundle file, `openldr ingest bundle.json` (below) is the
-turnkey path — it applies the same converter + strictness gate without building a workflow.
+Replace REQUEST_ID. History in Studio also separates receipts from runs. A queued or running receipt has not completed. Disabling or changing a workflow can cancel queued work. Do not bulk retry with new keys.
 
-## 2. Load a file with the CLI (any install)
-
-`openldr ingest <file>` reads a file, converts it, and writes the results into the FHIR
-store. The **converter** decides how the file is parsed:
-
-```bash
-# A FHIR Bundle (the default converter)
-./openldr ingest data/bundle.json
-
-# A WHONET SQLite export, via a converter plugin (install the plugin first)
-./openldr ingest data/whonet.sqlite --plugin whonet-sqlite
-
-# A CSV with a column mapping
-./openldr ingest data/results.csv --plugin tabular --config data/mapping.json
+```sh
+{{operator:data-receipt}}
 ```
 
-Those are the installed-stack forms, so every file sits in `./data` and carries the `data/`
-prefix. From a source checkout, use `pnpm openldr` and ordinary host paths. The bundled
-converter plugins are repository files, so installing one is a source-checkout command:
+![Inspect the recorded receipt on the host.](guide:operator-data-receipt)
 
-```bash
-pnpm openldr ingest bundle.json
-pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
-pnpm openldr ingest whonet.sqlite --plugin whonet-sqlite
-pnpm openldr ingest results.csv --plugin tabular --config mapping.json
+## Load a file through the installed CLI
+
+Use your own valid FHIR JSON. Put it in the installation’s shared data folder. From a development checkout use pnpm openldr and ordinary host paths. Starter dashboards and sample data are optional; essential ingestion definitions remain available without them.
+
+### 1. Validate the file without importing it
+
+Validation is not ingestion. Correct reported errors first. A missing file often means it is outside data or the path lacks its data/ prefix.
+
+```sh
+{{operator:data-validate}}
 ```
 
-A successful run prints `batch <id>: done (<n> resources)`. **0 resources** means the converter
-did not recognise the file. Inspect or retry a batch with the `pipeline status` and
-`pipeline retry <batchId>` commands. Converters that ship with OpenLDR: `fhir-bundle`
-(default), `whonet-sqlite`, `hl7v2`, and `tabular`; more can be added as marketplace plugins.
+![Validate the file without importing it.](guide:operator-data-validate)
+
+### 2. Import when ready to write
+
+This writes into the configured installation. A successful run reports a batch and resource count. Zero resources is not useful proof of an import. Check the converter and source format.
+
+```sh
+{{operator:data-ingest}}
+```
+
+![Import when ready to write.](guide:operator-data-ingest)
+
+### 3. Read the batch status
+
+Find the batch ID printed by ingestion. The API worker may finish it asynchronously. A pending batch is not a completed import.
+
+```sh
+{{operator:data-status}}
+```
+
+![Read the batch status.](guide:operator-data-status)
+
+### 4. Inspect errors before retrying
+
+Replace BATCH_ID. Read the error and correct its cause before choosing pipeline retry. Stored FHIR resources project into the analytics warehouse; dashboard appearance also depends on projection and query filters.
+
+```sh
+{{operator:data-logs}}
+```
+
+![Inspect errors before retrying.](guide:operator-data-logs)
+
+## Use an approved converter when needed
+
+FHIR is the default. Other formats need the appropriate converter and configuration. Use an approved signed plugin in normal operation. The examples below are alternatives, not required sample files.
+
+### 1. Install the approved plugin file
+
+Replace the example filename with your approved artifact, placed in data. Development builds in reference-plugins are source-checkout files, not paths assumed to exist in an installed stack.
+
+```sh
+{{operator:data-plugin}}
+```
+
+![Install the approved plugin file.](guide:operator-data-plugin)
+
+### 2. Select its identifier for ingestion
+
+Replace source filename and PLUGIN_ID. Use the plugin’s documented mapping/configuration options. Review the batch afterward with the earlier status and log commands.
+
+```sh
+{{operator:data-plugin-ingest}}
+```
+
+![Select its identifier for ingestion.](guide:operator-data-plugin-ingest)
+
+## Optional payload examples
 
 ### Example payloads
 
@@ -213,6 +251,49 @@ The exact `mapping` keys are defined by the tabular plugin and are also editable
 in **Workflows** (the same plugin backs the workflow **Tabular** node), so you can build and
 preview a mapping in the app before saving it as `mapping.json`.
 
+## CDR sender settings
+
+### Post pre-built FHIR (the CDR toolchain)
+
+The **Ingest** workflow's FHIR branch is the front door for a system that already emits FHIR
+resources — most notably the **CDR toolchain**, which posts a **FHIR transaction Bundle**. Current
+CDR toolchain versions **default** their target path (`OPENLDR_CE_HOOK_PATH`) to the unified
+webhook (`/api/workflows/hooks/ingest`), so no path config is needed out of the box. An **older
+toolchain — or one whose `.env` still pins the retired `cdr-ingest` path** — must set
+`OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest` (the **full** path, not bare `ingest`) to target
+it. The pipeline is **Webhook → Switch → Unwrap FHIR Bundle → Persist / Store → Log**:
+
+- The request body is a **FHIR transaction Bundle** (or a bare array of FHIR resources). **Unwrap
+  FHIR Bundle** resolves internal references and unwraps it into **one item per resource**,
+  because **Persist / Store persists one FHIR resource per input item** — the same write path
+  (and **validation strictness gate**) the CLI uses.
+- **One webhook handles tests and questionnaires together.** Persist stores every resource, and the
+  projection routes each by `resourceType` (`Observation` → `lab_results`, `ServiceRequest` →
+  `lab_requests`, `QuestionnaireResponse` → `questionnaire_responses`, …).
+
+To point the CDR toolchain at a deployment, copy the **Ingest** webhook secret and set:
+
+**`CDR toolchain .env`**
+
+```dotenv
+OPENLDR_CE_URL=https://your-host        # base URL of the CE deployment
+OPENLDR_CE_WEBHOOK_TOKEN=<the-secret>   # the Ingest webhook secret you copied
+OPENLDR_CE_TIMEZONE=+03:00              # UTC offset for DISA's unzoned timestamps (per country)
+# OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest  # optional — this is already the default
+```
+
+`OPENLDR_CE_TIMEZONE` is **required** and has no safe default: DISA stores local wall-clock times
+with no zone, so an omitted offset would silently shift every clinical timestamp. Set it to the
+deployment's country (Tanzania `+03:00`; Mozambique/Zambia `+02:00`).
+
+> **A Bundle or array is what the webhook wants — but not what the CLI wants.** The `ingest`
+> webhook's FHIR branch accepts a transaction **Bundle** or a bare **array** of resources. The
+> `openldr ingest` **CLI** below is narrower: it takes a FHIR **Bundle** (or one bare resource),
+> not an array. Send each payload to the path that matches its shape.
+
+If you just have a Bundle file, `openldr ingest bundle.json` (below) is the
+turnkey path — it applies the same converter + strictness gate without building a workflow.
+
 ## 3. Distributed sync (lab ↔ central, not for third parties)
 
 If this instance is a **lab** enrolled with a **central** OpenLDR server, its data replicates up
@@ -237,7 +318,7 @@ authorised it.
 Rarer facts are rows in `lab_request_attributes`, one row per request and attribute. The attribute
 codes are the `urn:openldr:cs:request-attribute` coding system. Load it once with:
 
-    openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
+    pnpm openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
 
 Run this from a source checkout of the OpenLDR CE repository, where the file lives at that path.
 Without the import, attribute rows are still stored. Only the code display names are missing.

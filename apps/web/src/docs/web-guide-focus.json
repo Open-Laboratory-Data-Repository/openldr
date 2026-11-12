@@ -1,0 +1,375 @@
+{
+  "workflows-guide-open-page.png": {
+    "crop": {
+      "x": 0,
+      "y": 84.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 8,
+        "y": 216,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "workflows-guide-search.png": {
+    "crop": {
+      "x": 156.0,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 252,
+        "y": 56,
+        "width": 288,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "workflows-guide-ingest-row.png": {
+    "crop": {
+      "x": 35.0703125,
+      "y": 15.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 256,
+        "y": 157.5,
+        "width": 38.140625,
+        "height": 16
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "workflows-guide-fit.png": {
+    "crop": {
+      "x": 317.0,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 544,
+        "y": 758,
+        "width": 26,
+        "height": 26
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "workflows-guide-trigger.png": {
+    "crop": {
+      "x": 342.06005859375,
+      "y": 312.56719970703125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 562,
+        "y": 434.5377197265625,
+        "width": 40.1201171875,
+        "height": 56.0589599609375
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "workflows-guide-configure.png": {
+    "crop": {
+      "x": 326.16510009765625,
+      "y": 260.5377502441406,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 552.1651000976562,
+        "y": 396.5377502441406,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "workflows-guide-replace-secret.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1155.28125,
+        "y": 638.71875,
+        "width": 108.71875,
+        "height": 34
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 3
+  },
+  "workflows-guide-copy-secret.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 977,
+        "y": 640.71875,
+        "width": 170.28125,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "workflows-guide-save.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1115.3125,
+        "y": 85.5,
+        "width": 73.359375,
+        "height": 30
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "workflows-guide-confirm-save.png": {
+    "crop": {
+      "x": 541.359375,
+      "y": 341.265625,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 723.71875,
+        "y": 473.265625,
+        "width": 115.28125,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "workflows-guide-saved.png": {
+    "crop": {
+      "x": 749.2421875,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 940,
+        "y": 739.5,
+        "width": 98.484375,
+        "height": 19.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "workflows-guide-history.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1023.96875,
+        "y": 85.5,
+        "width": 83.34375,
+        "height": 30
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "workflows-guide-run-row.png": {
+    "crop": {
+      "x": 631,
+      "y": 15.96875,
+      "width": 649,
+      "height": 405.625
+    },
+    "targets": [
+      {
+        "x": 681,
+        "y": 195.53125,
+        "width": 599,
+        "height": 46.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "workflows-guide-run-result.png": {
+    "crop": {
+      "x": 497.015625,
+      "y": 37.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 697,
+        "y": 179.53125,
+        "width": 80.03125,
+        "height": 16
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "workflows-guide-run-node.png": {
+    "crop": {
+      "x": 631,
+      "y": 270.484375,
+      "width": 649,
+      "height": 405.625
+    },
+    "targets": [
+      {
+        "x": 681,
+        "y": 449.65625,
+        "width": 599,
+        "height": 47.28125
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 4
+  },
+  "workflows-guide-run-output.png": {
+    "crop": {
+      "x": 479.515625,
+      "y": 415.46875,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 697,
+        "y": 552.71875,
+        "width": 45.03125,
+        "height": 25.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "workflows-guide-receipts.png": {
+    "crop": {
+      "x": 631,
+      "y": 157.71875,
+      "width": 649,
+      "height": 405.625
+    },
+    "targets": [
+      {
+        "x": 681,
+        "y": 252.53125,
+        "width": 599,
+        "height": 216
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 6
+  }
+}

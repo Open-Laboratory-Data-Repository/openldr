@@ -177,3 +177,6 @@
   mask-composite: intersect;
 }
 :root[data-theme='dark'] .web-doc-dotted-dots { background-image: radial-gradient(circle, color-mix(in srgb, var(--text-muted) 35%, transparent) 1.25px, transparent 1.5px); }
+
+/* Long setting names and URL examples must fit phone-width guide text. */
+.doc-content :not(pre) > code { overflow-wrap: anywhere; }
