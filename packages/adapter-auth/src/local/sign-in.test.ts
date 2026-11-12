@@ -78,6 +78,55 @@ describe('login', () => {
     expect(r).not.toHaveProperty('lockStarted');
   });
 
+  it('returns a fresh result for each unknown user', async () => {
+    const first = await svc.login({ identifier: 'nobody', password: GOOD, ip: null, userAgent: null });
+    (first as Record<string, unknown>).reason = 'locked';
+    (first as Record<string, unknown>).userId = 'tampered';
+    expect(await svc.login({ identifier: 'nobody', password: GOOD, ip: null, userAgent: null })).toStrictEqual({ ok: false, reason: 'invalid' });
+  });
+
+  it('does not let a right guess in a parallel burst get past the lock', async () => {
+    // The right guess hashes in 30 ms and the wrong ones in 5 ms. The hasher runs four at a
+    // time, so the five wrong guesses finish and set the lock while the right one still hashes.
+    const track = { inFlight: 0, peak: 0 };
+    const slowScrypt: ScryptFn = async (password, salt, keylen, opts) => {
+      track.inFlight++;
+      track.peak = Math.max(track.peak, track.inFlight);
+      await new Promise((r) => setTimeout(r, password === GOOD ? 30 : 5));
+      track.inFlight--;
+      return fakeScrypt(password, salt, keylen, opts);
+    };
+    const slowHasher = createPasswordHasher({ scrypt: slowScrypt });
+    const burn = vi.spyOn(slowHasher, 'burn');
+    const slowSvc = createLocalSignIn({ store, users, roles, hasher: slowHasher, key, now: clock.now });
+    const attempt = (password: string) => slowSvc.login({ identifier: 'ada', password, ip: null, userAgent: null });
+
+    const [right, ...wrong] = await Promise.all([attempt(GOOD), ...Array.from({ length: 5 }, () => attempt('wrong wrong!'))]);
+
+    // Proof the six calls overlapped: none saw a lock at the first check, so none burned a
+    // hash, and four hashes ran at once.
+    expect(burn).not.toHaveBeenCalled();
+    expect(track.peak).toBe(4);
+    expect(right).toEqual({ ok: false, reason: 'locked', userId: adaId });
+    expect(wrong.filter((r) => !r.ok && r.lockStarted)).toHaveLength(1);
+    expect(wrong.every((r) => !r.ok && r.reason === 'invalid')).toBe(true);
+    expect(await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'locked', userId: adaId });
+  });
+
+  it('answers locked to a wrong guess that finishes after the lock is set, and still counts it', async () => {
+    for (let i = 0; i < 4; i++) await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null });
+    // The fifth failure lands while this call is between its first lock check and its hash.
+    const realVerify = hasher.verify.bind(hasher);
+    vi.spyOn(hasher, 'verify').mockImplementationOnce(async (password, stored) => {
+      await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null });
+      return realVerify(password, stored);
+    });
+    const record = vi.spyOn(store, 'recordFailure');
+    const r = await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null });
+    expect(r).toEqual({ ok: false, reason: 'locked', userId: adaId });
+    expect(record).toHaveBeenCalledTimes(2);
+  });
+
   it('burns a hash for an unknown user', async () => {
     const burn = vi.spyOn(hasher, 'burn');
     await svc.login({ identifier: 'nobody', password: 'x'.repeat(12), ip: null, userAgent: null });
@@ -306,6 +355,19 @@ describe('changePassword', () => {
     expect((await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).ok).toBe(true);
   });
 
+  it('locks after five wrong current passwords, and the lock holds for sign-in too', async () => {
+    const sessionId = (await login()).cookieValue.split('.')[0]!;
+    for (let i = 0; i < 5; i++) {
+      expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: NEW })).toBe('wrong_current');
+    }
+    const verify = vi.spyOn(hasher, 'verify');
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: NEW })).toBe('wrong_current');
+    expect(verify).not.toHaveBeenCalled();
+    expect(await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'locked', userId: adaId });
+    clock.advance(LOCK_MS + 1);
+    expect((await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).ok).toBe(true);
+  });
+
   it('checks the current password before the rules', async () => {
     const a = await login();
     const sessionId = a.cookieValue.split('.')[0]!;
@@ -383,6 +445,13 @@ describe('setup', () => {
     // The leftover user row has no password, so a new code and another name can finish setup.
     const again = await svc.setup({ setupCode: await svc.createSetupCode(), username: 'eve', password: GOOD, ip: null, userAgent: null });
     expect(again.ok).toBe(true);
+  });
+
+  it('refuses a taken username without spending the code', async () => {
+    await store.createUser({ username: 'ada' });
+    const code = await svc.createSetupCode();
+    expect(await svc.setup({ setupCode: code, username: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'username_taken' });
+    expect((await svc.setup({ setupCode: code, username: 'eve', password: GOOD, ip: null, userAgent: null })).ok).toBe(true);
   });
 
   it('checks the username and password before it spends the code', async () => {

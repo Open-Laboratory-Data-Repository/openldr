@@ -30,7 +30,7 @@ export interface NewSession extends SessionGrant { cookieValue: string; cookieEx
 export type LoginResult = ({ ok: true } & NewSession)
   | { ok: false; reason: 'invalid' | 'locked' | 'disabled'; userId?: string; lockStarted?: true };
 export type SetupResult = ({ ok: true } & NewSession)
-  | { ok: false; reason: 'already_set_up' | 'bad_code' | 'bad_username' | PasswordRuleFailure };
+  | { ok: false; reason: 'already_set_up' | 'bad_code' | 'bad_username' | 'username_taken' | PasswordRuleFailure };
 export interface LocalSignIn {
   setupRequired(): Promise<boolean>;
   login(input: { identifier: string; password: string; ip: string | null; userAgent: string | null }): Promise<LoginResult>;
@@ -64,8 +64,6 @@ const FIRST_ADMIN_ROLE = 'lab_admin';
 // so a stray byte such as \0, which Postgres refuses in text, cannot make a lookup throw.
 const COOKIE_PART = /^[A-Za-z0-9_-]+$/;
 
-const UNKNOWN_USER = { ok: false, reason: 'invalid' } as const;
-
 function sha256Hex(text: string): string {
   return createHash('sha256').update(text).digest('hex');
 }
@@ -83,6 +81,11 @@ function secretMatches(secret: string, storedHash: string): boolean {
   const presented = Buffer.from(sha256Hex(secret), 'hex');
   const stored = Buffer.from(storedHash, 'hex');
   return stored.length === presented.length && timingSafeEqual(presented, stored);
+}
+
+/** A lock time in the past is an old lock that has ended. */
+function isLocked(lockedUntil: Date | null | undefined, now: Date): boolean {
+  return lockedUntil != null && lockedUntil > now;
 }
 
 function isLive(session: LocalSession, now: Date): boolean {
@@ -155,24 +158,30 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       const userId = await store.findUserIdByIdentifier(input.identifier);
       if (!userId) {
         await hasher.burn();
-        return UNKNOWN_USER;
+        return { ok: false, reason: 'invalid' };
       }
       const credential = await store.getCredential(userId);
       if (!credential) {
         await hasher.burn();
         return { ok: false, reason: 'invalid', userId };
       }
-      // A lock time in the past is an old lock that has ended.
-      if (credential.lockedUntil !== null && credential.lockedUntil > now) {
+      if (isLocked(credential.lockedUntil, now)) {
         await hasher.burn();
         return { ok: false, reason: 'locked', userId };
       }
-      if (!(await hasher.verify(input.password, credential.passwordHash))) {
+      const passwordOk = await hasher.verify(input.password, credential.passwordHash);
+      // Read the lock again. A burst of requests can all pass the check above and then wait in
+      // the hash queue while another request in the burst sets the lock. Right and wrong
+      // passwords get the same answer here, so the reply does not reveal a right guess.
+      const lockedAfterVerify = isLocked((await store.getCredential(userId))?.lockedUntil, now);
+      if (!passwordOk) {
         const { lockedUntil } = await store.recordFailure(userId, now, MAX_FAILURES, LOCK_MS);
+        if (lockedAfterVerify) return { ok: false, reason: 'locked', userId };
         // recordFailure can hand back an old lock that has ended. Only a future one is new.
-        if (lockedUntil !== null && lockedUntil > now) return { ok: false, reason: 'invalid', userId, lockStarted: true };
+        if (isLocked(lockedUntil, now)) return { ok: false, reason: 'invalid', userId, lockStarted: true };
         return { ok: false, reason: 'invalid', userId };
       }
+      if (lockedAfterVerify) return { ok: false, reason: 'locked', userId };
       const user = await users.get(userId);
       if (!user) return { ok: false, reason: 'invalid', userId };
       if (!(await isAllowed(user))) return { ok: false, reason: 'disabled', userId };
@@ -202,10 +211,16 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
     },
 
     async changePassword(input) {
+      const now = clock();
       const credential = await store.getCredential(input.userId);
       const user = await users.get(input.userId);
       if (!credential || !user) return 'wrong_current';
-      if (!(await hasher.verify(input.currentPassword, credential.passwordHash))) return 'wrong_current';
+      // The same lock as sign-in, so this route is not a second way to guess the password.
+      if (isLocked(credential.lockedUntil, now)) return 'wrong_current';
+      if (!(await hasher.verify(input.currentPassword, credential.passwordHash))) {
+        await store.recordFailure(input.userId, now, MAX_FAILURES, LOCK_MS);
+        return 'wrong_current';
+      }
       const rule = checkPasswordRules(input.newPassword, user.username);
       if (rule !== 'ok') return rule;
       await store.setPassword(input.userId, await hasher.hash(input.newPassword), false);
@@ -225,6 +240,8 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       if (!USERNAME.test(input.username)) return { ok: false, reason: 'bad_username' };
       const rule = checkPasswordRules(input.password, input.username);
       if (rule !== 'ok') return { ok: false, reason: rule };
+      // A name that cannot be created must not spend the code.
+      if (await store.findUserIdByIdentifier(input.username)) return { ok: false, reason: 'username_taken' };
       // Look the role up before the code is spent, so a missing role writes nothing.
       const adminRole = await roles.getBySlug(FIRST_ADMIN_ROLE);
       if (!adminRole) throw new Error(`the ${FIRST_ADMIN_ROLE} role does not exist`);
