@@ -1,0 +1,53 @@
+[
+  {
+    "id": "ui-reference",
+    "version": "0.1.0",
+    "active": true,
+    "enabled": true,
+    "approvedBy": null,
+    "type": "plugin",
+    "publisher": null,
+    "description": "Reference plugin proving the plugin-UI surface (panel + datastore + gated host service)",
+    "license": "Apache-2.0",
+    "payload": {
+      "ui": {
+        "nav": {
+          "icon": "puzzle",
+          "label": "Reference Plugin",
+          "section": "apps"
+        },
+        "entry": "ui.html",
+        "sites": {
+          "panel": {
+            "title": "Reference panel"
+          },
+          "widget": {
+            "title": "Reference card",
+            "height": "small"
+          }
+        },
+        "sha256": "2070f45662ad7adb6464f17a857195d12b28406586fed993f00dfedee2005b97",
+        "uiSdkVersion": "1"
+      },
+      "kind": "plugin",
+      "wasi": true,
+      "limits": {
+        "memoryMb": 256,
+        "timeoutMs": 30000
+      },
+      "entrypoint": "convert",
+      "pluginKind": "sink",
+      "wasmSha256": "ae99e2196fc39e2fd8988e396f4e89cc9995632c2489247337e305a2e868868d",
+      "entrypoints": [
+        "health_check",
+        "push_aggregate"
+      ]
+    },
+    "capabilities": [
+      {
+        "kind": "host:reports"
+      }
+    ],
+    "legacy": false
+  }
+]

@@ -65,7 +65,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Connectors
 - [x] Connect to SQL Server and diagnose a connection
 - [ ] Import from OpenLDR v1
-- [ ] Marketplace
+- [x] Marketplace
 - [ ] Plugin cards and side panels
 - [ ] Authentication providers
 - [ ] Environment Variables

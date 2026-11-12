@@ -1,0 +1,337 @@
+{
+  "title": "Marketplace",
+  "meta": [
+    "System setup",
+    "Review and install packages",
+    "About 15 minutes"
+  ],
+  "intro": [
+    "Use Marketplace to review and install plugins, form templates, reports and content packs. Packages come from registries, which are lists of files supplied by a publisher.",
+    "<strong>View marketplace</strong> lets you browse packages and installed items. <strong>Manage marketplace</strong> lets you install, disable, remove and manage registries.",
+    "Begin with the registry your organisation trusts. A fresh installation includes Default registry on GitHub. Its server must reach that registry to read packages.",
+    "The pictures use a signed training sink from a local practice registry. You can follow the same tasks with your approved package. No documentation samples are required. Optional practice setup is at the end."
+  ],
+  "tasks": [
+    {
+      "id": "open",
+      "title": "Find your package",
+      "intro": [
+        "Check its source and purpose before choosing a package. Installing a plugin grants its declared capabilities."
+      ],
+      "steps": [
+        [
+          "Open Marketplace",
+          "Open <strong>Settings</strong>, then <strong>Marketplace</strong>.",
+          [
+            "open"
+          ]
+        ],
+        [
+          "Choose Browse",
+          "Use <strong>Browse</strong> to see available packages from enabled registries.",
+          [
+            "browse"
+          ]
+        ],
+        [
+          "Search for the package",
+          "Enter the package id in Search. The fictional practice example uses <code>test-sink</code>.",
+          [
+            "search"
+          ]
+        ],
+        [
+          "Choose a type if useful",
+          "Use <strong>All types</strong> to narrow the list to a plugin, form template, report or content pack.",
+          [
+            "filter"
+          ]
+        ],
+        [
+          "Check the card",
+          "Read the id, version, publisher and registry. Open the correct package card.",
+          [
+            "card"
+          ]
+        ]
+      ],
+      "result": "The package detail opens. Opening it retrieves the package information needed for signature, permission and compatibility checks.",
+      "resultShots": []
+    },
+    {
+      "id": "review",
+      "title": "Read the package before installing",
+      "intro": [
+        "A signature check establishes whether the file matches the publisher key. Decide whether you trust that publisher and what the package may do."
+      ],
+      "steps": [
+        [
+          "Check the signature",
+          "Read <strong>Verified</strong> or the verification failure. An unopened remote card can be Unverified until details load.",
+          [
+            "signature"
+          ]
+        ],
+        [
+          "Read the description",
+          "Read what the package does and any required setup. This training package has no real destination.",
+          [
+            "readme"
+          ]
+        ],
+        [
+          "Read permissions and requirements",
+          "Check publisher, selected version, permissions and compatibility. Loading permissions or Permissions unavailable does not mean no permissions are requested. Wait for confirmed details.",
+          [
+            "permissions"
+          ]
+        ]
+      ],
+      "result": "Install becomes available only when the selected version passes the required checks. Selecting another version starts its checks again.",
+      "resultShots": []
+    },
+    {
+      "id": "install",
+      "title": "Approve and install a package",
+      "intro": [
+        "Use this only after reviewing the selected package and capabilities."
+      ],
+      "steps": [
+        [
+          "Choose Install",
+          "Open the package detail dots and select <strong>Install</strong>.",
+          [
+            "install"
+          ]
+        ],
+        [
+          "Review the approval",
+          "Check the version and <strong>Requested capabilities</strong>. A content pack shows its included steps instead.",
+          [
+            "consent"
+          ]
+        ],
+        [
+          "Approve this installation",
+          "Select <strong>Approve &amp; install</strong> to proceed. Cancel closes the approval without installing.",
+          [
+            "approve"
+          ]
+        ],
+        [
+          "Check Installed",
+          "Use the detail dots and Back, then choose <strong>Installed</strong>. Check the installed id and Active state.",
+          [
+            "installed"
+          ]
+        ]
+      ],
+      "result": "The package is installed in this OpenLDR instance. Installation does not configure every external dependency or prove the plugin can import your data.",
+      "resultShots": []
+    },
+    {
+      "id": "disable",
+      "title": "Disable or enable an installed plugin",
+      "intro": [
+        "Disabling keeps the installed files and record. It stops the plugin loading."
+      ],
+      "steps": [
+        [
+          "Choose Disable",
+          "On Installed, open the plugin. Open its dots and select <strong>Disable</strong>.",
+          [
+            "disable"
+          ]
+        ],
+        [
+          "Enable it again when appropriate",
+          "After disabling, reload the page and reopen the plugin from Installed. Open its dots and select <strong>Enable</strong>. This refreshes the current menu state.",
+          [
+            "enable"
+          ]
+        ]
+      ],
+      "result": "The installed plugin can load again when enabled. This does not change its external connection settings.",
+      "resultShots": []
+    },
+    {
+      "id": "remove",
+      "title": "Remove an installed plugin",
+      "intro": [
+        "Check dependent workflows and imports before removing a plugin."
+      ],
+      "steps": [
+        [
+          "Choose Remove",
+          "Open the installed plugin detail dots and select <strong>Remove</strong>.",
+          [
+            "remove"
+          ]
+        ],
+        [
+          "Confirm the plugin id",
+          "In the confirmation, choose <strong>Remove</strong> to uninstall this plugin or Cancel to keep it. The practice capture removes test-sink.",
+          [
+            "remove-confirm"
+          ]
+        ]
+      ],
+      "result": "The removed plugin is no longer installed. Its available registry card can still appear in Browse.",
+      "resultShots": []
+    },
+    {
+      "id": "registry",
+      "title": "Add a registry",
+      "intro": [
+        "Use the registry URL or server folder supplied by your organisation. A local registry folder contains package directories. It must be accessible to the OpenLDR server."
+      ],
+      "steps": [
+        [
+          "Open Registries",
+          "Choose the <strong>Registries</strong> tab. Check existing sources before adding a duplicate.",
+          [
+            "registries"
+          ]
+        ],
+        [
+          "Choose Add registry",
+          "Open the tab-strip dots and select <strong>Add registry</strong>.",
+          [
+            "add-registry"
+          ]
+        ],
+        [
+          "Name the source",
+          "Enter a useful <strong>Name</strong>. The example uses Example local registry.",
+          [
+            "registry-name"
+          ]
+        ],
+        [
+          "Choose its type",
+          "Choose <strong>Local directory</strong> for a folder on the API server or <strong>Remote (HTTP)</strong> for a web registry.",
+          [
+            "registry-type"
+          ]
+        ],
+        [
+          "Enter its location",
+          "Fill <strong>Location</strong> with the server folder or registry base URL. The picture uses an isolated practice folder.",
+          [
+            "registry-location"
+          ]
+        ],
+        [
+          "Save the source",
+          "Open the sheet dots and select <strong>Save</strong>.",
+          [
+            "registry-save"
+          ]
+        ]
+      ],
+      "result": "The enabled registry appears in the list. Its available packages appear in Browse. A folder on your laptop is not automatically visible to a server or container.",
+      "resultShots": [
+        "registry-saved"
+      ]
+    },
+    {
+      "id": "registry-edit",
+      "title": "Change a registry",
+      "intro": [
+        "A disabled registry stops supplying available packages. It does not uninstall packages already installed."
+      ],
+      "steps": [
+        [
+          "Choose Edit",
+          "Open the registry row dots and select <strong>Edit</strong>.",
+          [
+            "registry-edit"
+          ]
+        ],
+        [
+          "Check settings and Enabled",
+          "Update the name, type, location or Enabled state. Save from the sheet dots. Close without Save to discard changes.",
+          [
+            "registry-settings"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Review packages on a phone",
+      "intro": [
+        "The same tabs and package actions are available at phone width."
+      ],
+      "steps": [
+        [
+          "Read a package card",
+          "Search in Browse and open the correct card. Cards stack vertically.",
+          [
+            "phone"
+          ]
+        ],
+        [
+          "Review version and permissions",
+          "Read details above the package description, then scroll for the remaining sections.",
+          [
+            "phone-details"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "packs",
+      "title": "Content packs and other package types",
+      "paragraphs": [
+        "A content pack applies its declared reference-data steps in order. Review its list and counts before installing. Pack installation can update code systems, value sets, facilities, mappings and named queries. A retry can overwrite a query changed locally.",
+        "If a pack fails during application, earlier steps can remain written. Read Failed at step N and its error, correct the cause, then choose Install again. A pack refuses invalid signatures and failed preflight checks before writing.",
+        "<strong>Detach</strong> forgets an installed pack or form-template record while retaining its created data. It is not an uninstall. Plugins offer Remove. An older installed plugin version can offer Rollback. These alternatives depend on the selected package type and installed versions.",
+        "A package whose details cannot load keeps installation disabled. Check registry availability before retrying. This preview exercised the plugin path. It did not apply a content pack or roll back an older plugin."
+      ]
+    },
+    {
+      "id": "cli",
+      "title": "Use a local bundle from the CLI",
+      "paragraphs": [
+        "Follow <a href=\"start-here-review.html\">Start here</a> for CLI setup. From <code>openldr_ce</code>, CLI install reads a bundle directory on the server. It does not browse the Studio registry list. Verify and dry-run before applying an approved bundle."
+      ],
+      "html": [
+        "<pre><code>pnpm openldr market list\npnpm openldr market verify &lt;bundle-directory&gt;\npnpm openldr market install &lt;bundle-directory&gt; --dry-run\npnpm openldr market install &lt;bundle-directory&gt;\npnpm openldr market disable &lt;plugin-id&gt;\npnpm openldr market remove &lt;plugin-id&gt;</code></pre>"
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional practice with a local training sink",
+      "paragraphs": [
+        "Use your approved registry and packages for normal work. The optional <a href=\"marketplace-evidence/practice-registry/test-sink/manifest.json\">practice manifest</a> belongs to a signed training bundle. It has no clinical sample data and sends nothing to a real destination.",
+        "In a source checkout on a disposable installation, <code>pnpm build:test-sink</code> and <code>pnpm make:docs-marketplace-bundle</code> create the repository training bundle. Use the generated bundle folder on that server as a local registry. Local registry roots contain immediate package directories. The HTTP index format is different.",
+        "The native pictures use a separate generated practice folder inside this preview evidence directory. Do not treat its publisher key as a production trust decision."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>Browse is empty.</strong> Clear Search and the type filter. Check enabled registries and whether the API server can read the folder or URL. Use the tab-strip dots and Refresh after source changes.",
+        "<strong>A local package is missing.</strong> Point the registry at the directory whose immediate children are readable bundle directories, each with its manifest and payload.",
+        "<strong>Permissions unavailable.</strong> The package details could not be retrieved. This does not establish an empty permission list.",
+        "<strong>Approval stays open after an error.</strong> Read the error notification. Correct storage, compatibility, signature or other reported requirements before retrying.",
+        "<strong>A plugin is installed but missing elsewhere.</strong> Confirm it is enabled and declares the expected importer, page or other capability. For cards and panels, see <a href=\"plugin-sites-review.html\">Plugin cards and side panels</a>."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"connectors-review.html\">Connectors</a> covers plugin destinations. <a href=\"forms-review.html\">Forms</a> covers form editing. <a href=\"plugin-sites-review.html\">Plugin cards and side panels</a> covers optional plugin places."
+      ]
+    }
+  ]
+}
