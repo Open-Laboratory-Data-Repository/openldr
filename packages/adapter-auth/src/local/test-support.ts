@@ -1,7 +1,8 @@
 // In-memory fakes for testing local sign-in. Not used by production code.
 import { randomUUID } from 'node:crypto';
 import type { LocalAuthStore, LocalCredential, LocalSession, StoredSigningKey } from '@openldr/ports';
-import type { SignInRoles, SignInUser, SignInUsers } from './sign-in';
+import type { DirectoryUsers } from './local-auth';
+import type { SignInRoles, SignInUser } from './sign-in';
 
 interface FakeUserRow {
   id: string; username: string; email: string | null; displayName: string | null;
@@ -10,13 +11,14 @@ interface FakeUserRow {
 
 export interface FakeClock { now(): Date; advance(ms: number): void }
 export type FakeStore = LocalAuthStore & { credentialCount(): number };
-export type FakeUsers = SignInUsers & { disable(username: string): void; block(username: string): void };
+export type FakeUsers = DirectoryUsers & { disable(username: string): void; block(username: string): void };
 export type FakeRoles = SignInRoles & { slugsFor(userId: string): string[] };
 
 /** The preset roles the fakes know about. */
 export const FAKE_ROLES = [
   { id: 'role-lab-admin', slug: 'lab_admin' },
   { id: 'role-lab-technician', slug: 'lab_technician' },
+  { id: 'role-data-analyst', slug: 'data_analyst' },
 ];
 
 export function makeFakes(start: Date = new Date('2026-01-01T00:00:00Z')): {
@@ -168,11 +170,40 @@ export function makeFakes(start: Date = new Date('2026-01-01T00:00:00Z')): {
     credentialCount: () => credentials.size,
   };
 
+  const toSignInUser = (row: FakeUserRow): SignInUser =>
+    ({ id: row.id, username: row.username, displayName: row.displayName, email: row.email, status: row.status });
+
   const users: FakeUsers = {
-    async get(id): Promise<SignInUser | undefined> {
+    async get(id) {
       const row = userRows.get(id);
-      if (!row) return undefined;
-      return { id: row.id, username: row.username, displayName: row.displayName, email: row.email, status: row.status };
+      return row ? toSignInUser(row) : undefined;
+    },
+    async getByUsername(username) {
+      const row = byUsername(username);
+      return row ? toSignInUser(row) : undefined;
+    },
+    // Same filters and order as the real user store: username, then ID.
+    async list(opts) {
+      let rows = [...userRows.values()].sort((a, b) => a.username.localeCompare(b.username) || a.id.localeCompare(b.id));
+      if (opts) {
+        if (opts.enabled !== undefined) rows = rows.filter((r) => r.status === (opts.enabled ? 'active' : 'disabled'));
+        if (opts.search) {
+          const needle = opts.search.toLowerCase();
+          rows = rows.filter((r) => [r.username, r.email, r.displayName].some((v) => v?.toLowerCase().includes(needle)));
+        }
+        rows = rows.slice(opts.offset, opts.offset + opts.limit);
+      }
+      return rows.map(toSignInUser);
+    },
+    async update(id, input) {
+      const row = userRows.get(id);
+      if (!row) return;
+      if ('displayName' in input) row.displayName = input.displayName ?? null;
+      if ('email' in input) row.email = input.email ?? null;
+    },
+    async setStatus(id, status) {
+      const row = userRows.get(id);
+      if (row) row.status = status;
     },
     // A local user's subject is its ID.
     async isSubjectBlocked(subject) {
