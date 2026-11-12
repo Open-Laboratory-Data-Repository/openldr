@@ -1565,7 +1565,7 @@ html>body{padding:0}</style>
 #start-here-guide .dg-step p { margin:4px 0 10px 22px; }
 #start-here-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
 #start-here-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
-#start-here-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#start-here-guide .dg-shot:not(.dg-dotted-shot) img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
 #start-here-guide .dg-dotted-shot button { border:0; border-radius:0; background:transparent; }
 #start-here-guide .dg-dotted-frame { display:block; }
 #start-here-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
@@ -1590,8 +1590,8 @@ html>body{padding:0}</style>
 #start-here-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
 #start-here-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:var(--dg-bg); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
 #start-here-guide .dg-lightbox-frame { display:block; width:min(100%,calc((min(840px,100dvh) - 64px)*736/416)); }
-#start-here-guide .dg-dotted-frame img { position:relative; display:block; width:100%; height:auto; max-height:none; }
-#start-here-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#start-here-guide .dg-dotted-frame img { max-height:none; }
+#start-here-guide .dg-lightbox-frame > img { max-width:100%; max-height:100%; object-fit:contain; }
 #start-here-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
 #start-here-guide .dg-app { position:relative; }
 #start-here-guide [hidden] { display:none !important; }
@@ -1652,7 +1652,7 @@ html>body{padding:0}</style>
   <h3 id="sh-cli-open"><span class="dg-number">1.</span>Open a terminal</h3>
   <p data-cli-launch>Press the Super key, often the Windows-logo key. Type Terminal in the applications search, then select Terminal.</p>
   <p>A terminal window opens. The line ending in <code data-cli-prompt-end>$</code> is the <strong>prompt</strong>. The vertical line after it is the cursor. This is where your typing appears.</p>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the new terminal illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-ready" data-terminal-stage="ready" alt="Illustrated new terminal with a prompt and cursor ready for typing."></span></button><figcaption>Your name and computer name may be different. Type after the prompt.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the new terminal illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-ready" data-terminal-stage="ready" alt="Illustrated new terminal with a prompt and cursor ready for typing."></span></span></button><figcaption>Your name and computer name may be different. Type after the prompt.</figcaption></figure>
   <p>Do not type the prompt. If you make a typing mistake, use <strong>Backspace</strong> to correct it before pressing Enter.</p>
  </section>
 
@@ -1660,19 +1660,19 @@ html>body{padding:0}</style>
   <h3 id="sh-cli-folder"><span class="dg-number">2.</span>Go to the installation folder</h3>
   <p>OpenLDR's installed command file is in its installation folder. The commands in this guide must run from that folder. Opening a terminal alone does not put you there.</p>
   <p>For this example, OpenLDR is installed in <code data-cli-path>~/Downloads/openldr_ce</code>. Use the location you chose during installation.</p>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the example installation folder"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-folder" data-terminal-stage="folder" alt="Illustrated file browser showing the example OpenLDR installation and its files."></span></button><figcaption>This is the example installation folder. Your actual folder must contain the installed OpenLDR files.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the example installation folder"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-folder" data-terminal-stage="folder" alt="Illustrated file browser showing the example OpenLDR installation and its files."></span></span></button><figcaption>This is the example installation folder. Your actual folder must contain the installed OpenLDR files.</figcaption></figure>
   <p><code>cd</code> changes the folder your terminal is using. In your terminal, type the command below and press <strong>Enter</strong>. Substitute your actual location if it differs.</p>
   <pre><code data-cli-cd>cd ~/Downloads/openldr_ce</code></pre>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the change-folder command illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-cd" data-terminal-stage="cd" alt="Illustrated terminal with cd pointing to the example installation folder."></span></button><figcaption>There is a space after cd. The rest of the command is the installation location.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the change-folder command illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-cd" data-terminal-stage="cd" alt="Illustrated terminal with cd pointing to the example installation folder."></span></span></button><figcaption>There is a space after cd. The rest of the command is the installation location.</figcaption></figure>
   <p>The terminal usually prints no success message for <code>cd</code>. A new prompt appears. If an error appears instead, check the folder location before continuing.</p>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the changed-folder illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-changed" data-terminal-stage="changed" alt="Illustrated terminal after changing to the example installation folder."></span></button><figcaption>The new prompt shows that you changed folders. Check its files next.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the changed-folder illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-changed" data-terminal-stage="changed" alt="Illustrated terminal after changing to the example installation folder."></span></span></button><figcaption>The new prompt shows that you changed folders. Check its files next.</figcaption></figure>
  </section>
 
  <section class="dg-step">
   <h3 id="sh-cli-check"><span class="dg-number">3.</span>Check that this is the right folder</h3>
   <p>List the files in the folder. Type the following command and press <strong>Enter</strong>.</p>
   <pre><code data-cli-list>ls</code></pre>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the installation folder listing illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-files" data-terminal-stage="files" alt="Illustrated terminal listing the data folder, docker-compose.yml and the OpenLDR command file."></span></button><figcaption>This illustration shows the files you need. Your folder may contain other files too.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the installation folder listing illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-files" data-terminal-stage="files" alt="Illustrated terminal listing the data folder, docker-compose.yml and the OpenLDR command file."></span></span></button><figcaption>This illustration shows the files you need. Your folder may contain other files too.</figcaption></figure>
   <div class="dg-result"><p><strong>Check before continuing</strong></p><p>Look for <code>docker-compose.yml</code>, the <code>data</code> folder, and <code data-cli-wrapper>openldr</code>. If these are missing, return to the folder created by your installer.</p></div>
  </section>
 
@@ -1681,9 +1681,9 @@ html>body{padding:0}</style>
   <p>Stay in the installation folder you checked in step 3. Now run your first OpenLDR command. It displays help without changing records.</p>
   <pre><code data-cli-help>./openldr --help</code></pre>
   <p>Type the command at the new prompt and press <strong>Enter</strong>. Keep the space before <code>--help</code> and both hyphens.</p>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the first OpenLDR command illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-help" data-terminal-stage="help" alt="Illustrated terminal with the OpenLDR help command typed before pressing Enter."></span></button><figcaption>The command is ready. Press Enter to run it.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the first OpenLDR command illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-help" data-terminal-stage="help" alt="Illustrated terminal with the OpenLDR help command typed before pressing Enter."></span></span></button><figcaption>The command is ready. Press Enter to run it.</figcaption></figure>
   <div class="dg-result"><p><strong>Expected result</strong></p><p>The terminal prints a usage line, options and a list of commands. The picture below shows an excerpt.</p></div>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the OpenLDR help output illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-help-result" data-terminal-stage="help-result" alt="Illustrated excerpt of OpenLDR help output with Usage, Options and Commands."></span></button><figcaption>Scroll in your terminal to read the full output. When the prompt returns, you can type again.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the OpenLDR help output illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-help-result" data-terminal-stage="help-result" alt="Illustrated excerpt of OpenLDR help output with Usage, Options and Commands."></span></span></button><figcaption>Scroll in your terminal to read the full output. When the prompt returns, you can type again.</figcaption></figure>
  </section>
 
  <section class="dg-step">
@@ -1691,9 +1691,9 @@ html>body{padding:0}</style>
   <p>The <code>ingest</code> command imports a file. Add <code>--help</code> to read its instructions without importing anything.</p>
   <pre><code data-cli-ingest-help>./openldr ingest --help</code></pre>
   <p>Type this at the prompt, then press <strong>Enter</strong>.</p>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the command-specific help illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-ingest" data-terminal-stage="ingest" alt="Illustrated terminal with ingest --help typed before pressing Enter."></span></button><figcaption>There is a space between the program, command name and option.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the command-specific help illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-ingest" data-terminal-stage="ingest" alt="Illustrated terminal with ingest --help typed before pressing Enter."></span></span></button><figcaption>There is a space between the program, command name and option.</figcaption></figure>
   <div class="dg-result"><p><strong>Expected result</strong></p><p>The usage line now names <code>ingest</code>. The options underneath apply to that command.</p></div>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the ingest help output illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-ingest-result" data-terminal-stage="ingest-result" alt="Illustrated ingest help output with a required file placeholder and command options."></span></button><figcaption><code>&lt;file&gt;</code> means a required file path. <code>[options]</code> means optional settings. Do not type these brackets.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the ingest help output illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-ingest-result" data-terminal-stage="ingest-result" alt="Illustrated ingest help output with a required file placeholder and command options."></span></span></button><figcaption><code>&lt;file&gt;</code> means a required file path. <code>[options]</code> means optional settings. Do not type these brackets.</figcaption></figure>
   <p>You have reached the end of the first-command walkthrough. No file has been imported. Continue below to learn how file paths work before following an import guide.</p>
  </section>
  <p class="dg-illustration-note">More help opening a terminal: <a href="https://ubuntu.com/desktop/docs/en/26.04/tutorial/the-linux-command-line-for-beginners/">Ubuntu</a>, <a href="https://support.apple.com/guide/mac-help/mchlp1008/mac">macOS Spotlight</a>, <a href="https://learn.microsoft.com/en-us/powershell/scripting/windows-powershell/starting-windows-powershell">Windows PowerShell</a>.</p>
@@ -1709,14 +1709,14 @@ html>body{padding:0}</style>
   <p>For this example, the source checkout is at <code data-cli-dev-path>~/Downloads/openldr_ce</code>. Substitute the location where you cloned the repository.</p>
   <pre><code data-cli-dev-cd>cd ~/Downloads/openldr_ce</code></pre>
   <p>This folder contains <code>package.json</code>, <code>pnpm-workspace.yaml</code>, <code>apps</code> and <code>packages</code>. Use this repository root for the following commands.</p>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development checkout illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-dev-root" data-terminal-stage="dev-root" alt="Illustrated terminal in the source checkout, listing its package.json and workspace folders."></span></button><figcaption>The source checkout has the workspace files. It uses the pnpm command below.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development checkout illustration"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-dev-root" data-terminal-stage="dev-root" alt="Illustrated terminal in the source checkout, listing its package.json and workspace folders."></span></span></button><figcaption>The source checkout has the workspace files. It uses the pnpm command below.</figcaption></figure>
  </section>
  <section class="dg-step">
   <h3><span class="dg-number">2.</span>Run the development CLI</h3>
   <p>Ask for help, then read the import command's help. Enter one command at a time.</p>
   <pre><code>pnpm openldr --help
 pnpm openldr ingest --help</code></pre>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development help examples"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-dev-help" data-terminal-stage="dev-help" alt="Illustrated source commands pnpm openldr --help and pnpm openldr ingest --help with their usage lines."></span></button><figcaption>These commands display help. They do not import data.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development help examples"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-dev-help" data-terminal-stage="dev-help" alt="Illustrated source commands pnpm openldr --help and pnpm openldr ingest --help with their usage lines."></span></span></button><figcaption>These commands display help. They do not import data.</figcaption></figure>
   <p><code>pnpm openldr</code> runs <code>packages/cli/dev.mjs</code> from this checkout. Use that prefix for CLI commands while developing.</p>
  </section>
  <section class="dg-step">
@@ -1724,14 +1724,14 @@ pnpm openldr ingest --help</code></pre>
   <p>The development CLI can read ordinary local paths. Files do not have to be in Docker's shared <code>data</code> folder.</p>
   <p>For example, if your own FHIR JSON file is at <code data-cli-dev-file>~/Downloads/openldr_ce/files/my-file.json</code>, validate it from the repository root:</p>
   <pre><code>pnpm openldr fhir validate files/my-file.json</code></pre>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development file validation example"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-dev-file" data-terminal-stage="dev-file" alt="Illustrated development CLI reading files/my-file.json outside the Docker data folder and reporting all valid."></span></button><figcaption>The test file was valid. Your result depends on the contents of your own file. Validation does not import it.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development file validation example"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-dev-file" data-terminal-stage="dev-file" alt="Illustrated development CLI reading files/my-file.json outside the Docker data folder and reporting all valid."></span></span></button><figcaption>The test file was valid. Your result depends on the contents of your own file. Validation does not import it.</figcaption></figure>
  </section>
  <section class="dg-step">
   <h3><span class="dg-number">4.</span>Import into your development database</h3>
   <p>Use this step when you intend to import the file. Check that the checkout's <code>.env</code> points to your development databases and storage. Those backing services must be running.</p>
   <pre><code>pnpm openldr ingest files/my-file.json
 pnpm openldr pipeline status</code></pre>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development import result"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="terminal-linux-dev-import" data-terminal-stage="dev-import" alt="Illustrated source CLI importing a file and showing its completed batch in pipeline status."></span></button><figcaption>The tested file produced a completed batch with one resource. Your batch ID and count will differ.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the development import result"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="terminal-linux-dev-import" data-terminal-stage="dev-import" alt="Illustrated source CLI importing a file and showing its completed batch in pipeline status."></span></span></button><figcaption>The tested file produced a completed batch with one resource. Your batch ID and count will differ.</figcaption></figure>
   <p>For the other CLI commands in these guides, keep the <code>pnpm openldr</code> prefix and use paths on your computer.</p>
  </section>
 
@@ -1763,7 +1763,7 @@ pnpm openldr pipeline status</code></pre>
   <pre><code data-cli-fix-folder>cd ~/Downloads/openldr_ce
 ./openldr --help</code></pre>
   <p>The help usage line confirms that the launcher ran. If it still cannot be found, list the folder's files as shown in step 3. Check for <code data-cli-wrapper>openldr</code> and <code>docker-compose.yml</code>.</p>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested wrong-folder recovery"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="proof-wrong-folder" alt="Illustrated Linux transcript showing launcher not found, changing into the installation folder, then successful CLI help."></span></button><figcaption>Tested result: returning to the installation folder restored the help command.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested wrong-folder recovery"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="proof-wrong-folder" alt="Illustrated Linux transcript showing launcher not found, changing into the installation folder, then successful CLI help."></span></span></button><figcaption>Tested result: returning to the installation folder restored the help command.</figcaption></figure>
  </details>
 
  <details class="cursor-interaction">
@@ -1775,7 +1775,7 @@ pnpm openldr pipeline status</code></pre>
   <pre><code data-cli-check-docker>docker info
 ./openldr --help</code></pre>
   <p>The test recovered after clearing the incorrect address. If <code>docker info</code> still fails, Docker is not yet reachable. Read that Docker error before retrying OpenLDR.</p>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested Docker connection recovery"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="proof-docker" alt="Illustrated Linux transcript showing an unreachable Docker socket, clearing DOCKER_HOST, and successful CLI help."></span></button><figcaption>The test used a deliberately missing Docker socket. The running Docker engine was left untouched.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested Docker connection recovery"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="proof-docker" alt="Illustrated Linux transcript showing an unreachable Docker socket, clearing DOCKER_HOST, and successful CLI help."></span></span></button><figcaption>The test used a deliberately missing Docker socket. The running Docker engine was left untouched.</figcaption></figure>
  </details>
 
  <details class="cursor-interaction">
@@ -1786,7 +1786,7 @@ pnpm openldr pipeline status</code></pre>
 docker compose up -d api</code></pre>
   <p>Then run the help command again:</p>
   <pre><code data-cli-help>./openldr --help</code></pre>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested stopped-container recovery"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="proof-api" alt="Illustrated Linux transcript showing the stopped API error, starting the API service, and successful CLI help."></span></button><figcaption>Tested result: starting the stopped container restored the help command.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested stopped-container recovery"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="proof-api" alt="Illustrated Linux transcript showing the stopped API error, starting the API service, and successful CLI help."></span></span></button><figcaption>Tested result: starting the stopped container restored the help command.</figcaption></figure>
  </details>
 
  <details class="cursor-interaction">
@@ -1798,7 +1798,7 @@ docker compose up -d api</code></pre>
   <pre><code data-cli-validate-installed>./openldr fhir validate data/my-file.json</code></pre>
   <p>For a valid FHIR JSON file, the result includes <code>all valid</code>. If you intend to import it, retry with the shared path:</p>
   <pre><code data-cli-import>./openldr ingest data/my-file.json</code></pre>
-  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested missing-file recovery"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><img data-evidence="proof-file" alt="Illustrated Linux transcript showing ENOENT outside the shared data folder, moving the file, successful validation and a completed import."></span></button><figcaption>The same file failed outside data, then validated and imported after moving into it.</figcaption></figure>
+  <figure class="dg-shot dg-dotted-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested missing-file recovery"><span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window"><img data-evidence="proof-file" alt="Illustrated Linux transcript showing ENOENT outside the shared data folder, moving the file, successful validation and a completed import."></span></span></button><figcaption>The same file failed outside data, then validated and imported after moving into it.</figcaption></figure>
   <p>This shared-folder rule applies to the installed Docker launcher. The development CLI can read normal local paths, as shown in the development walkthrough.</p>
  </details>
 
@@ -1826,6 +1826,7 @@ docker compose up -d api</code></pre>
  let previewTheme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
  function applyTheme() {
   root.style.colorScheme=previewTheme;
+  root.dataset.theme=previewTheme;
   themeButton.setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');
  }
  applyTheme();
@@ -1913,22 +1914,50 @@ docker compose up -d api</code></pre>
  }
 })();
 </script>
-<style>.doc-dotted-frame {
+<style>[data-theme='dark'] {
+  --doc-illustration-dot-opacity: 35%;
+}
+
+[data-theme='light'] {
+  --doc-illustration-dot-opacity: 95%;
+}
+
+.doc-dotted-frame {
   position: relative;
   display: block;
-  padding: 2.5%;
+  padding: 24px;
+}
+
+/* Remove the PNG's transparent 16px margin without changing the source image. */
+.doc-dotted-window {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 704 / 384;
+  border-radius: 6px;
+}
+
+.doc-dotted-window > img {
+  position: absolute;
+  left: -2.272727%;
+  top: -4.166667%;
+  display: block;
+  width: 104.545455%;
+  max-width: none;
+  height: 108.333333%;
+  margin: 0;
 }
 
 .doc-dotted-dots {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted-foreground) 95%, transparent) 1.25px, transparent 1.5px);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted-foreground) var(--doc-illustration-dot-opacity, 95%), transparent) 1.25px, transparent 1.5px);
   background-size: 12px 12px;
-  background-position: 0 0;
+  background-repeat: round;
   mask-image:
-    linear-gradient(to right, transparent, #000 4.5%, #000 95.5%, transparent),
-    linear-gradient(to bottom, transparent, #000 7.67%, #000 92.33%, transparent);
+    linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+    linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
   mask-composite: intersect;
 }
 </style>

@@ -1,18 +1,46 @@
+[data-theme='dark'] {
+  --doc-illustration-dot-opacity: 35%;
+}
+
+[data-theme='light'] {
+  --doc-illustration-dot-opacity: 95%;
+}
+
 .doc-dotted-frame {
   position: relative;
   display: block;
-  padding: 2.5%;
+  padding: 24px;
+}
+
+/* Remove the PNG's transparent 16px margin without changing the source image. */
+.doc-dotted-window {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 704 / 384;
+  border-radius: 6px;
+}
+
+.doc-dotted-window > img {
+  position: absolute;
+  left: -2.272727%;
+  top: -4.166667%;
+  display: block;
+  width: 104.545455%;
+  max-width: none;
+  height: 108.333333%;
+  margin: 0;
 }
 
 .doc-dotted-dots {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted-foreground) 95%, transparent) 1.25px, transparent 1.5px);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted-foreground) var(--doc-illustration-dot-opacity, 95%), transparent) 1.25px, transparent 1.5px);
   background-size: 12px 12px;
-  background-position: 0 0;
+  background-repeat: round;
   mask-image:
-    linear-gradient(to right, transparent, #000 4.5%, #000 95.5%, transparent),
-    linear-gradient(to bottom, transparent, #000 7.67%, #000 92.33%, transparent);
+    linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent),
+    linear-gradient(to bottom, transparent, #000 24px, #000 calc(100% - 24px), transparent);
   mask-composite: intersect;
 }

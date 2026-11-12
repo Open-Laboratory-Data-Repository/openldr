@@ -11,7 +11,9 @@ export function DottedIllustrationFrame({ url, alt }: { url: string; alt: string
   return (
     <span className="doc-dotted-frame">
       <span className="doc-dotted-dots" aria-hidden="true" />
-      <img src={url} alt={alt} loading="lazy" draggable={false} className="relative block h-auto w-full" style={{ margin: 0 }} />
+      <span className="doc-dotted-window">
+        <img src={url} alt={alt} loading="lazy" draggable={false} />
+      </span>
     </span>
   );
 }

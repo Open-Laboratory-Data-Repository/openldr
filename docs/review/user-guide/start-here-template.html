@@ -50,7 +50,7 @@
 #start-here-guide .dg-step p { margin:4px 0 10px 22px; }
 #start-here-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
 #start-here-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
-#start-here-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#start-here-guide .dg-shot:not(.dg-dotted-shot) img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
 #start-here-guide .dg-dotted-shot button { border:0; border-radius:0; background:transparent; }
 #start-here-guide .dg-dotted-frame { display:block; }
 #start-here-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
@@ -75,8 +75,8 @@
 #start-here-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
 #start-here-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:var(--dg-bg); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
 #start-here-guide .dg-lightbox-frame { display:block; width:min(100%,calc((min(840px,100dvh) - 64px)*736/416)); }
-#start-here-guide .dg-dotted-frame img { position:relative; display:block; width:100%; height:auto; max-height:none; }
-#start-here-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#start-here-guide .dg-dotted-frame img { max-height:none; }
+#start-here-guide .dg-lightbox-frame > img { max-width:100%; max-height:100%; object-fit:contain; }
 #start-here-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
 #start-here-guide .dg-app { position:relative; }
 #start-here-guide [hidden] { display:none !important; }
@@ -122,6 +122,7 @@
  let previewTheme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
  function applyTheme() {
   root.style.colorScheme=previewTheme;
+  root.dataset.theme=previewTheme;
   themeButton.setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');
  }
  applyTheme();

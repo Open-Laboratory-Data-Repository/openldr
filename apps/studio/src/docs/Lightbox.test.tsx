@@ -30,7 +30,7 @@ describe('Lightbox', () => {
   it('keeps the themed illustration surround while zooming', () => {
     render(<Lightbox image={{ url: '/assets/start.png', alt: 'Terminal', illustration: true }} onClose={() => {}} />);
     const image = screen.getByAltText('Terminal');
-    const frame = image.parentElement!;
+    const frame = image.closest<HTMLElement>('.doc-dotted-frame')!;
     expect(frame).toHaveClass('doc-dotted-frame');
     expect(frame.parentElement!.parentElement).toHaveClass('bg-background');
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));

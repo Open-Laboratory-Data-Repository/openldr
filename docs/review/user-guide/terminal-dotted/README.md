@@ -34,3 +34,21 @@ The dots are clearest beside the window and fade toward the outer edges.
 Only the dotted layer is masked. The terminal and file-browser images remain sharp.
 The live page and image viewer share DottedIllustrationFrame.
 The full Start here preview and the interactive theme render use the same CSS.
+
+## Equal margins and theme contrast
+
+The shared frame now reserves 24px on every side.
+CSS crops the PNG's transparent margin. The source PNGs remain unchanged.
+The rounded grid fits two rows along every edge, including the expanded image.
+Light mode keeps 95% dot opacity. Dark mode uses 35%.
+Both modes fade toward the outside edge.
+
+`node docs/review/user-guide/terminal-dotted/check-surround.cjs` reports:
+
+```text
+PASS: two dot rows on every edge at 800, 736, 500, 375 and 320px in both themes.
+PASS: light opacity 95%, dark opacity 35%; actual app uses shared styles.
+```
+
+Chromium also checked matching window crops in the page and expanded image.
+This checks browser layout. It does not prove native Safari or physical-phone rendering.

@@ -143,3 +143,8 @@ The full Start here preview has a theme switch in its header.
 The dots are larger and clearest near the window, then fade outward with intersected edge gradients.
 The foreground PNG is not masked.
 The theme render and the full Start here preview share DottedIllustration.css with the app.
+
+The latest refinement gives every illustration a 24px margin with two dot rows per side.
+Dark mode uses 35% opacity. Light mode keeps 95%. Both fade outward.
+Original PNGs and older previews remain available.
+Run terminal-dotted/check-surround.cjs for the browser checks and saved screenshots.

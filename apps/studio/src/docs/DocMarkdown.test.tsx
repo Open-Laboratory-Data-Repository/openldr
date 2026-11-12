@@ -14,7 +14,7 @@ describe('DocMarkdown', () => {
   it('renders an approved CLI image on themed dots and retains them when enlarged', () => {
     const click = vi.fn();
     render(<DocMarkdown content={'![Terminal](start-terminal-linux-ready.png)'} onImageClick={click} />);
-    const frame = screen.getByAltText('Terminal').parentElement!;
+    const frame = screen.getByAltText('Terminal').closest<HTMLElement>('.doc-dotted-frame')!;
     expect(frame).toHaveClass('doc-dotted-frame');
     expect(frame.querySelector('.doc-dotted-dots')).toHaveAttribute('aria-hidden', 'true');
     expect(frame.querySelector('img')!.style.maskImage).toBe('');

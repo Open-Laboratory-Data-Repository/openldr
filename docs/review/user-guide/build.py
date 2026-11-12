@@ -80,7 +80,7 @@ def start():
     html=re.sub(r'__WIDTH:([^_]+)__',lambda m:str(min(500,steps[m[1]]['crop_dimensions'][0])),html)
     def themed_figure(match):
         figure = match[0].replace('class="dg-shot"', 'class="dg-shot dg-dotted-shot"')
-        return re.sub(r'(<img[^>]*>)', r'<span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span>\1</span>', figure)
+        return re.sub(r'(<img[^>]*>)', r'<span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span><span class="doc-dotted-window">\1</span></span>', figure)
     html = re.sub(r'<figure class="dg-shot"[^>]*>.*?</figure>', themed_figure, html, flags=re.S)
     html += '<style>' + (REPO/'apps/studio/src/docs/DottedIllustration.css').read_text() + '</style>'
     save(html,'start-here-review.html'); print('Start here:',len(used),'themed illustrations')
