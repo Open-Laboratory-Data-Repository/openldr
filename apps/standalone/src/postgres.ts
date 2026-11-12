@@ -18,6 +18,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -25,7 +26,7 @@ import {
 import { createRequire } from 'node:module';
 import { createServer, type AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
 
@@ -252,6 +253,59 @@ async function servesCluster(
   }
 }
 
+function removePidFile(clusterDir: string): void {
+  rmSync(join(clusterDir, 'postmaster.pid'), { force: true });
+}
+
+/**
+ * Linux only: true when process `pid` has the command line of a postmaster for `clusterDir`.
+ * Both must hold: argv[0]'s file name is exactly `postgres`, and an argument `-D <dir>` (or
+ * `-D<dir>`) names this cluster, compared as real paths. A relative <dir> is read against the
+ * process's own working folder. A program whose arguments merely contain the folder name, or a
+ * postgres serving another folder, does not match.
+ */
+function looksLikePostgresFor(pid: number, clusterDir: string): boolean {
+  let argv: string[];
+  try {
+    argv = readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0');
+  } catch {
+    return false;
+  }
+  if (argv.at(-1) === '') argv.pop();
+  if (basename(argv[0] ?? '') !== 'postgres') return false;
+  for (let i = 1; i < argv.length; i++) {
+    const arg = argv[i]!;
+    let dir = arg === '-D' ? argv[i + 1] : arg.startsWith('-D') && arg.length > 2 ? arg.slice(2) : undefined;
+    if (dir === undefined) continue;
+    if (!isAbsolute(dir)) {
+      try {
+        dir = resolve(readlinkSync(`/proc/${pid}/cwd`), dir);
+      } catch {
+        continue;
+      }
+    }
+    if (samePath(dir, clusterDir)) return true;
+  }
+  return false;
+}
+
+/**
+ * Removes a pid file whose live process was not proven to be this cluster's Postgres.
+ * Guard first, on Linux: if that process has the command line of a Postgres for this folder, it
+ * is one that refuses our login, and its lock file must stay. Reject instead.
+ * macOS and Windows have no /proc, so there is no such guard there. Postgres's own shared-memory
+ * check on start is the remaining net. Unproven: only Linux is tested.
+ */
+function removeUnprovenPidFile(clusterDir: string, pid: number): void {
+  if (process.platform === 'linux' && looksLikePostgresFor(pid, clusterDir)) {
+    throw new Error(
+      `A Postgres for ${clusterDir} is running as process ${pid} but does not accept this install's login. ` +
+        'Stop that process, then start again.',
+    );
+  }
+  removePidFile(clusterDir);
+}
+
 function sendLeftoverFastShutdown(pid: number, clusterDir: string, pgCtl: string | undefined): void {
   if (IS_WINDOWS) {
     // Windows has no SIGINT for a console-less process. pg_ctl sends Postgres's own fast
@@ -267,6 +321,18 @@ function sendLeftoverFastShutdown(pid: number, clusterDir: string, pgCtl: string
   process.kill(pid, 'SIGINT');
 }
 
+/**
+ * Clears the way for a start after a crash, a hard kill or a power cut.
+ * - No pid file, or a malformed one: `none`.
+ * - The pid file names another data folder: remove it, `stale`.
+ * - The recorded process is gone: leave the file (Postgres overwrites it), `stale`.
+ * - The process lives but is not proven over SQL to be this cluster's Postgres (no login, another
+ *   folder, or another user's process): remove the pid file, `stale`. Postgres would otherwise
+ *   refuse to start while the file names any live process. On Linux, a process whose command
+ *   line is a Postgres for this folder keeps its file and the call rejects.
+ * - Proven: fast shutdown, wait up to `waitMs`, `stopped`. Reject if it is still there.
+ * Only the proven path sends a signal.
+ */
 export async function stopLeftoverPostgres(opts: {
   clusterDir: string;
   settings: PostgresSettings;
@@ -277,14 +343,31 @@ export async function stopLeftoverPostgres(opts: {
 
   const info = readPostmasterPid(clusterDir);
   if (!info) return 'none';
-  if (!samePath(info.dataDir, clusterDir)) return 'stale';
-  // `foreign` is a process of another user: not ours. `gone` is a pid file left by a crash.
-  if (liveness(info.pid) !== 'alive') return 'stale';
+  // The file does not describe this folder. Remove it so Postgres can write its own.
+  if (!samePath(info.dataDir, clusterDir)) {
+    removePidFile(clusterDir);
+    return 'stale';
+  }
+  const state = liveness(info.pid);
+  // Gone: a pid file left by a crash. Postgres sees the process is gone and overwrites the file
+  // itself, so it stays.
+  if (state === 'gone') return 'stale';
 
   // A process ID alone proves nothing: after a reboot it can belong to any program. Prove over
-  // SQL that this install's Postgres is the one running before sending any signal.
-  const ours = await servesCluster(clusterDir, settings, Date.now() + waitMs, () => liveness(info.pid) === 'alive');
-  if (!ours) return 'stale';
+  // SQL that this install's Postgres is the one running before sending any signal. `foreign`
+  // (EPERM, another user's process) is never ours.
+  const ours =
+    state === 'alive' &&
+    (await servesCluster(clusterDir, settings, Date.now() + waitMs, () => liveness(info.pid) === 'alive'));
+  if (!ours) {
+    // Not proven ours, and nothing is signalled. Postgres refuses to start while the pid file
+    // names any live process, whatever that process is, and after a power cut it is usually a
+    // stranger that reused the number. So the file goes, after one guard (see
+    // removeUnprovenPidFile). Postgres still checks its shared memory block on start, so a
+    // second server on a cluster that is truly in use is refused by Postgres itself.
+    removeUnprovenPidFile(clusterDir, info.pid);
+    return 'stale';
+  }
 
   const pgCtl = IS_WINDOWS ? (await loadBinaries()).pg_ctl : undefined;
   sendLeftoverFastShutdown(info.pid, clusterDir, pgCtl);

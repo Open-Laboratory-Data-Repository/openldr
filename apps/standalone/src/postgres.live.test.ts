@@ -3,7 +3,7 @@
 // port from 3990 to 3997, and everything it starts is stopped in afterEach.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -12,6 +12,7 @@ import pg from 'pg';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
 import {
   postgresUrls,
+  readPostmasterPid,
   startPostgres,
   stopLeftoverPostgres,
   type PostgresSettings,
@@ -304,6 +305,67 @@ describe.skipIf(!LIVE)('bundled Postgres, live', { timeout: 120_000 }, () => {
 
     const again = await start(c);
     expect(await one(again.internalUrl, 'select v from before_kill')).toBe(7);
+  });
+
+  it('clears a pid file that names a stranger after a power cut, then starts clean', async () => {
+    const c = await newCase();
+    const first = await start(c);
+    await query(first.internalUrl, 'create table kept (v int)');
+    await query(first.internalUrl, 'insert into kept values (11)');
+    const real = readFileSync(join(c.clusterDir, 'postmaster.pid'), 'utf8');
+    await first.stop();
+    running.splice(running.indexOf(first), 1);
+    expect(existsSync(join(c.clusterDir, 'postmaster.pid'))).toBe(false);
+
+    // After a reboot the old pid can belong to any program. Same file, first line swapped.
+    const stranger = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+    children.push(stranger);
+    writeFileSync(join(c.clusterDir, 'postmaster.pid'), real.replace(/^\d+/, String(stranger.pid)));
+
+    // The problem: Postgres refuses to start while the pid file names a live process.
+    await expect(start(c)).rejects.toThrow(/lock file "postmaster\.pid" already exists/);
+
+    expect(await stopLeftoverPostgres({ clusterDir: c.clusterDir, settings: c.settings })).toBe('stale');
+    expect(alive(stranger.pid!)).toBe(true);
+    expect(existsSync(join(c.clusterDir, 'postmaster.pid'))).toBe(false);
+
+    const again = await start(c);
+    expect(await one(again.internalUrl, 'select v from kept')).toBe(11);
+  });
+
+  it('leaves a pid file whose process is gone, and Postgres starts over it', async () => {
+    const c = await newCase();
+    const first = await start(c);
+    const real = readFileSync(join(c.clusterDir, 'postmaster.pid'), 'utf8');
+    await first.stop();
+    running.splice(running.indexOf(first), 1);
+
+    const dead = spawn(process.execPath, ['-e', '0'], { stdio: 'ignore' });
+    await new Promise((r) => dead.once('exit', r));
+    writeFileSync(join(c.clusterDir, 'postmaster.pid'), real.replace(/^\d+/, String(dead.pid)));
+
+    expect(await stopLeftoverPostgres({ clusterDir: c.clusterDir, settings: c.settings })).toBe('stale');
+    expect(readFileSync(join(c.clusterDir, 'postmaster.pid'), 'utf8')).toMatch(new RegExp(`^${dead.pid}\\n`));
+
+    const again = await start(c);
+    expect(await one(again.internalUrl, 'select current_user')).toBe('openldr_app');
+  });
+
+  it('refuses to clear the pid file of a running Postgres for this folder that rejects the login', async () => {
+    const c = await newCase();
+    const pgr = await start(c);
+    const wrong = { ...c.settings, superPassword: 'not-the-password' };
+    const err = await stopLeftoverPostgres({ clusterDir: c.clusterDir, settings: wrong, waitMs: 2000 }).then(
+      () => null,
+      (e: unknown) => e as Error,
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect(err!.message).toContain(c.clusterDir);
+    expect(err!.message).toContain(String(pgr.pid));
+    expect(err!.message).not.toContain('not-the-password');
+    expect(readPostmasterPid(c.clusterDir)?.pid).toBe(pgr.pid);
+    expect(alive(pgr.pid)).toBe(true);
+    expect(await one(pgr.internalUrl, 'select 1 as ok')).toBe(1);
   });
 
   it('stopSync makes Postgres exit without waiting', async () => {

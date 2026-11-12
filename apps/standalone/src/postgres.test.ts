@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -27,8 +27,14 @@ function writePid(clusterDir: string, pid: number, dataDir: string): void {
   writeFileSync(join(clusterDir, 'postmaster.pid'), `${pid}\n${dataDir}\n1731400000\n5432\n\n127.0.0.1\n`);
 }
 
-function idleChild(): ChildProcess {
-  const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+const pidFile = (clusterDir: string) => join(clusterDir, 'postmaster.pid');
+
+/** A process that idles. `extra` goes after `--` on its command line; `argv0` replaces argv[0]. */
+function idleChild(extra: string[] = [], argv0?: string): ChildProcess {
+  const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', ...extra], {
+    stdio: 'ignore',
+    ...(argv0 ? { argv0 } : {}),
+  });
   children.push(c);
   return c;
 }
@@ -104,9 +110,11 @@ describe('stopLeftoverPostgres', () => {
     await new Promise((r) => c.once('exit', r));
     writePid(d, pid, d);
     expect(await stopLeftoverPostgres({ clusterDir: d, settings: settings(port) })).toBe('stale');
+    // Postgres itself overwrites a pid file whose process is gone, so the file stays.
+    expect(existsSync(pidFile(d))).toBe(true);
   });
 
-  it('reports stale when the pid belongs to a process with a different data folder', async () => {
+  it('reports stale and removes the pid file when it names a different data folder', async () => {
     const d = tempDir();
     const other = tempDir();
     const c = idleChild();
@@ -114,26 +122,60 @@ describe('stopLeftoverPostgres', () => {
     const port = await unusedPort();
     expect(await stopLeftoverPostgres({ clusterDir: d, settings: settings(port) })).toBe('stale');
     expect(alive(c.pid!)).toBe(true);
+    expect(existsSync(pidFile(d))).toBe(false);
   });
 
-  it('reports stale and signals nothing when the pid names a live process that is not Postgres', async () => {
+  it('reports stale, signals nothing and removes the pid file when the pid names a live process that is not Postgres', async () => {
     const d = tempDir();
-    const c = idleChild();
+    // A stranger whose arguments hold `-D <this cluster>` but whose program is not postgres.
+    const c = idleChild(['-D', d]);
     writePid(d, c.pid!, d);
     const port = await unusedPort();
     expect(await stopLeftoverPostgres({ clusterDir: d, settings: settings(port), waitMs: 2000 })).toBe('stale');
     expect(alive(c.pid!)).toBe(true);
     expect(c.exitCode).toBeNull();
     expect(c.signalCode).toBeNull();
+    expect(existsSync(pidFile(d))).toBe(false);
   });
 
-  it('reports stale when the cluster folder in the pid file no longer exists', async () => {
+  it('removes the pid file when a process named postgres serves a different folder', async () => {
+    const d = tempDir();
+    const c = idleChild(['-D', tempDir()], '/opt/pg/bin/postgres');
+    writePid(d, c.pid!, d);
+    expect(await stopLeftoverPostgres({ clusterDir: d, settings: settings(await unusedPort()), waitMs: 2000 })).toBe('stale');
+    expect(alive(c.pid!)).toBe(true);
+    expect(existsSync(pidFile(d))).toBe(false);
+  });
+
+  it.runIf(process.platform === 'linux')(
+    'keeps the pid file and rejects when the live process looks like a Postgres for this cluster',
+    async () => {
+      const d = tempDir();
+      // argv[0] is a path ending in `postgres` and the arguments hold `-D <this cluster>`: the
+      // command line a real postmaster for this folder shows in /proc.
+      const c = idleChild(['-D', d], '/opt/pg/bin/postgres');
+      writePid(d, c.pid!, d);
+      const err = await stopLeftoverPostgres({ clusterDir: d, settings: settings(await unusedPort()), waitMs: 2000 }).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err).toBeInstanceOf(Error);
+      expect(err!.message).toContain(d);
+      expect(err!.message).toContain(String(c.pid));
+      expect(err!.message).not.toContain('su-x');
+      expect(existsSync(pidFile(d))).toBe(true);
+      expect(alive(c.pid!)).toBe(true);
+    },
+  );
+
+  it('reports stale and removes the pid file when the cluster folder it names no longer exists', async () => {
     const d = tempDir();
     const c = idleChild();
     const gone = join(tempDir(), 'missing');
     writePid(d, c.pid!, gone);
     expect(await stopLeftoverPostgres({ clusterDir: d, settings: settings(await unusedPort()) })).toBe('stale');
     expect(alive(c.pid!)).toBe(true);
+    expect(existsSync(pidFile(d))).toBe(false);
   });
 });
 
