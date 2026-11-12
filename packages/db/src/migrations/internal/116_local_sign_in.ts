@@ -5,7 +5,8 @@ import { type Kysely, sql } from 'kysely';
 // local_credentials: one password per users row. A user with no row has no password and cannot
 // sign in. failed_count and locked_until drive the lock after repeated wrong passwords.
 // auth_sessions: one row per signed-in browser. Only a hash of the session secret is kept.
-// auth_signing_keys: the key that signs access tokens. The private half is sealed, never plain.
+// auth_signing_keys: at most one row (id = 1), the key that signs access tokens. The private half
+// is sealed, never plain.
 // auth_setup_code: at most one row (id = 1), the one-time code for creating the first admin.
 //
 // first_name and last_name go on users, not on local_credentials. An admin can create an account
@@ -38,11 +39,15 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema.createIndex('auth_sessions_user_id_idx').ifNotExists()
     .on('auth_sessions').column('user_id').execute();
 
+  // One row (id = 1). Two processes that start together both insert with id 1 and
+  // `on conflict (id) do nothing`, so only one key is ever stored and both read it back.
   await db.schema.createTable('auth_signing_keys').ifNotExists()
-    .addColumn('kid', 'text', (c) => c.primaryKey())
+    .addColumn('id', 'integer', (c) => c.primaryKey())
+    .addColumn('kid', 'text', (c) => c.notNull())
     .addColumn('sealed_private_jwk', 'text', (c) => c.notNull())
     .addColumn('public_jwk', 'jsonb', (c) => c.notNull())
     .addColumn('created_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
+    .addCheckConstraint('auth_signing_keys_singleton', sql`id = 1`)
     .execute();
 
   await db.schema.createTable('auth_setup_code').ifNotExists()

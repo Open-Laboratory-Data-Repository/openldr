@@ -48,7 +48,7 @@ export function createLocalAuthStore(db: Kysely<InternalSchema>): LocalAuthStore
   async function getSigningKey(): Promise<StoredSigningKey | null> {
     const row = await db.selectFrom('auth_signing_keys')
       .select(['kid', 'sealed_private_jwk', 'public_jwk'])
-      .orderBy('created_at').orderBy('kid')
+      .where('id', '=', 1)
       .executeTakeFirst();
     return row ? toSigningKey(row) : null;
   }
@@ -175,11 +175,12 @@ export function createLocalAuthStore(db: Kysely<InternalSchema>): LocalAuthStore
     getSigningKey,
 
     async insertSigningKeyIfNone(key) {
-      await sql`
-        insert into auth_signing_keys (kid, sealed_private_jwk, public_jwk)
-        select ${key.kid}, ${key.sealedPrivateJwk}, ${JSON.stringify(key.publicJwk)}::jsonb
-        where not exists (select 1 from auth_signing_keys)
-      `.execute(db);
+      // Two processes starting together both land here. The singleton id makes the second insert
+      // a no-op, so both read back the same row.
+      await db.insertInto('auth_signing_keys')
+        .values({ id: 1, kid: key.kid, sealed_private_jwk: key.sealedPrivateJwk, public_jwk: JSON.stringify(key.publicJwk) })
+        .onConflict((oc) => oc.column('id').doNothing())
+        .execute();
       const stored = await getSigningKey();
       if (!stored) throw new Error('auth_signing_keys is empty after insert');
       return stored;

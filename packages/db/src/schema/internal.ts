@@ -219,6 +219,7 @@ export interface AuthSessionsTable {
   user_agent: string | null;
 }
 export interface AuthSigningKeysTable {
+  id: number; // always 1
   kid: string;
   sealed_private_jwk: string;
   public_jwk: JSONColumnType<Record<string, unknown>>;

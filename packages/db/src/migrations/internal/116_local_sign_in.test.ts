@@ -26,8 +26,13 @@ describe('116_local_sign_in', () => {
       expect(session.created_at).toBeInstanceOf(Date);
       expect(session.last_used_at).toBeInstanceOf(Date);
 
-      await db.insertInto('auth_signing_keys').values({ kid: 'k1', sealed_private_jwk: 's', public_jwk: JSON.stringify({ kty: 'EC' }) }).execute();
-      expect((await db.selectFrom('auth_signing_keys').select('public_jwk').executeTakeFirstOrThrow()).public_jwk).toEqual({ kty: 'EC' });
+      await db.insertInto('auth_signing_keys').values({ id: 1, kid: 'k1', sealed_private_jwk: 's', public_jwk: JSON.stringify({ kty: 'EC' }) }).execute();
+      const key = await db.selectFrom('auth_signing_keys').selectAll().executeTakeFirstOrThrow();
+      expect(key.public_jwk).toEqual({ kty: 'EC' });
+      expect(key.created_at).toBeInstanceOf(Date);
+      // The signing key table holds one row, with id 1.
+      await expect(db.insertInto('auth_signing_keys').values({ id: 1, kid: 'k2', sealed_private_jwk: 's', public_jwk: '{}' }).execute()).rejects.toThrow();
+      await expect(db.insertInto('auth_signing_keys').values({ id: 2, kid: 'k2', sealed_private_jwk: 's', public_jwk: '{}' }).execute()).rejects.toThrow();
 
       // The setup code table holds one row, with id 1.
       await db.insertInto('auth_setup_code').values({ id: 1, code_hash: 'c', expires_at: new Date() }).execute();
