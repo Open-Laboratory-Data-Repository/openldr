@@ -9,5 +9,6 @@
   "roles": "roles-review.html",
   "connectors": "connectors-review.html",
   "connector-diagnose": "connector-diagnose-review.html",
-  "workflows": "workflows-review.html"
+  "workflows": "workflows-review.html",
+  "activity": "activity-review.html"
 }

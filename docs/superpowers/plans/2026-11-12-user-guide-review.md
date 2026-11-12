@@ -49,7 +49,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Forms
 - [x] Workflows
 - [ ] Reports
-- [ ] Activity
+- [x] Activity
 - [ ] Scheduled reports with workflows
 - [ ] Custom Queries
 - [ ] Report Designer

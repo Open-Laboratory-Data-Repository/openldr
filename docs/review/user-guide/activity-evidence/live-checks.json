@@ -1,0 +1,36 @@
+{
+  "correlationId": "92253151-521a-4a93-a383-2384055ea176",
+  "activity": [
+    {
+      "correlationId": "92253151-521a-4a93-a383-2384055ea176",
+      "workflowId": "wf-sample-reactive",
+      "source": "webhook",
+      "startedAt": "Thu Nov 12 2026 16:48:57 GMT+0300 (East Africa Time)",
+      "currentStage": "persisted",
+      "status": "complete"
+    }
+  ],
+  "lifecycle": {
+    "correlationId": "92253151-521a-4a93-a383-2384055ea176",
+    "status": "complete",
+    "stages": [
+      {
+        "stage": "received",
+        "status": "ok",
+        "at": "Thu Nov 12 2026 16:48:56 GMT+0300 (East Africa Time)",
+        "runId": "f96a169d-4e0a-4784-a115-c94e581cc8ad",
+        "detail": "webhook"
+      },
+      {
+        "stage": "persisted",
+        "status": "ok",
+        "at": "Thu Nov 12 2026 16:48:56 GMT+0300 (East Africa Time)",
+        "detail": "1 × Patient"
+      }
+    ],
+    "runIds": [
+      "f96a169d-4e0a-4784-a115-c94e581cc8ad",
+      "780d38f2-ee44-41c9-bab3-94d4f2898642"
+    ]
+  }
+}

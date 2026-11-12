@@ -1,0 +1,1759 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/charts/; img-src 'self' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Activity guide preview</title>
+<style>:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI",
+    Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget > :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  --btn-size: calc(12px + 2 * var(--control-spacing, 12px));
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: var(--btn-size);
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+/* Codex Button size="compact"; appearance stays with the button variant. */
+.btn-sm {
+  --btn-size: 24px;
+  padding-inline: 8px;
+  font-size: calc(var(--font-size-base) * 12 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 12 / 16), 1px);
+  line-height: 16px;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled="true"]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(> .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel > [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel > [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host's design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker > summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-picker > summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls > button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker > summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls > button > svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls > button::before,
+.viz-carousel-picker > summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.viz-carousel-controls > button:hover::before,
+.viz-carousel-picker > summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker > summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options > button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options > [aria-current="true"],
+.viz-carousel-options > button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type="file"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="color"]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type="file"]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select :is(option, optgroup) {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select :is(option, optgroup):disabled {
+  color: var(--muted-foreground);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: "";
+}
+
+.form-check-input[type="radio"] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type="radio"]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type="radio"]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host's proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn-sm {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 12 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 12 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(> .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker > summary,
+  .form-control,
+  .form-select {
+    --btn-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type="file"],
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="week"],
+    [type="time"],
+    [type="color"]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html>body{padding:0}
+:root{--guide-preview-height:100dvh}</style>
+</head>
+<body>
+<style>
+#activity-evidence-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#activity-evidence-guide * { box-sizing:border-box; }
+#activity-evidence-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#activity-evidence-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
+#activity-evidence-guide .dg-head strong { font-size:16px; font-weight:600; }
+#activity-evidence-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
+#activity-evidence-guide .dg-head-icons { margin-left:auto; display:flex; align-items:center; gap:20px; color:var(--dg-muted); padding-right:80px; }
+#activity-evidence-guide .dg-main { display:flex; min-height:0; flex:1; }
+#activity-evidence-guide .dg-sidebar { width:256px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--dg-border); }
+#activity-evidence-guide .dg-search { height:48px; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--dg-border); flex-shrink:0; }
+#activity-evidence-guide .dg-search input { min-width:0; width:100%; border:1px solid var(--dg-border); border-radius:6px; padding:7px 10px; background:transparent; color:var(--dg-text); font:inherit; }
+#activity-evidence-guide .dg-docnav { overflow:auto; min-height:0; padding:4px 0 16px; }
+#activity-evidence-guide .dg-group { margin-top:5px; padding-top:8px; border-top:1px solid var(--dg-border); }
+#activity-evidence-guide .dg-group:first-child { border:0; margin:0; }
+#activity-evidence-guide .dg-group-label { display:block; padding:4px 12px; text-transform:uppercase; font-size:10px; color:var(--dg-muted); font-weight:600; letter-spacing:.03em; }
+#activity-evidence-guide .dg-navitem { display:block; padding:8px 12px; color:var(--dg-text); text-decoration:none; }
+#activity-evidence-guide .dg-selected { border-left:2px solid var(--dg-brand); background:var(--dg-wash); color:var(--dg-link); padding-left:10px; }
+#activity-evidence-guide .dg-content { min-width:0; flex:1; display:flex; flex-direction:column; }
+#activity-evidence-guide .dg-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:12px; height:48px; flex-shrink:0; border-bottom:1px solid var(--dg-border); padding:0 12px; }
+#activity-evidence-guide .dg-version { font-size:12px; border:1px solid var(--dg-border); border-radius:6px; padding:4px 9px; color:var(--dg-muted); }
+#activity-evidence-guide .dg-version b { color:var(--dg-text); font-weight:500; }
+#activity-evidence-guide button { font:inherit; color:inherit; cursor:inherit; }
+#activity-evidence-guide .dg-iconbtn { border:0; background:none; padding:5px; display:inline-flex; align-items:center; border-radius:4px; color:var(--dg-muted); }
+#activity-evidence-guide .dg-iconbtn:hover { background:var(--dg-wash); }
+#activity-evidence-guide .dg-scroll { min-height:0; flex:1; overflow:auto; padding:24px; scroll-behavior:smooth; }
+#activity-evidence-guide .dg-columns { display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:32px; align-items:start; }
+#activity-evidence-guide .dg-article { min-width:0; }
+#activity-evidence-guide h1 { font-size:24px; line-height:1.3; margin:0 0 12px; font-weight:600; }
+#activity-evidence-guide h2 { font-size:18px; font-weight:600; margin:30px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--dg-rule); scroll-margin-top:12px; }
+#activity-evidence-guide h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#activity-evidence-guide p { margin:8px 0; }
+#activity-evidence-guide .dg-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; color:var(--dg-muted); }
+#activity-evidence-guide .dg-meta span { border:1px solid var(--dg-border); border-radius:5px; padding:1px 7px; font-size:11px; }
+#activity-evidence-guide .dg-intro { color:var(--dg-muted); }
+#activity-evidence-guide .dg-example { border-left:2px solid var(--dg-brand); padding-left:12px; margin:18px 0; }
+#activity-evidence-guide .dg-example p { margin:4px 0; }
+#activity-evidence-guide .dg-onpage { position:sticky; top:0; color:var(--dg-muted); font-size:12px; }
+#activity-evidence-guide .dg-onpage > p { text-transform:uppercase; font-size:10px; letter-spacing:.03em; margin:5px 0 12px; }
+#activity-evidence-guide .dg-onpage a { display:block; color:inherit; text-decoration:none; padding:6px 0 6px 12px; border-left:2px solid transparent; }
+#activity-evidence-guide .dg-onpage a:hover,#activity-evidence-guide .dg-onpage a[aria-current] { color:var(--dg-link); border-color:var(--dg-brand); }
+#activity-evidence-guide .dg-onpage small { display:block; font-size:11px; margin:24px 0 0 12px; }
+#activity-evidence-guide .dg-loop { margin:14px 0 22px; max-width:500px; }
+#activity-evidence-guide .dg-loop video { width:100%; display:block; border:1px solid var(--dg-border); border-radius:6px; background:#171717; }
+#activity-evidence-guide .dg-loop-control { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--dg-muted); font-size:11px; margin-top:5px; }
+#activity-evidence-guide .dg-loop-control button { border:0; padding:3px 0; color:var(--dg-link); background:none; }
+#activity-evidence-guide .dg-step { padding:17px 0 18px; border-bottom:1px solid var(--dg-rule); }
+#activity-evidence-guide .dg-step:last-child { border-bottom:0; }
+#activity-evidence-guide .dg-number { color:var(--dg-muted); display:inline-block; min-width:22px; font-variant-numeric:tabular-nums; }
+#activity-evidence-guide .dg-step p { margin:4px 0 10px 22px; }
+#activity-evidence-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
+#activity-evidence-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
+#activity-evidence-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#activity-evidence-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
+#activity-evidence-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
+#activity-evidence-guide .dg-result p { margin:3px 0; }
+#activity-evidence-guide code { display:inline-block; max-width:100%; box-sizing:border-box; overflow-wrap:anywhere; font:12px/1.6 ui-monospace,monospace; background:var(--dg-pane); padding:2px 5px; border:1px solid var(--dg-border); border-radius:4px; }
+#activity-evidence-guide pre { margin:12px 0; padding:12px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#activity-evidence-guide pre code { background:none; border:0; padding:0; }
+#activity-evidence-guide .dg-config { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 18px; margin:14px 0; }
+#activity-evidence-guide .dg-config dt { color:var(--dg-muted); }
+#activity-evidence-guide .dg-config dd { margin:0; }
+#activity-evidence-guide .dg-onpage .dg-subtoc { padding-left:24px; }
+#activity-evidence-guide details { padding:12px 0; border-bottom:1px solid var(--dg-rule); }
+#activity-evidence-guide summary { font-weight:500; cursor:inherit; }
+#activity-evidence-guide details p { color:var(--dg-muted); }
+#activity-evidence-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
+#activity-evidence-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#activity-evidence-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#activity-evidence-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
+#activity-evidence-guide .dg-app { position:relative; }
+#activity-evidence-guide [hidden] { display:none !important; }
+#activity-evidence-guide.dg-folded .dg-sidebar { display:none; }
+@media(max-width:1279px) { #activity-evidence-guide .dg-columns { grid-template-columns:minmax(0,1fr); } #activity-evidence-guide .dg-onpage { display:none; } }
+@media(max-width:600px) { #activity-evidence-guide .dg-sidebar { display:none; } #activity-evidence-guide .dg-scroll { padding:18px; } #activity-evidence-guide .dg-head { padding:0 12px; } #activity-evidence-guide .dg-head-icons { padding-right:0; gap:12px; } #activity-evidence-guide .dg-review { display:none; } #activity-evidence-guide .dg-shot { margin-left:0; } #activity-evidence-guide .dg-step p { margin-left:0; } }
+@media(prefers-reduced-motion:reduce) { #activity-evidence-guide .dg-scroll { scroll-behavior:auto; } }
+</style>
+<div id="activity-evidence-guide" aria-label="Facilities user guide preview">
+ <div class="dg-app">
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Activity guide preview</span><div class="dg-head-icons"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-right" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bell" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><button type="button" class="dg-iconbtn cursor-interaction" data-theme-toggle aria-label="Switch preview theme"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></button></div></header>
+  <div class="dg-main">
+   <aside class="dg-sidebar">
+    <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-close" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m16 15-3-3 3-3"></path></svg></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
+    <nav class="dg-docnav" aria-label="Documentation sections"><div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem" href="start-here-review.html">Start Here</a></div><div class="dg-group"><span class="dg-group-label">Set up your system</span><a class="dg-navitem" href="terminology-review.html">Terminology</a><a class="dg-navitem" href="facilities-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Facilities</a><a class="dg-navitem" href="test-catalog-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Test catalog</a><a class="dg-navitem" href="patients-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Patients</a><span class="dg-navitem">Forms</span><a class="dg-navitem" href="workflows-review.html">Workflows</a></div><div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><a class="dg-navitem dg-selected" href="#dg-top" aria-current="page">Activity</a></div><div class="dg-group"><span class="dg-group-label">Build and manage</span><span class="dg-navitem">Scheduled reports with workflows</span><span class="dg-navitem">Custom Queries</span><span class="dg-navitem">Report Designer</span></div><div class="dg-group"><span class="dg-group-label">Administration</span><span class="dg-navitem">Layouts</span><span class="dg-navitem">Users and Roles</span><a class="dg-navitem" href="roles-review.html">Roles</a><span class="dg-navitem">Audit</span><span class="dg-navitem">Settings</span><span class="dg-navitem">Setup checks</span><span class="dg-navitem">Laboratory</span><span class="dg-navitem">Data exposure</span><span class="dg-navitem">Distributed Sync</span><a class="dg-navitem" href="connectors-review.html">Connectors</a><a class="dg-navitem" href="connector-diagnose-review.html">Connect to SQL Server and diagnose a connection</a><span class="dg-navitem">Import from OpenLDR v1</span><span class="dg-navitem">Marketplace</span><span class="dg-navitem">Plugin cards and side panels</span><span class="dg-navitem">Authentication providers</span><span class="dg-navitem">Environment Variables</span><span class="dg-navitem">Planned upgrades</span></div><div class="dg-group"><span class="dg-group-label">Personal settings</span><a class="dg-navitem" href="preferences-review.html">Your preferences</a></div><div class="dg-group"><span class="dg-group-label">More</span><span class="dg-navitem">Deployment &amp; Developer Docs</span></div></nav>
+   </aside>
+   <section class="dg-content">
+    <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-open" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m14 9 3 3-3 3"></path></svg></button><span class="dg-version">Version <b>0.1.8</b></span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></div>
+    <div class="dg-scroll" data-reading-pane>
+     <div class="dg-columns">
+      <article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Daily work</span><span>Follow received data</span><span>About 10 minutes</span></div>
+<h1>Activity</h1>
+<p>Use Activity to check whether a recent payload arrived and what OpenLDR recorded afterward. A payload is one batch of data, such as one webhook request or one CLI ingestion batch.</p>
+<p>Use your own recent payloads. No sample data is required. The pictures follow the fictional patient sent in the Workflows test installation. An empty installation can have no recent payloads.</p>
+<p>You need <strong>View activity</strong>. This page reads recorded events. It does not change, retry or delete the underlying data. <a href="audit-review.html">Audit</a> records user and administrative changes.</p>
+<h2 id="dg-follow">Follow one payload</h2>
+<p>Use this when a sender asks whether its data arrived. Keep its response identifier or sending time nearby.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Activity</h3><p>Select <strong>Activity</strong> in the main menu.</p><figure class="dg-shot dg-context-shot" data-shot-id="open-page"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open Activity to follow recent payloads."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:0.0%;top:-134.66666666666666%"><img class="fc-background" data-evidence="open-page" alt="Open Activity to follow recent payloads."><img class="fc-sharp" data-evidence="open-page" alt="" aria-hidden="true" style="clip-path:inset(67.0% 81.953125% 28.499999999999996% 0.625%)"><span class="fc-ring" aria-hidden="true" style="left:0.625%;top:67.0%;width:17.421875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Open Activity to follow recent payloads.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Find the payload</h3><p>Enter its identifier in <strong>Search payloads...</strong>. Search also matches source, status or stage within the loaded list.</p><figure class="dg-shot dg-context-shot" data-shot-id="search"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search the payload identifier to find this request."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-27.500000000000004%;top:0.0%"><img class="fc-background" data-evidence="search" alt="Search the payload identifier to find this request."><img class="fc-sharp" data-evidence="search" alt="" aria-hidden="true" style="clip-path:inset(7.000000000000001% 61.5625% 89.0% 19.6875%)"><span class="fc-ring" aria-hidden="true" style="left:19.6875%;top:7.000000000000001%;width:18.75%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Search the payload identifier to find this request.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check the matching row</h3><p>Match the source and start time. Read the current stage and status. This example reached Persisted and Complete.</p><figure class="dg-shot dg-context-shot" data-shot-id="matching-row"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Match the source, start time, current stage and status."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-85.45084635416667%;top:-3.5000000000000004%"><img class="fc-background" data-evidence="matching-row" alt="Match the source, start time, current stage and status."><img class="fc-sharp" data-evidence="matching-row" alt="" aria-hidden="true" style="clip-path:inset(19.0625% 47.0166015625% 78.9375% 48.604736328125%)"><span class="fc-ring" aria-hidden="true" style="left:48.604736328125%;top:19.0625%;width:4.378662109375%;height:2.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Match the source, start time, current stage and status.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Open the lifecycle</h3><p>Select the row to open <strong>Payload lifecycle</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="open-row"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select the payload row to inspect its recorded lifecycle."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-30.338541666666668%;top:-4.166666666666666%"><img class="fc-background" data-evidence="open-row" alt="Select the payload row to inspect its recorded lifecycle."><img class="fc-sharp" data-evidence="open-row" alt="" aria-hidden="true" style="clip-path:inset(19.4375% 59.74609374999999% 78.8125% 20.0%)"><span class="fc-ring" aria-hidden="true" style="left:20.0%;top:19.4375%;width:20.25390625%;height:1.7500000000000002%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Select the payload row to inspect its recorded lifecycle.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Keep the identifier</h3><p>Copy the payload identifier shown below the sheet title when reporting a problem.</p><figure class="dg-shot dg-context-shot" data-shot-id="payload-id"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Keep the payload identifier when asking an administrator for help."><span class="fc-screenshot"><span class="fc-scene" style="width:215.85160202360876%;height:215.85160202360876%;left:-115.85160202360878%;top:0.0%"><img class="fc-background" data-evidence="payload-id" alt="Keep the payload identifier when asking an administrator for help."><img class="fc-sharp" data-evidence="payload-id" alt="" aria-hidden="true" style="clip-path:inset(9.81640625% 1.25% 88.18359375% 56.32812499999999%)"><span class="fc-ring" aria-hidden="true" style="left:56.32812499999999%;top:9.81640625%;width:42.421875%;height:2.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">5</span></span></span></span></button><figcaption>Keep the payload identifier when asking an administrator for help.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Read Received</h3><p>Read the arrival timestamp, source detail and associated run identifier. Use the run identifier when checking Workflows history.</p><figure class="dg-shot dg-context-shot" data-shot-id="received"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Received records arrival and its workflow run identifier."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-137.98502604166666%;top:-9.760416666666668%"><img class="fc-background" data-evidence="received" alt="Received records arrival and its workflow run identifier."><img class="fc-sharp" data-evidence="received" alt="" aria-hidden="true" style="clip-path:inset(16.69140625% 18.93310546875% 71.87109375% 59.921875%)"><span class="fc-ring" aria-hidden="true" style="left:59.921875%;top:16.69140625%;width:21.14501953125%;height:11.4375%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Received records arrival and its workflow run identifier.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Read Persisted</h3><p>Read the recorded storage event and resource counts. The example stored one Patient. Other workflows can record different stages.</p><figure class="dg-shot dg-context-shot" data-shot-id="persisted"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Persisted records the stored resource count."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-130.45735677083334%;top:-41.010416666666664%"><img class="fc-background" data-evidence="persisted" alt="Persisted records the stored resource count."><img class="fc-sharp" data-evidence="persisted" alt="" aria-hidden="true" style="clip-path:inset(30.12890625% 24.578857421875% 61.87109374999999% 59.921875%)"><span class="fc-ring" aria-hidden="true" style="left:59.921875%;top:30.12890625%;width:15.499267578125%;height:8.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">7</span></span></span></span></button><figcaption>Persisted records the stored resource count.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Return to the list</h3><p>Select <strong>Close</strong> at the top right.</p><figure class="dg-shot dg-context-shot" data-shot-id="close"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Close the lifecycle sheet to return to the list."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="close" alt="Close the lifecycle sheet to return to the list."><img class="fc-sharp" data-evidence="close" alt="" aria-hidden="true" style="clip-path:inset(2.0% 1.25% 95.0% 96.5625%)"><span class="fc-ring" aria-hidden="true" style="left:96.5625%;top:2.0%;width:2.1875%;height:3.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">8</span></span></span></span></button><figcaption>Close the lifecycle sheet to return to the list.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> You can identify the payload and the stages actually recorded for it.</p></div>
+<h2 id="dg-refresh">Fetch the latest recorded state</h2>
+<p>Use Refresh after new data arrives. Close and reopen a lifecycle sheet to fetch its current details.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Activity actions</h3><p>Select the dots labelled <strong>Activity actions</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Activity actions contains Refresh."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="actions" alt="Activity actions contains Refresh."><img class="fc-sharp" data-evidence="actions" alt="" aria-hidden="true" style="clip-path:inset(7.000000000000001% 0.9375% 89.0% 96.5625%)"><span class="fc-ring" aria-hidden="true" style="left:96.5625%;top:7.000000000000001%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Activity actions contains Refresh.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Refresh</h3><p>Select <strong>Refresh</strong>. Reopen the payload row when you need refreshed lifecycle details.</p><figure class="dg-shot dg-context-shot" data-shot-id="refresh"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Refresh fetches the recent list again."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="refresh" alt="Refresh fetches the recent list again."><img class="fc-sharp" data-evidence="refresh" alt="" aria-hidden="true" style="clip-path:inset(12.125% 1.328125% 83.875% 86.953125%)"><span class="fc-ring" aria-hidden="true" style="left:86.953125%;top:12.125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Refresh fetches the recent list again.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The recent payload list reloads.</p></div>
+<h2 id="dg-filter">Show complete payloads</h2>
+<p>Use Status filters when reviewing one outcome. Filters apply to the loaded recent payloads.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Filter</h3><p>Select <strong>Filter</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="filter"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Filter narrows the loaded recent payloads."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-61.73665364583333%;top:0.0%"><img class="fc-background" data-evidence="filter" alt="Filter narrows the loaded recent payloads."><img class="fc-sharp" data-evidence="filter" alt="" aria-hidden="true" style="clip-path:inset(7.000000000000001% 55.26000976562499% 89.0% 39.0625%)"><span class="fc-ring" aria-hidden="true" style="left:39.0625%;top:7.000000000000001%;width:5.677490234375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Filter narrows the loaded recent payloads.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Add a rule</h3><p>Select <strong>Add filter</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-filter"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Add filter creates a rule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-65.97493489583334%;top:-18.0%"><img class="fc-background" data-evidence="add-filter" alt="Add filter creates a rule."><img class="fc-sharp" data-evidence="add-filter" alt="" aria-hidden="true" style="clip-path:inset(23.75% 53.096923828125% 72.75% 40.078125%)"><span class="fc-ring" aria-hidden="true" style="left:40.078125%;top:23.75%;width:6.824951171875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Add filter creates a rule.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Status</h3><p>Open the column selector and choose <strong>Status</strong>. Keep <strong>Equals</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="status-rule"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Status as the column and keep Equals."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-96.45833333333333%;top:0.0%"><img class="fc-background" data-evidence="status-rule" alt="Choose Status as the column and keep Equals."><img class="fc-sharp" data-evidence="status-rule" alt="" aria-hidden="true" style="clip-path:inset(14.875% 38.203125% 81.125% 48.046875%)"><span class="fc-ring" aria-hidden="true" style="left:48.046875%;top:14.875%;width:13.750000000000002%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose Status as the column and keep Equals.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Complete</h3><p>Open the value selector and choose <strong>Complete</strong>. Choose a different status when investigating that outcome.</p><figure class="dg-shot dg-context-shot" data-shot-id="complete-value"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Complete to inspect stored payloads without a failed workflow run."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-157.29166666666669%;top:-7.333333333333333%"><img class="fc-background" data-evidence="complete-value" alt="Choose Complete to inspect stored payloads without a failed workflow run."><img class="fc-sharp" data-evidence="complete-value" alt="" aria-hidden="true" style="clip-path:inset(19.5% 17.65625% 76.5% 73.125%)"><span class="fc-ring" aria-hidden="true" style="left:73.125%;top:19.5%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Choose Complete to inspect stored payloads without a failed workflow run.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Apply the rule</h3><p>Select <strong>Apply</strong>. The rule appears above the table.</p><figure class="dg-shot dg-context-shot" data-shot-id="apply-filter"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Apply updates the visible rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-16.666666666666664%"><img class="fc-background" data-evidence="apply-filter" alt="Apply updates the visible rows."><img class="fc-sharp" data-evidence="apply-filter" alt="" aria-hidden="true" style="clip-path:inset(23.25% 11.953125% 73.25% 83.82568359375%)"><span class="fc-ring" aria-hidden="true" style="left:83.82568359375%;top:23.25%;width:4.22119140625%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Apply updates the visible rows.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The visible rows match the Status rule.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="filtered"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The applied Status filter appears above the matching rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-7.711588541666667%;top:0.0%"><img class="fc-background" data-evidence="filtered" alt="The applied Status filter appears above the matching rows."><img class="fc-sharp" data-evidence="filtered" alt="" aria-hidden="true" style="clip-path:inset(12.5% 77.02880859375% 85.5% 20.3125%)"><span class="fc-ring" aria-hidden="true" style="left:20.3125%;top:12.5%;width:2.65869140625%;height:2.0%"></span></span></span></button><figcaption>The applied Status filter appears above the matching rows.</figcaption></figure>
+<h2 id="dg-sort">Put latest start times first</h2>
+<p>Use a time sort when arrival order matters. It changes the loaded list only.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add a sort</h3><p>Select <strong>Sort</strong>, then <strong>Add sort</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-sort"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Add sort creates a sort rule."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-109.84049479166667%;top:-18.0%"><img class="fc-background" data-evidence="add-sort" alt="Add sort creates a sort rule."><img class="fc-sharp" data-evidence="add-sort" alt="" aria-hidden="true" style="clip-path:inset(23.75% 28.65478515625% 72.75% 48.53515625%)"><span class="fc-ring" aria-hidden="true" style="left:48.53515625%;top:23.75%;width:22.81005859375%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Add sort creates a sort rule.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Started</h3><p>Select <strong>Started</strong> from the available columns.</p><figure class="dg-shot dg-context-shot" data-shot-id="sort-started"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Started to sort by arrival time."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-92.76041666666667%;top:-51.0%"><img class="fc-background" data-evidence="sort-started" alt="Choose Started to sort by arrival time."><img class="fc-sharp" data-evidence="sort-started" alt="" aria-hidden="true" style="clip-path:inset(35.875% 41.85546875% 60.12499999999999% 48.92578125%)"><span class="fc-ring" aria-hidden="true" style="left:48.92578125%;top:35.875%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose Started to sort by arrival time.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose descending order</h3><p>Select <strong>Asc</strong> once to change it to <strong>Desc</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="sort-direction"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Toggle Asc to Desc to show the latest start times first."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-138.80045572916666%;top:0.0%"><img class="fc-background" data-evidence="sort-direction" alt="Toggle Asc to Desc to show the latest start times first."><img class="fc-sharp" data-evidence="sort-direction" alt="" aria-hidden="true" style="clip-path:inset(15.75% 27.16796875% 80.75% 68.768310546875%)"><span class="fc-ring" aria-hidden="true" style="left:68.768310546875%;top:15.75%;width:4.063720703125%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Toggle Asc to Desc to show the latest start times first.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Apply the sort</h3><p>Select <strong>Apply</strong>. Latest start times appear first.</p><figure class="dg-shot dg-context-shot" data-shot-id="apply-sort"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Apply stores the chosen sort for the loaded rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-147.548828125%;top:-20.0%"><img class="fc-background" data-evidence="apply-sort" alt="Apply stores the chosen sort for the loaded rows."><img class="fc-sharp" data-evidence="apply-sort" alt="" aria-hidden="true" style="clip-path:inset(24.5% 23.80859375% 72.0% 71.97021484375%)"><span class="fc-ring" aria-hidden="true" style="left:71.97021484375%;top:24.5%;width:4.22119140625%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Apply stores the chosen sort for the loaded rows.</figcaption></figure></section>
+<h2 id="dg-columns">Choose visible columns</h2>
+<p>Use this when the table is wider than the information you need.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Columns</h3><p>Select <strong>Columns</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="columns"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Columns controls the visible table columns."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-108.01920572916666%;top:0.0%"><img class="fc-background" data-evidence="columns" alt="Columns controls the visible table columns."><img class="fc-sharp" data-evidence="columns" alt="" aria-hidden="true" style="clip-path:inset(7.000000000000001% 37.095947265625% 89.0% 55.61035156250001%)"><span class="fc-ring" aria-hidden="true" style="left:55.61035156250001%;top:7.000000000000001%;width:7.293701171875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Columns controls the visible table columns.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the fields</h3><p>Use the column checkboxes to show or hide fields. Keep Payload visible so you can identify rows. Close the menu when finished.</p><figure class="dg-shot dg-context-shot" data-shot-id="column-options"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Keep the fields you need for the review."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-127.65625%;top:0.0%"><img class="fc-background" data-evidence="column-options" alt="Keep the fields you need for the review."><img class="fc-sharp" data-evidence="column-options" alt="" aria-hidden="true" style="clip-path:inset(16.875% 25.41015625% 80.625% 58.65234375%)"><span class="fc-ring" aria-hidden="true" style="left:58.65234375%;top:16.875%;width:15.937499999999998%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Keep the fields you need for the review.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Use the table pages</h3><p>Use the page size and navigation arrows below the table when the loaded list spans several pages.</p><figure class="dg-shot dg-context-shot" data-shot-id="pagination"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the page size and arrows when there are several pages."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="pagination" alt="Use the page size and arrows when there are several pages."><img class="fc-sharp" data-evidence="pagination" alt="" aria-hidden="true" style="clip-path:inset(95.25% 12.7685546875% 1.25% 80.9814453125%)"><span class="fc-ring" aria-hidden="true" style="left:80.9814453125%;top:95.25%;width:6.25%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Use the page size and arrows when there are several pages.</figcaption></figure></section>
+<h2 id="dg-phone">Read a payload on a phone</h2>
+<p>Search first to reduce a wide table. Scroll the table horizontally when you need columns farther right.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Search recent payloads</h3><p>Use the search field at the top of Activity.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-search"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search recent payloads on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-search" alt="Search recent payloads on a phone."><img class="fc-sharp" data-evidence="phone-search" alt="" aria-hidden="true" style="clip-path:inset(6.896551724137931% 14.933333333333335% 89.16256157635468% 3.2%)"><span class="fc-ring" aria-hidden="true" style="left:3.2%;top:6.896551724137931%;width:81.86666666666666%;height:3.9408866995073892%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Search recent payloads on a phone.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the payload</h3><p>Select its identifier in the row.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-open"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select the identifier to open the payload lifecycle."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-50.480000000000004%"><img class="fc-background" data-evidence="phone-open" alt="Select the identifier to open the payload lifecycle."><img class="fc-sharp" data-evidence="phone-open" alt="" aria-hidden="true" style="clip-path:inset(24.445812807881772% 72.6875% 66.44088669950739% 4.266666666666667%)"><span class="fc-ring" aria-hidden="true" style="left:4.266666666666667%;top:24.445812807881772%;width:23.04583333333333%;height:9.113300492610838%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Select the identifier to open the payload lifecycle.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Read the lifecycle</h3><p>Scroll the sheet to read the recorded stages and resource counts.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-detail"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read each recorded stage in the phone sheet."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-66.49333333333334%"><img class="fc-background" data-evidence="phone-detail" alt="Read each recorded stage in the phone sheet."><img class="fc-sharp" data-evidence="phone-detail" alt="" aria-hidden="true" style="clip-path:inset(29.683651477832512% 20.29583333333333% 62.43457512315271% 26.8%)"><span class="fc-ring" aria-hidden="true" style="left:26.8%;top:29.683651477832512%;width:52.90416666666666%;height:7.8817733990147785%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Read each recorded stage in the phone sheet.</figcaption></figure></section>
+<h2 id="dg-statuses">Read stages and statuses</h2>
+<p>The stage bar highlights stages up to the latest recorded stage. Read the lifecycle itself to see which events actually exist. A missing Validated stage does not prove that every earlier check failed.</p>
+<p>A recorded push does not prove the recipient accepted or read the data. Stuck is not proof that processing stopped. Check the workflow History and its node results.</p>
+<table><thead><tr><th>Stage</th><th>Meaning</th></tr></thead><tbody><tr><td>Received</td><td>An ingestion batch or workflow recorded arrival.</td></tr><tr><td>Validated</td><td>A workflow recorded a successful check.</td></tr><tr><td>Persisted</td><td>A storage event recorded saved resources.</td></tr><tr><td>Pushed</td><td>A step recorded delivery to another system.</td></tr></tbody></table>
+<table><thead><tr><th>Status</th><th>Meaning</th></tr></thead><tbody><tr><td>Complete</td><td>Data reached storage without a recorded failed workflow run.</td></tr><tr><td>Failed</td><td>A related workflow run or ingestion batch failed.</td></tr><tr><td>Stuck</td><td>The recorded events do not establish completion or failure.</td></tr><tr><td>Running</td><td>An import run or CLI batch is still active.</td></tr><tr><td>Stopped</td><td>An import run or CLI batch was stopped.</td></tr></tbody></table>
+<h2 id="dg-limits">Understand the history window</h2>
+<p>Activity loads up to 200 recent payloads. Search, filters, sorting and paging act on those loaded rows. They do not search the full database.</p>
+<p>CLI batch history also has its own limit. For older ingestion batches, use <code>openldr pipeline status</code>. Read <a href="start-here-review.html">Start here</a> for the installed launcher or the development form <code>pnpm openldr pipeline status</code>. Use your real installation folder, such as <code>~/Downloads/openldr_ce</code> or <code>C:\openldr_ce</code>.</p>
+<h2 id="dg-practice">Optional fictional practice</h2>
+<p>You can follow any received payload without creating more data. For test practice, use the optional fictional Bundle in <a href="workflows-review.html#dg-practice">Workflows</a>. Complete its webhook steps, then match the returned correlation identifier here. No sample is required in normal use.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>The list is empty.</strong> Clear search and filters, then Refresh. Check sender responses and Workflows History before deciding nothing arrived. Older events can be outside the recent window.</p>
+<p><strong>A row is Failed.</strong> Open the workflow History and inspect the failing node. Activity has no retry action. Reconcile effects before following the workflow recovery procedure.</p>
+<p><strong>The sheet stays on Loading.</strong> Close it, Refresh, and reopen the row. If it persists, ask an administrator to check the API request and server logs. This sheet cannot distinguish every failed request from a slow one.</p>
+<p><strong>Refresh shows an error.</strong> Try once again. Report the exact error if it persists.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="workflows-review.html">Workflows</a> explains runs and webhook receipts. <a href="audit-review.html">Audit</a> explains administrative change records.</p>
+</article>
+
+      <nav class="dg-onpage" aria-label="On this page"><p>On this page</p><a href="#dg-follow">Follow one payload</a><a href="#dg-refresh">Fetch the latest recorded state</a><a href="#dg-filter">Show complete payloads</a><a href="#dg-sort">Put latest start times first</a><a href="#dg-columns">Choose visible columns</a><a href="#dg-phone">Read a payload on a phone</a><a href="#dg-statuses">Read stages and statuses</a><a href="#dg-limits">Understand the history window</a><a href="#dg-practice">Optional fictional practice</a><a href="#dg-help">Troubleshooting</a><a href="#dg-related">Related guides</a><small>Click any screenshot to enlarge it.</small></nav>
+     </div>
+    </div>
+   </section>
+  </div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><div data-lightbox-content></div></div>
+ </div>
+</div>
+<script type="application/json" id="facilities-evidence-assets">{"open-page":"./activity-evidence/open-page.png","search":"./activity-evidence/search.png","matching-row":"./activity-evidence/matching-row.png","open-row":"./activity-evidence/open-row.png","payload-id":"./activity-evidence/payload-id.png","received":"./activity-evidence/received.png","persisted":"./activity-evidence/persisted.png","close":"./activity-evidence/close.png","actions":"./activity-evidence/actions.png","refresh":"./activity-evidence/refresh.png","filter":"./activity-evidence/filter.png","add-filter":"./activity-evidence/add-filter.png","status-rule":"./activity-evidence/status-rule.png","complete-value":"./activity-evidence/complete-value.png","apply-filter":"./activity-evidence/apply-filter.png","filtered":"./activity-evidence/filtered.png","add-sort":"./activity-evidence/add-sort.png","sort-started":"./activity-evidence/sort-started.png","sort-direction":"./activity-evidence/sort-direction.png","apply-sort":"./activity-evidence/apply-sort.png","columns":"./activity-evidence/columns.png","column-options":"./activity-evidence/column-options.png","pagination":"./activity-evidence/pagination.png","phone-search":"./activity-evidence/phone-search.png","phone-open":"./activity-evidence/phone-open.png","phone-detail":"./activity-evidence/phone-detail.png"}</script>
+<script>
+(() => {
+ const root = document.getElementById('activity-evidence-guide');
+ const assets = JSON.parse(document.getElementById('facilities-evidence-assets').textContent);
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
+ const pane = root.querySelector('[data-reading-pane]');
+ let previewTheme='dark';
+ function applyTheme(){root.style.colorScheme=previewTheme;root.querySelector('[data-theme-toggle]').setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');}
+ applyTheme();
+ root.querySelector('[data-theme-toggle]').addEventListener('click',()=>{previewTheme=previewTheme==='dark'?'light':'dark';applyTheme();});
+ const box = root.querySelector('.dg-lightbox');
+ let previousFocus = null;
+ function closeBox() { box.hidden = true; root.querySelector('.dg-main').inert=false; if(previousFocus) previousFocus.focus(); }
+ root.querySelector('[data-close-lightbox]').addEventListener('click', closeBox);
+ root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
+ root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
+  previousFocus = button;
+  const content = box.querySelector('[data-lightbox-content]');
+  const frame = button.querySelector('.fc-screenshot');
+  content.replaceChildren();
+  content.className = frame ? 'dg-context-shot' : '';
+  if(frame) {
+   content.dataset.shotId = button.closest('[data-shot-id]').dataset.shotId;
+   content.append(frame.cloneNode(true));
+  } else {
+   delete content.dataset.shotId;
+   content.append(button.querySelector('img').cloneNode(true));
+  }
+  box.hidden = false;
+  root.querySelector('.dg-main').inert=true;
+  box.querySelector('button').focus();
+ }));
+ root.querySelectorAll('a[href^="#dg-"]').forEach(link => link.addEventListener('click', event => {
+  const target = root.querySelector(link.getAttribute('href'));
+  if(!target) return;
+  event.preventDefault();
+  pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  root.querySelectorAll('.dg-onpage a').forEach(item => item.removeAttribute('aria-current'));
+  if(link.closest('.dg-onpage')) link.setAttribute('aria-current','location');
+ }));
+ root.querySelectorAll('[data-play-loop]').forEach(button => button.addEventListener('click', () => {
+  const video=button.closest('figure').querySelector('video');
+  if(video.paused) video.play().then(()=>button.textContent='Pause loop').catch(()=>button.textContent='Play loop');
+  else {video.pause();button.textContent='Play loop';}
+ }));
+ root.querySelectorAll('.dg-loop').forEach(figure=>{
+  const video=figure.querySelector('video');
+  const button=figure.querySelector('[data-play-loop]');
+  video.addEventListener('play',()=>{button.textContent='Pause loop';});
+  video.addEventListener('pause',()=>{button.textContent='Play loop';});
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+   video.autoplay=true;
+   video.play().catch(()=>{button.textContent='Play loop';});
+  }
+ });
+ const expand = root.querySelector('[data-expand]');
+ root.querySelector('[data-collapse]').addEventListener('click',()=>{root.classList.add('dg-folded');expand.hidden=false;});
+ expand.addEventListener('click',()=>{root.classList.remove('dg-folded');expand.hidden=true;});
+ root.querySelector('[data-search]').addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  root.querySelectorAll('.dg-navitem').forEach(item=>{item.hidden=!!query&&!item.textContent.toLowerCase().includes(query);});
+ });
+
+})();
+</script>
+<style>
+#activity-evidence-guide .dg-context-shot { max-width:500px; }
+#activity-evidence-guide .fc-screenshot { display:block; position:relative; width:100%; aspect-ratio:8/5; container-type:inline-size; overflow:hidden; background:var(--dg-bg); }
+#activity-evidence-guide .dg-context-shot img { position:absolute; inset:0; display:block; width:100%; height:100%; max-height:none; object-fit:fill; }
+#activity-evidence-guide .fc-scene { position:absolute; display:block; }
+#activity-evidence-guide .fc-background { filter:blur(.25cqw); opacity:.9; }
+#activity-evidence-guide .fc-sharp { pointer-events:none; }
+#activity-evidence-guide .fc-ring { position:absolute; display:block; border:2px solid var(--dg-link); border-radius:3px; pointer-events:none; }
+#activity-evidence-guide .fc-marker { position:absolute; right:calc(100% + 3px); top:-4px; display:flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; background:var(--dg-link); color:var(--dg-bg); font:500 11px/1 Arial,sans-serif; }
+#activity-evidence-guide [data-shot-id="open-dashboard"] .fc-marker { left:calc(100% + 3px); right:auto; }
+#activity-evidence-guide .dg-lightbox .dg-context-shot { margin:0; width:min(100%,calc((min(var(--guide-preview-height,840px),100dvh) - 64px)*1.6)); max-width:none; }
+</style>
+<style>#activity-evidence-guide .fc-marker{left:calc(100% + 3px);right:auto}#activity-evidence-guide .dg-head-icons{padding-right:0}@media(max-width:900px){#activity-evidence-guide .fc-marker{left:auto!important;right:4px!important}}</style>
+</body></html>
