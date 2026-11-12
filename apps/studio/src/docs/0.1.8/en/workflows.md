@@ -160,7 +160,7 @@ The **Node library** groups nodes by purpose: **Core**, **Communication**, **Dev
 ### Bring data in
 
 - **Postgres**, **MySQL**, **Microsoft SQL**. Run SQL through a database connector and emit one item per row. The connector sets the dialect. Use `{{ $json.x }}` to put values in. Keep queries as plain `SELECT`s and do the reshaping in nodes, so the same workflow works on another database.
-- **SQL Query**. Runs a `SELECT` over the reporting schema. It needs **Dashboard raw SQL** turned on in **Settings**, **General**. Without it, it fails with `raw SQL widgets are disabled`. The Postgres node does not need that switch.
+- **SQL Query**. Runs one `SELECT` over the reporting schema, read-only, with the same timeout and row limit as dashboard SQL. It does not need **Dashboard raw SQL**.
 - **Load Dataset**. Reads a dataset saved earlier.
 - **HTTP Request** and **FHIR Query**. Fetch from an API or from the FHIR store.
 
@@ -268,7 +268,6 @@ The workflow list works on a phone. The canvas needs a computer: build and chang
 - **Save on Ingest seems to do nothing.** Look for the **Save changes to a system workflow?** prompt and select **Save anyway**.
 - **A node cannot run.** Open it and fill every required field. A database or email node needs a connector.
 - **A connector is missing from a node.** Check the connector exists, is enabled, and matches the node's type. See [Connectors](/docs/connectors).
-- **The SQL Query node fails with `raw SQL widgets are disabled`.** Turn on **Dashboard raw SQL**, or use the **Postgres**, **MySQL** or **Microsoft SQL** node with a connector.
 - **Run does nothing.** **Run** only arms the workflow. Select the play badge on the trigger.
 - **A dataset is empty.** Run the workflow that builds it before the one that reads it.
 - **An email arrived without the attachment.** Set the Send Email node's **Attachment field** to the file field made earlier, usually `file`.

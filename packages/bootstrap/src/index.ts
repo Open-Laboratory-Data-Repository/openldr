@@ -71,6 +71,7 @@ import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
+import { createWorkflowSql } from './workflow-sql';
 import { createFacilityJobWorkerIfEnabled } from './facility-job-worker';
 import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
@@ -1196,10 +1197,18 @@ const reporting: ReportingApi = {
   const connectorSftpRunner = createConnectorSftpRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
 
   const workflowServices: WorkflowServices = {
-    runSql: async (sql) => {
-      const r = await dashboards.query({ mode: 'sql', sql });
-      return { columns: r.columns.map((c) => ({ key: c.key, label: c.label })), rows: r.rows };
-    },
+    // Bug 12: not through dashboards.query, whose Dashboard raw SQL switch blocked this node while
+    // the Postgres node ran the same SELECT through the default warehouse connector. The dashboard
+    // SQL bounds still apply. See workflow-sql.ts.
+    runSql: createWorkflowSql({
+      db: reportingDb,
+      bounds: async () => ({
+        timeoutMs: await numberSettings.get('dashboard.sql_timeout_ms'),
+        rowCap: await numberSettings.get('dashboard.sql_row_cap'),
+      }),
+      withDeadline: selectedTarget.withQueryTimeout,
+      engine: cfg.TARGET_STORE_ADAPTER === 'mssql' ? 'mssql' : cfg.TARGET_STORE_ADAPTER === 'mysql' ? 'mysql' : 'postgres',
+    }),
     fhirQuery: async (resourceType, limit) => ({
       resources: (await termFhirStore.listByType(resourceType, limit)).map((x) => x.resource),
     }),

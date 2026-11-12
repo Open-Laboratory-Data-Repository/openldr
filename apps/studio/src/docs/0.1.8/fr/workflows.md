@@ -162,7 +162,7 @@ La **Node library** range les nœuds par usage : **Core**, **Communication**, **
 ### Faire entrer des données
 
 - **Postgres**, **MySQL**, **Microsoft SQL**. Exécutent du SQL par un connecteur de base de données et produisent un élément par ligne. Le connecteur fixe le dialecte. Utilisez `{{ $json.x }}` pour y mettre des valeurs. Gardez des `SELECT` simples et faites le remodelage dans des nœuds, pour que le même flux marche sur une autre base.
-- **SQL Query**. Exécute un `SELECT` sur le schéma de reporting. Il faut activer **SQL brut pour les tableaux de bord** dans **Paramètres**, **Général**. Sinon il échoue avec `raw SQL widgets are disabled`. Le nœud Postgres n'a pas besoin de ce réglage.
+- **SQL Query**. Exécute un seul `SELECT` sur le schéma de reporting, en lecture seule, avec le même délai et la même limite de lignes que le SQL des tableaux de bord. Il n'a pas besoin de **SQL brut pour les tableaux de bord**.
 - **Load Dataset**. Lit un jeu de données enregistré plus tôt.
 - **HTTP Request** et **FHIR Query**. Vont chercher dans une API ou dans le magasin FHIR.
 
@@ -270,7 +270,6 @@ La liste des flux marche sur un téléphone. Le canevas demande un ordinateur : 
 - **Save sur Ingest semble ne rien faire.** Cherchez la question **Save changes to a system workflow?** et sélectionnez **Save anyway**.
 - **Un nœud ne peut pas tourner.** Ouvrez-le et remplissez chaque champ obligatoire. Un nœud de base de données ou d'e-mail demande un connecteur.
 - **Un connecteur manque dans un nœud.** Vérifiez que le connecteur existe, est activé, et correspond au type du nœud. Voir [Connecteurs](/docs/connectors).
-- **Le nœud SQL Query échoue avec `raw SQL widgets are disabled`.** Activez **SQL brut pour les tableaux de bord**, ou utilisez le nœud **Postgres**, **MySQL** ou **Microsoft SQL** avec un connecteur.
 - **Run ne fait rien.** **Run** ne fait que préparer le flux. Sélectionnez le badge lecture sur le déclencheur.
 - **Un jeu de données est vide.** Exécutez le flux qui le construit avant celui qui le lit.
 - **Un e-mail est arrivé sans la pièce jointe.** Réglez l'**Attachment field** du nœud Send Email sur le champ de fichier créé plus tôt, en général `file`.

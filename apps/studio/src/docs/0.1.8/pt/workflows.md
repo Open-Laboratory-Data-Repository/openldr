@@ -162,7 +162,7 @@ A **Node library** agrupa os nós por uso: **Core**, **Communication**, **Develo
 ### Trazer dados
 
 - **Postgres**, **MySQL**, **Microsoft SQL**. Executam SQL por um conector de base de dados e produzem um item por linha. O conector define o dialeto. Use `{{ $json.x }}` para lá pôr valores. Mantenha `SELECT` simples e faça a remodelação em nós, para que o mesmo fluxo funcione noutra base.
-- **SQL Query**. Executa um `SELECT` sobre o esquema de relatórios. Precisa de **SQL bruto no painel** ativado em **Definições**, **Geral**. Sem isso, falha com `raw SQL widgets are disabled`. O nó Postgres não precisa dessa definição.
+- **SQL Query**. Executa um só `SELECT` sobre o esquema de relatórios, só de leitura, com o mesmo tempo limite e o mesmo limite de linhas do SQL do painel. Não precisa de **SQL bruto no painel**.
 - **Load Dataset**. Lê um conjunto de dados guardado antes.
 - **HTTP Request** e **FHIR Query**. Vão buscar a uma API ou ao repositório FHIR.
 
@@ -270,7 +270,6 @@ A lista de fluxos funciona num telemóvel. A tela precisa de um computador: cons
 - **Save no Ingest parece não fazer nada.** Procure a pergunta **Save changes to a system workflow?** e selecione **Save anyway**.
 - **Um nó não corre.** Abra-o e preencha todos os campos obrigatórios. Um nó de base de dados ou de e-mail precisa de um conector.
 - **Falta um conector num nó.** Confirme que o conector existe, está ativo e corresponde ao tipo do nó. Veja [Conectores](/docs/connectors).
-- **O nó SQL Query falha com `raw SQL widgets are disabled`.** Ative **SQL bruto no painel**, ou use o nó **Postgres**, **MySQL** ou **Microsoft SQL** com um conector.
 - **Run não faz nada.** **Run** só prepara o fluxo. Selecione o botão de reprodução no gatilho.
 - **Um conjunto de dados está vazio.** Corra o fluxo que o constrói antes do que o lê.
 - **Chegou um e-mail sem o anexo.** Defina o **Attachment field** do nó Send Email com o campo de ficheiro criado antes, normalmente `file`.
