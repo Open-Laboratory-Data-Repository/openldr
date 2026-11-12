@@ -74,13 +74,13 @@ A opção sem exemplos é intencional. Para incluir o painel inicial e os dados 
 
 ![Ilustração do comando com a pasta de exemplo e a opção sem dados iniciais.](guide:install-run)
 
-### 2. Aguardar os serviços e guardar as credenciais
+### 2. Aguardar os serviços e guardar o código de configuração
 
-Aguarde **OpenLDR is ready**. Guarde o endereço e as credenciais **App sign-in**. Servem para o Studio. A palavra-passe de administrador do Keycloak serve separadamente para gerir a autenticação.
+Aguarde **OpenLDR is ready**. Guarde o endereço e o código **Setup code**. No Studio, a página **Criar o administrador** pede este código para criar o primeiro administrador. O código é válido durante 30 minutos. Em Linux e macOS, `./openldr auth setup-code` mostra um novo. No Windows, use `.\openldr.ps1 auth setup-code`. Uma instalação feita com `--auth keycloak` mostra, em vez disso, uma palavra-passe de administrador do Keycloak e as credenciais **App sign-in**.
 
 Se aparecer **OpenLDR is starting**, siga **Verificar uma instalação ainda a iniciar** abaixo. Um código de saída zero não prova que todos os serviços estejam prontos.
 
-![Ilustração da saída final. As palavras-passe são marcadores; use as apresentadas no seu anfitrião.](guide:install-ready)
+![Ilustração da saída final. O código de configuração é um marcador; use o apresentado no seu anfitrião.](guide:install-ready)
 
 ### 3. Encontrar a pasta de instalação
 
@@ -97,7 +97,7 @@ O ficheiro oculto `.env` contém definições e palavras-passe geradas. Guarde-o
 
 ![Ilustração do gestor de ficheiros com a pasta de exemplo e os ficheiros gerados.](guide:install-folder)
 
-**Resultado esperado:** Os serviços estão prontos, tem as credenciais do Studio e encontra os ficheiros da instalação.
+**Resultado esperado:** Os serviços estão prontos, tem o código de configuração e encontra os ficheiros da instalação.
 
 ## Verificar uma instalação ainda a iniciar
 
@@ -365,6 +365,7 @@ Espere `mysql`, também para MariaDB. Verifique estado real e registos. Isto con
 | `--no-start` | `-NoStart` | desligada | Apenas criar e configurar, sem arrancar a pilha. |
 | `--no-pull` | `-NoPull` | desligada | Não descarregar imagens (usa as que já existem localmente). |
 | `--seedless` | `-Seedless` | desligada (com dados) | Primeiro arranque vazio: não cria o painel de exemplo nem os dados de demonstração (por omissão, são criados). Windows: `-Seedless`. Apenas numa instalação nova. |
+| `--auth <mode>` | `-Auth` | pergunta, senão `local` | Início de sessão de uma instalação nova: `local` ou `keycloak`. `local` mantém as contas próprias do OpenLDR e não executa o Keycloak. Sem a opção, o instalador pergunta quando tem um terminal e, caso contrário, usa `local`. Uma nova execução mantém o modo com que a instalação foi feita. Windows: `-Auth`. |
 | `--target-db <db>` | `-TargetDb` | `postgres` | Base de dados analítica externa: `postgres`, `mssql` ou `mysql`. |
 | `--mssql-demo` | `-MssqlDemo` | desligada | Incluir um contentor SQL Server 2022 (apenas para avaliação). Implica `--target-db mssql`. |
 | `--mssql-host <host>` | `-MssqlHost` | nenhuma | Anfitrião do seu SQL Server (obrigatório com `--target-db mssql` sem `--mssql-demo`). |

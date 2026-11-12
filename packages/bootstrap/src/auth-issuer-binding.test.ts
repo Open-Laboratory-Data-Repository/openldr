@@ -3,6 +3,7 @@ import { newDb } from 'pg-mem';
 import type { Kysely } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
 import * as migration from '../../db/src/migrations/internal/098_auth_issuer_binding';
+import { LOCAL_ISSUER } from '@openldr/adapter-auth';
 import { bindAuthIssuer, readAuthIssuerBinding, rebindAuthIssuer } from './auth-issuer-binding';
 
 async function migratedDb(): Promise<Kysely<InternalSchema>> {
@@ -29,6 +30,32 @@ describe('authentication issuer binding', () => {
     try {
       await bindAuthIssuer(db, 'https://old.example/realms/openldr');
       await expect(bindAuthIssuer(db, 'https://new.example/realms/openldr')).rejects.toThrow(/openldr auth rebind-issuer --force/);
+    } finally { await db.destroy(); }
+  });
+
+  it('keeps the Keycloak and OIDC refusal word for word', async () => {
+    const db = await migratedDb();
+    try {
+      await bindAuthIssuer(db, 'https://old.example/realms/openldr');
+      await expect(bindAuthIssuer(db, 'https://new.example/realms/openldr')).rejects.toThrow(
+        'Authentication issuer https://new.example/realms/openldr differs from the issuer bound to this database (https://old.example/realms/openldr). '
+        + 'Restore the original OIDC_ISSUER_URL. If the same provider only moved address and user IDs are unchanged, '
+        + 'run `openldr auth rebind-issuer --force`. A different provider needs an explicit identity mapping.',
+      );
+    } finally { await db.destroy(); }
+  });
+
+  it('says local sign-in cannot take over a database set up with another provider', async () => {
+    const db = await migratedDb();
+    try {
+      await bindAuthIssuer(db, 'http://kc/realms/openldr');
+      const refusal = await bindAuthIssuer(db, LOCAL_ISSUER).catch((e: unknown) => e);
+      expect(refusal).toBeInstanceOf(Error);
+      expect((refusal as Error).message).toBe(
+        'This database was set up with another sign-in provider (http://kc/realms/openldr). '
+        + 'Local sign-in cannot take it over. Moving an install between sign-in modes is not supported.',
+      );
+      expect(await readAuthIssuerBinding(db)).toBe('http://kc/realms/openldr');
     } finally { await db.destroy(); }
   });
 

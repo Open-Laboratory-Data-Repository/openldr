@@ -136,6 +136,8 @@ O relatório descreve as verificações no momento da execução. All checks pas
 
 **Um aviso indica que a autenticação está desligada.** Desligue o desvio de autenticação de desenvolvimento na configuração do servidor antes da utilização real.
 
+**Início de sessão avisa que ainda não existe nenhum administrador.** A instalação usa o início de sessão próprio do OpenLDR, e ninguém terminou a configuração. O `openldr doctor` mostra `No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.` Até lá, o Studio mostra a página **Criar o administrador**, e não esta página. Veja [Início de sessão e palavras-passe](/docs/sign-in).
+
 **Uma página ligada está indisponível.** Peça ajuda a um administrador com permissão para alterar essa definição.
 
 ## Guias relacionados

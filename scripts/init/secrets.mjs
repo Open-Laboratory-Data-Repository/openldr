@@ -1,4 +1,6 @@
 import { randomBytes } from 'node:crypto';
+import { computeEnv } from './config-compute.mjs';
+import { mergeEnv } from './env-merge.mjs';
 
 /** URL-safe random secret (base64 stripped to alnum), default 32 chars. Alnum-only so it is safe to
  *  embed unencoded in a postgres:// URL password segment. */
@@ -42,6 +44,9 @@ const WEAK_DEFAULTS = {
   KEYCLOAK_ADMIN_CLIENT_SECRET: ['', 'openldr-admin-dev-secret'],
 };
 
+// Written only for a Keycloak install. Local sign-in has no Keycloak to give a password to.
+const KEYCLOAK_SECRETS = ['KEYCLOAK_ADMIN_PASSWORD', 'KEYCLOAK_ADMIN_CLIENT_SECRET'];
+
 const PRE_GARAGE_MESSAGE =
   'This install predates 0.1.11: its storage settings are still MinIO. ' +
   'Follow "Moving from MinIO to Garage" in the upgrading guide before you run init again. ' +
@@ -74,10 +79,11 @@ function assertNotPreGarage(text) {
  * Returns the updated env text plus the two values the realm import must be patched with:
  * `kcClientSecret` (openldr-admin service account) and `labAdminPassword` (the seeded labadmin user).
  */
-export function ensureStackSecrets(envText, gen = randomSecret) {
+export function ensureStackSecrets(envText, gen = randomSecret, { auth = signInModeOf(envText) } = {}) {
   assertNotPreGarage(envText);
   let text = envText;
   for (const [key, weak] of Object.entries(WEAK_DEFAULTS)) {
+    if (auth === 'local' && KEYCLOAK_SECRETS.includes(key)) continue;
     const cur = getEnv(text, key);
     if (cur === undefined || weak.includes(cur)) text = setEnv(text, key, (GENERATORS[key] ?? gen)());
   }
@@ -90,12 +96,66 @@ export function ensureStackSecrets(envText, gen = randomSecret) {
       if (url) text = setEnv(text, key, url.replace(/^(postgres(?:ql)?:\/\/[^:/@]+:)[^@]*(@)/, `$1${pg}$2`));
     }
   }
+  // Local sign-in has no Keycloak realm to import, so no labadmin user and no client secret.
+  // The first administrator comes from `openldr auth setup-code` instead.
+  if (auth === 'local') return { envText: text, kcClientSecret: undefined, labAdminPassword: undefined };
   let labAdminPassword = getEnv(text, 'INITIAL_LAB_ADMIN_PASSWORD');
   if (!labAdminPassword) {
     labAdminPassword = gen();
     text = setEnv(text, 'INITIAL_LAB_ADMIN_PASSWORD', labAdminPassword);
   }
   return { envText: text, kcClientSecret: getEnv(text, 'KEYCLOAK_ADMIN_CLIENT_SECRET'), labAdminPassword };
+}
+
+/** The sign-in mode an .env.prod runs under. No AUTH_ADAPTER line means keycloak, the server's
+ *  default, which is what every install made before local sign-in runs. */
+export function signInModeOf(envText) {
+  return getEnv(envText, 'AUTH_ADAPTER')?.trim() || 'keycloak';
+}
+
+// Keycloak values the wizard used to inherit from .env.prod.example. The example now leaves them
+// commented, so a Keycloak install writes them, only where the key is missing.
+const KEYCLOAK_DEFAULTS = {
+  OIDC_INTERNAL_ISSUER_URL: 'http://keycloak:8080/auth/realms/openldr',
+  KEYCLOAK_ADMIN: 'admin',
+  KEYCLOAK_ADMIN_CLIENT_ID: 'openldr-admin',
+};
+
+/** Add `profile` to COMPOSE_PROFILES, keeping any profiles already listed. */
+function addComposeProfile(text, profile) {
+  const cur = getEnv(text, 'COMPOSE_PROFILES')?.trim();
+  if (!cur) return setEnv(text, 'COMPOSE_PROFILES', profile);
+  if (cur.split(',').map((p) => p.trim()).includes(profile)) return text;
+  return setEnv(text, 'COMPOSE_PROFILES', `${cur},${profile}`);
+}
+
+/** Generate SECRETS_ENCRYPTION_KEY once. Never rotate an existing key: that would make stored
+ *  secrets unreadable. Local sign-in also seals its token signing key with it. */
+export function ensureEncryptionKey(envText, gen = () => randomBytes(32).toString('base64')) {
+  if (/^SECRETS_ENCRYPTION_KEY=.+/m.test(envText)) return envText;
+  const key = gen();
+  return /^#?\s*SECRETS_ENCRYPTION_KEY=/m.test(envText)
+    ? envText.replace(/^#?\s*SECRETS_ENCRYPTION_KEY=.*/m, `SECRETS_ENCRYPTION_KEY=${key}`)
+    : `${envText}\nSECRETS_ENCRYPTION_KEY=${key}\n`;
+}
+
+/**
+ * Build the .env.prod text `pnpm run init` writes, from the existing text (or the example) and the
+ * operator's answers, including `answers.auth`. Under keycloak (or oidc) the keycloak compose
+ * profile is turned on, because docker-compose.prod.yml starts Keycloak only under that profile.
+ * Idempotent: a second pass with the same answers returns the same text.
+ */
+export function prepareProdEnv(envText, answers, gen = randomSecret) {
+  const { auth } = answers;
+  const secrets = ensureStackSecrets(ensureEncryptionKey(envText), gen, { auth });
+  let text = secrets.envText;
+  if (auth !== 'local') {
+    for (const [key, val] of Object.entries(KEYCLOAK_DEFAULTS)) {
+      if (getEnv(text, key) === undefined) text = setEnv(text, key, val);
+    }
+    text = addComposeProfile(text, 'keycloak');
+  }
+  return { ...secrets, envText: mergeEnv(text, computeEnv(answers)) };
 }
 
 /** Patch a rendered realm-import JSON string with per-install secrets: the openldr-admin service

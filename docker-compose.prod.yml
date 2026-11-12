@@ -15,7 +15,9 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       storage: { condition: service_healthy }
-      keycloak: { condition: service_healthy }
+      # `required: false` (Compose 2.20 or later): wait for Keycloak when its profile is on,
+      # start without it when it is off (AUTH_ADAPTER=local).
+      keycloak: { condition: service_healthy, required: false }
     restart: unless-stopped
 
   studio:
@@ -50,7 +52,7 @@ services:
       api: { condition: service_started }
       studio: { condition: service_started }
       web: { condition: service_started }
-      keycloak: { condition: service_healthy }
+      keycloak: { condition: service_healthy, required: false }
     restart: unless-stopped
 
   # Let's Encrypt helper (profile-gated: does NOT start with `up`). Invoked ad-hoc by
@@ -108,7 +110,10 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Runs only with the `keycloak` profile on: `COMPOSE_PROFILES=keycloak` in .env.prod (written by
+  # `pnpm run init` for a Keycloak install) or `--profile keycloak`. Local sign-in needs no Keycloak.
   keycloak:
+    profiles: ["keycloak"]
     image: ghcr.io/open-laboratory-data-repository/openldr-keycloak:${OPENLDR_VERSION:-latest}
     # Production mode (`start`, not `start-dev`): persistent Postgres store instead of the throwaway H2
     # dev database. The stock image isn't pre-built for a specific DB vendor, so `start` (without
@@ -117,8 +122,11 @@ services:
     command: start --import-realm --http-relative-path=/auth
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
-      # Fail closed: no baked-in admin/admin fallback for the master-realm bootstrap password.
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD must be set in .env.prod}
+      # No baked-in admin/admin fallback for the master-realm bootstrap password. This cannot be
+      # `:?` (required): Compose checks required variables in every service, even one whose
+      # profile is off, so a local install with no Keycloak settings would refuse to start.
+      # `pnpm run init` writes a generated value for a Keycloak install.
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
       # Reuse the shared internal Postgres (service `postgres`), DB `keycloak`, as the openldr role.
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak

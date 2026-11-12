@@ -21,9 +21,9 @@ The installer creates the configuration, generates passwords and starts the serv
 
 1. Open the guide for your host above. Check its requirements before running commands.
 2. Follow that guide's installation steps. Wait for the services to become ready.
-3. Keep the address and **App sign-in** credentials printed at the end. The Keycloak admin password is a separate credential for managing authentication.
+3. Keep the address and the **Setup code** printed at the end. The setup code works for 30 minutes.
 
-![Illustration of installer output. The highlighted lines show the address and App sign-in credentials. Passwords are placeholders.](guide:install-result)
+![Illustration of installer output. The highlighted lines show the address and the setup code. The code is a placeholder.](guide:install-result)
 
 **Expected result:** The installer says **OpenLDR is ready** and prints the address to open. If it says **OpenLDR is starting**, some services are not ready yet. Inspect `docker compose ps` and `docker compose logs` from the installation folder before continuing.
 
@@ -31,7 +31,7 @@ The illustrated address is the default for a local installation. If you need acc
 
 ## First sign-in
 
-The illustrated first-sign-in walkthrough is deferred until it can be captured on a fresh installation. Keep the generated **App sign-in** credentials for that task. See [Install](/docs/install) for the configured address and certificate setup.
+The illustrated first-sign-in walkthrough is deferred until it can be captured on a fresh installation. Keep the setup code the installer printed for that task. An install made with `--auth keycloak` prints **App sign-in** credentials instead of a setup code. See [Install](/docs/install) for the configured address and certificate setup, and [Authentication providers](/docs/auth-providers) for how the setup code is used.
 
 ## Continue in the app
 

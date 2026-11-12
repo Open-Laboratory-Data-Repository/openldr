@@ -1,24 +1,89 @@
 # Authentication providers
 
+OpenLDR can sign people in three ways: with its own accounts, through Keycloak, or through a generic OpenID Connect, or OIDC, provider. `AUTH_ADAPTER` picks one. When it is not set, it is `keycloak`. Generic mode requires discovery and signed JWT access tokens. Opaque access tokens are unsupported. This guide does not certify a second provider's deployment configuration.
+
 <!-- operator-platform -->
 
 Run maintenance on the OpenLDR host, from your installed Compose folder. The examples use `~/Downloads/openldr_ce` on Linux/macOS and `C:\openldr_ce` in PowerShell. Replace these paths with your installation. The blue prompt is already shown by the terminal. Type the command only. Configuration snippets name the file to edit; they are not terminal commands. Pictures are examples, not proof that maintenance succeeded. Sample data is optional.
+
+## Choose a sign-in mode
+
+| Mode | Where accounts and passwords live | Pick it when |
+| --- | --- | --- |
+| `AUTH_ADAPTER=local` | In OpenLDR's own database. No other service runs. | A lab runs its own install and needs nothing beyond usernames and passwords. It is the simplest choice and uses the least memory. |
+| `AUTH_ADAPTER=keycloak` | In Keycloak, a separate service that runs beside OpenLDR. | The install is a sync central, or it already uses Keycloak. Enrolling sync sites needs Keycloak administration. |
+| `AUTH_ADAPTER=oidc` | In a provider you already run, such as a national login. | People must use an existing login. OpenLDR cannot create those accounts or reset their passwords. |
+
+Choose before the first start. The database records the sign-in mode it first starts with, and refuses to start under a different one. There is no way to move an existing install's accounts from Keycloak or OIDC to local sign-in.
 
 ## Choose authentication and administration
 
 | Configuration | Sign-in | Provider administration | Sync client provisioning |
 | --- | --- | --- | --- |
+| `AUTH_ADAPTER=local`, administration omitted or `local` | OpenLDR's own accounts | Available in Studio and the CLI | Unavailable |
 | `AUTH_ADAPTER=keycloak`, administration omitted or `keycloak` | Keycloak metadata | Available with admin credentials | Keycloak only |
 | `AUTH_ADAPTER=keycloak`, `IDENTITY_ADMIN_ADAPTER=none` | Keycloak metadata | Unavailable | Unavailable |
 | `AUTH_ADAPTER=oidc`, administration omitted or `none` | OIDC discovery | Unavailable | Unavailable |
 
-`IDENTITY_ADMIN_ADAPTER` defaults to `keycloak` for Keycloak authentication and `none` for generic OIDC. Generic authentication with Keycloak administration is rejected.
+`IDENTITY_ADMIN_ADAPTER` defaults to `keycloak` for Keycloak authentication, `local` for local sign-in, and `none` for generic OIDC. Generic authentication with Keycloak administration is rejected. Local sign-in accepts only `local` or no value.
+
+## Set up local sign-in
+
+Use a fresh database. Set these in `.env`:
+
+```dotenv
+AUTH_ADAPTER=local
+SECRETS_ENCRYPTION_KEY=YOUR_KEY
+```
+
+`SECRETS_ENCRYPTION_KEY` is required. The server seals its token signing key with it, and refuses to start under local sign-in without it. `OIDC_ISSUER_URL` and the Keycloak settings are not used. Leave `IDENTITY_ADMIN_ADAPTER` unset. See [Environment variables](/docs/environment) for the key.
+
+### Create the first administrator with a setup code
+
+A new install has no accounts. Until the first administrator exists, Studio shows a **Create the administrator** page to whoever opens it. The page asks for a setup code. Only someone with access to the server can get one, so a stranger on the lab network cannot claim the install first.
+
+1. Start OpenLDR.
+2. On the server, run `openldr auth setup-code`. It prints a code that is valid for 30 minutes. Use the installed or development form of the command from [Command-line interface](/docs/cli).
+3. Open Studio. The **Create the administrator** page opens.
+4. Type the code in **Setup code**, then a username, then the password twice.
+5. Select **Create the administrator**.
+
+Studio signs you in with the locked **Administrator** role. The setup page does not come back, and `openldr auth setup-code` now refuses with `an administrator already exists`.
+
+Running the command again replaces the earlier code. A wrong or expired code shows **That setup code is wrong or has expired.** A taken username shows **That username is already in use.** Until setup is done, `openldr doctor` warns on its Sign-in line.
+
+### Rules for passwords and sessions
+
+These values are fixed. They are not settings.
+
+- A password is 10 to 128 characters and cannot be the username. There is no rule about character types, and passwords do not expire.
+- Five wrong passwords in a row lock the account for five minutes. A lock always ends by itself. A correct sign-in or an administrator's reset clears the count.
+- Each address gets 30 sign-in attempts a minute. An IPv6 address counts by its /64. The count is kept in memory on each server.
+- A session ends after 12 hours with no use, or 7 days after sign-in, whichever comes first.
+- The session cookie has no expiry date, so closing the browser signs the user out of that browser, unless the browser is set to restore its last session. The 12-hour and 7-day limits still apply.
+- Changing your own password ends your other sessions and keeps the current one.
+- An administrator's reset sets a temporary password and ends that user's sessions. The user must choose a new password at the next sign-in, and it cannot be the temporary one.
+- Password reset by email is not available. Studio hides **Send reset email**.
+
+A wrong password, a locked account and a disabled account all get the same message, so the sign-in page does not reveal whether an account exists.
+
+### Passwords on plain HTTP
+
+Over plain HTTP, a password crosses the network unencrypted. Anyone who can watch the traffic between a browser and the server can read it. Serve Studio over HTTPS, or reach it only through Tailscale, which encrypts the traffic between devices. The session cookie is marked `Secure` only when a request arrives over HTTPS, so plain HTTP still works. It is not private.
+
+### What local sign-in does not do
+
+- No second factor.
+- No password reset by email.
+- No self-registration. An administrator adds each person.
+- No move of an existing Keycloak or OIDC install to local sign-in.
+- No sync enrollment. An install on local sign-in cannot be a sync central.
 
 Without provider administration, manage accounts, passwords and provider sessions at the provider. OpenLDR cannot create, edit or delete provider users, reset passwords or revoke provider sessions. Local role assignment and local disable/enable remain available in Studio and the CLI. Local disable blocks OpenLDR access; it does not disable the provider account. Distributed sync client provisioning still requires Keycloak administration. Generic machine-to-machine sync is outside this guide's supported setup.
 
 ## Configure a generic provider
 
-Use a fresh deployment with no identities bound to another issuer. Keycloak remains the default. Generic OIDC needs discovery and signed JWT access tokens; opaque tokens are unsupported. These steps do not certify any external provider. First sign-in screenshots remain deferred to the fresh install.
+Use a fresh deployment with no identities bound to another issuer. Keycloak is the default only when `AUTH_ADAPTER` is unset. Generic OIDC needs discovery and signed JWT access tokens; opaque tokens are unsupported. These steps do not certify any external provider. First sign-in screenshots remain deferred to the fresh install.
 
 ### 1. Register the browser client at your provider
 
@@ -51,6 +116,8 @@ Resolve configuration or discovery errors before continuing. OpenLDR checks toke
 ![Recreate the API and read its startup result.](guide:operator-auth-recreate)
 
 ## Grant administrator access to a known account
+
+This section is for Keycloak and generic OIDC. Under local sign-in, the setup code creates the first administrator.
 
 An account must already have completed its first provider login so it exists locally. That login does not automatically grant administrator access. This is an operator task after that prerequisite, not a sign-in walkthrough.
 
@@ -97,3 +164,14 @@ Use --force only when this is the same provider and subject IDs are unchanged. I
 ```
 
 ![Confirm only an unchanged provider identity.](guide:operator-auth-rebind)
+
+## Troubleshooting local sign-in
+
+- **The last administrator forgot their password.** On the server, run `openldr user reset-password <username> --force`. It prints a temporary password once and ends that user's sessions. Sign in with it, then choose a new password. The username must match exactly, including capital letters. `openldr users list` shows every username. Without `--force`, the command changes nothing.
+- **`openldr auth setup-code` says `an administrator already exists`.** Setup is done. Sign in, or recover a lost password as above.
+- **`openldr auth setup-code` says `local sign-in is not enabled`.** `AUTH_ADAPTER` is not `local` in the server's environment.
+- **The server refuses to start after you set `AUTH_ADAPTER=local`, and names two different issuers.** The database was first started with Keycloak or OIDC. Moving an install between sign-in modes is not supported. Start local sign-in on a fresh database. `openldr auth rebind-issuer` does not help here, because it is only for a provider that moved address.
+- **The server refuses to start and says `SECRETS_ENCRYPTION_KEY is required when AUTH_ADAPTER=local`.** Set the key and start again.
+- **A role given with `openldr user assign-role` has no effect.** The command takes the user ID, not the username. Given a username, it reports success and grants nothing. `openldr user create` prints the ID, and `openldr users list` shows it first on each line.
+
+See [Environment variables](/docs/environment) and [Command-line interface](/docs/cli).

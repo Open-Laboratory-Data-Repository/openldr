@@ -65,8 +65,9 @@ export function terminalTranscript(scene: InstallScene, platform: InstallPlatfor
   if (scene === 'compose') return [...exchange('docker compose version', ['Docker Compose version v5.4.0', '']), freshPrompt()];
   if (scene === 'ready') return [...output([
     `${platform === 'windows' ? 'OK' : '✓'} OpenLDR is ready. Open https://localhost`,
-    '', 'Keycloak admin password: <generated password>', '',
-    'App sign-in: labadmin / <generated password>', '(change it on first login)', '',
+    '', 'Setup code: <setup code>, valid for 30 minutes',
+    'Open https://localhost/studio/ and enter it on the Create the administrator page.',
+    `For a new code, run: ${platform === 'windows' ? '.\\openldr.ps1' : './openldr'} auth setup-code`, '',
   ]), freshPrompt()];
   if (scene === 'mssql-ready') return output(['  MSSQL (demo) SA password: <generated password>']);
   if (scene === 'mysql-ready') return output(['  MySQL (demo) root password: <generated password>']);

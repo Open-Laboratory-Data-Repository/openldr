@@ -14,9 +14,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   createUser, updateUser, listPublishedForms, getForm,
-  listRoles, getUserRoles, setUserRoles,
+  listRoles, getUserRoles, setUserRoles, PasswordRuleError,
   type UserSummary, type RoleRecord, type CreateUserPayload,
 } from '@/api';
+import { PASSWORD_RULE_KEYS } from './ResetPasswordDialog';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
 import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
@@ -271,7 +272,8 @@ export function UserDialog({ open, onOpenChange, user, onSaved, identityAdmin = 
       onSaved(saved);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      if (err instanceof PasswordRuleError) setError(t(PASSWORD_RULE_KEYS[err.rule]));
+      else setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }

@@ -302,6 +302,34 @@ For the CLI, use `openldr user deactivate <local-id>` or `openldr user activate 
 
 If another status change is in progress for this account, the API returns `409`. Wait for that action to finish, then retry. This also applies when Studio and the CLI change the same account.
 
+## Local sign-in accounts
+
+These commands are for an install with `AUTH_ADAPTER=local`. See [Authentication providers](/docs/auth-providers). The usage lines below are copied from each command's `--help`:
+
+```text
+Usage: openldr auth setup-code [options]
+Usage: openldr user create [options]
+Usage: openldr user assign-role [options] <subject> <slug>
+Usage: openldr user reset-password [options] <username>
+Usage: openldr user end-sessions [options] <username>
+```
+
+- `openldr auth setup-code` prints a one-time code for creating the first administrator in Studio. It is valid for 30 minutes, and a new code replaces the earlier one. Once an administrator exists, it refuses with `an administrator already exists`. The code is never written to the audit log.
+- `openldr user create --username <u>` makes an account that can sign in. It prints the new user's ID and a temporary password, once. The person must change that password at first sign-in. `--role` takes a role slug such as `lab_technician`. A role that does not exist makes the command refuse with `no role named <slug>`, and nothing is created. Until the first administrator exists, the command refuses and tells you to run `openldr auth setup-code`.
+- `openldr user assign-role <subject> <slug>` adds a role. Under local sign-in the subject is the user ID that `user create` prints. Given a username, the command reports success and grants nothing.
+- `openldr user reset-password <username> --force` sets a new temporary password, prints it once, and ends the user's sessions. The user must choose a new password at the next sign-in. Without `--force` it refuses and changes nothing. This is how a forgotten administrator password is recovered.
+- `openldr user end-sessions <username>` signs the user out everywhere. The password does not change.
+
+`reset-password` and `end-sessions` match the username exactly, including capital letters. Under Keycloak or OIDC they refuse with `local sign-in is not enabled`. `user create`, `reset-password` and `end-sessions` write an audit event with actor type `cli`. A temporary password never appears in the audit log.
+
+```
+./openldr user create --username amina --name "Amina Hassan" --role lab_technician
+./openldr user reset-password amina --force
+./openldr user end-sessions amina
+```
+
+`user create` prints three lines: `created amina (<id>)`, `temporary password: <password>`, and `amina must change it at first sign-in.` Give the password to the person directly.
+
 ## User directory paging
 
 Users starts with active accounts. Search matches provider usernames, names, and email addresses across the directory. Select All statuses to include disabled accounts. Changing search, status, or page size returns to the first page.

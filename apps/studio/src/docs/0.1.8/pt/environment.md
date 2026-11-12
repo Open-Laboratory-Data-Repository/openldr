@@ -112,9 +112,9 @@ Consulte [Fornecedores de autenticação](/docs/auth-providers) antes de alterar
 
 | Variável | Predefinição ou origem | Significado |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | keycloak | Autenticação keycloak ou oidc genérico. |
-| `IDENTITY_ADMIN_ADAPTER` | Depende de AUTH_ADAPTER | keycloak ou none. O oidc genérico exige none. |
-| `OIDC_ISSUER_URL` | Obrigatório | Emissor esperado dos tokens. Preserve-o num espaço de identidade existente. |
+| `AUTH_ADAPTER` | keycloak | Autenticação local, keycloak ou oidc genérico. As novas instalações usam local. |
+| `IDENTITY_ADMIN_ADAPTER` | Depende de AUTH_ADAPTER | keycloak, local ou none. O início de sessão local usa local. O oidc genérico exige none. |
+| `OIDC_ISSUER_URL` | Obrigatório para keycloak e oidc | Emissor esperado dos tokens. O início de sessão local não o usa. Preserve-o num espaço de identidade existente. |
 | `OIDC_WEB_CLIENT_ID` | openldr-web | Identificador do cliente público do navegador. |
 | `OIDC_AUDIENCE` | Opcional | Audiência exigida do token de acesso à API quando configurada. |
 | `OIDC_SCOPES` | openid profile email | Âmbitos pedidos pelo navegador. Deve incluir openid. |

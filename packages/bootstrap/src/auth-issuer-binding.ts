@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { InternalSchema } from '@openldr/db';
+import { LOCAL_ISSUER } from '@openldr/adapter-auth';
 
 /** Subjects and role assignments are meaningful only within the original issuer. */
 export async function bindAuthIssuer(db: Kysely<InternalSchema>, issuer: string): Promise<void> {
@@ -9,6 +10,13 @@ export async function bindAuthIssuer(db: Kysely<InternalSchema>, issuer: string)
   const binding = await db.selectFrom('auth_issuer_binding').select('issuer')
     .where('id', '=', 1).executeTakeFirstOrThrow();
   if (binding.issuer !== issuer) {
+    // Neither OIDC_ISSUER_URL nor rebind-issuer applies to local sign-in, so say what is true.
+    if (issuer === LOCAL_ISSUER) {
+      throw new Error(
+        `This database was set up with another sign-in provider (${binding.issuer}). `
+        + 'Local sign-in cannot take it over. Moving an install between sign-in modes is not supported.',
+      );
+    }
     throw new Error(
       `Authentication issuer ${issuer} differs from the issuer bound to this database (${binding.issuer}). `
       + 'Restore the original OIDC_ISSUER_URL. If the same provider only moved address and user IDs are unchanged, '

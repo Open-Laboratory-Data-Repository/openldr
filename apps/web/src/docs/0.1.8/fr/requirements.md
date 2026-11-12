@@ -24,7 +24,7 @@ Microsoft décrit [WSL sur Server 2022 et 2025](https://learn.microsoft.com/en-u
 | Élément | Prérequis |
 | --- | --- |
 | Docker | Docker Engine ou Docker Desktop maintenu à jour. Le service doit fonctionner et être accessible au compte qui exécute l'installateur. |
-| Compose | La commande `docker compose` doit fonctionner. L'ancienne commande `docker-compose` seule ne suffit pas. |
+| Compose | La commande `docker compose` doit fonctionner, en version 2.20 ou plus récente. L'installateur s'arrête sur un Compose plus ancien. L'ancienne commande `docker-compose` seule ne suffit pas. |
 | Terminal Linux/macOS | Un interpréteur de commandes et `curl` pour télécharger et lancer l'installateur. |
 | Terminal Windows | Windows PowerShell 5.1 ou ultérieur pour télécharger et lancer l'installateur PowerShell. |
 | Dossier d'installation | Le compte doit pouvoir créer le dossier choisi et y écrire. Docker Desktop doit pouvoir le partager avec sa VM Linux. |
@@ -55,7 +55,7 @@ Pour l'installateur normal, autorisez les téléchargements HTTPS sortants depui
 | Réseau privé ou Tailscale | Un nom ou une adresse IP accessible aux autres appareils. Configurez cette adresse à l'installation pour les redirections de connexion. Les appareils doivent atteindre le port HTTPS choisi. |
 | Domaine public avec Let's Encrypt | Un domaine pointant vers l'hôte, les ports entrants TCP 80 et 443 et la configuration du certificat sous Linux décrite dans [Installation](/docs/install). |
 
-La passerelle utilise les ports hôte **80 et 443 par défaut**. Ils doivent être disponibles, sinon choisissez d'autres ports avant l'installation. PostgreSQL, le stockage et Keycloak communiquent dans le réseau Docker. Il n'est pas nécessaire d'ouvrir leurs ports internes aux utilisateurs dans la pile par défaut.
+La passerelle utilise les ports hôte **80 et 443 par défaut**. Ils doivent être disponibles, sinon choisissez d'autres ports avant l'installation. PostgreSQL, le stockage et, sur une installation Keycloak, Keycloak communiquent dans le réseau Docker. Il n'est pas nécessaire d'ouvrir leurs ports internes aux utilisateurs dans la pile par défaut.
 
 ## Vérifier l'hôte avant l'installation
 
@@ -79,7 +79,7 @@ Pour les images AMD64 fournies, attendez `linux/x86_64` ou `linux/amd64`. Si Doc
 docker compose version
 ```
 
-Une version doit s'afficher sans erreur. Elle peut différer de l'illustration. Si la commande est absente, installez le plugin Compose ou mettez Docker Desktop à jour.
+Une version doit s'afficher sans erreur. Elle peut différer de l'illustration, mais doit être 2.20 ou plus récente. Si la commande est absente ou plus ancienne, installez le plugin Compose ou mettez Docker Desktop à jour.
 
 ![Illustration de la vérification de Compose. Votre version peut différer.](guide:install-compose)
 

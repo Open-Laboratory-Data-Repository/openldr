@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ConfigSchema } from './schema';
+import { ConfigSchema, DEV_SECRETS_ENCRYPTION_KEY } from './schema';
 
 const base = {
   INTERNAL_DATABASE_URL: 'postgres://u:p@localhost/db', TARGET_DATABASE_URL: 'postgres://u:p@localhost/ext',
@@ -106,5 +106,60 @@ describe('auth config', () => {
     const withVal = ConfigSchema.parse({ ...base, TLS_CERT_PATH: '/etc/openldr/tls-cert.pem' });
     expect(withVal.TLS_CERT_PATH).toBe('/etc/openldr/tls-cert.pem');
     expect(ConfigSchema.parse({ ...base }).TLS_CERT_PATH).toBeUndefined();
+  });
+});
+
+describe('local sign-in config', () => {
+  // 32 bytes, base64. Only presence is checked at boot.
+  const VALID_KEY = Buffer.alloc(32, 7).toString('base64');
+  const parse = (env: Record<string, unknown>) => ConfigSchema.parse(env);
+
+  it('accepts local sign-in with no OIDC issuer', () => {
+    const { OIDC_ISSUER_URL: _drop, ...rest } = base;
+    const cfg = parse({ ...rest, AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: VALID_KEY });
+    expect(cfg.AUTH_ADAPTER).toBe('local');
+  });
+  it('refuses local sign-in with no secrets key', () => {
+    expect(() => parse({ ...base, AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: undefined })).toThrow(/SECRETS_ENCRYPTION_KEY/);
+  });
+  it('still requires an issuer for keycloak and oidc', () => {
+    const { OIDC_ISSUER_URL: _drop, ...rest } = base;
+    expect(() => parse({ ...rest, AUTH_ADAPTER: 'keycloak' })).toThrow(/OIDC_ISSUER_URL/);
+    expect(() => parse({ ...rest, AUTH_ADAPTER: 'oidc' })).toThrow(/OIDC_ISSUER_URL/);
+  });
+  it('refuses mixed admin adapters', () => {
+    expect(() => parse({ ...base, AUTH_ADAPTER: 'local', IDENTITY_ADMIN_ADAPTER: 'keycloak', SECRETS_ENCRYPTION_KEY: VALID_KEY })).toThrow();
+    expect(() => parse({ ...base, AUTH_ADAPTER: 'keycloak', IDENTITY_ADMIN_ADAPTER: 'local' })).toThrow();
+  });
+  it('refuses IDENTITY_ADMIN_ADAPTER=none under local sign-in', () => {
+    expect(() => parse({ ...base, AUTH_ADAPTER: 'local', IDENTITY_ADMIN_ADAPTER: 'none', SECRETS_ENCRYPTION_KEY: VALID_KEY }))
+      .toThrow('local sign-in manages its own users; leave IDENTITY_ADMIN_ADAPTER unset');
+    expect(parse({ ...base, AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: VALID_KEY }).IDENTITY_ADMIN_ADAPTER).toBeUndefined();
+    expect(parse({ ...base, AUTH_ADAPTER: 'local', IDENTITY_ADMIN_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: VALID_KEY }).IDENTITY_ADMIN_ADAPTER).toBe('local');
+    expect(parse({ ...base, AUTH_ADAPTER: 'oidc', IDENTITY_ADMIN_ADAPTER: 'none' }).IDENTITY_ADMIN_ADAPTER).toBe('none');
+  });
+  it('keeps keycloak as the default', () => {
+    expect(parse(base).AUTH_ADAPTER).toBe('keycloak');
+  });
+});
+
+describe('the public development secrets key', () => {
+  const MESSAGE = 'SECRETS_ENCRYPTION_KEY is the public development key from .env.example. Generate a new one for a real install.';
+
+  it('is refused in production, whatever the sign-in mode', () => {
+    for (const AUTH_ADAPTER of ['local', 'keycloak', 'oidc']) {
+      expect(() => ConfigSchema.parse({ ...base, NODE_ENV: 'production', AUTH_ADAPTER, SECRETS_ENCRYPTION_KEY: DEV_SECRETS_ENCRYPTION_KEY }))
+        .toThrow(MESSAGE);
+    }
+  });
+  it('is accepted in development and test', () => {
+    for (const NODE_ENV of ['development', 'test']) {
+      expect(ConfigSchema.parse({ ...base, NODE_ENV, AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: DEV_SECRETS_ENCRYPTION_KEY }).SECRETS_ENCRYPTION_KEY)
+        .toBe(DEV_SECRETS_ENCRYPTION_KEY);
+    }
+  });
+  it('leaves another key alone in production', () => {
+    const key = Buffer.alloc(32, 9).toString('base64');
+    expect(ConfigSchema.parse({ ...base, NODE_ENV: 'production', AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: key }).SECRETS_ENCRYPTION_KEY).toBe(key);
   });
 });

@@ -6,7 +6,7 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual, resetUserPassword: vi.fn() };
 });
-import { resetUserPassword } from '@/api';
+import { PasswordRuleError, resetUserPassword } from '@/api';
 import { ResetPasswordDialog } from './ResetPasswordDialog';
 
 const user = { id: 'u1', subject: 's1', username: 'ada', displayName: 'Ada', email: null, roles: [], status: 'active' as const, lastLoginAt: null, createdAt: null };
@@ -61,6 +61,21 @@ describe('ResetPasswordDialog', () => {
     const confirm = screen.getByLabelText('Confirm password') as HTMLInputElement;
     expect(newPw.value.length).toBeGreaterThanOrEqual(12);
     expect(confirm.value).toBe(newPw.value);
+  });
+
+  it.each([
+    ['too_short', 'Use at least 10 characters.'],
+    ['too_long', 'Use 128 characters or fewer.'],
+    ['same_as_username', 'The password cannot be the username.'],
+  ] as const)('shows the %s password rule in words and stays open', async (rule, text) => {
+    (resetUserPassword as ReturnType<typeof vi.fn>).mockRejectedValue(new PasswordRuleError(rule, 'reset password'));
+    const onDone = vi.fn();
+    render(<ResetPasswordDialog open user={user} onOpenChange={() => {}} onDone={onDone} />);
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'abc' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'abc' } });
+    fireEvent.click(screen.getByRole('button', { name: /reset password/i }));
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('sets a permanent password (temporary=false) when require-change is unchecked', async () => {

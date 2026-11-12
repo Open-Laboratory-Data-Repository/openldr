@@ -15,7 +15,7 @@ import { resolveObservedFacilities } from './facility-reconcile';
 export type SetupCheckId = 'adapters' | 'signIn' | 'secretsKey' | 'labName' | 'timeZone' | 'connectors' | 'sync' | 'facilities';
 export type SetupStatus = 'pass' | 'warn' | 'fail' | 'skip';
 export type SetupHint =
-  | 'adapterDown' | 'adapterDegraded' | 'signInOff' | 'secretsKeyMissing'
+  | 'adapterDown' | 'adapterDegraded' | 'signInOff' | 'signInSetup' | 'secretsKeyMissing'
   | 'labNameDefault' | 'timeZoneEmpty' | 'timeZoneSqlServer'
   | 'connectorFailed' | 'syncIncomplete' | 'syncFailing' | 'facilitiesUnmatched' | 'checkError';
 
@@ -49,6 +49,8 @@ export interface SetupCheckDeps {
   /** Facilities seen in the data (the Facilities page, Observed tab), and how many of them match
    *  no facility in the register. */
   observedFacilities(): Promise<{ total: number; unmatched: number }>;
+  /** Present only under AUTH_ADAPTER=local. True while no administrator exists yet. */
+  setupRequired?: () => Promise<boolean>;
 }
 
 export const SETUP_CHECK_TITLE: Record<SetupCheckId, string> = {
@@ -66,6 +68,7 @@ export const SETUP_HINT_TEXT: Record<SetupHint, string> = {
   adapterDown: 'A service CE depends on is down. Run `openldr health` on the server to see which, then check that service and its settings.',
   adapterDegraded: 'A service CE depends on answers, but reports a problem. Run `openldr health` on the server for the detail.',
   signInOff: 'Sign-in is switched off (AUTH_DEV_BYPASS). Anyone who can reach this server is treated as an administrator. Turn it off before real use.',
+  signInSetup: 'No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.',
   secretsKeyMissing: 'SECRETS_ENCRYPTION_KEY is not set. A connector that holds a password cannot be saved or read until it is.',
   labNameDefault: 'The laboratory name is empty or still the shipped default. Reports print it as the issuing laboratory. Set it in Settings, Laboratory.',
   timeZoneEmpty: 'No time zone is set. The monthly transmission report then counts days in UTC, which moves evening arrivals to the wrong day. Set it in Settings, Laboratory.',
@@ -90,8 +93,10 @@ async function adapters(deps: SetupCheckDeps): Promise<SetupCheck> {
 }
 
 async function signIn(deps: SetupCheckDeps): Promise<SetupCheck> {
-  if (!deps.cfg.AUTH_DEV_BYPASS) return { id: 'signIn', status: 'pass' };
-  return { id: 'signIn', status: deps.cfg.NODE_ENV === 'production' ? 'fail' : 'warn', hint: 'signInOff' };
+  if (deps.cfg.AUTH_DEV_BYPASS) return { id: 'signIn', status: deps.cfg.NODE_ENV === 'production' ? 'fail' : 'warn', hint: 'signInOff' };
+  // No fix link: under local sign-in the setup screen already shows before studio loads.
+  if (await deps.setupRequired?.()) return { id: 'signIn', status: 'warn', hint: 'signInSetup' };
+  return { id: 'signIn', status: 'pass' };
 }
 
 async function secretsKey(deps: SetupCheckDeps): Promise<SetupCheck> {
@@ -180,7 +185,9 @@ export function setupCheckDeps(ctx: {
   internalDb: Kysely<InternalSchema>;
   store: { db: unknown };
   terminology: { admin: TerminologyAdminStore };
+  localSignIn?: { setupRequired(): Promise<boolean> };
 }): SetupCheckDeps {
+  const local = ctx.localSignIn;
   return {
     cfg: ctx.cfg,
     targetEngine: ctx.targetEngine,
@@ -199,5 +206,6 @@ export function setupCheckDeps(ctx: {
       });
       return { total: rows.length, unmatched: rows.filter((r) => r.registryId === null).length };
     },
+    setupRequired: local ? () => local.setupRequired() : undefined,
   };
 }

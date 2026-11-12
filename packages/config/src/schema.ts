@@ -9,6 +9,13 @@ const envBoolean = (defaultValue: boolean) =>
     .default(defaultValue)
     .transform((v) => v === true || v === 'true' || v === '1');
 
+/**
+ * The SECRETS_ENCRYPTION_KEY in the repo's `.env.example`. It is public, so it protects nothing:
+ * anyone with a database backup could unseal the local sign-in signing key and forge tokens.
+ * Production refuses it. `env-docs.test.ts` checks `.env.example` still holds this exact value.
+ */
+export const DEV_SECRETS_ENCRYPTION_KEY = 'b3Blbmxkci1kZXYtb25seS1zZWNyZXRzLWtleS0wMDE=';
+
 export const ConfigSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -32,8 +39,8 @@ export const ConfigSchema = z
     // after migration. Off by default; the prod demo turns it on so it comes up populated.
     SEED_ON_START: envBoolean(false),
 
-    AUTH_ADAPTER: z.enum(['keycloak', 'oidc']).default('keycloak'),
-    IDENTITY_ADMIN_ADAPTER: z.enum(['keycloak', 'none']).optional(),
+    AUTH_ADAPTER: z.enum(['keycloak', 'oidc', 'local']).default('keycloak'),
+    IDENTITY_ADMIN_ADAPTER: z.enum(['keycloak', 'none', 'local']).optional(),
     BLOB_ADAPTER: z.enum(['minio']).default('minio'),
     EVENTING_ADAPTER: z.enum(['pg']).default('pg'),
     TARGET_STORE_ADAPTER: z.enum(['pg', 'mssql', 'mysql']).default('pg'),
@@ -72,8 +79,9 @@ export const ConfigSchema = z
     // Working dir for terminology distribution download + extraction (needs disk headroom for SNOMED).
     TERMINOLOGY_WORK_DIR: z.string().optional(),
 
-    // OIDC issuer URL. Keycloak mode uses the realm base URL.
-    OIDC_ISSUER_URL: z.string().url(),
+    // OIDC issuer URL. Keycloak mode uses the realm base URL. Required for keycloak and oidc
+    // (checked below). Local sign-in has no external issuer.
+    OIDC_ISSUER_URL: z.string().url().optional(),
     OIDC_WEB_CLIENT_ID: z.string().min(1).default('openldr-web'),
     OIDC_AUDIENCE: z.string().min(1).optional(),
     OIDC_RESOURCE: z.string().url().max(2048).optional(),
@@ -198,8 +206,23 @@ export const ConfigSchema = z
     SECRETS_ENCRYPTION_KEY: z.string().optional(),
   })
   .superRefine((cfg, ctx) => {
-    if (cfg.AUTH_ADAPTER === 'oidc' && cfg.IDENTITY_ADMIN_ADAPTER === 'keycloak') {
+    if (cfg.AUTH_ADAPTER !== 'keycloak' && cfg.IDENTITY_ADMIN_ADAPTER === 'keycloak') {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['IDENTITY_ADMIN_ADAPTER'], message: 'Keycloak administration requires AUTH_ADAPTER=keycloak' });
+    }
+    if (cfg.AUTH_ADAPTER !== 'local' && cfg.IDENTITY_ADMIN_ADAPTER === 'local') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['IDENTITY_ADMIN_ADAPTER'], message: 'Local account administration requires AUTH_ADAPTER=local' });
+    }
+    // The local adapter always serves user management, so `none` would hide the Users page
+    // while the server still allowed the calls.
+    if (cfg.AUTH_ADAPTER === 'local' && cfg.IDENTITY_ADMIN_ADAPTER === 'none') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['IDENTITY_ADMIN_ADAPTER'], message: 'local sign-in manages its own users; leave IDENTITY_ADMIN_ADAPTER unset' });
+    }
+    if (cfg.AUTH_ADAPTER !== 'local' && !cfg.OIDC_ISSUER_URL) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['OIDC_ISSUER_URL'], message: `OIDC_ISSUER_URL is required when AUTH_ADAPTER=${cfg.AUTH_ADAPTER}` });
+    }
+    // Local sign-in seals its token signing key with this key, so it cannot start without it.
+    if (cfg.AUTH_ADAPTER === 'local' && !cfg.SECRETS_ENCRYPTION_KEY) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SECRETS_ENCRYPTION_KEY'], message: 'SECRETS_ENCRYPTION_KEY is required when AUTH_ADAPTER=local' });
     }
     if (cfg.TARGET_STORE_ADAPTER === 'mssql') {
       for (const key of ['MSSQL_HOST', 'MSSQL_DATABASE', 'MSSQL_USER', 'MSSQL_PASSWORD'] as const) {
@@ -218,6 +241,12 @@ export const ConfigSchema = z
     }
     if (cfg.NODE_ENV === 'production' && cfg.AUTH_DEV_BYPASS === true) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['AUTH_DEV_BYPASS'], message: 'AUTH_DEV_BYPASS must be off in production' });
+    }
+    if (cfg.NODE_ENV === 'production' && cfg.SECRETS_ENCRYPTION_KEY === DEV_SECRETS_ENCRYPTION_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom, path: ['SECRETS_ENCRYPTION_KEY'],
+        message: 'SECRETS_ENCRYPTION_KEY is the public development key from .env.example. Generate a new one for a real install.',
+      });
     }
   })
   .transform((cfg) => ({

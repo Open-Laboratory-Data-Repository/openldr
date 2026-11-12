@@ -41,7 +41,7 @@ export function General() {
   const { t, i18n } = useTranslation();
   // `resolvedLanguage` can be a region tag ('en-US'); the app only ships the base languages.
   const dateLocale = DATE_LOCALES[(i18n.resolvedLanguage ?? i18n.language ?? 'en').slice(0, 2) as keyof typeof DATE_LOCALES] ?? enUS;
-  const { hasCapability } = useAuth();
+  const { hasCapability, authMode } = useAuth();
   // Split per-control, matching the server's route-level gates (settings-routes.ts):
   // feature flags, numbers/validation ("general edits"), and the destructive danger-zone
   // actions are three independent capabilities, not one admin flag.
@@ -430,7 +430,16 @@ export function General() {
           title={t(`settings.general.danger.${dangerMeta[pending].key}.title`)}
           confirmName={t(`settings.general.danger.${dangerMeta[pending].key}.confirm`)}
           confirmLabel={t(`settings.general.danger.${dangerMeta[pending].key}.button`)}
-          summary={<p>{t(`settings.general.danger.${dangerMeta[pending].key}.warning`)}</p>}
+          summary={(
+            <>
+              <p>{t(`settings.general.danger.${dangerMeta[pending].key}.warning`)}</p>
+              {/* Under local sign-in the reset also empties the passwords, sessions and signing key,
+                  so every admin is signed out and setup needs a code from the server again. */}
+              {pending === 'factory-reset' && authMode === 'local' && (
+                <p className="mt-2">{t('settings.general.danger.factoryReset.localSignInWarning')}</p>
+              )}
+            </>
+          )}
           onConfirm={() => void runDanger(pending)}
         />
       )}

@@ -15,8 +15,15 @@ export interface RequestActor {
 declare module 'fastify' {
   interface FastifyRequest {
     user?: RequestActor;
+    /** The verified token's `sid` claim, when it is a string. Local sign-in uses it as the session ID. */
+    sessionId?: string;
   }
 }
+
+// Local sign-in routes that work without a bearer token. Exact paths only.
+const LOCAL_SIGN_IN_PUBLIC_PATHS = new Set(['/api/auth/login', '/api/auth/refresh', '/api/auth/logout', '/api/auth/setup']);
+// The one route a token marked `pwd_change` may reach. Exact path, so no other route shares it.
+const CHANGE_PASSWORD_PATH = '/api/auth/change-password';
 
 export function bearer(req: FastifyRequest): string | null {
   const h = req.headers.authorization;
@@ -83,6 +90,9 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
     const path = (req.raw.url ?? '').split('?')[0];
     // Only /api/* is protected. /health and the static SPA stay public.
     if (path === '/api/config') return; // public: the SPA reads OIDC settings before it has a token
+    // Local sign-in: these routes check a password, a cookie or a setup code themselves. Only
+    // when local sign-in is on, so Keycloak and OIDC installs keep answering 401 here.
+    if (ctx.localSignIn && LOCAL_SIGN_IN_PUBLIC_PATHS.has(path)) return;
     // Webhook trigger endpoints authenticate via their per-path X-Webhook-Token secret (a
     // constant-time compare in the route), not a Keycloak session — external callers have no
     // bearer token. Let them through to the route's own secret check. The trailing slash keeps
@@ -114,6 +124,15 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
       reply.code(401);
       return reply.send({ error: 'invalid token' });
     }
+
+    // Only local sign-in issues `pwd_change`. Such a token works on change-password alone. Other
+    // modes have no change-password route, so a claim of that name from them is ignored.
+    if (ctx.localSignIn && (claims as { pwd_change?: unknown }).pwd_change === true && path !== CHANGE_PASSWORD_PATH) {
+      reply.code(403);
+      return reply.send({ error: 'password_change_required' });
+    }
+    const sid = (claims as { sid?: unknown }).sid;
+    if (typeof sid === 'string') req.sessionId = sid;
 
     try {
       if (await ctx.users.isSubjectBlocked(claims.sub)) {

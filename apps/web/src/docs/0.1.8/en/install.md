@@ -74,13 +74,13 @@ The sample-free option is intentional. To include the starter dashboard and demo
 
 ![Illustrated install command with the example installation folder and sample-free option.](guide:install-run)
 
-### 2. Wait for readiness and keep the credentials
+### 2. Wait for readiness and keep the setup code
 
-Wait for **OpenLDR is ready**. Keep the printed address and **App sign-in** username and password. Use the App sign-in credentials for Studio. The separate Keycloak admin password manages authentication.
+Wait for **OpenLDR is ready**. Keep the printed address and **Setup code**. In Studio, the **Create the administrator** page asks for this code to make the first administrator. The code works for 30 minutes. On Linux and macOS, `./openldr auth setup-code` prints a new one. On Windows, use `.\openldr.ps1 auth setup-code`. An install made with `--auth keycloak` prints a Keycloak admin password and an **App sign-in** username and password instead.
 
 If the message says **OpenLDR is starting**, follow **Check an installation that is still starting** below. A successful script exit alone does not prove every service is ready.
 
-![Illustrated final installer output. Passwords are placeholders; use the credentials printed on your host.](guide:install-ready)
+![Illustrated final installer output. The setup code is a placeholder; use the code printed on your host.](guide:install-ready)
 
 ### 3. Find the installation folder
 
@@ -97,7 +97,7 @@ The hidden `.env` file contains generated settings and passwords. Keep it with t
 
 ![Illustrated file browser showing the example installation folder and generated files.](guide:install-folder)
 
-**Expected result:** Services are ready, you have the Studio credentials, and you can find the installation files.
+**Expected result:** Services are ready, you have the setup code, and you can find the installation files.
 
 ## Check an installation that is still starting
 
@@ -268,7 +268,7 @@ Expect the additional `mssql` service and adapter value `mssql`. Read actual con
 
 ### 3. Keep the generated database credential
 
-Read the MSSQL demo password line from your installer output. The picture uses a placeholder. This is the database SA password, separate from App sign-in. Keep it private.
+Read the MSSQL demo password line from your installer output. The picture uses a placeholder. This is the database SA password, separate from Studio sign-in. Keep it private.
 
 ![Illustrated terminal: Keep the generated database credential.](guide:install-mssql-ready)
 
@@ -322,7 +322,7 @@ Expect the additional `mysql` service and adapter value `mysql`. Check actual st
 
 ### 3. Keep the generated database credential
 
-Read the MySQL demo root password line from your installer output. The illustration uses a placeholder. This database credential is separate from App sign-in. Keep it private.
+Read the MySQL demo root password line from your installer output. The illustration uses a placeholder. This database credential is separate from Studio sign-in. Keep it private.
 
 ![Illustrated terminal: Keep the generated database credential.](guide:install-mysql-ready)
 
@@ -365,6 +365,7 @@ Expect adapter value `mysql`, including for MariaDB. Check actual service status
 | `--no-start` | `-NoStart` | off | Scaffold and configure only; don't start the stack. |
 | `--no-pull` | `-NoPull` | off | Skip pulling images (use what's already local). |
 | `--seedless` | `-Seedless` | off (seeded) | Empty first run. Skip the seeded sample dashboard + demo data (the default seeds them). Windows: `-Seedless`. Fresh install only. |
+| `--auth <mode>` | `-Auth` | asks, else `local` | Sign-in for a new install: `local` or `keycloak`. `local` keeps OpenLDR's own accounts and runs no Keycloak. Without the flag the installer asks when it has a terminal, and otherwise uses `local`. A re-run keeps the mode the install was made with. Windows: `-Auth`. |
 | `--target-db <db>` | `-TargetDb` | `postgres` | External analytics database: `postgres`, `mssql`, or `mysql`. |
 | `--mssql-demo` | `-MssqlDemo` | off | Bundle a SQL Server 2022 container (evaluation only); implies `--target-db mssql`. |
 | `--mssql-host <host>` | `-MssqlHost` | not set | BYO SQL Server host (required for `--target-db mssql` without `--mssql-demo`). |

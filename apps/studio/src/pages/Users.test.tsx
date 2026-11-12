@@ -21,7 +21,7 @@ vi.mock('@/api', async (orig) => {
     setUserRoles: vi.fn(),
   };
 });
-const providerState = vi.hoisted(() => ({ identityAdmin: true, syncClientAdmin: true }));
+const providerState = vi.hoisted(() => ({ identityAdmin: true, syncClientAdmin: true, passwordResetEmail: undefined as boolean | undefined }));
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ authCapabilities: providerState, user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] }, loading: false, hasCapability: () => true }),
 }));
@@ -59,7 +59,7 @@ const rows: UserSummary[] = [
 ];
 
 beforeEach(() => {
-  vi.clearAllMocks(); providerState.identityAdmin = true;
+  vi.clearAllMocks(); providerState.identityAdmin = true; providerState.passwordResetEmail = undefined;
   (listUserDirectory as ReturnType<typeof vi.fn>).mockImplementation(async ({ enabled }) => ({ rows: rows.filter((u) => enabled === undefined || u.enabled === enabled), total: null, hasMore: false }));
   (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([
     { id: 'form-1', name: 'Users Form', versionLabel: null, status: 'published', active: true, fhirResourceType: null, fieldCount: 2, updatedAt: '2026-01-01T00:00:00Z' },
@@ -243,6 +243,36 @@ it('ignores stale search responses', async () => {
   resolveOld({ rows: [{ ...rows[0], username: 'old-result' }], hasMore: true });
   await waitFor(() => expect(screen.queryByText('old-result')).toBeNull());
   expect(screen.getByRole('button', { name: 'Next page' }).hasAttribute('disabled')).toBe(true);
+});
+
+describe('Send reset email', () => {
+  async function openBobActions() {
+    render(<MemoryRouter><Users /></MemoryRouter>);
+    await screen.findByText('bob');
+    openDropdown(screen.getByLabelText('Actions for bob'));
+    await screen.findByRole('menuitem', { name: 'Reset password' });
+  }
+
+  it('is hidden when the server says the reset email is off', async () => {
+    providerState.passwordResetEmail = false;
+    await openBobActions();
+    expect(screen.queryByRole('menuitem', { name: 'Send reset email' })).toBeNull();
+    // The other account actions stay.
+    expect(screen.getByRole('menuitem', { name: 'Reset password' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Force sign-out' })).toBeTruthy();
+  });
+
+  it('still shows when the flag is undefined, as an older server sends it', async () => {
+    providerState.passwordResetEmail = undefined;
+    await openBobActions();
+    expect(screen.getByRole('menuitem', { name: 'Send reset email' })).toBeTruthy();
+  });
+
+  it('shows when the flag is true', async () => {
+    providerState.passwordResetEmail = true;
+    await openBobActions();
+    expect(screen.getByRole('menuitem', { name: 'Send reset email' })).toBeTruthy();
+  });
 });
 
 describe('local-only administration', () => {

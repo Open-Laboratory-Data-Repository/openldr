@@ -270,6 +270,24 @@ describe('UserDialog — seedless (no published Users form)', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it.each([
+    ['too_short', 'Use at least 10 characters.'],
+    ['too_long', 'Use 128 characters or fewer.'],
+    ['same_as_username', 'The password cannot be the username.'],
+  ] as const)('shows the %s password rule from create in words and stays open', async (rule, text) => {
+    (api.createUser as ReturnType<typeof vi.fn>).mockRejectedValue(new api.PasswordRuleError(rule, 'create user'));
+    const onSaved = vi.fn();
+    const onOpenChange = vi.fn();
+    render(<UserDialog open user={null} onOpenChange={onOpenChange} onSaved={onSaved} />);
+    await screen.findByText(/no published users form/i);
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'nora' } });
+    await screen.findByRole('combobox', { name: 'Role' });
+    clickMenuItem(/^create$/i);
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
   it('renders exactly one ⋯ actions menu (no duplicate action affordances)', async () => {
     render(<UserDialog open user={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
     await screen.findByText(/no published users form/i);

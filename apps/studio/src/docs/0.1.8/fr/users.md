@@ -6,7 +6,7 @@ Utilisez vos comptes de personnel et vos décisions d'accès approuvées. Les im
 
 View users donne accès à l'annuaire. Manage users permet de créer des comptes, modifier les profils et activer ou désactiver l'accès. Manage roles permet d'attribuer les rôles. Reset passwords et Force logout permettent les actions de sécurité correspondantes.
 
-Créer des comptes, modifier les profils du fournisseur, réinitialiser les mots de passe et terminer les sessions du fournisseur exige une administration d'identité configurée. Sinon, la page demande de contacter l'administrateur du fournisseur d'identité. Les contrôles de rôle et d'accès OpenLDR restent disponibles.
+Créer des comptes, modifier les profils du fournisseur, réinitialiser les mots de passe et terminer les sessions du fournisseur exige une administration d'identité configurée. Sinon, la page demande de contacter l'administrateur du fournisseur d'identité. Les contrôles de rôle et d'accès OpenLDR restent disponibles. Avec la connexion propre à OpenLDR, ces actions sont toujours disponibles. Voir [Connexion et mots de passe](/docs/sign-in).
 
 Pour l'installation et la ligne de commande, lisez [Commencer ici](/docs/start-here). Pour définir les droits des rôles, lisez [Rôles](/docs/roles).
 
@@ -36,7 +36,7 @@ Saisissez le nom de connexion de la personne. L'exemple utilise `documentation.o
 
 ### 4. Choisir un mot de passe initial
 
-Saisissez un **Password** initial, ou laissez-le vide et organisez l'activation via votre fournisseur d'identité. Un mot de passe initial impose un changement à la prochaine connexion. Transmettez les identifiants selon votre procédure approuvée.
+Saisissez un **Password** initial, ou laissez-le vide et organisez l'activation via votre fournisseur d'identité. Un mot de passe initial impose un changement à la prochaine connexion. Transmettez les identifiants selon votre procédure approuvée. Avec la connexion propre à OpenLDR, il n'y a pas de fournisseur. Un compte créé sans mot de passe ne peut pas se connecter tant que vous n'avez pas réinitialisé son mot de passe.
 
 ![Saisissez un mot de passe initial ou laissez-le vide et organisez l'activation via le fournisseur.](users-guide-password.png)
 
@@ -212,7 +212,7 @@ Sélectionnez **Reset password**. Transmettez le mot de passe de manière sûre 
 
 ## Terminer les sessions du fournisseur d'un utilisateur
 
-Effectuez cette tâche lorsque les sessions existantes du fournisseur doivent se terminer. L'administration d'identité et Force logout sont requis.
+Effectuez cette tâche lorsque les sessions existantes du fournisseur doivent se terminer. L'administration d'identité et Force logout sont requis. Avec la connexion propre à OpenLDR, elle termine les sessions OpenLDR de la personne.
 
 ### 1. Choisir Force sign-out
 
@@ -248,7 +248,7 @@ Sélectionnez sa ligne. Faites défiler le panneau User pour lire le profil et l
 
 ## Envoyer un courriel de réinitialisation si la messagerie est configurée
 
-Les points du compte proposent aussi **Send reset email**. Cette action demande au fournisseur d'identité d'envoyer un lien de réinitialisation. Vérifiez d'abord l'adresse et la configuration d'envoi du fournisseur. Le test documenté n'a envoyé aucun courriel.
+Les points du compte proposent aussi **Send reset email**. Cette action demande au fournisseur d'identité d'envoyer un lien de réinitialisation. Vérifiez d'abord l'adresse et la configuration d'envoi du fournisseur. Le test documenté n'a envoyé aucun courriel. La connexion propre à OpenLDR n'a pas d'e-mail de réinitialisation, donc Studio y masque cette action.
 
 ## Exercice facultatif
 

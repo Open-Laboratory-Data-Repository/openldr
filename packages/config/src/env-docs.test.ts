@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
-import { ConfigSchema } from './schema';
+import { parseSecretKey } from '@openldr/core';
+import { ConfigSchema, DEV_SECRETS_ENCRYPTION_KEY } from './schema';
 
 // Every env var the server reads must be listed on each environment docs page. A var added
 // to ConfigSchema without a docs row fails here, so the gap shows up before merge instead of
@@ -46,5 +47,30 @@ describe('environment docs', () => {
     const text = readFileSync(repoRoot + page, 'utf8');
     const missing = vars.filter((name) => !text.includes('`' + name + '`'));
     expect(missing, `${page} has no row for: ${missing.join(', ')}`).toEqual([]);
+  });
+});
+
+// The development guide says `cp .env.example .env`. The server must start on that copy, so the
+// template's uncommented lines must pass the same check the server runs at boot.
+describe('.env.example', () => {
+  const env: Record<string, string> = {};
+  for (const line of readFileSync(repoRoot + '.env.example', 'utf8').split(/\r?\n/)) {
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(line);
+    if (m) env[m[1]] = m[2];
+  }
+
+  it('is accepted by the server config schema', () => {
+    const parsed = ConfigSchema.safeParse(env);
+    const issues = parsed.success ? [] : parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`);
+    expect(issues).toEqual([]);
+  });
+
+  it('has a SECRETS_ENCRYPTION_KEY the server can use', () => {
+    expect(() => parseSecretKey(env.SECRETS_ENCRYPTION_KEY ?? '')).not.toThrow();
+  });
+
+  // The production refusal in schema.ts compares against this constant, so the two must match.
+  it('ships the development key the schema refuses in production', () => {
+    expect(env.SECRETS_ENCRYPTION_KEY).toBe(DEV_SECRETS_ENCRYPTION_KEY);
   });
 });

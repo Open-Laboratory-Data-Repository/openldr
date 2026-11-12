@@ -244,7 +244,7 @@ Sélectionnez **Factory reset** pour exécuter l'opération. Attendez sa fin.
 
 ![Confirmer Factory reset seulement pour l'opération voulue.](settings-guide-factory-reset-confirm.png)
 
-**Résultat attendu :** la base interne est vidée et les valeurs d'usine sont recréées. Les données cibles externes et les comptes du fournisseur d'identité restent hors de cette opération.
+**Résultat attendu :** la base interne est vidée et les valeurs d'usine sont recréées. Les données cibles externes et les comptes du fournisseur d'identité restent hors de cette opération. Avec la connexion propre à OpenLDR, tous les comptes et mots de passe sont aussi supprimés. Pour se reconnecter, il faut un nouveau code de configuration obtenu en ligne de commande sur le serveur.
 
 ![La page signale la fin de Factory reset.](settings-guide-factory-reset-result.png)
 

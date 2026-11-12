@@ -6,7 +6,7 @@ import { redactError } from './redact-error';
 import { sendLogsToStderr } from '@openldr/core';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
-import { runAuthRebindIssuer } from './auth';
+import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
 import { runFormsExtract, runFormsList, runFormsLint, runFormsVersions, runFormsRestore } from './forms';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
@@ -15,7 +15,10 @@ import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPlugin
 import { runReportList, runReportRun, runReportGlassExport } from './report';
 import { runAuditList } from './audit';
 import { runWorkflowReceiptsList, runWorkflowReceiptShow } from './workflows';
-import { runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet } from './user';
+import {
+  runUserDirectoryList, runUserList, runUsersList, runUserShow, runUserCreate, runUserSetRole, runUserSetStatus, runUserPreferencesShow, runUserPreferencesSet,
+  runUserResetPassword, runUserEndSessions,
+} from './user';
 import { runExport } from './export';
 import { runTargetStoreTest } from './target-store';
 import { runStorageCopy } from './storage';
@@ -312,6 +315,17 @@ export function buildProgram(): Command {
         process.exitCode = await runAuthRebindIssuer(opts);
       } catch (err) {
         process.stderr.write(`auth rebind-issuer failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+  auth.command('setup-code')
+    .description('Print a one-time code for creating the first admin in studio (local sign-in only; valid 30 minutes)')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try {
+        process.exitCode = await runAuthSetupCode(opts);
+      } catch (err) {
+        process.stderr.write(`auth setup-code failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
     });
@@ -1255,6 +1269,19 @@ export function buildProgram(): Command {
     .option('--json', 'emit JSON', false)
     .action(async (opts: { username: string; name?: string; email?: string; role?: string[]; json: boolean }) => {
       try { process.exitCode = await runUserCreate(opts); } catch (err) { process.stderr.write(`user create failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  user.command('reset-password <username>')
+    .description('Set a temporary password and end the user\'s sessions (local sign-in only; refuses without --force)')
+    .option('--force', 'confirm the user\'s sessions will end', false)
+    .option('--json', 'emit JSON', false)
+    .action(async (username: string, opts: { json: boolean; force: boolean }) => {
+      try { process.exitCode = await runUserResetPassword(username, opts); } catch (err) { process.stderr.write(`user reset-password failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
+  user.command('end-sessions <username>')
+    .description('Sign the user out everywhere (local sign-in only)')
+    .option('--json', 'emit JSON', false)
+    .action(async (username: string, opts: { json: boolean }) => {
+      try { process.exitCode = await runUserEndSessions(username, opts); } catch (err) { process.stderr.write(`user end-sessions failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   user.command('set-role <id> <roles...>').option('--json', 'emit JSON', false).action(async (id: string, roles: string[], opts: { json: boolean }) => {
     try { process.exitCode = await runUserSetRole(id, roles, opts); } catch (err) { process.stderr.write(`user set-role failed: ${redactError(err)}\n`); process.exitCode = 1; }

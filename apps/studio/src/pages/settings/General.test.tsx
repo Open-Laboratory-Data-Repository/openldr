@@ -4,10 +4,11 @@ import { MemoryRouter } from 'react-router-dom';
 import i18n from '@/i18n';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
-// Mutable so a test can drop the caller to a signed-in user with no settings capability.
-const caps = { granted: true };
+// Mutable so a test can drop the caller to a signed-in user with no settings capability, or
+// switch the sign-in mode.
+const caps = { granted: true, authMode: 'keycloak' as 'keycloak' | 'oidc' | 'local' };
 vi.mock('@/auth/AuthProvider', () => ({
-  useAuth: () => ({ user: { id: 'me', username: 'admin', roles: ['lab_admin'] }, hasCapability: () => caps.granted }),
+  useAuth: () => ({ user: { id: 'me', username: 'admin', roles: ['lab_admin'] }, hasCapability: () => caps.granted, authMode: caps.authMode }),
 }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -41,6 +42,7 @@ const FAILING = {
 beforeEach(() => {
   vi.clearAllMocks();
   caps.granted = true;
+  caps.authMode = 'keycloak';
   (api.fetchClientConfig as any).mockResolvedValue({
     dashboardSqlEnabled: false, authEnforced: false, version: '0.1.1', environment: 'test', oidc: null,
   });
@@ -247,5 +249,38 @@ describe('General settings: Latest row when the cache is older than this install
     expect(row).toHaveTextContent('0.1.4');
     expect(row).toHaveTextContent(/up to date/i);
     expect(row).not.toHaveTextContent(/no update found/i);
+  });
+});
+
+describe('General settings: factory reset warning', () => {
+  const LOCAL_LINE = {
+    en: "Every account and password is removed too. Signing in again needs a new setup code from the server's command line.",
+    fr: 'Tous les comptes et mots de passe sont aussi supprimés. Pour se reconnecter, il faut un nouveau code de configuration obtenu en ligne de commande sur le serveur.',
+    pt: 'Todas as contas e palavras-passe são também removidas. Para voltar a iniciar sessão é preciso um novo código de configuração obtido na linha de comandos do servidor.',
+  } as const;
+
+  async function openFactoryReset() {
+    render(<MemoryRouter><General /></MemoryRouter>);
+    const trigger = await screen.findByRole('button', { name: i18n.t('settings.general.danger.factoryReset.label') });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    const item = i18n.t('settings.general.danger.factoryReset.button');
+    if (!screen.queryByRole('menuitem', { name: item })) fireEvent.keyDown(trigger, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('menuitem', { name: item }));
+    return screen.findByRole('alertdialog');
+  }
+
+  it.each(['en', 'fr', 'pt'] as const)('under local sign-in says sign-in needs a new setup code (%s)', async (language) => {
+    await i18n.changeLanguage(language);
+    caps.authMode = 'local';
+    const dialog = await openFactoryReset();
+    expect(dialog).toHaveTextContent(i18n.t('settings.general.danger.factoryReset.warning'));
+    expect(dialog).toHaveTextContent(LOCAL_LINE[language]);
+  });
+
+  it.each(['keycloak', 'oidc'] as const)('under %s keeps the warning as it was', async (mode) => {
+    caps.authMode = mode;
+    const dialog = await openFactoryReset();
+    expect(dialog).toHaveTextContent(i18n.t('settings.general.danger.factoryReset.warning'));
+    expect(dialog).not.toHaveTextContent(LOCAL_LINE.en);
   });
 });

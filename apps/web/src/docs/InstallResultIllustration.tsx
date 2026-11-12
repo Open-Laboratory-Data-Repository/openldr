@@ -15,13 +15,13 @@ export function InstallResultIllustration({ alt, locale = 'en' }: { alt: string;
         </g>
         <g fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace" fontSize="22" fill="var(--text)">
           <text x="70" y="138">✓ OpenLDR is ready. Open https://localhost</text>
-          <text x="70" y="185" fill="var(--text-muted)">Keycloak admin password: &lt;generated password&gt;</text>
-          <text x="70" y="232">App sign-in: labadmin / &lt;generated password&gt;</text>
-          <text x="70" y="267" fill="var(--text-muted)">(change it on first login)</text>
+          <text x="70" y="185">Setup code: &lt;setup code&gt;, valid for 30 minutes</text>
+          <text x="70" y="232" fill="var(--text-muted)">Open https://localhost/studio/ and enter it on the</text>
+          <text x="70" y="267" fill="var(--text-muted)">Create the administrator page.</text>
         </g>
         <g fill="none" stroke="var(--brand)" strokeWidth="2">
           <rect x="65" y="111" width="660" height="38" rx="4" />
-          <rect x="65" y="207" width="680" height="38" rx="4" />
+          <rect x="65" y="160" width="680" height="38" rx="4" />
         </g>
       </svg></DottedGuideFrame>
       <span className="mt-1 block text-xs text-muted-foreground">{alt}</span>

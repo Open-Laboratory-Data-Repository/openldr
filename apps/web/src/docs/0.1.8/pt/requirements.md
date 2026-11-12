@@ -24,7 +24,7 @@ A Microsoft documenta o [WSL no Server 2022 e 2025](https://learn.microsoft.com/
 | Item | Requisito |
 | --- | --- |
 | Docker | Docker Engine ou Docker Desktop com manutenção atual. O serviço deve estar a funcionar e acessível à conta que executa o instalador. |
-| Compose | O comando `docker compose` deve funcionar. O comando antigo `docker-compose`, sozinho, não satisfaz o instalador. |
+| Compose | O comando `docker compose` deve funcionar, na versão 2.20 ou posterior. O instalador para com um Compose mais antigo. O comando antigo `docker-compose`, sozinho, não satisfaz o instalador. |
 | Terminal Linux/macOS | Um interpretador de comandos e `curl` para descarregar e executar o instalador. |
 | Terminal Windows | Windows PowerShell 5.1 ou posterior para descarregar e executar o instalador PowerShell. |
 | Pasta de instalação | A conta deve poder criar a pasta escolhida e escrever nela. Docker Desktop deve poder partilhá-la com a VM Linux. |
@@ -55,7 +55,7 @@ Para o instalador normal, permita descarregamentos HTTPS de saída do GitHub e d
 | Rede privada ou Tailscale | Um nome ou endereço IP acessível aos outros dispositivos. Configure-o durante a instalação para os redirecionamentos de início de sessão. Os dispositivos devem alcançar a porta HTTPS escolhida. |
 | Domínio público com Let's Encrypt | Um domínio apontado ao anfitrião, entrada TCP 80 e 443 e a configuração Linux do certificado descrita em [Instalar](/docs/install). |
 
-A porta de entrada usa as portas do anfitrião **80 e 443 por omissão**. Devem estar livres, ou deve escolher outras antes de instalar. PostgreSQL, armazenamento e Keycloak comunicam na rede Docker. A instalação predefinida não exige abrir as portas internas aos utilizadores.
+A porta de entrada usa as portas do anfitrião **80 e 443 por omissão**. Devem estar livres, ou deve escolher outras antes de instalar. PostgreSQL, armazenamento e, numa instalação Keycloak, o Keycloak comunicam na rede Docker. A instalação predefinida não exige abrir as portas internas aos utilizadores.
 
 ## Verificar o anfitrião antes de instalar
 
@@ -79,7 +79,7 @@ Para as imagens AMD64 fornecidas, espere `linux/x86_64` ou `linux/amd64`. Se ind
 docker compose version
 ```
 
-Deve aparecer uma versão sem erro. Pode ser diferente da ilustração. Se faltar o comando, instale o plugin Compose ou atualize o Docker Desktop.
+Deve aparecer uma versão sem erro. Pode ser diferente da ilustração, mas tem de ser 2.20 ou posterior. Se faltar o comando ou for mais antigo, instale o plugin Compose ou atualize o Docker Desktop.
 
 ![Ilustração da verificação de Compose. A sua versão pode ser diferente.](guide:install-compose)
 

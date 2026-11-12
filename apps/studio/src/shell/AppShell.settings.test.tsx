@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
@@ -8,12 +8,14 @@ vi.mock('react-router-dom', async (orig) => {
   const actual = await orig<typeof import('react-router-dom')>();
   return { ...actual, useNavigate: () => navigate };
 });
+const authState = vi.hoisted(() => ({ authMode: 'keycloak' as 'keycloak' | 'oidc' | 'local' }));
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({
     user: { id: 'me', username: 'admin', displayName: null, roles: ['lab_admin'] },
     loading: false,
     hasCapability: () => true,
     signOut: vi.fn(),
+    authMode: authState.authMode,
   }),
 }));
 vi.mock('@/i18n/language', async (orig) => {
@@ -76,5 +78,36 @@ describe('AppShell settings entry', () => {
       // The submenu interaction is validated by the sub-trigger being rendered.
       expect(subTrigger).toBeInTheDocument();
     }
+  });
+});
+
+describe('AppShell change password entry', () => {
+  function openUserMenu() {
+    const trigger = screen.getByText('admin');
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+
+  it.each(['keycloak', 'oidc'] as const)('shows no Change password item under %s', async (mode) => {
+    authState.authMode = mode;
+    render(<MemoryRouter><AppShell title="Dashboard"><div>content</div></AppShell></MemoryRouter>);
+    // Let the shell's plugin-list request settle, so its state update lands inside the test.
+    await act(async () => {});
+    openUserMenu();
+    expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Change password' })).toBeNull();
+  });
+
+  it('shows Change password above Sign out under local sign-in and opens the sheet', async () => {
+    authState.authMode = 'local';
+    render(<MemoryRouter><AppShell title="Dashboard"><div>content</div></AppShell></MemoryRouter>);
+    openUserMenu();
+    const items = screen.getAllByRole('menuitem').map((i) => i.textContent?.trim());
+    const change = items.indexOf('Change password');
+    expect(change).toBeGreaterThanOrEqual(0);
+    expect(items[change + 1]).toBe('Sign out');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Change password' }));
+    expect(await screen.findByRole('dialog', { name: 'Change password' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Current password')).toBeInTheDocument();
   });
 });

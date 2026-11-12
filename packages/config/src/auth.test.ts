@@ -1,27 +1,45 @@
 import { describe, it, expect } from 'vitest';
 import { ConfigSchema } from './schema';
-import { resolveAuthCapabilities, resolveIdentityAdminAdapter } from './auth';
+import { requireOidcIssuer, resolveAuthCapabilities, resolveIdentityAdminAdapter } from './auth';
 const base = { INTERNAL_DATABASE_URL: 'postgres://u:p@localhost/db', TARGET_DATABASE_URL: 'postgres://u:p@localhost/ext', S3_ENDPOINT: 'http://localhost:9010', S3_ACCESS_KEY_ID: 'k', S3_SECRET_ACCESS_KEY: 's', S3_BUCKET: 'b', OIDC_ISSUER_URL: 'https://id.example' };
 describe('authentication selection', () => {
   it('preserves Keycloak defaults', () => {
     const cfg = ConfigSchema.parse(base);
     expect(cfg.AUTH_ADAPTER).toBe('keycloak');
     expect(resolveIdentityAdminAdapter(cfg)).toBe('keycloak');
-    expect(resolveAuthCapabilities(cfg)).toEqual({ identityAdmin: false, syncClientAdmin: false });
+    expect(resolveAuthCapabilities(cfg)).toEqual({ identityAdmin: false, syncClientAdmin: false, passwordResetEmail: false });
   });
   it.each(['none', undefined])('generic auth ignores stale credentials with admin %s', (admin) => {
     const cfg = ConfigSchema.parse({ ...base, AUTH_ADAPTER: 'oidc', IDENTITY_ADMIN_ADAPTER: admin, KEYCLOAK_ADMIN_CLIENT_ID: 'old', KEYCLOAK_ADMIN_CLIENT_SECRET: 'old' });
     expect(resolveIdentityAdminAdapter(cfg)).toBe('none');
-    expect(resolveAuthCapabilities(cfg)).toEqual({ identityAdmin: false, syncClientAdmin: false });
+    expect(resolveAuthCapabilities(cfg)).toEqual({ identityAdmin: false, syncClientAdmin: false, passwordResetEmail: false });
   });
   it('requires both credentials and enabled administration', () => {
     const cfg = ConfigSchema.parse({ ...base, KEYCLOAK_ADMIN_CLIENT_ID: 'admin', KEYCLOAK_ADMIN_CLIENT_SECRET: 'secret' });
-    expect(resolveAuthCapabilities(cfg)).toEqual({ identityAdmin: true, syncClientAdmin: true });
+    expect(resolveAuthCapabilities(cfg)).toEqual({ identityAdmin: true, syncClientAdmin: true, passwordResetEmail: true });
     expect(resolveAuthCapabilities({ ...cfg, IDENTITY_ADMIN_ADAPTER: 'none' }).identityAdmin).toBe(false);
     expect(resolveAuthCapabilities({ ...cfg, KEYCLOAK_ADMIN_CLIENT_SECRET: undefined }).identityAdmin).toBe(false);
   });
   it.each([{ AUTH_ADAPTER: 'other' }, { IDENTITY_ADMIN_ADAPTER: 'other' }, { AUTH_ADAPTER: 'oidc', IDENTITY_ADMIN_ADAPTER: 'keycloak' }])('rejects invalid selection %j', (selection) => {
     expect(ConfigSchema.safeParse({ ...base, ...selection }).success).toBe(false);
+  });
+});
+
+describe('local sign-in selection', () => {
+  it('reports local capabilities', () => {
+    expect(resolveAuthCapabilities({ AUTH_ADAPTER: 'local' }))
+      .toEqual({ identityAdmin: true, syncClientAdmin: false, passwordResetEmail: false });
+  });
+  it('reports reset email only for a configured keycloak', () => {
+    expect(resolveAuthCapabilities({ AUTH_ADAPTER: 'keycloak', KEYCLOAK_ADMIN_CLIENT_ID: 'a', KEYCLOAK_ADMIN_CLIENT_SECRET: 'b' }).passwordResetEmail).toBe(true);
+    expect(resolveAuthCapabilities({ AUTH_ADAPTER: 'oidc' }).passwordResetEmail).toBe(false);
+  });
+  it('defaults identity administration to local under local sign-in', () => {
+    expect(resolveIdentityAdminAdapter({ AUTH_ADAPTER: 'local' })).toBe('local');
+  });
+  it('requires an issuer only where one is read', () => {
+    expect(requireOidcIssuer({ OIDC_ISSUER_URL: 'https://id.example' })).toBe('https://id.example');
+    expect(() => requireOidcIssuer({})).toThrow('OIDC_ISSUER_URL is required for this sign-in mode');
   });
 });
 

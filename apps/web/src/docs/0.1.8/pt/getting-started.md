@@ -21,9 +21,9 @@ O instalador cria a configuração, gera palavras-passe e inicia os serviços. E
 
 1. Abra o guia adequado ao seu anfitrião acima. Verifique os requisitos antes de executar comandos.
 2. Siga os passos de instalação desse guia. Aguarde até os serviços estarem prontos.
-3. Guarde o endereço e as credenciais **App sign-in** apresentados no final. A palavra-passe de administrador do Keycloak serve separadamente para gerir a autenticação.
+3. Guarde o endereço e o código **Setup code** apresentados no final. O código de configuração é válido durante 30 minutos.
 
-![Ilustração da saída do instalador. As linhas destacadas mostram o endereço e as credenciais App sign-in. As palavras-passe são marcadores de posição.](guide:install-result)
+![Ilustração da saída do instalador. As linhas destacadas mostram o endereço e o código de configuração. O código é um marcador de posição.](guide:install-result)
 
 **Resultado esperado:** O instalador apresenta **OpenLDR is ready** e o endereço a abrir. Se apresentar **OpenLDR is starting**, alguns serviços ainda não estão prontos. Consulte `docker compose ps` e `docker compose logs` na pasta de instalação antes de continuar.
 
@@ -31,7 +31,7 @@ O endereço ilustrado é o predefinido numa instalação local. Para aceder a pa
 
 ## Primeiro início de sessão
 
-O percurso ilustrado do primeiro início de sessão fica adiado até à captura numa instalação nova. Conserve as credenciais **App sign-in** geradas para essa tarefa. Consulte [Instalar](/docs/install) para o endereço configurado e os certificados.
+O percurso ilustrado do primeiro início de sessão fica adiado até à captura numa instalação nova. Conserve o código de configuração apresentado pelo instalador para essa tarefa. Uma instalação feita com `--auth keycloak` apresenta credenciais **App sign-in** em vez do código de configuração. Consulte [Instalar](/docs/install) para o endereço configurado e os certificados, e [Fornecedores de autenticação](/docs/auth-providers) para a utilização do código de configuração.
 
 ## Continuar na aplicação
 

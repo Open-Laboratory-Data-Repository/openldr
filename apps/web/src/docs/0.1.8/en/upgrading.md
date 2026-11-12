@@ -198,6 +198,16 @@ Replace OLD_KEY, OLD_SECRET and SOURCE_BUCKET. Credentials appear in process arg
 
 ![Copy and verify the objects.](guide:operator-upgrade-storage-copy)
 
+## Installs that use Keycloak
+
+Do this before you start the new compose file. If the `keycloak` service in the `docker-compose.yml` you are moving to has a `profiles` line, add this line to the install's `.env`:
+
+```sh
+COMPOSE_PROFILES=keycloak
+```
+
+Without it Keycloak does not start, and nobody can sign in. If `.env` already has a `COMPOSE_PROFILES` line, add `keycloak` to it after a comma. Re-running the one-line installer adds the line for you. An install that uses local sign-in has nothing to do here.
+
 ## Check before resuming traffic
 
 Start the new API only after migration and any storage copy pass. Reconcile deliveries and external effects before restoring an older snapshot if traffic was already reopened.

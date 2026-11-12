@@ -18,6 +18,10 @@ are reachable only on the compose network. Auth uses a split front/back channel:
 public issuer `https://<host>/auth/realms/openldr`, while the api validates tokens over the internal
 JWKS URL (`http://keycloak:8080/auth/...`) so it never depends on the gateway's cert.
 
+Keycloak runs only on an install that chose Keycloak sign-in. A new install uses local sign-in by
+default, and then no keycloak container runs and nothing answers `/auth`. See
+[Sign-in: local or Keycloak](#sign-in-local-or-keycloak).
+
 ## Images
 
 OpenLDR CE ships five independently-versioned images on GHCR (GitHub Container Registry):
@@ -28,7 +32,7 @@ OpenLDR CE ships five independently-versioned images on GHCR (GitHub Container R
 | `ghcr.io/open-laboratory-data-repository/openldr-studio` | studio SPA (static nginx, served under `/studio/`) |
 | `ghcr.io/open-laboratory-data-repository/openldr-web` | public landing site |
 | `ghcr.io/open-laboratory-data-repository/openldr-gateway` | nginx reverse proxy (routes `/`→web, `/studio`→studio, `/api`+`/health`→api, `/auth`→keycloak) |
-| `ghcr.io/open-laboratory-data-repository/openldr-keycloak` | Keycloak 26 with the OpenLDR-branded login theme baked in |
+| `ghcr.io/open-laboratory-data-repository/openldr-keycloak` | Keycloak 26 with the OpenLDR-branded login theme baked in. Pulled only for Keycloak sign-in. |
 
 Postgres and the storage service (Garage) use OpenLDR copies of their upstream images on GHCR, pinned by digest.
 
@@ -93,8 +97,8 @@ docker compose up -d
 ```
 
 `--dir <path>` scaffolds **directly** into `<path>` (no nested `openldr/`). Pass `--server-name` so the
-generated `.env` (`PUBLIC_ORIGIN`, `OIDC_ISSUER_URL`, `KC_HOSTNAME`) and the OIDC redirect match your
-domain. Windows is identical: `install.ps1 -Dir .\openldr -ServerName your.domain.com -NoStart`, then
+generated `.env` matches your domain. That sets `PUBLIC_ORIGIN`, and on a Keycloak install also
+`OIDC_ISSUER_URL`, `KC_HOSTNAME` and the OIDC redirect. Windows is identical: `install.ps1 -Dir .\openldr -ServerName your.domain.com -NoStart`, then
 copy the two files into `.\openldr\config\nginx\certs\` and `docker compose up -d`.
 
 Already running on the self-signed placeholder? Just overwrite the two files and reload the gateway
@@ -114,9 +118,94 @@ echo | openssl s_client -connect your.domain.com:443 -servername your.domain.com
   | openssl x509 -noout -issuer -subject -enddate
 ```
 
+## Sign-in: local or Keycloak
+
+A new install asks which sign-in to use. Local is the default.
+
+| Mode | What runs | First administrator |
+|------|-----------|---------------------|
+| Local, `AUTH_ADAPTER=local` | No Keycloak. OpenLDR keeps its own accounts. | A setup code from `openldr auth setup-code`, typed into Studio |
+| Keycloak, `AUTH_ADAPTER=keycloak` | A keycloak container under `/auth` | `labadmin` with a generated password |
+
+Pick Keycloak for a sync central. Enrolling sync sites needs Keycloak. The web guide
+[Authentication providers](apps/web/src/docs/0.1.8/en/auth-providers.md) explains each mode.
+
+**Choosing.** The one-line installer asks when it runs in a terminal. With no terminal it uses local.
+To skip the question, pass `--auth local` or `--auth keycloak` to `install.sh`, or `-Auth local` or
+`-Auth keycloak` to `install.ps1`. `pnpm run init` asks too.
+
+**Local sign-in.** The installer writes `AUTH_ADAPTER=local` and a `SECRETS_ENCRYPTION_KEY`. It writes
+no OIDC or Keycloak setting. At the end it prints a setup code. Open `/studio/` and enter the code on
+the Create the administrator page. The code is valid for 30 minutes. For a new code, run this in
+the install directory:
+
+```bash
+./openldr auth setup-code          # Linux and macOS
+.\openldr.ps1 auth setup-code      # Windows
+```
+
+From source, run
+`docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr exec -T api node /app/cli/dist/index.js auth setup-code`.
+
+**Keycloak sign-in.** The installer writes the same Keycloak settings as before, plus
+`AUTH_ADAPTER=keycloak` and `COMPOSE_PROFILES=keycloak`. The keycloak service in both compose files
+has `profiles: ["keycloak"]`, so it starts only while that profile is on. `COMPOSE_PROFILES` in
+`.env` turns it on for every plain `docker compose up -d`.
+
+A `--profile` flag on the command line replaces `COMPOSE_PROFILES` for that one command. On a
+Keycloak install, `docker compose --profile letsencrypt up -d` would leave Keycloak out. Pass
+`--profile keycloak` as well. The certbot `run` commands in this guide start only certbot, so they
+are not affected.
+
+**Compose version.** The api and gateway wait for Keycloak with `required: false`, which needs
+Docker Compose 2.20 or later. Older versions do not support it. Check with `docker compose version`.
+
+**Switching modes.** Choose before the first start. The database records the sign-in mode it first
+starts with and refuses to start under another. Moving an existing install between modes is not
+supported, and the installer refuses a re-run with a different `--auth`.
+
+To use Keycloak on a fresh install that has no data worth keeping, start over. This deletes the
+database and every stored file:
+
+```bash
+cd ./openldr
+docker compose down -v
+rm .env
+cd ..
+curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh \
+  | bash -s -- --dir ./openldr --auth keycloak
+```
+
+From source, run `docker compose --env-file .env.prod -f docker-compose.prod.yml -p openldr down -v`,
+delete `.env.prod`, then run `pnpm run init` and pick Keycloak.
+
+### Upgrading an install made before local sign-in
+
+An install made before this change runs Keycloak, and its `.env` has no `AUTH_ADAPTER` line. The
+server still reads that as Keycloak, so the `.env` needs no sign-in edit. The new compose files start
+Keycloak only under the `keycloak` profile, though. Without `COMPOSE_PROFILES=keycloak`, Keycloak stops
+on the next `up` and nobody can sign in.
+
+- **Re-running the one-line installer.** Nothing to do. The installer downloads the new compose file
+  and adds `COMPOSE_PROFILES=keycloak` to `.env`. It changes no other line.
+- **Replacing `docker-compose.yml` by hand.** Add the line to `.env` first:
+  `printf '\nCOMPOSE_PROFILES=keycloak\n' >> .env`
+- **Running from source.** `git pull` brings the new `docker-compose.prod.yml`, so this step is
+  required. Run `pnpm run init` again, which adds the line, or add it yourself:
+  `printf '\nCOMPOSE_PROFILES=keycloak\n' >> .env.prod`
+- **Keeping the old compose file.** `docker compose pull` and `up -d` with the old file still start
+  Keycloak. Nothing changes until you take the new file.
+
+Check before you run `up`. Keycloak must be in the list:
+
+```bash
+docker compose config --services                                              # one-line install
+docker compose --env-file .env.prod -f docker-compose.prod.yml config --services   # from source
+```
+
 ## Prerequisites
 
-- Docker + Docker Compose v2.
+- Docker + Docker Compose 2.20 or later. The compose files use `required: false`, which older versions do not support.
 - A domain name (production) or `localhost` (local/demo).
 - For a public deployment: DNS A-record → this host, and ports **80 + 443** reachable.
 
@@ -127,11 +216,20 @@ echo | openssl s_client -connect your.domain.com:443 -servername your.domain.com
 1. Address by **IP** (lists the host's addresses) or **Domain** (e.g. `openldr.online`).
 2. TLS mode: **self-signed** (lab/internal), **Let's Encrypt** (public domain), or **bring-your-own**.
 3. HTTP/HTTPS ports (defaults 80/443).
+4. Sign-in: local, the default, or Keycloak. Asked on the first run only. A re-run keeps the mode.
 
-It writes `.env.prod` (correct `PUBLIC_ORIGIN` / `SERVER_NAME` / OIDC + Keycloak hostnames), renders
-the Keycloak realm, generates/plans certs, brings the stack up, and polls `/health`.
+It writes `.env.prod` with `PUBLIC_ORIGIN` and `SERVER_NAME`, generates certs, brings the stack up,
+and polls `/health`. For Keycloak it also writes the OIDC and Keycloak hostnames and renders the
+Keycloak realm. For local it prints a setup code at the end.
 
 ## Manual quick start (local, self-signed TLS)
+
+`.env.prod.example` uses local sign-in. Set `SECRETS_ENCRYPTION_KEY` before the first start, because
+the server will not start under local sign-in without it. For Keycloak, set `AUTH_ADAPTER=keycloak`
+and uncomment the Keycloak and OIDC block, including `COMPOSE_PROFILES=keycloak`. Set a real
+`KEYCLOAK_ADMIN_PASSWORD`. Compose cannot require it any more, because it checks required values even
+for a service whose profile is off. A missing value no longer stops Compose. Keycloak gets an empty
+bootstrap password instead.
 
 ```sh
 # 1. Self-signed cert for localhost (writes deploy/nginx/certs/{fullchain,privkey}.pem)
