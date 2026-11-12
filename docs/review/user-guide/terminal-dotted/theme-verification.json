@@ -1,0 +1,53 @@
+{
+  "checks": [
+    {
+      "kind": "app",
+      "theme": "dark",
+      "pageBackground": "rgb(23, 23, 23)",
+      "surround": "rgba(0, 0, 0, 0)",
+      "buttonBackground": "rgba(0, 0, 0, 0)",
+      "dots": "radial-gradient(circle, color(srgb 0.537255 0.537255 0.537255 / 0.8) 0.8px, rgba(0, 0, 0, 0) 1px)",
+      "cornerAlpha": 0
+    },
+    {
+      "kind": "app",
+      "theme": "light",
+      "pageBackground": "rgb(255, 255, 255)",
+      "surround": "rgba(0, 0, 0, 0)",
+      "buttonBackground": "rgba(0, 0, 0, 0)",
+      "dots": "radial-gradient(circle, color(srgb 0.443137 0.443137 0.478431 / 0.8) 0.8px, rgba(0, 0, 0, 0) 1px)",
+      "cornerAlpha": 0
+    },
+    {
+      "kind": "platform",
+      "os": "Linux",
+      "frames": 17
+    },
+    {
+      "kind": "platform",
+      "os": "macOS",
+      "frames": 17
+    },
+    {
+      "kind": "platform",
+      "os": "Windows",
+      "frames": 17
+    },
+    {
+      "kind": "mobile",
+      "width": 375,
+      "pageOverflow": false
+    },
+    {
+      "kind": "render",
+      "theme": "light",
+      "background": "rgb(255, 255, 255)"
+    },
+    {
+      "kind": "render",
+      "theme": "dark",
+      "background": "rgb(23, 23, 23)"
+    }
+  ],
+  "pageErrors": []
+}

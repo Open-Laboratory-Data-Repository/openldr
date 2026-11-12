@@ -107,3 +107,28 @@ The neutral terminal and file browser are illustrations for review.
 Their standalone page fit 736-, 375- and 320-pixel widths without page overflow.
 No JavaScript page errors were reported.
 Start here's existing OS-specific content and pictures were not changed.
+
+## Start here images and theme-aware surrounds
+
+The approved native terminal and file-browser images are now referenced by Start here in en/fr/pt.
+All 43 app PNGs have transparent corners, verified during generation.
+Original bundled images and earlier preview versions remain preserved.
+
+`pnpm --filter @openldr/studio test src/docs` reported 94 tests passed.
+`pnpm --filter @openldr/web test src/docs` reported 29 tests passed.
+`pnpm --filter @openldr/studio typecheck` exited 0.
+`pnpm --filter @openldr/studio build` reported built in 10.49s and exited 0.
+The existing build annotation warnings and documentation test warnings remain.
+
+The browser checked live light/dark theme switching, transparent margins, matching image-viewer backgrounds, and zoom.
+Each operating-system selection displayed 17 themed image placements.
+The page fit a 375px viewport. The interactive render fit 320px without overflow.
+The later fade check used the app's data-theme attribute to inspect both colour schemes.
+It confirmed theme-aware dots, intersected edge gradients and no mask on the foreground image.
+See terminal-dotted/theme-verification.json and terminal-dotted/fade-verification.json.
+The Light and Dark buttons on start-here-theme-review.html were also checked.
+
+These checks cover documentation rendering and asset integrity.
+No CLI command behavior changed or received a new execution test.
+PDF and Word exports use the transparent PNGs. Their static pages do not render the live CSS dot layer.
+HONEST NON-PROOF: a physical phone and native Safari have not been checked in this slice.

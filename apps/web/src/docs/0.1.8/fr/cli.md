@@ -57,7 +57,7 @@ Get-ChildItem -Name
 .\openldr.ps1 ingest --help
 ```
 
-Remplacez ce dossier d'exemple par le vôtre. Il contient `docker-compose.yml`, `data` et le lanceur. Exécutez une commande à la fois. Les commandes d'aide ne modifient aucun dossier. Le guide **Commencer ici** de l'application illustre chaque étape.
+Remplacez ce dossier d'exemple par le vôtre. Il contient `docker-compose.yml`, `data` et le lanceur. Exécutez une commande à la fois. Les commandes d'aide ne modifient aucun dossier. Le guide **Commencer ici** de l'application illustre chaque étape avec des images du terminal et du gestionnaire de fichiers.
 
 ### Utiliser une copie du code source
 

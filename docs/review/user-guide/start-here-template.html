@@ -1,5 +1,5 @@
 <style>
-#start-here-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#start-here-guide { --muted-foreground:var(--dg-muted); --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
 #start-here-guide * { box-sizing:border-box; }
 #start-here-guide .dg-app { display:flex; flex-direction:column; height:840px; min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
 #start-here-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
@@ -51,6 +51,8 @@
 #start-here-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
 #start-here-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
 #start-here-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#start-here-guide .dg-dotted-shot button { border:0; border-radius:0; background:transparent; }
+#start-here-guide .dg-dotted-frame { display:block; }
 #start-here-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
 #start-here-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
 #start-here-guide .dg-result p { margin:3px 0; }
@@ -71,7 +73,9 @@
 #start-here-guide summary { font-weight:500; cursor:inherit; }
 #start-here-guide details p { color:var(--dg-muted); }
 #start-here-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
-#start-here-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#start-here-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:var(--dg-bg); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#start-here-guide .dg-lightbox-frame { display:block; width:min(100%,calc((min(840px,100dvh) - 64px)*736/416)); }
+#start-here-guide .dg-dotted-frame img { position:relative; display:block; width:100%; height:auto; max-height:none; }
 #start-here-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
 #start-here-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
 #start-here-guide .dg-app { position:relative; }
@@ -84,7 +88,7 @@
 </style>
 <div id="start-here-guide" aria-label="Start here user guide review preview">
  <div class="dg-app">
-  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Start here guide preview</span><div class="dg-head-icons"><i data-lucide="panel-right" aria-hidden="true"></i><i data-lucide="bell" aria-hidden="true"></i><i data-lucide="sun" aria-hidden="true"></i></div></header>
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Start here guide preview</span><div class="dg-head-icons"><i data-lucide="panel-right" aria-hidden="true"></i><i data-lucide="bell" aria-hidden="true"></i><button type="button" class="dg-iconbtn cursor-interaction" data-theme-toggle aria-label="Switch to light mode"><i data-lucide="sun" aria-hidden="true"></i></button></div></header>
   <div class="dg-main">
    <aside class="dg-sidebar">
     <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><i data-lucide="panel-left-close" aria-hidden="true"></i></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
@@ -105,7 +109,7 @@
     </div>
    </section>
   </div>
-  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><img alt=""></div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><span class="dg-lightbox-frame" data-lightbox-content></span></div>
  </div>
 </div>
 <script type="application/json" id="start-here-assets">__EVIDENCE_ASSETS__</script>
@@ -114,8 +118,16 @@
  const root = document.getElementById('start-here-guide');
  const assets = JSON.parse(document.getElementById('start-here-assets').textContent);
  root.querySelectorAll('img[data-evidence]').forEach(img=>{img.src=assets[img.dataset.evidence];});
+ const themeButton=root.querySelector('[data-theme-toggle]');
+ let previewTheme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+ function applyTheme() {
+  root.style.colorScheme=previewTheme;
+  themeButton.setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');
+ }
+ applyTheme();
+ themeButton.addEventListener('click',()=>{previewTheme=previewTheme==='dark'?'light':'dark';applyTheme();});
  const platforms = {
-  linux:{path:'~/Downloads/openldr_ce',cd:'cd ~/Downloads/openldr_ce',list:'ls',wrapper:'openldr',prefix:'./openldr',end:'$',launch:'Press the Super key, often the Windows-logo key. Type Terminal in the applications search, then select Terminal. These Linux pictures use Ubuntu as an example.',explanation:'Here, ~ means your home folder. ~/Downloads/openldr_ce means the openldr_ce folder inside your Downloads folder.'},
+  linux:{path:'~/Downloads/openldr_ce',cd:'cd ~/Downloads/openldr_ce',list:'ls',wrapper:'openldr',prefix:'./openldr',end:'$',launch:'Press the Super key, often the Windows-logo key. Type Terminal in the applications search, then select Terminal.',explanation:'Here, ~ means your home folder. ~/Downloads/openldr_ce means the openldr_ce folder inside your Downloads folder.'},
   mac:{path:'~/Downloads/openldr_ce',cd:'cd ~/Downloads/openldr_ce',list:'ls',wrapper:'openldr',prefix:'./openldr',end:'%',launch:'Press Command and Space together to open Spotlight. Type Terminal, then press Return to open the Terminal application.',explanation:'Here, ~ means your home folder. ~/Downloads/openldr_ce means the openldr_ce folder inside your Downloads folder.'},
   windows:{path:'C:\\openldr_ce',cd:'cd C:\\openldr_ce',list:'Get-ChildItem -Name',wrapper:'openldr.ps1',prefix:'.\\openldr.ps1',end:'>',launch:'Press the Windows key to open Start. Type PowerShell, then select Windows PowerShell and choose Open.',explanation:'Here, C:\\openldr_ce means the openldr_ce folder directly on the C: drive. It is our example installation location.'}
  };
@@ -153,8 +165,9 @@
  root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
  root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
   previousFocus = button;
-  box.querySelector('img').src = button.querySelector('img').src;
-  box.querySelector('img').alt = button.querySelector('img').alt;
+  const content=box.querySelector('[data-lightbox-content]');
+  const frame=button.querySelector('.dg-dotted-frame');
+  content.replaceChildren((frame || button.querySelector('img')).cloneNode(true));
   box.hidden = false;
   root.querySelector('.dg-main').inert=true;
   box.querySelector('button').focus();

@@ -48,17 +48,17 @@ Se a instalação estiver noutro local, substitua este caminho em todo o guia.
 <!-- cli:mac -->O símbolo ~ representa a sua pasta pessoal. A pasta openldr_ce deste exemplo fica dentro de Downloads.<!-- /cli -->
 <!-- cli:windows -->C:\openldr_ce representa a pasta openldr_ce diretamente na unidade C:.<!-- /cli -->
 
-As imagens são ilustrações. Os comandos e as linhas do terminal usam o mesmo local de exemplo. Selecione uma imagem para a ampliar.
+Estas ilustrações usam o mesmo estilo de janela. Os comandos e os caminhos seguem o sistema escolhido. Selecione uma imagem para a ampliar.
 
 ### 1. Abrir um terminal
 
-<!-- cli:linux -->Prima Super, frequentemente a tecla com o símbolo Windows. Procure Terminal nas aplicações e abra-o. As ilustrações Linux usam o Ubuntu.<!-- /cli -->
+<!-- cli:linux -->Prima Super, frequentemente a tecla com o símbolo Windows. Procure Terminal nas aplicações e abra-o.<!-- /cli -->
 <!-- cli:mac -->Prima Comando e Espaço para abrir o Spotlight. Escreva Terminal e prima Return.<!-- /cli -->
 <!-- cli:windows -->Prima a tecla Windows. Procure PowerShell, selecione Windows PowerShell e escolha Abrir.<!-- /cli -->
 
 A linha terminada em <!-- cli:linux -->`$`<!-- /cli --><!-- cli:mac -->`%`<!-- /cli --><!-- cli:windows -->`>`<!-- /cli --> é o prompt. A barra vertical é o cursor. Escreva depois do prompt, sem o copiar.
 
-![Ilustração de um terminal aberto, com o prompt e o cursor.](terminal-linux-ready.png)
+![Ilustração de um terminal aberto, com o prompt e o cursor.](start-terminal-linux-ready.png)
 
 O seu nome e o nome do computador podem ser diferentes. Use Backspace para corrigir um erro antes de premir Enter.
 
@@ -66,7 +66,7 @@ O seu nome e o nome do computador podem ser diferentes. Use Backspace para corri
 
 Abrir um terminal não o coloca automaticamente na pasta OpenLDR. Este exemplo usa `~/Downloads/openldr_ce`.
 
-![Ilustração da pasta de instalação e dos seus ficheiros.](terminal-linux-folder.png)
+![Ilustração da pasta de instalação e dos seus ficheiros.](start-terminal-linux-folder.png)
 
 A pasta real deve conter os ficheiros criados pela sua instalação.
 
@@ -76,13 +76,13 @@ O comando `cd` muda de pasta. Escreva o comando abaixo e prima Enter. Ajuste o c
 cd ~/Downloads/openldr_ce
 ```
 
-![Ilustração do comando cd antes de o executar.](terminal-linux-cd.png)
+![Ilustração do comando cd antes de o executar.](start-terminal-linux-cd.png)
 
 Deixe um espaço depois de `cd`. O restante texto é o caminho da pasta.
 
 Normalmente aparece outro prompt sem mensagem de sucesso. Se aparecer um erro, verifique o caminho antes de continuar.
 
-![Ilustração do prompt depois de mudar de pasta.](terminal-linux-changed.png)
+![Ilustração do prompt depois de mudar de pasta.](start-terminal-linux-changed.png)
 
 Verifique agora os ficheiros da pasta.
 
@@ -94,7 +94,7 @@ Escreva este comando e prima Enter:
 ls
 ```
 
-![Ilustração da lista dos ficheiros necessários à instalação.](terminal-linux-files.png)
+![Ilustração da lista dos ficheiros necessários à instalação.](start-terminal-linux-files.png)
 
 Confirme que existem `docker-compose.yml`, a pasta `data` e `openldr`. A pasta pode conter outros ficheiros. Se estes faltarem, procure a pasta criada pelo instalador.
 
@@ -108,11 +108,11 @@ Fique na pasta confirmada no passo 3. Execute o primeiro comando OpenLDR:
 
 Prima Enter. Mantenha o espaço antes de `--help` e os dois hífenes.
 
-![Ilustração do comando de ajuda pronto a executar.](terminal-linux-help.png)
+![Ilustração do comando de ajuda pronto a executar.](start-terminal-linux-help.png)
 
 **Resultado esperado:** o terminal mostra a utilização, as opções e os comandos disponíveis.
 
-![Ilustração de um excerto da ajuda OpenLDR.](terminal-linux-help-result.png)
+![Ilustração de um excerto da ajuda OpenLDR.](start-terminal-linux-help-result.png)
 
 Desloque o conteúdo do terminal para ler a ajuda completa. Quando o prompt regressar, pode escrever outro comando.
 
@@ -126,11 +126,11 @@ O comando `ingest` importa um ficheiro. Acrescente `--help` para ler as instruç
 
 Escreva o comando e prima Enter.
 
-![Ilustração do comando ingest --help.](terminal-linux-ingest.png)
+![Ilustração do comando ingest --help.](start-terminal-linux-ingest.png)
 
 **Resultado esperado:** a linha de utilização indica `ingest`. As opções seguintes aplicam-se a esse comando.
 
-![Ilustração da ajuda do comando ingest.](terminal-linux-ingest-result.png)
+![Ilustração da ajuda do comando ingest.](start-terminal-linux-ingest-result.png)
 
 `<file>` indica um caminho obrigatório. `[options]` indica definições opcionais. Não escreva estes parênteses retos. Nenhum ficheiro foi importado nestes passos.
 
@@ -156,7 +156,7 @@ cd ~/Downloads/openldr_ce
 
 Esta pasta contém `package.json`, `pnpm-workspace.yaml`, `apps` e `packages`. Execute os comandos seguintes a partir desta raiz do repositório.
 
-![Ilustração do terminal na pasta do código-fonte.](terminal-linux-dev-root.png)
+![Ilustração do terminal na pasta do código-fonte.](start-terminal-linux-dev-root.png)
 
 ### 2. Executar a CLI de desenvolvimento
 
@@ -167,7 +167,7 @@ pnpm openldr --help
 pnpm openldr ingest --help
 ```
 
-![Ilustração da ajuda da CLI de desenvolvimento.](terminal-linux-dev-help.png)
+![Ilustração da ajuda da CLI de desenvolvimento.](start-terminal-linux-dev-help.png)
 
 Estes comandos mostram ajuda sem importar dados. O prefixo `pnpm openldr` executa `packages/cli/dev.mjs` neste repositório. Mantenha esse prefixo durante o desenvolvimento.
 
@@ -181,7 +181,7 @@ Se o seu ficheiro JSON FHIR estiver em `~/Downloads/openldr_ce/files/my-file.jso
 pnpm openldr fhir validate files/my-file.json
 ```
 
-![Ilustração da validação de um ficheiro local em desenvolvimento.](terminal-linux-dev-file.png)
+![Ilustração da validação de um ficheiro local em desenvolvimento.](start-terminal-linux-dev-file.png)
 
 O ficheiro testado era válido. O seu resultado depende do conteúdo do seu ficheiro. A validação não o importa.
 
@@ -194,7 +194,7 @@ pnpm openldr ingest files/my-file.json
 pnpm openldr pipeline status
 ```
 
-![Ilustração de uma importação e do estado do lote em desenvolvimento.](terminal-linux-dev-import.png)
+![Ilustração de uma importação e do estado do lote em desenvolvimento.](start-terminal-linux-dev-import.png)
 
 O ficheiro testado criou um lote concluído com um recurso. O identificador e a contagem do seu lote serão diferentes. Nos outros comandos, mantenha `pnpm openldr` e use caminhos do seu computador.
 
@@ -245,7 +245,7 @@ cd ~/Downloads/openldr_ce
 
 A ajuda confirma que o iniciador foi executado. Se o problema continuar, liste os ficheiros como no passo 3. Procure `openldr` e `docker-compose.yml`.
 
-![Transcrição ilustrada do regresso à pasta correta e da ajuda obtida.](proof-wrong-folder.png)
+![Transcrição ilustrada do regresso à pasta correta e da ajuda obtida.](start-proof-wrong-folder.png)
 
 ### O Docker usa um endereço de ligação inacessível
 
@@ -264,7 +264,7 @@ docker info
 ./openldr --help
 ```
 
-![Transcrição ilustrada do endereço Docker incorreto e da sua correção.](proof-docker.png)
+![Transcrição ilustrada do endereço Docker incorreto e da sua correção.](start-proof-docker.png)
 
 O teste recuperou depois de retirar o endereço incorreto. Se `docker info` continuar a falhar, leia esse erro antes de repetir o OpenLDR.
 
@@ -285,7 +285,7 @@ Depois repita:
 ./openldr --help
 ```
 
-![Transcrição ilustrada do arranque do contentor API e da ajuda obtida.](proof-api.png)
+![Transcrição ilustrada do arranque do contentor API e da ajuda obtida.](start-proof-api.png)
 
 O teste voltou a obter ajuda depois de iniciar o contentor. Não verificou o arranque HTTP completo da aplicação.
 
@@ -307,7 +307,7 @@ Para um ficheiro JSON FHIR válido, a saída inclui `all valid`. Se o quiser imp
 ./openldr ingest data/my-file.json
 ```
 
-![Transcrição ilustrada da mudança do ficheiro, da validação e da importação.](proof-file.png)
+![Transcrição ilustrada da mudança do ficheiro, da validação e da importação.](start-proof-file.png)
 
 Esta regra aplica-se ao iniciador Docker instalado. A CLI de desenvolvimento lê caminhos locais normais.
 

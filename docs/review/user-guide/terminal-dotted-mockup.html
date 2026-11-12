@@ -1,0 +1,37 @@
+<style>
+#terminal-dotted-preview { --tp-stage:light-dark(#f7f7f7,#171717); --tp-dot:light-dark(#b4b4b4,#777); padding:16px; background-color:var(--tp-stage); background-image:radial-gradient(circle,var(--tp-dot) 1px,transparent 1.15px); background-size:24px 24px; background-position:4px 4px; font:14px/1.6 Arial,sans-serif; }
+#terminal-dotted-preview * { box-sizing:border-box; }
+#terminal-dotted-preview .tp-window { background:#252b35; border:1px solid #555962; border-radius:8px; overflow:hidden; box-shadow:0 5px 12px #0003,0 1px 2px #0004; }
+#terminal-dotted-preview .tp-bar { height:35px; display:flex; justify-content:flex-end; align-items:stretch; background:linear-gradient(#333436,#2e2f31); border-bottom:1px solid #42464e; }
+#terminal-dotted-preview .tp-control { position:relative; width:39px; display:flex; align-items:center; justify-content:center; color:#e1e3e7; }
+#terminal-dotted-preview .tp-control:last-child { margin-right:3px; }
+#terminal-dotted-preview .tp-minimize::before { content:""; width:10px; height:1px; background:currentColor; }
+#terminal-dotted-preview .tp-maximize::before { content:""; width:10px; height:10px; border:1px solid currentColor; border-radius:1px; }
+#terminal-dotted-preview .tp-close::before,#terminal-dotted-preview .tp-close::after { content:""; position:absolute; width:13px; height:1px; background:currentColor; transform:rotate(45deg); }
+#terminal-dotted-preview .tp-close::after { transform:rotate(-45deg); }
+#terminal-dotted-preview .tp-console { min-height:284px; padding:17px 19px 22px; color:#eceef3; background:linear-gradient(115deg,#282e39,#252b35); font:15px/1.6 'Cascadia Mono','SFMono-Regular',Consolas,'Liberation Mono',monospace; -webkit-font-smoothing:antialiased; }
+#terminal-dotted-preview .tp-line { white-space:pre-wrap; overflow-wrap:anywhere; min-height:24px; }
+#terminal-dotted-preview .tp-gap { height:15px; }
+#terminal-dotted-preview .tp-prompt { color:#cbd2df; }
+#terminal-dotted-preview .tp-caret { display:inline-block; height:17px; width:1px; margin-left:2px; background:#eef0f4; vertical-align:-3px; }
+@media(max-width:480px) { #terminal-dotted-preview { padding:12px; background-size:20px 20px; } #terminal-dotted-preview .tp-console { padding:15px 13px 20px; font-size:13px; min-height:273px; } #terminal-dotted-preview .tp-line { min-height:21px; } }
+</style>
+<div id="terminal-dotted-preview" class="viz-dotted-background" aria-label="Terminal illustration on a narrow dotted background">
+ <div class="tp-window">
+  <div class="tp-bar" aria-label="Window controls">
+   <span class="tp-control tp-minimize" role="img" aria-label="Minimize"></span>
+   <span class="tp-control tp-maximize" role="img" aria-label="Maximize"></span>
+   <span class="tp-control tp-close" role="img" aria-label="Close"></span>
+  </div>
+  <div class="tp-console" aria-label="Example OpenLDR help command">
+   <div class="tp-line"><span class="tp-prompt">PS C:\openldr_ce&gt;</span> .\openldr.ps1 --help</div>
+   <div class="tp-gap"></div>
+   <div class="tp-line">Usage: openldr [options] [command]</div>
+   <div class="tp-gap"></div>
+   <div class="tp-line">Options:</div>
+   <div class="tp-line">  -h, --help   display help for command</div>
+   <div class="tp-gap"></div>
+   <div class="tp-line"><span class="tp-prompt">PS C:\openldr_ce&gt;</span> <span class="tp-caret" aria-hidden="true"></span></div>
+  </div>
+ </div>
+</div>

@@ -68,7 +68,7 @@ def dashboard():
 
 def start():
     steps={s['id']:s for s in json.loads((ROOT/'start-evidence/start-evidence.json').read_text())['steps']}
-    terminal=json.loads((ROOT/'terminal-illustrations/manifest.json').read_text())['steps']
+    terminal=json.loads((ROOT/'terminal-dotted/app-manifest.json').read_text())['steps']
     steps.update({s['id']:s for s in terminal})
     html=(ROOT/'start-here-template.html').read_text().replace('__START_ARTICLE__',(ROOT/'start-here-article.html').read_text())
     used=set()
@@ -78,6 +78,11 @@ def start():
     used.update(s['id'] for s in terminal if s['stage'] in stages)
     html=html.replace('__EVIDENCE_ASSETS__',json.dumps({k:asset(steps[k]['path']) for k in sorted(used)},separators=(',',':')))
     html=re.sub(r'__WIDTH:([^_]+)__',lambda m:str(min(500,steps[m[1]]['crop_dimensions'][0])),html)
-    save(html,'start-here-review.html'); print('Start here:',len(used),'illustrations')
+    def themed_figure(match):
+        figure = match[0].replace('class="dg-shot"', 'class="dg-shot dg-dotted-shot"')
+        return re.sub(r'(<img[^>]*>)', r'<span class="dg-dotted-frame doc-dotted-frame"><span class="doc-dotted-dots" aria-hidden="true"></span>\1</span>', figure)
+    html = re.sub(r'<figure class="dg-shot"[^>]*>.*?</figure>', themed_figure, html, flags=re.S)
+    html += '<style>' + (REPO/'apps/studio/src/docs/DottedIllustration.css').read_text() + '</style>'
+    save(html,'start-here-review.html'); print('Start here:',len(used),'themed illustrations')
 
 if __name__=='__main__':dashboard();start()

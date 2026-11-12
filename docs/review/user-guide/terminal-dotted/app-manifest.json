@@ -1,0 +1,822 @@
+{
+  "notes": "Approved Start here illustrations. Transparent surrounds let the documentation page draw theme-aware dots. Terminal and file browser windows retain their approved dark finish.",
+  "steps": [
+    {
+      "id": "terminal-linux-ready",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-ready.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ready",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-ready.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-folder",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-folder.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "folder",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-folder.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-cd",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-cd.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "cd",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-cd.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-changed",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-changed.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "changed",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-changed.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-files",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-files.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "files",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-files.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-help",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-help.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "help",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-help.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-help-result",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-help-result.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "help-result",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-help-result.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-ingest",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-ingest.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ingest",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-ingest.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-ingest-result",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-ingest-result.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ingest-result",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-ingest-result.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-ready",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-ready.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ready",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-ready.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-folder",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-folder.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "folder",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-folder.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-cd",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-cd.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "cd",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-cd.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-changed",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-changed.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "changed",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-changed.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-files",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-files.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "files",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-files.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-help",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-help.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "help",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-help.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-help-result",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-help-result.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "help-result",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-help-result.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-ingest",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-ingest.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ingest",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-ingest.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-ingest-result",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-ingest-result.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ingest-result",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-ingest-result.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-ready",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-ready.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ready",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-ready.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-folder",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-folder.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "folder",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-folder.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-cd",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-cd.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "cd",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-cd.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-changed",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-changed.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "changed",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-changed.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-files",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-files.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "files",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-files.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-help",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-help.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "help",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-help.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-help-result",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-help-result.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "help-result",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-help-result.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-ingest",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-ingest.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ingest",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-ingest.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-ingest-result",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-ingest-result.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ingest-result",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-ingest-result.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-dev-root",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-dev-root.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-root",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-dev-root.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-dev-help",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-dev-help.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-help",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-dev-help.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-dev-file",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-dev-file.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-file",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-dev-file.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-linux-dev-import",
+      "path": "./terminal-dotted/transparent/start-terminal-linux-dev-import.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-import",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-linux-dev-import.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-dev-root",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-dev-root.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-root",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-dev-root.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-dev-help",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-dev-help.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-help",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-dev-help.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-dev-file",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-dev-file.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-file",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-dev-file.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-mac-dev-import",
+      "path": "./terminal-dotted/transparent/start-terminal-mac-dev-import.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-import",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-mac-dev-import.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-dev-root",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-dev-root.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-root",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-dev-root.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-dev-help",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-dev-help.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-help",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-dev-help.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-dev-file",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-dev-file.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-file",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-dev-file.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "terminal-windows-dev-import",
+      "path": "./terminal-dotted/transparent/start-terminal-windows-dev-import.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-import",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-terminal-windows-dev-import.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "proof-wrong-folder",
+      "path": "./terminal-dotted/transparent/start-proof-wrong-folder.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-wrong-folder",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-proof-wrong-folder.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "proof-docker",
+      "path": "./terminal-dotted/transparent/start-proof-docker.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-docker",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-proof-docker.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "proof-api",
+      "path": "./terminal-dotted/transparent/start-proof-api.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-api",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-proof-api.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    },
+    {
+      "id": "proof-file",
+      "path": "./terminal-dotted/transparent/start-proof-file.png",
+      "crop_dimensions": [
+        736,
+        416
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-file",
+      "mime": "image/png",
+      "pixel_dimensions": [
+        1472,
+        832
+      ],
+      "chrome": "native-dotted-frame",
+      "app_name": "start-proof-file.png",
+      "surround": "transparent; rendered with theme-aware CSS"
+    }
+  ]
+}

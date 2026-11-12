@@ -72,7 +72,7 @@ Get-ChildItem -Name
 .\openldr.ps1 ingest --help
 ```
 
-Replace the example folder with your actual installation folder. It contains `docker-compose.yml`, `data`, and the launcher. Enter one command at a time. The help commands do not change records. The in-app **Start here** guide illustrates each step.
+Replace the example folder with your actual installation folder. It contains `docker-compose.yml`, `data`, and the launcher. Enter one command at a time. The help commands do not change records. The in-app **Start here** guide illustrates each step with terminal and file-browser images.
 
 ### Run from a development checkout
 

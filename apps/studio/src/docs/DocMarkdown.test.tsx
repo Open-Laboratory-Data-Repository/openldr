@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('./screenshots', () => ({
   resolveImg: (src: string) =>
-    ({ 'dashboard.png': '/assets/dashboard.png', 'dashboard-create-menu.png': '/assets/original-menu.png', 'terminal-linux-ready.png': '/assets/linux.png', 'terminal-windows-ready.png': '/assets/windows.png', 'tour.mp4': '/assets/tour.mp4', 'tour.png': '/assets/tour.png' })[src] ?? null,
+    ({ 'start-terminal-linux-ready.png': '/assets/start-linux.png', 'start-terminal-windows-ready.png': '/assets/start-windows.png', 'dashboard.png': '/assets/dashboard.png', 'dashboard-create-menu.png': '/assets/original-menu.png', 'terminal-linux-ready.png': '/assets/linux.png', 'terminal-windows-ready.png': '/assets/windows.png', 'tour.mp4': '/assets/tour.mp4', 'tour.png': '/assets/tour.png' })[src] ?? null,
   isClip: (src: string) => src.endsWith('.mp4'),
   posterName: (src: string) => src.replace(/\.mp4$/, '.png'),
 }));
@@ -11,6 +11,18 @@ vi.mock('./screenshots', () => ({
 import { DocMarkdown } from './DocMarkdown';
 
 describe('DocMarkdown', () => {
+  it('renders an approved CLI image on themed dots and retains them when enlarged', () => {
+    const click = vi.fn();
+    render(<DocMarkdown content={'![Terminal](start-terminal-linux-ready.png)'} onImageClick={click} />);
+    const frame = screen.getByAltText('Terminal').parentElement!;
+    expect(frame).toHaveClass('doc-dotted-frame');
+    expect(frame.querySelector('.doc-dotted-dots')).toHaveAttribute('aria-hidden', 'true');
+    expect(frame.querySelector('img')!.style.maskImage).toBe('');
+    expect(frame.style.backgroundColor).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom: Terminal' }));
+    expect(click).toHaveBeenCalledWith({ url: '/assets/start-linux.png', alt: 'Terminal', illustration: true });
+  });
+
   it('keeps the focused target sharp and sends its focus to the lightbox', () => {
     const click = vi.fn();
     const { container } = render(<DocMarkdown content={'![Menu](dashboard-create-menu.png)'} onImageClick={click} />);

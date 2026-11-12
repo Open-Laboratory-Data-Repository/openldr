@@ -76,7 +76,7 @@ Get-ChildItem -Name
 .\openldr.ps1 ingest --help
 ```
 
-Substitua a pasta de exemplo pela sua pasta real. Contém `docker-compose.yml`, `data` e o iniciador. Execute um comando de cada vez. Os comandos de ajuda não alteram registos. O guia **Comece aqui** da aplicação ilustra cada passo.
+Substitua a pasta de exemplo pela sua pasta real. Contém `docker-compose.yml`, `data` e o iniciador. Execute um comando de cada vez. Os comandos de ajuda não alteram registos. O guia **Comece aqui** da aplicação ilustra cada passo com imagens do terminal e do gestor de ficheiros.
 
 ### Usar uma cópia do código-fonte
 

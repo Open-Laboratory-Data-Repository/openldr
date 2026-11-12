@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 
 import { isClip } from './screenshots';
 import { FocusedScreenshotFrame } from './FocusedScreenshot';
+import { DottedIllustrationFrame } from './DottedIllustration';
 
 /** A screenshot, or a clip (an MP4 url, with the poster shown before it plays). */
-export interface LightboxImage { url: string; alt: string; poster?: string; focus?: string }
+export interface LightboxImage { url: string; alt: string; poster?: string; focus?: string; illustration?: boolean }
 
 const MIN = 1;
 const MAX = 5;
@@ -85,8 +86,13 @@ export function Lightbox({ image, onClose }: { image: LightboxImage | null; onCl
         </div>
         {/* Image backdrop is hardcoded near-black (not a theme token) so the viewer
             reads correctly in any theme — the same approach corlix's lightbox uses. */}
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto bg-[#0d0d0d]">
-          {image.focus ? (
+        <div ref={scrollRef} className={`min-h-0 flex-1 overflow-auto ${image.illustration ? 'bg-background' : 'bg-[#0d0d0d]'}`}>
+          {image.illustration ? (
+            <div className="mx-auto" onClick={() => setZoom((z) => (z === 1 ? 2 : 1))}
+              style={{ width: `${zoom * 100}%`, maxWidth: 'none', cursor: zoom === 1 ? 'zoom-in' : 'zoom-out' }}>
+              <DottedIllustrationFrame url={image.url} alt={image.alt} />
+            </div>
+          ) : image.focus ? (
             <div className="mx-auto" onClick={() => setZoom((z) => (z === 1 ? 2 : 1))}
               style={{ width: `${zoom * 100}%`, maxWidth: 'none', cursor: zoom === 1 ? 'zoom-in' : 'zoom-out' }}>
               <FocusedScreenshotFrame src={image.focus} url={image.url} alt={image.alt} />

@@ -1,0 +1,564 @@
+{
+  "notes": "Preview only. Shared approved blank terminal frame and matching file browser. Original illustration files are preserved. Commands, paths and Linux proof transcripts retain their previous contents. The Windows startup banner was removed.",
+  "steps": [
+    {
+      "id": "terminal-linux-ready",
+      "path": "./terminal-neutral/terminal-linux-ready.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ready",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-folder",
+      "path": "./terminal-neutral/terminal-linux-folder.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "folder",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-cd",
+      "path": "./terminal-neutral/terminal-linux-cd.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "cd",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-changed",
+      "path": "./terminal-neutral/terminal-linux-changed.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "changed",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-files",
+      "path": "./terminal-neutral/terminal-linux-files.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "files",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-help",
+      "path": "./terminal-neutral/terminal-linux-help.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "help",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-help-result",
+      "path": "./terminal-neutral/terminal-linux-help-result.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "help-result",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-ingest",
+      "path": "./terminal-neutral/terminal-linux-ingest.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ingest",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-ingest-result",
+      "path": "./terminal-neutral/terminal-linux-ingest-result.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "linux",
+      "stage": "ingest-result",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-ready",
+      "path": "./terminal-neutral/terminal-mac-ready.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ready",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-folder",
+      "path": "./terminal-neutral/terminal-mac-folder.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "folder",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-cd",
+      "path": "./terminal-neutral/terminal-mac-cd.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "cd",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-changed",
+      "path": "./terminal-neutral/terminal-mac-changed.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "changed",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-files",
+      "path": "./terminal-neutral/terminal-mac-files.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "files",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-help",
+      "path": "./terminal-neutral/terminal-mac-help.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "help",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-help-result",
+      "path": "./terminal-neutral/terminal-mac-help-result.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "help-result",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-ingest",
+      "path": "./terminal-neutral/terminal-mac-ingest.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ingest",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-ingest-result",
+      "path": "./terminal-neutral/terminal-mac-ingest-result.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "mac",
+      "stage": "ingest-result",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-ready",
+      "path": "./terminal-neutral/terminal-windows-ready.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ready",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-folder",
+      "path": "./terminal-neutral/terminal-windows-folder.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "folder",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-cd",
+      "path": "./terminal-neutral/terminal-windows-cd.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "cd",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-changed",
+      "path": "./terminal-neutral/terminal-windows-changed.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "changed",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-files",
+      "path": "./terminal-neutral/terminal-windows-files.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "files",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-help",
+      "path": "./terminal-neutral/terminal-windows-help.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "help",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-help-result",
+      "path": "./terminal-neutral/terminal-windows-help-result.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "help-result",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-ingest",
+      "path": "./terminal-neutral/terminal-windows-ingest.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ingest",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-ingest-result",
+      "path": "./terminal-neutral/terminal-windows-ingest-result.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-example",
+      "platform": "windows",
+      "stage": "ingest-result",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-dev-root",
+      "path": "./terminal-neutral/terminal-linux-dev-root.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-root",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-dev-help",
+      "path": "./terminal-neutral/terminal-linux-dev-help.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-help",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-dev-file",
+      "path": "./terminal-neutral/terminal-linux-dev-file.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-file",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-linux-dev-import",
+      "path": "./terminal-neutral/terminal-linux-dev-import.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "dev-import",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-dev-root",
+      "path": "./terminal-neutral/terminal-mac-dev-root.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-root",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-dev-help",
+      "path": "./terminal-neutral/terminal-mac-dev-help.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-help",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-dev-file",
+      "path": "./terminal-neutral/terminal-mac-dev-file.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-file",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-mac-dev-import",
+      "path": "./terminal-neutral/terminal-mac-dev-import.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "mac",
+      "stage": "dev-import",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-dev-root",
+      "path": "./terminal-neutral/terminal-windows-dev-root.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-root",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-dev-help",
+      "path": "./terminal-neutral/terminal-windows-dev-help.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-help",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-dev-file",
+      "path": "./terminal-neutral/terminal-windows-dev-file.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-file",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "terminal-windows-dev-import",
+      "path": "./terminal-neutral/terminal-windows-dev-import.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "windows",
+      "stage": "dev-import",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "proof-wrong-folder",
+      "path": "./terminal-neutral/proof-wrong-folder.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-wrong-folder",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "proof-docker",
+      "path": "./terminal-neutral/proof-docker.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-docker",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "proof-api",
+      "path": "./terminal-neutral/proof-api.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-api",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    },
+    {
+      "id": "proof-file",
+      "path": "./terminal-neutral/proof-file.webp",
+      "crop_dimensions": [
+        720,
+        400
+      ],
+      "kind": "illustrated-tested-transcript",
+      "platform": "linux",
+      "stage": "proof-file",
+      "mime": "image/webp",
+      "chrome": "shared-approved-blank-frame"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "checks": [
+    {
+      "platform": "Linux",
+      "images": 13,
+      "command": "./openldr --help",
+      "path": "~/Downloads/openldr_ce"
+    },
+    {
+      "platform": "macOS",
+      "images": 13,
+      "command": "./openldr --help",
+      "path": "~/Downloads/openldr_ce"
+    },
+    {
+      "platform": "Windows",
+      "images": 13,
+      "command": ".\\openldr.ps1 --help",
+      "path": "C:\\openldr_ce"
+    },
+    {
+      "viewport": 375,
+      "width": 375,
+      "scroll": 375,
+      "pane": 373,
+      "paneScroll": 373
+    },
+    {
+      "viewport": 320,
+      "width": 320,
+      "scroll": 320,
+      "pane": 318,
+      "paneScroll": 318
+    }
+  ],
+  "pageErrors": []
+}

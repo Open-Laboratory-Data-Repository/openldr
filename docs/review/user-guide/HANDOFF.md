@@ -120,3 +120,26 @@ neutral-terminal-files.html is the editable neutral window illustration.
 neutral-terminal-files-review.html is its standalone preview.
 It shows a source checkout and the cross-platform development command pnpm openldr --help.
 It does not change Start here. The current OS-specific illustrations remain available until the user selects a replacement.
+
+
+## Approved Start here images and themes
+
+The user approved the native terminal and matching file browser with a narrow dotted surround.
+All 43 approved images are promoted under distinct start-terminal-* and start-proof-* filenames.
+The earlier bundled images remain unchanged for historical docs.
+
+DottedIllustration.tsx draws the dots using the active Studio theme.
+The new PNGs have transparent margins, so the page background shows through.
+The terminal and file-browser windows retain the approved dark finish.
+The same component is used in the page and image lightbox.
+PDF and Word exports use the transparent PNGs on the document background.
+
+terminal-dotted/build.cjs reproduces the approved dark preview frames.
+terminal-dotted/promote.cjs generates the transparent app images and checks every image corner.
+The operating-system selection still controls commands, paths and images.
+start-here-theme-review.html includes Light and Dark buttons for testing the two illustrations.
+The full Start here preview has a theme switch in its header.
+
+The dots are larger and clearest near the window, then fade outward with intersected edge gradients.
+The foreground PNG is not masked.
+The theme render and the full Start here preview share DottedIllustration.css with the app.

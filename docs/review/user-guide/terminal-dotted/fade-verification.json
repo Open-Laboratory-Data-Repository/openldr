@@ -1,0 +1,25 @@
+{
+  "checks": [
+    {
+      "theme": "dark",
+      "dots": "radial-gradient(circle, color(srgb 0.537255 0.537255 0.537255 / 0.95) 1.25px, rgba(0, 0, 0, 0) 1.5px)",
+      "mask": "linear-gradient(to right, rgba(0, 0, 0, 0), rgb(0, 0, 0) 4.5%, rgb(0, 0, 0) 95.5%, rgba(0, 0, 0, 0)), linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 7.67%, rgb(0, 0, 0) 92.33%, rgba(0, 0, 0, 0))",
+      "composite": "intersect, intersect",
+      "surround": "rgba(0, 0, 0, 0)",
+      "imageMask": "none",
+      "width": 500,
+      "padding": "12.5px"
+    },
+    {
+      "theme": "light",
+      "dots": "radial-gradient(circle, color(srgb 0.443137 0.443137 0.478431 / 0.95) 1.25px, rgba(0, 0, 0, 0) 1.5px)",
+      "mask": "linear-gradient(to right, rgba(0, 0, 0, 0), rgb(0, 0, 0) 4.5%, rgb(0, 0, 0) 95.5%, rgba(0, 0, 0, 0)), linear-gradient(rgba(0, 0, 0, 0), rgb(0, 0, 0) 7.67%, rgb(0, 0, 0) 92.33%, rgba(0, 0, 0, 0))",
+      "composite": "intersect, intersect",
+      "surround": "rgba(0, 0, 0, 0)",
+      "imageMask": "none",
+      "width": 500,
+      "padding": "12.5px"
+    }
+  ],
+  "narrowRenderOverflow": false
+}

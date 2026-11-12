@@ -48,17 +48,17 @@ If you installed it somewhere else, replace this example path with your actual i
 <!-- cli:mac -->Here, ~ means your home folder. ~/Downloads/openldr_ce is the openldr_ce folder inside Downloads.<!-- /cli -->
 <!-- cli:windows -->C:\openldr_ce is the openldr_ce folder directly on the C: drive.<!-- /cli -->
 
-These are illustrated examples. The same installation location appears in the commands, prompts and file examples. Select a picture to enlarge it.
+These illustrations share the same window style. Commands and paths follow your operating-system selection. Select a picture to enlarge it.
 
 ### 1. Open a terminal
 
-<!-- cli:linux -->Press the Super key, often the Windows-logo key. Type Terminal in the applications search, then select Terminal. These Linux pictures use Ubuntu as an example.<!-- /cli -->
+<!-- cli:linux -->Press the Super key, often the Windows-logo key. Type Terminal in the applications search, then select Terminal.<!-- /cli -->
 <!-- cli:mac -->Press Command and Space to open Spotlight. Type Terminal, then press Return.<!-- /cli -->
 <!-- cli:windows -->Press the Windows key. Type PowerShell, select Windows PowerShell, then choose Open.<!-- /cli -->
 
 A terminal window opens. The line ending in <!-- cli:linux -->`$`<!-- /cli --><!-- cli:mac -->`%`<!-- /cli --><!-- cli:windows -->`>`<!-- /cli --> is the **prompt**. The vertical line after it is the cursor. This is where your typing appears.
 
-![Illustrated new terminal with a prompt and cursor ready for typing.](terminal-linux-ready.png)
+![Illustrated new terminal with a prompt and cursor ready for typing.](start-terminal-linux-ready.png)
 
 Your name and computer name may be different. Type after the prompt.
 
@@ -70,7 +70,7 @@ OpenLDR's installed command file is in its installation folder. The commands in 
 
 For this example, OpenLDR is installed in `~/Downloads/openldr_ce`. Use the location you chose during installation.
 
-![Illustrated file browser showing the example OpenLDR installation and its files.](terminal-linux-folder.png)
+![Illustrated file browser showing the example OpenLDR installation and its files.](start-terminal-linux-folder.png)
 
 This is the example installation folder. Your actual folder must contain the installed OpenLDR files.
 
@@ -80,13 +80,13 @@ This is the example installation folder. Your actual folder must contain the ins
 cd ~/Downloads/openldr_ce
 ```
 
-![Illustrated terminal with cd pointing to the example installation folder.](terminal-linux-cd.png)
+![Illustrated terminal with cd pointing to the example installation folder.](start-terminal-linux-cd.png)
 
 There is a space after cd. The rest of the command is the installation location.
 
 The terminal usually prints no success message for `cd`. A new prompt appears. If an error appears instead, check the folder location before continuing.
 
-![Illustrated terminal after changing to the example installation folder.](terminal-linux-changed.png)
+![Illustrated terminal after changing to the example installation folder.](start-terminal-linux-changed.png)
 
 The new prompt shows that you changed folders. Check its files next.
 
@@ -98,7 +98,7 @@ List the files in the folder. Type the following command and press **Enter**.
 ls
 ```
 
-![Illustrated terminal listing the data folder, docker-compose.yml and the OpenLDR command file.](terminal-linux-files.png)
+![Illustrated terminal listing the data folder, docker-compose.yml and the OpenLDR command file.](start-terminal-linux-files.png)
 
 This illustration shows the files you need. Your folder may contain other files too.
 
@@ -116,7 +116,7 @@ Stay in the installation folder you checked in step 3. Now run your first OpenLD
 
 Type the command at the new prompt and press **Enter**. Keep the space before `--help` and both hyphens.
 
-![Illustrated terminal with the OpenLDR help command typed before pressing Enter.](terminal-linux-help.png)
+![Illustrated terminal with the OpenLDR help command typed before pressing Enter.](start-terminal-linux-help.png)
 
 The command is ready. Press Enter to run it.
 
@@ -124,7 +124,7 @@ The command is ready. Press Enter to run it.
 
 The terminal prints a usage line, options and a list of commands. The picture below shows an excerpt.
 
-![Illustrated excerpt of OpenLDR help output with Usage, Options and Commands.](terminal-linux-help-result.png)
+![Illustrated excerpt of OpenLDR help output with Usage, Options and Commands.](start-terminal-linux-help-result.png)
 
 Scroll in your terminal to read the full output. When the prompt returns, you can type again.
 
@@ -138,7 +138,7 @@ The `ingest` command imports a file. Add `--help` to read its instructions witho
 
 Type this at the prompt, then press **Enter**.
 
-![Illustrated terminal with ingest --help typed before pressing Enter.](terminal-linux-ingest.png)
+![Illustrated terminal with ingest --help typed before pressing Enter.](start-terminal-linux-ingest.png)
 
 There is a space between the program, command name and option.
 
@@ -146,7 +146,7 @@ There is a space between the program, command name and option.
 
 The usage line now names `ingest`. The options underneath apply to that command.
 
-![Illustrated ingest help output with a required file placeholder and command options.](terminal-linux-ingest-result.png)
+![Illustrated ingest help output with a required file placeholder and command options.](start-terminal-linux-ingest-result.png)
 
 `<file>` means a required file path. `[options]` means optional settings. Do not type these brackets.
 
@@ -174,7 +174,7 @@ cd ~/Downloads/openldr_ce
 
 This folder contains `package.json`, `pnpm-workspace.yaml`, `apps` and `packages`. Use this repository root for the following commands.
 
-![Illustrated terminal in the source checkout, listing its package.json and workspace folders.](terminal-linux-dev-root.png)
+![Illustrated terminal in the source checkout, listing its package.json and workspace folders.](start-terminal-linux-dev-root.png)
 
 The source checkout has the workspace files. It uses the pnpm command below.
 
@@ -187,7 +187,7 @@ pnpm openldr --help
 pnpm openldr ingest --help
 ```
 
-![Illustrated source commands pnpm openldr --help and pnpm openldr ingest --help with their usage lines.](terminal-linux-dev-help.png)
+![Illustrated source commands pnpm openldr --help and pnpm openldr ingest --help with their usage lines.](start-terminal-linux-dev-help.png)
 
 These commands display help. They do not import data.
 
@@ -203,7 +203,7 @@ For example, if your own FHIR JSON file is at `~/Downloads/openldr_ce/files/my-f
 pnpm openldr fhir validate files/my-file.json
 ```
 
-![Illustrated development CLI reading files/my-file.json outside the Docker data folder and reporting all valid.](terminal-linux-dev-file.png)
+![Illustrated development CLI reading files/my-file.json outside the Docker data folder and reporting all valid.](start-terminal-linux-dev-file.png)
 
 The test file was valid. Your result depends on the contents of your own file. Validation does not import it.
 
@@ -216,7 +216,7 @@ pnpm openldr ingest files/my-file.json
 pnpm openldr pipeline status
 ```
 
-![Illustrated source CLI importing a file and showing its completed batch in pipeline status.](terminal-linux-dev-import.png)
+![Illustrated source CLI importing a file and showing its completed batch in pipeline status.](start-terminal-linux-dev-import.png)
 
 The tested file produced a completed batch with one resource. Your batch ID and count will differ.
 
@@ -277,7 +277,7 @@ cd ~/Downloads/openldr_ce
 
 The help usage line confirms that the launcher ran. If it still cannot be found, list the folder's files as shown in step 3. Check for `openldr` and `docker-compose.yml`.
 
-![Illustrated Linux transcript showing launcher not found, changing into the installation folder, then successful CLI help.](proof-wrong-folder.png)
+![Illustrated Linux transcript showing launcher not found, changing into the installation folder, then successful CLI help.](start-proof-wrong-folder.png)
 
 Tested result: returning to the installation folder restored the help command.
 
@@ -300,7 +300,7 @@ docker info
 
 The test recovered after clearing the incorrect address. If `docker info` still fails, Docker is not yet reachable. Read that Docker error before retrying OpenLDR.
 
-![Illustrated Linux transcript showing an unreachable Docker socket, clearing DOCKER_HOST, and successful CLI help.](proof-docker.png)
+![Illustrated Linux transcript showing an unreachable Docker socket, clearing DOCKER_HOST, and successful CLI help.](start-proof-docker.png)
 
 The test used a deliberately missing Docker socket. The running Docker engine was left untouched.
 
@@ -321,7 +321,7 @@ Then run the help command again:
 ./openldr --help
 ```
 
-![Illustrated Linux transcript showing the stopped API error, starting the API service, and successful CLI help.](proof-api.png)
+![Illustrated Linux transcript showing the stopped API error, starting the API service, and successful CLI help.](start-proof-api.png)
 
 Tested result: starting the stopped container restored the help command.
 
@@ -345,7 +345,7 @@ For a valid FHIR JSON file, the result includes `all valid`. If you intend to im
 ./openldr ingest data/my-file.json
 ```
 
-![Illustrated Linux transcript showing ENOENT outside the shared data folder, moving the file, successful validation and a completed import.](proof-file.png)
+![Illustrated Linux transcript showing ENOENT outside the shared data folder, moving the file, successful validation and a completed import.](start-proof-file.png)
 
 The same file failed outside data, then validated and imported after moving into it.
 

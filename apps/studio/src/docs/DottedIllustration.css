@@ -1,0 +1,18 @@
+.doc-dotted-frame {
+  position: relative;
+  display: block;
+  padding: 2.5%;
+}
+
+.doc-dotted-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--muted-foreground) 95%, transparent) 1.25px, transparent 1.5px);
+  background-size: 12px 12px;
+  background-position: 0 0;
+  mask-image:
+    linear-gradient(to right, transparent, #000 4.5%, #000 95.5%, transparent),
+    linear-gradient(to bottom, transparent, #000 7.67%, #000 92.33%, transparent);
+  mask-composite: intersect;
+}

@@ -8,6 +8,7 @@ import type { LightboxImage } from './Lightbox';
 import { headingIdMaker } from './toc';
 import { Button } from '@/components/ui/button';
 import { FocusedScreenshot, focusedScreenshot } from './FocusedScreenshot';
+import { DottedIllustration, isDottedIllustration } from './DottedIllustration';
 import { CLI_PLATFORM_MARKER, cliPlatformMarkdown, type CliPlatform } from './cliPlatform';
 
 function text(children: ReactNode): string {
@@ -88,6 +89,9 @@ export function DocMarkdown({
             {alt ? `Screenshot unavailable: ${alt}` : 'Screenshot unavailable'}
           </span>
         );
+      }
+      if (isDottedIllustration(src)) {
+        return <DottedIllustration url={url} alt={alt} onImageClick={onImageClick} />;
       }
       if (focusedScreenshot(src)) {
         return <FocusedScreenshot src={src} url={url} alt={alt} onImageClick={onImageClick} />;

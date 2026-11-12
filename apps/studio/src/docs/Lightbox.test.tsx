@@ -27,6 +27,17 @@ describe('Lightbox', () => {
     expect(img).toHaveStyle({ filter: 'blur(1.25px)' });
     expect(sharp.style.clipPath).toContain('inset(');
   });
+  it('keeps the themed illustration surround while zooming', () => {
+    render(<Lightbox image={{ url: '/assets/start.png', alt: 'Terminal', illustration: true }} onClose={() => {}} />);
+    const image = screen.getByAltText('Terminal');
+    const frame = image.parentElement!;
+    expect(frame).toHaveClass('doc-dotted-frame');
+    expect(frame.parentElement!.parentElement).toHaveClass('bg-background');
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(frame.parentElement).toHaveStyle({ width: '150%' });
+    expect(frame.querySelector('.doc-dotted-dots')).toHaveAttribute('aria-hidden', 'true');
+    expect(frame.querySelector('img')!.style.maskImage).toBe('');
+  });
   it('calls onClose when the close button is clicked', () => {
     const onClose = vi.fn();
     render(<Lightbox image={{ url: '/assets/x.png', alt: 'X' }} onClose={onClose} />);
