@@ -70,7 +70,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Authentication providers
 - [x] Environment Variables
 - [x] Planned upgrades
-- [ ] Deployment & Developer Docs
+- [x] Deployment & Developer Docs
 
 ## Recovery
 

@@ -1,0 +1,173 @@
+[
+  {
+    "id": "docs",
+    "crop": [
+      0,
+      444.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 576,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "search",
+    "crop": [
+      145.78125,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 284.5625,
+        "y": 53.5,
+        "width": 202.4375,
+        "height": 36
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "guide-link",
+    "crop": [
+      127.5,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 240,
+        "y": 123,
+        "width": 255,
+        "height": 36
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "guide",
+    "crop": [
+      495.0,
+      11.5703125,
+      530,
+      331.25
+    ],
+    "targets": [
+      {
+        "x": 520,
+        "y": 158,
+        "width": 480,
+        "height": 38.390625
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "repository",
+    "crop": [
+      467.9375,
+      297.609375,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 520,
+        "y": 439.609375,
+        "width": 375.875,
+        "height": 16
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "download",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1240,
+        "y": 55.5,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "this-page",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1117,
+        "y": 96.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "format",
+    "crop": [
+      797.0,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 962,
+        "y": 101.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "phone",
+    "crop": [
+      0,
+      109.203125,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 72,
+        "y": 188,
+        "width": 279,
+        "height": 76.78125
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  }
+]

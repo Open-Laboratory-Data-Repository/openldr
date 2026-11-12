@@ -25,5 +25,6 @@
   "v1-import": "v1-import-review.html",
   "sync": "sync-review.html",
   "environment": "environment-review.html",
-  "upgrading": "upgrading-review.html"
+  "upgrading": "upgrading-review.html",
+  "advanced-docs": "advanced-docs-review.html"
 }
