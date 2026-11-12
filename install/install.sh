@@ -781,6 +781,9 @@ if [ "$AUTH" = "local" ]; then
     echo "  An administrator already exists. Sign in at $ORIGIN/studio/"
   else
     echo "  Could not get a setup code yet. Once the api is up, run: ./openldr auth setup-code"
+    # One line of the reason, no more. It is the last thing the command printed.
+    SETUP_REASON="$(printf '%s\n' "$SETUP_OUT" | sed '/^[[:space:]]*$/d' | tail -1)"
+    [ -z "$SETUP_REASON" ] || echo "  Reason: $SETUP_REASON"
   fi
 else
   echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"

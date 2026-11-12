@@ -271,7 +271,11 @@ describe('build-and-push.sh overwrite guard — gh failure handling', () => {
  * Ports are deliberately high: install.sh refuses a fresh install when 80/443 are already
  * bound, and this test must not depend on what the machine is running.
  */
-function installSh(args: string[], existingEnv?: string): { code: number; out: string; dir: string } {
+function installSh(
+  args: string[],
+  existingEnv?: string,
+  extraEnv: Record<string, string> = {},
+): { code: number; out: string; dir: string } {
   const bin = tempDir('openldr-fakebin-');
   const dir = join(tempDir('openldr-install-'), 'openldr');
   // A re-run: the installer adopts an .env it finds and never rewrites it whole.
@@ -285,8 +289,12 @@ function installSh(args: string[], existingEnv?: string): { code: number; out: s
     [
       '#!/usr/bin/env bash',
       'echo "FAKE-DOCKER: $*"',
-      // The local-install summary asks the api container for a setup code.
-      'case "$*" in *"auth setup-code --json"*) echo \'{ "setupCode": "TEST-CODE-0001", "validForMinutes": 30 }\' ;; esac',
+      // The local-install summary asks the api container for a setup code. FAKE_SETUP_CODE_ERROR
+      // makes that call fail: a log line on stdout, then the given reason on stderr, exit 1.
+      'case "$*" in *"auth setup-code --json"*)',
+      '  if [ -n "${FAKE_SETUP_CODE_ERROR:-}" ]; then echo "an earlier log line"; echo "$FAKE_SETUP_CODE_ERROR" >&2; echo "" >&2; exit 1; fi',
+      '  echo \'{ "setupCode": "TEST-CODE-0001", "validForMinutes": 30 }\' ;;',
+      'esac',
       'exit 0',
       '',
     ].join('\n'),
@@ -331,6 +339,7 @@ function installSh(args: string[], existingEnv?: string): { code: number; out: s
         encoding: 'utf8',
         env: {
           ...env,
+          ...extraEnv,
           // ⛔ POSIX form, not `C:\...`. bash splits PATH on ':', and a Windows path splits at
           // its own drive-letter colon — `C:\tmp\bin` becomes the two entries `C` and `\tmp\bin`,
           // so the fake docker/curl are never found and the REAL ones run. Measured twice on this
@@ -484,6 +493,19 @@ describe('install.sh sign-in mode', () => {
     expect(r.out).toMatch(/valid for 30 minutes/);
     expect(r.out).not.toMatch(/Keycloak admin password/);
     expect(r.out).not.toMatch(/labadmin/);
+    // Success prints no reason line.
+    expect(r.out).not.toMatch(/Reason:/);
+  }, 60_000);
+
+  it('local: when no setup code comes back, prints the last line of the reason and no more', () => {
+    const r = installSh(['--ready-timeout', '1'], undefined, {
+      FAKE_SETUP_CODE_ERROR: 'auth setup-code failed: database is not migrated',
+    });
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/Could not get a setup code yet/);
+    expect(r.out).toMatch(/^ {2}Reason: auth setup-code failed: database is not migrated$/m);
+    expect(r.out).not.toMatch(/an earlier log line/);
+    expect(r.out).not.toMatch(/Setup code:/);
   }, 60_000);
 
   it('keycloak: starts with the keycloak profile and still waits for the realm', () => {

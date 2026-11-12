@@ -666,6 +666,9 @@ if ($Auth -eq 'local') {
     Write-Host "   An administrator already exists. Sign in at $Origin/studio/"
   } else {
     Write-Host "   Could not get a setup code yet. Once the api is up, run: .\openldr.ps1 auth setup-code"
+    # One line of the reason, no more. It is the last thing the command printed.
+    $setupReason = ($setupOut -split "`r?`n" | Where-Object { $_.Trim() } | Select-Object -Last 1)
+    if ($setupReason) { Write-Host "   Reason: $($setupReason.Trim())" }
   }
 } else {
   $kcLine = (Select-String -Path $envPath -Pattern '^KEYCLOAK_ADMIN_PASSWORD=').Line

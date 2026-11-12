@@ -130,6 +130,10 @@ function printSetupCode(origin) {
   } else {
     console.log('\n  Could not get a setup code yet. Once the api is up, run:');
     console.log(`    ${again}`);
+    // One line of the reason, no more. It is the last thing the command printed.
+    const reason = `${r.stdout ?? ''}\n${r.stderr ?? ''}\n${r.error?.message ?? ''}`
+      .split(/\r?\n/).map((l) => l.trim()).filter(Boolean).at(-1);
+    if (reason) console.log(`  Reason: ${reason}`);
   }
 }
 
