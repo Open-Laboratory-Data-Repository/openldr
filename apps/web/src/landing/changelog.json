@@ -1,10 +1,154 @@
 {
-  "generatedAt": "2026-11-11",
+  "generatedAt": "2026-11-12",
   "days": [
+    {
+      "date": "2026-11-12",
+      "version": null,
+      "entries": [
+        {
+          "hash": "342fc9f7",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Translate the Forms list page"
+        },
+        {
+          "hash": "99b50342",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Translate the Form Builder into French and Portuguese"
+        },
+        {
+          "hash": "fff0941f",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Keep the referring facility and clinician on a Lab order"
+        }
+      ]
+    },
     {
       "date": "2026-11-11",
       "version": null,
       "entries": [
+        {
+          "hash": "04873b7c",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Register a facility source from the command line"
+        },
+        {
+          "hash": "c2b3addf",
+          "type": "feat",
+          "scope": "cli",
+          "title": "List, add, test and remove connectors from the command line"
+        },
+        {
+          "hash": "c27b98f9",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Use European Portuguese in the connector and report labels"
+        },
+        {
+          "hash": "09909b09",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Count and list value sets that keep no stored codes"
+        },
+        {
+          "hash": "f56ecb5d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Fold the Terminology publishers list on a phone"
+        },
+        {
+          "hash": "3014fb7c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep Reject in the reject sheet's menu only"
+        },
+        {
+          "hash": "3ce27d5d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Link a Results field added from a pack to the Tests field"
+        },
+        {
+          "hash": "534e0b68",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Stop listing Results as left out once it is on the form"
+        },
+        {
+          "hash": "5ca776ed",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Keep the test name on an order taken in the studio"
+        },
+        {
+          "hash": "5b5eced1",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Time each report from its own specimen"
+        },
+        {
+          "hash": "fd45125a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Make Query Parameters a sheet with its actions in a menu"
+        },
+        {
+          "hash": "5cd7763c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show a failed query's error in place of the old result"
+        },
+        {
+          "hash": "89c52350",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Draw a Breakdown as one series per value"
+        },
+        {
+          "hash": "278234fb",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Let a Builder widget follow dashboard filters"
+        },
+        {
+          "hash": "24825049",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Set a widget's refresh interval in the editor"
+        },
+        {
+          "hash": "6f530f56",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Rename a dashboard from the Dashboard menu"
+        },
+        {
+          "hash": "b84a6064",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep focus in the filter Variable ID box while typing"
+        },
+        {
+          "hash": "49c4679e",
+          "type": "fix",
+          "scope": "dashboards",
+          "title": "Count the sample's results by the order's test name"
+        },
+        {
+          "hash": "fa96eaff",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Draw chart values that arrive as text"
+        },
+        {
+          "hash": "c228886e",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Import every line of an uploaded terms file"
+        },
         {
           "hash": "75d27856",
           "type": "feat",
