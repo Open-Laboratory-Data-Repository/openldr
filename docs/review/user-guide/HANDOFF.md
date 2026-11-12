@@ -397,7 +397,7 @@ The published Connectors guide remains unchanged.
 Previous checkpoint HEAD: 950ced0d.
 connector-diagnose-review.html has 16 numbered steps and 16 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See connector-diagnose-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -407,7 +407,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 2c8f1919.
 workflows-review.html has 38 numbered steps and 43 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See workflows-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -417,7 +417,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 4c477183.
 activity-review.html has 25 numbered steps and 26 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See activity-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -427,7 +427,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 7a76824a.
 users-review.html has 30 numbered steps and 38 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See users-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -437,7 +437,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 5d16a2a1.
 layouts-review.html has 20 numbered steps and 29 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See layouts-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -447,7 +447,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: f9b82178.
 audit-review.html has 20 numbered steps and 23 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See audit-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -457,7 +457,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 9aced41c.
 setup-checks-review.html has 14 numbered steps and 18 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See setup-checks-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -467,7 +467,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: a9424e21.
 laboratory-review.html has 14 numbered steps and 19 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See laboratory-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -477,7 +477,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 86d42bae.
 marketplace-review.html has 26 numbered steps and 27 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See marketplace-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -487,7 +487,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 44133678.
 plugin-sites-review.html has 18 numbered steps and 18 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See plugin-sites-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -497,7 +497,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 501bd4b8.
 data-exposure-review.html has 18 numbered steps and 24 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See data-exposure-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -507,7 +507,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 5d725df4.
 settings-review.html has 33 numbered steps and 39 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See settings-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -517,7 +517,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: 9c67237b.
 report-pipeline-review.html has 47 numbered steps and 52 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See report-pipeline-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -527,7 +527,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: c613907d.
 query-review.html has 53 numbered steps and 69 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See query-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -537,7 +537,7 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: c52d00d5.
 v1-import-review.html has 18 numbered steps and 18 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See v1-import-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
@@ -547,29 +547,9 @@ This remains a preview. Its published guide is unchanged.
 Previous checkpoint HEAD: f2d9bed0.
 sync-review.html has 22 numbered steps and 22 native image placements.
 Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
 All active preview menus match. Sample data remains optional.
 See sync-review-notes.md for live workflows, source proofs and untested variants.
-This remains a preview. Its published guide is unchanged.
-
-## Distributed sync preview checkpoint
-
-Previous checkpoint HEAD: f2d9bed0.
-sync-review.html has 22 numbered steps and 22 native image placements.
-Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
-All active preview menus match. Sample data remains optional.
-See sync-review-notes.md for live workflows, source proofs and untested variants.
-This remains a preview. Its published guide is unchanged.
-
-## Environment variables preview checkpoint
-
-Previous checkpoint HEAD: 8c3ce45d.
-environment-review.html has 8 numbered steps and 8 native image placements.
-Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
-All active preview menus match. Sample data remains optional.
-See environment-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
 
 ## Environment variables preview checkpoint
@@ -632,16 +612,6 @@ All active preview menus match. Sample data remains optional.
 See report-designer-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
 
-## Report Designer preview checkpoint
-
-Previous checkpoint HEAD: 5c4bb630.
-report-designer-review.html has 43 numbered steps and 50 native image placements.
-Every step has screenshot evidence. The integrated browser check reported no missing images,
-no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
-All active preview menus match. Sample data remains optional.
-See report-designer-review-notes.md for live workflows, source proofs and untested variants.
-This remains a preview. Its published guide is unchanged.
-
 ## Reports preview checkpoint
 
 Previous checkpoint HEAD: 4f2efdde.
@@ -651,3 +621,14 @@ no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px view
 All active preview menus match. Sample data remains optional.
 See reports-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
+
+## Final review checkpoint
+
+All 27 remaining sections have separate pushed preview commits. Reports checkpoint is 751c1c5a.
+All 32 active pages share navigation. The final browser command printed ALL PREVIEWS PASS 32.
+The new guides contain 775 numbered steps and 913 native screenshot placements.
+FINAL-REVIEW.md records verification, existing app failures, approved baseline exceptions and untested variants.
+The connector-engine wording and Query reporting-parameter limitation are corrected in the final checkpoint.
+Facilities is published; the remaining guides stay in preview pending review.
+Normal databases were not reset or seeded. The single form submission was not repeated.
+Keep the static preview server on port 4392 running for review.

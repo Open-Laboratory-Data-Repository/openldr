@@ -3,7 +3,7 @@
 <h1>Query</h1>
 <p>Use Query to browse enabled database connectors, inspect workflow datasets and save SELECT statements as Custom Queries. Report Designer can bind tables to those saved queries.</p>
 <p>Start with your own connector and received data. No documentation sample data is required. The count example below also returns a useful result when the warehouse is empty. The pictures use a separate test installation.</p>
-<p>You need <strong>Use query workbench</strong>. Queries read data. Statements that change data or tables are refused. A new installation has Target Warehouse (Postgres). Other sources need a matching enabled database connector.</p>
+<p>You need <strong>Use query workbench</strong>. Queries read data. Statements that change data or tables are refused. A new installation creates a target-warehouse connector for its configured database engine. These pictures use <strong>Target Warehouse (Postgres)</strong>. Other sources need a matching enabled database connector.</p>
 <p>Saved built-in queries can supply reports. Inspect them freely, but understand those report dependencies before changing SQL or parameter identifiers.</p>
 <h2 id="dg-browse">Browse a source table</h2>
 <p>Use this to inspect a connector schema before writing SQL. A schema is the database namespace containing its tables.</p>
@@ -106,6 +106,7 @@ __SHOT:ungrouped:0__
 <p>Text accepts a value read as <code>{{ param.variableId }}</code>. Select asks for one value from Options SQL. Its first returned column supplies the choices. Date range supplies <code>{{ param.from }}</code> and <code>{{ param.to }}</code>.</p>
 <p>Choose a unique nonempty Variable ID for each parameter. The parameter row dots can move it up or down or remove it. Removing a parameter still referenced by SQL causes an unbound-parameter error.</p>
 <p>A blank optional value becomes an empty string. SQL must explicitly handle that empty value when it means no filter. Required does not invent a default. A report uses template parameters, so match its parameter key to the saved query definition.</p>
+<p>The current Reports page passes date filters as flat from and to values. A Custom Query declaring one daterange parameter works in this workbench but currently fails when bound directly to Reports. For reporting, use two Text query parameters named from and to, referenced by {{ param.from }} and {{ param.to }}. Report Designer can expose them through one Date range control.</p>
 <h2 id="dg-manage">Remove or regroup definitions</h2>
 <p>A saved query row offers Rename, Move to group and Delete query. No group moves a query back to the top-level list. Deleting a saved query requires confirmation and can break reports that reference it.</p>
 <p>Each group has Rename group and Delete group. Deleting a group keeps its queries and moves them out. Dragging a query onto a group is another way to move it. On a phone, use Move to group for a direct menu action.</p>

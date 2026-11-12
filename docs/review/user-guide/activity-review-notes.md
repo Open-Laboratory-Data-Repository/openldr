@@ -7,7 +7,7 @@ Four hypotheses checked: two confirmed, two refuted.
 | A1 | Status explanations omit active and stopped ingestion batches. | CONFIRMED | `apps/studio/src/docs/0.1.8/en/activity.md:46` lists three statuses. `apps/studio/src/pages/Activity.tsx:198` also offers Running and Stopped. | Explain the two batch-only statuses. |
 | A2 | Filter, sort and columns instructions lack individual evidence. | CONFIRMED | `apps/studio/src/docs/0.1.8/en/activity.md:55` compresses all controls into one sentence. | Add separate numbered controls and native screenshots. |
 | A3 | Activity can replay a failed payload. | REFUTED | `apps/server/src/activity-routes.ts:9` and line 16 register only GET views. The live actions menu contains Refresh. | Explain recovery through the relevant workflow. |
-| A4 | Search covers all historical payloads. | REFUTED | `apps/studio/src/pages/Activity.tsx:160` fetches 200; line 221 searches that loaded array. | Keep the recent-window limit explicit. |
+| A4 | Search covers all historical payloads. | REFUTED | `apps/studio/src/pages/Activity.tsx:158` fetches 200; line 221 searches that loaded array. | Keep the recent-window limit explicit. |
 
 The preview has 25 numbered steps and 26 native screenshot placements.
 Desktop sources are 5120 by 3200. Phone sources are 1500 by 3248.

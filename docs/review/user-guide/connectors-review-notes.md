@@ -59,3 +59,9 @@ Physical phone browser chrome was not tested. A real phone must confirm bottom-e
 No app changes, translations, production publication, commits or pushes were made by this worker.
 
 Root integration added actual account-menu and Settings navigation evidence and split connection type from connection details. Final preview check reports 25 steps and 26 frames.
+
+## Final introduction check
+
+The original introduction named Postgres for every fresh installation.
+`packages/bootstrap/src/seed.ts:533` selects SQL Server and `:564` selects MySQL instead.
+The corrected introduction describes the configured warehouse connector and identifies Postgres as the pictured example.

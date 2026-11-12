@@ -8,7 +8,7 @@
   "intro": [
     "Use Query to browse enabled database connectors, inspect workflow datasets and save SELECT statements as Custom Queries. Report Designer can bind tables to those saved queries.",
     "Start with your own connector and received data. No documentation sample data is required. The count example below also returns a useful result when the warehouse is empty. The pictures use a separate test installation.",
-    "You need <strong>Use query workbench</strong>. Queries read data. Statements that change data or tables are refused. A new installation has Target Warehouse (Postgres). Other sources need a matching enabled database connector.",
+    "You need <strong>Use query workbench</strong>. Queries read data. Statements that change data or tables are refused. A new installation creates a target-warehouse connector for its configured database engine. These pictures use <strong>Target Warehouse (Postgres)</strong>. Other sources need a matching enabled database connector.",
     "Saved built-in queries can supply reports. Inspect them freely, but understand those report dependencies before changing SQL or parameter identifiers."
   ],
   "tasks": [
@@ -557,7 +557,8 @@
       "paragraphs": [
         "Text accepts a value read as <code>{{ param.variableId }}</code>. Select asks for one value from Options SQL. Its first returned column supplies the choices. Date range supplies <code>{{ param.from }}</code> and <code>{{ param.to }}</code>.",
         "Choose a unique nonempty Variable ID for each parameter. The parameter row dots can move it up or down or remove it. Removing a parameter still referenced by SQL causes an unbound-parameter error.",
-        "A blank optional value becomes an empty string. SQL must explicitly handle that empty value when it means no filter. Required does not invent a default. A report uses template parameters, so match its parameter key to the saved query definition."
+        "A blank optional value becomes an empty string. SQL must explicitly handle that empty value when it means no filter. Required does not invent a default. A report uses template parameters, so match its parameter key to the saved query definition.",
+        "The current Reports page passes date filters as flat from and to values. A Custom Query declaring one daterange parameter works in this workbench but currently fails when bound directly to Reports. For reporting, use two Text query parameters named from and to, referenced by {{ param.from }} and {{ param.to }}. Report Designer can expose them through one Date range control."
       ]
     },
     {

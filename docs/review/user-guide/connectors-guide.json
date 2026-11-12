@@ -8,7 +8,7 @@
   "intro": [
     "Save a connection once, then select it in workflows, Custom Queries and reports. A connector stores the connection settings and encrypted credentials.",
     "You need <strong>Manage connectors</strong>. Use your own database or service account. The pictures use a fictional read-only reporting account on an isolated Postgres database.",
-    "A fresh installation includes <strong>Target Warehouse (Postgres)</strong>. Built-in queries and reports use it. Keep it unless you have checked everything that depends on it.",
+    "A fresh installation creates a target-warehouse connector for its configured database engine. These pictures use <strong>Target Warehouse (Postgres)</strong>. Built-in queries and reports use the warehouse connector. Check their dependencies before changing it.",
     "The host and port must be reachable from the OpenLDR server. In Docker, <code>localhost</code> means that container. Use your database service name and internal port when both services share a Docker network.",
     "Creating a connector does not import records or run a workflow. <a href=\"#dg-practice\">Optional practice setup</a> is at the end."
   ],

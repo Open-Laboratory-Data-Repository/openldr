@@ -85,3 +85,9 @@ Capture phases are browse, create, proof, manage, group-proof, transfer, phone a
 Run them sequentially. Create and manage mutate saved definitions; inspect existing state before replaying them.
 Proof and group-proof capture persisted results after earlier phases.
 The root task registers navigation separately.
+
+## Final introduction check
+
+The original introduction named Postgres for every fresh installation.
+`packages/bootstrap/src/seed.ts:533` selects SQL Server and `:564` selects MySQL instead.
+The corrected introduction describes the configured warehouse connector and identifies Postgres as the pictured example.
