@@ -32,6 +32,8 @@ export interface LocalAuthStore {
   touchSession(id: string, now: Date): Promise<void>;
   deleteSession(id: string): Promise<void>;
   deleteSessionsForUser(userId: string, exceptSessionId?: string): Promise<number>;
+  /** Deletes the user's rows where expires_at <= now or last_used_at <= now - idleMs. Returns the count. */
+  deleteDeadSessionsForUser(userId: string, now: Date, idleMs: number): Promise<number>;
   getSigningKey(): Promise<StoredSigningKey | null>;
   /** Inserts only when the table is empty. Returns the row that is stored afterwards. */
   insertSigningKeyIfNone(key: StoredSigningKey): Promise<StoredSigningKey>;

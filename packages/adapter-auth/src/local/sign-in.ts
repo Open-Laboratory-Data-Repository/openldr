@@ -212,6 +212,8 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       if (!user) return { ok: false, reason: 'invalid', userId };
       if (!(await isAllowed(user))) return { ok: false, reason: 'disabled', userId };
       await store.clearFailures(userId);
+      // Expired rows are never read again. Clearing this user's on each sign-in keeps the table small.
+      await store.deleteDeadSessionsForUser(userId, now, SESSION_IDLE_MS);
       const { opened, sessionId } = await openSession(user, credential.mustChange, input.ip, input.userAgent, now);
       // A reset after the re-check above deletes sessions before this one existed. Reading
       // again now means a reset either shows here or lands later and deletes this session.

@@ -242,6 +242,31 @@ describe('sessions', () => {
     expect(await svc.refresh(s.cookieValue)).toBeNull();
   });
 
+  it("a sign-in deletes the user's dead session rows before it opens a new one", async () => {
+    const idle = await login();
+    clock.advance(SESSION_IDLE_MS / 2);
+    const recent = await login();
+    clock.advance(SESSION_IDLE_MS / 2 + 1);
+    const prune = vi.spyOn(store, 'deleteDeadSessionsForUser');
+    const create = vi.spyOn(store, 'createSession');
+    const fresh = await login();
+    const id = (c: NewSession) => c.cookieValue.split('.')[0]!;
+    expect(prune).toHaveBeenCalledWith(adaId, clock.now(), SESSION_IDLE_MS);
+    expect(prune.mock.invocationCallOrder[0]).toBeLessThan(create.mock.invocationCallOrder[0]!);
+    expect(await store.getSession(id(idle))).toBeNull();
+    expect(await store.getSession(id(recent))).not.toBeNull();
+    expect(await store.getSession(id(fresh))).not.toBeNull();
+  });
+
+  it('a failed sign-in deletes no session rows', async () => {
+    const idle = await login();
+    clock.advance(SESSION_IDLE_MS + 1);
+    const prune = vi.spyOn(store, 'deleteDeadSessionsForUser');
+    expect((await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null })).ok).toBe(false);
+    expect(prune).not.toHaveBeenCalled();
+    expect(await store.getSession(idle.cookieValue.split('.')[0]!)).not.toBeNull();
+  });
+
   it('ends a session at seven days even when it is used every hour', async () => {
     const s = await login();
     const hours = SESSION_TOTAL_MS / 3_600_000;

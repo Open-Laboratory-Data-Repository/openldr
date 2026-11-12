@@ -188,6 +188,16 @@ export function createLocalAuthStore(db: Kysely<InternalSchema>): LocalAuthStore
       return Number(res.numDeletedRows);
     },
 
+    // Each row keeps an IP address and a user agent, so a dead one is deleted, not left to pile up.
+    async deleteDeadSessionsForUser(userId, now, idleMs) {
+      const idleSince = new Date(now.getTime() - idleMs);
+      const res = await db.deleteFrom('auth_sessions')
+        .where('user_id', '=', userId)
+        .where((eb) => eb.or([eb('expires_at', '<=', now), eb('last_used_at', '<=', idleSince)]))
+        .executeTakeFirst();
+      return Number(res.numDeletedRows);
+    },
+
     getSigningKey,
 
     async insertSigningKeyIfNone(key) {

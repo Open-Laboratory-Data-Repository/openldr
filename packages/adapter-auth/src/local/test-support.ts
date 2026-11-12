@@ -157,6 +157,18 @@ export function makeFakes(start: Date = new Date('2026-01-01T00:00:00Z')): {
       return n;
     },
 
+    async deleteDeadSessionsForUser(userId, now, idleMs) {
+      const idleSince = now.getTime() - idleMs;
+      let n = 0;
+      for (const s of [...sessions.values()]) {
+        if (s.userId === userId && (s.expiresAt <= now || s.lastUsedAt.getTime() <= idleSince)) {
+          sessions.delete(s.id);
+          n++;
+        }
+      }
+      return n;
+    },
+
     async getSigningKey() {
       return signingKey;
     },

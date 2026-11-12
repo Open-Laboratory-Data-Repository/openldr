@@ -231,6 +231,31 @@ describe('LocalAuthStore', () => {
     expect(await store.deleteSessionsForUser(userId)).toBe(1);
   });
 
+  it("deleteDeadSessionsForUser removes only that user's expired and idle rows", async () => {
+    const { id: userId } = await store.createUser({ username: 'ada' });
+    const { id: otherId } = await store.createUser({ username: 'bob' });
+    const now = new Date('2030-01-01T00:00:00Z');
+    const idleMs = 12 * 3_600_000;
+    const mk = async (u: string, expiresAt: string, lastUsedAt: string) => {
+      const s = await store.createSession({ userId: u, secretHash: 'sh', expiresAt: new Date(expiresAt), ip: '10.0.0.1', userAgent: 'test' });
+      await store.touchSession(s.id, new Date(lastUsedAt));
+      return s.id;
+    };
+    const live = await mk(userId, '2030-01-05T00:00:00Z', '2029-12-31T20:00:00Z');
+    const justUsed = await mk(userId, '2030-01-05T00:00:00Z', '2029-12-31T12:00:01Z');
+    const expired = await mk(userId, '2030-01-01T00:00:00Z', '2029-12-31T23:00:00Z');
+    const idle = await mk(userId, '2030-01-05T00:00:00Z', '2029-12-31T12:00:00Z');
+    const otherDead = await mk(otherId, '2029-12-01T00:00:00Z', '2029-11-30T00:00:00Z');
+
+    expect(await store.deleteDeadSessionsForUser(userId, now, idleMs)).toBe(2);
+    expect(await store.getSession(expired)).toBeNull();
+    expect(await store.getSession(idle)).toBeNull();
+    expect(await store.getSession(live)).not.toBeNull();
+    expect(await store.getSession(justUsed)).not.toBeNull();
+    expect(await store.getSession(otherDead)).not.toBeNull();
+    expect(await store.deleteDeadSessionsForUser(userId, now, idleMs)).toBe(0);
+  });
+
   it('deleting a user removes its credential and sessions', async () => {
     const { id } = await store.createUser({ username: 'ada' });
     await store.setPassword(id, 'h', false);
