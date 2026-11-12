@@ -1,4 +1,7 @@
-import { createDbContext, createAppContext, recordAuditEvent, readAuthIssuerBinding, rebindAuthIssuer } from '@openldr/bootstrap';
+import {
+  createDbContext, createAppContext, recordAuditEvent, readAuthIssuerBinding, rebindAuthIssuer,
+  createSetupCode, LocalSignInNotEnabledError, SetupAlreadyDoneError,
+} from '@openldr/bootstrap';
 import { loadConfig, requireOidcIssuer } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
@@ -9,6 +12,31 @@ interface RebindOpts {
 
 function emit(json: boolean, payload: unknown, human: string): void {
   process.stdout.write(json ? JSON.stringify(payload, null, 2) + '\n' : human + '\n');
+}
+
+/** Prints a one-time code for creating the first admin in studio. The code is never audited or logged. */
+export async function runAuthSetupCode(opts: { json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    let code: string;
+    try {
+      code = await createSetupCode(ctx);
+    } catch (err) {
+      if (err instanceof LocalSignInNotEnabledError) {
+        process.stderr.write('local sign-in is not enabled\n');
+        return 1;
+      }
+      if (err instanceof SetupAlreadyDoneError) {
+        process.stderr.write('an administrator already exists\n');
+        return 1;
+      }
+      throw err;
+    }
+    emit(opts.json, { setupCode: code, validForMinutes: 30 }, `${code}\nvalid for 30 minutes`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
 }
 
 /** Moves the stored issuer to OIDC_ISSUER_URL. For a provider that changed address, not a new provider.
