@@ -10,6 +10,7 @@ import {
   StateFileError,
   acquireLock,
   ensureFolders,
+  isLockLive,
   loadOrCreateState,
   pathsFor,
   readLock,
@@ -182,6 +183,13 @@ describe('folders and state file', () => {
     await expect(loadOrCreateState(paths, pick)).rejects.toBeInstanceOf(StateFileError);
   });
 
+  it('gives two callers at once the same state, the one on disk', async () => {
+    const [a, b] = await Promise.all([loadOrCreateState(paths, pick), loadOrCreateState(paths, pick)]);
+    expect(a).toEqual(b);
+    expect(JSON.parse(await readFile(paths.stateFile, 'utf8'))).toEqual(a);
+    expect(await leftovers()).toEqual(['standalone.json']);
+  });
+
   it('refuses to make new secrets over an existing database', async () => {
     await mkdir(paths.cluster);
     await writeFile(join(paths.cluster, 'PG_VERSION'), '16\n');
@@ -253,6 +261,32 @@ describe('lock', () => {
     const mine2 = await liveLock(106);
     await acquireLock(paths, mine2);
     expect(await readLock(paths)).toEqual(mine2);
+  });
+
+  it('counts a lock as live when only the third ping is answered', async () => {
+    let connections = 0;
+    // Stands in for a launcher whose event loop is stalled: the first two pings get nothing.
+    const stalled = createServer((s) => {
+      connections += 1;
+      if (connections <= 2) return void s.destroy();
+      s.resume();
+      s.end('pong\n');
+    });
+    others.push(stalled);
+    await new Promise<void>((r) => stalled.listen(0, '127.0.0.1', () => r()));
+    const held = { ...(await deadLock()), controlPort: (stalled.address() as AddressInfo).port };
+    expect(await isLockLive(held)).toBe(true);
+    expect(connections).toBe(3);
+
+    connections = 0;
+    await writeFile(paths.lockFile, JSON.stringify(held));
+    const err = await acquireLock(paths, await liveLock(108)).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AlreadyRunningError);
+    expect(await readLock(paths)).toEqual(held);
+  });
+
+  it('counts a lock as dead after three refused pings', async () => {
+    expect(await isLockLive(await deadLock())).toBe(false);
   });
 
   it('replaces a lock file that is not a lock', async () => {

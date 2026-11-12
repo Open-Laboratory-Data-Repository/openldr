@@ -180,11 +180,64 @@ describe('control channel', () => {
 
   it('stops listening on close()', async () => {
     const token = newControlToken();
-    const c = await startControl({ token, onStop: async () => 'clean' });
+    const c = await control(token);
     expect(await pingControl({ controlPort: c.port, token })).toBe(true);
     await c.close();
     expect(await pingControl({ controlPort: c.port, token })).toBe(false);
     await c.close(); // a second close does nothing
+  });
+
+  it('waits for the stop answer on a later close() when onStop already called close()', async () => {
+    const token = newControlToken();
+    let c!: ControlServer;
+    const returned = deferred<void>();
+    c = await control(token, async () => {
+      void c.close();
+      returned.resolve();
+      return 'clean';
+    });
+    let answer: string | undefined;
+    const stop = requestStop({ controlPort: c.port, token }, 5000).then((a) => (answer = a));
+    await returned.promise;
+    await c.close();
+    // The launcher exits right after this await. The answer must already be with the asker.
+    expect(answer).toBe('clean');
+    await stop;
+  });
+
+  it('resolves close() during a stop only after the answer reached the asker', async () => {
+    const token = newControlToken();
+    const gate = deferred<void>();
+    const started = deferred<void>();
+    const c = await control(token, async () => {
+      started.resolve();
+      await gate.promise;
+      return 'forced';
+    });
+    let answer: string | undefined;
+    const stop = requestStop({ controlPort: c.port, token }, 5000).then((a) => (answer = a));
+    await started.promise;
+    let closed = false;
+    const closing = c.close().then(() => (closed = true));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(closed).toBe(false);
+    gate.resolve();
+    await closing;
+    expect(answer).toBe('forced');
+    await stop;
+  });
+
+  it('limits how many connections it holds at once', async () => {
+    const c = await control(newControlToken());
+    // Each raw connection sends nothing; the server closes the ones over the limit at once.
+    const conns = Array.from({ length: 24 }, () => raw(c.port, null));
+    const quick = await Promise.race([
+      Promise.any(conns.map((p) => p.then((r) => (r.ms < 1000 ? r : Promise.reject(new Error('slow')))))),
+      new Promise((r) => setTimeout(() => r('none'), 2000)),
+    ]);
+    expect(quick).not.toBe('none');
+    await c.close();
+    await Promise.allSettled(conns);
   });
 
   it('still sends the stop answer when onStop itself calls close()', async () => {

@@ -6,6 +6,7 @@
 import { randomBytes } from 'node:crypto';
 import { chmod, link, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises';
 import { join, posix, resolve, win32 } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { pingControl } from './control.js';
 
 export interface StandalonePaths {
@@ -60,6 +61,9 @@ export class AlreadyRunningError extends Error {
 const IS_WINDOWS = process.platform === 'win32';
 /** How many times acquireLock tries before it gives up. */
 const LOCK_ROUNDS = 3;
+/** Failed pings in a row before a lock counts as dead, and the pause between them. */
+const LIVE_PINGS = 3;
+const LIVE_PAUSE_MS = 250;
 
 // ---------------------------------------------------------------------------------------------
 // Where the data folder is
@@ -144,15 +148,20 @@ export async function loadOrCreateState(
     pgSuperPassword: randomBytes(24).toString('base64url'),
     pgAppPassword: randomBytes(24).toString('base64url'),
   };
+  // Hard-linked into place like the lock, so a state file that is already there is never
+  // replaced, even when two callers create one at the same moment. The loser reads the winner's.
   const tmp = tempPath(paths, 'standalone.json');
   try {
     await writeOwnerOnly(tmp, `${JSON.stringify(state, null, 2)}\n`);
-    await rename(tmp, paths.stateFile);
+    await link(tmp, paths.stateFile);
+  } catch (e) {
+    if (errorCode(e) !== 'EEXIST') throw e;
+    return parseState(await readFile(paths.stateFile, 'utf8'), paths.stateFile);
   } finally {
     await rm(tmp, { force: true });
   }
-  // Make the rename itself survive a power cut. Without the state file, a database made from it
-  // can no longer be opened.
+  // Make the new name survive a power cut. Without the state file, a database made from it can
+  // no longer be opened.
   await syncFolder(paths.root);
   return state;
 }
@@ -206,7 +215,7 @@ export async function acquireLock(paths: StandalonePaths, info: LockInfo): Promi
     const seen = await readIfThere(paths.lockFile);
     if (seen === null) continue;
     const current = parseLock(seen);
-    if (current && (await pingControl(current))) throw new AlreadyRunningError(current);
+    if (current && (await isLockLive(current))) throw new AlreadyRunningError(current);
 
     // Dead. Move it aside rather than unlink it: two launchers that both judged the same lock
     // dead must not both delete and both win.
@@ -217,28 +226,50 @@ export async function acquireLock(paths: StandalonePaths, info: LockInfo): Promi
       if (errorCode(e) === 'ENOENT') continue;
       throw e;
     }
+    let keepAside = false;
     try {
       const moved = await readIfThere(aside);
       if (moved !== null && moved !== seen) {
         // Another launcher's fresh lock was moved. Put it back if that launcher is alive.
         const fresh = parseLock(moved);
-        if (fresh && (await pingControl(fresh))) {
+        if (fresh && (await isLockLive(fresh))) {
           try {
             await link(aside, paths.lockFile);
           } catch (e) {
-            if (errorCode(e) !== 'EEXIST') throw e;
+            if (errorCode(e) !== 'EEXIST') {
+              // The only copy of a running launcher's lock. Keep it so a person can put it back.
+              keepAside = true;
+              throw new Error(
+                `Could not put back the lock of a running launcher (${errorCode(e) ?? 'unknown error'}). ` +
+                  `It is kept in ${aside}. Rename that file to ${paths.lockFile}.`,
+              );
+            }
           }
           throw new AlreadyRunningError(fresh);
         }
       }
     } finally {
-      await rm(aside, { force: true });
+      if (!keepAside) await rm(aside, { force: true });
     }
   }
   throw new Error(
     `Could not take the lock ${paths.lockFile} after ${LOCK_ROUNDS} tries. ` +
       'Another launcher may be starting on this data folder. Try again.',
   );
+}
+
+/**
+ * True when the launcher named in the lock answers on its control port. One missed ping is not
+ * enough to call it dead: an event loop stalled for two seconds would lose its lock, and the
+ * next launcher would stop its Postgres. So it takes three failed pings in a row, with a short
+ * pause between them. `status` uses this too.
+ */
+export async function isLockLive(info: LockInfo): Promise<boolean> {
+  for (let attempt = 0; attempt < LIVE_PINGS; attempt += 1) {
+    if (attempt > 0) await sleep(LIVE_PAUSE_MS);
+    if (await pingControl(info)) return true;
+  }
+  return false;
 }
 
 /** Removes the lock only when it holds this token. */

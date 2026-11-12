@@ -30,8 +30,10 @@ const MAX_LINE = 256;
 /** A connection that sends no request within this time is closed. */
 const IDLE_MS = 5000;
 const DEFAULT_PING_MS = 2000;
-/** How long close() waits for a stop answer that is already on its way out. */
+/** How long a stop answer that is written waits for the asker to hang up before it is dropped. */
 const FLUSH_MS = 2000;
+/** Most connections held at once. The control port has one or two honest callers. */
+const MAX_CONNECTIONS = 16;
 
 /** 24 random bytes in base64url. */
 export function newControlToken(): string {
@@ -42,18 +44,12 @@ export function newControlToken(): string {
 export function startControl(opts: { token: string; onStop: () => Promise<StopResult> }): Promise<ControlServer> {
   const expected = Buffer.from(opts.token, 'utf8');
   const sockets = new Set<Socket>();
-  /** Sockets that asked to stop and wait for the answer. */
-  const answering = new Set<Socket>();
+  /** Sockets that asked to stop, each with a promise that resolves when that socket has closed. */
+  const answering = new Map<Socket, Promise<void>>();
   let stopping: Promise<StopResult> | undefined;
-  let stopSettled = false;
-  let closing: Promise<void> | undefined;
+  let listenerClosed = false;
 
-  const stopOnce = (): Promise<StopResult> =>
-    (stopping ??= Promise.resolve()
-      .then(() => opts.onStop())
-      .finally(() => {
-        stopSettled = true;
-      }));
+  const stopOnce = (): Promise<StopResult> => (stopping ??= Promise.resolve().then(() => opts.onStop()));
 
   const tokenMatches = (given: string): boolean => {
     const g = Buffer.from(given, 'utf8');
@@ -86,36 +82,30 @@ export function startControl(opts: { token: string; onStop: () => Promise<StopRe
       if (parts.length !== 2 || !tokenMatches(parts[1]!)) return void sock.destroy();
       if (parts[0] === 'ping') return void sock.end('pong\n');
       if (parts[0] !== 'stop') return void sock.destroy();
-      answering.add(sock);
+      answering.set(sock, new Promise<void>((resolve) => sock.once('close', () => resolve())));
       stopOnce().then(
-        (result) => sock.end(`${result}\n`),
+        (result) =>
+          // The asker hangs up once it has read the answer. If it never does, drop it.
+          sock.end(`${result}\n`, () => void setTimeout(() => sock.destroy(), FLUSH_MS).unref()),
         () => sock.destroy(),
       );
     });
   });
+  server.maxConnections = MAX_CONNECTIONS;
 
+  /**
+   * Stops listening and drops connections that have not asked to stop. Every call, the first or
+   * a later one, then waits until each stop asker has had its answer and hung up, or was dropped.
+   * So it can be called inside onStop and awaited again after onStop returns. Awaiting it inside
+   * onStop never resolves: it waits for the answer, and the answer waits for onStop.
+   */
   const close = async (): Promise<void> => {
-    server.close();
-    const waits: Promise<void>[] = [];
-    for (const sock of sockets) {
-      if (!answering.has(sock)) {
-        sock.destroy();
-      } else if (stopSettled) {
-        // The answer is written or about to be. Let it reach the asker, briefly.
-        waits.push(
-          new Promise<void>((resolve) => {
-            const timer = setTimeout(() => sock.destroy(), FLUSH_MS);
-            sock.once('close', () => {
-              clearTimeout(timer);
-              resolve();
-            });
-          }),
-        );
-      }
-      // A stop still running is left alone: close() is often called from inside onStop, and
-      // the answer is sent when onStop returns.
+    if (!listenerClosed) {
+      listenerClosed = true;
+      server.close();
+      for (const sock of sockets) if (!answering.has(sock)) sock.destroy();
     }
-    await Promise.all(waits);
+    await Promise.all(answering.values());
   };
 
   return new Promise((resolve, reject) => {
@@ -123,7 +113,7 @@ export function startControl(opts: { token: string; onStop: () => Promise<StopRe
     server.listen({ host: HOST, port: 0 }, () => {
       server.off('error', reject);
       const { port } = server.address() as AddressInfo;
-      resolve({ port, close: () => (closing ??= close()) });
+      resolve({ port, close });
     });
   });
 }
