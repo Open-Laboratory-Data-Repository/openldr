@@ -393,3 +393,9 @@ openldr market install <bundle-dir>
 ```
 
 `--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. For each test-mappings or result-mappings step it lists the mappings it would map, keep and skip. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
+
+## Personal preferences
+
+Studio's **Your preferences** guide is under **Personal settings**. It shows language, theme, start page and sidebar choices, with a screenshot for each step. Preferences save to each user's account. A personal start page takes priority over a layout's start page; Dashboard is the fallback.
+
+For operators, `user preferences show <user-id>` reads the saved values and `user preferences set <user-id> startPage none` clears the personal start-page choice. Use the installed or development command form described above. Clearing the choice lets the layout's start page apply again when one is configured.

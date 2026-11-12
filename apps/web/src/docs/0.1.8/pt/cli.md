@@ -405,3 +405,9 @@ openldr market install <bundle-dir>
 ```
 
 `--dry-run` executa as verificações e mostra os passos. Para cada passo de associação de ligações, mostra quantos códigos ligaria. Para cada passo de mapeamentos de testes ou de resultados, lista os mapeamentos que criaria, manteria e ignoraria. Não escreve nada. Um pacote de conteúdo tem de estar assinado por um editor. Instalar um pacote que já está instalado exige `--force`. Um pacote cuja última instalação falhou volta a instalar-se sem essa opção. `openldr market update` aceita as mesmas opções. Instala uma versão mais recente de um pacote instalado sem `--force`. Recusa a mesma versão ou uma mais antiga, e um pacote que não está instalado, a menos que use `--force`. `--json` mostra uma saída legível por máquinas. `openldr market list` mostra os pacotes com o seu estado. A CLI regista o ator como `cli`.
+
+## Preferências pessoais
+
+O guia **As suas preferências** do Studio encontra-se em **Preferências pessoais**. Mostra as escolhas de idioma, tema, página inicial e barra lateral, com uma captura para cada passo. As preferências ficam guardadas na conta de cada utilizador. Uma página inicial pessoal tem prioridade sobre a página da disposição. O painel é a última opção predefinida.
+
+Para operadores, `user preferences show <user-id>` lê os valores guardados e `user preferences set <user-id> startPage none` limpa a escolha pessoal da página inicial. Use a forma do comando instalado ou de desenvolvimento descrita acima. Limpar a escolha permite voltar a usar a página inicial da disposição, quando está configurada.

@@ -1,0 +1,307 @@
+{
+  "preferences-guide-user-menu-button.png": {
+    "crop": {
+      "x": 0,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 36.5,
+        "width": 223,
+        "x": 8,
+        "y": 755.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 1
+  },
+  "preferences-guide-language-menu.png": {
+    "crop": {
+      "x": 0,
+      "y": 476.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 198,
+        "x": 13,
+        "y": 610
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 2
+  },
+  "preferences-guide-language-french.png": {
+    "crop": {
+      "x": 51.0,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 150,
+        "x": 216,
+        "y": 647
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 3
+  },
+  "preferences-guide-language-result.png": {
+    "crop": {
+      "x": 0,
+      "y": 23.0,
+      "width": 592.0,
+      "height": 370.0
+    },
+    "targets": [
+      {
+        "height": 320,
+        "width": 239,
+        "x": 0,
+        "y": 48
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true
+  },
+  "preferences-guide-theme-button.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 1224,
+        "y": 7.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 1
+  },
+  "preferences-guide-theme-result.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 1224,
+        "y": 7.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true
+  },
+  "preferences-guide-start-page-menu.png": {
+    "crop": {
+      "x": 0,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 198,
+        "x": 13,
+        "y": 642
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 2
+  },
+  "preferences-guide-start-page-reports.png": {
+    "crop": {
+      "x": 51.0,
+      "y": 245.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 150,
+        "x": 216,
+        "y": 379
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 3
+  },
+  "preferences-guide-start-page-result.png": {
+    "crop": {
+      "x": 100.0,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 48,
+        "width": 200,
+        "x": 240,
+        "y": 0
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 4
+  },
+  "preferences-guide-sidebar-collapse.png": {
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 195,
+        "y": 7.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 1
+  },
+  "preferences-guide-sidebar-expand.png": {
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 11.5,
+        "y": 7.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerAfter": true,
+    "step": 2
+  },
+  "preferences-guide-phone-open-menu.png": {
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 12,
+        "y": 7.5
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerAfter": true,
+    "step": 1
+  },
+  "preferences-guide-phone-user-menu.png": {
+    "crop": {
+      "x": 0,
+      "y": 577.625,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "height": 36.5,
+        "width": 239,
+        "x": 8,
+        "y": 767.5
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerAfter": true,
+    "step": 2
+  },
+  "preferences-guide-phone-menu-result.png": {
+    "crop": {
+      "x": 0,
+      "y": 544.8125,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "height": 204,
+        "width": 208,
+        "x": 8,
+        "y": 560
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerAfter": true
+  }
+}

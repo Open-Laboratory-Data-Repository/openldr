@@ -308,7 +308,7 @@ export function Docs() {
                       className={`pb-1${idx > 0 ? ' mt-1 border-t border-border pt-2' : ''}`}
                     >
                       <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-                        {group.title}
+                        {group.titles?.[locale] ?? group.title}
                       </div>
                       {items.map((navSection) => (
                         <GuideLink

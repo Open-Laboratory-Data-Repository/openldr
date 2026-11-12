@@ -359,3 +359,9 @@ openldr market install <bundle-dir>
 ```
 
 `--dry-run` lance les vérifications et affiche les étapes. Pour chaque étape de liaison de codes, elle affiche combien de codes elle lierait. Pour chaque étape test-mappings ou result-mappings, elle liste les correspondances qu'elle créerait, garderait et ignorerait. Elle n'écrit rien. Un pack de contenu doit être signé par un éditeur. Réinstaller un pack déjà installé demande `--force`. Un pack dont la dernière installation a échoué s'installe de nouveau sans cette option. `openldr market update` accepte les mêmes options. Elle installe une version plus récente d'un pack installé sans `--force`. Elle refuse la même version ou une version plus ancienne, ainsi qu'un pack non installé, sauf si vous passez `--force`. `--json` affiche une sortie lisible par une machine. `openldr market list` affiche les packs avec leur statut. La CLI enregistre l'acteur sous `cli`.
+
+## Préférences personnelles
+
+Le guide **Vos préférences** de Studio se trouve dans **Préférences personnelles**. Il montre les choix de langue, thème, page de démarrage et barre latérale, avec une capture pour chaque étape. Les préférences sont enregistrées dans le compte de chaque utilisateur. Une page de démarrage personnelle passe avant celle de la disposition. Le tableau de bord est le dernier choix par défaut.
+
+Pour les opérateurs, `user preferences show <user-id>` lit les valeurs enregistrées et `user preferences set <user-id> startPage none` efface le choix personnel de page de démarrage. Utilisez la commande de l'installation ou de développement décrite plus haut. Effacer le choix permet de réutiliser la page de démarrage de la disposition lorsqu'elle est configurée.

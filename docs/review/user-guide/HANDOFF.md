@@ -148,3 +148,17 @@ The latest refinement gives every illustration a 24px margin with two dot rows p
 Dark mode uses 35% opacity. Light mode keeps 95%. Both fade outward.
 Original PNGs and older previews remain available.
 Run terminal-dotted/check-surround.cjs for the browser checks and saved screenshots.
+
+## Your preferences preview
+
+The next section has been checked against the live app and drafted in preview only.
+Open preferences-review.html. Read preferences-review-notes.md for the findings and limits.
+Rebuild with `python3 docs/review/user-guide/build-preferences.py`.
+The source article and template are preferences-article.html and preferences-template.html.
+Original captures and framing are under preferences-evidence.
+Each of the 12 actions has a screenshot. The preview uses 15 equal frames.
+The sidebar demonstrates moving preferences into Personal settings after lab setup.
+The operator approved publication on 2026-11-12. The guide is promoted in English, French and Portuguese.
+Personal settings now contains Your preferences. Other published guide groups are unchanged.
+preferences-focus.json preserves the approved crop, markers and phone screenshot dimensions.
+The earlier screenshots and clips remain available. The review files remain editable.

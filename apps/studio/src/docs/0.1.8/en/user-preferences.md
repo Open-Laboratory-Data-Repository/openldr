@@ -1,100 +1,151 @@
 # Your preferences
 
-Your theme, your sidebar state, your start page and your language are saved to your account. They follow you to any browser, computer or phone you sign in on.
+Choose the language, appearance and start page you want in Studio. These preferences belong to your account. You can change them whenever you need to.
 
-This guide takes about 5 minutes. Select any picture or clip to enlarge it.
+Changes save automatically. You do not need sample data to follow this guide.
 
-## Who can do what
+## Change your language
 
-Everyone. Preferences belong to each user. They are not a lab-wide setting, and no role or capability is needed to change your own.
+Use Studio in English, French or Portuguese. This example switches to French so you can see the change.
 
-## What is saved
+### 1. Open your user menu
 
-| Preference | How to change it |
-| --- | --- |
-| Theme | Use the sun or moon button in the page header, or press `d`. |
-| Sidebar open or collapsed | Use the collapse button at the top of the sidebar (desktop only). |
-| Start page | Open the user menu at the bottom of the sidebar, choose **Start page**, and pick a page. |
-| Language | Open the user menu at the bottom of the sidebar, choose **Language**, and pick one. |
+Select your name at the bottom left of the main menu. If the sidebar shows only icons, select your initial.
 
-Each change is saved as you make it. There is no Save button.
+![Your name or initial opens the user menu.](preferences-guide-user-menu-button.png)
 
-## Example 1: open on Reports after you sign in
+### 2. Open Language
 
-![Opening the user menu, pointing at Start page, and choosing Reports.](user-preferences-start-page.mp4)
+Select **Language** in the user menu.
 
-1. Select your name at the bottom of the sidebar. The user menu opens: **Language**, **Start page**, **Settings**, **Sign out**.
-2. Point at **Start page**. The list shows the pages in your sidebar.
-3. Select **Reports**. A message says **Reports will open first after you sign in.**
-4. Open OpenLDR at its main address, or sign out and in again.
+![Language is in the user menu.](preferences-guide-language-menu.png)
 
-**Expected result:** **Reports** opens, not the Dashboard.
+### 3. Choose Français
 
-![OpenLDR opening on Reports.](user-preferences-reports-first.png)
+Select **Français**. The current language is greyed out.
 
-How the start page works:
+![Choose Français in the Language submenu.](preferences-guide-language-french.png)
 
-- It is the Dashboard unless you choose another. Pick **Dashboard** to go back to the default.
-- The list shows only the pages in your sidebar. Your role decides which pages those are.
-- It opens once, when you sign in or open OpenLDR at its main address. After that, the **Dashboard** link always opens the Dashboard.
-- A link to a specific page still opens that page.
-- If your role changes and you can no longer open your start page, the Dashboard opens.
+**Expected result:** the main menu and this guide switch to French. Dashboard becomes **Tableau de bord** and Reports becomes **Rapports**.
 
-## Example 2: switch to the light theme
+![Navigation labels change to French.](preferences-guide-language-result.png)
 
-![Selecting the sun button in the header.](user-preferences-theme.mp4)
+To return to English, open your user menu, select **Langue**, then **English**. Some feature pages still contain English text.
 
-1. Select the sun button at the top right, or press `d` anywhere outside a text box.
+## Switch between light and dark
 
-**Expected result:** the studio turns light, and stays light on your next sign-in and on your other devices. Press `d` again to go back.
+Choose the appearance that is easier to read on your screen. This example starts in dark mode.
 
-![The studio in the light theme.](user-preferences-light.png)
+### 1. Select the theme button
 
-## Example 3: work in French
+Select the sun button at the top right. In light mode, the same position has a moon button.
 
-![Opening the user menu, pointing at Language, and choosing Français.](user-preferences-language.mp4)
+![The theme button is at the top right.](preferences-guide-theme-button.png)
 
-1. Open the user menu and point at **Language**.
-2. Select **Français**.
+**Expected result:** Studio changes to light mode. Select the moon button to return to dark mode.
 
-**Expected result:** menus and pages switch to French at once. The sidebar reads **Tableau de bord**, **Rapports** and so on. Pick **English** or **Português** the same way.
+![The page changes to light mode.](preferences-guide-theme-result.png)
 
-![The studio in French.](user-preferences-french.png)
+You can also press `d` when you are not typing in a field.
 
-The in-app docs follow your language too, where a translation exists.
+## Choose which page opens first
 
-## On a new device
+If you usually start by reading reports, make Reports your start page. You can choose any page offered in your own list.
 
-The first time you sign in on a new browser, OpenLDR loads your saved preferences and applies them. If you have never saved a theme, the theme that browser shows becomes your saved theme.
+### 1. Open your user menu
 
-Language works the same way, with one difference. A language you picked in that browser before becomes your saved language. A browser where you never picked one shows English, and that is not saved, so it cannot replace the language you chose on another device.
+Select your name or initial at the bottom left of the main menu.
 
-## From the command line
+![Your name or initial opens the user menu.](preferences-guide-user-menu-button.png)
 
-An administrator can read or fix one user's preferences:
+### 2. Open Start page
 
-```bash
-openldr user preferences show <user-id>
-```
+Select **Start page**. Its list follows the pages available in your sidebar.
 
-```bash
-openldr user preferences set <user-id> startPage none
-```
+![Start page is in the user menu.](preferences-guide-start-page-menu.png)
 
-The keys are `theme` (`light` or `dark`), `sidebarCollapsed` (`true` or `false`), `startPage` (a page path such as `/reports`) and `language` (`en`, `fr` or `pt`). The value `none` clears a key. Get the user id from `openldr user list`.
+### 3. Choose Reports
 
-## On a phone
+Select **Reports**, or the page you prefer.
 
-The user menu, theme button and language work the same on a phone. The sidebar has no collapse button there: it opens from the menu button at the top left.
+![Choose Reports from the pages available to you.](preferences-guide-start-page-reports.png)
+
+**Saved:** a message says **Reports will open first after you sign in.** Choosing the page does not move you there immediately.
+
+### 4. Reopen Studio at its main address
+
+Open the address you normally use to enter Studio, without a link to a particular page.
+
+![Reopening Studio at its main address opens Reports.](preferences-guide-start-page-result.png)
+
+**Expected result:** Reports opens first. A bookmark to a specific page still opens that page.
+
+To open Dashboard first again, choose **Dashboard** under **Start page**.
+
+## Make more room for the page
+
+On a computer, collapse the main sidebar to leave more space for your work. Its icons remain available.
+
+### 1. Collapse the sidebar
+
+Select **Collapse sidebar**, the button beside OpenLDR at the top left.
+
+![Collapse sidebar is beside OpenLDR at the top left.](preferences-guide-sidebar-collapse.png)
+
+### 2. Expand it when you need the names
+
+Select **Expand sidebar** at the top of the narrow sidebar.
+
+![The same position now offers Expand sidebar.](preferences-guide-sidebar-expand.png)
+
+**Expected result:** the page names return. Studio remembers whether you leave the sidebar expanded or collapsed.
+
+## Find your preferences on a phone
+
+The main menu is folded away on a phone. Open it to reach your language and start-page choices.
+
+### 1. Open the main menu
+
+Select the menu button at the top left.
+
+![On a phone, open the main menu at the top left.](preferences-guide-phone-open-menu.png)
+
+### 2. Open your user menu
+
+Select your name at the bottom of the open main menu.
+
+![Your name is at the bottom of the open main menu.](preferences-guide-phone-user-menu.png)
+
+**Expected result:** **Language** and **Start page** appear. Continue with the steps above. The theme button stays in the page header.
+
+![Language and Start page are available on the phone menu.](preferences-guide-phone-menu-result.png)
+
+## What Studio remembers
+
+Your language, theme, sidebar state and start page save to your account. They load when you sign in on another browser or device.
+
+Your lab may also offer named sidebar layouts. If **Layout** appears in your user menu, the [Layouts guide](/docs/layouts) explains those choices.
+
+Without your own start-page choice, Studio uses your layout's start page when it is available. Otherwise it opens Dashboard. Choosing **Dashboard** explicitly makes Dashboard open first.
 
 ## Troubleshooting
 
-- **The start page does not open.** It opens only at the main address or after sign-in. A bookmark to another page opens that page.
-- **The start page says it could not be saved.** Check your connection and pick it again.
-- **Another device shows a different theme.** It had a theme before you ever saved one. Change the theme once on any device and it is saved for all of them.
-- **A colleague is stuck on a page they can no longer open.** The Dashboard opens instead. To clear it: `openldr user preferences set <user-id> startPage none`.
+**My chosen page does not open first**
+
+Reopen Studio at its main address. A bookmark to another page keeps opening that page. Your chosen start page must still be available in your sidebar.
+
+**A choice is greyed out**
+
+That language or start page is already selected. Choose a different item to change it.
+
+**I cannot see Layout**
+
+The Layout submenu appears only after someone creates a named layout. Language, theme and Start page work without one.
+
+**I see a message saying the start page could not be saved**
+
+Check your connection to Studio, then choose the page again. Confirm that the success message appears.
 
 ## Related guides
 
-- [Start here](/docs/start-here)
-- [Users and Roles](/docs/users)
+[Start here](/docs/start-here) · [Dashboards](/docs/dashboard) · [Layouts](/docs/layouts)

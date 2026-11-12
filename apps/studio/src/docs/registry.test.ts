@@ -39,6 +39,7 @@ describe('docs registry', () => {
       'daily-work',
       'data-design',
       'administration',
+      'personal',
       'more',
     ]);
   });
@@ -46,7 +47,6 @@ describe('docs registry', () => {
   it('defines the approved guides in navigation order', () => {
     expect(DOC_GUIDES.map((guide) => guide.slug)).toEqual([
       'start-here',
-      'user-preferences',
       'layouts',
       'dashboard',
       'reports',
@@ -76,6 +76,7 @@ describe('docs registry', () => {
       'auth-providers',
       'environment',
       'upgrading',
+      'user-preferences',
       'advanced-docs',
     ]);
     expect(DOC_ORDER).toEqual(DOC_GUIDES.map((guide) => guide.slug));
@@ -86,7 +87,7 @@ describe('docs registry', () => {
       Object.fromEntries(DOC_GUIDES.map((guide) => [guide.slug, guide.relatedSlugs])),
     ).toEqual({
       'start-here': ['dashboard', 'reports', 'advanced-docs'],
-      'user-preferences': ['start-here'],
+      'user-preferences': ['start-here', 'dashboard', 'layouts'],
       layouts: ['user-preferences', 'roles'],
       dashboard: ['reports', 'workflows', 'query', 'data-exposure', 'settings'],
       reports: ['dashboard', 'audit', 'report-designer', 'query'],

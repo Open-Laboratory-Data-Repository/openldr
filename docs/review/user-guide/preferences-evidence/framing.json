@@ -1,0 +1,257 @@
+[
+  {
+    "id": "user-menu-button",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 36.5,
+        "width": 223,
+        "x": 8,
+        "y": 755.5
+      }
+    ]
+  },
+  {
+    "id": "language-menu",
+    "crop": [
+      0,
+      476.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 198,
+        "x": 13,
+        "y": 610
+      }
+    ]
+  },
+  {
+    "id": "language-french",
+    "crop": [
+      51.0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 150,
+        "x": 216,
+        "y": 647
+      }
+    ]
+  },
+  {
+    "id": "language-result",
+    "crop": [
+      0,
+      23.0,
+      592.0,
+      370.0
+    ],
+    "targets": [
+      {
+        "height": 320,
+        "width": 239,
+        "x": 0,
+        "y": 48
+      }
+    ]
+  },
+  {
+    "id": "theme-button",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 1224,
+        "y": 7.5
+      }
+    ]
+  },
+  {
+    "id": "theme-result",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 1224,
+        "y": 7.5
+      }
+    ]
+  },
+  {
+    "id": "user-menu-button",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 36.5,
+        "width": 223,
+        "x": 8,
+        "y": 755.5
+      }
+    ]
+  },
+  {
+    "id": "start-page-menu",
+    "crop": [
+      0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 198,
+        "x": 13,
+        "y": 642
+      }
+    ]
+  },
+  {
+    "id": "start-page-reports",
+    "crop": [
+      51.0,
+      245.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 150,
+        "x": 216,
+        "y": 379
+      }
+    ]
+  },
+  {
+    "id": "start-page-result",
+    "crop": [
+      100.0,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 48,
+        "width": 200,
+        "x": 240,
+        "y": 0
+      }
+    ]
+  },
+  {
+    "id": "sidebar-collapse",
+    "crop": [
+      0,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 195,
+        "y": 7.5
+      }
+    ]
+  },
+  {
+    "id": "sidebar-expand",
+    "crop": [
+      0,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 11.5,
+        "y": 7.5
+      }
+    ]
+  },
+  {
+    "id": "phone-open-menu",
+    "crop": [
+      0,
+      0,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "height": 32,
+        "width": 32,
+        "x": 12,
+        "y": 7.5
+      }
+    ]
+  },
+  {
+    "id": "phone-user-menu",
+    "crop": [
+      0,
+      577.625,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "height": 36.5,
+        "width": 239,
+        "x": 8,
+        "y": 767.5
+      }
+    ]
+  },
+  {
+    "id": "phone-menu-result",
+    "crop": [
+      0,
+      544.8125,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "height": 204,
+        "width": 208,
+        "x": 8,
+        "y": 560
+      }
+    ]
+  }
+]

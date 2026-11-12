@@ -1,100 +1,151 @@
 # Vos préférences
 
-Votre thème, l'état de la barre latérale, votre page de démarrage et votre langue sont enregistrés dans votre compte. Ils vous suivent sur chaque navigateur, ordinateur ou téléphone où vous vous connectez.
+Choisissez la langue, l'apparence et la page de démarrage de Studio. Ces préférences appartiennent à votre compte. Vous pouvez les modifier à tout moment.
 
-Comptez 5 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Les changements sont enregistrés automatiquement. Aucune donnée d'exemple n'est nécessaire pour suivre ce guide.
 
-## Qui peut faire quoi
+## Changer de langue
 
-Tout le monde. Les préférences appartiennent à chaque utilisateur. Ce n'est pas un réglage du laboratoire, et aucun rôle ni aucune capacité n'est nécessaire pour changer les siennes.
+Utilisez Studio en anglais, français ou portugais. Cet exemple passe au français pour montrer le changement.
 
-## Ce qui est enregistré
+### 1. Ouvrir votre menu utilisateur
 
-| Préférence | Comment la changer |
-| --- | --- |
-| Thème | Le bouton soleil ou lune dans l'en-tête, ou la touche `d`. |
-| Barre latérale ouverte ou repliée | Le bouton de repli en haut de la barre latérale (ordinateur seulement). |
-| Page de démarrage | Ouvrez le menu utilisateur en bas de la barre latérale, choisissez **Page de démarrage**, puis une page. |
-| Langue | Ouvrez le menu utilisateur en bas de la barre latérale, choisissez **Langue**, puis une langue. |
+Sélectionnez votre nom en bas à gauche du menu principal. Si la barre latérale ne montre que des icônes, sélectionnez votre initiale.
 
-Chaque changement est enregistré tout de suite. Il n'y a pas de bouton Enregistrer.
+![Votre nom ou votre initiale ouvre le menu utilisateur.](preferences-guide-user-menu-button.png)
 
-## Exemple 1 : ouvrir sur Rapports après la connexion
+### 2. Ouvrir Langue
 
-![Ouvrir le menu utilisateur, pointer Page de démarrage et choisir Rapports.](user-preferences-start-page.mp4)
+Sélectionnez **Langue** dans le menu utilisateur.
 
-1. Sélectionnez votre nom en bas de la barre latérale. Le menu utilisateur s'ouvre : **Langue**, **Page de démarrage**, **Paramètres**, **Se déconnecter**.
-2. Pointez **Page de démarrage**. La liste montre les pages de votre barre latérale.
-3. Sélectionnez **Rapports**. Un message dit **Rapports s'ouvrira en premier après la connexion.**
-4. Ouvrez OpenLDR à son adresse principale, ou déconnectez-vous et reconnectez-vous.
+![Langue se trouve dans le menu utilisateur.](preferences-guide-language-menu.png)
 
-**Résultat attendu :** **Rapports** s'ouvre, et non le tableau de bord.
+### 3. Choisir Français
 
-![OpenLDR qui s'ouvre sur Rapports.](user-preferences-reports-first.png)
+Sélectionnez **Français**. La langue actuelle est grisée.
 
-Fonctionnement de la page de démarrage :
+![Choisissez Français dans le sous-menu Langue.](preferences-guide-language-french.png)
 
-- C'est le tableau de bord, sauf si vous en choisissez une autre. Choisissez **Tableau de bord** pour revenir au défaut.
-- La liste ne montre que les pages de votre barre latérale. Votre rôle décide lesquelles.
-- Elle s'ouvre une fois, à la connexion ou à l'adresse principale d'OpenLDR. Ensuite, le lien **Tableau de bord** ouvre toujours le tableau de bord.
-- Un lien vers une page précise ouvre toujours cette page.
-- Si votre rôle change et que vous ne pouvez plus ouvrir votre page de démarrage, le tableau de bord s'ouvre.
+**Résultat attendu :** le menu principal et ce guide passent au français. Dashboard devient **Tableau de bord** et Reports devient **Rapports**.
 
-## Exemple 2 : passer au thème clair
+![Les libellés du menu passent au français.](preferences-guide-language-result.png)
 
-![Sélectionner le bouton soleil dans l'en-tête.](user-preferences-theme.mp4)
+Pour revenir à l'anglais, ouvrez votre menu utilisateur, sélectionnez **Langue**, puis **English**. Certaines pages contiennent encore du texte en anglais.
 
-1. Sélectionnez le bouton soleil en haut à droite, ou appuyez sur `d` en dehors d'un champ de saisie.
+## Passer du thème sombre au thème clair
 
-**Résultat attendu :** le studio passe en clair, et le reste à la prochaine connexion et sur vos autres appareils. Appuyez de nouveau sur `d` pour revenir.
+Choisissez l'apparence la plus lisible sur votre écran. Cet exemple commence en mode sombre.
 
-![Le studio en thème clair.](user-preferences-light.png)
+### 1. Sélectionner le bouton de thème
 
-## Exemple 3 : travailler en français
+Sélectionnez le soleil en haut à droite. En mode clair, une lune occupe la même place.
 
-![Ouvrir le menu utilisateur, pointer Langue et choisir Français.](user-preferences-language.mp4)
+![Le bouton de thème se trouve en haut à droite.](preferences-guide-theme-button.png)
 
-1. Ouvrez le menu utilisateur et pointez **Langue**.
-2. Sélectionnez **Français**.
+**Résultat attendu :** Studio passe en mode clair. Sélectionnez la lune pour revenir au mode sombre.
 
-**Résultat attendu :** les menus et les pages passent en français tout de suite. La barre latérale affiche **Tableau de bord**, **Rapports**, etc. Choisissez **English** ou **Português** de la même façon.
+![La page passe en mode clair.](preferences-guide-theme-result.png)
 
-![Le studio en français.](user-preferences-french.png)
+Vous pouvez aussi appuyer sur `d` lorsque vous ne saisissez rien dans un champ.
 
-La documentation intégrée suit aussi votre langue, quand une traduction existe.
+## Choisir la page qui s'ouvre en premier
 
-## Sur un nouvel appareil
+Si vous commencez habituellement par lire les rapports, choisissez Rapports comme page de démarrage. Vous pouvez choisir toute page proposée dans votre liste.
 
-À votre première connexion sur un nouveau navigateur, OpenLDR charge vos préférences enregistrées et les applique. Si vous n'avez jamais enregistré de thème, le thème de ce navigateur devient votre thème enregistré.
+### 1. Ouvrir votre menu utilisateur
 
-La langue fonctionne de même, à une différence près. Une langue déjà choisie dans ce navigateur devient votre langue enregistrée. Un navigateur où vous n'en avez jamais choisi affiche l'anglais, et ce choix n'est pas enregistré : il ne peut donc pas remplacer la langue choisie sur un autre appareil.
+Sélectionnez votre nom ou votre initiale en bas à gauche du menu principal.
 
-## En ligne de commande
+![Votre nom ou votre initiale ouvre le menu utilisateur.](preferences-guide-user-menu-button.png)
 
-Un administrateur peut lire ou corriger les préférences d'un utilisateur :
+### 2. Ouvrir Page de démarrage
 
-```bash
-openldr user preferences show <user-id>
-```
+Sélectionnez **Page de démarrage**. La liste suit les pages disponibles dans votre barre latérale.
 
-```bash
-openldr user preferences set <user-id> startPage none
-```
+![Page de démarrage se trouve dans le menu utilisateur.](preferences-guide-start-page-menu.png)
 
-Les clés sont `theme` (`light` ou `dark`), `sidebarCollapsed` (`true` ou `false`), `startPage` (un chemin de page comme `/reports`) et `language` (`en`, `fr` ou `pt`). La valeur `none` efface une clé. L'id de l'utilisateur vient de `openldr user list`.
+### 3. Choisir Rapports
 
-## Sur un téléphone
+Sélectionnez **Rapports**, ou la page que vous préférez.
 
-Le menu utilisateur, le bouton de thème et la langue fonctionnent de même sur un téléphone. La barre latérale n'y a pas de bouton de repli : elle s'ouvre par le bouton de menu en haut à gauche.
+![Choisissez Rapports parmi les pages disponibles.](preferences-guide-start-page-reports.png)
+
+**Enregistré :** un message indique que **Rapports s'ouvrira en premier après la connexion.** Ce choix ne vous y conduit pas immédiatement.
+
+### 4. Rouvrir Studio à son adresse principale
+
+Ouvrez l'adresse habituelle de Studio, sans lien vers une page précise.
+
+![Rouvrir Studio à son adresse principale ouvre Rapports.](preferences-guide-start-page-result.png)
+
+**Résultat attendu :** Rapports s'ouvre en premier. Un favori vers une page précise ouvre toujours cette page.
+
+Pour ouvrir à nouveau le tableau de bord en premier, choisissez **Tableau de bord** dans **Page de démarrage**.
+
+## Donner plus de place à la page
+
+Sur ordinateur, repliez la barre latérale principale pour agrandir votre espace de travail. Ses icônes restent disponibles.
+
+### 1. Replier la barre latérale
+
+Sélectionnez **Réduire la barre latérale**, le bouton à côté d'OpenLDR en haut à gauche.
+
+![Le bouton de repli se trouve à côté d'OpenLDR en haut à gauche.](preferences-guide-sidebar-collapse.png)
+
+### 2. La déplier pour retrouver les noms
+
+Sélectionnez **Développer la barre latérale** en haut de la barre étroite.
+
+![La même place propose maintenant de développer la barre latérale.](preferences-guide-sidebar-expand.png)
+
+**Résultat attendu :** les noms des pages réapparaissent. Studio mémorise si vous laissez la barre latérale ouverte ou repliée.
+
+## Retrouver vos préférences sur téléphone
+
+Le menu principal est replié sur téléphone. Ouvrez-le pour choisir votre langue et votre page de démarrage.
+
+### 1. Ouvrir le menu principal
+
+Sélectionnez le bouton de menu en haut à gauche.
+
+![Sur téléphone, ouvrez le menu principal en haut à gauche.](preferences-guide-phone-open-menu.png)
+
+### 2. Ouvrir votre menu utilisateur
+
+Sélectionnez votre nom en bas du menu principal ouvert.
+
+![Votre nom se trouve en bas du menu principal ouvert.](preferences-guide-phone-user-menu.png)
+
+**Résultat attendu :** **Langue** et **Page de démarrage** apparaissent. Continuez avec les étapes précédentes. Le bouton de thème reste dans l'en-tête.
+
+![Langue et Page de démarrage sont disponibles dans le menu du téléphone.](preferences-guide-phone-menu-result.png)
+
+## Ce que Studio mémorise
+
+Votre langue, votre thème, l'état de la barre latérale et votre page de démarrage sont enregistrés dans votre compte. Ils sont chargés à la connexion sur un autre navigateur ou appareil.
+
+Votre laboratoire peut aussi proposer des dispositions nommées de la barre latérale. Si **Disposition** apparaît dans votre menu utilisateur, le [guide Dispositions](/docs/layouts) explique ces choix.
+
+Sans choix personnel, Studio utilise la page de démarrage de votre disposition lorsqu'elle est disponible. Sinon, il ouvre le tableau de bord. Choisir explicitement **Tableau de bord** l'ouvre en premier.
 
 ## Dépannage
 
-- **La page de démarrage ne s'ouvre pas.** Elle ne s'ouvre qu'à l'adresse principale ou après la connexion. Un favori vers une autre page ouvre cette page.
-- **La page de démarrage n'a pas pu être enregistrée.** Vérifiez la connexion et choisissez-la de nouveau.
-- **Un autre appareil montre un autre thème.** Il avait un thème avant que vous en enregistriez un. Changez le thème une fois sur n'importe quel appareil, et il est enregistré pour tous.
-- **Un collègue reste bloqué sur une page qu'il ne peut plus ouvrir.** Le tableau de bord s'ouvre à la place. Pour effacer : `openldr user preferences set <user-id> startPage none`.
+**La page choisie ne s'ouvre pas en premier**
+
+Rouvrez Studio à son adresse principale. Un favori vers une autre page continue d'ouvrir cette page. Votre page de démarrage doit toujours être disponible dans votre barre latérale.
+
+**Un choix est grisé**
+
+Cette langue ou cette page de démarrage est déjà sélectionnée. Choisissez un autre élément pour la modifier.
+
+**Je ne vois pas Disposition**
+
+Le sous-menu Disposition apparaît seulement lorsqu'une disposition nommée existe. Langue, thème et Page de démarrage fonctionnent sans disposition.
+
+**Un message indique que la page de démarrage n'a pas pu être enregistrée**
+
+Vérifiez votre connexion à Studio, puis choisissez à nouveau la page. Vérifiez que le message de réussite apparaît.
 
 ## Guides associés
 
-- [Commencer ici](/docs/start-here)
-- [Utilisateurs et rôles](/docs/users)
+[Commencer ici](/docs/start-here) · [Tableaux de bord](/docs/dashboard) · [Dispositions](/docs/layouts)

@@ -1,0 +1,263 @@
+{
+  "capturedOn": "2026-11-12",
+  "appUrl": "http://localhost:5173/studio/docs/user-preferences",
+  "checks": [
+    "French changes navigation and the guide title.",
+    "Light theme changes the page and the toggle label.",
+    "Reports selection shows a success message.",
+    "Opening /studio redirects to /studio/reports.",
+    "Sidebar collapses to icons and expands again.",
+    "Phone main menu exposes the same user menu."
+  ],
+  "restored": {
+    "language": "English",
+    "theme": "dark",
+    "startPage": "Dashboard",
+    "sidebarCollapsed": true
+  },
+  "limits": [
+    "Development authentication bypass was active.",
+    "No second device or physical phone was tested.",
+    "No named layouts were configured, so the Layout submenu was not exercised."
+  ],
+  "steps": [
+    {
+      "id": "user-menu-button",
+      "label": "Your name or initial opens the user menu.",
+      "path": "preferences-evidence/user-menu-button.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36.5,
+          "width": 223,
+          "x": 8,
+          "y": 755.5
+        }
+      ]
+    },
+    {
+      "id": "language-menu",
+      "label": "Language is in the user menu.",
+      "path": "preferences-evidence/language-menu.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 198,
+          "x": 13,
+          "y": 610
+        }
+      ]
+    },
+    {
+      "id": "language-french",
+      "label": "Choose Français in the Language submenu.",
+      "path": "preferences-evidence/language-french.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 216,
+          "y": 647
+        }
+      ]
+    },
+    {
+      "id": "language-result",
+      "label": "Navigation labels change to French.",
+      "path": "preferences-evidence/language-result.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 698.5,
+          "width": 239,
+          "x": 0,
+          "y": 48
+        }
+      ]
+    },
+    {
+      "id": "theme-button",
+      "label": "The theme button is at the top right.",
+      "path": "preferences-evidence/theme-button.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 32,
+          "x": 1224,
+          "y": 7.5
+        }
+      ]
+    },
+    {
+      "id": "theme-result",
+      "label": "The page changes to light mode.",
+      "path": "preferences-evidence/theme-result.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 32,
+          "x": 1224,
+          "y": 7.5
+        }
+      ]
+    },
+    {
+      "id": "start-page-menu",
+      "label": "Start page is in the user menu.",
+      "path": "preferences-evidence/start-page-menu.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 198,
+          "x": 13,
+          "y": 642
+        }
+      ]
+    },
+    {
+      "id": "start-page-reports",
+      "label": "Choose Reports from the pages available to you.",
+      "path": "preferences-evidence/start-page-reports.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 216,
+          "y": 379
+        }
+      ]
+    },
+    {
+      "id": "start-page-result",
+      "label": "Reopening Studio at its main address opens Reports.",
+      "path": "preferences-evidence/start-page-result.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 48,
+          "width": 1040,
+          "x": 240,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "id": "sidebar-collapse",
+      "label": "Collapse sidebar is beside OpenLDR at the top left.",
+      "path": "preferences-evidence/sidebar-collapse.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 32,
+          "x": 195,
+          "y": 7.5
+        }
+      ]
+    },
+    {
+      "id": "sidebar-expand",
+      "label": "The same position now offers Expand sidebar.",
+      "path": "preferences-evidence/sidebar-expand.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 32,
+          "x": 11.5,
+          "y": 7.5
+        }
+      ]
+    },
+    {
+      "id": "phone-open-menu",
+      "label": "On a phone, open the main menu at the top left.",
+      "path": "preferences-evidence/phone-open-menu.jpg",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 32,
+          "x": 12,
+          "y": 7.5
+        }
+      ]
+    },
+    {
+      "id": "phone-user-menu",
+      "label": "Your name is at the bottom of the open main menu.",
+      "path": "preferences-evidence/phone-user-menu.jpg",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "focus": [
+        {
+          "height": 36.5,
+          "width": 239,
+          "x": 8,
+          "y": 767.5
+        }
+      ]
+    },
+    {
+      "id": "phone-menu-result",
+      "label": "Language and Start page are available on the phone menu.",
+      "path": "preferences-evidence/phone-menu-result.jpg",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "focus": [
+        {
+          "height": 204,
+          "width": 208,
+          "x": 8,
+          "y": 560
+        }
+      ]
+    }
+  ]
+}

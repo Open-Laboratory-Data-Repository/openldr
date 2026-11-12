@@ -3,7 +3,7 @@ import { DOCS_VERSION, compareVersions } from './version';
 export type Locale = 'en' | 'fr' | 'pt';
 export const LOCALES: Locale[] = ['en', 'fr', 'pt'];
 
-export type DocGroupId = 'start' | 'daily-work' | 'data-design' | 'administration' | 'more';
+export type DocGroupId = 'start' | 'daily-work' | 'data-design' | 'administration' | 'personal' | 'more';
 export type DocAudience = 'all-users' | 'lab-users' | 'lab-managers' | 'administrators';
 export type DocDifficulty = 'beginner' | 'intermediate' | 'advanced';
 export type DocStatus = 'published' | 'coming-soon';
@@ -11,6 +11,7 @@ export type DocStatus = 'published' | 'coming-soon';
 export interface DocGroup {
   id: DocGroupId;
   title: string;
+  titles?: Partial<Record<Locale, string>>;
 }
 
 export interface DocGuide {
@@ -40,6 +41,7 @@ export const DOC_GROUPS: DocGroup[] = [
   { id: 'daily-work', title: 'Daily work' },
   { id: 'data-design', title: 'Data and design' },
   { id: 'administration', title: 'Administration' },
+  { id: 'personal', title: 'Personal settings', titles: { fr: 'Préférences personnelles', pt: 'Preferências pessoais' } },
   { id: 'more', title: 'More' },
 ];
 
@@ -150,20 +152,7 @@ export const DOC_GUIDES: DocGuide[] = [
     ],
     status: 'published',
   },
-  {
-    slug: 'user-preferences',
-    title: 'Your preferences',
-    group: 'start',
-    summary: 'Your theme, sidebar state and start page are saved to your account and follow you to any device.',
-    audience: ['all-users'],
-    requiredRoles: [],
-    estimatedMinutes: 5,
-    difficulty: 'beginner',
-    relatedSlugs: ['start-here'],
-    screenshotNames: [],
-    capturedNames: ['user-preferences-start-page.mp4', 'user-preferences-reports-first.png', 'user-preferences-theme.mp4', 'user-preferences-light.png', 'user-preferences-language.mp4', 'user-preferences-french.png'],
-    status: 'published',
-  },
+
   {
     slug: 'layouts',
     title: 'Layouts',
@@ -644,6 +633,41 @@ export const DOC_GUIDES: DocGuide[] = [
     difficulty: 'advanced',
     relatedSlugs: ['settings', 'environment', 'workflows'],
     screenshotNames: [],
+    status: 'published',
+  },
+  {
+    slug: 'user-preferences',
+    title: 'Your preferences',
+    group: 'personal',
+    summary: 'Your theme, sidebar state and start page are saved to your account and follow you to any device.',
+    audience: ['all-users'],
+    requiredRoles: [],
+    estimatedMinutes: 5,
+    difficulty: 'beginner',
+    relatedSlugs: ['start-here', 'dashboard', 'layouts'],
+    screenshotNames: [],
+    capturedNames: [
+      'preferences-guide-user-menu-button.png',
+      'preferences-guide-language-menu.png',
+      'preferences-guide-language-french.png',
+      'preferences-guide-language-result.png',
+      'preferences-guide-theme-button.png',
+      'preferences-guide-theme-result.png',
+      'preferences-guide-start-page-menu.png',
+      'preferences-guide-start-page-reports.png',
+      'preferences-guide-start-page-result.png',
+      'preferences-guide-sidebar-collapse.png',
+      'preferences-guide-sidebar-expand.png',
+      'preferences-guide-phone-open-menu.png',
+      'preferences-guide-phone-user-menu.png',
+      'preferences-guide-phone-menu-result.png',
+      'user-preferences-start-page.mp4',
+      'user-preferences-reports-first.png',
+      'user-preferences-theme.mp4',
+      'user-preferences-light.png',
+      'user-preferences-language.mp4',
+      'user-preferences-french.png',
+    ],
     status: 'published',
   },
   {
