@@ -1,0 +1,17 @@
+$ node packages/cli/dev.mjs connectors diagnose a608461a-0e4b-47ba-92f8-363c5a954766
+(node:48801) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794491495641,"pid":48801,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+WARN  config   127.0.0.1\DOCS_MISSING
+      When CE runs in Docker, localhost is the CE container itself. Use the server name or IP address of the machine that runs the database.
+PASS  dns      127.0.0.1 resolved to 127.0.0.1
+FAIL  browser  no reply from SQL Server Browser within 3000 ms
+      SQL Server Browser did not answer on UDP port 1434. Start the SQL Server Browser service, open UDP 1434 in the firewall, or clear the instance name and enter the instance's fixed TCP port.
+SKIP  tcp
+SKIP  login
+SKIP  version
+
+Connection check failed at: browser
+[ELIFECYCLE] Command failed with exit code 1.
+
+EXIT 1

@@ -391,3 +391,13 @@ The demo read-only database login was revoked after capture; its historical scre
 Browser integration passed zero missing images, no broken anchors, native5120 enlargement,
 all nine active menus and mobile812px without horizontal overflow. See connectors-review-notes.md.
 The published Connectors guide remains unchanged.
+
+## Diagnose connections preview checkpoint
+
+Previous checkpoint HEAD: 950ced0d.
+connector-diagnose-review.html has 16 numbered steps and 16 native image placements.
+Every step has screenshot evidence. The integrated browser check reported no missing images,
+no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+All active preview menus match. Sample data remains optional.
+See connector-diagnose-review-notes.md for live workflows, source proofs and untested variants.
+This remains a preview. Its published guide is unchanged.

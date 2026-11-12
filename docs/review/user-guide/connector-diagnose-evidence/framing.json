@@ -1,0 +1,372 @@
+[
+  {
+    "id": "open",
+    "crop": [
+      103.5,
+      168.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 300,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "diagnose",
+    "crop": [
+      800,
+      206.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 340.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "passed",
+    "crop": [
+      559,
+      0,
+      721,
+      450.625
+    ],
+    "targets": [
+      {
+        "x": 609,
+        "y": 127.53125,
+        "width": 671,
+        "height": 109
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "login",
+    "crop": [
+      559,
+      164.71875,
+      721,
+      450.625
+    ],
+    "targets": [
+      {
+        "x": 609,
+        "y": 301.53125,
+        "width": 671,
+        "height": 65
+      },
+      {
+        "x": 609,
+        "y": 366.53125,
+        "width": 671,
+        "height": 48
+      },
+      {
+        "x": 609,
+        "y": 414.53125,
+        "width": 671,
+        "height": 64
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "again",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1077,
+        "y": 66.25,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "add",
+    "crop": [
+      800,
+      24.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 158,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "sql-type",
+    "crop": [
+      580.390625,
+      210.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 744.25,
+        "y": 344.5,
+        "width": 152.28125,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "split",
+    "crop": [
+      729.609375,
+      181.5341796875,
+      550.390625,
+      343.994140625
+    ],
+    "targets": [
+      {
+        "x": 755.609375,
+        "y": 287.53125,
+        "width": 500.390625,
+        "height": 36
+      },
+      {
+        "x": 755.609375,
+        "y": 335.53125,
+        "width": 500.390625,
+        "height": 36
+      },
+      {
+        "x": 755.609375,
+        "y": 383.53125,
+        "width": 500.390625,
+        "height": 36
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "login-fields",
+    "crop": [
+      729.609375,
+      325.5341796875,
+      550.390625,
+      343.994140625
+    ],
+    "targets": [
+      {
+        "x": 755.609375,
+        "y": 431.53125,
+        "width": 500.390625,
+        "height": 36
+      },
+      {
+        "x": 755.609375,
+        "y": 479.53125,
+        "width": 500.390625,
+        "height": 36
+      },
+      {
+        "x": 755.609375,
+        "y": 527.53125,
+        "width": 500.390625,
+        "height": 36
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "encryption",
+    "crop": [
+      607,
+      379.375,
+      673,
+      420.625
+    ],
+    "targets": [
+      {
+        "x": 633,
+        "y": 623.53125,
+        "width": 623,
+        "height": 20
+      },
+      {
+        "x": 633,
+        "y": 655.53125,
+        "width": 623,
+        "height": 20
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "save",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1077,
+        "y": 66.25,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "bad-diagnose",
+    "crop": [
+      800,
+      149.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 283.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "browser-failure",
+    "crop": [
+      559,
+      130.71875,
+      721,
+      450.625
+    ],
+    "targets": [
+      {
+        "x": 609,
+        "y": 301.53125,
+        "width": 671,
+        "height": 109
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "skipped",
+    "crop": [
+      559,
+      256.71875,
+      721,
+      450.625
+    ],
+    "targets": [
+      {
+        "x": 609,
+        "y": 410.53125,
+        "width": 671,
+        "height": 48
+      },
+      {
+        "x": 609,
+        "y": 458.53125,
+        "width": 671,
+        "height": 48
+      },
+      {
+        "x": 609,
+        "y": 506.53125,
+        "width": 671,
+        "height": 47
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "correction",
+    "crop": [
+      729.609375,
+      181.5341796875,
+      550.390625,
+      343.994140625
+    ],
+    "targets": [
+      {
+        "x": 755.609375,
+        "y": 287.53125,
+        "width": 500.390625,
+        "height": 36
+      },
+      {
+        "x": 755.609375,
+        "y": 335.53125,
+        "width": 500.390625,
+        "height": 36
+      },
+      {
+        "x": 755.609375,
+        "y": 383.53125,
+        "width": 500.390625,
+        "height": 36
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "inside"
+  },
+  {
+    "id": "phone",
+    "crop": [
+      0,
+      296.84375,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 38.5,
+        "y": 381.53125,
+        "width": 336.5,
+        "height": 65
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  }
+]

@@ -63,7 +63,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Data exposure
 - [ ] Distributed Sync
 - [x] Connectors
-- [ ] Connect to SQL Server and diagnose a connection
+- [x] Connect to SQL Server and diagnose a connection
 - [ ] Import from OpenLDR v1
 - [ ] Marketplace
 - [ ] Plugin cards and side panels

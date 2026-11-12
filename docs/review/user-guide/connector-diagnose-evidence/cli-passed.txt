@@ -1,0 +1,14 @@
+$ node packages/cli/dev.mjs connectors diagnose ded8fca8-b4e9-4ff3-9b17-9071ee22c8f8
+(node:48482) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794491493938,"pid":48482,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+WARN  config   127.0.0.1:15442
+      When CE runs in Docker, localhost is the CE container itself. Use the server name or IP address of the machine that runs the database.
+PASS  dns      127.0.0.1 resolved to 127.0.0.1
+PASS  tcp      port 15442 is open
+PASS  login
+PASS  version  PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+
+All checks passed.
+
+EXIT 0
