@@ -561,6 +561,19 @@ describe('users routes — SP4 admin actions (reset-password / send-reset-email 
     expect(events.some((e) => e.action === 'user.force_logout')).toBe(true);
   });
 
+  it('send-reset-email: 501 and no audit row under local sign-in', async () => {
+    const ctx = fakeCtx();
+    (ctx as unknown as { auth: { sendPasswordResetEmail: () => Promise<void> } }).auth.sendPasswordResetEmail = async () => {
+      const e = new Error('password reset email is not supported under local sign-in'); e.name = 'PasswordResetEmailUnsupportedError'; throw e;
+    };
+    const app = adminApp(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/users/lu1/send-reset-email' });
+    expect(res.statusCode).toBe(501);
+    expect(res.json()).toEqual({ error: 'password reset email is not available with local sign-in' });
+    const events = (ctx as unknown as { __auditEvents: Array<{ action: string }> }).__auditEvents;
+    expect(events.some((e) => e.action === 'user.send_reset_email')).toBe(false);
+  });
+
   it('reset-password: 503 when op throws IdentityAdminNotConfiguredError', async () => {
     const ctx = fakeCtx();
     (ctx as unknown as { auth: { resetPassword: () => Promise<void> } }).auth.resetPassword = async () => {

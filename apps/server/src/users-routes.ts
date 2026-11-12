@@ -15,6 +15,12 @@ function isNotConfigured(e: unknown): boolean {
   return e instanceof Error && e.name === 'IdentityAdminNotConfiguredError';
 }
 
+// Same duck-typing: local sign-in has no reset email. The error class lives in
+// @openldr/adapter-auth, which apps/server does not depend on.
+function isResetEmailUnsupported(e: unknown): boolean {
+  return e instanceof Error && e.name === 'PasswordResetEmailUnsupportedError';
+}
+
 // ---------------------------------------------------------------------------
 // Input schemas
 // ---------------------------------------------------------------------------
@@ -307,6 +313,7 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
       await ctx.auth.sendPasswordResetEmail(id);
     } catch (e) {
       if (isNotConfigured(e)) { reply.code(503); return { error: 'identity provider admin client is not configured' }; }
+      if (isResetEmailUnsupported(e)) { reply.code(501); return { error: 'password reset email is not available with local sign-in' }; }
       reply.code(502); return { error: redact(e instanceof Error ? e.message : String(e)) };
     }
     await recordAudit(ctx, req, { action: 'user.send_reset_email', entityType: 'user', entityId: id, before: null, after: null });

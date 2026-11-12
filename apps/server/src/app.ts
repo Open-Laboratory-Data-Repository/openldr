@@ -43,6 +43,7 @@ import { registerSyncRoutes } from './sync-routes';
 import { registerFacilitiesRoutes } from './facilities-routes';
 import { createConnectorStore, createCustomQueryGroupStore, createCustomQueryStore, createPatientResolver, referenceCapture } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
+import { registerLocalAuthRoutes } from './local-auth-routes';
 import { readAppVersion } from './version';
 
 export function registerConfigRoute(
@@ -50,24 +51,31 @@ export function registerConfigRoute(
   ctx: {
     cfg: AuthSelectionConfig & { TARGET_STORE_ADAPTER: string; AUTH_DEV_BYPASS: boolean; OIDC_ISSUER_URL?: string; OIDC_WEB_CLIENT_ID: string; OIDC_AUDIENCE?: string; OIDC_RESOURCE?: string; OIDC_SCOPES?: string };
     featureFlags: { get(id: string): Promise<boolean> };
+    /** Set only under AUTH_ADAPTER=local. */
+    localSignIn?: { setupRequired(): Promise<boolean> };
   },
 ): void {
   const version = readAppVersion();
-  app.get('/api/config', async () => ({
-    dashboardSqlEnabled: await ctx.featureFlags.get('dashboard.raw_sql'),
-    authEnforced: !ctx.cfg.AUTH_DEV_BYPASS,
-    version,
-    environment: process.env.NODE_ENV ?? 'development',
-    authCapabilities: resolveAuthCapabilities(ctx.cfg),
-    oidc: {
-      mode: ctx.cfg.AUTH_ADAPTER ?? 'keycloak',
-      issuerUrl: requireOidcIssuer(ctx.cfg),
-      clientId: ctx.cfg.OIDC_WEB_CLIENT_ID,
-      audience: ctx.cfg.OIDC_AUDIENCE ?? null,
-      resource: ctx.cfg.OIDC_RESOURCE ?? null,
-      scopes: ctx.cfg.OIDC_SCOPES ?? 'openid profile email',
-    },
-  }));
+  app.get('/api/config', async () => {
+    const mode = ctx.cfg.AUTH_ADAPTER ?? 'keycloak';
+    return {
+      dashboardSqlEnabled: await ctx.featureFlags.get('dashboard.raw_sql'),
+      authEnforced: !ctx.cfg.AUTH_DEV_BYPASS,
+      version,
+      environment: process.env.NODE_ENV ?? 'development',
+      authCapabilities: resolveAuthCapabilities(ctx.cfg),
+      auth: { mode, setupRequired: (await ctx.localSignIn?.setupRequired()) ?? false },
+      // Local sign-in has no issuer, so requireOidcIssuer must not run for it.
+      oidc: mode === 'local' ? null : {
+        mode,
+        issuerUrl: requireOidcIssuer(ctx.cfg),
+        clientId: ctx.cfg.OIDC_WEB_CLIENT_ID,
+        audience: ctx.cfg.OIDC_AUDIENCE ?? null,
+        resource: ctx.cfg.OIDC_RESOURCE ?? null,
+        scopes: ctx.cfg.OIDC_SCOPES ?? 'openid profile email',
+      },
+    };
+  });
 }
 
 /** Map the TRUST_PROXY env string to Fastify's `trustProxy` option. Unset/''/'false' → false (don't
@@ -153,6 +161,7 @@ export async function buildApp(ctx: AppContext) {
   });
 
   registerConfigRoute(app, ctx);
+  registerLocalAuthRoutes(app, ctx);
   registerReportRoutes(app, ctx);
   registerTerminologyRoutes(app, ctx);
   registerTerminologyAdminRoutes(app, ctx);

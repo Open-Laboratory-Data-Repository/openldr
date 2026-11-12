@@ -1,6 +1,8 @@
 export type AuthFailReason =
   | 'missing' | 'expired' | 'bad-signature' | 'wrong-audience' | 'wrong-issuer'
-  | 'no-matching-key' | 'invalid' | 'account-disabled' | 'sync-failed';
+  | 'no-matching-key' | 'invalid' | 'account-disabled' | 'sync-failed'
+  // Local sign-in: a wrong username or password, and a locked account.
+  | 'bad-credentials' | 'locked';
 
 /** Derive a stable reason from a jose (or other) verification error. Never inspects the token. */
 export function reasonFromError(e: unknown): AuthFailReason {
