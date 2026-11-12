@@ -107,5 +107,5 @@ The published Markdown becomes the editing source. Keep original evidence as an 
 - [x] Publish the 27 guides in English, French and Portuguese.
 - [x] Verify translated links, code examples, native assets and the actual Studio viewer.
 - [x] Run docs tests, typechecks and builds.
-- [ ] Merge main, generate its changelog, push and compare remote HEAD.
-- [ ] Explain reproduced bugs and source-backed wording inconsistencies without changing app behavior.
+- [x] Merge main, generate its changelog, push and compare remote HEAD.
+- [x] Explain reproduced bugs and source-backed wording inconsistencies without changing app behavior.

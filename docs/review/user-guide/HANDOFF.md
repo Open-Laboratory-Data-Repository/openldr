@@ -632,3 +632,17 @@ The connector-engine wording and Query reporting-parameter limitation are correc
 Facilities is published; the remaining guides stay in preview pending review.
 Normal databases were not reset or seeded. The single form submission was not repeated.
 Keep the static preview server on port 4392 running for review.
+
+## All approved guides published on main
+
+The operator approved publishing the remaining 27 guides and retiring the standalone review workflow.
+Verified publication code merged by fast-forward at e2afc54b0bd77baefe733d60a16f43548f2ee160.
+All 27 guides now have English, French and Portuguese Markdown, 775 steps and 913 image placements per locale.
+The image assets and optional files are in production paths. Edit published Markdown from now on.
+Studio documentation tests passed 108 tests. Website documentation tests passed 29 tests. Both typechecks and builds passed.
+The actual Studio browser check passed 81 pages, identical enlarged frames, light theme and phone width.
+PUBLICATION.md, publication-integrity.json and published-browser-checks.json retain commands, outputs and limitations.
+BUGS.md records seven confirmed issues and three refuted suspicions. No app bug repairs were included.
+Normal databases were not reset or seeded. The single captured form submission was not repeated.
+Changelog generation ran after the main merge. The final metadata commit and both branch refs are pushed together.
+Compare git rev-parse HEAD and git ls-remote origin refs/heads/main for the final remote check.
