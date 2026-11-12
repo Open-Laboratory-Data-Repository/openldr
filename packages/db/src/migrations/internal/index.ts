@@ -114,6 +114,7 @@ import * as m112 from './112_custom_query_groups';
 import * as m113 from './113_user_preferences';
 import * as m114 from './114_layout_presets';
 import * as m115 from './115_lab_order_requester';
+import * as m116 from './116_local_sign_in';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -232,4 +233,5 @@ export const internalMigrations: Record<string, Migration> = {
   '113_user_preferences': { up: m113.up, down: m113.down },
   '114_layout_presets': { up: m114.up, down: m114.down },
   '115_lab_order_requester': { up: m115.up, down: m115.down },
+  '116_local_sign_in': { up: m116.up, down: m116.down },
 };

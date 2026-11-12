@@ -194,6 +194,40 @@ export interface UsersTable {
   updated_at: Generated<Date>;
   last_login_at: Date | null;
   rbac_initialized: Generated<boolean>;
+  // Migration 116. Kept here, not on local_credentials, so an account with no password keeps them.
+  first_name: string | null;
+  last_name: string | null;
+}
+
+// Local sign-in (migration 116). Used only when AUTH_ADAPTER=local.
+export interface LocalCredentialsTable {
+  user_id: string;
+  password_hash: string;
+  must_change: Generated<boolean>;
+  failed_count: Generated<number>;
+  locked_until: Date | null;
+  password_changed_at: Generated<Date>;
+}
+export interface AuthSessionsTable {
+  id: string;
+  user_id: string;
+  secret_hash: string;
+  created_at: Generated<Date>;
+  last_used_at: Generated<Date>;
+  expires_at: Date;
+  ip: string | null;
+  user_agent: string | null;
+}
+export interface AuthSigningKeysTable {
+  kid: string;
+  sealed_private_jwk: string;
+  public_jwk: JSONColumnType<Record<string, unknown>>;
+  created_at: Generated<Date>;
+}
+export interface AuthSetupCodeTable {
+  id: number;
+  code_hash: string;
+  expires_at: Date;
 }
 
 export interface RolesTable {
@@ -979,6 +1013,10 @@ export interface InternalSchema {
   notification_reads: NotificationReadsTable;
   notification_prefs: NotificationPrefsTable;
   users: UsersTable;
+  local_credentials: LocalCredentialsTable;
+  auth_sessions: AuthSessionsTable;
+  auth_signing_keys: AuthSigningKeysTable;
+  auth_setup_code: AuthSetupCodeTable;
   account_access_blocks: { subject: string };
   /** Pairs of patients marked "not duplicates" (migration 111). patient_a < patient_b. */
   patient_duplicate_dismissals: {

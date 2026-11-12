@@ -69,6 +69,7 @@ export {
   type FacilityImportRunStatus,
 } from './facility-import-run-states';
 export { createRoleStore } from './role-store';
+export { createLocalAuthStore } from './local-auth-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, CapabilityReconciliation, CapabilityDiagnosis } from './role-store';
 export * from './reference-search';
 export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, toRow as facilityRecordToRow, toRecord as facilityRowToRecord } from './facility-registry-store';
