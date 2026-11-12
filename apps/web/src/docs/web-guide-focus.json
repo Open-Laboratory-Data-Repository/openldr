@@ -371,5 +371,425 @@
     },
     "markerPlacement": "before",
     "step": 6
+  },
+  "v1-import-guide-connectors.png": {
+    "crop": {
+      "x": 103.5,
+      "y": 168.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 252,
+        "y": 300,
+        "width": 183,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "v1-import-guide-access.png": {
+    "crop": {
+      "x": 800,
+      "y": 295.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1109,
+        "y": 429.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "v1-import-guide-allow.png": {
+    "crop": {
+      "x": 559,
+      "y": 0,
+      "width": 721,
+      "height": 450.625
+    },
+    "targets": [
+      {
+        "x": 609,
+        "y": 127.53125,
+        "width": 671,
+        "height": 64
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 3
+  },
+  "v1-import-guide-allowed.png": {
+    "crop": {
+      "x": 800,
+      "y": 9.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1220,
+        "y": 149.53125,
+        "width": 36,
+        "height": 20
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "v1-import-guide-plugin-nav.png": {
+    "crop": {
+      "x": 0,
+      "y": 484.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 8,
+        "y": 616,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "v1-import-guide-source.png": {
+    "crop": {
+      "x": 235.0,
+      "y": 0,
+      "width": 810,
+      "height": 506.25
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 183.6875,
+        "width": 760,
+        "height": 46.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 2
+  },
+  "v1-import-guide-connection.png": {
+    "crop": {
+      "x": 235.0,
+      "y": 293.75,
+      "width": 810,
+      "height": 506.25
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 579.140625,
+        "width": 760,
+        "height": 20.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 3
+  },
+  "v1-import-guide-timezone.png": {
+    "crop": {
+      "x": 292.0,
+      "y": 15.5390625,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 372,
+        "y": 147.390625,
+        "width": 320,
+        "height": 36.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "v1-import-guide-options.png": {
+    "crop": {
+      "x": 292.0,
+      "y": 202.8125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 372,
+        "y": 237.375,
+        "width": 320,
+        "height": 36.296875
+      },
+      {
+        "x": 372,
+        "y": 308.515625,
+        "width": 320,
+        "height": 38.296875
+      },
+      {
+        "x": 372,
+        "y": 358.8125,
+        "width": 320,
+        "height": 38.296875
+      },
+      {
+        "x": 372,
+        "y": 431.953125,
+        "width": 320,
+        "height": 36.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2,
+    "markerPlacements": [
+      "after",
+      "after",
+      "after",
+      "after"
+    ]
+  },
+  "v1-import-guide-checks.png": {
+    "crop": {
+      "x": 236.0,
+      "y": 0,
+      "width": 808,
+      "height": 505.0
+    },
+    "targets": [
+      {
+        "x": 261,
+        "y": 184.6875,
+        "width": 758,
+        "height": 39.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 3
+  },
+  "v1-import-guide-dry-limit.png": {
+    "crop": {
+      "x": 207.15625,
+      "y": 51.8359375,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 377.15625,
+        "y": 183.6875,
+        "width": 140,
+        "height": 36.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "v1-import-guide-dry-start.png": {
+    "crop": {
+      "x": 79.6484375,
+      "y": 104.1328125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 235.984375,
+        "width": 119.296875,
+        "height": 36.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "v1-import-guide-dry-result.png": {
+    "crop": {
+      "x": 235.0,
+      "y": 94.6015625,
+      "width": 810,
+      "height": 506.25
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 288.28125,
+        "width": 760,
+        "height": 118.890625
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 3
+  },
+  "v1-import-guide-import-summary.png": {
+    "crop": {
+      "x": 204.0,
+      "y": 67.1328125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 203.984375,
+        "width": 368,
+        "height": 26.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "v1-import-guide-import-start.png": {
+    "crop": {
+      "x": 77.8359375,
+      "y": 114.4296875,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 246.28125,
+        "width": 115.671875,
+        "height": 36.296875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "v1-import-guide-complete.png": {
+    "crop": {
+      "x": 235.0,
+      "y": 52.6015625,
+      "width": 810,
+      "height": 506.25
+    },
+    "targets": [
+      {
+        "x": 260,
+        "y": 246.28125,
+        "width": 760,
+        "height": 118.890625
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 3
+  },
+  "v1-import-guide-activity.png": {
+    "crop": {
+      "x": 0,
+      "y": 0.0,
+      "width": 1280,
+      "height": 800.0
+    },
+    "targets": [
+      {
+        "x": 240,
+        "y": 48,
+        "width": 1040,
+        "height": 752
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 4
+  },
+  "v1-import-guide-phone.png": {
+    "crop": {
+      "x": 0,
+      "y": 5.15625,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "x": 16,
+        "y": 109.296875,
+        "width": 343,
+        "height": 26.09375
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerPlacement": "inside",
+    "step": 1
   }
 }

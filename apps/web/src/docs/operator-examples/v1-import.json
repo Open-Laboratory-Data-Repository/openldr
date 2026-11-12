@@ -1,0 +1,30 @@
+{
+  "v1-status": {
+    "unix": "./openldr import status openldr-v1-import --json",
+    "windows": ".\\openldr.ps1 import status openldr-v1-import --json"
+  },
+  "v1-stop": {
+    "unix": "./openldr import stop openldr-v1-import RUN_ID",
+    "windows": ".\\openldr.ps1 import stop openldr-v1-import RUN_ID"
+  },
+  "v1-resume": {
+    "unix": "./openldr import resume openldr-v1-import RUN_ID --json",
+    "windows": ".\\openldr.ps1 import resume openldr-v1-import RUN_ID --json"
+  },
+  "v1-failures": {
+    "unix": "./openldr import failures openldr-v1-import RUN_ID --json",
+    "windows": ".\\openldr.ps1 import failures openldr-v1-import RUN_ID --json"
+  },
+  "v1-allow": {
+    "unix": "./openldr import allow openldr-v1-import CONNECTOR_ID",
+    "windows": ".\\openldr.ps1 import allow openldr-v1-import CONNECTOR_ID"
+  },
+  "v1-dry": {
+    "unix": "./openldr import start --plugin openldr-v1-import --connector CONNECTOR_ID --option tz=+02:00 --dry-run --limit 100",
+    "windows": ".\\openldr.ps1 import start --plugin openldr-v1-import --connector CONNECTOR_ID --option tz=+02:00 --dry-run --limit 100"
+  },
+  "v1-start": {
+    "unix": "./openldr import start --plugin openldr-v1-import --connector CONNECTOR_ID --option tz=+02:00",
+    "windows": ".\\openldr.ps1 import start --plugin openldr-v1-import --connector CONNECTOR_ID --option tz=+02:00"
+  }
+}
