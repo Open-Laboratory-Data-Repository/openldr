@@ -1,0 +1,25 @@
+{
+  "userId": "98d39a17-dc15-43f4-af80-0be7e8169367",
+  "created": {
+    "username": "documentation.operator",
+    "firstName": "Documentation",
+    "lastName": "Operator",
+    "email": "operator@example.invalid"
+  },
+  "createdRole": "lab_technician",
+  "initialPasswordTemporary": true,
+  "initialTokenResponse": 400,
+  "editedRole": "system_auditor",
+  "editedName": "Guide Operator",
+  "disabledSignIn": 400,
+  "enabledSignIn": 400,
+  "resetSignIn": 200,
+  "refreshAfterSignOut": 400,
+  "restrictedSystemAuditor": {
+    "/me": 200,
+    "/users": 403,
+    "/roles": 403,
+    "/audit": 200
+  },
+  "enabledTokenResponseReason": "Account is not fully set up. Initial password is temporary."
+}

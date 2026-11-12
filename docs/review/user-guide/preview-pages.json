@@ -10,5 +10,6 @@
   "connectors": "connectors-review.html",
   "connector-diagnose": "connector-diagnose-review.html",
   "workflows": "workflows-review.html",
-  "activity": "activity-review.html"
+  "activity": "activity-review.html",
+  "users": "users-review.html"
 }

@@ -1,0 +1,1771 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/charts/; img-src 'self' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Users guide preview</title>
+<style>:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI",
+    Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget > :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  --btn-size: calc(12px + 2 * var(--control-spacing, 12px));
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: var(--btn-size);
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+/* Codex Button size="compact"; appearance stays with the button variant. */
+.btn-sm {
+  --btn-size: 24px;
+  padding-inline: 8px;
+  font-size: calc(var(--font-size-base) * 12 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 12 / 16), 1px);
+  line-height: 16px;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled="true"]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(> .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel > [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel > [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host's design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker > summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-picker > summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls > button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker > summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls > button > svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls > button::before,
+.viz-carousel-picker > summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.viz-carousel-controls > button:hover::before,
+.viz-carousel-picker > summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker > summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options > button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options > [aria-current="true"],
+.viz-carousel-options > button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type="file"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="color"]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type="file"]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select :is(option, optgroup) {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select :is(option, optgroup):disabled {
+  color: var(--muted-foreground);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: "";
+}
+
+.form-check-input[type="radio"] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type="radio"]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type="radio"]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host's proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn-sm {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 12 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 12 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(> .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker > summary,
+  .form-control,
+  .form-select {
+    --btn-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type="file"],
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="week"],
+    [type="time"],
+    [type="color"]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html>body{padding:0}
+:root{--guide-preview-height:100dvh}</style>
+</head>
+<body>
+<style>
+#users-evidence-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#users-evidence-guide * { box-sizing:border-box; }
+#users-evidence-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#users-evidence-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
+#users-evidence-guide .dg-head strong { font-size:16px; font-weight:600; }
+#users-evidence-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
+#users-evidence-guide .dg-head-icons { margin-left:auto; display:flex; align-items:center; gap:20px; color:var(--dg-muted); padding-right:80px; }
+#users-evidence-guide .dg-main { display:flex; min-height:0; flex:1; }
+#users-evidence-guide .dg-sidebar { width:256px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--dg-border); }
+#users-evidence-guide .dg-search { height:48px; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--dg-border); flex-shrink:0; }
+#users-evidence-guide .dg-search input { min-width:0; width:100%; border:1px solid var(--dg-border); border-radius:6px; padding:7px 10px; background:transparent; color:var(--dg-text); font:inherit; }
+#users-evidence-guide .dg-docnav { overflow:auto; min-height:0; padding:4px 0 16px; }
+#users-evidence-guide .dg-group { margin-top:5px; padding-top:8px; border-top:1px solid var(--dg-border); }
+#users-evidence-guide .dg-group:first-child { border:0; margin:0; }
+#users-evidence-guide .dg-group-label { display:block; padding:4px 12px; text-transform:uppercase; font-size:10px; color:var(--dg-muted); font-weight:600; letter-spacing:.03em; }
+#users-evidence-guide .dg-navitem { display:block; padding:8px 12px; color:var(--dg-text); text-decoration:none; }
+#users-evidence-guide .dg-selected { border-left:2px solid var(--dg-brand); background:var(--dg-wash); color:var(--dg-link); padding-left:10px; }
+#users-evidence-guide .dg-content { min-width:0; flex:1; display:flex; flex-direction:column; }
+#users-evidence-guide .dg-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:12px; height:48px; flex-shrink:0; border-bottom:1px solid var(--dg-border); padding:0 12px; }
+#users-evidence-guide .dg-version { font-size:12px; border:1px solid var(--dg-border); border-radius:6px; padding:4px 9px; color:var(--dg-muted); }
+#users-evidence-guide .dg-version b { color:var(--dg-text); font-weight:500; }
+#users-evidence-guide button { font:inherit; color:inherit; cursor:inherit; }
+#users-evidence-guide .dg-iconbtn { border:0; background:none; padding:5px; display:inline-flex; align-items:center; border-radius:4px; color:var(--dg-muted); }
+#users-evidence-guide .dg-iconbtn:hover { background:var(--dg-wash); }
+#users-evidence-guide .dg-scroll { min-height:0; flex:1; overflow:auto; padding:24px; scroll-behavior:smooth; }
+#users-evidence-guide .dg-columns { display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:32px; align-items:start; }
+#users-evidence-guide .dg-article { min-width:0; }
+#users-evidence-guide h1 { font-size:24px; line-height:1.3; margin:0 0 12px; font-weight:600; }
+#users-evidence-guide h2 { font-size:18px; font-weight:600; margin:30px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--dg-rule); scroll-margin-top:12px; }
+#users-evidence-guide h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#users-evidence-guide p { margin:8px 0; }
+#users-evidence-guide .dg-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; color:var(--dg-muted); }
+#users-evidence-guide .dg-meta span { border:1px solid var(--dg-border); border-radius:5px; padding:1px 7px; font-size:11px; }
+#users-evidence-guide .dg-intro { color:var(--dg-muted); }
+#users-evidence-guide .dg-example { border-left:2px solid var(--dg-brand); padding-left:12px; margin:18px 0; }
+#users-evidence-guide .dg-example p { margin:4px 0; }
+#users-evidence-guide .dg-onpage { position:sticky; top:0; color:var(--dg-muted); font-size:12px; }
+#users-evidence-guide .dg-onpage > p { text-transform:uppercase; font-size:10px; letter-spacing:.03em; margin:5px 0 12px; }
+#users-evidence-guide .dg-onpage a { display:block; color:inherit; text-decoration:none; padding:6px 0 6px 12px; border-left:2px solid transparent; }
+#users-evidence-guide .dg-onpage a:hover,#users-evidence-guide .dg-onpage a[aria-current] { color:var(--dg-link); border-color:var(--dg-brand); }
+#users-evidence-guide .dg-onpage small { display:block; font-size:11px; margin:24px 0 0 12px; }
+#users-evidence-guide .dg-loop { margin:14px 0 22px; max-width:500px; }
+#users-evidence-guide .dg-loop video { width:100%; display:block; border:1px solid var(--dg-border); border-radius:6px; background:#171717; }
+#users-evidence-guide .dg-loop-control { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--dg-muted); font-size:11px; margin-top:5px; }
+#users-evidence-guide .dg-loop-control button { border:0; padding:3px 0; color:var(--dg-link); background:none; }
+#users-evidence-guide .dg-step { padding:17px 0 18px; border-bottom:1px solid var(--dg-rule); }
+#users-evidence-guide .dg-step:last-child { border-bottom:0; }
+#users-evidence-guide .dg-number { color:var(--dg-muted); display:inline-block; min-width:22px; font-variant-numeric:tabular-nums; }
+#users-evidence-guide .dg-step p { margin:4px 0 10px 22px; }
+#users-evidence-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
+#users-evidence-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
+#users-evidence-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#users-evidence-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
+#users-evidence-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
+#users-evidence-guide .dg-result p { margin:3px 0; }
+#users-evidence-guide code { display:inline-block; max-width:100%; box-sizing:border-box; overflow-wrap:anywhere; font:12px/1.6 ui-monospace,monospace; background:var(--dg-pane); padding:2px 5px; border:1px solid var(--dg-border); border-radius:4px; }
+#users-evidence-guide pre { margin:12px 0; padding:12px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#users-evidence-guide pre code { background:none; border:0; padding:0; }
+#users-evidence-guide .dg-config { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 18px; margin:14px 0; }
+#users-evidence-guide .dg-config dt { color:var(--dg-muted); }
+#users-evidence-guide .dg-config dd { margin:0; }
+#users-evidence-guide .dg-onpage .dg-subtoc { padding-left:24px; }
+#users-evidence-guide details { padding:12px 0; border-bottom:1px solid var(--dg-rule); }
+#users-evidence-guide summary { font-weight:500; cursor:inherit; }
+#users-evidence-guide details p { color:var(--dg-muted); }
+#users-evidence-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
+#users-evidence-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#users-evidence-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#users-evidence-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
+#users-evidence-guide .dg-app { position:relative; }
+#users-evidence-guide [hidden] { display:none !important; }
+#users-evidence-guide.dg-folded .dg-sidebar { display:none; }
+@media(max-width:1279px) { #users-evidence-guide .dg-columns { grid-template-columns:minmax(0,1fr); } #users-evidence-guide .dg-onpage { display:none; } }
+@media(max-width:600px) { #users-evidence-guide .dg-sidebar { display:none; } #users-evidence-guide .dg-scroll { padding:18px; } #users-evidence-guide .dg-head { padding:0 12px; } #users-evidence-guide .dg-head-icons { padding-right:0; gap:12px; } #users-evidence-guide .dg-review { display:none; } #users-evidence-guide .dg-shot { margin-left:0; } #users-evidence-guide .dg-step p { margin-left:0; } }
+@media(prefers-reduced-motion:reduce) { #users-evidence-guide .dg-scroll { scroll-behavior:auto; } }
+</style>
+<div id="users-evidence-guide" aria-label="Facilities user guide preview">
+ <div class="dg-app">
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Users guide preview</span><div class="dg-head-icons"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-right" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bell" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><button type="button" class="dg-iconbtn cursor-interaction" data-theme-toggle aria-label="Switch preview theme"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></button></div></header>
+  <div class="dg-main">
+   <aside class="dg-sidebar">
+    <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-close" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m16 15-3-3 3-3"></path></svg></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
+    <nav class="dg-docnav" aria-label="Documentation sections"><div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem" href="start-here-review.html">Start Here</a></div><div class="dg-group"><span class="dg-group-label">Set up your system</span><a class="dg-navitem" href="terminology-review.html">Terminology</a><a class="dg-navitem" href="facilities-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Facilities</a><a class="dg-navitem" href="test-catalog-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Test catalog</a><a class="dg-navitem" href="patients-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Patients</a><span class="dg-navitem">Forms</span><a class="dg-navitem" href="workflows-review.html">Workflows</a></div><div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><a class="dg-navitem" href="activity-review.html">Activity</a></div><div class="dg-group"><span class="dg-group-label">Build and manage</span><span class="dg-navitem">Scheduled reports with workflows</span><span class="dg-navitem">Custom Queries</span><span class="dg-navitem">Report Designer</span></div><div class="dg-group"><span class="dg-group-label">Administration</span><span class="dg-navitem">Layouts</span><a class="dg-navitem dg-selected" href="#dg-top" aria-current="page">Users and Roles</a><a class="dg-navitem" href="roles-review.html">Roles</a><span class="dg-navitem">Audit</span><span class="dg-navitem">Settings</span><span class="dg-navitem">Setup checks</span><span class="dg-navitem">Laboratory</span><span class="dg-navitem">Data exposure</span><span class="dg-navitem">Distributed Sync</span><a class="dg-navitem" href="connectors-review.html">Connectors</a><a class="dg-navitem" href="connector-diagnose-review.html">Connect to SQL Server and diagnose a connection</a><span class="dg-navitem">Import from OpenLDR v1</span><span class="dg-navitem">Marketplace</span><span class="dg-navitem">Plugin cards and side panels</span><span class="dg-navitem">Authentication providers</span><span class="dg-navitem">Environment Variables</span><span class="dg-navitem">Planned upgrades</span></div><div class="dg-group"><span class="dg-group-label">Personal settings</span><a class="dg-navitem" href="preferences-review.html">Your preferences</a></div><div class="dg-group"><span class="dg-group-label">More</span><span class="dg-navitem">Deployment &amp; Developer Docs</span></div></nav>
+   </aside>
+   <section class="dg-content">
+    <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-open" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m14 9 3 3-3 3"></path></svg></button><span class="dg-version">Version <b>0.1.8</b></span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></div>
+    <div class="dg-scroll" data-reading-pane>
+     <div class="dg-columns">
+      <article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Manage accounts and assign a role</span><span>About 20 minutes</span></div>
+<h1>Users</h1>
+<p>Use Users to find accounts, update their profiles, assign a role and control access. Roles define the permissions an account receives. The Users sheet selects one role per person.</p>
+<p>Use your own staff accounts and approved access decisions. The pictures use a fictional account in an isolated test installation. No sample data is required.</p>
+<p>View users allows the directory. Manage users allows account creation, profile changes and enabling or disabling access. Manage roles allows role assignment. Reset passwords and Force logout allow their respective security actions.</p>
+<p>Creating accounts, editing provider profiles, resetting passwords and ending provider sessions require a configured identity administrator. When it is unavailable, the page tells you to contact your identity provider administrator. OpenLDR role and account-access controls remain available.</p>
+<p>For installation and command-line setup, read <a href="./start-here-review.html">Start here</a>. To define role permissions, read <a href="./roles-review.html">Roles</a>.</p>
+<h2 id="dg-create">Create an operator account</h2>
+<p>Use this when a person needs their own sign-in. Check the required role before creating the account.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Users</h3><p>Select <strong>Users</strong> in the main menu.</p><figure class="dg-shot dg-context-shot" data-shot-id="open-users"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select Users in the main menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:0.0%;top:-108.0%"><img class="fc-background" data-evidence="open-users" alt="Select Users in the main menu."><img class="fc-sharp" data-evidence="open-users" alt="" aria-hidden="true" style="clip-path:inset(56.99999999999999% 81.953125% 38.5% 0.625%)"><span class="fc-ring" aria-hidden="true" style="left:0.625%;top:56.99999999999999%;width:17.421875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Select Users in the main menu.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose New user</h3><p>Open the page dots above the directory and select <strong>New user</strong>. If it is unavailable, contact your identity provider administrator.</p><figure class="dg-shot dg-context-shot" data-shot-id="page-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the Users page dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="page-actions" alt="Open the Users page dots menu."><img class="fc-sharp" data-evidence="page-actions" alt="" aria-hidden="true" style="clip-path:inset(7.000000000000001% 0.9375% 89.0% 96.5625%)"><span class="fc-ring" aria-hidden="true" style="left:96.5625%;top:7.000000000000001%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Open the Users page dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="new-user"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose New user."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="new-user" alt="Choose New user."><img class="fc-sharp" data-evidence="new-user" alt="" aria-hidden="true" style="clip-path:inset(12.125% 1.328125% 83.875% 86.953125%)"><span class="fc-ring" aria-hidden="true" style="left:86.953125%;top:12.125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Choose New user.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter the username</h3><p>Enter the person's sign-in username. The example uses <code>documentation.operator</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="username"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter the account username."><span class="fc-screenshot"><span class="fc-scene" style="width:257.8533207428392%;height:257.8533207428392%;left:-157.85332074283914%;top:-19.146994019515265%"><img class="fc-background" data-evidence="username" alt="Enter the account username."><img class="fc-sharp" data-evidence="username" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 1.875% 70.93359375% 63.24951171874999%)"><span class="fc-ring" aria-hidden="true" style="left:63.24951171874999%;top:24.56640625%;width:34.87548828125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Enter the account username.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose an initial password</h3><p>Enter an initial <strong>Password</strong>, or leave it blank and arrange activation through your identity provider. An initial password requires a change at the next sign-in. Share account credentials through your approved process.</p><figure class="dg-shot dg-context-shot" data-shot-id="password"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter an initial password, or leave it blank and arrange activation through your provider."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-37.51041666666667%"><img class="fc-background" data-evidence="password" alt="Enter an initial password, or leave it blank and arrange activation through your provider."><img class="fc-sharp" data-evidence="password" alt="" aria-hidden="true" style="clip-path:inset(30.56640625% 1.875% 64.93359375% 67.017822265625%)"><span class="fc-ring" aria-hidden="true" style="left:67.017822265625%;top:30.56640625%;width:31.107177734375004%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Enter an initial password, or leave it blank and arrange activation through your provider.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm the password</h3><p>If you entered a password, enter it again in <strong>Confirm password</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="confirm-password"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter the same initial password again."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-53.51041666666667%"><img class="fc-background" data-evidence="confirm-password" alt="Enter the same initial password again."><img class="fc-sharp" data-evidence="confirm-password" alt="" aria-hidden="true" style="clip-path:inset(36.56640625% 1.875% 58.93359375% 67.017822265625%)"><span class="fc-ring" aria-hidden="true" style="left:67.017822265625%;top:36.56640625%;width:31.107177734375004%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Enter the same initial password again.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose the role</h3><p>Select the role that grants the actions this person needs. New accounts default to <strong>Lab Technician</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="choose-role"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the role that matches this person. The example uses Lab Technician."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-126.21419270833334%;top:-121.50000000000001%"><img class="fc-background" data-evidence="choose-role" alt="Choose the role that matches this person. The example uses Lab Technician."><img class="fc-sharp" data-evidence="choose-role" alt="" aria-hidden="true" style="clip-path:inset(62.31250000000001% 28.67919921875% 33.6875% 60.83984375%)"><span class="fc-ring" aria-hidden="true" style="left:60.83984375%;top:62.31250000000001%;width:10.48095703125%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Choose the role that matches this person. The example uses Lab Technician.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Complete the profile</h3><p>Fill the fields in your published Users form. The pictured form asks for first name, last name and email. Your form may contain different fields. A published form is optional for account creation.</p><figure class="dg-shot dg-context-shot" data-shot-id="profile"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Complete the published Users form. This test form asks for name and email."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-103.21490467937609%"><img class="fc-background" data-evidence="profile" alt="Complete the published Users form. This test form asks for name and email."><img class="fc-sharp" data-evidence="profile" alt="" aria-hidden="true" style="clip-path:inset(66.81640625% 1.875% 28.683593750000004% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:66.81640625%;width:41.171875%;height:4.5%"><span class="fc-marker" style="left:auto;right:4px">7</span></span></span></span></button><figcaption>Complete the published Users form. This test form asks for name and email.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Create the account</h3><p>Open the sheet dots and select <strong>Create</strong>. If role assignment fails after saving the account, choose a valid role and retry in the same sheet.</p><figure class="dg-shot dg-context-shot" data-shot-id="sheet-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the New user sheet dots."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.1770833333333333%"><img class="fc-background" data-evidence="sheet-actions" alt="Open the New user sheet dots."><img class="fc-sharp" data-evidence="sheet-actions" alt="" aria-hidden="true" style="clip-path:inset(17.44140625% 1.875% 79.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:17.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">8</span></span></span></span></button><figcaption>Open the New user sheet dots.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="create-user"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Create to save the account and role."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="create-user" alt="Choose Create to save the account and role."><img class="fc-sharp" data-evidence="create-user" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">8</span></span></span></span></button><figcaption>Choose Create to save the account and role.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and the new account appears Active in the directory.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="created-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The account appears Active with its name and email."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-18.736979166666668%;top:-21.166666666666668%"><img class="fc-background" data-evidence="created-result" alt="The account appears Active with its name and email."><img class="fc-sharp" data-evidence="created-result" alt="" aria-hidden="true" style="clip-path:inset(25.687500000000004% 68.447265625% 72.3125% 20.0%)"><span class="fc-ring" aria-hidden="true" style="left:20.0%;top:25.687500000000004%;width:11.552734375%;height:2.0%"></span></span></span></button><figcaption>The account appears Active with its name and email.</figcaption></figure>
+<h2 id="dg-edit">Edit a profile or assign another role</h2>
+<p>Use this when staff details or responsibilities change. Changing the role changes the permissions the person receives.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the account</h3><p>Search by username, name or email. Search applies to the whole directory.</p><figure class="dg-shot dg-context-shot" data-shot-id="search-user"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search across the whole directory by username, name or email."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-29.166666666666668%;top:0.0%"><img class="fc-background" data-evidence="search-user" alt="Search across the whole directory by username, name or email."><img class="fc-sharp" data-evidence="search-user" alt="" aria-hidden="true" style="clip-path:inset(7.000000000000001% 60.3125% 89.0% 19.6875%)"><span class="fc-ring" aria-hidden="true" style="left:19.6875%;top:7.000000000000001%;width:20.0%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Search across the whole directory by username, name or email.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open its actions</h3><p>Select the dots for the correct account.</p><figure class="dg-shot dg-context-shot" data-shot-id="row-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the dots for the correct user."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-21.166666666666668%"><img class="fc-background" data-evidence="row-actions" alt="Open the dots for the correct user."><img class="fc-sharp" data-evidence="row-actions" alt="" aria-hidden="true" style="clip-path:inset(24.6875% 1.25% 71.3125% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:24.6875%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Open the dots for the correct user.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Edit</h3><p>Select <strong>Edit</strong>. Selecting the row opens the same sheet. With identity administration unavailable, this menu reads <strong>Edit role</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-user"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Edit to open the profile and role."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-34.833333333333336%"><img class="fc-background" data-evidence="edit-user" alt="Choose Edit to open the profile and role."><img class="fc-sharp" data-evidence="edit-user" alt="" aria-hidden="true" style="clip-path:inset(29.812499999999996% 1.640625% 66.1875% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:29.812499999999996%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Choose Edit to open the profile and role.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Update the profile</h3><p>Edit the fields provided by your Users form. Username cannot be changed here.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-profile"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Update the profile fields your Users form provides."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-44.51041666666667%"><img class="fc-background" data-evidence="edit-profile" alt="Update the profile fields your Users form provides."><img class="fc-sharp" data-evidence="edit-profile" alt="" aria-hidden="true" style="clip-path:inset(33.19140625% 1.875% 62.30859375% 72.421875%)"><span class="fc-ring" aria-hidden="true" style="left:72.421875%;top:33.19140625%;width:25.703125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Update the profile fields your Users form provides.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose the role</h3><p>Open <strong>Role</strong> and select the required role. The example chooses <strong>System Auditor</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="change-role"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose another role. The example changes to System Auditor."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-126.21419270833334%;top:-77.16666666666666%"><img class="fc-background" data-evidence="change-role" alt="Choose another role. The example changes to System Auditor."><img class="fc-sharp" data-evidence="change-role" alt="" aria-hidden="true" style="clip-path:inset(45.6875% 28.67919921875% 50.31250000000001% 60.83984375%)"><span class="fc-ring" aria-hidden="true" style="left:60.83984375%;top:45.6875%;width:10.48095703125%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Choose another role. The example changes to System Auditor.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the account</h3><p>Open the sheet dots and select <strong>Save</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="save-user"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Save in the sheet dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="save-user" alt="Choose Save in the sheet dots menu."><img class="fc-sharp" data-evidence="save-user" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Choose Save in the sheet dots menu.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and the directory shows the saved profile. Reopen the account to inspect its saved role.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="edited-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The saved profile appears in the Users table."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-88.93391927083333%;top:-35.16666666666667%"><img class="fc-background" data-evidence="edited-result" alt="The saved profile appears in the Users table."><img class="fc-sharp" data-evidence="edited-result" alt="" aria-hidden="true" style="clip-path:inset(28.375% 39.122314453125% 64.5% 43.32275390625%)"><span class="fc-ring" aria-hidden="true" style="left:43.32275390625%;top:28.375%;width:17.554931640625%;height:7.124999999999999%"></span></span></span></button><figcaption>The saved profile appears in the Users table.</figcaption></figure>
+<h2 id="dg-disable">Disable account access</h2>
+<p>Use this when someone should no longer sign in. You cannot disable your own account through its row menu.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Disable</h3><p>Find the account. Open its row dots and select <strong>Disable</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="disable-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Disable for the correct user."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-45.5%"><img class="fc-background" data-evidence="disable-menu" alt="Choose Disable for the correct user."><img class="fc-sharp" data-evidence="disable-menu" alt="" aria-hidden="true" style="clip-path:inset(33.8125% 1.640625% 62.18749999999999% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:33.8125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Choose Disable for the correct user.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the account</h3><p>Check the username in the confirmation. Select <strong>Disable</strong> to continue.</p><figure class="dg-shot dg-context-shot" data-shot-id="disable-confirm"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Confirm the account name before selecting Disable."><span class="fc-screenshot"><span class="fc-scene" style="width:257.0281124497992%;height:257.0281124497992%;left:-78.5140562248996%;top:-78.5140562248996%"><img class="fc-background" data-evidence="disable-confirm" alt="Confirm the account name before selecting Disable."><img class="fc-sharp" data-evidence="disable-confirm" alt="" aria-hidden="true" style="clip-path:inset(36.966796875% 32.5% 36.966796875% 32.5%)"><span class="fc-ring" aria-hidden="true" style="left:32.5%;top:36.966796875%;width:35.0%;height:26.06640625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Confirm the account name before selecting Disable.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open Status</h3><p>Disabled accounts disappear from the default Active list. Open <strong>Status</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="status-filter"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use Status to find a disabled account."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-74.16666666666667%;top:0.0%"><img class="fc-background" data-evidence="status-filter" alt="Use Status to find a disabled account."><img class="fc-sharp" data-evidence="status-filter" alt="" aria-hidden="true" style="clip-path:inset(7.000000000000001% 47.1875% 89.0% 40.3125%)"><span class="fc-ring" aria-hidden="true" style="left:40.3125%;top:7.000000000000001%;width:12.5%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Use Status to find a disabled account.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Disabled</h3><p>Select <strong>Disabled</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="disabled-option"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Disabled."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-70.83333333333334%;top:-7.666666666666666%"><img class="fc-background" data-evidence="disabled-option" alt="Choose Disabled."><img class="fc-sharp" data-evidence="disabled-option" alt="" aria-hidden="true" style="clip-path:inset(19.625% 50.07812499999999% 76.375% 40.703125%)"><span class="fc-ring" aria-hidden="true" style="left:40.703125%;top:19.625%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Choose Disabled.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The account appears with Disabled status. Disabling access keeps the account and profile.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="disabled-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The account appears with Disabled status."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-35.16666666666667%"><img class="fc-background" data-evidence="disabled-result" alt="The account appears with Disabled status."><img class="fc-sharp" data-evidence="disabled-result" alt="" aria-hidden="true" style="clip-path:inset(30.562499999999996% 6.25% 66.6875% 88.695068359375%)"><span class="fc-ring" aria-hidden="true" style="left:88.695068359375%;top:30.562499999999996%;width:5.054931640625%;height:2.75%"></span></span></span></button><figcaption>The account appears with Disabled status.</figcaption></figure>
+<h2 id="dg-enable">Restore account access</h2>
+<p>Use this when a disabled person should be able to sign in again.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Enable</h3><p>Find the account using Status set to Disabled or All statuses. Open its row dots and select <strong>Enable</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="enable-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Enable to restore account access."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-59.5%"><img class="fc-background" data-evidence="enable-menu" alt="Choose Enable to restore account access."><img class="fc-sharp" data-evidence="enable-menu" alt="" aria-hidden="true" style="clip-path:inset(39.0625% 1.640625% 56.9375% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:39.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Choose Enable to restore account access.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the account</h3><p>Check the username, then select <strong>Enable</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="enable-confirm"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check the account, then confirm Enable."><span class="fc-screenshot"><span class="fc-scene" style="width:257.0281124497992%;height:257.0281124497992%;left:-78.5140562248996%;top:-78.5140562248996%"><img class="fc-background" data-evidence="enable-confirm" alt="Check the account, then confirm Enable."><img class="fc-sharp" data-evidence="enable-confirm" alt="" aria-hidden="true" style="clip-path:inset(36.966796875% 32.5% 36.966796875% 32.5%)"><span class="fc-ring" aria-hidden="true" style="left:32.5%;top:36.966796875%;width:35.0%;height:26.06640625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Check the account, then confirm Enable.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Return to Active</h3><p>Open <strong>Status</strong> and choose <strong>Active</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="active-option"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Active to find the enabled account."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-70.83333333333334%;top:0.0%"><img class="fc-background" data-evidence="active-option" alt="Choose Active to find the enabled account."><img class="fc-sharp" data-evidence="active-option" alt="" aria-hidden="true" style="clip-path:inset(15.625% 50.07812499999999% 80.375% 40.703125%)"><span class="fc-ring" aria-hidden="true" style="left:40.703125%;top:15.625%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose Active to find the enabled account.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The account returns to the Active list.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="enabled-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The account returns to the Active list."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-35.16666666666667%"><img class="fc-background" data-evidence="enabled-result" alt="The account returns to the Active list."><img class="fc-sharp" data-evidence="enabled-result" alt="" aria-hidden="true" style="clip-path:inset(30.562499999999996% 7.290039062500001% 66.6875% 88.75%)"><span class="fc-ring" aria-hidden="true" style="left:88.75%;top:30.562499999999996%;width:3.9599609374999996%;height:2.75%"></span></span></span></button><figcaption>The account returns to the Active list.</figcaption></figure>
+<h2 id="dg-password">Reset a password</h2>
+<p>Use this when an account needs a replacement password. This requires identity administration and Reset passwords.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Reset password</h3><p>Find the account. Open its row dots and select <strong>Reset password</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="reset-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Reset password for the correct account."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-70.16666666666667%"><img class="fc-background" data-evidence="reset-menu" alt="Choose Reset password for the correct account."><img class="fc-sharp" data-evidence="reset-menu" alt="" aria-hidden="true" style="clip-path:inset(43.0625% 1.640625% 52.93750000000001% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:43.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Choose Reset password for the correct account.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter a new password</h3><p>Enter <strong>New password</strong>. <strong>Generate</strong> creates a password and fills both fields. The eye reveals it and Copy copies it.</p><figure class="dg-shot dg-context-shot" data-shot-id="reset-new-password"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter a new password. Generate can fill both password fields."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-79.16666666666666%;top:-70.58333333333333%"><img class="fc-background" data-evidence="reset-new-password" alt="Enter a new password. Generate can fill both password fields."><img class="fc-sharp" data-evidence="reset-new-password" alt="" aria-hidden="true" style="clip-path:inset(42.96875% 37.578125% 52.53124999999999% 34.453125%)"><span class="fc-ring" aria-hidden="true" style="left:34.453125%;top:42.96875%;width:27.968749999999996%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Enter a new password. Generate can fill both password fields.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Confirm the new password</h3><p>Enter the same password in <strong>Confirm password</strong>. Generate has already filled this for you.</p><figure class="dg-shot dg-context-shot" data-shot-id="reset-confirm-password"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter the same new password again."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-83.33333333333334%;top:-93.58333333333333%"><img class="fc-background" data-evidence="reset-confirm-password" alt="Enter the same new password again."><img class="fc-sharp" data-evidence="reset-confirm-password" alt="" aria-hidden="true" style="clip-path:inset(51.59375000000001% 34.453125% 43.90625% 34.453125%)"><span class="fc-ring" aria-hidden="true" style="left:34.453125%;top:51.59375000000001%;width:31.093749999999996%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Enter the same new password again.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose whether it is temporary</h3><p>Keep <strong>Require password change at next sign-in</strong> selected for a temporary password. Clear it only when the person should use this password directly.</p><figure class="dg-shot dg-context-shot" data-shot-id="reset-change"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Keep Require password change on for a temporary password, or turn it off when appropriate."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-83.33333333333334%;top:-106.91666666666666%"><img class="fc-background" data-evidence="reset-change" alt="Keep Require password change on for a temporary password, or turn it off when appropriate."><img class="fc-sharp" data-evidence="reset-change" alt="" aria-hidden="true" style="clip-path:inset(57.59375% 34.453125% 39.90625% 34.453125%)"><span class="fc-ring" aria-hidden="true" style="left:34.453125%;top:57.59375%;width:31.093749999999996%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Keep Require password change on for a temporary password, or turn it off when appropriate.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Reset the password</h3><p>Select <strong>Reset password</strong>. Share the password securely using your approved process.</p><figure class="dg-shot dg-context-shot" data-shot-id="reset-submit"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select Reset password after checking the password-change choice."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-111.00097656250001%;top:-132.08333333333334%"><img class="fc-background" data-evidence="reset-submit" alt="Select Reset password after checking the password-change choice."><img class="fc-sharp" data-evidence="reset-submit" alt="" aria-hidden="true" style="clip-path:inset(66.03125% 34.453125% 29.46875% 55.203857421875%)"><span class="fc-ring" aria-hidden="true" style="left:55.203857421875%;top:66.03125%;width:10.343017578125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Select Reset password after checking the password-change choice.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The page confirms the password reset. With the default temporary option, the person must change it at their next sign-in.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="reset-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The page confirms that the password was reset."><span class="fc-screenshot"><span class="fc-scene" style="width:120.0750469043152%;height:120.0750469043152%;left:-20.075046904315197%;top:0.0%"><img class="fc-background" data-evidence="reset-result" alt="The page confirms that the password was reset."><img class="fc-sharp" data-evidence="reset-result" alt="" aria-hidden="true" style="clip-path:inset(18.0% 0.9375% 77.75% 19.6875%)"><span class="fc-ring" aria-hidden="true" style="left:19.6875%;top:18.0%;width:79.375%;height:4.25%"></span></span></span></button><figcaption>The page confirms that the password was reset.</figcaption></figure>
+<h2 id="dg-logout">End a user&#x27;s provider sessions</h2>
+<p>Use this when existing provider sessions should end. This requires identity administration and Force logout.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Force sign-out</h3><p>Find the account. Open its row dots and select <strong>Force sign-out</strong>. You cannot use this action on yourself here.</p><figure class="dg-shot dg-context-shot" data-shot-id="logout-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Force sign-out to end this user&#x27;s provider sessions."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-91.5%"><img class="fc-background" data-evidence="logout-menu" alt="Choose Force sign-out to end this user&#x27;s provider sessions."><img class="fc-sharp" data-evidence="logout-menu" alt="" aria-hidden="true" style="clip-path:inset(51.0625% 1.640625% 44.9375% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:51.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Choose Force sign-out to end this user&#x27;s provider sessions.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the account</h3><p>Check the username and select <strong>Force sign-out</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="logout-confirm"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Confirm Force sign-out for the correct account."><span class="fc-screenshot"><span class="fc-scene" style="width:257.0281124497992%;height:257.0281124497992%;left:-78.5140562248996%;top:-78.5140562248996%"><img class="fc-background" data-evidence="logout-confirm" alt="Confirm Force sign-out for the correct account."><img class="fc-sharp" data-evidence="logout-confirm" alt="" aria-hidden="true" style="clip-path:inset(36.966796875% 32.5% 36.966796875% 32.5%)"><span class="fc-ring" aria-hidden="true" style="left:32.5%;top:36.966796875%;width:35.0%;height:26.06640625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Confirm Force sign-out for the correct account.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The page confirms that all sessions were signed out. This action does not disable the account.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="logout-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The page confirms that all sessions were signed out."><span class="fc-screenshot"><span class="fc-scene" style="width:120.0750469043152%;height:120.0750469043152%;left:-20.075046904315197%;top:0.0%"><img class="fc-background" data-evidence="logout-result" alt="The page confirms that all sessions were signed out."><img class="fc-sharp" data-evidence="logout-result" alt="" aria-hidden="true" style="clip-path:inset(18.0% 0.9375% 77.75% 19.6875%)"><span class="fc-ring" aria-hidden="true" style="left:19.6875%;top:18.0%;width:79.375%;height:4.25%"></span></span></span></button><figcaption>The page confirms that all sessions were signed out.</figcaption></figure>
+<h2 id="dg-phone">Use Users on a phone</h2>
+<p>Use the same directory and account sheet on a phone. Wide columns can require horizontal scrolling.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the account</h3><p>Search by username, name or email.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-search"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search for an account on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-search" alt="Search for an account on a phone."><img class="fc-sharp" data-evidence="phone-search" alt="" aria-hidden="true" style="clip-path:inset(6.896551724137931% 13.866666666666665% 89.16256157635468% 3.2%)"><span class="fc-ring" aria-hidden="true" style="left:3.2%;top:6.896551724137931%;width:82.93333333333334%;height:3.9408866995073892%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Search for an account on a phone.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the account</h3><p>Select its row. Scroll the User sheet to read its profile and role. Select <strong>Close</strong> at the top right to return.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-profile"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The User sheet uses the phone width. Scroll to read profile fields."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-41.53333333333333%"><img class="fc-background" data-evidence="phone-profile" alt="The User sheet uses the phone width. Scroll to read profile fields."><img class="fc-sharp" data-evidence="phone-profile" alt="" aria-hidden="true" style="clip-path:inset(24.20335591133005% 6.4% 71.36314655172413% 28.6125%)"><span class="fc-ring" aria-hidden="true" style="left:28.6125%;top:24.20335591133005%;width:64.9875%;height:4.433497536945813%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>The User sheet uses the phone width. Scroll to read profile fields.</figcaption></figure></section>
+<h2 id="dg-email">Send a reset email when mail is configured</h2>
+<p>The account row dots also offer <strong>Send reset email</strong>. It asks the identity provider to send the account a reset link. Check the email address and your provider's outgoing mail configuration first. This preview did not send email.</p>
+<h2 id="dg-practice">Optional practice</h2>
+<p>Use a test installation and a fictional operator. Follow the account tasks using your own test username and example.invalid email address. Do not test disable, password reset or force sign-out on another person's account without approval.</p>
+<h2 id="dg-limits">Limits</h2>
+<p>Users has no delete-account action. Disable access when an account should stop signing in. The fields below Role depend on your published Users form. OpenLDR cannot configure outgoing provider email here.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>New user or password actions are missing.</strong> Read the notice above the directory. Ask your identity provider administrator to configure account administration.</p>
+<p><strong>The account disappears after a status change.</strong> Change Status to Active, Disabled or All statuses to find it again.</p>
+<p><strong>The account saved but role assignment failed.</strong> Keep the sheet open, choose a valid role, then save again. Do not remove the last person able to manage roles.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./roles-review.html">Roles</a> to define permissions. Read <a href="./start-here-review.html">Start here</a> for installation and command-line setup.</p>
+</article>
+
+      <nav class="dg-onpage" aria-label="On this page"><p>On this page</p><a href="#dg-create">Create an operator account</a><a href="#dg-edit">Edit a profile or assign another role</a><a href="#dg-disable">Disable account access</a><a href="#dg-enable">Restore account access</a><a href="#dg-password">Reset a password</a><a href="#dg-logout">End a user&#x27;s provider sessions</a><a href="#dg-phone">Use Users on a phone</a><a href="#dg-email">Send a reset email when mail is configured</a><a href="#dg-practice">Optional practice</a><a href="#dg-limits">Limits</a><a href="#dg-troubleshooting">Troubleshooting</a><a href="#dg-related">Related guides</a><small>Click any screenshot to enlarge it.</small></nav>
+     </div>
+    </div>
+   </section>
+  </div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><div data-lightbox-content></div></div>
+ </div>
+</div>
+<script type="application/json" id="facilities-evidence-assets">{"open-users":"./users-evidence/open-users.png","page-actions":"./users-evidence/page-actions.png","new-user":"./users-evidence/new-user.png","username":"./users-evidence/username.png","password":"./users-evidence/password.png","confirm-password":"./users-evidence/confirm-password.png","choose-role":"./users-evidence/choose-role.png","profile":"./users-evidence/profile.png","sheet-actions":"./users-evidence/sheet-actions.png","create-user":"./users-evidence/create-user.png","created-result":"./users-evidence/created-result.png","search-user":"./users-evidence/search-user.png","row-actions":"./users-evidence/row-actions.png","edit-user":"./users-evidence/edit-user.png","edit-profile":"./users-evidence/edit-profile.png","change-role":"./users-evidence/change-role.png","save-user":"./users-evidence/save-user.png","edited-result":"./users-evidence/edited-result.png","disable-menu":"./users-evidence/disable-menu.png","disable-confirm":"./users-evidence/disable-confirm.png","status-filter":"./users-evidence/status-filter.png","disabled-option":"./users-evidence/disabled-option.png","disabled-result":"./users-evidence/disabled-result.png","enable-menu":"./users-evidence/enable-menu.png","enable-confirm":"./users-evidence/enable-confirm.png","active-option":"./users-evidence/active-option.png","enabled-result":"./users-evidence/enabled-result.png","reset-menu":"./users-evidence/reset-menu.png","reset-new-password":"./users-evidence/reset-new-password.png","reset-confirm-password":"./users-evidence/reset-confirm-password.png","reset-change":"./users-evidence/reset-change.png","reset-submit":"./users-evidence/reset-submit.png","reset-result":"./users-evidence/reset-result.png","logout-menu":"./users-evidence/logout-menu.png","logout-confirm":"./users-evidence/logout-confirm.png","logout-result":"./users-evidence/logout-result.png","phone-search":"./users-evidence/phone-search.png","phone-profile":"./users-evidence/phone-profile.png"}</script>
+<script>
+(() => {
+ const root = document.getElementById('users-evidence-guide');
+ const assets = JSON.parse(document.getElementById('facilities-evidence-assets').textContent);
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
+ const pane = root.querySelector('[data-reading-pane]');
+ let previewTheme='dark';
+ function applyTheme(){root.style.colorScheme=previewTheme;root.querySelector('[data-theme-toggle]').setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');}
+ applyTheme();
+ root.querySelector('[data-theme-toggle]').addEventListener('click',()=>{previewTheme=previewTheme==='dark'?'light':'dark';applyTheme();});
+ const box = root.querySelector('.dg-lightbox');
+ let previousFocus = null;
+ function closeBox() { box.hidden = true; root.querySelector('.dg-main').inert=false; if(previousFocus) previousFocus.focus(); }
+ root.querySelector('[data-close-lightbox]').addEventListener('click', closeBox);
+ root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
+ root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
+  previousFocus = button;
+  const content = box.querySelector('[data-lightbox-content]');
+  const frame = button.querySelector('.fc-screenshot');
+  content.replaceChildren();
+  content.className = frame ? 'dg-context-shot' : '';
+  if(frame) {
+   content.dataset.shotId = button.closest('[data-shot-id]').dataset.shotId;
+   content.append(frame.cloneNode(true));
+  } else {
+   delete content.dataset.shotId;
+   content.append(button.querySelector('img').cloneNode(true));
+  }
+  box.hidden = false;
+  root.querySelector('.dg-main').inert=true;
+  box.querySelector('button').focus();
+ }));
+ root.querySelectorAll('a[href^="#dg-"]').forEach(link => link.addEventListener('click', event => {
+  const target = root.querySelector(link.getAttribute('href'));
+  if(!target) return;
+  event.preventDefault();
+  pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  root.querySelectorAll('.dg-onpage a').forEach(item => item.removeAttribute('aria-current'));
+  if(link.closest('.dg-onpage')) link.setAttribute('aria-current','location');
+ }));
+ root.querySelectorAll('[data-play-loop]').forEach(button => button.addEventListener('click', () => {
+  const video=button.closest('figure').querySelector('video');
+  if(video.paused) video.play().then(()=>button.textContent='Pause loop').catch(()=>button.textContent='Play loop');
+  else {video.pause();button.textContent='Play loop';}
+ }));
+ root.querySelectorAll('.dg-loop').forEach(figure=>{
+  const video=figure.querySelector('video');
+  const button=figure.querySelector('[data-play-loop]');
+  video.addEventListener('play',()=>{button.textContent='Pause loop';});
+  video.addEventListener('pause',()=>{button.textContent='Play loop';});
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+   video.autoplay=true;
+   video.play().catch(()=>{button.textContent='Play loop';});
+  }
+ });
+ const expand = root.querySelector('[data-expand]');
+ root.querySelector('[data-collapse]').addEventListener('click',()=>{root.classList.add('dg-folded');expand.hidden=false;});
+ expand.addEventListener('click',()=>{root.classList.remove('dg-folded');expand.hidden=true;});
+ root.querySelector('[data-search]').addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  root.querySelectorAll('.dg-navitem').forEach(item=>{item.hidden=!!query&&!item.textContent.toLowerCase().includes(query);});
+ });
+
+})();
+</script>
+<style>
+#users-evidence-guide .dg-context-shot { max-width:500px; }
+#users-evidence-guide .fc-screenshot { display:block; position:relative; width:100%; aspect-ratio:8/5; container-type:inline-size; overflow:hidden; background:var(--dg-bg); }
+#users-evidence-guide .dg-context-shot img { position:absolute; inset:0; display:block; width:100%; height:100%; max-height:none; object-fit:fill; }
+#users-evidence-guide .fc-scene { position:absolute; display:block; }
+#users-evidence-guide .fc-background { filter:blur(.25cqw); opacity:.9; }
+#users-evidence-guide .fc-sharp { pointer-events:none; }
+#users-evidence-guide .fc-ring { position:absolute; display:block; border:2px solid var(--dg-link); border-radius:3px; pointer-events:none; }
+#users-evidence-guide .fc-marker { position:absolute; right:calc(100% + 3px); top:-4px; display:flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; background:var(--dg-link); color:var(--dg-bg); font:500 11px/1 Arial,sans-serif; }
+#users-evidence-guide [data-shot-id="open-dashboard"] .fc-marker { left:calc(100% + 3px); right:auto; }
+#users-evidence-guide .dg-lightbox .dg-context-shot { margin:0; width:min(100%,calc((min(var(--guide-preview-height,840px),100dvh) - 64px)*1.6)); max-width:none; }
+</style>
+<style>#users-evidence-guide .fc-marker{left:calc(100% + 3px);right:auto}#users-evidence-guide .dg-head-icons{padding-right:0}@media(max-width:900px){#users-evidence-guide .fc-marker{left:auto!important;right:4px!important}}</style>
+</body></html>

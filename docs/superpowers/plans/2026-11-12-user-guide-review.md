@@ -54,7 +54,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Custom Queries
 - [ ] Report Designer
 - [ ] Layouts
-- [ ] Users and Roles
+- [x] Users and Roles
 - [x] Roles
 - [ ] Audit
 - [ ] Settings

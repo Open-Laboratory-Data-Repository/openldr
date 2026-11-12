@@ -1,0 +1,805 @@
+{
+  "capturedAt": "2026-11-12T13:52:31.409Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5188/studio/users",
+  "steps": [
+    {
+      "id": "open-users",
+      "label": "Select Users in the main menu.",
+      "path": "users-evidence/open-users.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 456,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "page-actions",
+      "label": "Open the Users page dots menu.",
+      "path": "users-evidence/page-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 56,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "new-user",
+      "label": "Choose New user.",
+      "path": "users-evidence/new-user.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1113,
+          "y": 97,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "username",
+      "label": "Enter the account username.",
+      "path": "users-evidence/username.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 809.59375,
+          "y": 196.53125,
+          "width": 446.40625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "password",
+      "label": "Enter an initial password, or leave it blank and arrange activation through your provider.",
+      "path": "users-evidence/password.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 857.828125,
+          "y": 244.53125,
+          "width": 398.171875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "confirm-password",
+      "label": "Enter the same initial password again.",
+      "path": "users-evidence/confirm-password.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 857.828125,
+          "y": 292.53125,
+          "width": 398.171875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "choose-role",
+      "label": "Choose the role that matches this person. The example uses Lab Technician.",
+      "path": "users-evidence/choose-role.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 778.75,
+          "y": 498.5,
+          "width": 134.15625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "profile",
+      "label": "Complete the published Users form. This test form asks for name and email.",
+      "path": "users-evidence/profile.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 534.53125,
+          "width": 527,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "sheet-actions",
+      "label": "Open the New user sheet dots.",
+      "path": "users-evidence/sheet-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "create-user",
+      "label": "Choose Create to save the account and role.",
+      "path": "users-evidence/create-user.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "created-result",
+      "label": "The account appears Active with its name and email.",
+      "path": "users-evidence/created-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 205.5,
+          "width": 147.875,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "search-user",
+      "label": "Search across the whole directory by username, name or email.",
+      "path": "users-evidence/search-user.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 56,
+          "width": 256,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "row-actions",
+      "label": "Open the dots for the correct user.",
+      "path": "users-evidence/row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 197.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit-user",
+      "label": "Choose Edit to open the profile and role.",
+      "path": "users-evidence/edit-user.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 238.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit-profile",
+      "label": "Update the profile fields your Users form provides.",
+      "path": "users-evidence/edit-profile.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 265.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "change-role",
+      "label": "Choose another role. The example changes to System Auditor.",
+      "path": "users-evidence/change-role.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 778.75,
+          "y": 365.5,
+          "width": 134.15625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "save-user",
+      "label": "Choose Save in the sheet dots menu.",
+      "path": "users-evidence/save-user.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edited-result",
+      "label": "The saved profile appears in the Users table.",
+      "path": "users-evidence/edited-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 554.53125,
+          "y": 227,
+          "width": 224.703125,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "disable-menu",
+      "label": "Choose Disable for the correct user.",
+      "path": "users-evidence/disable-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 270.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "disable-confirm",
+      "label": "Confirm the account name before selecting Disable.",
+      "path": "users-evidence/disable-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 295.734375,
+          "width": 448,
+          "height": 208.53125
+        }
+      ]
+    },
+    {
+      "id": "status-filter",
+      "label": "Use Status to find a disabled account.",
+      "path": "users-evidence/status-filter.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 516,
+          "y": 56,
+          "width": 160,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "disabled-option",
+      "label": "Choose Disabled.",
+      "path": "users-evidence/disabled-option.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 521,
+          "y": 157,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "disabled-result",
+      "label": "The account appears with Disabled status.",
+      "path": "users-evidence/disabled-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1135.296875,
+          "y": 244.5,
+          "width": 64.703125,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "enable-menu",
+      "label": "Choose Enable to restore account access.",
+      "path": "users-evidence/enable-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 312.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "enable-confirm",
+      "label": "Check the account, then confirm Enable.",
+      "path": "users-evidence/enable-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 295.734375,
+          "width": 448,
+          "height": 208.53125
+        }
+      ]
+    },
+    {
+      "id": "active-option",
+      "label": "Choose Active to find the enabled account.",
+      "path": "users-evidence/active-option.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 521,
+          "y": 125,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "enabled-result",
+      "label": "The account returns to the Active list.",
+      "path": "users-evidence/enabled-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1136,
+          "y": 244.5,
+          "width": 50.6875,
+          "height": 22
+        }
+      ]
+    },
+    {
+      "id": "reset-menu",
+      "label": "Choose Reset password for the correct account.",
+      "path": "users-evidence/reset-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 344.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "reset-new-password",
+      "label": "Enter a new password. Generate can fill both password fields.",
+      "path": "users-evidence/reset-new-password.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 441,
+          "y": 343.75,
+          "width": 358,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "reset-confirm-password",
+      "label": "Enter the same new password again.",
+      "path": "users-evidence/reset-confirm-password.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 441,
+          "y": 412.75,
+          "width": 398,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "reset-change",
+      "label": "Keep Require password change on for a temporary password, or turn it off when appropriate.",
+      "path": "users-evidence/reset-change.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 441,
+          "y": 460.75,
+          "width": 398,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "reset-submit",
+      "label": "Select Reset password after checking the password-change choice.",
+      "path": "users-evidence/reset-submit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 706.609375,
+          "y": 528.25,
+          "width": 132.390625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "reset-result",
+      "label": "The page confirms that the password was reset.",
+      "path": "users-evidence/reset-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 144,
+          "width": 1016,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "logout-menu",
+      "label": "Choose Force sign-out to end this user's provider sessions.",
+      "path": "users-evidence/logout-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 408.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "logout-confirm",
+      "label": "Confirm Force sign-out for the correct account.",
+      "path": "users-evidence/logout-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 295.734375,
+          "width": 448,
+          "height": 208.53125
+        }
+      ]
+    },
+    {
+      "id": "logout-result",
+      "label": "The page confirms that all sessions were signed out.",
+      "path": "users-evidence/logout-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 144,
+          "width": 1016,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "phone-search",
+      "label": "Search for an account on a phone.",
+      "path": "users-evidence/phone-search.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 12,
+          "y": 56,
+          "width": 311,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-profile",
+      "label": "The User sheet uses the phone width. Scroll to read profile fields.",
+      "path": "users-evidence/phone-profile.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 107.296875,
+          "y": 196.53125,
+          "width": 243.703125,
+          "height": 36
+        }
+      ]
+    }
+  ]
+}

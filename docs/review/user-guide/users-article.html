@@ -1,0 +1,77 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Manage accounts and assign a role</span><span>About 20 minutes</span></div>
+<h1>Users</h1>
+<p>Use Users to find accounts, update their profiles, assign a role and control access. Roles define the permissions an account receives. The Users sheet selects one role per person.</p>
+<p>Use your own staff accounts and approved access decisions. The pictures use a fictional account in an isolated test installation. No sample data is required.</p>
+<p>View users allows the directory. Manage users allows account creation, profile changes and enabling or disabling access. Manage roles allows role assignment. Reset passwords and Force logout allow their respective security actions.</p>
+<p>Creating accounts, editing provider profiles, resetting passwords and ending provider sessions require a configured identity administrator. When it is unavailable, the page tells you to contact your identity provider administrator. OpenLDR role and account-access controls remain available.</p>
+<p>For installation and command-line setup, read <a href="./start-here-review.html">Start here</a>. To define role permissions, read <a href="./roles-review.html">Roles</a>.</p>
+<h2 id="dg-create">Create an operator account</h2>
+<p>Use this when a person needs their own sign-in. Check the required role before creating the account.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Users</h3><p>Select <strong>Users</strong> in the main menu.</p>__SHOT:open-users:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose New user</h3><p>Open the page dots above the directory and select <strong>New user</strong>. If it is unavailable, contact your identity provider administrator.</p>__SHOT:page-actions:2____SHOT:new-user:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter the username</h3><p>Enter the person's sign-in username. The example uses <code>documentation.operator</code>.</p>__SHOT:username:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose an initial password</h3><p>Enter an initial <strong>Password</strong>, or leave it blank and arrange activation through your identity provider. An initial password requires a change at the next sign-in. Share account credentials through your approved process.</p>__SHOT:password:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Confirm the password</h3><p>If you entered a password, enter it again in <strong>Confirm password</strong>.</p>__SHOT:confirm-password:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Choose the role</h3><p>Select the role that grants the actions this person needs. New accounts default to <strong>Lab Technician</strong>.</p>__SHOT:choose-role:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Complete the profile</h3><p>Fill the fields in your published Users form. The pictured form asks for first name, last name and email. Your form may contain different fields. A published form is optional for account creation.</p>__SHOT:profile:7__</section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Create the account</h3><p>Open the sheet dots and select <strong>Create</strong>. If role assignment fails after saving the account, choose a valid role and retry in the same sheet.</p>__SHOT:sheet-actions:8____SHOT:create-user:8__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and the new account appears Active in the directory.</p></div>
+__SHOT:created-result:0__
+<h2 id="dg-edit">Edit a profile or assign another role</h2>
+<p>Use this when staff details or responsibilities change. Changing the role changes the permissions the person receives.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the account</h3><p>Search by username, name or email. Search applies to the whole directory.</p>__SHOT:search-user:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open its actions</h3><p>Select the dots for the correct account.</p>__SHOT:row-actions:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Edit</h3><p>Select <strong>Edit</strong>. Selecting the row opens the same sheet. With identity administration unavailable, this menu reads <strong>Edit role</strong>.</p>__SHOT:edit-user:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Update the profile</h3><p>Edit the fields provided by your Users form. Username cannot be changed here.</p>__SHOT:edit-profile:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Choose the role</h3><p>Open <strong>Role</strong> and select the required role. The example chooses <strong>System Auditor</strong>.</p>__SHOT:change-role:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the account</h3><p>Open the sheet dots and select <strong>Save</strong>.</p>__SHOT:save-user:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and the directory shows the saved profile. Reopen the account to inspect its saved role.</p></div>
+__SHOT:edited-result:0__
+<h2 id="dg-disable">Disable account access</h2>
+<p>Use this when someone should no longer sign in. You cannot disable your own account through its row menu.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Disable</h3><p>Find the account. Open its row dots and select <strong>Disable</strong>.</p>__SHOT:disable-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the account</h3><p>Check the username in the confirmation. Select <strong>Disable</strong> to continue.</p>__SHOT:disable-confirm:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open Status</h3><p>Disabled accounts disappear from the default Active list. Open <strong>Status</strong>.</p>__SHOT:status-filter:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose Disabled</h3><p>Select <strong>Disabled</strong>.</p>__SHOT:disabled-option:4__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The account appears with Disabled status. Disabling access keeps the account and profile.</p></div>
+__SHOT:disabled-result:0__
+<h2 id="dg-enable">Restore account access</h2>
+<p>Use this when a disabled person should be able to sign in again.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Enable</h3><p>Find the account using Status set to Disabled or All statuses. Open its row dots and select <strong>Enable</strong>.</p>__SHOT:enable-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the account</h3><p>Check the username, then select <strong>Enable</strong>.</p>__SHOT:enable-confirm:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Return to Active</h3><p>Open <strong>Status</strong> and choose <strong>Active</strong>.</p>__SHOT:active-option:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The account returns to the Active list.</p></div>
+__SHOT:enabled-result:0__
+<h2 id="dg-password">Reset a password</h2>
+<p>Use this when an account needs a replacement password. This requires identity administration and Reset passwords.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Reset password</h3><p>Find the account. Open its row dots and select <strong>Reset password</strong>.</p>__SHOT:reset-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Enter a new password</h3><p>Enter <strong>New password</strong>. <strong>Generate</strong> creates a password and fills both fields. The eye reveals it and Copy copies it.</p>__SHOT:reset-new-password:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Confirm the new password</h3><p>Enter the same password in <strong>Confirm password</strong>. Generate has already filled this for you.</p>__SHOT:reset-confirm-password:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Choose whether it is temporary</h3><p>Keep <strong>Require password change at next sign-in</strong> selected for a temporary password. Clear it only when the person should use this password directly.</p>__SHOT:reset-change:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Reset the password</h3><p>Select <strong>Reset password</strong>. Share the password securely using your approved process.</p>__SHOT:reset-submit:5__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The page confirms the password reset. With the default temporary option, the person must change it at their next sign-in.</p></div>
+__SHOT:reset-result:0__
+<h2 id="dg-logout">End a user&#x27;s provider sessions</h2>
+<p>Use this when existing provider sessions should end. This requires identity administration and Force logout.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Force sign-out</h3><p>Find the account. Open its row dots and select <strong>Force sign-out</strong>. You cannot use this action on yourself here.</p>__SHOT:logout-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the account</h3><p>Check the username and select <strong>Force sign-out</strong>.</p>__SHOT:logout-confirm:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The page confirms that all sessions were signed out. This action does not disable the account.</p></div>
+__SHOT:logout-result:0__
+<h2 id="dg-phone">Use Users on a phone</h2>
+<p>Use the same directory and account sheet on a phone. Wide columns can require horizontal scrolling.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the account</h3><p>Search by username, name or email.</p>__SHOT:phone-search:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the account</h3><p>Select its row. Scroll the User sheet to read its profile and role. Select <strong>Close</strong> at the top right to return.</p>__SHOT:phone-profile:2__</section>
+<h2 id="dg-email">Send a reset email when mail is configured</h2>
+<p>The account row dots also offer <strong>Send reset email</strong>. It asks the identity provider to send the account a reset link. Check the email address and your provider's outgoing mail configuration first. This preview did not send email.</p>
+<h2 id="dg-practice">Optional practice</h2>
+<p>Use a test installation and a fictional operator. Follow the account tasks using your own test username and example.invalid email address. Do not test disable, password reset or force sign-out on another person's account without approval.</p>
+<h2 id="dg-limits">Limits</h2>
+<p>Users has no delete-account action. Disable access when an account should stop signing in. The fields below Role depend on your published Users form. OpenLDR cannot configure outgoing provider email here.</p>
+<h2 id="dg-troubleshooting">Troubleshooting</h2>
+<p><strong>New user or password actions are missing.</strong> Read the notice above the directory. Ask your identity provider administrator to configure account administration.</p>
+<p><strong>The account disappears after a status change.</strong> Change Status to Active, Disabled or All statuses to find it again.</p>
+<p><strong>The account saved but role assignment failed.</strong> Keep the sheet open, choose a valid role, then save again. Do not remove the last person able to manage roles.</p>
+<h2 id="dg-related">Related guides</h2>
+<p>Read <a href="./roles-review.html">Roles</a> to define permissions. Read <a href="./start-here-review.html">Start here</a> for installation and command-line setup.</p>
+</article>

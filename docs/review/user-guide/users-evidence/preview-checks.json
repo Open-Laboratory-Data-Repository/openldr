@@ -1,0 +1,33 @@
+{
+  "desktop": {
+    "steps": 30,
+    "frames": 38,
+    "missingScreenshots": 0,
+    "brokenAnchors": []
+  },
+  "enlarged": {
+    "nativeWidth": 5120,
+    "blur": "blur(5.50398px)"
+  },
+  "mobile": {
+    "height": 812,
+    "viewport": 812,
+    "overflow": false
+  },
+  "navigation": [
+    "start-here",
+    "dashboard",
+    "user-preferences",
+    "terminology",
+    "facilities",
+    "test-catalog",
+    "patients",
+    "roles",
+    "connectors",
+    "connector-diagnose",
+    "workflows",
+    "activity",
+    "users"
+  ],
+  "http": 200
+}
