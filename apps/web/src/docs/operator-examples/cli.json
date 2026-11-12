@@ -1,0 +1,246 @@
+{
+  "cli-find": {
+    "unix": "cd \"$HOME/Downloads/openldr_ce\"\nls -a",
+    "windows": "Set-Location C:\\openldr_ce\nGet-ChildItem -Force -Name"
+  },
+  "cli-help": {
+    "unix": "./openldr --help",
+    "windows": ".\\openldr.ps1 --help"
+  },
+  "cli-group-help": {
+    "unix": "./openldr ingest --help",
+    "windows": ".\\openldr.ps1 ingest --help"
+  },
+  "cli-file": {
+    "unix": "cp /path/to/your-file.json data/your-file.json",
+    "windows": "Copy-Item C:\\path\\to\\your-file.json data\\your-file.json"
+  },
+  "cli-validate": {
+    "unix": "./openldr fhir validate data/your-file.json",
+    "windows": ".\\openldr.ps1 fhir validate data/your-file.json"
+  },
+  "cli-import": {
+    "unix": "./openldr ingest data/your-file.json",
+    "windows": ".\\openldr.ps1 ingest data/your-file.json"
+  },
+  "cli-dev-help": {
+    "unix": "cd \"$HOME/Downloads/openldr_ce\"\npnpm openldr --help\npnpm openldr ingest --help",
+    "windows": "Set-Location C:\\openldr_ce\npnpm openldr --help\npnpm openldr ingest --help"
+  },
+  "cli-dev-validate": {
+    "unix": "pnpm openldr fhir validate files/your-file.json"
+  },
+  "cli-en-1": {
+    "unix": "./openldr db migrate",
+    "windows": ".\\openldr.ps1 db migrate"
+  },
+  "cli-en-2": {
+    "unix": "pnpm openldr db reset --force\npnpm openldr db seed"
+  },
+  "cli-en-3": {
+    "unix": "./openldr db reproject --force",
+    "windows": ".\\openldr.ps1 db reproject --force"
+  },
+  "cli-en-4": {
+    "unix": "./openldr plugin install data/plugin.wasm\n./openldr ingest data/results.sqlite --plugin whonet-sqlite",
+    "windows": ".\\openldr.ps1 plugin install data/plugin.wasm\n.\\openldr.ps1 ingest data/results.sqlite --plugin whonet-sqlite"
+  },
+  "cli-en-5": {
+    "unix": "./openldr user create --username alice --name \"Alice\" --email alice@example.org --role lab_technician\n./openldr user set-role ID lab_admin",
+    "windows": ".\\openldr.ps1 user create --username alice --name \"Alice\" --email alice@example.org --role lab_technician\n.\\openldr.ps1 user set-role ID lab_admin"
+  },
+  "cli-en-6": {
+    "unix": "./openldr settings flags list\n./openldr settings flags set dashboard.raw_sql true",
+    "windows": ".\\openldr.ps1 settings flags list\n.\\openldr.ps1 settings flags set dashboard.raw_sql true"
+  },
+  "cli-en-7": {
+    "unix": "./openldr report list\n./openldr report run ID\n\n# PDF in the design's own text, then in French\n./openldr report run ID --format pdf --out data/report.pdf\n./openldr report run ID --format pdf --lang fr --out data/rapport.pdf",
+    "windows": ".\\openldr.ps1 report list\n.\\openldr.ps1 report run ID\n\n# PDF in the design's own text, then in French\n.\\openldr.ps1 report run ID --format pdf --out data/report.pdf\n.\\openldr.ps1 report run ID --format pdf --lang fr --out data/rapport.pdf"
+  },
+  "cli-en-8": {
+    "unix": "# On central: mint the lab's client + secret (printed once)\n./openldr sync enroll lab-site-01 --central-url https://central.example.org\n\n# On the lab: apply the credentials, then check status\n./openldr settings sync set centralUrl https://central.example.org\n./openldr settings sync set siteId LOCAL_SITE_ID\n./openldr settings sync set oidcIssuer CENTRAL_ISSUER_URL\n./openldr settings sync set clientId GENERATED_CLIENT_ID\n./openldr settings sync set clientSecret GENERATED_CLIENT_SECRET\n./openldr settings sync set mode bidirectional\n./openldr settings sync set enabled true\n./openldr sync status",
+    "windows": "# On central: mint the lab's client + secret (printed once)\n.\\openldr.ps1 sync enroll lab-site-01 --central-url https://central.example.org\n\n# On the lab: apply the credentials, then check status\n.\\openldr.ps1 settings sync set centralUrl https://central.example.org\n.\\openldr.ps1 settings sync set siteId LOCAL_SITE_ID\n.\\openldr.ps1 settings sync set oidcIssuer CENTRAL_ISSUER_URL\n.\\openldr.ps1 settings sync set clientId GENERATED_CLIENT_ID\n.\\openldr.ps1 settings sync set clientSecret GENERATED_CLIENT_SECRET\n.\\openldr.ps1 settings sync set mode bidirectional\n.\\openldr.ps1 settings sync set enabled true\n.\\openldr.ps1 sync status"
+  },
+  "cli-en-9": {
+    "unix": "./openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json",
+    "windows": ".\\openldr.ps1 user directory-list --offset 100 --limit 25 --search Ada --enabled true --json"
+  },
+  "cli-en-10": {
+    "unix": "./openldr test-catalog list --search viral --category MOL --loinc linked --enabled on --json",
+    "windows": ".\\openldr.ps1 test-catalog list --search viral --category MOL --loinc linked --enabled on --json"
+  },
+  "cli-en-11": {
+    "unix": "./openldr test-catalog enable YOUR_TEST_CODE\n./openldr test-catalog retire YOUR_TEST_CODE --json",
+    "windows": ".\\openldr.ps1 test-catalog enable YOUR_TEST_CODE\n.\\openldr.ps1 test-catalog retire YOUR_TEST_CODE --json"
+  },
+  "cli-en-12": {
+    "unix": "./openldr test-catalog import data/national-tests.xlsx\n./openldr test-catalog import data/national-tests.xlsx --value-map data/answers.json --apply",
+    "windows": ".\\openldr.ps1 test-catalog import data/national-tests.xlsx\n.\\openldr.ps1 test-catalog import data/national-tests.xlsx --value-map data/answers.json --apply"
+  },
+  "cli-en-13": {
+    "unix": "{\n  \"categories\": [{ \"text\": \"Virology\", \"kind\": \"new\", \"code\": \"VIRO\", \"display\": \"Virology\" }],\n  \"specimens\": [{ \"text\": \"Plasma\", \"system\": \"urn:openldr:cs:local\", \"code\": \"BLD\" }]\n}",
+    "file": "data/answers.json"
+  },
+  "cli-en-14": {
+    "unix": "./openldr test-catalog export --out data/catalog.csv",
+    "windows": ".\\openldr.ps1 test-catalog export --out data/catalog.csv"
+  },
+  "cli-en-15": {
+    "unix": "./openldr test-catalog map list --status unmapped --json\n./openldr test-catalog map set urn:openldr:disa SOURCE_CODE YOUR_TEST_CODE\n./openldr test-catalog map clear urn:openldr:disa SOURCE_CODE --force\n./openldr test-catalog map export --out data/mappings.csv\n./openldr test-catalog map import data/mappings.csv\n./openldr test-catalog map import data/mappings.csv --apply --force\n./openldr test-catalog map rebuild --apply",
+    "windows": ".\\openldr.ps1 test-catalog map list --status unmapped --json\n.\\openldr.ps1 test-catalog map set urn:openldr:disa SOURCE_CODE YOUR_TEST_CODE\n.\\openldr.ps1 test-catalog map clear urn:openldr:disa SOURCE_CODE --force\n.\\openldr.ps1 test-catalog map export --out data/mappings.csv\n.\\openldr.ps1 test-catalog map import data/mappings.csv\n.\\openldr.ps1 test-catalog map import data/mappings.csv --apply --force\n.\\openldr.ps1 test-catalog map rebuild --apply"
+  },
+  "cli-en-16": {
+    "unix": "./openldr test-catalog map list --level result --status unmapped\n./openldr test-catalog map set urn:openldr:disa YOUR_RESULT_CODE YOUR_TEST_CODE --level result\n./openldr test-catalog map match urn:openldr:disa\n./openldr test-catalog map match urn:openldr:disa --apply --force",
+    "windows": ".\\openldr.ps1 test-catalog map list --level result --status unmapped\n.\\openldr.ps1 test-catalog map set urn:openldr:disa YOUR_RESULT_CODE YOUR_TEST_CODE --level result\n.\\openldr.ps1 test-catalog map match urn:openldr:disa\n.\\openldr.ps1 test-catalog map match urn:openldr:disa --apply --force"
+  },
+  "cli-en-17": {
+    "unix": "./openldr test-catalog result-fields list --loinc none\n./openldr test-catalog result-fields link YOUR_TEST_CODE 20447-9\n./openldr test-catalog result-fields unlink YOUR_TEST_CODE --force\n./openldr test-catalog result-fields export --out data/result-fields.csv\n./openldr test-catalog result-fields import data/result-fields.csv --apply --force",
+    "windows": ".\\openldr.ps1 test-catalog result-fields list --loinc none\n.\\openldr.ps1 test-catalog result-fields link YOUR_TEST_CODE 20447-9\n.\\openldr.ps1 test-catalog result-fields unlink YOUR_TEST_CODE --force\n.\\openldr.ps1 test-catalog result-fields export --out data/result-fields.csv\n.\\openldr.ps1 test-catalog result-fields import data/result-fields.csv --apply --force"
+  },
+  "cli-en-18": {
+    "unix": "./openldr market install data/BUNDLE_DIR --dry-run\n./openldr market install data/BUNDLE_DIR",
+    "windows": ".\\openldr.ps1 market install data/BUNDLE_DIR --dry-run\n.\\openldr.ps1 market install data/BUNDLE_DIR"
+  },
+  "cli-fr-1": {
+    "unix": "./openldr db migrate",
+    "windows": ".\\openldr.ps1 db migrate"
+  },
+  "cli-fr-2": {
+    "unix": "pnpm openldr db reset --force\npnpm openldr db seed"
+  },
+  "cli-fr-3": {
+    "unix": "./openldr db reproject --force",
+    "windows": ".\\openldr.ps1 db reproject --force"
+  },
+  "cli-fr-4": {
+    "unix": "./openldr plugin install data/plugin.wasm\n./openldr ingest data/results.sqlite --plugin whonet-sqlite",
+    "windows": ".\\openldr.ps1 plugin install data/plugin.wasm\n.\\openldr.ps1 ingest data/results.sqlite --plugin whonet-sqlite"
+  },
+  "cli-fr-5": {
+    "unix": "./openldr user create --username alice --name \"Alice\" --email alice@example.org --role lab_technician\n./openldr user set-role ID lab_admin",
+    "windows": ".\\openldr.ps1 user create --username alice --name \"Alice\" --email alice@example.org --role lab_technician\n.\\openldr.ps1 user set-role ID lab_admin"
+  },
+  "cli-fr-6": {
+    "unix": "./openldr settings flags list\n./openldr settings flags set dashboard.raw_sql true",
+    "windows": ".\\openldr.ps1 settings flags list\n.\\openldr.ps1 settings flags set dashboard.raw_sql true"
+  },
+  "cli-fr-7": {
+    "unix": "./openldr report list\n./openldr report run ID\n\n# PDF in the design's own text, then in French\n./openldr report run ID --format pdf --out data/report.pdf\n./openldr report run ID --format pdf --lang fr --out data/rapport.pdf",
+    "windows": ".\\openldr.ps1 report list\n.\\openldr.ps1 report run ID\n\n# PDF in the design's own text, then in French\n.\\openldr.ps1 report run ID --format pdf --out data/report.pdf\n.\\openldr.ps1 report run ID --format pdf --lang fr --out data/rapport.pdf"
+  },
+  "cli-fr-8": {
+    "unix": "# On central: mint the lab's client + secret (printed once)\n./openldr sync enroll lab-site-01 --central-url https://central.example.org\n\n# On the lab: apply the credentials, then check status\n./openldr settings sync set centralUrl https://central.example.org\n./openldr settings sync set siteId LOCAL_SITE_ID\n./openldr settings sync set oidcIssuer CENTRAL_ISSUER_URL\n./openldr settings sync set clientId GENERATED_CLIENT_ID\n./openldr settings sync set clientSecret GENERATED_CLIENT_SECRET\n./openldr settings sync set mode bidirectional\n./openldr settings sync set enabled true\n./openldr sync status",
+    "windows": "# On central: mint the lab's client + secret (printed once)\n.\\openldr.ps1 sync enroll lab-site-01 --central-url https://central.example.org\n\n# On the lab: apply the credentials, then check status\n.\\openldr.ps1 settings sync set centralUrl https://central.example.org\n.\\openldr.ps1 settings sync set siteId LOCAL_SITE_ID\n.\\openldr.ps1 settings sync set oidcIssuer CENTRAL_ISSUER_URL\n.\\openldr.ps1 settings sync set clientId GENERATED_CLIENT_ID\n.\\openldr.ps1 settings sync set clientSecret GENERATED_CLIENT_SECRET\n.\\openldr.ps1 settings sync set mode bidirectional\n.\\openldr.ps1 settings sync set enabled true\n.\\openldr.ps1 sync status"
+  },
+  "cli-fr-9": {
+    "unix": "./openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json",
+    "windows": ".\\openldr.ps1 user directory-list --offset 100 --limit 25 --search Ada --enabled true --json"
+  },
+  "cli-fr-10": {
+    "unix": "./openldr test-catalog list --search viral --category MOL --loinc linked --enabled on --json",
+    "windows": ".\\openldr.ps1 test-catalog list --search viral --category MOL --loinc linked --enabled on --json"
+  },
+  "cli-fr-11": {
+    "unix": "./openldr test-catalog enable YOUR_TEST_CODE\n./openldr test-catalog retire YOUR_TEST_CODE --json",
+    "windows": ".\\openldr.ps1 test-catalog enable YOUR_TEST_CODE\n.\\openldr.ps1 test-catalog retire YOUR_TEST_CODE --json"
+  },
+  "cli-fr-12": {
+    "unix": "./openldr test-catalog import data/national-tests.xlsx\n./openldr test-catalog import data/national-tests.xlsx --value-map data/answers.json --apply",
+    "windows": ".\\openldr.ps1 test-catalog import data/national-tests.xlsx\n.\\openldr.ps1 test-catalog import data/national-tests.xlsx --value-map data/answers.json --apply"
+  },
+  "cli-fr-13": {
+    "unix": "{\n  \"categories\": [{ \"text\": \"Virology\", \"kind\": \"new\", \"code\": \"VIRO\", \"display\": \"Virology\" }],\n  \"specimens\": [{ \"text\": \"Plasma\", \"system\": \"urn:openldr:cs:local\", \"code\": \"BLD\" }]\n}",
+    "file": "data/answers.json"
+  },
+  "cli-fr-14": {
+    "unix": "./openldr test-catalog export --out data/catalog.csv",
+    "windows": ".\\openldr.ps1 test-catalog export --out data/catalog.csv"
+  },
+  "cli-fr-15": {
+    "unix": "./openldr test-catalog map list --status unmapped --json\n./openldr test-catalog map set urn:openldr:disa SOURCE_CODE YOUR_TEST_CODE\n./openldr test-catalog map clear urn:openldr:disa SOURCE_CODE --force\n./openldr test-catalog map export --out data/mappings.csv\n./openldr test-catalog map import data/mappings.csv\n./openldr test-catalog map import data/mappings.csv --apply --force\n./openldr test-catalog map rebuild --apply",
+    "windows": ".\\openldr.ps1 test-catalog map list --status unmapped --json\n.\\openldr.ps1 test-catalog map set urn:openldr:disa SOURCE_CODE YOUR_TEST_CODE\n.\\openldr.ps1 test-catalog map clear urn:openldr:disa SOURCE_CODE --force\n.\\openldr.ps1 test-catalog map export --out data/mappings.csv\n.\\openldr.ps1 test-catalog map import data/mappings.csv\n.\\openldr.ps1 test-catalog map import data/mappings.csv --apply --force\n.\\openldr.ps1 test-catalog map rebuild --apply"
+  },
+  "cli-fr-16": {
+    "unix": "./openldr test-catalog map list --level result --status unmapped\n./openldr test-catalog map set urn:openldr:disa YOUR_RESULT_CODE YOUR_TEST_CODE --level result\n./openldr test-catalog map match urn:openldr:disa\n./openldr test-catalog map match urn:openldr:disa --apply --force",
+    "windows": ".\\openldr.ps1 test-catalog map list --level result --status unmapped\n.\\openldr.ps1 test-catalog map set urn:openldr:disa YOUR_RESULT_CODE YOUR_TEST_CODE --level result\n.\\openldr.ps1 test-catalog map match urn:openldr:disa\n.\\openldr.ps1 test-catalog map match urn:openldr:disa --apply --force"
+  },
+  "cli-fr-17": {
+    "unix": "./openldr test-catalog result-fields list --loinc none\n./openldr test-catalog result-fields link YOUR_TEST_CODE 20447-9\n./openldr test-catalog result-fields unlink YOUR_TEST_CODE --force\n./openldr test-catalog result-fields export --out data/result-fields.csv\n./openldr test-catalog result-fields import data/result-fields.csv --apply --force",
+    "windows": ".\\openldr.ps1 test-catalog result-fields list --loinc none\n.\\openldr.ps1 test-catalog result-fields link YOUR_TEST_CODE 20447-9\n.\\openldr.ps1 test-catalog result-fields unlink YOUR_TEST_CODE --force\n.\\openldr.ps1 test-catalog result-fields export --out data/result-fields.csv\n.\\openldr.ps1 test-catalog result-fields import data/result-fields.csv --apply --force"
+  },
+  "cli-fr-18": {
+    "unix": "./openldr market install data/BUNDLE_DIR --dry-run\n./openldr market install data/BUNDLE_DIR",
+    "windows": ".\\openldr.ps1 market install data/BUNDLE_DIR --dry-run\n.\\openldr.ps1 market install data/BUNDLE_DIR"
+  },
+  "cli-pt-1": {
+    "unix": "./openldr db migrate",
+    "windows": ".\\openldr.ps1 db migrate"
+  },
+  "cli-pt-2": {
+    "unix": "pnpm openldr db reset --force\npnpm openldr db seed"
+  },
+  "cli-pt-3": {
+    "unix": "./openldr db reproject --force",
+    "windows": ".\\openldr.ps1 db reproject --force"
+  },
+  "cli-pt-4": {
+    "unix": "./openldr plugin install data/plugin.wasm\n./openldr ingest data/results.sqlite --plugin whonet-sqlite",
+    "windows": ".\\openldr.ps1 plugin install data/plugin.wasm\n.\\openldr.ps1 ingest data/results.sqlite --plugin whonet-sqlite"
+  },
+  "cli-pt-5": {
+    "unix": "./openldr user create --username alice --name \"Alice\" --email alice@example.org --role lab_technician\n./openldr user set-role ID lab_admin",
+    "windows": ".\\openldr.ps1 user create --username alice --name \"Alice\" --email alice@example.org --role lab_technician\n.\\openldr.ps1 user set-role ID lab_admin"
+  },
+  "cli-pt-6": {
+    "unix": "./openldr settings flags list\n./openldr settings flags set dashboard.raw_sql true",
+    "windows": ".\\openldr.ps1 settings flags list\n.\\openldr.ps1 settings flags set dashboard.raw_sql true"
+  },
+  "cli-pt-7": {
+    "unix": "./openldr report list\n./openldr report run ID\n\n# PDF in the design's own text, then in French\n./openldr report run ID --format pdf --out data/report.pdf\n./openldr report run ID --format pdf --lang fr --out data/rapport.pdf",
+    "windows": ".\\openldr.ps1 report list\n.\\openldr.ps1 report run ID\n\n# PDF in the design's own text, then in French\n.\\openldr.ps1 report run ID --format pdf --out data/report.pdf\n.\\openldr.ps1 report run ID --format pdf --lang fr --out data/rapport.pdf"
+  },
+  "cli-pt-8": {
+    "unix": "# On central: mint the lab's client + secret (printed once)\n./openldr sync enroll lab-site-01 --central-url https://central.example.org\n\n# On the lab: apply the credentials, then check status\n./openldr settings sync set centralUrl https://central.example.org\n./openldr settings sync set siteId LOCAL_SITE_ID\n./openldr settings sync set oidcIssuer CENTRAL_ISSUER_URL\n./openldr settings sync set clientId GENERATED_CLIENT_ID\n./openldr settings sync set clientSecret GENERATED_CLIENT_SECRET\n./openldr settings sync set mode bidirectional\n./openldr settings sync set enabled true\n./openldr sync status",
+    "windows": "# On central: mint the lab's client + secret (printed once)\n.\\openldr.ps1 sync enroll lab-site-01 --central-url https://central.example.org\n\n# On the lab: apply the credentials, then check status\n.\\openldr.ps1 settings sync set centralUrl https://central.example.org\n.\\openldr.ps1 settings sync set siteId LOCAL_SITE_ID\n.\\openldr.ps1 settings sync set oidcIssuer CENTRAL_ISSUER_URL\n.\\openldr.ps1 settings sync set clientId GENERATED_CLIENT_ID\n.\\openldr.ps1 settings sync set clientSecret GENERATED_CLIENT_SECRET\n.\\openldr.ps1 settings sync set mode bidirectional\n.\\openldr.ps1 settings sync set enabled true\n.\\openldr.ps1 sync status"
+  },
+  "cli-pt-9": {
+    "unix": "./openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json",
+    "windows": ".\\openldr.ps1 user directory-list --offset 100 --limit 25 --search Ada --enabled true --json"
+  },
+  "cli-pt-10": {
+    "unix": "./openldr test-catalog list --search viral --category MOL --loinc linked --enabled on --json",
+    "windows": ".\\openldr.ps1 test-catalog list --search viral --category MOL --loinc linked --enabled on --json"
+  },
+  "cli-pt-11": {
+    "unix": "./openldr test-catalog enable YOUR_TEST_CODE\n./openldr test-catalog retire YOUR_TEST_CODE --json",
+    "windows": ".\\openldr.ps1 test-catalog enable YOUR_TEST_CODE\n.\\openldr.ps1 test-catalog retire YOUR_TEST_CODE --json"
+  },
+  "cli-pt-12": {
+    "unix": "./openldr test-catalog import data/national-tests.xlsx\n./openldr test-catalog import data/national-tests.xlsx --value-map data/answers.json --apply",
+    "windows": ".\\openldr.ps1 test-catalog import data/national-tests.xlsx\n.\\openldr.ps1 test-catalog import data/national-tests.xlsx --value-map data/answers.json --apply"
+  },
+  "cli-pt-13": {
+    "unix": "{\n  \"categories\": [{ \"text\": \"Virology\", \"kind\": \"new\", \"code\": \"VIRO\", \"display\": \"Virology\" }],\n  \"specimens\": [{ \"text\": \"Plasma\", \"system\": \"urn:openldr:cs:local\", \"code\": \"BLD\" }]\n}",
+    "file": "data/answers.json"
+  },
+  "cli-pt-14": {
+    "unix": "./openldr test-catalog export --out data/catalog.csv",
+    "windows": ".\\openldr.ps1 test-catalog export --out data/catalog.csv"
+  },
+  "cli-pt-15": {
+    "unix": "./openldr test-catalog map list --status unmapped --json\n./openldr test-catalog map set urn:openldr:disa SOURCE_CODE YOUR_TEST_CODE\n./openldr test-catalog map clear urn:openldr:disa SOURCE_CODE --force\n./openldr test-catalog map export --out data/mappings.csv\n./openldr test-catalog map import data/mappings.csv\n./openldr test-catalog map import data/mappings.csv --apply --force\n./openldr test-catalog map rebuild --apply",
+    "windows": ".\\openldr.ps1 test-catalog map list --status unmapped --json\n.\\openldr.ps1 test-catalog map set urn:openldr:disa SOURCE_CODE YOUR_TEST_CODE\n.\\openldr.ps1 test-catalog map clear urn:openldr:disa SOURCE_CODE --force\n.\\openldr.ps1 test-catalog map export --out data/mappings.csv\n.\\openldr.ps1 test-catalog map import data/mappings.csv\n.\\openldr.ps1 test-catalog map import data/mappings.csv --apply --force\n.\\openldr.ps1 test-catalog map rebuild --apply"
+  },
+  "cli-pt-16": {
+    "unix": "./openldr test-catalog map list --level result --status unmapped\n./openldr test-catalog map set urn:openldr:disa YOUR_RESULT_CODE YOUR_TEST_CODE --level result\n./openldr test-catalog map match urn:openldr:disa\n./openldr test-catalog map match urn:openldr:disa --apply --force",
+    "windows": ".\\openldr.ps1 test-catalog map list --level result --status unmapped\n.\\openldr.ps1 test-catalog map set urn:openldr:disa YOUR_RESULT_CODE YOUR_TEST_CODE --level result\n.\\openldr.ps1 test-catalog map match urn:openldr:disa\n.\\openldr.ps1 test-catalog map match urn:openldr:disa --apply --force"
+  },
+  "cli-pt-17": {
+    "unix": "./openldr test-catalog result-fields list --loinc none\n./openldr test-catalog result-fields link YOUR_TEST_CODE 20447-9\n./openldr test-catalog result-fields unlink YOUR_TEST_CODE --force\n./openldr test-catalog result-fields export --out data/result-fields.csv\n./openldr test-catalog result-fields import data/result-fields.csv --apply --force",
+    "windows": ".\\openldr.ps1 test-catalog result-fields list --loinc none\n.\\openldr.ps1 test-catalog result-fields link YOUR_TEST_CODE 20447-9\n.\\openldr.ps1 test-catalog result-fields unlink YOUR_TEST_CODE --force\n.\\openldr.ps1 test-catalog result-fields export --out data/result-fields.csv\n.\\openldr.ps1 test-catalog result-fields import data/result-fields.csv --apply --force"
+  },
+  "cli-pt-18": {
+    "unix": "./openldr market install data/BUNDLE_DIR --dry-run\n./openldr market install data/BUNDLE_DIR",
+    "windows": ".\\openldr.ps1 market install data/BUNDLE_DIR --dry-run\n.\\openldr.ps1 market install data/BUNDLE_DIR"
+  }
+}

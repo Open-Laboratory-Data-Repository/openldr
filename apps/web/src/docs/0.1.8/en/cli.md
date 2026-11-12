@@ -1,105 +1,100 @@
 # Command-line interface (CLI)
 
-OpenLDR ships an operator command-line interface (CLI), `openldr`, for database,
-terminology, ingest, plugin,
-reporting, user, and marketplace tasks — everything you can do from the app, plus
-lower-level operations.
+<!-- operator-platform -->
 
-## Running it
+Run maintenance on the OpenLDR host, from your installed Compose folder. The examples use `~/Downloads/openldr_ce` on Linux/macOS and `C:\openldr_ce` in PowerShell. Replace these paths with your installation. The blue prompt is already shown by the terminal. Type the command only. File illustrations show text to edit in the named file. Pictures are examples, not proof that maintenance succeeded. Sample data is optional.
 
-**On an installed stack**, the installer puts an `openldr` wrapper in your install directory.
-Run it from there:
+## Use the installed launcher
 
-```
-./openldr <command>
-./openldr --help           # list every command group
-./openldr db --help        # drill into a group
-```
+Run on the computer hosting OpenLDR. A browser over Tailscale is not a terminal on that computer. For a remote host, use your configured remote terminal or SSH.
 
-On Windows, use `.\openldr.ps1` instead.
+### 1. Find the real installation folder
 
-The wrapper runs the CLI inside the `api` container. That has one consequence worth knowing:
-**commands that read or write files only see the `data` directory.** Put a file in `./data`
-next to the wrapper and name it with the `data/` prefix:
-
-```
-./openldr ingest data/bundle.json
-./openldr sync export --out data/export.ndjson
-```
-
-A path outside `data/` will not be found. An `--out` path outside it now usually fails with a
-permission error, rather than writing into the container and disappearing on restart.
-
-The wrapper runs as the user who invokes it, so that user must be able to write to `./data`.
-If the install ran under `sudo`, `./data` ends up owned by root, and a later non-root
-`./openldr sync export --out data/x.ndjson` fails with `EACCES`. Fix it by changing the
-directory's owner to the invoking user, or by running the wrapper as the user that owns it.
-
-An operator without `docker` group access must run `sudo ./openldr`, which makes the container
-process root. Root can write anywhere in the container, so an unprefixed `--out` then writes
-silently and is lost on restart — the exact failure the `data/` rule exists to prevent. Always
-prefix output paths with `data/`.
-
-**From a source checkout**, run it through the workspace instead:
-
-```
-pnpm openldr <command>
-```
-
-Most read commands accept `--json` for machine-readable output. In a deployed stack the
-common lifecycle steps (schema migration and seeding) run automatically on startup, and
-admin/danger actions are also available in the Studio UI under Settings.
-
-### Choose your actual installation folder
-
-Run the installed CLI on the computer hosting OpenLDR. For a remote host, use the SSH or remote terminal access you configured. Opening Studio over Tailscale does not open a terminal on that host.
-
-For example, if you downloaded and installed OpenLDR in `~/Downloads/openldr_ce` on Linux or macOS:
+Replace the example path. Look for docker-compose.yml, data, and openldr or openldr.ps1. Do not assume a global openldr executable exists.
 
 ```sh
-cd ~/Downloads/openldr_ce
-ls
-./openldr --help
-./openldr ingest --help
+{{operator:cli-find}}
 ```
 
-If you installed it in `C:\openldr_ce` on Windows, open PowerShell and run:
+![Find the real installation folder.](guide:operator-cli-find)
 
-```powershell
-cd C:\openldr_ce
-Get-ChildItem -Name
-.\openldr.ps1 --help
-.\openldr.ps1 ingest --help
-```
+### 2. Read launcher help
 
-Replace the example folder with your actual installation folder. It contains `docker-compose.yml`, `data`, and the launcher. Enter one command at a time. The help commands do not change records. The in-app **Start here** guide illustrates each step with terminal and file-browser images.
-
-### Run from a development checkout
-
-Use the repository root, where `package.json`, `pnpm-workspace.yaml`, `apps` and `packages` are present. The same example paths apply to a source checkout. On Linux or macOS:
+Help lists commands without changing records. The launcher executes inside the api container, so that service and Docker must be available.
 
 ```sh
-cd ~/Downloads/openldr_ce
-pnpm openldr --help
-pnpm openldr ingest --help
+{{operator:cli-help}}
 ```
 
-On Windows, use `cd C:\openldr_ce`, then the same `pnpm openldr` commands. Set up dependencies and `.env` first, as described in [Development](/docs/development).
+![Read launcher help.](guide:operator-cli-help)
 
-The source CLI runs on the host and uses the databases and storage in `.env`. Those services must be running for an import. It does not require the Studio or API development server. It can read local files outside the installed launcher's shared `data` folder. For your own valid FHIR JSON file at `files/my-file.json`:
+### 3. Read the selected command’s options
+
+Use --help at each command level. Most read commands support --json. Mutating examples below are alternatives, not a script to run in sequence. Use --actor NAME when an audited change must identify the operator instead of the container’s account name.
 
 ```sh
-pnpm openldr fhir validate files/my-file.json
+{{operator:cli-group-help}}
 ```
 
-Validation does not import the file. When you intend to write it to your development database, check `.env`, then run:
+![Read the selected command’s options.](guide:operator-cli-group-help)
+
+## Pass a file to the installed CLI
+
+File arguments inside the api container must use the shared data directory. Keep both inputs and outputs under data/. A host path outside it is not the same path inside the container.
+
+### 1. Copy your approved file into data
+
+Replace the source path and filename with your actual file. The account invoking the launcher must be able to write this folder. An installation created with sudo may leave it owned by root; use the intended owner or correct ownership deliberately, not blanket permissions.
 
 ```sh
-pnpm openldr ingest files/my-file.json
-pnpm openldr pipeline status
+{{operator:cli-file}}
 ```
 
-The Linux source check imported one Organization resource and reported a completed batch. Your batch ID and count depend on your file.
+![Copy your approved file into data.](guide:operator-cli-file)
+
+### 2. Validate without importing
+
+Validation reads this file; it does not import it. Resolve errors before proceeding. Do not include real patient identifiers in shared screenshots.
+
+```sh
+{{operator:cli-validate}}
+```
+
+![Validate without importing.](guide:operator-cli-validate)
+
+### 3. Import only when ready to write
+
+This writes to the installation’s configured database. Read the batch outcome and use pipeline status/logs as described in Load & push data. Always use data/ for --out paths too, even when running as root; root can otherwise write files that disappear with the container.
+
+```sh
+{{operator:cli-import}}
+```
+
+![Import only when ready to write.](guide:operator-cli-import)
+
+## Use the development launcher
+
+Use a source checkout with dependencies and .env already configured. It is not the installed Compose folder. See Development first.
+
+### 1. Run workspace help from the repository root
+
+The root contains package.json, pnpm-workspace.yaml, apps and packages. CLI operations use the services configured in .env; they do not need the API or Studio dev server running.
+
+```sh
+{{operator:cli-dev-help}}
+```
+
+![Run workspace help from the repository root.](guide:operator-cli-dev-help)
+
+### 2. Use an ordinary host file path
+
+Replace files/your-file.json with your actual host path. Development is not restricted to the installed data share. Keep sample loading optional.
+
+```sh
+{{operator:cli-dev-validate}}
+```
+
+![Use an ordinary host file path.](guide:operator-cli-dev-validate)
 
 ## Recover from an installed CLI error
 
@@ -111,6 +106,18 @@ These cases were reproduced on Linux with the installed launcher and real CLI in
 | `failed to connect to the docker API` with an incorrect `DOCKER_HOST` address | Run `docker info`. If the override is wrong, clear it with `unset DOCKER_HOST`, then retry `docker info` and CLI help. In PowerShell, clear it with `$env:DOCKER_HOST = $null`. This does not start a stopped Docker engine. |
 | `service "api" is not running` | Inspect `docker compose ps -a api`, run `docker compose up -d api`, then retry CLI help. The check proved launcher recovery, not full HTTP application startup. |
 | `ingest failed: ENOENT` when the file is beside the launcher | Move the file into the installation's `data` folder. Run `./openldr fhir validate data/my-file.json`, then import that same path when intended. The development CLI reads ordinary local paths instead. |
+| `workflows` | Inspect durable webhook receipts |
+| `connectors` | List, inspect, test and diagnose host connectors |
+| `import` | Allow sources and manage database-plugin imports |
+| `doctor` | Read the same readiness checks as Setup checks |
+| `auth` | Inspect and deliberately rebind a moved issuer |
+| `roles` | Manage capability roles |
+| `data-exposure` | Read or change analytics column exposure |
+| `layouts` | Manage sidebar and start-page layouts |
+| `report-design` | Manage report page designs |
+| `report-def` | Manage saved report definitions |
+| `export` | Export canonical data, tables and a manifest |
+
 
 ## Command groups
 
@@ -154,16 +161,23 @@ operator's real name. They appear on the Audit page alongside UI actions.
 
 Bring a database up to date after pulling new migrations (non-destructive, keeps data):
 
+### 1. Apply pending database migrations
+
 ```
-./openldr db migrate
+{{operator:cli-en-1}}
 ```
+
+![Apply pending database migrations.](guide:operator-cli-en-1)
 
 Reset and seed a development database (`db reset` **drops and recreates** the schema):
 
+### 2. Reset only an intended disposable database
+
 ```
-./openldr db reset
-./openldr db seed
+{{operator:cli-en-2}}
 ```
+
+![Reset only an intended disposable database.](guide:operator-cli-en-2)
 
 `db seed` refuses to run when migrations are pending, naming what is outstanding — run
 `db migrate` first.
@@ -171,9 +185,13 @@ Reset and seed a development database (`db reset` **drops and recreates** the sc
 Rebuild the warehouse read model from the canonical FHIR store (`db reproject` **rewrites every
 projected row**, so it refuses without `--force`):
 
+### 3. Rebuild the warehouse only when required
+
 ```
-./openldr db reproject --force
+{{operator:cli-en-3}}
 ```
+
+![Rebuild the warehouse only when required.](guide:operator-cli-en-3)
 
 It prints two separate counts: the canonical resources it rewrote, and the arrivals it recorded in
 the ingest ledger (one per version of a clinical resource — they are different units, not the same
@@ -186,35 +204,43 @@ it inherits the `--force` guard. Use `db reproject` instead.
 
 Install and run an ingest plugin, then ingest a file with it:
 
+### 4. Install an approved converter and ingest your file
+
 ```
-./openldr plugin install data/plugin.wasm
-./openldr ingest data/results.sqlite --plugin whonet-sqlite
+{{operator:cli-en-4}}
 ```
+
+![Install an approved converter and ingest your file.](guide:operator-cli-en-4)
 
 Create a local user and assign roles:
 
+### 5. Choose the intended user operation
+
 ```
-./openldr user create --username alice --name "Alice" --email alice@example.org --role lab_technician
-./openldr user set-role <id> lab_admin
+{{operator:cli-en-5}}
 ```
+
+![Choose the intended user operation.](guide:operator-cli-en-5)
 
 Toggle a feature flag:
 
+### 6. Read or change a selected feature flag
+
 ```
-./openldr settings flags list
-./openldr settings flags set dashboard.raw_sql true
+{{operator:cli-en-6}}
 ```
+
+![Read or change a selected feature flag.](guide:operator-cli-en-6)
 
 Run a report:
 
-```
-./openldr report list
-./openldr report run <id>
+### 7. Run a report or export into the shared folder
 
-# PDF in the design's own text, then in French
-./openldr report run <id> --format pdf --out report.pdf
-./openldr report run <id> --format pdf --lang fr --out rapport.pdf
 ```
+{{operator:cli-en-7}}
+```
+
+![Run a report or export into the shared folder.](guide:operator-cli-en-7)
 
 For a report with a Date range filter, pass both dates with `--param from=2026-01-01 --param to=2026-11-12`. The reporting service binds these values to the saved query's declared date range. Choose dates for your own report.
 
@@ -224,16 +250,13 @@ that language prints as authored, and data is never translated.
 
 Enroll a lab on the central server, then connect a lab to it:
 
-```
-# On central: mint the lab's client + secret (printed once)
-./openldr sync enroll lab-site-01 --central-url https://central.example.org
+### 8. Configure the intended sync peer
 
-# On the lab: apply the credentials, then check status
-./openldr settings sync set clientId sync-lab-site-01
-./openldr settings sync set mode bidirectional
-./openldr settings sync set enabled true
-./openldr sync status
 ```
+{{operator:cli-en-8}}
+```
+
+![Configure the intended sync peer.](guide:operator-cli-en-8)
 
 > Distributed sync links labs to a central server: operational data pushes up to a
 > read-only mirror, reference config and terminology pull down. Enrollment mints a
@@ -287,9 +310,13 @@ Use Next to reach accounts beyond the first 100. Each request returns at most 10
 
 For headless access, run:
 
+### 9. Choose the intended user operation
+
 ```sh
-openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
+{{operator:cli-en-9}}
 ```
+
+![Choose the intended user operation.](guide:operator-cli-en-9)
 
 The JSON contains `rows`, `offset`, `limit`, `total: null`, and `hasMore`. Add `limit` to `offset` while `hasMore` is true. Omit `--enabled` to include both statuses. `openldr user list` still lists local accounts.
 
@@ -303,54 +330,67 @@ Central keeps the catalog. A lab receives it through terminology sync and cannot
 
 List the catalog from the command line:
 
+### 10. Use the catalog command for your own codes
+
 ```sh
-openldr test-catalog list --search viral --category MOL --loinc linked --enabled on --json
+{{operator:cli-en-10}}
 ```
+
+![Use the catalog command for your own codes.](guide:operator-cli-en-10)
 
 Retired tests are hidden unless you pass `--status retired` or `--status all`. `--loinc none` lists tests with no LOINC code. `--limit` is 25 by default and 200 at most. Page with `--offset`. The JSON holds `rows`, `total` and `ownedHere`. `ownedHere` is false when this install received its catalog from central.
 
 Switch a test on or off at this lab, or retire and restore it, by code:
 
+### 11. Use the catalog command for your own codes
+
 ```sh
-openldr test-catalog enable HIVVL
-openldr test-catalog retire HIVVL --json
+{{operator:cli-en-11}}
 ```
+
+![Use the catalog command for your own codes.](guide:operator-cli-en-11)
 
 `enable` and `disable` work on any install. `retire` and `restore` work only where this install owns the catalog. Retiring is reversible, so none of them takes `--force`. Each is recorded in the audit log as the CLI user.
 
 Import a test list from a CSV or Excel (.xlsx) file:
 
+### 12. Use the catalog command for your own codes
+
 ```sh
-openldr test-catalog import national-tests.xlsx
-openldr test-catalog import national-tests.xlsx --value-map answers.json --apply
+{{operator:cli-en-12}}
 ```
+
+![Use the catalog command for your own codes.](guide:operator-cli-en-12)
 
 Without `--apply` nothing is written. The command prints the counts of new, changed, unchanged and refused rows, each refusal with its row number, and any category or specimen text that matched nothing. Columns are matched by their header. To name them yourself, pass `--column-map` with a JSON file such as `{"code": "Test code", "name": "Test name"}`. Answer unmatched text with `--value-map`:
 
+### 13. Save the mapping in the named JSON file
+
 ```json
-{
-  "categories": [{ "text": "Virology", "kind": "new", "code": "VIRO", "display": "Virology" }],
-  "specimens": [{ "text": "Plasma", "system": "urn:openldr:cs:local", "code": "BLD" }]
-}
+{{operator:cli-en-13}}
 ```
+
+![Save the mapping in the named JSON file.](guide:operator-cli-en-13)
 
 A category answer is `"kind": "existing"` with a `code`, or `"kind": "new"` with a `code` and a `display`. Only an install that owns the catalog can import. An apply is recorded in the audit log as the CLI user. Export the active tests as CSV, to standard output or to a file:
 
+### 14. Use the catalog command for your own codes
+
 ```sh
-openldr test-catalog export --out catalog.csv
+{{operator:cli-en-14}}
 ```
+
+![Use the catalog command for your own codes.](guide:operator-cli-en-14)
 
 Map lab test codes to catalog tests. See **Mapping lab test codes** in the in-app Test catalog guide. The system is a URN, as shown in the System column of the Observed tab. For DISA data it is `urn:openldr:disa`:
 
+### 15. Use the catalog command for your own codes
+
 ```sh
-openldr test-catalog map list --status unmapped --json
-openldr test-catalog map set urn:openldr:disa POCVR HIVVL
-openldr test-catalog map clear urn:openldr:disa POCVR --force
-openldr test-catalog map export --out mappings.csv
-openldr test-catalog map import mappings.csv
-openldr test-catalog map import mappings.csv --apply --force
-openldr test-catalog map rebuild --apply
+{{operator:cli-en-15}}
 ```
+
+![Use the catalog command for your own codes.](guide:operator-cli-en-15)
 
 - `map list` lists the lab test codes in the warehouse with their catalog mapping. `--status` takes `unmapped`, `mapped`, `ambiguous` or `all`. `--search`, `--limit` (1 to 200, 25 by default) and `--offset` narrow and page the list.
 - `map set <system> <code> <catalog-code>` maps one code to a catalog test.
@@ -361,25 +401,26 @@ openldr test-catalog map rebuild --apply
 
 Result codes use the same commands with `--level result`. The target is a result field code:
 
+### 16. Use the catalog command for your own codes
+
 ```sh
-openldr test-catalog map list --level result --status unmapped
-openldr test-catalog map set urn:openldr:disa HIVVC HIVVL --level result
-openldr test-catalog map match urn:openldr:disa
-openldr test-catalog map match urn:openldr:disa --apply --force
+{{operator:cli-en-16}}
 ```
+
+![Use the catalog command for your own codes.](guide:operator-cli-en-16)
 
 - `--level result` on `map list`, `set`, `clear`, `export` and `import` works on result codes. The result CSV has the columns `system, code, description, results, parameter_code, loinc`.
 - `map match <system>` lists every unmapped result code of that lab system that equals a result field code. `--apply --force` maps them. It refuses `--apply` without `--force`.
 
 Link result fields to LOINC:
 
+### 17. Use the catalog command for your own codes
+
 ```sh
-openldr test-catalog result-fields list --loinc none
-openldr test-catalog result-fields link HIVVL 20447-9
-openldr test-catalog result-fields unlink HIVVL --force
-openldr test-catalog result-fields export --out result-fields.csv
-openldr test-catalog result-fields import result-fields.csv --apply --force
+{{operator:cli-en-17}}
 ```
+
+![Use the catalog command for your own codes.](guide:operator-cli-en-17)
 
 - `result-fields list` lists the fields with their role, units and LOINC link. `--loinc` takes `linked`, `none` or `all`, and `--role` takes `result`, `specimen`, `metadata` or `admin`.
 - `result-fields unlink` refuses without `--force`. `result-fields import` previews unless `--apply --force` is given. A lab that receives its dictionary from central cannot change links.
@@ -389,10 +430,13 @@ Each change is recorded in the audit log as the CLI user.
 
 ## Install a content pack
 
+### 18. Preview an approved content pack before installing
+
 ```sh
-openldr market install <bundle-dir> --dry-run
-openldr market install <bundle-dir>
+{{operator:cli-en-18}}
 ```
+
+![Preview an approved content pack before installing.](guide:operator-cli-en-18)
 
 `--dry-run` runs the checks and prints the steps. For each link-matching step it prints how many codes it would link. For each test-mappings or result-mappings step it lists the mappings it would map, keep and skip. It writes nothing. A content pack must be signed by a publisher. Installing a pack that is already installed needs `--force`. A pack whose last install failed installs again without it. `openldr market update` takes the same flags. It installs a newer version of an installed pack without `--force`. It refuses the same or an older version, and a pack that is not installed, unless you pass `--force`. `--json` prints machine-readable output. `openldr market list` shows packs with their status. The CLI records the actor as `cli`.
 
