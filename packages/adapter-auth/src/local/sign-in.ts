@@ -44,7 +44,8 @@ export interface LocalSignIn {
    * is no transaction and no cleanup: a leftover user row with no password is accepted.
    */
   setup(input: { setupCode: string; username: string; displayName?: string; password: string; ip: string | null; userAgent: string | null }): Promise<SetupResult>;
-  sessionIsLive(sessionId: string): Promise<boolean>;
+  /** False unless the session exists, is live, and belongs to `userId`. */
+  sessionIsLive(sessionId: string, userId: string): Promise<boolean>;
 }
 
 export const MAX_FAILURES = 5;
@@ -114,6 +115,17 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
     return isLocked((await store.getCredential(userId))?.lockedUntil, now);
   }
 
+  /**
+   * Reads the credential again after a hash. `passwordChanged` is true when the hash that was
+   * verified is no longer the stored one, so an admin reset landed during the hash.
+   */
+  async function recheckAfterHash(
+    userId: string, verifiedHash: string, now: Date,
+  ): Promise<{ locked: boolean; passwordChanged: boolean }> {
+    const current = await store.getCredential(userId);
+    return { locked: isLocked(current?.lockedUntil, now), passwordChanged: current?.passwordHash !== verifiedHash };
+  }
+
   async function touchIfStale(session: LocalSession, now: Date): Promise<void> {
     if (now.getTime() - session.lastUsedAt.getTime() > TOUCH_AFTER_MS) await store.touchSession(session.id, now);
   }
@@ -179,7 +191,7 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       }
       const passwordOk = await hasher.verify(input.password, credential.passwordHash);
       // Right and wrong passwords get the same answer here, so the reply does not reveal a right guess.
-      const lockedAfterVerify = await lockActiveNow(userId, now);
+      const { locked: lockedAfterVerify, passwordChanged } = await recheckAfterHash(userId, credential.passwordHash, now);
       if (!passwordOk) {
         const { lockedUntil } = await store.recordFailure(userId, now, MAX_FAILURES, LOCK_MS);
         if (lockedAfterVerify) return { ok: false, reason: 'locked', userId };
@@ -188,6 +200,8 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
         return { ok: false, reason: 'invalid', userId };
       }
       if (lockedAfterVerify) return { ok: false, reason: 'locked', userId };
+      // A reset during the hash deleted the user's sessions. Opening one now would outlive it.
+      if (passwordChanged) return { ok: false, reason: 'invalid', userId };
       const user = await users.get(userId);
       if (!user) return { ok: false, reason: 'invalid', userId };
       if (!(await isAllowed(user))) return { ok: false, reason: 'disabled', userId };
@@ -269,11 +283,11 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       return { ok: true, ...(await openSession(user, false, input.ip, input.userAgent, now)) };
     },
 
-    async sessionIsLive(sessionId) {
+    async sessionIsLive(sessionId, userId) {
       if (!COOKIE_PART.test(sessionId)) return false;
       const now = clock();
       const session = await store.getSession(sessionId);
-      if (!session || !isLive(session, now)) return false;
+      if (!session || session.userId !== userId || !isLive(session, now)) return false;
       await touchIfStale(session, now);
       return true;
     },

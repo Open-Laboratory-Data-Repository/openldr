@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createHash, randomBytes } from 'node:crypto';
-import { SignJWT } from 'jose';
+import { createHash, createPublicKey, randomBytes, type JsonWebKeyInput } from 'node:crypto';
+import { SignJWT, decodeJwt } from 'jose';
 import { IdentityAdminNotConfiguredError, type AuthPort } from '@openldr/ports';
 import { createPasswordHasher, type PasswordHasher, type ScryptFn } from './password';
-import { LOCAL_ISSUER, loadOrCreateSigningKey } from './tokens';
+import { LOCAL_ISSUER, loadOrCreateSigningKey, signAccessToken } from './tokens';
 import type { LocalSignIn, NewSession } from './sign-in';
 import { PasswordResetEmailUnsupportedError, createLocalAuth } from './local-auth';
 import { FAKE_ROLES, makeFakes, type FakeClock, type FakeRoles, type FakeStore, type FakeUsers } from './test-support';
@@ -59,18 +59,69 @@ describe('verifyToken', () => {
     await expect(auth.verifyToken(s.accessToken)).rejects.toThrow('session ended');
   });
 
-  it('refuses a token signed by another key', async () => {
-    const other = makeFakes();
-    const otherHasher = createPasswordHasher({ scrypt: fakeScrypt });
-    const second = await createLocalAuth({
-      store: other.store, users: other.users, roles: other.roles, secretKey: randomBytes(32),
-      ping: async () => {}, now: other.clock.now, hasher: otherHasher,
-    });
-    const { id } = await other.store.createUser({ username: 'ada' });
-    await other.store.setPassword(id, await otherHasher.hash(GOOD), false);
-    const s = await login(second.signIn);
-    await expect(auth.verifyToken(s.accessToken)).rejects.toThrow();
-    expect((await second.auth.verifyToken(s.accessToken)).sub).toBe(id);
+  /** The session ID inside a session's access token. */
+  function sidOf(session: NewSession): string {
+    return decodeJwt(session.accessToken).sid as string;
+  }
+
+  /** Ada's claims with a live session ID, as a forger would copy them from a real token. */
+  async function adaClaimsWithLiveSid(): Promise<Record<string, unknown>> {
+    const s = await login(signIn);
+    return { preferred_username: 'ada', sid: sidOf(s), realm_access: { roles: ['lab_admin'] } };
+  }
+
+  function iatNow(): number {
+    return Math.floor(clock.now().getTime() / 1000);
+  }
+
+  it('refuses a token signed by another key under its own key ID', async () => {
+    const otherKey = await loadOrCreateSigningKey(makeFakes().store, randomBytes(32));
+    const forged = await signAccessToken(otherKey, {
+      sub: adaId, username: 'ada', name: null, email: null, sid: sidOf(await login(signIn)),
+      roles: ['lab_admin'], mustChangePassword: false,
+    }, clock.now());
+    await expect(auth.verifyToken(forged)).rejects.toMatchObject({ code: 'ERR_JWKS_NO_MATCHING_KEY' });
+  });
+
+  it('refuses a token signed by another key that borrows this key ID', async () => {
+    const ownKey = await loadOrCreateSigningKey(store, secretKey);
+    const otherKey = await loadOrCreateSigningKey(makeFakes().store, randomBytes(32));
+    const forged = await new SignJWT(await adaClaimsWithLiveSid())
+      .setProtectedHeader({ alg: 'ES256', kid: ownKey.kid })
+      .setIssuer(LOCAL_ISSUER).setSubject(adaId).setIssuedAt(iatNow()).setExpirationTime(iatNow() + 600)
+      .sign(otherKey.privateKey);
+    await expect(auth.verifyToken(forged)).rejects.toMatchObject({ code: 'ERR_JWS_SIGNATURE_VERIFICATION_FAILED' });
+  });
+
+  it('refuses a token from another issuer', async () => {
+    const ownKey = await loadOrCreateSigningKey(store, secretKey);
+    const token = await new SignJWT(await adaClaimsWithLiveSid())
+      .setProtectedHeader({ alg: 'ES256', kid: ownKey.kid })
+      .setIssuer('https://issuer.example').setSubject(adaId).setIssuedAt(iatNow()).setExpirationTime(iatNow() + 600)
+      .sign(ownKey.privateKey);
+    await expect(auth.verifyToken(token)).rejects.toMatchObject({ code: 'ERR_JWT_CLAIM_VALIDATION_FAILED', claim: 'iss' });
+  });
+
+  it('refuses an HS256 token keyed with the public key text', async () => {
+    const stored = (await store.getSigningKey())!;
+    const publicPem = createPublicKey({ key: stored.publicJwk as JsonWebKeyInput['key'], format: 'jwk' }).export({ type: 'spki', format: 'pem' });
+    const token = await new SignJWT(await adaClaimsWithLiveSid())
+      .setProtectedHeader({ alg: 'HS256', kid: stored.kid })
+      .setIssuer(LOCAL_ISSUER).setSubject(adaId).setIssuedAt(iatNow()).setExpirationTime(iatNow() + 600)
+      .sign(new TextEncoder().encode(publicPem as string));
+    await expect(auth.verifyToken(token)).rejects.toMatchObject({ code: 'ERR_JOSE_ALG_NOT_ALLOWED' });
+  });
+
+  it("refuses a token carrying one user's subject and another user's live session", async () => {
+    const ownKey = await loadOrCreateSigningKey(store, secretKey);
+    await auth.directory.create({ username: 'bo', password: 'temporary pw 1', temporaryPassword: false });
+    const bo = await login(signIn, 'bo', 'temporary pw 1');
+    const token = await signAccessToken(ownKey, {
+      sub: adaId, username: 'ada', name: null, email: null, sid: sidOf(bo),
+      roles: ['lab_admin'], mustChangePassword: false,
+    }, clock.now());
+    await expect(auth.verifyToken(token)).rejects.toThrow('session ended');
+    expect((await auth.verifyToken(bo.accessToken)).sub).toBe(bo.userId);
   });
 
   it('refuses a token with no session ID', async () => {
@@ -208,6 +259,32 @@ describe('password and sessions', () => {
     await expect(auth.verifyToken(s.accessToken)).rejects.toThrow('session ended');
     const r = await login(signIn, 'ada', NEW);
     expect(r.mustChangePassword).toBe(false);
+  });
+
+  it('fails a sign-in whose hash was running when an admin reset the password', async () => {
+    let hashStarted!: () => void;
+    const started = new Promise<void>((r) => { hashStarted = r; });
+    let releaseHash!: () => void;
+    const released = new Promise<void>((r) => { releaseHash = r; });
+    const gatedScrypt: ScryptFn = async (password, salt, keylen, opts) => {
+      if (password === GOOD) {
+        hashStarted();
+        await released;
+      }
+      return fakeScrypt(password, salt, keylen, opts);
+    };
+    const gated = await createLocalAuth({
+      store, users, roles, secretKey, ping: async () => {}, now: clock.now,
+      hasher: createPasswordHasher({ scrypt: gatedScrypt }),
+    });
+
+    const pending = gated.signIn.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null });
+    await started;
+    await gated.auth.resetPassword(adaId, NEW, false);
+    releaseHash();
+
+    expect(await pending).toMatchObject({ ok: false, reason: 'invalid', userId: adaId });
+    expect(await store.deleteSessionsForUser(adaId)).toBe(0);
   });
 
   it('resetPassword with temporary true forces a change', async () => {

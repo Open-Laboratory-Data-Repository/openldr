@@ -106,7 +106,8 @@ export async function createLocalAuth(deps: LocalAuthDeps): Promise<{ auth: Auth
       });
       if (typeof payload.sub !== 'string' || payload.sub.length === 0) throw new Error('token missing sub claim');
       if (typeof payload.sid !== 'string' || payload.sid.length === 0) throw new Error('token missing sid claim');
-      if (!(await signIn.sessionIsLive(payload.sid))) throw new Error('session ended');
+      // The session must belong to the subject, a second check besides the signature.
+      if (!(await signIn.sessionIsLive(payload.sid, payload.sub))) throw new Error('session ended');
       return payload as TokenClaims;
     },
 

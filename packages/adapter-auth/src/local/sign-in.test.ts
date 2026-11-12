@@ -288,7 +288,7 @@ describe('sessions', () => {
     const touch = vi.spyOn(store, 'touchSession');
     clock.advance(30_000);
     await svc.refresh(s.cookieValue);
-    expect(await svc.sessionIsLive(id)).toBe(true);
+    expect(await svc.sessionIsLive(id, adaId)).toBe(true);
     expect(touch).not.toHaveBeenCalled();
     clock.advance(31_000);
     await svc.refresh(s.cookieValue);
@@ -300,12 +300,20 @@ describe('sessions', () => {
     const s = await login();
     const id = s.cookieValue.split('.')[0]!;
     clock.advance(SESSION_IDLE_MS - 1000);
-    expect(await svc.sessionIsLive(id)).toBe(true);
+    expect(await svc.sessionIsLive(id, adaId)).toBe(true);
     clock.advance(SESSION_IDLE_MS - 1000);
-    expect(await svc.sessionIsLive(id)).toBe(true);
+    expect(await svc.sessionIsLive(id, adaId)).toBe(true);
     clock.advance(SESSION_IDLE_MS);
-    expect(await svc.sessionIsLive(id)).toBe(false);
-    expect(await svc.sessionIsLive('no-such-session')).toBe(false);
+    expect(await svc.sessionIsLive(id, adaId)).toBe(false);
+    expect(await svc.sessionIsLive('no-such-session', adaId)).toBe(false);
+  });
+
+  it('refuses a live session ID paired with another user ID', async () => {
+    const s = await login();
+    const id = s.cookieValue.split('.')[0]!;
+    const { id: otherId } = await store.createUser({ username: 'bo' });
+    expect(await svc.sessionIsLive(id, otherId)).toBe(false);
+    expect(await svc.sessionIsLive(id, adaId)).toBe(true);
   });
 
   it('logs out, and a logged-out cookie no longer refreshes', async () => {
@@ -330,7 +338,7 @@ describe('sessions', () => {
       expect(await svc.refresh(v)).toBeNull();
       expect(await svc.logout(v)).toBeNull();
     }
-    for (const v of ['', '\0', '🙂', `${id}.x`]) expect(await svc.sessionIsLive(v)).toBe(false);
+    for (const v of ['', '\0', '🙂', `${id}.x`]) expect(await svc.sessionIsLive(v, adaId)).toBe(false);
     expect(await store.getSession(id)).not.toBeNull();
   });
 });
