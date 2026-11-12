@@ -378,3 +378,16 @@ The published Roles guide remains unchanged.
 The integrated browser check passed 21 steps, 26 frames, zero missing screenshots,
 no broken anchors, a 5120px enlarged source and no horizontal overflow at 375 by 812.
 Its permission-effect limitations are recorded in roles-review-notes.md.
+
+## Connectors preview checkpoint
+
+Roles was pushed through ce953de5; remote SHA matched ce953de525424e6c715e99c653de44b1ca01bf02.
+Connectors is ready at connectors-review.html with 25 numbered steps and 26 native image placements.
+Its first task includes actual account-menu, Settings and Connectors navigation.
+Connection type and connection details are separate tasks, each under nine steps.
+Actual local Postgres create, save, Test, edit with blank-password retention, disable and enable passed.
+Removal confirmation was cancelled. Other connector types were not claimed as tested.
+The demo read-only database login was revoked after capture; its historical screenshot password is masked.
+Browser integration passed zero missing images, no broken anchors, native5120 enlargement,
+all nine active menus and mobile812px without horizontal overflow. See connectors-review-notes.md.
+The published Connectors guide remains unchanged.

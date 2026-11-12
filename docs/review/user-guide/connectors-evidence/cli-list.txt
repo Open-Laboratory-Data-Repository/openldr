@@ -1,0 +1,18 @@
+$ node packages/cli/dev.mjs connectors list --json
+(node:37140) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794491371513,"pid":37140,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+[
+  {
+    "id": "0e733b8a-f897-4385-8e21-43a5a6f4715c",
+    "kind": "postgres",
+    "name": "Example reporting database",
+    "enabled": true
+  },
+  {
+    "id": "ded8fca8-b4e9-4ff3-9b17-9071ee22c8f8",
+    "kind": "postgres",
+    "name": "Target Warehouse (Postgres)",
+    "enabled": true
+  }
+]

@@ -6,5 +6,6 @@
   "facilities": "facilities-review.html",
   "test-catalog": "test-catalog-review.html",
   "patients": "patients-review.html",
-  "roles": "roles-review.html"
+  "roles": "roles-review.html",
+  "connectors": "connectors-review.html"
 }

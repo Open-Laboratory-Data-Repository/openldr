@@ -1,0 +1,7 @@
+$ node packages/cli/dev.mjs connectors test 0e733b8a-f897-4385-8e21-43a5a6f4715c
+(node:40579) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794491423837,"pid":40579,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+Connection OK
+
+EXIT 0

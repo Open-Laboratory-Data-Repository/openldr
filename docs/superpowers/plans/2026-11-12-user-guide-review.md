@@ -62,7 +62,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Laboratory
 - [ ] Data exposure
 - [ ] Distributed Sync
-- [ ] Connectors
+- [x] Connectors
 - [ ] Connect to SQL Server and diagnose a connection
 - [ ] Import from OpenLDR v1
 - [ ] Marketplace

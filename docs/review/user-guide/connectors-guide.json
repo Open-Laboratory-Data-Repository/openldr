@@ -1,0 +1,318 @@
+{
+  "title": "Connectors",
+  "meta": [
+    "System setup",
+    "Save and test connections",
+    "About 15 minutes"
+  ],
+  "intro": [
+    "Save a connection once, then select it in workflows, Custom Queries and reports. A connector stores the connection settings and encrypted credentials.",
+    "You need <strong>Manage connectors</strong>. Use your own database or service account. The pictures use a fictional read-only reporting account on an isolated Postgres database.",
+    "A fresh installation includes <strong>Target Warehouse (Postgres)</strong>. Built-in queries and reports use it. Keep it unless you have checked everything that depends on it.",
+    "The host and port must be reachable from the OpenLDR server. In Docker, <code>localhost</code> means that container. Use your database service name and internal port when both services share a Docker network.",
+    "Creating a connector does not import records or run a workflow. <a href=\"#dg-practice\">Optional practice setup</a> is at the end."
+  ],
+  "tasks": [
+    {
+      "id": "add",
+      "title": "Choose the connection type",
+      "intro": [
+        "Use the settings and account prepared for the service you want OpenLDR to reach. Choose the connection type before entering its fields."
+      ],
+      "steps": [
+        [
+          "Open your user menu",
+          "Select your account menu at the bottom of the main sidebar.",
+          [
+            "open-user-menu"
+          ]
+        ],
+        [
+          "Open Settings",
+          "Choose <strong>Settings</strong> from the account menu.",
+          [
+            "settings-menu"
+          ]
+        ],
+        [
+          "Open Connectors",
+          "Select <strong>Connectors</strong> in Settings.",
+          [
+            "open"
+          ]
+        ],
+        [
+          "Open the page actions",
+          "Select the page dots above the table.",
+          [
+            "actions"
+          ]
+        ],
+        [
+          "Choose Add connector",
+          "Select <strong>Add connector</strong>.",
+          [
+            "add"
+          ]
+        ],
+        [
+          "Name the connection",
+          "Enter a name people can recognise when choosing a connector. The example uses <code>Example reporting database</code>. Keep passwords out of the name.",
+          [
+            "name"
+          ]
+        ],
+        [
+          "Choose Host",
+          "Set <strong>Category</strong> to <strong>Host</strong> for a built-in database, email or file connection.",
+          [
+            "host-option"
+          ]
+        ],
+        [
+          "Choose the service type",
+          "Set <strong>Database type</strong> to the actual service. The example uses <strong>Postgres</strong>. This list also contains email and file services.",
+          [
+            "type"
+          ]
+        ]
+      ]
+    },
+    {
+      "id": "details",
+      "title": "Enter the connection details and save",
+      "intro": [
+        "Continue in the open connector sheet. The fields follow the service type you selected. This example uses Postgres."
+      ],
+      "steps": [
+        [
+          "Enter the database address",
+          "Fill <strong>Host</strong>, <strong>Port</strong> and <strong>Database</strong>. The example address is specific to this test installation. Use your server address.",
+          [
+            "address"
+          ]
+        ],
+        [
+          "Enter the account",
+          "Fill <strong>User</strong> and <strong>Password</strong> with the database account. A connection test does not establish which tables that account may read.",
+          [
+            "account"
+          ]
+        ],
+        [
+          "Check transport encryption",
+          "Match <strong>Use SSL</strong> to the database requirements. The local example leaves it off. Other service types have their own transport settings.",
+          [
+            "ssl"
+          ]
+        ],
+        [
+          "Open the sheet actions",
+          "Select the dots in the connector sheet header.",
+          [
+            "sheet-actions"
+          ]
+        ],
+        [
+          "Save the connector",
+          "Select <strong>Save</strong>.",
+          [
+            "save"
+          ]
+        ]
+      ],
+      "result": "The connector appears in the list and starts enabled. The Allowed plugin host column is a plugin network restriction. It is not the saved database address.",
+      "resultShots": [
+        "created"
+      ]
+    },
+    {
+      "id": "test",
+      "title": "Test the saved connection",
+      "intro": [
+        "Run a test after creating a connector or changing its credentials."
+      ],
+      "steps": [
+        [
+          "Choose Test",
+          "Open the connector row dots and select <strong>Test</strong>.",
+          [
+            "test"
+          ]
+        ],
+        [
+          "Read the result",
+          "Wait for <strong>Connection OK</strong> or a failure below the row menu. A successful connection does not prove a report query or email delivery succeeds.",
+          [
+            "test-result"
+          ]
+        ]
+      ],
+      "result": "The test uses the saved credentials from the OpenLDR server. Test outcomes appear in Audit.",
+      "resultShots": []
+    },
+    {
+      "id": "edit",
+      "title": "Change settings or credentials",
+      "intro": [
+        "Edit ordinary settings directly. Passwords stay blank after saving. Leave a password blank to keep it."
+      ],
+      "steps": [
+        [
+          "Open Edit",
+          "On the correct connector row, open the dots and select <strong>Edit</strong>.",
+          [
+            "edit"
+          ]
+        ],
+        [
+          "Check the stored fields",
+          "Verify the host, port, database and user. A set password shows a placeholder. Type a new password only when replacing it.",
+          [
+            "stored"
+          ]
+        ],
+        [
+          "Save the changes",
+          "Open the sheet dots and select <strong>Save</strong>. The example leaves the password blank and keeps it. Test the connector again afterward.",
+          [
+            "save-kept"
+          ]
+        ]
+      ],
+      "result": "The same connector remains available to its existing consumers. They use updated settings on their next run.",
+      "resultShots": []
+    },
+    {
+      "id": "disable",
+      "title": "Find and temporarily disable a connection",
+      "intro": [
+        "Disable a connector when you need to stop its use without deleting its stored settings."
+      ],
+      "steps": [
+        [
+          "Search the list",
+          "Use the search field to find a name, type or allowed plugin host.",
+          [
+            "search"
+          ]
+        ],
+        [
+          "Turn Enabled off",
+          "Switch off <strong>Enabled</strong> on the correct row. Queries and workflows that need it can fail while it is disabled.",
+          [
+            "toggle"
+          ]
+        ],
+        [
+          "Check the switch",
+          "An off switch marks it disabled. Switch it on again when it may be used.",
+          [
+            "disabled"
+          ]
+        ]
+      ],
+      "result": "Disabling keeps the saved connector and credentials. It does not remove dependencies.",
+      "resultShots": []
+    },
+    {
+      "id": "remove",
+      "title": "Remove a connection you no longer need",
+      "intro": [
+        "Check dependent workflows, queries and reports before removal. Do not remove the warehouse connector just to clear the list."
+      ],
+      "steps": [
+        [
+          "Choose Remove",
+          "Open the row dots and select <strong>Remove</strong>.",
+          [
+            "remove"
+          ]
+        ],
+        [
+          "Check the confirmation",
+          "Check the connector name. Choose <strong>Remove</strong> to delete it, or <strong>Cancel</strong> to keep it. The picture keeps this example for later tasks.",
+          [
+            "remove-confirm"
+          ]
+        ]
+      ],
+      "result": "Confirming Remove deletes the connector and stored credentials. Anything that still refers to it fails until reconfigured.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Use Connectors on a phone",
+      "intro": [
+        "The Host column is hidden at phone width. Open Edit to read a host connection address."
+      ],
+      "steps": [
+        [
+          "Find the connector row",
+          "Use search, then the row dots or Enabled switch.",
+          [
+            "phone-list"
+          ]
+        ],
+        [
+          "Read or change its settings",
+          "Choose <strong>Edit</strong> from the row dots. The sheet fills the phone screen. Scroll inside it for longer service forms.",
+          [
+            "phone-edit"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "types",
+      "title": "Choose the right type",
+      "paragraphs": [
+        "<strong>SQL databases.</strong> Postgres, MySQL / MariaDB and Microsoft SQL have distinct connection settings. The selected connector controls the query dialect. For SQL Server instances and Windows domain accounts, use <a href=\"connector-diagnose-review.html\">Diagnose connections</a>.",
+        "<strong>Other host services.</strong> MongoDB, Redis, SMTP Email, IMAP Email, Gmail, Microsoft Outlook and SFTP show the fields relevant to their type. Use service credentials supplied by your operator. Gmail and Outlook types require an existing application registration and refresh token. SMTP uses the sending account and relay settings.",
+        "<strong>Plugin destinations.</strong> Choose Category <strong>Plugin</strong>, select an installed sink plugin, then enter Base URL, Username and Password together. When editing, leave all three blank to keep them, or replace all three. Install a sink through <a href=\"marketplace-review.html\">Marketplace</a> if the selector is empty.",
+        "A node offers enabled connectors matching its required type. A missing connector can be disabled or have another type. Passwords do not belong in workflow labels or query text."
+      ]
+    },
+    {
+      "id": "cli",
+      "title": "Use the command line",
+      "paragraphs": [
+        "Follow <a href=\"start-here-review.html\">Start here</a> for CLI setup. From <code>openldr_ce</code>, use the commands below. Get the id from the list. CLI add, inspect, update, test and remove support host connectors. Plugin destinations use Studio.",
+        "An add file contains <code>name</code>, <code>type</code> and <code>config</code>. A patch file contains only fields to change. Omitted fields stay stored. Blank secrets keep existing values. Protect credential files and remove them after use."
+      ],
+      "html": [
+        "<pre><code>pnpm openldr connectors list\npnpm openldr connectors inspect &lt;id&gt;\npnpm openldr connectors add --file new-connector.json\npnpm openldr connectors update &lt;id&gt; --file connector-patch.json\npnpm openldr connectors test &lt;id&gt;\npnpm openldr connectors remove &lt;id&gt; --force</code></pre>"
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional practice setup",
+      "paragraphs": [
+        "The tasks work with your own service account. For a disposable installation, ask the database operator to create a small test table and a read-only role. The screenshots use two fictional rows in <code>guide_orders</code> and <code>guide_reader</code>.",
+        "Do not copy the screenshot address or demonstration password into a real connector. Give a report account SELECT only on approved tables. Confirm both allowed and refused queries in your own database. This preview tested local Postgres connectivity. It did not test email delivery, cloud account authorization or file transfer."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>Connection refused or timeout.</strong> Check the address from the OpenLDR server and the database firewall. Open row dots, then Diagnose for host connections.",
+        "<strong>Authentication failed.</strong> Check the account and database. Replace the password through Edit and test again.",
+        "<strong>SSL or certificate error.</strong> Ask the service operator which transport settings are required. SQL Server shows Encrypt and Trust server certificate.",
+        "<strong>A test passes but a query fails.</strong> Read the query error or workflow run. The account may lack access, the SQL may use another dialect, or the query may exceed its deadline. SQL connector queries have a 30-second limit.",
+        "<strong>Old query results remain visible.</strong> Check the error beside the connector selector. An earlier result table does not prove the latest run succeeded."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"connector-diagnose-review.html\">Diagnose connections</a> explains connection checks. <a href=\"start-here-review.html\">Start here</a> explains the CLI. Workflows and Custom Queries use saved connectors."
+      ]
+    }
+  ]
+}
