@@ -3304,7 +3304,7 @@ export const diagnoseConnector = (id: string): Promise<DiagnoseResult> =>
 // so the id and hint lists are repeated here; SetupChecks.test.tsx checks each has its strings.
 export const SETUP_CHECK_IDS = ['adapters', 'signIn', 'secretsKey', 'labName', 'timeZone', 'connectors', 'sync'] as const;
 export const SETUP_HINTS = [
-  'adapterDown', 'adapterDegraded', 'signInOff', 'secretsKeyMissing', 'labNameDefault', 'timeZoneEmpty',
+  'adapterDown', 'adapterDegraded', 'signInOff', 'signInSetup', 'secretsKeyMissing', 'labNameDefault', 'timeZoneEmpty',
   'timeZoneSqlServer', 'connectorFailed', 'syncIncomplete', 'syncFailing', 'checkError',
 ] as const;
 export type SetupStatus = 'pass' | 'warn' | 'fail' | 'skip';

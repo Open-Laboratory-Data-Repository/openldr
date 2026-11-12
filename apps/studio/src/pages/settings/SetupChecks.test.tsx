@@ -57,6 +57,14 @@ describe('SetupChecks', () => {
     expect(screen.queryByTestId('setup-fix-adapters')).toBeNull();
   });
 
+  it('tells the reader to run the setup code command while no administrator exists, with no link', async () => {
+    (api.runSetupChecks as any).mockResolvedValue({ ok: true, checks: [{ id: 'signIn', status: 'warn', hint: 'signInSetup' }] });
+    page();
+    expect((await screen.findByTestId('setup-hint-signIn')).textContent)
+      .toBe('No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.');
+    expect(screen.queryByTestId('setup-fix-signIn')).toBeNull();
+  });
+
   it('says so when every check passed', async () => {
     (api.runSetupChecks as any).mockResolvedValue({ ok: true, checks: [{ id: 'adapters', status: 'pass' }] });
     page();

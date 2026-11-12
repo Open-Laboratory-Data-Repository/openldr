@@ -482,6 +482,7 @@ export const pt: EnShape = {
         adapterDown: "Um serviço de que o CE depende está em baixo. Execute openldr health no servidor para ver qual, e verifique esse serviço e as suas definições.",
         adapterDegraded: "Um serviço de que o CE depende responde, mas indica um problema. Execute openldr health no servidor para ver o detalhe.",
         signInOff: "O início de sessão está desligado (AUTH_DEV_BYPASS). Qualquer pessoa que chegue a este servidor é tratada como administrador. Desligue esta opção antes do uso real.",
+        signInSetup: 'Ainda não existe nenhum administrador. Execute "openldr auth setup-code" e depois abra o studio para criar um.',
         secretsKeyMissing: "SECRETS_ENCRYPTION_KEY não está definida. Um conector com palavra-passe não pode ser guardado nem lido até estar.",
         labNameDefault: "O nome do laboratório está vazio ou ainda é o valor de origem. Os relatórios imprimem-no como laboratório emissor.",
         timeZoneEmpty: "Não há fuso horário definido. O relatório mensal de transmissão conta então os dias em UTC, o que coloca as chegadas da noite no dia errado.",

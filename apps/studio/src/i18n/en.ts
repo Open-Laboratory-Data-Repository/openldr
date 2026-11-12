@@ -484,6 +484,7 @@ export const en = {
         adapterDown: "A service CE depends on is down. Run openldr health on the server to see which, then check that service and its settings.",
         adapterDegraded: "A service CE depends on answers, but reports a problem. Run openldr health on the server for the detail.",
         signInOff: "Sign-in is switched off (AUTH_DEV_BYPASS). Anyone who can reach this server is treated as an administrator. Turn it off before real use.",
+        signInSetup: 'No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.',
         secretsKeyMissing: "SECRETS_ENCRYPTION_KEY is not set. A connector that holds a password cannot be saved or read until it is.",
         labNameDefault: "The laboratory name is empty or still the shipped default. Reports print it as the issuing laboratory.",
         timeZoneEmpty: "No time zone is set. The monthly transmission report then counts days in UTC, which moves evening arrivals to the wrong day.",

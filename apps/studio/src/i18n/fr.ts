@@ -482,6 +482,7 @@ export const fr: EnShape = {
         adapterDown: "Un service dont CE dépend est arrêté. Lancez openldr health sur le serveur pour voir lequel, puis vérifiez ce service et ses paramètres.",
         adapterDegraded: "Un service dont CE dépend répond, mais signale un problème. Lancez openldr health sur le serveur pour le détail.",
         signInOff: "La connexion est désactivée (AUTH_DEV_BYPASS). Toute personne qui atteint ce serveur est traitée comme administrateur. Désactivez ce réglage avant un usage réel.",
+        signInSetup: "Aucun administrateur n’existe encore. Lancez « openldr auth setup-code », puis ouvrez studio pour en créer un.",
         secretsKeyMissing: "SECRETS_ENCRYPTION_KEY n’est pas défini. Un connecteur qui contient un mot de passe ne peut être ni enregistré ni lu tant qu’il ne l’est pas.",
         labNameDefault: "Le nom du laboratoire est vide ou encore celui fourni par défaut. Les rapports l’impriment comme laboratoire émetteur.",
         timeZoneEmpty: "Aucun fuseau horaire n’est défini. Le rapport mensuel de transmission compte alors les jours en UTC, ce qui place les arrivées du soir le mauvais jour.",

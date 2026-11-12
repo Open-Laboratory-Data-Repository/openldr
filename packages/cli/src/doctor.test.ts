@@ -42,6 +42,14 @@ it('prints one line per check, the advice under a warning or failure, and a summ
   expect(formatSetupReport({ ok: true, checks: [{ id: 'adapters', status: 'pass' }] })).toMatch(/All checks passed\.$/);
 });
 
+it('prints the setup advice while local sign-in has no administrator', () => {
+  const text = formatSetupReport({ ok: true, checks: [{ id: 'signIn', status: 'warn', hint: 'signInSetup' }] });
+  expect(text.split('\n').slice(0, 2)).toEqual([
+    'WARN  Sign-in',
+    '      No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.',
+  ]);
+});
+
 it('exits 1 when a check failed, audits the outcome as the cli, and closes the context', async () => {
   const audits: unknown[] = [];
   const ctx = context(audits);
