@@ -87,6 +87,18 @@ describe('local sign-in calls', () => {
     }
   });
 
+  it('change password maps a 401 to session_ended', async () => {
+    setAccessToken('tok');
+    fetchMock.mockResolvedValueOnce(reply(401, { error: 'session_ended' }));
+    expect(await localChangePassword('a', 'b')).toBe('session_ended');
+    // The auth plugin answers 401 too when the token no longer verifies, which under local
+    // sign-in means the session is gone.
+    fetchMock.mockResolvedValueOnce(reply(401, { error: 'authentication required' }));
+    expect(await localChangePassword('a', 'b')).toBe('session_ended');
+    fetchMock.mockResolvedValueOnce(reply(500, { error: 'boom' }));
+    await expect(localChangePassword('a', 'b')).rejects.toThrow();
+  });
+
   it('setup returns the session on 201 and maps every refusal', async () => {
     fetchMock.mockResolvedValueOnce(reply(201, session('c')));
     const input = { setupCode: 'CODE', username: 'admin', password: 'a long password' };

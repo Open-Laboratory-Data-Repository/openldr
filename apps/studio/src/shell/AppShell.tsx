@@ -2,11 +2,12 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
-  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, PanelRight, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, type LucideIcon,
+  Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, PanelRight, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, KeyRound, type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_LANGUAGES, setLanguage } from '@/i18n/language';
 import { useAuth } from '@/auth/AuthProvider';
+import { ChangePasswordSheet } from '@/auth/ChangePasswordSheet';
 import { useTheme } from './useTheme';
 import { toast } from 'sonner';
 import { useSidebar } from './useSidebar';
@@ -71,7 +72,10 @@ export function AppShell({
   const { prefs } = useUserPreferences();
   const { list: layoutList } = useLayouts();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, signOut, hasCapability, authEnforced } = useAuth();
+  const { user, signOut, hasCapability, authEnforced, authMode } = useAuth();
+  // Only local sign-in keeps passwords here. Keycloak and OIDC change them at the provider.
+  const localSignIn = authMode === 'local';
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const layout = layoutInForce(prefs, layoutList);
   const roleDefault = layoutInForce({}, layoutList);
   const nav = visibleNav(hasCapability, layout);
@@ -137,6 +141,7 @@ export function AppShell({
         actually-visible height. */}
     <div className="ui-scope flex h-dvh overflow-hidden">
       <NotificationToaster />
+      {localSignIn && <ChangePasswordSheet open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />}
       {/* Scrim behind the mobile drawer; tapping it closes the menu. Desktop never shows it. */}
       {mobileOpen && (
         <div
@@ -288,6 +293,12 @@ export function AppShell({
                 <DropdownMenuItem onClick={() => navigate('/settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   {t('layout.settings')}
+                </DropdownMenuItem>
+              )}
+              {localSignIn && (
+                <DropdownMenuItem onClick={() => setChangePasswordOpen(true)}>
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  {t('auth.changePassword')}
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={signOut}>

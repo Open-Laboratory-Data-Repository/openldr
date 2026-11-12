@@ -30,6 +30,8 @@ export function Users() {
   const { t } = useTranslation();
   const { user: me, authCapabilities } = useAuth();
   const identityAdmin = authCapabilities?.identityAdmin ?? true;
+  // Only an explicit false hides it. An older server sends no flag and keeps today's menu.
+  const resetEmail = authCapabilities?.passwordResetEmail !== false;
   const [rows, setRows] = useState<UserSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -118,9 +120,9 @@ export function Users() {
                 {identityAdmin && <><DropdownMenuItem onClick={() => { setResetting(u); }}>
                   {t('users.resetPassword')}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { void doSendResetEmail(u); }}>
+                {resetEmail && <DropdownMenuItem onClick={() => { void doSendResetEmail(u); }}>
                   {t('users.sendResetEmail')}
-                </DropdownMenuItem>
+                </DropdownMenuItem>}
                 <DropdownMenuItem disabled={isSelf} onClick={() => { if (!isSelf) setPendingLogout(u); }} className="text-destructive focus:text-destructive">
                   {t('users.forceSignOut')}{isSelf ? ` (${t('users.selfSuffix')})` : ''}
                 </DropdownMenuItem></>}
@@ -129,7 +131,7 @@ export function Users() {
           </div>
         );
       }, type: 'text', defaultVisible: true, sortable: false, filterable: false, headClassName: 'w-16' },
-  ], [me?.id, t, doSendResetEmail, identityAdmin]);
+  ], [me?.id, t, doSendResetEmail, identityAdmin, resetEmail]);
 
   const table = useTableState({ columns });
 

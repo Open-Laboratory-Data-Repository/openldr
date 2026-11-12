@@ -75,8 +75,12 @@ export async function localLogout(): Promise<boolean> {
 
 const CHANGE_PASSWORD_FAILURES = new Set<string>(['wrong_current', 'too_short', 'too_long', 'same_as_username']);
 
-/** Changes the signed-in account's password. Throws on any answer it cannot map. */
-export async function localChangePassword(current: string, next: string): Promise<'ok' | 'wrong_current' | PasswordFailure> {
+/**
+ * Changes the signed-in account's password. Throws on any answer it cannot map.
+ * 'session_ended' covers every 401: the route's own `session_ended`, and the auth plugin's answer
+ * when the token no longer verifies, which under local sign-in means the session is gone.
+ */
+export async function localChangePassword(current: string, next: string): Promise<'ok' | 'wrong_current' | 'session_ended' | PasswordFailure> {
   const token = getAccessToken();
   const res = await post(
     '/api/auth/change-password',
@@ -84,6 +88,7 @@ export async function localChangePassword(current: string, next: string): Promis
     token ? { Authorization: `Bearer ${token}` } : {},
   );
   if (res.ok) return 'ok';
+  if (res.status === 401) return 'session_ended';
   if (res.status === 400) {
     const code = await errorCode(res);
     if (code && CHANGE_PASSWORD_FAILURES.has(code)) return code as 'wrong_current' | PasswordFailure;

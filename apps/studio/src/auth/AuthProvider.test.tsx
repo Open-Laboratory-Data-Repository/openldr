@@ -6,11 +6,14 @@ import { AuthProvider, useAuth, __resetAuthProviderState } from './AuthProvider'
 
 vi.mock('@/api', () => ({ authFetch: vi.fn(), getMe: vi.fn(), getMyCapabilities: vi.fn() }));
 vi.mock('./oidc', () => ({ getOidc: vi.fn(), createOidc: vi.fn(), __resetOidc: vi.fn() }));
-vi.mock('./local', () => ({ localRefresh: vi.fn(), localLogout: vi.fn(), localLogin: vi.fn(), keepSessionFresh: vi.fn() }));
+vi.mock('./local', () => ({
+  localRefresh: vi.fn(), localLogout: vi.fn(), localLogin: vi.fn(), keepSessionFresh: vi.fn(),
+  localSetup: vi.fn(), localChangePassword: vi.fn(),
+}));
 
 import { authFetch, getMe, getMyCapabilities } from '@/api';
 import { getOidc } from './oidc';
-import { keepSessionFresh, localLogin, localLogout, localRefresh, type LocalSession } from './local';
+import { keepSessionFresh, localChangePassword, localLogin, localLogout, localRefresh, localSetup, type LocalSession } from './local';
 import { getAccessToken, notifyUnauthorized, setAccessToken } from './token';
 
 function Probe() {
@@ -221,20 +224,111 @@ describe('AuthProvider under local sign-in', () => {
     expect(getMe).toHaveBeenCalled();
   });
 
-  it('shows the sign-in page while setup is required and does not try a refresh', async () => {
+  it('shows the setup page when setup is required and does not try a refresh', async () => {
     mockConfig({ ...localConfig, auth: { mode: 'local', setupRequired: true } });
     renderApp();
-    expect(await screen.findByLabelText('Username or email')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Setup code')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Username or email')).toBeNull();
+    expect(screen.queryByText('app')).toBeNull();
     expect(localRefresh).not.toHaveBeenCalled();
   });
 
-  it('loads no user when the session must change its password', async () => {
+  it('loads the app after the first admin is created on the setup page', async () => {
+    mockConfig({ ...localConfig, auth: { mode: 'local', setupRequired: true } });
+    vi.mocked(localSetup).mockResolvedValue({ accessToken: 'admin', expiresIn: 600, mustChangePassword: false });
+    renderApp();
+    fireEvent.change(await screen.findByLabelText('Setup code'), { target: { value: 'ABCD-1234' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse battery' } });
+    fireEvent.change(screen.getByLabelText('Repeat password'), { target: { value: 'correct horse battery' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create the administrator' }));
+    expect(await screen.findByText('app')).toBeInTheDocument();
+    expect(getAccessToken()).toBe('admin');
+    expect(getMe).toHaveBeenCalled();
+  });
+
+  it('moves from the setup page to the sign-in page when an administrator already exists', async () => {
+    mockConfig({ ...localConfig, auth: { mode: 'local', setupRequired: true } });
+    vi.mocked(localSetup).mockResolvedValue('already_set_up');
+    renderApp();
+    fireEvent.change(await screen.findByLabelText('Setup code'), { target: { value: 'ABCD-1234' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'correct horse battery' } });
+    fireEvent.change(screen.getByLabelText('Repeat password'), { target: { value: 'correct horse battery' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create the administrator' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByLabelText('Username or email')).toBeInTheDocument();
+  });
+
+  it('shows the forced change page for a must-change session and loads no user', async () => {
     mockConfig(localConfig);
     mockLocalRefresh({ accessToken: 't', expiresIn: 600, mustChangePassword: true });
     renderApp();
-    await waitFor(() => expect(keepSessionFresh).toHaveBeenCalled());
+    expect(await screen.findByLabelText('Current password')).toBeInTheDocument();
+    expect(screen.getByText('Choose a new password')).toBeInTheDocument();
+    expect(keepSessionFresh).toHaveBeenCalled();
+    expect(getAccessToken()).toBe('t');
     expect(screen.queryByText('app')).toBeNull();
     expect(getMe).not.toHaveBeenCalled();
+  });
+
+  it('a must-change sign-in lands on the forced change page with a working form', async () => {
+    mockConfig(localConfig);
+    mockLocalRefresh(null);
+    vi.mocked(localLogin).mockResolvedValue({ accessToken: 'temp', expiresIn: 600, mustChangePassword: true });
+    renderApp();
+    fireEvent.change(await screen.findByLabelText('Username or email'), { target: { value: 'ada' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'temporary pass' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByLabelText('Current password')).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: 'Change password' });
+    expect(button).toBeEnabled();
+
+    vi.mocked(localChangePassword).mockResolvedValue('ok');
+    mockLocalRefresh({ accessToken: 'fresh', expiresIn: 600, mustChangePassword: false });
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'temporary pass' } });
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'a much better one' } });
+    fireEvent.change(screen.getByLabelText('Repeat password'), { target: { value: 'a much better one' } });
+    fireEvent.click(button);
+    expect(await screen.findByText('app')).toBeInTheDocument();
+    expect(localChangePassword).toHaveBeenCalledWith('temporary pass', 'a much better one');
+    // The app runs on the refreshed token, which no longer carries the must-change mark.
+    expect(getAccessToken()).toBe('fresh');
+    expect(getMe).toHaveBeenCalled();
+  });
+
+  it('shows the sign-in page when the forced change finds the session ended', async () => {
+    mockConfig(localConfig);
+    mockLocalRefresh({ accessToken: 't', expiresIn: 600, mustChangePassword: true });
+    vi.mocked(localChangePassword).mockResolvedValue('session_ended');
+    renderApp();
+    fireEvent.change(await screen.findByLabelText('Current password'), { target: { value: 'temporary pass' } });
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'a much better one' } });
+    fireEvent.change(screen.getByLabelText('Repeat password'), { target: { value: 'a much better one' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    expect(await screen.findByLabelText('Username or email')).toBeInTheDocument();
+    expect(stop).toHaveBeenCalled();
+    expect(getAccessToken()).toBeNull();
+    expect(screen.queryByText(/Sign-out did not reach the server/)).toBeNull();
+  });
+
+  it('signs out from the forced change page', async () => {
+    mockConfig(localConfig);
+    mockLocalRefresh({ accessToken: 't', expiresIn: 600, mustChangePassword: true });
+    renderApp();
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign out' }));
+    expect(await screen.findByLabelText('Username or email')).toBeInTheDocument();
+    expect(localLogout).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalled();
+    expect(getAccessToken()).toBeNull();
+  });
+
+  it('reports authMode local inside the app', async () => {
+    mockConfig(localConfig);
+    mockLocalRefresh({ accessToken: 't', expiresIn: 600, mustChangePassword: false });
+    function Mode() { return <p>mode:{useAuth().authMode}</p>; }
+    render(<MemoryRouter><AuthProvider><Mode /></AuthProvider></MemoryRouter>);
+    expect(await screen.findByText('mode:local')).toBeInTheDocument();
   });
 
   it('still treats a missing oidc block as bypass when auth is not enforced', async () => {
@@ -351,5 +445,46 @@ describe('AuthProvider under local sign-in', () => {
     expect(await screen.findByLabelText('Username or email')).toBeInTheDocument();
     expect(stop).toHaveBeenCalled();
     expect(getAccessToken()).toBeNull();
+  });
+});
+
+describe('authMode outside local sign-in', () => {
+  function Mode() {
+    const { authMode, loading } = useAuth();
+    return <p>{loading ? 'loading' : `mode:${authMode}`}</p>;
+  }
+  const renderMode = () => render(<MemoryRouter><AuthProvider><Mode /></AuthProvider></MemoryRouter>);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetAuthProviderState();
+    vi.mocked(getMe).mockResolvedValue({ id: 'u', username: 'ada', displayName: null, roles: [] } as never);
+    vi.mocked(getMyCapabilities).mockResolvedValue([]);
+    vi.mocked(getOidc).mockReturnValue({ getStoredUser: vi.fn().mockResolvedValue({ access_token: 't' }), signinRedirect: vi.fn(), signoutRedirect: vi.fn() } as never);
+  });
+
+  it('defaults to keycloak outside the provider', () => {
+    function Bare() { return <p>bare:{useAuth().authMode}</p>; }
+    render(<Bare />);
+    expect(screen.getByText('bare:keycloak')).toBeInTheDocument();
+  });
+
+  it('is keycloak for a Keycloak server', async () => {
+    okConfig({ authEnforced: true, oidc: { issuerUrl: 'i', clientId: 'c', audience: null }, dashboardSqlEnabled: false });
+    renderMode();
+    expect(await screen.findByText('mode:keycloak')).toBeInTheDocument();
+  });
+
+  it('is oidc for a generic OIDC server', async () => {
+    okConfig({ authEnforced: true, oidc: { mode: 'oidc', issuerUrl: 'i', clientId: 'c', audience: null }, auth: { mode: 'oidc', setupRequired: false }, dashboardSqlEnabled: false });
+    renderMode();
+    expect(await screen.findByText('mode:oidc')).toBeInTheDocument();
+  });
+
+  it('is not local under the dev bypass, even when the server names local sign-in', async () => {
+    okConfig({ authEnforced: false, oidc: null, auth: { mode: 'local', setupRequired: false }, dashboardSqlEnabled: false });
+    renderMode();
+    expect(await screen.findByText('mode:keycloak')).toBeInTheDocument();
+    expect(localRefresh).not.toHaveBeenCalled();
   });
 });
