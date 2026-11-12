@@ -1,0 +1,18 @@
+{
+  "desktop": {
+    "steps": 63,
+    "frames": 88,
+    "missingScreenshots": 0
+  },
+  "enlarged": {
+    "nativeWidth": 5120,
+    "blur": "blur(5.50398px)"
+  },
+  "mobile": {
+    "height": 812,
+    "viewport": 812,
+    "overflow": false
+  },
+  "navigation": "Start here → Facilities → Terminology → Facilities",
+  "downloads": "Both optional practice files returned HTTP 200"
+}

@@ -2,6 +2,7 @@ import additionalFocus from './dashboard-focus.json';
 import preferencesFocus from './preferences-focus.json';
 import highResolutionFocus from './high-resolution-focus.json';
 import terminologyFocus from './terminology-focus.json';
+import facilitiesFocus from './facilities-focus.json';
 import { Button } from '@/components/ui/button';
 import type { LightboxImage } from './Lightbox';
 
@@ -13,6 +14,7 @@ const FOCUS: Record<string, Focus> = {
   ...preferencesFocus,
   ...highResolutionFocus,
   ...terminologyFocus as Record<string, Focus>,
+  ...facilitiesFocus as Record<string, Focus>,
 };
 
 export function focusedScreenshot(src: string): boolean { return src in FOCUS; }

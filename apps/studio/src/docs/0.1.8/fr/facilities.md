@@ -1,709 +1,589 @@
 # Établissements
 
-**Établissements** contient les registres d'établissements que connaît cette installation : la liste nationale des structures de santé et des laboratoires, chacun avec un code, un nom, un type et un lieu. Les données de laboratoire désignent les établissements par leur code. Un registre transforme ces codes en noms et en lieux, pour que les rapports disent « Sample District Hospital, Sample North » au lieu de `SAMPLE-HOSP-01`.
+Donnez aux établissements de vos données des noms, des codes et des localisations cohérents. Ajoutez des établissements, importez un registre, puis reliez les codes reçus aux bons établissements.
 
-La configuration des établissements est facultative. OpenLDR peut recevoir et traiter les données de laboratoire avant l'ajout d'un registre. Nous recommandons fortement de le configurer au cours de l'utilisation du système, pour associer des noms et des lieux cohérents aux codes d'établissement.
+**Cette configuration est facultative.** OpenLDR peut recevoir et traiter des données avant la configuration de Facilities. Nous recommandons de la compléter pendant votre utilisation du système pour identifier les établissements dans les rapports.
 
-La page a deux onglets. **Registre** liste les établissements ajoutés ou importés. **Observés** liste les codes d'établissement arrivés dans les données de laboratoire, et l'établissement vers lequel chacun se résout. Ajouter une ligne au registre et résoudre un code observé sont deux tâches distinctes.
+**Registry** contient les établissements ajoutés ou importés. **Observed** contient les codes reçus et indique leur établissement de destination. Ajouter un établissement et relier un code reçu sont deux tâches distinctes.
 
-Une installation neuve n'a aucun registre. Ce guide importe un petit registre d'exemple et y relie les données d'exemple de la documentation. Comptez 20 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Un **registre** est une liste maintenue par un organisme, par exemple un annuaire national ou la liste de votre organisation. **System** sélectionne ce registre. Son URI et le **Facility code** identifient ensemble l'établissement.
 
-![Établissements, Registre, après l'importation d'exemple : dix établissements avec leur code, nom, région, district, statut et source.](facilities-registry.png)
+Utilisez votre propre registre, vos informations et vos fichiers. Les captures montrent des établissements fictifs. Aucune donnée d'exemple n'est nécessaire. Les [fichiers de pratique facultatifs](#pratique-facultative-avec-des-donnees-fictives) sont à la fin.
 
-## Qui peut faire quoi
+La lecture nécessite **View facilities**. L'ajout, la modification, l'import et les liens nécessitent **Manage facilities**. Add et Edit nécessitent aussi un formulaire publié ciblant Facilities. Ce formulaire détermine les champs et les indications obligatoires.
 
-| Capacité | Ce qu'elle permet |
-| --- | --- |
-| **View facilities** | Ouvrir Établissements et lire le registre et l'onglet Observés |
-| **Manage facilities** | Ajouter, modifier, importer, supprimer, et lier les codes observés |
+## Enregistrer la source de votre liste
 
-Ajouter un nouveau type d'établissement pendant une importation demande aussi **Manage terminology**.
+Faites cette opération une seule fois par registre. Si votre registre apparaît déjà sous **System** ou **National system**, utilisez-le et passez cette tâche. Ne créez pas une seconde source pour le même registre.
 
-## Avant de commencer
+### 1. Ouvrir Facilities
 
-Les exemples utilisent deux fichiers d'exemple. Les deux sont des données inventées, pour une installation de test.
+Sélectionnez **Facilities** dans le menu principal à gauche.
 
-1. **Les données d'exemple de la documentation**, pour l'Exemple 2. Voir [Tableaux de bord, Charger les données d'exemple](/docs/dashboard#charger-les-donnees-d-exemple). Leurs demandes viennent de trois établissements, et leurs comptes rendus d'un laboratoire.
-2. **Le registre d'exemple**, un CSV de dix établissements. Téléchargez-le depuis `https://openldr.online/docs-samples/openldr-sample-facilities.csv`. Dans une copie du code source, c'est `apps/web/public/docs-samples/openldr-sample-facilities.csv`.
+![Capture de Studio : Ouvrir Facilities](facilities-guide-open-facilities.png)
 
-Ses premières lignes :
+### 2. Ouvrir Import facilities
 
-```csv
-Facility Code,Facility Name,Facility Type,Ownership,Region,District,Operating Status,Phone
-SAMPLE-LAB,Sample Central Laboratory,Level IIA1 (Regional Laboratory),Public,Sample Region,Sample City,Operating,+000 100 0001
-SAMPLE-HOSP-01,Sample District Hospital,District Hospital,Public,Sample Region,Sample North,Operating,+000 100 0002
-SAMPLE-HC-01,Sample Health Centre North,Health Centre,Public,Sample Region,Sample North,Operating,+000 100 0003
+Dans **Registry**, ouvrez les points à droite des onglets et sélectionnez **Import facilities**.
+
+![Capture de Studio : Ouvrir Import facilities](facilities-guide-source-actions.png)
+
+![Capture de Studio : Ouvrir Import facilities](facilities-guide-source-import.png)
+
+### 3. Choisir Register a source
+
+Sélectionnez **Register a source**. Vous pouvez enregistrer la source avant de choisir un fichier. Si des sources existent déjà, cette action se trouve dans le menu du panneau d'import.
+
+![Capture de Studio : Choisir Register a source](facilities-guide-register-source-button.png)
+
+![Capture de Studio : Choisir Register a source](facilities-guide-register-existing-actions.png)
+
+![Capture de Studio : Choisir Register a source](facilities-guide-register-existing-menu.png)
+
+### 4. Saisir l'URI permanente du registre
+
+Dans **Canonical URI**, utilisez l'identifiant fourni par l'organisme responsable. Pour votre propre liste, choisissez une URI stable. L'exemple fictif utilise `urn:example:facilities:guide`.
+
+![Capture de Studio : Saisir l'URI permanente du registre](facilities-guide-register-url.png)
+
+### 5. Saisir son nom
+
+Dans **Display name**, saisissez le nom à afficher dans les choix. L'exemple utilise `Example facility register`.
+
+![Capture de Studio : Saisir son nom](facilities-guide-register-name.png)
+
+### 6. Saisir un code court
+
+Dans **Code**, saisissez un identifiant court pour le registre. L'exemple utilise `EXAMPLE`. Version, jurisdiction et contact sont facultatifs.
+
+![Capture de Studio : Saisir un code court](facilities-guide-register-code.png)
+
+### 7. Enregistrer la source
+
+Ouvrez le menu de ce panneau et sélectionnez **Register**.
+
+![Capture de Studio : Enregistrer la source](facilities-guide-register-actions.png)
+
+![Capture de Studio : Enregistrer la source](facilities-guide-register-save.png)
+
+**Résultat attendu :** le nouveau registre est sélectionné dans le panneau d'import. L'enregistrement de la source n'a importé aucun établissement.
+
+![Capture de Studio : Enregistrer la source](facilities-guide-register-selected.png)
+
+### 8. Fermer le panneau pour un ajout manuel
+
+Sélectionnez **Close** en haut à droite. Pour importer un fichier, gardez le panneau ouvert et [continuez avec l'import](#choisir-le-fichier-du-registre).
+
+![Capture de Studio : Fermer le panneau pour un ajout manuel](facilities-guide-close-import.png)
+
+## Commencer une fiche d'établissement
+
+Ajoutez un établissement manuellement pour saisir un seul site. Les étapes suivantes utilisent le formulaire publié dans cette installation. Complétez les champs obligatoires de votre propre formulaire.
+
+### 1. Choisir Add facility
+
+Dans **Registry**, ouvrez le menu de la page et sélectionnez **Add facility**.
+
+![Capture de Studio : Choisir Add facility](facilities-guide-add-actions.png)
+
+![Capture de Studio : Choisir Add facility](facilities-guide-add-menu.png)
+
+### 2. Choisir System
+
+Sous **System**, choisissez la source enregistrée de cet établissement. Le nom sélectionne son URI canonique.
+
+![Capture de Studio : Choisir System](facilities-guide-add-system.png)
+
+### 3. Saisir Facility code
+
+Saisissez le code exact du registre, en conservant les zéros initiaux. L'exemple utilise `EXAMPLE-CLINIC-01`.
+
+![Capture de Studio : Saisir Facility code](facilities-guide-add-code.png)
+
+### 4. Saisir Name
+
+Saisissez le nom lisible de l'établissement. L'exemple utilise `Example Clinic North`.
+
+![Capture de Studio : Saisir Name](facilities-guide-add-name.png)
+
+### 5. Choisir Country
+
+Recherchez le pays, puis sélectionnez un résultat. Saisir uniquement le texte de recherche ne sélectionne pas de réponse.
+
+![Capture de Studio : Choisir Country](facilities-guide-add-country.png)
+
+### 6. Saisir Zone si votre formulaire l'exige
+
+Saisissez la zone réelle de l'établissement. Les suggestions viennent des localisations déjà saisies dans ce registre. La capture utilise `Example Zone`.
+
+![Capture de Studio : Saisir Zone si votre formulaire l'exige](facilities-guide-add-zone.png)
+
+### 7. Saisir District et les autres localisations obligatoires
+
+Ce formulaire exige aussi **District**. Saisissez le district de l'établissement. Complétez Region ou Council si vous avez ces informations.
+
+![Capture de Studio : Saisir District et les autres localisations obligatoires](facilities-guide-add-district.png)
+
+**Continuez ci-dessous :** la fiche reste ouverte dans New facility. Elle n'est pas encore enregistrée.
+
+## Compléter et enregistrer l'établissement
+
+Continuez dans le panneau **New facility** ouvert. Choisissez le statut et le type dans la terminologie configurée, puis enregistrez.
+
+### 1. Choisir Status
+
+Recherchez sous **Status** et sélectionnez le bon résultat. L'exemple choisit **Active**.
+
+![Capture de Studio : Choisir Status](facilities-guide-add-status.png)
+
+### 2. Choisir Level
+
+**Level** sélectionne le type d'établissement. Recherchez et choisissez le type correspondant au site parmi les valeurs de votre installation.
+
+![Capture de Studio : Choisir Level](facilities-guide-add-level.png)
+
+### 3. Ouvrir le menu du panneau
+
+Sélectionnez les points sous le titre du panneau, vers la droite.
+
+![Capture de Studio : Ouvrir le menu du panneau](facilities-guide-add-sheet-actions.png)
+
+### 4. Choisir Create
+
+Sélectionnez **Create**. Si le formulaire indique des champs manquants, complétez-les et réessayez.
+
+![Capture de Studio : Choisir Create](facilities-guide-add-create.png)
+
+**Résultat attendu :** le panneau se ferme et Registry se recharge. L'établissement apparaît avec son code, son nom et sa source. Si un filtre le masque, recherchez son code.
+
+![Capture de Studio : Choisir Create](facilities-guide-add-result.png)
+
+## Trouver et modifier un établissement
+
+Utilisez cette tâche pour corriger un nom, une localisation ou un autre détail. Rechercher d'abord évite aussi de créer un second enregistrement pour un établissement existant.
+
+### 1. Rechercher l'établissement
+
+Dans **Search facilities…**, saisissez son nom ou son code. L'exemple recherche `EXAMPLE-CLINIC-01`.
+
+![Capture de Studio : Rechercher l'établissement](facilities-guide-search-input.png)
+
+### 2. Ouvrir sa ligne
+
+Sélectionnez la ligne de l'établissement. Ses informations s'ouvrent dans **Edit facility**.
+
+![Capture de Studio : Ouvrir sa ligne](facilities-guide-edit-row.png)
+
+### 3. Modifier les informations
+
+Modifiez le champ à corriger. Ici, Name devient `Example Clinic North Updated`.
+
+![Capture de Studio : Modifier les informations](facilities-guide-edit-name.png)
+
+### 4. Ouvrir le menu du panneau
+
+Sélectionnez les points sous le titre du panneau.
+
+![Capture de Studio : Ouvrir le menu du panneau](facilities-guide-edit-actions.png)
+
+### 5. Choisir Save
+
+Sélectionnez **Save**. Les fiches existantes utilisent Save ; les nouvelles utilisent Create.
+
+![Capture de Studio : Choisir Save](facilities-guide-edit-save.png)
+
+**Résultat attendu :** Registry affiche les changements. L'exemple conserve le code. System et Facility code peuvent aussi être corrigés. Ne supprimez pas la fiche uniquement pour corriger son code.
+
+![Capture de Studio : Choisir Save](facilities-guide-edit-result.png)
+
+## Consulter les changements
+
+History affiche les changements d'un établissement avec leur date et leur auteur. Vous pouvez le consulter sans modifier la fiche.
+
+### 1. Ouvrir le menu de la ligne
+
+Sélectionnez les points à droite de la ligne de l'établissement.
+
+![Capture de Studio : Ouvrir le menu de la ligne](facilities-guide-history-row-actions.png)
+
+### 2. Choisir History
+
+Sélectionnez **History**.
+
+![Capture de Studio : Choisir History](facilities-guide-history-menu.png)
+
+**Résultat attendu :** Facility history affiche les changements les plus récents en premier. L'exemple montre le changement de nom et la création initiale.
+
+![Capture de Studio : Choisir History](facilities-guide-history-result.png)
+
+### 3. Fermer History
+
+Sélectionnez **Close** en haut à droite pour revenir à Registry.
+
+![Capture de Studio : Fermer History](facilities-guide-history-close.png)
+
+## Choisir le fichier du registre
+
+Importez votre liste existante au format CSV, JSON Lines ou Excel `.xlsx`. Il faut une colonne de codes et une colonne de noms. Les autres champs peuvent être associés, fournis comme valeurs fixes ou conservés comme données supplémentaires.
+
+Utilisez la source enregistrée qui possède les codes du fichier. Les exigences du formulaire manuel ne déterminent pas les colonnes obligatoires de l'import.
+
+### 1. Ouvrir Import facilities
+
+Dans Registry, ouvrez le menu de la page et sélectionnez **Import facilities**.
+
+![Capture de Studio : Ouvrir Import facilities](facilities-guide-import-actions.png)
+
+![Capture de Studio : Ouvrir Import facilities](facilities-guide-import-menu.png)
+
+### 2. Choisir le fichier
+
+Sélectionnez la zone File et choisissez votre fichier. Son nom apparaît sous Source. Le format suit le fichier choisi.
+
+![Capture de Studio : Choisir le fichier](facilities-guide-import-file.png)
+
+![Capture de Studio : Choisir le fichier](facilities-guide-import-format.png)
+
+### 3. Choisir National system
+
+Sélectionnez la source enregistrée de ce fichier. Si elle manque, [enregistrez sa source](#enregistrer-la-source-de-votre-liste) d'abord.
+
+![Capture de Studio : Choisir National system](facilities-guide-import-register-step-3.png)
+
+### 4. Indiquer si le fichier est une version complète
+
+Cochez **This file is a complete release** uniquement si le fichier contient le registre entier. Laissez cette case vide pour un fichier partiel. Une version complète permet de vérifier les établissements existants absents du fichier.
+
+![Capture de Studio : Indiquer si le fichier est une version complète](facilities-guide-import-complete-release.png)
+
+### 5. Continuer vers Mapping
+
+Sélectionnez **Continue**. Le fichier est envoyé et stocké, puis Mapping s'ouvre. Aucun établissement n'a encore été importé.
+
+![Capture de Studio : Continuer vers Mapping](facilities-guide-import-continue.png)
+
+## Associer les colonnes et les valeurs fixes
+
+Mapping relie les en-têtes du fichier aux champs OpenLDR. Vérifiez les suggestions pour le code et le nom, puis décidez du traitement des autres colonnes.
+
+### 1. Vérifier les colonnes obligatoires
+
+La colonne du code doit correspondre à `national_code`. Le nom lisible doit correspondre à `name`. Ouvrez la liste à côté d'un en-tête pour corriger sa destination.
+
+![Capture de Studio : Vérifier les colonnes obligatoires](facilities-guide-map-code.png)
+
+![Capture de Studio : Vérifier les colonnes obligatoires](facilities-guide-map-name.png)
+
+### 2. Corriger les autres destinations
+
+Choisissez le champ approprié à côté de chaque en-tête. Ici, **Operating Status** doit correspondre à `status` au lieu de rester une donnée supplémentaire.
+
+![Capture de Studio : Corriger les autres destinations](facilities-guide-map-status-option.png)
+
+### 3. Conserver les colonnes supplémentaires utiles
+
+Pour une colonne sans champ standard, ouvrez le menu de sa ligne et sélectionnez **Keep as extra**. L'exemple conserve Notes.
+
+![Capture de Studio : Conserver les colonnes supplémentaires utiles](facilities-guide-map-extra-actions.png)
+
+![Capture de Studio : Conserver les colonnes supplémentaires utiles](facilities-guide-map-extra-save.png)
+
+### 4. Fournir des valeurs fixes pour les colonnes absentes
+
+Si tous les établissements partagent une valeur absente du fichier, saisissez-la sous **Fixed values**. Ici, Country est sélectionné dans la terminologie. Chaque ligne reçoit ce pays.
+
+![Capture de Studio : Fournir des valeurs fixes pour les colonnes absentes](facilities-guide-map-fixed-country.png)
+
+### 5. Décider du traitement des changements après l'aperçu
+
+Sous **Rows changed since this preview**, choisissez d'ignorer ces lignes ou de les remplacer par le fichier. Par défaut, ces lignes du registre restent inchangées.
+
+![Capture de Studio : Décider du traitement des changements après l'aperçu](facilities-guide-map-conflict-policy.png)
+
+### 6. Valider le fichier
+
+Sélectionnez **Validate all**. La vérification s'exécute en arrière-plan, puis Review s'ouvre. Corrigez toute colonne obligatoire non associée avant de continuer.
+
+![Capture de Studio : Valider le fichier](facilities-guide-map-validate.png)
+
+**Résultat attendu :** Review décrit les effets du fichier et des associations actuelles. Si des valeurs n'ont pas d'association canonique, définissez-les comme ci-dessous.
+
+![Capture de Studio : Valider le fichier](facilities-guide-review-unmapped.png)
+
+## Définir les valeurs inconnues
+
+Le fichier peut utiliser d'autres mots que votre terminologie. Associez-les aux valeurs voulues. L'exemple utilise Operating et Closed comme statuts.
+
+### 1. Revenir à Mapping
+
+Dans Review, sélectionnez **Map these values**. Les choix apparaissent sous la colonne concernée dans Mapping.
+
+![Capture de Studio : Revenir à Mapping](facilities-guide-review-map-values.png)
+
+### 2. Définir le sens de Operating
+
+Pour cet exemple, choisissez **Active** pour Operating. Pour votre fichier, choisissez une valeur ayant le même sens.
+
+![Capture de Studio : Définir le sens de Operating](facilities-guide-map-operating.png)
+
+### 3. Définir le sens de Closed
+
+Pour cet exemple, choisissez **Inactive** pour Closed. Ne fusionnez pas des sens différents uniquement pour supprimer un avertissement.
+
+![Capture de Studio : Définir le sens de Closed](facilities-guide-map-closed.png)
+
+### 4. Vérifier à nouveau
+
+Sélectionnez **Validate all**. Les décisions sont enregistrées pour ce registre et le fichier est vérifié à nouveau.
+
+![Capture de Studio : Vérifier à nouveau](facilities-guide-map-revalidate.png)
+
+**Résultat attendu :** Review reflète les nouvelles décisions. Dans cet exemple, l'avertissement de statut non associé disparaît.
+
+## Vérifier et appliquer l'import
+
+Lisez les changements prévus avant de les appliquer. Un fichier peut créer des lignes, modifier des lignes ou correspondre aux lignes existantes. Les nombres dépendent du fichier et du registre actuel.
+
+### 1. Lire le résumé
+
+Vérifiez les nombres de lignes nouvelles, modifiées, inchangées et ignorées, ainsi que les avertissements. Si nécessaire, revenez à Mapping et validez à nouveau. Review présente les décisions sans les modifier.
+
+![Capture de Studio : Lire le résumé](facilities-guide-review-summary.png)
+
+### 2. Confirmer l'import vérifié
+
+Sélectionnez **Confirm import**. Attendez le panneau de fin.
+
+![Capture de Studio : Confirmer l'import vérifié](facilities-guide-import-confirm.png)
+
+**Résultat attendu :** Import complete indique les créations, mises à jour, lignes inchangées et lignes ignorées.
+
+![Capture de Studio : Confirmer l'import vérifié](facilities-guide-import-complete.png)
+
+### 3. Revenir à Registry
+
+Sélectionnez **Close** en haut à droite. Le registre se recharge avec les établissements importés.
+
+![Capture de Studio : Revenir à Registry](facilities-guide-import-close.png)
+
+![Capture de Studio : Revenir à Registry](facilities-guide-import-result.png)
+
+## Actualiser un registre existant
+
+À la prochaine version du fichier, répétez l'import avec le même National system. Le registre et le code identifient les lignes existantes. Inutile de recréer ces établissements manuellement.
+
+### 1. Réutiliser la source enregistrée
+
+Choisissez le même registre dans le nouvel import et répétez les étapes Source et Mapping. Vérifiez à nouveau les colonnes.
+
+![Capture de Studio : Réutiliser la source enregistrée](facilities-guide-import-register-step-1.png)
+
+### 2. Lire les changements prévus
+
+Après validation, vérifiez les nombres. Le même fichier d'exemple retrouve deux lignes inchangées et n'en crée aucune.
+
+![Capture de Studio : Lire les changements prévus](facilities-guide-reimport-summary.png)
+
+### 3. Appliquer les changements vérifiés
+
+Sélectionnez **Confirm import** quand le résumé correspond à votre intention.
+
+![Capture de Studio : Appliquer les changements vérifiés](facilities-guide-reimport-confirm.png)
+
+**Résultat attendu :** le fichier répété signale les lignes inchangées sans créer de doublons. Un fichier modifié présente ses différences réelles.
+
+![Capture de Studio : Appliquer les changements vérifiés](facilities-guide-reimport-complete.png)
+
+## Relier les codes reçus qui correspondent au registre
+
+Faites cette tâche après l'arrivée des données de laboratoire. Observed liste les codes reçus. Si cette liste est vide, vous pouvez construire Registry maintenant et revenir après l'arrivée du flux habituel.
+
+La correspondance exacte relie un code reçu à l'établissement portant le même code dans le registre choisi. Les associations existantes sont conservées.
+
+### 1. Ouvrir Observed
+
+Sélectionnez **Observed** à côté de Registry.
+
+![Capture de Studio : Ouvrir Observed](facilities-guide-observed-tab.png)
+
+### 2. Choisir Link matching codes
+
+Ouvrez le menu de la page Observed et sélectionnez **Link matching codes**.
+
+![Capture de Studio : Choisir Link matching codes](facilities-guide-observed-actions.png)
+
+![Capture de Studio : Choisir Link matching codes](facilities-guide-matching-menu.png)
+
+### 3. Choisir le registre
+
+Sélectionnez le registre dont vous voulez rapprocher les codes.
+
+![Capture de Studio : Choisir le registre](facilities-guide-matching-register.png)
+
+### 4. Lire les correspondances proposées
+
+Vérifiez les nombres et les noms. L'exemple comporte trois codes à relier et un sans correspondance. Vos nombres viennent de vos données.
+
+![Capture de Studio : Lire les correspondances proposées](facilities-guide-matching-preview.png)
+
+### 5. Ouvrir Link actions
+
+Sélectionnez les points en haut à droite de ce panneau.
+
+![Capture de Studio : Ouvrir Link actions](facilities-guide-matching-actions.png)
+
+### 6. Appliquer les correspondances
+
+Sélectionnez **Link N codes**, N étant le nombre de votre aperçu. L'exemple affiche Link 3 codes.
+
+![Capture de Studio : Appliquer les correspondances](facilities-guide-matching-apply.png)
+
+**Résultat attendu :** les codes correspondants affichent l'établissement sous Resolves to. Report facilities peut afficher Updating pendant la reconstruction des liens de rapports, puis Current.
+
+![Capture de Studio : Appliquer les correspondances](facilities-guide-matching-result.png)
+
+## Relier un code différent utilisé par la source
+
+Utilisez cette tâche quand une source emploie un autre code pour le même établissement. Choisissez sa véritable fiche Registry. L'exemple relie EXTERNAL-CLINIC à la clinique nord existante.
+
+### 1. Choisir Map sur la ligne reçue
+
+Ouvrez le menu de cette ligne et sélectionnez **Map**. Une ligne déjà associée propose Edit mapping.
+
+![Capture de Studio : Choisir Map sur la ligne reçue](facilities-guide-mapping-row-actions.png)
+
+![Capture de Studio : Choisir Map sur la ligne reçue](facilities-guide-mapping-menu.png)
+
+### 2. Rechercher l'établissement de destination
+
+Dans Target, utilisez **Search terms** pour rechercher le nom ou le code. System est fixé à FACILITY-REGISTRY dans ce parcours.
+
+![Capture de Studio : Rechercher l'établissement de destination](facilities-guide-mapping-search.png)
+
+### 3. Sélectionner l'établissement correspondant
+
+Choisissez le bon établissement parmi les résultats.
+
+![Capture de Studio : Sélectionner l'établissement correspondant](facilities-guide-mapping-target.png)
+
+### 4. Vérifier le type d'association
+
+Gardez **Same as** lorsque les codes désignent le même établissement. Une relation plus large ou plus étroite n'est pas une correspondance d'identité.
+
+![Capture de Studio : Vérifier le type d'association](facilities-guide-mapping-type.png)
+
+### 5. Ouvrir le menu de l'association
+
+Sélectionnez les points en haut à droite du panneau d'association.
+
+![Capture de Studio : Ouvrir le menu de l'association](facilities-guide-mapping-sheet-actions.png)
+
+### 6. Choisir Create
+
+Sélectionnez **Create** pour une nouvelle association. Une association existante utilise Save.
+
+![Capture de Studio : Choisir Create](facilities-guide-mapping-create.png)
+
+**Résultat attendu :** Resolves to affiche l'établissement choisi à côté du code différent de la source.
+
+![Capture de Studio : Choisir Create](facilities-guide-mapping-result.png)
+
+## Utiliser Facilities sur un téléphone
+
+Les tâches Registry et Observed restent disponibles sur téléphone. L'en-tête passe à la ligne pour laisser de la place au statut des rapports.
+
+### 1. Choisir Registry
+
+Sélectionnez **Registry** en haut pour consulter la liste des établissements.
+
+![Capture de Studio : Choisir Registry](facilities-guide-phone-registry.png)
+
+### 2. Choisir Observed
+
+Sélectionnez **Observed** pour consulter les codes reçus.
+
+![Capture de Studio : Choisir Observed](facilities-guide-phone-observed.png)
+
+### 3. Ouvrir le menu de cet onglet
+
+Sélectionnez les points à droite des onglets. Les actions dépendent de l'onglet choisi. Faites défiler le tableau horizontalement pour voir les colonnes restantes.
+
+![Capture de Studio : Ouvrir le menu de cet onglet](facilities-guide-phone-actions.png)
+
+## Pratique facultative avec des données fictives
+
+Toutes les tâches ci-dessus peuvent utiliser vos propres données. Ces fichiers servent uniquement à pratiquer dans une installation de test :
+
+- [Télécharger le CSV de deux établissements](https://openldr.online/docs-samples/example-facilities.csv) utilisé dans les captures d'import.
+- [Télécharger le lot de sept ressources](https://openldr.online/docs-samples/example-observed-data.json) utilisé pour montrer les codes reçus. Il contient un patient fictif, trois demandes et trois rapports.
+
+Pour obtenir les trois correspondances exactes montrées, ajoutez aussi `EXAMPLE-CLINIC-01` avec la tâche manuelle. Utilisez Example facility register pour ces fiches fictives. Le CSV seul donne moins de correspondances ; l'aperçu indique les codes sans correspondance.
+
+Importez le CSV dans le navigateur avec les étapes précédentes. Avant de charger le lot facultatif, lisez [Start here](/docs/start-here) pour les instructions CLI installées et de développement. Placez le JSON dans le dossier `data` de l'installation.
+
+Exemple pour une installation Linux ou macOS :
+
+```shell
+cd ~/Downloads/openldr_ce
+./openldr ingest data/example-observed-data.json
 ```
 
-Comme la plupart des exports nationaux, ses en-têtes ne sont pas les noms de champs d'OpenLDR, et certains de ses mots ne sont pas ceux d'OpenLDR. Les exemples montrent comment traiter les deux.
+Exemple pour une installation Windows :
 
-> **Utilisez une installation de test.** Un registre ne peut pas être retiré une fois enregistré. Les établissements peuvent être supprimés, voir [Supprimer des établissements en masse](#supprimer-des-etablissements-en-masse).
-
-## Exemple 1 : importer un registre d'établissements
-
-L'assistant d'importation a trois étapes : **Source**, **Mappage** et **Vérification**. Rien n'est écrit avant **Confirmer l'import**.
-
-### Enregistrer la source et envoyer le fichier
-
-![Choisir le fichier, enregistrer Sample facility register, et passer au Mappage.](facilities-register.mp4)
-
-1. Ouvrez **Établissements**. Ouvrez le menu **⋯** de la page et sélectionnez **Importer des établissements**.
-2. Déposez le CSV d'exemple sur **Fichier**, ou cliquez pour le choisir.
-3. Sur une installation neuve, le panneau affiche **Enregistrez d'abord la source de ce fichier**. Sélectionnez **Enregistrer un registre**.
-4. Remplissez le registre. Son URI canonique devient son identité permanente, utilisez donc celui que son éditeur utilise déjà :
-
-   | Champ | Valeur |
-   | --- | --- |
-   | URI canonique | `urn:openldr:cs:facility-register:sample` |
-   | Nom affiché | `Sample facility register` |
-   | Code | `SAMPLE` |
-
-5. Ouvrez le menu **⋯** de ce panneau et sélectionnez **Enregistrer**. **Registre national** affiche maintenant **Sample facility register**.
-6. Sélectionnez **Continuer**. Le fichier est envoyé et l'assistant passe au **Mappage**.
-
-### Corriger la correspondance et vérifier le fichier
-
-![La correspondance suggérée, avec Operating Status conservée en donnée supplémentaire.](facilities-mapping.png)
-
-Le Mappage s'ouvre avec une correspondance suggérée. Chaque en-tête du fichier est à côté du champ qu'il remplit. Ici, la suggestion en a trouvé sept sur huit. Elle a laissé **Operating Status** sur **Conserver en donnée supplémentaire**, car aucun champ ne s'écrit comme lui.
-
-![Associer Operating Status à status, fixer le pays, et lancer Tout valider.](facilities-check.mp4)
-
-1. Réglez **Operating Status** sur `status`.
-2. Sous **Valeurs fixes**, le fichier n'a pas de colonne pays, donnez-en donc un à chaque ligne. Dans **country**, tapez `Tanzania` et choisissez-le. Utilisez votre propre pays sur une vraie installation.
-3. Sélectionnez **Tout valider**. L'assistant lit tout le fichier et passe à la **Vérification**.
-
-**Résultat attendu :** **10 ligne(s) seront importées (0 ignorée(s))** et **10 ligne(s) d'établissement seront créées**. Un encadré **Valeurs sans correspondance canonique** liste les mots du fichier qu'OpenLDR ne connaît pas :
-
-- **Level** : 1 valeur, **Outreach Site**.
-- **Status** : 2 valeurs, **Operating** et **Closed**.
-
-![La Vérification, avec trois valeurs encore sans correspondance.](facilities-review-values.png)
-
-**Health Centre**, **Dispensary** et les autres types ont trouvé leur correspondance tout seuls, même quand l'orthographe diffère de **Health Center** d'OpenLDR. Voir [L'orthographe n'est pas votre problème](#l-orthographe-n-est-pas-votre-probleme).
-
-### Décider des valeurs inconnues
-
-![Ignorer Outreach Site, associer Operating à Active et Closed à Inactive, et vérifier de nouveau.](facilities-values.mp4)
-
-1. Sélectionnez **Mapper ces valeurs**. Le Mappage s'ouvre de nouveau, avec une liste sous chaque valeur.
-2. Pour **Outreach Site**, choisissez **Ignorer cette valeur**. Elle est importée telle qu'écrite. Vous pourriez aussi choisir **Ajouter « Outreach Site » comme nouveau type…**.
-3. Pour **Operating**, choisissez **Active**. Pour **Closed**, choisissez **Inactive**.
-4. Sélectionnez de nouveau **Tout valider**.
-
-**Résultat attendu :** la Vérification montre les mêmes totaux, sans encadré de valeurs inconnues.
-
-![La Vérification sans rien à décider : 10 établissements seront créés.](facilities-review.png)
-
-5. Sélectionnez **Confirmer l'import**. Après quelques secondes, le registre liste les dix établissements.
-
-**Résultat attendu :** dix lignes, chacune avec la source **Importé**. **Sample Dispensary Lake** est **Inactive**, les autres **Active**.
-
-Ces décisions de valeurs sont enregistrées avec le registre. La prochaine importation du même registre ne les redemande pas.
-
-## Exemple 2 : lier les codes de vos données de laboratoire
-
-Les données d'exemple désignent quatre établissements par leur code : trois qui ont envoyé des demandes, et le laboratoire qui a fait les examens. Ils sont arrivés avant le registre, donc rien ne les résout encore.
-
-![Observés : quatre codes des données d'exemple, tous Non associé.](facilities-observed.png)
-
-1. Ouvrez l'onglet **Observés**. Il liste `SAMPLE-LAB` avec 39 comptes rendus, `SAMPLE-HOSP-01` 23, `SAMPLE-HC-01` 22 et `SAMPLE-HC-02` 15. Chacun affiche **Non associé**.
-2. Ouvrez le menu **⋯** de la page et sélectionnez **Lier les codes correspondants**.
-3. Réglez **Registre** sur **Sample facility register**. Le panneau affiche **4 à lier, 0 déjà liés, 0 conservés, 0 sans correspondance.** Rien n'est encore écrit.
-4. Ouvrez le menu **⋯** du panneau et sélectionnez **Lier 4 codes**.
-
-![Lier les quatre codes au registre d'exemple.](facilities-link.mp4)
-
-**Résultat attendu :** **4 codes liés.** Chaque ligne affiche maintenant l'établissement vers lequel elle se résout sous **Résout vers**, avec son type, son lieu et **via le registre**.
-
-![Chaque code observé se résout vers un établissement du registre.](facilities-linked.png)
-
-Les rapports prennent les nouveaux liens après la reconstruction de la carte des établissements que l'action met en file. Le haut de la page affiche **Établissements des rapports** et l'heure de la dernière reconstruction.
-
-## Exemple 3 : lire le registre depuis une requête
-
-L'entrepôt garde une copie de chaque registre dans la table `facility_registry`. Ouvrez **Requête**, choisissez **Target Warehouse (Postgres)** et exécutez :
-
-```sql
-select facility_code, name, region, district, status
-from facility_registry
-where facility_system = 'urn:openldr:cs:facility-register:sample'
-order by facility_code
+```shell
+cd C:\openldr_ce
+.\openldr.ps1 ingest data\example-observed-data.json
 ```
 
-**Résultat attendu :** dix lignes, de `SAMPLE-DISP-01` à `SAMPLE-OUT-01`. `SAMPLE-DISP-03` affiche `inactive`. Voir [Interroger un registre](#interroger-un-registre).
+Exemple pour un dépôt de développement, après avoir placé le fichier dans son dossier `data` :
 
-## La même importation en ligne de commande
-
-La CLI importe le même fichier. Sur une installation neuve, enregistrez d'abord le registre, avec les valeurs de l'Exemple 1. Passez cette étape s'il est déjà enregistré dans le studio :
-
-```bash
-./openldr facilities register-source --url urn:openldr:cs:facility-register:sample \
-  --name "Sample facility register" --code SAMPLE
+```shell
+cd ~/Downloads/openldr_ce
+pnpm openldr ingest data/example-observed-data.json
 ```
 
-Un registre existant est refusé, et le message le dit. Deux fichiers JSON portent les décisions de l'Exemple 1.
-
-La correspondance de colonnes, `columns.json` :
-
-```json
-{"columns":{"Facility Code":"national_code","Facility Name":"name","Facility Type":"level","Ownership":"ownership","Region":"region","District":"district","Operating Status":"status","Phone":"phone"},"constants":{"country":"TZA"}}
-```
-
-La correspondance de valeurs, `values.json` :
-
-```json
-[{"field":"status","rawValue":"Operating","toCode":"active"},{"field":"status","rawValue":"Closed","toCode":"inactive"},{"field":"level","rawValue":"Outreach Site","ignore":true}]
-```
-
-```bash
-./openldr facilities import data/openldr-sample-facilities.csv \
-  --national-system urn:openldr:cs:facility-register:sample \
-  --column-map data/columns.json --value-map data/values.json
-```
-
-Sans `--apply`, c'est un essai à blanc. Il affiche `parsed 10 row(s), skipped 0` et combien de lignes il créerait, modifierait ou laisserait. Ajoutez `--apply` pour écrire. Liez ensuite les codes :
-
-```bash
-./openldr facilities link-matching --register urn:openldr:cs:facility-register:sample --apply
-```
-
-`--national-system` est du texte libre en ligne de commande. Écrivez-le exactement comme l'affiche `openldr facilities import-sources`. Un registre mal écrit enregistre des correspondances de valeurs que rien ne lit.
-
-## Enregistrer un établissement à la main
-
-1. Ouvrez Établissements, choisissez Registre, puis Ajouter un établissement dans le menu ⋯.
-2. Choisissez le champ System parmi les sources enregistrées. Le paramètre du laboratoire peut le préremplir.
-   Système identifie le registre. Le nom affiché sélectionne son URI canonique.
-   Un registre inconnu ou inactif est refusé. Si le registre manque, enregistrez une source
-   dans l'étape Source de l'assistant d'importation, ou avec `openldr facilities register-source`,
-   avant de continuer.
-3. Renseignez Facility code et Name dans le formulaire par défaut. Ce code identifie le site dans ce registre.
-   Le formulaire contient un seul code, sans champs distincts Code national et Code local.
-4. Remplissez les champs obligatoires du formulaire d'établissement publié. Un administrateur
-   peut modifier ce formulaire. Les champs et leurs obligations peuvent donc varier.
-   Ajouter et Modifier nécessitent le droit de gérer les établissements et un formulaire publié.
-5. Pour les champs terminologiques comme Pays, Niveau et Statut, recherchez puis sélectionnez un résultat.
-   Saisir une recherche ne sélectionne aucune réponse. Le libellé sélectionné représente un code enregistré.
-   Sans résultat adapté, demandez à l'administrateur de vérifier la terminologie configurée.
-6. Choisissez Créer dans le menu ⋯ du panneau. Pour une modification, choisissez Enregistrer. Après succès, le panneau se ferme
-   et le tableau du registre est mis à jour. En cas d'échec, corrigez les erreurs
-   indiquées dans les champs ou le panneau, puis réessayez. Rouvrez la ligne pour vérifier les valeurs.
-
-### Après l'enregistrement
-
-Après Créer ou Enregistrer, le registre recharge la page avec ses filtres et son tri. L'établissement peut appartenir à une autre page ou ne plus correspondre au filtre. Recherchez son code pour le vérifier. L'enregistrement n'ajoute pas de ligne au-delà de la taille de page.
-
-### Codes et identité
-
-Système et Code de l'établissement identifient ensemble le site. Utilisez le code exact du registre,
-y compris les zéros initiaux. La colonne Code du tableau affiche ce même code.
-L'ajout refuse une paire déjà présente. Recherchez et modifiez plutôt la ligne existante.
-
-Vous pouvez corriger Système ou Code de l'établissement dans Modifier. Un nouveau Système doit désigner
-une source enregistrée active. L'identifiant interne reste inchangé. Un import ultérieur retrouve la ligne
-par son Système et son Code actuels. Sa politique de conflit décide quelles valeurs conserver.
-Ne supprimez pas un établissement pour corriger son code.
-
-## Importer une liste nationale : référence
-
-Vous pouvez importer une liste nationale d'établissements dont les en-têtes de colonnes et le
-vocabulaire ne correspondent pas à ceux d'OpenLDR, à l'aide d'une correspondance de colonnes et
-d'une correspondance de valeurs, depuis l'assistant d'importation ou la CLI `openldr`.
-
-### Avant d'importer votre propre liste
-
-- Connaître le registre national auquel appartient le fichier (son URI canonique, par exemple
-  `urn:zm:mfl`). L'identifiant permanent de chaque ligne importée est dérivé de cet URI et de la
-  colonne de code du fichier, donc le même registre doit toujours porter le même nom.
-- Garder le fichier source ouvert quelque part pour comparer sa ligne d'en-têtes aux champs du
-  contrat ci-dessous.
-
-## Les trois étapes de l'assistant d'importation
-
-L'assistant d'importation a trois étapes, numérotées en haut : Source, Mappage et
-Vérification. Cliquez sur une étape dans cette bande pour passer de l'une à l'autre. Il n'y a pas
-de bouton Retour séparé.
-
-- **Source.** Choisissez le fichier et le registre auquel il appartient. Si cette installation n'a
-  encore aucun registre, le bouton affiche ici « Enregistrer un registre » au lieu de « Continuer ».
-  Quitter Source envoie le fichier au serveur. Il est seulement stocké, pas encore vérifié, car
-  aucune correspondance de colonnes n'existe encore.
-- **Mappage.** Toutes les décisions se prennent ici : la correspondance de colonnes, les valeurs
-  fixes, que faire des conflits, des absences et des suppressions, et quels mots du registre
-  correspondent au vocabulaire. Chaque ligne porte aussi sa propre icône d'état, décrite plus bas,
-  pour vérifier une seule colonne rapidement. Son action principale, Tout valider, lance la
-  première vérification complète sur le fichier déjà stocké à l'étape Source. Elle ne renvoie pas
-  le fichier une deuxième fois.
-- **Vérification.** Rapporte ce que la vérification a trouvé et propose une seule action,
-  Appliquer. Rien n'y est modifiable.
-
-### Importer un classeur Excel
-
-L'import accepte un classeur `.xlsx` en plus d'un fichier `.csv` ou `.jsonl`, dans l'assistant
-comme dans la CLI.
-
-- Seule la première feuille est lue. Si le classeur en contient plusieurs, l'étape Mappage indique
-  la feuille lue. Si les colonnes semblent fausses, placez le registre dans la première feuille ou
-  enregistrez-le au format CSV.
-- Le serveur convertit cette feuille en CSV au moment du téléversement, et toutes les étapes
-  suivantes lisent ce CSV. C'est pourquoi l'historique des imports indique le format `csv`.
-- Les nombres gardent leur valeur complète. Un long code d'établissement n'est pas réduit à
-  `1.23457E+14`, et une coordonnée garde toutes ses décimales. Un nombre qui a son propre format,
-  comme un code complété par des zéros, garde le texte affiché par Excel.
-- Un classeur ne peut pas dépasser 20 Mo. Un CSV peut être bien plus gros, car il est lu par
-  morceaux, alors qu'un classeur doit être ouvert en entier. Pour un registre plus gros,
-  enregistrez la première feuille au format CSV et importez ce fichier.
-- En ligne de commande, un chemin qui se termine par `.xlsx` est lu comme un classeur. Ajoutez
-  `--format xlsx` pour un classeur qui porte un autre nom. `suggest-map` et `suggest-values`
-  lisent aussi les classeurs.
-
-### Le mappage décide, la vérification rapporte
-
-Si la vérification révèle quelque chose que vous voulez changer, revenez au Mappage, changez-le,
-puis avancez de nouveau. Cet aller-retour est voulu. Une liste nationale d'établissements engage
-trop de choses pour qu'il vaille la peine d'échanger l'exactitude contre la vitesse.
-
-Au premier passage, le Mappage n'affiche aucune liste de valeurs non reconnues, car rien n'a encore
-lu le fichier. Cliquez sur Tout valider, laissez la vérification s'exécuter, et la liste vous
-attend à votre retour. Il en va de même des options qui laissent passer un problème : aucune ne
-vous est proposée tant que rien ne vous a dit que le problème existe.
-
-**Changer quoi que ce soit au Mappage supprime la dernière Vérification.** C'est délibéré. Un
-résumé qui ne correspond plus à ce que vous allez importer est pire que pas de résumé : l'assistant
-le retire plutôt que de laisser à l'écran un chiffre qui n'est plus vrai. La Vérification est soit
-à jour, soit absente.
-
-Deux choses ne la suppriment volontairement **pas**, car elles ne changent rien à ce que la
-vérification a trouvé : les choix conflits, absences et suppressions, qui s'appliquent au moment de
-l'import et non à la lecture du fichier, et l'option d'importer malgré des lignes illisibles, qui
-décide seulement si l'import peut se poursuivre.
-
-Les valeurs non reconnues d'un champ apparaissent sous sa propre ligne de mappage, chacune avec sa
-liste de choix, au lieu d'une seule zone plus bas. La liste est conservée pendant que vous la
-traitez : enregistrer une correspondance ne fait pas disparaître les lignes restantes, et ne
-relance plus la vérification tout seul. Demandez la vérification suivante quand vous êtes prêt.
-
-**Une valeur de niveau qui n'appartient à aucun type peut être ignorée.** Choisissez **Ignorer
-cette valeur** en haut de la liste. La valeur est importée exactement comme écrite, ce qui est déjà
-le cas d'une valeur que personne n'a mappée, et la ligne cesse de la compter. La décision est
-enregistrée pour ce registre, donc le prochain import du même fichier ne la redemande pas. Elle
-n'est proposée que pour `level` : `status` et `country` ont de petits vocabulaires fermés, sans
-rien à y ignorer.
-
-**Une valeur de niveau absente de la liste peut y être ajoutée.** Choisissez **Ajouter « … » comme
-nouveau type** en haut de la liste. Une confirmation s'ouvre avec le nom, que vous pouvez corriger,
-et le code qu'il recevra, que vous ne pouvez pas. Le type est ajouté à ce registre seulement :
-chaque autre registre garde la liste qu'il a. Si le nom tapé correspond déjà à quelque chose dans
-la liste, l'ajout est refusé et nomme ce qu'il a rencontré, car deux entrées qui se lisent pareil
-empêcheraient les deux de se résoudre. Ajouter un type demande la capacité `terminology.manage` en
-plus de `facilities.manage` ; sans elle, l'option est désactivée et vous pouvez toujours mapper ou
-ignorer.
-
-### L'icône d'état sur chaque ligne
-
-Chaque ligne de mappage porte une petite icône à côté de son sélecteur de champ. Elle a quatre
-états :
-
-- Un cercle d'information ambre signifie que la ligne n'a pas encore été vérifiée.
-- Une coche verte dans un cercle signifie qu'elle a été vérifiée et que rien ne cloche.
-- Un cercle rouge signifie qu'un problème existe. La ligne dit lequel, juste en dessous.
-- Une flèche circulaire grise signifie que le mappage a changé depuis sa dernière vérification.
-- Un cercle discret barré d'un tiret signifie que la colonne est gardée en données supplémentaires.
-  Elle ne revendique aucun champ du contrat, il n'y a donc rien à vérifier et l'icône ne fait rien.
-  La plupart des colonnes d'un export réel sont dans ce cas, ce qui laisse ressortir les autres.
-
-Chaque état a sa propre forme, pas seulement sa propre couleur, pour qu'ils restent distincts sur
-un téléphone, où l'infobulle ne s'ouvre pas du tout.
-
-L'icône reste cliquable dans tous les états. Une nouvelle vérification n'est jamais refusée.
-
-Aucune ligne ne devient verte toute seule, même quand le champ suggéré paraît juste. La suggestion
-note le NOM de la colonne. Elle ne peut pas savoir ce que la colonne contient, et les noms qu'elle
-reconnaît le plus sûrement sont souvent ceux des champs contrôlés dont les valeurs demandent le
-plus de vérification. Le vert veut dire qu'une vérification a lu la colonne.
-
-Cliquer sur l'icône ne vérifie que cette colonne. Elle lit les valeurs de cette colonne dans le
-fichier déjà envoyé à l'étape Source, sans revérifier tout le fichier. Utilisez Tout valider quand
-vous voulez une vérification complète de toutes les colonnes à la fois.
-
-### L'orthographe n'est pas votre problème
-
-Une valeur qui ne diffère du vocabulaire que par les majuscules, ou parce qu'elle écrit Centre là où
-le vocabulaire écrit Center, se résout toute seule et n'atteint jamais cette liste. Le
-`Health Centre` de votre registre est importé comme `health-center`, et les mots que votre fichier a
-réellement employés sont conservés à côté de la ligne.
-
-Un nom réellement différent vous parvient toujours. `1st Level Hospital` n'est l'orthographe de rien
-dans le vocabulaire : il attend donc votre décision, et c'est bien le but.
-
-**Une correspondance que vous avez faite à la main l'emporte toujours.** Rien de décidé
-automatiquement ne passe outre une décision que vous avez prise.
-
-Chaque étape affiche un seul bouton, celui qui fait avancer. Toute autre action, dont les trois
-options de nouvelle vérification et Fermer, reste dans le menu `⋯` de la page.
-
-**Il n'y a pas de bouton Enregistrer. L'icône d'état est l'enregistrement.** Choisissez les valeurs
-dans les listes sous une ligne, puis appuyez sur l'icône de cette ligne : elle enregistre vos choix,
-relit la colonne et passe la ligne au vert s'il ne reste rien. Tout valider fait la même chose pour
-toutes les lignes avant de vérifier le fichier entier. D'ici là, la ligne dit ce qui attend, par
-exemple « 4 valeur(s) non reconnue(s). 2 choisie(s), pas encore enregistrée(s) ».
-
-Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
-étape antérieure pendant qu'une vérification en arrière-plan est en cours. Cliquer sur Tout valider
-au Mappage vous amène tout seul à Vérification dès que la vérification démarre, avant même qu'elle
-ne se termine. Si la vérification trouve un problème dans la correspondance de colonnes,
-l'assistant vous ramène à Mappage et affiche les erreurs à cet endroit, pour que vous puissiez
-corriger la correspondance sur place.
-
-## Ce qu'est une correspondance de colonnes
-
-Le contrat d'import d'OpenLDR a un ensemble fixe de champs : `national_code` et `name`
-(obligatoires), plus `level`, `ownership`, `status`, `country`, `zone`, `region`, `district`,
-`council`, `ward`, `village`, `address`, `phone`, `latitude` et `longitude` (facultatifs). Un
-fichier national n'orthographie presque jamais ses colonnes ainsi : il peut appeler la colonne de
-code `MFL Code`, ou la colonne de région `Province`.
-
-Une **correspondance de colonnes** est la traduction entre les deux. Ses clés sont **les en-têtes
-du fichier lui-même, exactement comme ils apparaissent dans le fichier**, et non les noms du
-contrat. Pour chaque en-tête, vous avez trois choix :
-
-- **La faire correspondre** à un champ du contrat. Deux en-têtes ne peuvent jamais correspondre au
-  même champ. L'analyseur ne peut pas deviner lequel doit l'emporter, il refuse donc plutôt que de
-  deviner.
-- **Lui donner une valeur fixe.** À utiliser quand le contrat a besoin d'un champ pour lequel le
-  fichier n'a aucune colonne. Un fichier national porte rarement son propre pays, par exemple,
-  donc `country` est généralement une valeur fixe plutôt qu'une colonne mappée.
-
-  `level`, `status` et `country` sont liés à des jeux de valeurs, donc leur valeur fixe se choisit
-  dans une liste au lieu de se saisir. Le choix écrit le code, c'est-à-dire la même chaîne que
-  l'importateur produit pour une valeur mappée à la Révision, donc une valeur choisie n'a besoin
-  d'aucun mappage. Vous pouvez toujours saisir une valeur absente de la liste. Le panneau vous le
-  signale, et cette valeur est importée telle quelle puis apparaît à la Révision pour être mappée.
-  Si une installation n'a aucune liste de valeurs pour un champ, le panneau le dit aussi, et rien
-  n'est vérifié.
-- **La garder comme donnée supplémentaire.** La colonne est quand même importée, transportée dans
-  le champ `extras` de l'enregistrement, mais elle n'est pas traitée comme l'un des champs du
-  contrat.
-
-Vous n'êtes pas obligé de décider pour chaque en-tête. Laissez-en un tel quel et il réclame quand
-même son champ tout seul, tant qu'il orthographie déjà exactement le nom d'un champ du contrat.
-L'analyseur appelle cela une colonne **passthrough**. Un en-tête laissé tel quel qui n'orthographie
-rien du contrat est refusé, sauf si vous activez **Autoriser les colonnes non reconnues**, ce qui
-la transporte dans `extras` de la même façon que le choix « la garder comme donnée
-supplémentaire ».
-
-> **Votre mappage de colonnes décide du sort de chaque colonne.** Si vous mappez cinq colonnes sur
-> vingt, les quinze autres sont conservées en données supplémentaires et l'import se poursuit. On ne
-> vous interroge pas à leur sujet et rien n'est perdu : chaque ligne les porte dans ses données
-> supplémentaires, là où va aussi une colonne que vous choisissez explicitement de conserver ainsi.
->
-> **Sans aucun mappage, une colonne non reconnue arrête toujours le fichier.** Rien n'a indiqué à
-> l'importateur si vous vouliez cette colonne, et il ne devinera pas : une colonne perdue en silence
-> est pire qu'un fichier refusé. Utilisez l'option proposée qui vérifie de nouveau le fichier en
-> conservant les colonnes non reconnues en données supplémentaires. Cette option doit être activée
-> avant la lecture du fichier, elle ne peut donc pas être ajoutée à l'étape de confirmation.
-> **Le fichier déjà envoyé est réutilisé** : un registre national n'est jamais envoyé deux fois
-> pour changer un réglage.
->
-> Une version JSONL ne s'arrête jamais pour cela : chaque ligne nomme ses propres champs.
-
-## Comment obtenir une correspondance suggérée
-
-Vous avez rarement besoin de construire une correspondance de colonnes à la main. L'assistant et
-la CLI peuvent tous deux examiner les en-têtes d'un fichier et proposer une correspondance hors
-ligne, sans aller-retour serveur :
-
-- **Dans l'assistant :** ouvrez **Établissements**, choisissez **Importer**, sélectionnez le fichier
-  et choisissez le registre. Quittez l'étape Source pour envoyer et stocker le fichier. L'étape
-  Mappage s'ouvre ensuite avec une suggestion déjà remplie. Chaque ligne démarre avec une icône
-  d'état ambre, décrite plus haut, car rien n'a encore lu le fichier. Cliquez sur une icône pour
-  vérifier cette colonne, ou sur Tout valider pour les vérifier toutes.
-- **Depuis la CLI :** exécutez `openldr facilities suggest-map <path>`. Elle affiche la même
-  correspondance suggérée sous forme de tableau, signale toute collision que la suggestion
-  provoquerait elle-même, et indique comment réinjecter le résultat :
-  `openldr facilities import <path> --column-map <file.json>`.
-
-Dans les deux cas, vérifiez la suggestion. C'est un point de départ, pas une réponse que vous
-pouvez éviter de contrôler.
-
-## Refus et comment les corriger
-
-Un import avec des problèmes de correspondance de colonnes n'écrit rien. Chaque problème est
-signalé en une seule fois, pour qu'une seule passe de correction répare le fichier, au lieu de
-découvrir les erreurs une par une. Quatre choses peuvent mal tourner :
-
-| Raison | Ce que cela signifie | Comment le corriger |
-|---|---|---|
-| `duplicate_target` | Deux en-têtes revendiquent le même champ du contrat. Un en-tête revendique un champ en y étant mappé, **ou simplement en portant son nom**, une colonne nommée `Zone` revendique `zone` même si le panneau affiche `Non mappé`. | Décidez quel en-tête est correct pour ce champ, puis mettez l'autre sur `Non mappé`, ce qui conserve ses valeurs en donnée supplémentaire. |
-| `constant_collision` | Une valeur fixe et un en-tête mappé (ou laissé tel quel et déjà correspondant) réclament tous deux le même champ. | Gardez un seul des deux, la valeur fixe ou la correspondance de colonne, pour ce champ. |
-| `unknown_target` | Un en-tête est mappé vers un nom qui n'est pas l'un des champs du contrat. | Corrigez la faute de frappe, ou faites-le correspondre à une donnée supplémentaire s'il n'appartient pas du tout au contrat. |
-| `missing_required` | `national_code` ou `name` n'a ni colonne mappée ni valeur fixe. | Mappez une colonne, ou fournissez une valeur fixe, pour le champ obligatoire manquant. |
-
-> **Une colonne qui porte le nom d'un champ du contrat le revendique.** Un fichier contenant à la
-> fois `Province` et `Zone` est refusé si vous mappez `Province` vers `zone`, car `Zone` le
-> revendique déjà par son nom. Mettez `Zone` sur `Non mappé` pour libérer la revendication. Ses
-> valeurs sont conservées en donnée supplémentaire, jamais perdues. Il en va de même pour
-> `Ownership`, `Ward`, `District`, `Latitude` et `Longitude`.
-
-## La distinction qui pose souvent problème
-
-Une correspondance de colonnes décide où va chaque **colonne**. Une correspondance de valeurs
-décide ce que signifie chaque **valeur** dans un champ contrôlé (`level`, `status`, `country`). Les
-deux se comportent très différemment quand elles sont incomplètes :
-
-- **Une valeur non mappée est importée quand même.** Si un fichier orthographie un niveau
-  d'établissement `"Health Centre"` et que votre jeu de valeurs ne reconnaît pas exactement cette
-  orthographe, la ligne est importée quand même. Le texte brut est conservé, et la valeur est
-  signalée pour que vous puissiez la mapper plus tard. Rien ne bloque là-dessus.
-- **Une colonne obligatoire non mappée bloque tout l'import.** Si `national_code` ou `name` n'a
-  nulle part d'où venir, l'analyseur refuse de deviner, et aucun enregistrement n'est écrit tant
-  que vous n'avez pas corrigé la correspondance.
-
-En résumé : un problème de colonne arrête l'import avant qu'il ne commence ; un problème de valeur
-est enregistré et peut être corrigé après coup.
-
-## Filtrage, tri et recherche
-
-Le tableau Établissements utilise la même barre d'outils qu'Audit : une zone de recherche, et les
-boutons Filtrer, Trier, Colonnes et Réinitialiser.
-
-- Rechercher vérifie le nom, le code, la région, le district et le conseil, côté serveur, en une
-  seule requête. Elle trouve du texte dans n'importe laquelle de ces cinq colonnes, même celles que
-  le tableau n'affiche pas actuellement.
-- Filtrer ajoute une règle : choisissez une colonne, un opérateur et une valeur. Vous pouvez ajouter
-  plus d'une règle.
-- Trier ordonne le tableau par n'importe quelle colonne triable, en ordre croissant ou décroissant.
-- Colonnes affiche ou masque des colonnes.
-- Réinitialiser efface tous les filtres, tris, termes de recherche et choix de colonnes, et remet
-  le tableau à ses réglages par défaut. Ce bouton n'apparaît qu'une fois un filtre ou un tri
-  appliqué. Chaque contrôle s'efface aussi tout seul, vous pouvez donc annuler une chose sans
-  annuler le reste.
-
-Les filtres actifs apparaissent sous forme de puces amovibles sous la barre d'outils.
-
-Un contrôle occupe sa propre ligne sous la barre d'outils, parce que ce n'est pas une colonne
-ordinaire :
-
-- **État du mappage.** Si un établissement peut être une cible de mappage, et si quelque chose le
-  mappe déjà. Mappé signifie qu'au moins un code observé s'y résout déjà. Non mappé signifie que
-  l'établissement est prêt à être une cible mais que rien ne pointe encore vers lui. Non projeté
-  signifie que l'établissement n'a pas encore atteint la table destinée aux rapports, donc il ne
-  peut pas du tout être une cible de mappage. Cet état provient d'une jointure entre deux autres
-  tables, pas d'une colonne stockée, il garde donc son propre menu déroulant au lieu de rejoindre
-  la liste Filtrer.
-
-Registre national occupait cette ligne comme deuxième zone. C'est une colonne de Filtrer
-maintenant, sous le nom Registre national, car elle a toujours filtré une colonne stockée comme
-tous les autres filtres. Filtrer lui donne des opérateurs que la zone n'avait pas : la zone exigeait
-l'URI complète du registre, et « contient » en trouve une partie, vous pouvez donc taper `hfr` au
-lieu de `urn:openldr:cs:facility-register:hfr` en entier. Les valeurs restent du texte libre plutôt
-qu'une liste de choix, car un établissement peut porter un code de registre que votre installation
-ne liste plus comme source active, et une liste de choix masquerait ces lignes.
-
-Une vue filtrée et triée peut être partagée. Les filtres et tris apparaissent dans l'URL de la
-page, donc copier le lien et l'envoyer à quelqu'un rouvre la même vue. Les anciens liens qui
-utilisaient un seul paramètre de requête, comme `?zone=Central`, fonctionnent toujours.
-
-Dans le studio, Filtrer et Trier peuvent utiliser ces colonnes : code, nom, région, district,
-statut, source, zone, conseil, pays, niveau, propriété, origine gérée, état du registre et registre
-national.
-
-### Deux choses à savoir
-
-Rechercher vérifie chaque ligne directement au lieu d'utiliser un index. Sur un grand registre
-national, cela peut prendre plus de temps que filtrer par une valeur de colonne exacte. Si une
-recherche semble lente, restreignez d'abord avec Filtrer, puis recherchez dans le résultat plus
-petit.
-
-L'ordre par défaut du tableau et un tri explicite par nom peuvent classer les noms différemment.
-Ils comparent la casse et les lettres accentuées selon des règles différentes. Si un rapport
-dépend d'un ordre précis, appliquez un tri explicite plutôt que de vous fier à la vue par défaut.
-
-### Laboratoires et cliniques dans la liste Observés
-
-La liste Observés contient deux sortes de codes :
-
-- **Laboratoires d'analyse.** Le laboratoire qui a réalisé chaque test, tiré de chaque rapport.
-- **Établissements demandeurs.** La clinique ou l'hôpital qui a envoyé l'échantillon, tiré de chaque
-  demande.
-
-Un laboratoire et une clinique peuvent partager le même code. Ils restent deux lignes distinctes,
-car chacun arrive sous son propre système de codage. Associez chacun au bon établissement.
-
-Les données envoyées par une ancienne version de la chaîne cdr-toolchain plaçaient l'établissement
-demandeur à la place du laboratoire. Renvoyez ces données pour remettre chaque code dans son bon
-rôle.
-
-## Lier les codes observés à un registre en une étape
-
-Certaines listes d'établissements utilisent les mêmes codes que votre LIS envoie. Un dictionnaire
-d'établissements OpenLDR v1 en est un : il est indexé sur les codes d'établissement DISA. Après
-avoir importé une telle liste, vous n'avez pas besoin d'associer chaque code observé à la main.
-
-1. Ouvrez Établissements, puis Observés.
-2. Ouvrez le menu `⋯` et choisissez **Lier les codes correspondants**.
-3. Choisissez le registre. Le panneau montre ce qui se passerait, et n'écrit encore rien.
-4. Ouvrez le menu `⋯` du panneau et choisissez **Lier N codes**.
-
-Chaque code entre dans l'un de ces quatre groupes :
-
-- **À lier.** Le registre porte exactement ce code, et rien ne l'associe encore.
-- **Déjà lié.** Le code résout déjà vers cet établissement.
-- **Conservé.** Le code a déjà une association. Elle reste telle quelle. Corrigez-la à la main si
-  elle est fausse.
-- **Sans correspondance.** Le registre n'a aucune ligne portant ce code.
-
-La correspondance est exacte. `MICAN` ne correspond ni à `mican` ni à `MICAN ` suivi d'un espace.
-Toutes les liaisons sont écrites ensemble, ou aucune. Les rapports reflètent les nouvelles liaisons
-après la reconstruction de la dimension des établissements que l'action programme.
-
-En ligne de commande :
-
-    openldr facilities link-matching --register <URL du registre>
-    openldr facilities link-matching --register <URL du registre> --apply
-
-### Exemple : un dictionnaire d'établissements v1 (Mozambique)
-
-Exportez la liste des établissements depuis la base du dictionnaire v1. La clause `WHERE` exclut
-les provinces et les districts, que la table stocke comme des lignes sans type d'établissement.
-
-```sql
-SELECT FacilityCode, Description, FacilityType, HFStatus, FacilityNationalCode,
-       CountryName, ProvinceName, DistrictName
-FROM dbo.viewFacilities
-WHERE ISNULL(FacilityType, '') <> ''
-```
-
-Enregistrez le résultat en CSV avec chaque colonne en texte. Excel transforme des codes comme `01`
-en `1` : ne faites pas passer le fichier par Excel.
-
-Créez un registre pour cette liste, par exemple « Codes d'établissement DISA du Mozambique ».
-Importez ensuite le CSV avec cette correspondance de colonnes :
-
-| Colonne du fichier | Champ |
-|---|---|
-| FacilityCode | `national_code` |
-| Description | `name` |
-| ProvinceName | `region` |
-| DistrictName | `district` |
-| CountryName | `country` |
-| FacilityType | `level` |
-| HFStatus | `status` |
-| FacilityNationalCode | Conserver en donnée supplémentaire |
-
-Associez la province à `region`, pas à `zone`. Les rapports lisent la région, le district et le
-conseil.
-
-Lancez ensuite **Lier les codes correspondants** sur le nouveau registre.
-
-## Ligne de commande : lister les établissements
-
-`openldr facilities list` prend en charge la même grammaire de filtre et de tri que la barre
-d'outils, ce qui permet à un script de reproduire n'importe quelle vue construite dans le
-navigateur.
-
-- `--where column:operator:value`. Répétable. Seuls les deux premiers deux-points sont des
-  délimiteurs, une valeur peut donc elle-même contenir un deux-points.
-- `--sort column` trie en ordre croissant. `--sort -column`, avec un tiret en préfixe, trie en
-  ordre décroissant. Répétable.
-- `--limit <n>` limite le nombre de lignes renvoyées. Sans cet indicateur, la commande renvoie au
-  plus 200 lignes. Dans la vue tableau, la dernière ligne indique combien vous en voyez sur le
-  total. Avec `--json`, le total voyage dans la réponse à la place, et cette ligne ne s'affiche pas.
-- `--json` affiche une sortie exploitable par machine au lieu d'un tableau.
-
-```bash
-openldr facilities list --sort -name --limit 10
-```
-
-Cette commande liste les dix derniers établissements par nom, de Z à A. Elle n'applique aucun
-filtre, donc elle renvoie des lignes partout où le registre en a.
-
-```bash
-openldr facilities list --where level:eq:hospital --sort -name
-```
-
-Cette commande liste les établissements dont la colonne level correspond exactement à
-« hospital », triés par nom de Z à A. `eq` exige une correspondance exacte, et la casse compte,
-vérifiez donc d'abord les valeurs de niveau réelles de votre propre registre. Les registres
-stockent souvent des valeurs comme « Health Post », « Health Centre » ou « 1st Level Hospital », et
-une valeur qui ne correspond pas exactement ne renvoie rien.
-
-La CLI peut aussi filtrer et trier par `id`, la seule colonne que la barre d'outils du studio
-laisse de côté. `health` n'a pas de forme `--where` : elle est calculée, pas stockée, donc
-filtrez-la plutôt via le menu déroulant État du mappage du studio. Utilisez `facilitySystem` pour
-le registre national, le nom de colonne qu'emploie aussi le filtre Registre national du studio.
-
-Une colonne inconnue, ou un opérateur que cette colonne n'autorise pas, est rejeté avec un message
-qui nomme précisément l'erreur, la même validation qu'utilise la barre d'outils. Un indicateur mal
-saisi échoue de la même façon qu'un filtre mal saisi dans le navigateur.
-
-## Interroger un registre
-
-L'entrepôt garde une copie de chaque registre dans la table `facility_registry`. Une requête
-personnalisée de la page Query peut la lire, même avant l'arrivée de résultats. Elle contient une
-ligne par établissement, de chaque registre, avec `facility_system` (l'URL du registre),
-`facility_code`, `name`, les colonnes de zone, `register_state` et `extras` (en texte JSON).
-
-La copie est reconstruite avec la carte des établissements : après une importation, une
-modification, une suppression, un pack de contenu, une liaison des codes, et au démarrage. Pour la
-reconstruire à la main, lancez `openldr facilities publish --apply`.
-
-Par exemple, le registre des établissements du Mozambique :
-
-    select facility_code, name, region, district
-    from facility_registry
-    where facility_system = 'urn:openldr:mz:facilities'
-    order by facility_code
-
-## Supprimer des établissements en masse
-
-Le menu de ligne supprime un établissement. Un registre national en compte des milliers, donc un
-import mal mappé a besoin d'une sortie autre qu'une ligne à la fois. **Supprimer ces
-établissements…**, dans le menu `⋯` de la page, retire tout ce que le filtre courant du tableau
-sélectionne.
-
-Lisez la confirmation avant de l'accepter. Elle nomme trois choses, chacune répondant à une question
-différente :
-
-- **Le nombre.** C'est ce qui autorise la suppression. Si la sélection change entre la confirmation
-  et votre clic, l'opération est refusée et rien n'est supprimé.
-- **Combien sont utilisés par des rapports.** Les supprimer change ce que montrent les rapports. Si
-  l'entrepôt est injoignable, la fenêtre le dit plutôt que d'annoncer zéro.
-- **Quelques établissements par leur nom.** C'est la seule protection contre un filtre qui
-  sélectionne des lignes non voulues. Si vous ne les reconnaissez pas, annulez et vérifiez le filtre.
-
-Le filtre par état de mappage est le seul qu'une suppression en masse ne peut pas utiliser :
-l'action est donc indisponible tant qu'il est actif. Effacez-le et sélectionnez plutôt par registre
-ou par zone administrative.
-
-Depuis un terminal :
-
-```
-openldr facilities delete --where facilitySystem:eq:urn:zmb:mfl --force
-```
-
-`--force` est obligatoire, tout comme un `--where` ou un `--all` explicite : oublier le filtre ne
-doit jamais signifier silencieusement tout le registre.
-
-## Sur un téléphone
-
-Établissements fonctionne sur un téléphone. Les tableaux Registre et Observés sont plus larges que l'écran : faites-les défiler sur le côté pour atteindre le menu **⋯** de chaque ligne. L'assistant d'importation remplit l'écran.
+Ces dossiers sont des exemples. Remplacez-les par votre vrai dossier, comme expliqué dans Start here. Revenez à Observed après l'import, puis suivez les tâches de liaison.
 
 ## Dépannage
 
-- **Le panneau d'importation demande d'abord d'enregistrer une source.** Cette installation n'a pas encore de registre. Sélectionnez **Enregistrer un registre**.
-- **Continuer est grisé.** Choisissez d'abord le registre sous **Registre national**.
-- **Une colonne est conservée en donnée supplémentaire.** Aucun champ ne s'écrit comme elle. Réglez-la sur le champ qu'elle remplit, comme Operating Status dans l'Exemple 1.
-- **L'importation est refusée pour une colonne.** Voir [Refus et comment les corriger](#refus-et-comment-les-corriger).
-- **La Vérification liste des valeurs sans correspondance canonique.** Sélectionnez **Mapper ces valeurs** et décidez chacune, ou confirmez quand même. Les valeurs non mappées sont importées telles qu'écrites.
-- **Un code observé reste Non associé après Lier les codes correspondants.** Le registre n'a aucune ligne avec exactement ce code. La correspondance est exacte, majuscules et espaces compris.
-- **Les rapports montrent encore des codes au lieu des noms.** Attendez la reconstruction de la carte des établissements, ou lancez `openldr facilities publish --apply`.
+### Create signale des champs obligatoires
+
+Complétez les champs indiqués. Pour un champ de terminologie, sélectionnez un résultat au lieu de laisser le texte de recherche seul. Choisissez ensuite Create à nouveau.
+
+![Capture de Studio : Dépannage](facilities-guide-required-error.png)
+
+### Un établissement porte déjà ce code dans ce registre
+
+Une paire System et Facility code ne peut pas être ajoutée deux fois. Fermez le formulaire, trouvez la ligne existante et modifiez-la. L'erreur reproduite parle de code national ; ce formulaire l'appelle Facility code.
+
+![Capture de Studio : Dépannage](facilities-guide-duplicate-error.png)
+
+### Une colonne manque pour un champ obligatoire
+
+Associez la colonne de codes à `national_code` et celle des noms à `name`, ou fournissez la valeur fixe appropriée. Validez à nouveau.
+
+![Capture de Studio : Dépannage](facilities-guide-missing-code-error.png)
+
+![Capture de Studio : Dépannage](facilities-guide-missing-code-fix.png)
+
+### Un code reçu indique encore Not mapped
+
+Importer un registre ne relie pas les codes reçus. Utilisez Link matching codes pour les codes exacts, ou Map sur la ligne quand la source utilise un code différent.
+
+### Add ou Edit est indisponible
+
+Ces actions nécessitent Manage facilities et un formulaire publié ciblant Facilities. La page indique le formulaire manquant. Ouvrez Forms pour le publier ou le corriger. L'import d'un registre ne nécessite pas ce formulaire.
+
+### Un établissement enregistré est absent de la liste visible
+
+La recherche, les filtres et la page restent appliqués après l'enregistrement. Recherchez le code pour retrouver la fiche.
+
+## Distinguer ces opérations
+
+Les saisies manuelles suivent votre formulaire Facilities. Les imports utilisent leurs associations de colonnes. Une source de registre, un établissement Registry et une association de code Observed sont des enregistrements distincts.
+
+Un fichier partiel n'évalue pas les établissements absents du fichier. Indiquez une version complète uniquement pour le registre entier, puis lisez les décisions supplémentaires dans Mapping et le résultat dans Review.
 
 ## Guides associés
 
-- [Laboratoire](/docs/laboratory)
-- [Terminologie](/docs/terminology)
-- [Rapports](/docs/reports)
-- [Requêtes personnalisées](/docs/query)
-- [Audit](/docs/audit)
+[Terminology](/docs/terminology) explique les listes et les codes. [Start here](/docs/start-here) explique la CLI. [Dashboards](/docs/dashboard) traite des graphiques et de la pratique facultative. [Your preferences](/docs/user-preferences) traite des réglages personnels.

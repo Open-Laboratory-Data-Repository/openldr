@@ -1,0 +1,3 @@
+Facility Code,Facility Name,Facility Type,Operating Status,Zone,District,Notes
+EXAMPLE-LAB,Example Central Laboratory,National Hospital,Operating,Example Zone,Example District,Main laboratory
+EXAMPLE-CLINIC-02,Example Clinic South,National Hospital,Closed,Example Zone,Example District,Outreach site

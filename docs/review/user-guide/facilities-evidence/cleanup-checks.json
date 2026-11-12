@@ -1,0 +1,17 @@
+{
+  "stoppedOwnedProcesses": [
+    80949,
+    80968,
+    81020,
+    81036,
+    80995,
+    80994
+  ],
+  "removedContainer": "/openldr-facilities-review-pg",
+  "temporaryViteConfigRemoved": true,
+  "previewServerRetained": 4392,
+  "normalAppRetained": [
+    3000,
+    5173
+  ]
+}

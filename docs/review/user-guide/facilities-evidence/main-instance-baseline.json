@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-11-12T08:01:46.280Z",
+  "facilityCount": 3141,
+  "registeredSources": [
+    {
+      "id": "cs-freg-127a3b62-a85d-4c13-b752-d586e1196f4b",
+      "url": "urn:openldr:mz:facilities"
+    },
+    {
+      "id": "cs-freg-1aa56ae3-5762-496a-a701-10a16f6ab056",
+      "url": "urn:openldr:mz:laboratories"
+    }
+  ],
+  "note": "Read-only normal-instance check. All workflow writes use the separate review installation on port 3006."
+}

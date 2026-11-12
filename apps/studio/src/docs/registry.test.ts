@@ -98,7 +98,7 @@ describe('docs registry', () => {
       'report-designer': ['reports', 'query', 'connectors'],
       forms: ['terminology', 'marketplace'],
       terminology: ['start-here', 'forms', 'test-catalog', 'facilities'],
-      facilities: ['terminology', 'audit'],
+      facilities: ['terminology', 'start-here', 'dashboard', 'user-preferences'],
       'test-catalog': ['terminology', 'facilities'],
       patients: ['facilities', 'test-catalog', 'data-exposure'],
       users: ['roles', 'audit', 'settings'],

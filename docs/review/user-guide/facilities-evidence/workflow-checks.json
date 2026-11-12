@@ -1,0 +1,154 @@
+{
+  "checkedAt": "2026-11-12T08:16:14.047Z",
+  "normalInstance": {
+    "facilityCount": 3141,
+    "registeredSources": [
+      {
+        "id": "cs-freg-127a3b62-a85d-4c13-b752-d586e1196f4b",
+        "url": "urn:openldr:mz:facilities"
+      },
+      {
+        "id": "cs-freg-1aa56ae3-5762-496a-a701-10a16f6ab056",
+        "url": "urn:openldr:mz:laboratories"
+      }
+    ],
+    "comparison": "Count and registered source identities match the read-only checkpoint. This is not a complete database comparison."
+  },
+  "isolatedInstance": {
+    "facilityCount": 3,
+    "facilities": [
+      {
+        "id": "fac-9a4939fc7f53b2e2",
+        "facilityCode": "EXAMPLE-LAB",
+        "name": "Example Central Laboratory",
+        "status": "active"
+      },
+      {
+        "id": "fac-adb06f2b6f881143",
+        "facilityCode": "EXAMPLE-CLINIC-01",
+        "name": "Example Clinic North Updated",
+        "status": "active"
+      },
+      {
+        "id": "fac-46a075531cb42037",
+        "facilityCode": "EXAMPLE-CLINIC-02",
+        "name": "Example Clinic South",
+        "status": "inactive"
+      }
+    ],
+    "observed": [
+      {
+        "sourceSystem": "cli",
+        "sourceCode": "EXAMPLE-LAB",
+        "observedSystem": "urn:example:source:facilities",
+        "sourceDisplay": "Example Central Laboratory",
+        "observations": [
+          {
+            "sourceSystem": "cli",
+            "performerSystem": "urn:example:source:facilities"
+          }
+        ],
+        "sourceRegion": null,
+        "sourceDistrict": null,
+        "reportCount": 3,
+        "registryId": "fac-9a4939fc7f53b2e2",
+        "facilityCode": "EXAMPLE-LAB",
+        "name": "Example Central Laboratory",
+        "level": "national-hospital",
+        "status": "active",
+        "region": null,
+        "district": "Example District",
+        "council": null,
+        "facilitySystem": "urn:example:facilities:guide",
+        "resolvedVia": "registry",
+        "targetMissing": false,
+        "nonFacilityTarget": false,
+        "ambiguous": false
+      },
+      {
+        "sourceSystem": "cli",
+        "sourceCode": "EXAMPLE-CLINIC-02",
+        "observedSystem": "urn:example:source:facilities",
+        "sourceDisplay": "EXAMPLE-CLINIC-02",
+        "observations": [
+          {
+            "sourceSystem": "cli",
+            "performerSystem": "urn:example:source:facilities"
+          }
+        ],
+        "sourceRegion": null,
+        "sourceDistrict": null,
+        "reportCount": 1,
+        "registryId": "fac-46a075531cb42037",
+        "facilityCode": "EXAMPLE-CLINIC-02",
+        "name": "Example Clinic South",
+        "level": "national-hospital",
+        "status": "inactive",
+        "region": null,
+        "district": "Example District",
+        "council": null,
+        "facilitySystem": "urn:example:facilities:guide",
+        "resolvedVia": "registry",
+        "targetMissing": false,
+        "nonFacilityTarget": false,
+        "ambiguous": false
+      },
+      {
+        "sourceSystem": "cli",
+        "sourceCode": "EXTERNAL-CLINIC",
+        "observedSystem": "urn:example:source:facilities",
+        "sourceDisplay": "EXTERNAL-CLINIC",
+        "observations": [
+          {
+            "sourceSystem": "cli",
+            "performerSystem": "urn:example:source:facilities"
+          }
+        ],
+        "sourceRegion": null,
+        "sourceDistrict": null,
+        "reportCount": 1,
+        "registryId": "fac-adb06f2b6f881143",
+        "facilityCode": "EXAMPLE-CLINIC-01",
+        "name": "Example Clinic North Updated",
+        "level": "national-hospital",
+        "status": "active",
+        "region": null,
+        "district": "Example District",
+        "council": null,
+        "facilitySystem": "urn:example:facilities:guide",
+        "resolvedVia": "registry",
+        "targetMissing": false,
+        "nonFacilityTarget": false,
+        "ambiguous": false
+      },
+      {
+        "sourceSystem": "cli",
+        "sourceCode": "EXAMPLE-CLINIC-01",
+        "observedSystem": "urn:example:source:facilities",
+        "sourceDisplay": "EXAMPLE-CLINIC-01",
+        "observations": [
+          {
+            "sourceSystem": "cli",
+            "performerSystem": "urn:example:source:facilities"
+          }
+        ],
+        "sourceRegion": null,
+        "sourceDistrict": null,
+        "reportCount": 1,
+        "registryId": "fac-adb06f2b6f881143",
+        "facilityCode": "EXAMPLE-CLINIC-01",
+        "name": "Example Clinic North Updated",
+        "level": "national-hospital",
+        "status": "active",
+        "region": null,
+        "district": "Example District",
+        "council": null,
+        "facilitySystem": "urn:example:facilities:guide",
+        "resolvedVia": "registry",
+        "targetMissing": false,
+        "nonFacilityTarget": false,
+        "ambiguous": false
+      }
+    ]
+  }
+}

@@ -1,0 +1,191 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "documentation-example-patient",
+        "active": true
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Patient/documentation-example-patient"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "documentation-example-request-1",
+        "status": "completed",
+        "intent": "order",
+        "code": {
+          "text": "Documentation example"
+        },
+        "subject": {
+          "reference": "Patient/documentation-example-patient"
+        },
+        "authoredOn": "2026-11-12T08:00:00Z",
+        "requester": {
+          "identifier": {
+            "system": "urn:example:source:facilities",
+            "value": "EXAMPLE-CLINIC-01"
+          },
+          "display": "EXAMPLE-CLINIC-01"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "ServiceRequest/documentation-example-request-1"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "documentation-example-report-1",
+        "status": "final",
+        "code": {
+          "text": "Documentation example"
+        },
+        "subject": {
+          "reference": "Patient/documentation-example-patient"
+        },
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/documentation-example-request-1"
+          }
+        ],
+        "effectiveDateTime": "2026-11-12T09:00:00Z",
+        "performer": [
+          {
+            "identifier": {
+              "system": "urn:example:source:facilities",
+              "value": "EXAMPLE-LAB"
+            },
+            "display": "Example Central Laboratory"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "DiagnosticReport/documentation-example-report-1"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "documentation-example-request-2",
+        "status": "completed",
+        "intent": "order",
+        "code": {
+          "text": "Documentation example"
+        },
+        "subject": {
+          "reference": "Patient/documentation-example-patient"
+        },
+        "authoredOn": "2026-11-12T08:00:00Z",
+        "requester": {
+          "identifier": {
+            "system": "urn:example:source:facilities",
+            "value": "EXAMPLE-CLINIC-02"
+          },
+          "display": "EXAMPLE-CLINIC-02"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "ServiceRequest/documentation-example-request-2"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "documentation-example-report-2",
+        "status": "final",
+        "code": {
+          "text": "Documentation example"
+        },
+        "subject": {
+          "reference": "Patient/documentation-example-patient"
+        },
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/documentation-example-request-2"
+          }
+        ],
+        "effectiveDateTime": "2026-11-12T09:00:00Z",
+        "performer": [
+          {
+            "identifier": {
+              "system": "urn:example:source:facilities",
+              "value": "EXAMPLE-LAB"
+            },
+            "display": "Example Central Laboratory"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "DiagnosticReport/documentation-example-report-2"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "documentation-example-request-3",
+        "status": "completed",
+        "intent": "order",
+        "code": {
+          "text": "Documentation example"
+        },
+        "subject": {
+          "reference": "Patient/documentation-example-patient"
+        },
+        "authoredOn": "2026-11-12T08:00:00Z",
+        "requester": {
+          "identifier": {
+            "system": "urn:example:source:facilities",
+            "value": "EXTERNAL-CLINIC"
+          },
+          "display": "EXTERNAL-CLINIC"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "ServiceRequest/documentation-example-request-3"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "id": "documentation-example-report-3",
+        "status": "final",
+        "code": {
+          "text": "Documentation example"
+        },
+        "subject": {
+          "reference": "Patient/documentation-example-patient"
+        },
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/documentation-example-request-3"
+          }
+        ],
+        "effectiveDateTime": "2026-11-12T09:00:00Z",
+        "performer": [
+          {
+            "identifier": {
+              "system": "urn:example:source:facilities",
+              "value": "EXAMPLE-LAB"
+            },
+            "display": "Example Central Laboratory"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "DiagnosticReport/documentation-example-report-3"
+      }
+    }
+  ]
+}

@@ -1,0 +1,1939 @@
+{
+  "capturedAt": "2026-11-12T08:15:28.228Z",
+  "source": "Live isolated Studio and API. Native 4x PNG. No main database reset or imports.",
+  "appUrl": "http://localhost:5186/studio/facilities",
+  "steps": [
+    {
+      "id": "open-facilities",
+      "label": "Facilities is in the main menu on the left.",
+      "path": "facilities-evidence/open-facilities.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 296,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "registry-tab",
+      "label": "Registry contains facilities you add or import.",
+      "path": "facilities-evidence/registry-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 49,
+          "width": 75.359375,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "source-actions",
+      "label": "Open the page dots menu at the right of the tab strip.",
+      "path": "facilities-evidence/source-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 50,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "source-import",
+      "label": "Import facilities opens the source registration and file import controls.",
+      "path": "facilities-evidence/source-import.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1096.75,
+          "y": 123,
+          "width": 162.296875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "register-source-button",
+      "label": "Register a source is available before choosing a file.",
+      "path": "facilities-evidence/register-source-button.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1122.28125,
+          "y": 756,
+          "width": 133.71875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "register-url",
+      "label": "Use the permanent URI that identifies this register.",
+      "path": "facilities-evidence/register-url.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 515.265625,
+          "y": 328.9375,
+          "width": 355.734375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "register-name",
+      "label": "The display name appears when you choose a register.",
+      "path": "facilities-evidence/register-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 515.265625,
+          "y": 376.9375,
+          "width": 355.734375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "register-code",
+      "label": "Use a short code for this register.",
+      "path": "facilities-evidence/register-code.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 515.265625,
+          "y": 424.9375,
+          "width": 355.734375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "register-actions",
+      "label": "The source registration actions are in its own dots menu.",
+      "path": "facilities-evidence/register-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 843,
+          "y": 187.0625,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "register-save",
+      "label": "Register saves the source without importing a file.",
+      "path": "facilities-evidence/register-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 716,
+          "y": 224,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "register-selected",
+      "label": "The registered source is now available for adding or importing facilities.",
+      "path": "facilities-evidence/register-selected.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 929.421875,
+          "y": 327.53125,
+          "width": 326.578125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "close-import",
+      "label": "Close the import sheet if you want to add a facility manually.",
+      "path": "facilities-evidence/close-import.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 16,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "add-actions",
+      "label": "The Registry dots menu contains Add facility.",
+      "path": "facilities-evidence/add-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 50,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add-menu",
+      "label": "Choose Add facility to open the published form.",
+      "path": "facilities-evidence/add-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1096.75,
+          "y": 91,
+          "width": 162.296875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add-system",
+      "label": "Choose the register this facility belongs to.",
+      "path": "facilities-evidence/add-system.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 928,
+          "y": 237.53125,
+          "width": 327,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "add-code",
+      "label": "Keep the exact facility code, including any leading zeros.",
+      "path": "facilities-evidence/add-code.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 248.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "add-name",
+      "label": "Enter the facility name people should see.",
+      "path": "facilities-evidence/add-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 300.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "add-country",
+      "label": "Search Country, then select the matching result.",
+      "path": "facilities-evidence/add-country.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 928,
+          "y": 393.53125,
+          "width": 327,
+          "height": 54
+        }
+      ]
+    },
+    {
+      "id": "add-zone",
+      "label": "Complete required location fields. This form requires Zone.",
+      "path": "facilities-evidence/add-zone.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 406.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "add-district",
+      "label": "This form also requires District.",
+      "path": "facilities-evidence/add-district.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 510.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "add-status",
+      "label": "Select a status from the terminology results.",
+      "path": "facilities-evidence/add-status.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 928,
+          "y": 655.53125,
+          "width": 327,
+          "height": 54
+        }
+      ]
+    },
+    {
+      "id": "add-level",
+      "label": "Choose the facility type in Level from the available results.",
+      "path": "facilities-evidence/add-level.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 928,
+          "y": 709.53125,
+          "width": 327,
+          "height": 54
+        }
+      ]
+    },
+    {
+      "id": "add-sheet-actions",
+      "label": "The form actions are in the sheet dots menu.",
+      "path": "facilities-evidence/add-sheet-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "add-create",
+      "label": "Create saves the facility after checking the form.",
+      "path": "facilities-evidence/add-create.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add-result",
+      "label": "The facility now appears in Registry.",
+      "path": "facilities-evidence/add-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 174,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "search-input",
+      "label": "Find a facility by its name or code.",
+      "path": "facilities-evidence/search-input.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 93,
+          "width": 240,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "search-result",
+      "label": "The list shows facilities matching the search.",
+      "path": "facilities-evidence/search-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 174,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "edit-row",
+      "label": "Select a Registry row to open its details.",
+      "path": "facilities-evidence/edit-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 450.671875,
+          "y": 174,
+          "width": 203.15625,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "edit-details",
+      "label": "The sheet shows the stored details and provenance.",
+      "path": "facilities-evidence/edit-details.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 418.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "edit-name",
+      "label": "Change the name or the other details you need to correct.",
+      "path": "facilities-evidence/edit-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 418.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "edit-actions",
+      "label": "Open the sheet dots menu when your changes are ready.",
+      "path": "facilities-evidence/edit-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "edit-save",
+      "label": "Existing facilities use Save.",
+      "path": "facilities-evidence/edit-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit-result",
+      "label": "The updated name appears beside the same code.",
+      "path": "facilities-evidence/edit-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 174,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "history-row-actions",
+      "label": "Each facility row has its own dots menu.",
+      "path": "facilities-evidence/history-row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 186.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "history-menu",
+      "label": "History opens the saved changes for this facility.",
+      "path": "facilities-evidence/history-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 227.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-actions",
+      "label": "Import starts from the Registry page dots menu.",
+      "path": "facilities-evidence/import-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 50,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-menu",
+      "label": "Choose Import facilities to open the three-step wizard.",
+      "path": "facilities-evidence/import-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1096.75,
+          "y": 123,
+          "width": 162.296875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-file",
+      "label": "The selected file name appears in Source.",
+      "path": "facilities-evidence/import-file.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 196.53125,
+          "width": 527,
+          "height": 90
+        }
+      ]
+    },
+    {
+      "id": "import-register",
+      "label": "Choose the registered source that owns these facility codes.",
+      "path": "facilities-evidence/import-register.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 934.5,
+          "y": 368.5,
+          "width": 187.828125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-format",
+      "label": "The format follows the chosen file. Check it before continuing.",
+      "path": "facilities-evidence/import-format.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 929.421875,
+          "y": 407.53125,
+          "width": 326.578125,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "import-complete-release",
+      "label": "Leave complete release unticked when this is only part of a register.",
+      "path": "facilities-evidence/import-complete-release.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 929.421875,
+          "y": 455.53125,
+          "width": 326.578125,
+          "height": 69
+        }
+      ]
+    },
+    {
+      "id": "import-continue",
+      "label": "Continue stores the file and opens Mapping. It does not import facility rows.",
+      "path": "facilities-evidence/import-continue.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1175.953125,
+          "y": 756,
+          "width": 80.046875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-code",
+      "label": "Check that the file column carrying the facility code maps to national_code.",
+      "path": "facilities-evidence/map-code.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 850.0625,
+          "y": 196.53125,
+          "width": 325.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "map-name",
+      "label": "Check that the facility name column maps to name.",
+      "path": "facilities-evidence/map-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 850.0625,
+          "y": 244.53125,
+          "width": 325.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "map-status-option",
+      "label": "Choose status for the column holding operating status.",
+      "path": "facilities-evidence/map-status-option.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 855,
+          "y": 550.5,
+          "width": 157.53125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-fixed-country",
+      "label": "A fixed Country value fills that field for every row when the file has no country column.",
+      "path": "facilities-evidence/map-fixed-country.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 809.828125,
+          "y": 487.53125,
+          "width": 445.171875,
+          "height": 54
+        }
+      ]
+    },
+    {
+      "id": "map-conflict-policy",
+      "label": "Decide what to do if a row changes after this preview. The default keeps that row untouched.",
+      "path": "facilities-evidence/map-conflict-policy.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 952,
+          "y": 706.53125,
+          "width": 304,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "map-validate",
+      "label": "Validate all checks the stored file with the current mapping.",
+      "path": "facilities-evidence/map-validate.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1164.546875,
+          "y": 756,
+          "width": 91.453125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "review-unmapped",
+      "label": "Review reports values that did not match the configured vocabulary.",
+      "path": "facilities-evidence/review-unmapped.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 562.53125,
+          "width": 527,
+          "height": 166
+        }
+      ]
+    },
+    {
+      "id": "review-map-values",
+      "label": "Map these values returns to Mapping so you can decide the unmatched values.",
+      "path": "facilities-evidence/review-map-values.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 742,
+          "y": 691.53125,
+          "width": 118.0625,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "map-operating",
+      "label": "Map Operating from the file to the configured Active status.",
+      "path": "facilities-evidence/map-operating.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 820.5,
+          "y": 519.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-closed",
+      "label": "Map Closed from the file to the configured Inactive status.",
+      "path": "facilities-evidence/map-closed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 820.5,
+          "y": 591.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-revalidate",
+      "label": "Validate all saves your value decisions and checks the file again.",
+      "path": "facilities-evidence/map-revalidate.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1164.546875,
+          "y": 756,
+          "width": 91.453125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "review-summary",
+      "label": "Read the planned new, changed, unchanged and skipped row counts before importing.",
+      "path": "facilities-evidence/review-summary.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 416.53125,
+          "width": 527,
+          "height": 134
+        }
+      ]
+    },
+    {
+      "id": "import-confirm",
+      "label": "Confirm import applies the reviewed changes.",
+      "path": "facilities-evidence/import-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1140.203125,
+          "y": 756,
+          "width": 115.796875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-complete",
+      "label": "The completion panel reports what was created, updated or skipped.",
+      "path": "facilities-evidence/import-complete.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 196.53125,
+          "width": 527,
+          "height": 100
+        }
+      ]
+    },
+    {
+      "id": "import-result",
+      "label": "The imported facilities appear alongside the facility you entered by hand.",
+      "path": "facilities-evidence/import-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 174,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "observed-tab",
+      "label": "Observed shows facility codes received in lab data.",
+      "path": "facilities-evidence/observed-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 335.359375,
+          "y": 50,
+          "width": 84.703125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "observed-list",
+      "label": "Each observed code shows its report count and current resolution.",
+      "path": "facilities-evidence/observed-list.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 125,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "observed-actions",
+      "label": "The Observed tab has its own page dots menu.",
+      "path": "facilities-evidence/observed-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 50,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "matching-menu",
+      "label": "Link matching codes previews exact-code matches in a chosen register.",
+      "path": "facilities-evidence/matching-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1080.25,
+          "y": 155,
+          "width": 178.640625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "matching-register",
+      "label": "Choose the register to check against the observed codes.",
+      "path": "facilities-evidence/matching-register.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 802.25,
+          "y": 257.5,
+          "width": 187.828125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "matching-preview",
+      "label": "Check which codes would link, which already link and which have no match.",
+      "path": "facilities-evidence/matching-preview.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 161.53125,
+          "width": 309.734375,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "matching-actions",
+      "label": "Open the Link actions dots menu after reviewing the preview.",
+      "path": "facilities-evidence/matching-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1224,
+          "y": 155.53125,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "matching-apply",
+      "label": "Link 3 codes applies only the matches in this preview.",
+      "path": "facilities-evidence/matching-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 196.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "matching-result",
+      "label": "The exact-code matches now resolve to their Registry facilities.",
+      "path": "facilities-evidence/matching-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 125,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "mapping-row-actions",
+      "label": "For a different code, use that observed row's dots menu.",
+      "path": "facilities-evidence/mapping-row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 251.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "mapping-menu",
+      "label": "Map code lets you choose the same facility when the source uses a different code.",
+      "path": "facilities-evidence/mapping-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 292.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "mapping-type",
+      "label": "Same as means the observed code identifies the same facility.",
+      "path": "facilities-evidence/mapping-type.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 886.0625,
+          "y": 208.53125,
+          "width": 369.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "mapping-search",
+      "label": "Search for the Registry facility that this observed code represents.",
+      "path": "facilities-evidence/mapping-search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 793,
+          "y": 494.53125,
+          "width": 463,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "mapping-target",
+      "label": "Choose the matching facility from the search results.",
+      "path": "facilities-evidence/mapping-target.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 794,
+          "y": 535.53125,
+          "width": 461,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "mapping-sheet-actions",
+      "label": "Mapping actions are in the sheet dots menu.",
+      "path": "facilities-evidence/mapping-sheet-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 145.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "mapping-create",
+      "label": "Create saves this observed-code mapping.",
+      "path": "facilities-evidence/mapping-create.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 182.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "mapping-result",
+      "label": "The source code now resolves to the selected Registry facility.",
+      "path": "facilities-evidence/mapping-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 239,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "history-result",
+      "label": "History shows the actor, time and field changes, newest first.",
+      "path": "facilities-evidence/history-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 769,
+          "y": 148.53125,
+          "width": 487,
+          "height": 70
+        }
+      ]
+    },
+    {
+      "id": "history-close",
+      "label": "Close returns to Registry without changing the facility.",
+      "path": "facilities-evidence/history-close.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 16,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "required-error",
+      "label": "Missing required fields are shown on the form before anything is saved.",
+      "path": "facilities-evidence/required-error.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 927,
+          "y": 196.53125,
+          "width": 329,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "duplicate-error",
+      "label": "An existing register and facility-code pair cannot be created twice.",
+      "path": "facilities-evidence/duplicate-error.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 196.53125,
+          "width": 527,
+          "height": 58
+        }
+      ]
+    },
+    {
+      "id": "map-extra-actions",
+      "label": "Use the Notes row dots menu when you want to retain this extra column.",
+      "path": "facilities-evidence/map-extra-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 527.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-extra-save",
+      "label": "Keep as extra explicitly retains the source column.",
+      "path": "facilities-evidence/map-extra-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 527.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "map-extra",
+      "label": "Notes is retained as extra data rather than a standard field.",
+      "path": "facilities-evidence/map-extra.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 850.0625,
+          "y": 484.53125,
+          "width": 325.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "missing-code-error",
+      "label": "The mapping names required fields that have no source column or fixed value.",
+      "path": "facilities-evidence/missing-code-error.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 475.53125,
+          "width": 527,
+          "height": 86
+        }
+      ]
+    },
+    {
+      "id": "missing-code-fix",
+      "label": "Restore the facility-code column to national_code before checking again.",
+      "path": "facilities-evidence/missing-code-fix.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 855,
+          "y": 278.5,
+          "width": 157.53125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "reimport-summary",
+      "label": "The same register and codes are recognised on a repeat import. Unchanged rows are reported.",
+      "path": "facilities-evidence/reimport-summary.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 318.53125,
+          "width": 527,
+          "height": 134
+        }
+      ]
+    },
+    {
+      "id": "reimport-confirm",
+      "label": "Confirm import applies only the changes shown by the review.",
+      "path": "facilities-evidence/reimport-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1140.203125,
+          "y": 756,
+          "width": 115.796875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "reimport-complete",
+      "label": "A repeat import reports unchanged rows instead of creating duplicates.",
+      "path": "facilities-evidence/reimport-complete.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 729,
+          "y": 196.53125,
+          "width": 527,
+          "height": 100
+        }
+      ]
+    },
+    {
+      "id": "import-close",
+      "label": "Close the completed import to return to Registry.",
+      "path": "facilities-evidence/import-close.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 16,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "phone-registry",
+      "label": "Registry and Observed remain at the top on a phone.",
+      "path": "facilities-evidence/phone-registry.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 49,
+          "width": 75.359375,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "phone-observed",
+      "label": "Use Observed on a phone to see received facility codes.",
+      "path": "facilities-evidence/phone-observed.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 95.359375,
+          "y": 49,
+          "width": 84.703125,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "phone-actions",
+      "label": "The same actions are available in the tab strip dots menu.",
+      "path": "facilities-evidence/phone-actions.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 175.25,
+          "y": 155,
+          "width": 178.640625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "register-existing-actions",
+      "label": "Open the import sheet dots menu when sources already exist.",
+      "path": "facilities-evidence/register-existing-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "register-existing-menu",
+      "label": "Register a source is available for adding a different register.",
+      "path": "facilities-evidence/register-existing-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    }
+  ]
+}

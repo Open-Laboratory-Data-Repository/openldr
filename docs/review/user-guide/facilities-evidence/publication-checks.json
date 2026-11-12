@@ -1,0 +1,35 @@
+{
+  "previewMenus": [
+    "terminology",
+    "start-here",
+    "dashboard",
+    "preferences",
+    "facilities"
+  ],
+  "locales": [
+    {
+      "locale": "en",
+      "steps": 63,
+      "images": 88,
+      "nativeWidth": 5120
+    },
+    {
+      "locale": "fr",
+      "steps": 63,
+      "images": 88,
+      "nativeWidth": 5120
+    },
+    {
+      "locale": "pt",
+      "steps": 63,
+      "images": 88,
+      "nativeWidth": 5120
+    }
+  ],
+  "roundTrip": "Terminology → Start here → Terminology",
+  "mobile": {
+    "width": 375,
+    "height": 812,
+    "horizontalOverflow": false
+  }
+}

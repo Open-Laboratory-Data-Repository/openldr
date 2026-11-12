@@ -40,6 +40,7 @@ O OpenLDR pode receber e processar dados antes de configurar as unidades de saú
 
 Abra **Documentação** no Studio e siga **Configurar o seu sistema**, começando por Terminologia. Os guias da aplicação explicam cada tarefa.
 
+O guia Facilities no Studio explica a introdução manual, as importações, o histórico e as ligações entre códigos. Pode usar os seus próprios dados. Os ficheiros de prática são opcionais.
 
 ## 3. Próximos passos
 

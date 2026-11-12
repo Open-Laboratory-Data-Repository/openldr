@@ -1,0 +1,153 @@
+<article class="dg-article" id="dg-top">
+ <div class="dg-meta"><span>System setup</span><span>Browse or manage facilities</span><span>About 35 minutes</span></div>
+ <h1>Facilities</h1>
+ <p>Give the facilities in your data consistent names, codes and locations. Add individual facilities, import a register, then link the codes arriving from your data sources to the right facility.</p>
+ <p><strong>This setup is optional.</strong> OpenLDR can receive and process data before you configure Facilities. We strongly recommend setting it up as you use the system, so reports can identify the facilities behind their codes.</p>
+ <p><strong>Registry</strong> holds the facilities you add or import. <strong>Observed</strong> holds the codes received in lab data and shows which facility each code resolves to. Adding a facility and linking an observed code are separate tasks.</p>
+ <p>A <strong>register</strong> is a list maintained by an organisation, such as a national facility directory or your own organisation's list. <strong>System</strong> selects that register. Its URI and the <strong>Facility code</strong> identify the facility together.</p>
+ <p>Use your own register, facility details and files throughout this guide. The screenshots use fictional facilities to make the actions visible. No documentation sample data is required. <a href="#dg-practice">Optional practice files</a> are at the end.</p>
+ <p>Reading needs <strong>View facilities</strong>. Adding, editing, importing and linking need <strong>Manage facilities</strong>. Add and Edit also need one published form targeting Facilities. That form determines the fields and required markers you see.</p>
+
+ <h2 id="dg-register">Register the source of your facility list</h2>
+ <p>Do this once for a register you will use for manual entries or imports. If your register already appears under <strong>System</strong> or <strong>National system</strong>, use it and skip this task. Do not create another source for the same register.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open Facilities</h3><p>Select <strong>Facilities</strong> in the main menu on the left.</p>__SHOT:open-facilities:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Open Import facilities</h3><p>On <strong>Registry</strong>, open the dots at the right of the tab strip and select <strong>Import facilities</strong>.</p>__SHOT:source-actions:2____SHOT:source-import:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose Register a source</h3><p>Select <strong>Register a source</strong>. You can register it before choosing a file. If sources already exist, this action is in the import sheet's dots menu.</p>__SHOT:register-source-button:3____SHOT:register-existing-actions:3____SHOT:register-existing-menu:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Enter the register's permanent URI</h3><p>In <strong>Canonical URI</strong>, use the identifier supplied by the organisation maintaining the register. For your own list, choose a stable URI once. The fictional example uses <code>urn:example:facilities:guide</code>.</p>__SHOT:register-url:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Enter its display name</h3><p>In <strong>Display name</strong>, enter the name people should choose. The example uses <code>Example facility register</code>.</p>__SHOT:register-name:5__</section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Enter a short code</h3><p>In <strong>Code</strong>, enter a short identifier for this register. The example uses <code>EXAMPLE</code>. Version, jurisdiction and contact are optional.</p>__SHOT:register-code:6__</section>
+ <section class="dg-step"><h3><span class="dg-number">7.</span> Register the source</h3><p>Open this panel's dots menu and select <strong>Register</strong>.</p>__SHOT:register-actions:7____SHOT:register-save:7__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the new register is selected in the import sheet. Registering the source has not imported any facility rows.</p></div>__SHOT:register-selected:0__
+ <section class="dg-step"><h3><span class="dg-number">8.</span> Close the import sheet if you are adding by hand</h3><p>Select <strong>Close</strong> at the top right. To import a file instead, keep the sheet open and <a href="#dg-import">continue with the file import</a>.</p>__SHOT:close-import:8__</section>
+
+ <h2 id="dg-add">Start a facility record</h2>
+ <p>Add a facility by hand when you have one site to enter. The following steps use the published form in this installation. Fill the required fields shown by your own form.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose Add facility</h3><p>On <strong>Registry</strong>, open the page dots menu and select <strong>Add facility</strong>.</p>__SHOT:add-actions:1____SHOT:add-menu:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose System</h3><p>Under <strong>System</strong>, select the registered source this facility belongs to. The name selects its canonical URI.</p>__SHOT:add-system:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Enter Facility code</h3><p>Enter the exact code used by that register, including any leading zeros. The example uses <code>EXAMPLE-CLINIC-01</code>.</p>__SHOT:add-code:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Enter Name</h3><p>Enter the facility's readable name. The example uses <code>Example Clinic North</code>.</p>__SHOT:add-name:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Choose Country</h3><p>Search for the country, then select a result. Typing a search alone does not select the answer.</p>__SHOT:add-country:5__</section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Enter Zone if your form requires it</h3><p>Enter the facility's actual zone. Suggestions come from locations already entered in this register. The screenshot uses <code>Example Zone</code>.</p>__SHOT:add-zone:6__</section>
+ <section class="dg-step"><h3><span class="dg-number">7.</span> Enter District and any other required location fields</h3><p>This form also requires <strong>District</strong>. Fill it with the facility's district. Complete Region or Council when you have those details.</p>__SHOT:add-district:7__</section>
+ <div class="dg-result"><p><strong>Continue below:</strong> the record is still in the open New facility sheet. It has not been saved.</p></div>
+
+ <h2 id="dg-save">Finish and save the facility</h2>
+ <p>Continue in the open <strong>New facility</strong> sheet. Choose the facility's status and type from the configured terminology, then save it.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose Status</h3><p>Search under <strong>Status</strong> and select the appropriate result. The example chooses <strong>Active</strong>.</p>__SHOT:add-status:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose Level</h3><p><strong>Level</strong> selects the facility type. Search and choose the type that fits this site. Use the types available in your installation.</p>__SHOT:add-level:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Open the sheet dots menu</h3><p>Select the dots below the sheet title, near the top right.</p>__SHOT:add-sheet-actions:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Choose Create</h3><p>Select <strong>Create</strong>. If the form marks missing fields, complete them and try again.</p>__SHOT:add-create:4__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the sheet closes and Registry reloads. The facility appears with its code, name and source. If an active filter hides it, search for its code.</p></div>__SHOT:add-result:0__
+
+ <h2 id="dg-edit">Find and change a facility</h2>
+ <p>Use this when a name, location or another detail needs correcting. Searching first also helps you avoid adding a second record for an existing facility.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Search for the facility</h3><p>In <strong>Search facilities…</strong>, enter its name or code. The example searches for <code>EXAMPLE-CLINIC-01</code>.</p>__SHOT:search-input:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Open its row</h3><p>Select the facility's row. Its stored details open in <strong>Edit facility</strong>.</p>__SHOT:edit-row:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Change the details</h3><p>Edit the field you need to correct. Here, Name changes to <code>Example Clinic North Updated</code>.</p>__SHOT:edit-name:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Open the sheet dots menu</h3><p>Select the sheet's dots below the title.</p>__SHOT:edit-actions:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Choose Save</h3><p>Select <strong>Save</strong>. Existing records use Save; new records use Create.</p>__SHOT:edit-save:5__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Registry shows the changed details. The example keeps the same facility code. System and Facility code can also be corrected when necessary; do not delete the record just to correct its code.</p></div>__SHOT:edit-result:0__
+
+ <h2 id="dg-history">See what changed</h2>
+ <p>History shows recorded changes to one facility, with the time and actor. You can read it without changing the record.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open the row dots menu</h3><p>Select the dots at the right end of the facility's row.</p>__SHOT:history-row-actions:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose History</h3><p>Select <strong>History</strong>.</p>__SHOT:history-menu:2__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Facility history lists changes newest first. The example shows the name change and the original creation.</p></div>__SHOT:history-result:0__
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Close History</h3><p>Select <strong>Close</strong> at the top right to return to Registry.</p>__SHOT:history-close:3__</section>
+
+ <h2 id="dg-import">Choose your register file</h2>
+ <p>Use an import when you already have a list of facilities. Choose your own CSV, JSON Lines or Excel <code>.xlsx</code> file. An import needs a column for the facility code and a column for the name. Other fields can be mapped, supplied as fixed values, or kept as extra data.</p>
+ <p>Use the registered source that owns the codes in this file. Manual form requirements do not determine the import's required columns.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open Import facilities</h3><p>On Registry, open the page dots menu and select <strong>Import facilities</strong>.</p>__SHOT:import-actions:1____SHOT:import-menu:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose your file</h3><p>Select the File area and choose your prepared file. Its name appears under Source. The format follows the file you chose.</p>__SHOT:import-file:2____SHOT:import-format:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose National system</h3><p>Select the registered source for this file. If it is missing, <a href="#dg-register">register its source</a> first.</p>__SHOT:import-register:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Decide whether this is a complete release</h3><p>Tick <strong>This file is a complete release</strong> only when it contains the whole register. Leave it unticked for a partial file. A complete release enables checking which existing facilities are absent from it.</p>__SHOT:import-complete-release:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Continue to Mapping</h3><p>Select <strong>Continue</strong>. This uploads and stores the file, then opens Mapping. No facility rows have been imported yet.</p>__SHOT:import-continue:5__</section>
+
+ <h2 id="dg-map">Map the columns and fixed values</h2>
+ <p>Mapping connects your file's headings to OpenLDR's fields. The suggested map is a starting point. Check the code and name columns, then decide how to handle the other columns.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Check the required columns</h3><p>The column carrying your facility code must map to <code>national_code</code>. The readable name must map to <code>name</code>. Open the list beside a heading to correct its target.</p>__SHOT:map-code:1____SHOT:map-name:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Correct other column targets</h3><p>Choose the appropriate field beside each heading. Here, <strong>Operating Status</strong> must map to <code>status</code>, rather than remaining extra data.</p>__SHOT:map-status-option:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Keep additional columns when needed</h3><p>For a column that does not fill a standard field, open that row's dots menu and select <strong>Keep as extra</strong>. This example keeps Notes.</p>__SHOT:map-extra-actions:3____SHOT:map-extra-save:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Supply fixed values for missing columns</h3><p>If every facility shares a value absent from the file, enter it under <strong>Fixed values</strong>. Here, Country is selected from its terminology list. Every row receives that country.</p>__SHOT:map-fixed-country:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Decide how to handle changes after the preview</h3><p>Under <strong>Rows changed since this preview</strong>, choose whether to skip those rows or overwrite them with the file. The default keeps those registry rows untouched.</p>__SHOT:map-conflict-policy:5__</section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Validate the file</h3><p>Select <strong>Validate all</strong>. The file is checked in the background, then the wizard opens Review. Fix any missing required column mapping before continuing.</p>__SHOT:map-validate:6__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Review describes what the current file and mapping would do. If it lists values with no canonical mapping, decide those values as shown below.</p></div>__SHOT:review-unmapped:0__
+
+ <h2 id="dg-values">Decide unrecognised values</h2>
+ <p>A file can use different words from your configured terminology. Map those words to the intended values. The example file uses Operating and Closed for status.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Return to Mapping</h3><p>In Review, select <strong>Map these values</strong>. The choices appear below their file column on Mapping.</p>__SHOT:review-map-values:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose the meaning of Operating</h3><p>For this example, select <strong>Active</strong> for Operating. For your file, choose the value that has the same meaning.</p>__SHOT:map-operating:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose the meaning of Closed</h3><p>For this example, select <strong>Inactive</strong> for Closed. Do not map different meanings together just to remove a warning.</p>__SHOT:map-closed:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Check again</h3><p>Select <strong>Validate all</strong>. The value decisions are saved for this register and the file is checked again.</p>__SHOT:map-revalidate:4__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Review reflects the new decisions. In this example, the unmapped-status warning disappears.</p></div>
+
+ <h2 id="dg-confirm">Review and apply the import</h2>
+ <p>Read the planned changes before writing them. A new file may create rows, change existing rows or match rows already in the registry. Counts depend on your file and current register.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Read the summary</h3><p>Check the new, changed, unchanged and skipped counts, plus any warnings. If something is wrong, return to Mapping and validate again. Review reports the decisions; it does not edit them.</p>__SHOT:review-summary:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the reviewed import</h3><p>Select <strong>Confirm import</strong>. Wait for the completion panel.</p>__SHOT:import-confirm:2__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Import complete reports what was created, updated, unchanged or skipped.</p></div>__SHOT:import-complete:0__
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Return to Registry</h3><p>Select <strong>Close</strong> at the top right. The registry reloads with the imported facilities.</p>__SHOT:import-close:3__</section>__SHOT:import-result:0__
+
+ <h2 id="dg-refresh">Refresh an existing register</h2>
+ <p>When a register's next file arrives, repeat the same import with the same National system. The register and facility code identify existing rows. You do not need to create those facilities again by hand.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Reuse the registered source</h3><p>Choose the same register in the new import and repeat the Source and Mapping steps above. Check the columns again.</p>__SHOT:import-register:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Read which rows would change</h3><p>After validation, review the counts. Repeating the identical example file finds two unchanged rows and creates none.</p>__SHOT:reimport-summary:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Apply the reviewed changes</h3><p>Select <strong>Confirm import</strong> when the summary matches your intention.</p>__SHOT:reimport-confirm:3__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the repeated file reports unchanged rows instead of creating duplicates. A changed file reports its actual differences.</p></div>__SHOT:reimport-complete:0__
+
+ <h2 id="dg-observed">Link received codes that match the register</h2>
+ <p>Do this after lab data has arrived. Observed lists the facility codes received with that data. If it is empty, you can still build Registry now and return after your normal data feed arrives.</p>
+ <p>Exact-code matching links an observed code to the facility with the same code in the register you choose. Existing mappings are kept.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open Observed</h3><p>Select <strong>Observed</strong> beside Registry.</p>__SHOT:observed-tab:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose Link matching codes</h3><p>Open the Observed page dots menu and select <strong>Link matching codes</strong>.</p>__SHOT:observed-actions:2____SHOT:matching-menu:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose the register</h3><p>Select the register whose codes you want to match.</p>__SHOT:matching-register:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Read the proposed matches</h3><p>Check the counts and facility names. This example has three codes to link and one with no match. Your counts come from your own data.</p>__SHOT:matching-preview:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Open Link actions</h3><p>Select the dots at the top right of this sheet.</p>__SHOT:matching-actions:5__</section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Apply the matches</h3><p>Select <strong>Link N codes</strong>, where N is the number in your preview. The example shows Link 3 codes.</p>__SHOT:matching-apply:6__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the matched codes show the corresponding Registry facility under Resolves to. Report facilities may show Updating while the report lookup is rebuilt, then Current.</p></div>__SHOT:matching-result:0__
+
+ <h2 id="dg-different">Link a code that is different in the source</h2>
+ <p>Use this when a source uses a different code for the same physical facility. Choose the Registry facility it really represents. The example maps EXTERNAL-CLINIC to the existing north clinic.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose Map on the observed row</h3><p>Open that row's dots menu and select <strong>Map</strong>. A mapped row offers Edit mapping instead.</p>__SHOT:mapping-row-actions:1____SHOT:mapping-menu:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Search for the destination facility</h3><p>In Target, use <strong>Search terms</strong> to find the facility by its name or code. System is fixed to FACILITY-REGISTRY in this flow.</p>__SHOT:mapping-search:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Select the matching facility</h3><p>Choose the correct facility from the results.</p>__SHOT:mapping-target:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Check the map type</h3><p>Keep <strong>Same as</strong> when both codes mean the same facility. A broader or narrower relationship is not an identity match.</p>__SHOT:mapping-type:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Open the mapping dots menu</h3><p>Select the dots at the top right of the mapping sheet.</p>__SHOT:mapping-sheet-actions:5__</section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Choose Create</h3><p>Select <strong>Create</strong> for the new mapping. An existing mapping uses Save.</p>__SHOT:mapping-create:6__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Resolves to shows the chosen facility beside the source's different code.</p></div>__SHOT:mapping-result:0__
+
+ <h2 id="dg-phone">Use Facilities on a phone</h2>
+ <p>The same Registry and Observed tasks are available on a phone. The header wraps to leave room for the report status.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose Registry</h3><p>Select <strong>Registry</strong> at the top to work with the facility list.</p>__SHOT:phone-registry:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose Observed</h3><p>Select <strong>Observed</strong> to work with received codes.</p>__SHOT:phone-observed:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Open that tab's dots menu</h3><p>Select the dots at the right of the tab strip. The available actions follow the selected tab. Scroll a table horizontally if its remaining columns are off screen.</p>__SHOT:phone-actions:3__</section>
+
+ <h2 id="dg-practice">Optional practice with fictional data</h2>
+ <p>You can complete every task above using your own data. These files are only for practice in a test installation:</p>
+ <ul><li><a href="facilities-evidence/example-facilities.csv" download>Download the two-facility CSV</a> used in the import screenshots.</li><li><a href="facilities-evidence/example-observed-data.json" download>Download the seven-resource lab-data bundle</a> used to demonstrate received facility codes. It contains a fictional patient, three requests and three reports.</li></ul>
+ <p>For the same three exact-code matches shown above, also add <code>EXAMPLE-CLINIC-01</code> using the manual-entry task. Use the Example facility register for these fictional records. With only the two-row CSV, there are fewer exact-code matches; the link preview explains which codes have no match.</p>
+ <p>Import the CSV through the browser using the instructions above. To load the optional lab-data bundle, first read <a href="start-here-review.html">Start here</a> for installed and development CLI instructions. Put the downloaded JSON in the installation's <code>data</code> folder.</p>
+ <p>Installed Linux or macOS example:</p><pre><code>cd ~/Downloads/openldr_ce
+./openldr ingest data/example-observed-data.json</code></pre>
+ <p>Installed Windows example:</p><pre><code>cd C:\openldr_ce
+.\openldr.ps1 ingest data\example-observed-data.json</code></pre>
+ <p>Development checkout example, after saving the file under its <code>data</code> folder:</p><pre><code>cd ~/Downloads/openldr_ce
+pnpm openldr ingest data/example-observed-data.json</code></pre>
+ <p>These are example installation folders. Replace them with your real folder, as explained in Start here. Return to Observed after the import completes, then follow the linking tasks above.</p>
+
+ <h2 id="dg-help">Troubleshooting</h2>
+ <details><summary>Create marks required fields</summary><p>Complete the marked fields in the published form. In a terminology field, select a search result rather than leaving only the search text. Then choose Create again.</p>__SHOT:required-error:0__</details>
+ <details><summary>A facility with that code already exists in this register</summary><p>The same System and Facility code pair cannot be added twice. Close the new form, find the existing row and edit it. The reproduced error below refers to the national code, which this form calls Facility code.</p>__SHOT:duplicate-error:0__</details>
+ <details><summary>The mapping says a required field has no column</summary><p>Map the facility-code column to <code>national_code</code> and the facility-name column to <code>name</code>, or supply the appropriate fixed value. Then validate again.</p>__SHOT:missing-code-error:0____SHOT:missing-code-fix:0__</details>
+ <details><summary>An observed code still says Not mapped</summary><p>Importing a register alone does not link received codes. Use Link matching codes for exact codes, or the observed row's Map action when the source uses a different code.</p></details>
+ <details><summary>Add or Edit is unavailable</summary><p>These actions need Manage facilities and one published form targeting Facilities. The page names a missing form. Open Forms to publish or correct that form before trying again. Importing a register does not require the facility-entry form.</p></details>
+ <details><summary>A saved facility is not in the visible list</summary><p>The current search, filters and page still apply after saving. Search for the facility code to check the record.</p></details>
+
+ <h2 id="dg-limits">Keep these distinctions in mind</h2>
+ <p>Manual entries follow your published Facility form. File imports use their column mapping instead. A register source, a Registry facility and a mapping from an Observed code are separate records.</p>
+ <p>A partial file does not evaluate facilities absent from the file. Only mark a file as a complete release when it contains the whole register, then read the additional decisions on Mapping and the resulting Review.</p>
+
+ <h2 id="dg-related">Related guides</h2>
+ <p><a href="terminology-review.html">Terminology</a> explains controlled lists and codes. <a href="start-here-review.html">Start here</a> explains the CLI. <a href="dashboard-review.html">Dashboards</a> covers charts and optional data practice. <a href="preferences-review.html">Your preferences</a> covers your personal settings.</p>
+</article>

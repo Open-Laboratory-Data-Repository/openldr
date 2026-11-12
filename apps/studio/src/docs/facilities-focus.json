@@ -1,0 +1,1924 @@
+{
+  "facilities-guide-open-facilities.png": {
+    "crop": {
+      "x": 0,
+      "y": 164.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 8,
+        "y": 296,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-source-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1232,
+        "y": 50,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "facilities-guide-source-import.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1096.75,
+        "y": 123,
+        "width": 162.296875,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "facilities-guide-register-source-button.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1122.28125,
+        "y": 756,
+        "width": 133.71875,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-register-existing-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 3.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1228,
+        "y": 139.53125,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-register-existing-menu.png": {
+    "crop": {
+      "x": 800,
+      "y": 42.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1101,
+        "y": 176.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-register-url.png": {
+    "crop": {
+      "x": 453.1328125,
+      "y": 196.9375,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 515.265625,
+        "y": 328.9375,
+        "width": 355.734375,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-register-name.png": {
+    "crop": {
+      "x": 453.1328125,
+      "y": 244.9375,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 515.265625,
+        "y": 376.9375,
+        "width": 355.734375,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "facilities-guide-register-code.png": {
+    "crop": {
+      "x": 453.1328125,
+      "y": 292.9375,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 515.265625,
+        "y": 424.9375,
+        "width": 355.734375,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "facilities-guide-register-actions.png": {
+    "crop": {
+      "x": 617.0,
+      "y": 51.0625,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 843,
+        "y": 187.0625,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 7
+  },
+  "facilities-guide-register-save.png": {
+    "crop": {
+      "x": 551.0,
+      "y": 90.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 716,
+        "y": 224,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 7
+  },
+  "facilities-guide-register-selected.png": {
+    "crop": {
+      "x": 800,
+      "y": 195.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 929.421875,
+        "y": 327.53125,
+        "width": 326.578125,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-close-import.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1236,
+        "y": 16,
+        "width": 28,
+        "height": 24
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 8
+  },
+  "facilities-guide-add-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1232,
+        "y": 50,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "facilities-guide-add-menu.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1096.75,
+        "y": 91,
+        "width": 162.296875,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "facilities-guide-add-system.png": {
+    "crop": {
+      "x": 800,
+      "y": 105.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 928,
+        "y": 237.53125,
+        "width": 327,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "facilities-guide-add-code.png": {
+    "crop": {
+      "x": 800,
+      "y": 116.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 927,
+        "y": 248.53125,
+        "width": 329,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-add-name.png": {
+    "crop": {
+      "x": 800,
+      "y": 168.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 927,
+        "y": 300.53125,
+        "width": 329,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-add-country.png": {
+    "crop": {
+      "x": 800,
+      "y": 270.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 928,
+        "y": 393.53125,
+        "width": 327,
+        "height": 54
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "facilities-guide-add-zone.png": {
+    "crop": {
+      "x": 800,
+      "y": 274.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 927,
+        "y": 406.53125,
+        "width": 329,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "facilities-guide-add-district.png": {
+    "crop": {
+      "x": 800,
+      "y": 378.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 927,
+        "y": 510.53125,
+        "width": 329,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 7
+  },
+  "facilities-guide-add-status.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 928,
+        "y": 655.53125,
+        "width": 327,
+        "height": 54
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-add-level.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 928,
+        "y": 709.53125,
+        "width": 327,
+        "height": 54
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "facilities-guide-add-sheet-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 3.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1228,
+        "y": 139.53125,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-add-create.png": {
+    "crop": {
+      "x": 800,
+      "y": 42.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1101,
+        "y": 176.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-add-result.png": {
+    "crop": {
+      "x": 355.0,
+      "y": 52.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 450,
+        "y": 174,
+        "width": 290,
+        "height": 57
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-search-input.png": {
+    "crop": {
+      "x": 136.0,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 256,
+        "y": 93,
+        "width": 240,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-edit-row.png": {
+    "crop": {
+      "x": 312.25,
+      "y": 52.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 450.671875,
+        "y": 174,
+        "width": 203.15625,
+        "height": 57
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "facilities-guide-edit-name.png": {
+    "crop": {
+      "x": 800,
+      "y": 286.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 927,
+        "y": 418.53125,
+        "width": 329,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-edit-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 3.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1228,
+        "y": 139.53125,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-edit-save.png": {
+    "crop": {
+      "x": 800,
+      "y": 42.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1101,
+        "y": 176.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "facilities-guide-edit-result.png": {
+    "crop": {
+      "x": 355.0,
+      "y": 52.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 450,
+        "y": 174,
+        "width": 290,
+        "height": 57
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-history-row-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 52.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1232,
+        "y": 186.5,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "facilities-guide-history-menu.png": {
+    "crop": {
+      "x": 800,
+      "y": 93.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1109,
+        "y": 227.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "facilities-guide-history-result.png": {
+    "crop": {
+      "x": 743,
+      "y": 15.71875,
+      "width": 537,
+      "height": 335.625
+    },
+    "targets": [
+      {
+        "x": 769,
+        "y": 148.53125,
+        "width": 487,
+        "height": 70
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-history-close.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1236,
+        "y": 16,
+        "width": 28,
+        "height": 24
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 3
+  },
+  "facilities-guide-import-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1232,
+        "y": 50,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "facilities-guide-import-menu.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1096.75,
+        "y": 123,
+        "width": 162.296875,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "facilities-guide-import-file.png": {
+    "crop": {
+      "x": 703,
+      "y": 61.21875,
+      "width": 577,
+      "height": 360.625
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 196.53125,
+        "width": 527,
+        "height": 90
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 2
+  },
+  "facilities-guide-import-format.png": {
+    "crop": {
+      "x": 800,
+      "y": 275.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 929.421875,
+        "y": 407.53125,
+        "width": 326.578125,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "facilities-guide-import-register-step-3.png": {
+    "crop": {
+      "x": 788.4140625,
+      "y": 234.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 934.5,
+        "y": 368.5,
+        "width": 187.828125,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-import-complete-release.png": {
+    "crop": {
+      "x": 800,
+      "y": 340.03125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 929.421875,
+        "y": 455.53125,
+        "width": 326.578125,
+        "height": 69
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-import-continue.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1175.953125,
+        "y": 756,
+        "width": 80.046875,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "facilities-guide-map-code.png": {
+    "crop": {
+      "x": 773.03125,
+      "y": 64.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 850.0625,
+        "y": 196.53125,
+        "width": 325.9375,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-map-name.png": {
+    "crop": {
+      "x": 773.03125,
+      "y": 112.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 850.0625,
+        "y": 244.53125,
+        "width": 325.9375,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-map-status-option.png": {
+    "crop": {
+      "x": 693.765625,
+      "y": 416.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 855,
+        "y": 550.5,
+        "width": 157.53125,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "facilities-guide-map-extra-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 393.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1101,
+        "y": 527.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-map-extra-save.png": {
+    "crop": {
+      "x": 800,
+      "y": 393.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1101,
+        "y": 527.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-map-fixed-country.png": {
+    "crop": {
+      "x": 784.828125,
+      "y": 359.7900390625,
+      "width": 495.171875,
+      "height": 309.482421875
+    },
+    "targets": [
+      {
+        "x": 809.828125,
+        "y": 487.53125,
+        "width": 445.171875,
+        "height": 54
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-map-conflict-policy.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 952,
+        "y": 706.53125,
+        "width": 304,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "facilities-guide-map-validate.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1164.546875,
+        "y": 756,
+        "width": 91.453125,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "facilities-guide-review-unmapped.png": {
+    "crop": {
+      "x": 703,
+      "y": 439.375,
+      "width": 577,
+      "height": 360.625
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 562.53125,
+        "width": 527,
+        "height": 166
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-review-map-values.png": {
+    "crop": {
+      "x": 561.03125,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 742,
+        "y": 691.53125,
+        "width": 118.0625,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-map-operating.png": {
+    "crop": {
+      "x": 639.5,
+      "y": 385.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 820.5,
+        "y": 519.5,
+        "width": 118,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "facilities-guide-map-closed.png": {
+    "crop": {
+      "x": 639.5,
+      "y": 457.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 820.5,
+        "y": 591.5,
+        "width": 118,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-map-revalidate.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1164.546875,
+        "y": 756,
+        "width": 91.453125,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-review-summary.png": {
+    "crop": {
+      "x": 703,
+      "y": 303.21875,
+      "width": 577,
+      "height": 360.625
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 416.53125,
+        "width": 527,
+        "height": 134
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 1
+  },
+  "facilities-guide-import-confirm.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1140.203125,
+        "y": 756,
+        "width": 115.796875,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "facilities-guide-import-complete.png": {
+    "crop": {
+      "x": 703,
+      "y": 66.21875,
+      "width": 577,
+      "height": 360.625
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 196.53125,
+        "width": 527,
+        "height": 100
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-import-close.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1236,
+        "y": 16,
+        "width": 28,
+        "height": 24
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 3
+  },
+  "facilities-guide-import-result.png": {
+    "crop": {
+      "x": 355.0,
+      "y": 52.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 450,
+        "y": 174,
+        "width": 290,
+        "height": 57
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-import-register-step-1.png": {
+    "crop": {
+      "x": 788.4140625,
+      "y": 234.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 934.5,
+        "y": 368.5,
+        "width": 187.828125,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-reimport-summary.png": {
+    "crop": {
+      "x": 703,
+      "y": 205.21875,
+      "width": 577,
+      "height": 360.625
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 318.53125,
+        "width": 527,
+        "height": 134
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 2
+  },
+  "facilities-guide-reimport-confirm.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1140.203125,
+        "y": 756,
+        "width": 115.796875,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-reimport-complete.png": {
+    "crop": {
+      "x": 703,
+      "y": 66.21875,
+      "width": 577,
+      "height": 360.625
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 196.53125,
+        "width": 527,
+        "height": 100
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-observed-tab.png": {
+    "crop": {
+      "x": 137.7109375,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 335.359375,
+        "y": 50,
+        "width": 84.703125,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-observed-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1232,
+        "y": 50,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "facilities-guide-matching-menu.png": {
+    "crop": {
+      "x": 800,
+      "y": 21.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1080.25,
+        "y": 155,
+        "width": 178.640625,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "facilities-guide-matching-register.png": {
+    "crop": {
+      "x": 656.1640625,
+      "y": 123.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 802.25,
+        "y": 257.5,
+        "width": 187.828125,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-matching-preview.png": {
+    "crop": {
+      "x": 643.8671875,
+      "y": 21.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 161.53125,
+        "width": 309.734375,
+        "height": 20
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-matching-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 21.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1224,
+        "y": 155.53125,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "facilities-guide-matching-apply.png": {
+    "crop": {
+      "x": 800,
+      "y": 62.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1101,
+        "y": 196.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "facilities-guide-matching-result.png": {
+    "crop": {
+      "x": 606.0,
+      "y": 3.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 636,
+        "y": 125,
+        "width": 420,
+        "height": 57
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-mapping-row-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 117.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1232,
+        "y": 251.5,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "facilities-guide-mapping-menu.png": {
+    "crop": {
+      "x": 800,
+      "y": 158.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1109,
+        "y": 292.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "facilities-guide-mapping-search.png": {
+    "crop": {
+      "x": 767,
+      "y": 352.21875,
+      "width": 513,
+      "height": 320.625
+    },
+    "targets": [
+      {
+        "x": 793,
+        "y": 494.53125,
+        "width": 463,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "facilities-guide-mapping-target.png": {
+    "crop": {
+      "x": 769,
+      "y": 393.84375,
+      "width": 511,
+      "height": 319.375
+    },
+    "targets": [
+      {
+        "x": 794,
+        "y": 535.53125,
+        "width": 461,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-mapping-type.png": {
+    "crop": {
+      "x": 800,
+      "y": 76.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 886.0625,
+        "y": 208.53125,
+        "width": 369.9375,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "facilities-guide-mapping-sheet-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 9.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1228,
+        "y": 145.53125,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "facilities-guide-mapping-create.png": {
+    "crop": {
+      "x": 800,
+      "y": 48.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1101,
+        "y": 182.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "facilities-guide-mapping-result.png": {
+    "crop": {
+      "x": 606.0,
+      "y": 117.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 636,
+        "y": 239,
+        "width": 420,
+        "height": 57
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-phone-registry.png": {
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "x": 16,
+        "y": 49,
+        "width": 75.359375,
+        "height": 34
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "facilities-guide-phone-observed.png": {
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "x": 95.359375,
+        "y": 49,
+        "width": 84.703125,
+        "height": 34
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "facilities-guide-phone-actions.png": {
+    "crop": {
+      "x": 0,
+      "y": 53.8125,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "x": 175.25,
+        "y": 155,
+        "width": 178.640625,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "facilities-guide-required-error.png": {
+    "crop": {
+      "x": 800,
+      "y": 81.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 927,
+        "y": 196.53125,
+        "width": 329,
+        "height": 70
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-duplicate-error.png": {
+    "crop": {
+      "x": 703,
+      "y": 45.21875,
+      "width": 577,
+      "height": 360.625
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 196.53125,
+        "width": 527,
+        "height": 58
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-missing-code-error.png": {
+    "crop": {
+      "x": 703,
+      "y": 338.21875,
+      "width": 577,
+      "height": 360.625
+    },
+    "targets": [
+      {
+        "x": 729,
+        "y": 475.53125,
+        "width": 527,
+        "height": 86
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "facilities-guide-missing-code-fix.png": {
+    "crop": {
+      "x": 693.765625,
+      "y": 144.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 855,
+        "y": 278.5,
+        "width": 157.53125,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  }
+}

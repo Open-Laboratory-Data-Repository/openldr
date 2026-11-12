@@ -1,0 +1,200 @@
+Établissements
+Donnez aux établissements de vos données des noms, des codes et des localisations cohérents. Ajoutez des établissements, importez un registre, puis reliez les codes reçus aux bons établissements.
+**Cette configuration est facultative.** OpenLDR peut recevoir et traiter des données avant la configuration de Facilities. Nous recommandons de la compléter pendant votre utilisation du système pour identifier les établissements dans les rapports.
+**Registry** contient les établissements ajoutés ou importés. **Observed** contient les codes reçus et indique leur établissement de destination. Ajouter un établissement et relier un code reçu sont deux tâches distinctes.
+Un **registre** est une liste maintenue par un organisme, par exemple un annuaire national ou la liste de votre organisation. **System** sélectionne ce registre. Son URI et le **Facility code** identifient ensemble l'établissement.
+Utilisez votre propre registre, vos informations et vos fichiers. Les captures montrent des établissements fictifs. Aucune donnée d'exemple n'est nécessaire. Les [fichiers de pratique facultatifs](#dg-practice) sont à la fin.
+La lecture nécessite **View facilities**. L'ajout, la modification, l'import et les liens nécessitent **Manage facilities**. Add et Edit nécessitent aussi un formulaire publié ciblant Facilities. Ce formulaire détermine les champs et les indications obligatoires.
+Enregistrer la source de votre liste
+Faites cette opération une seule fois par registre. Si votre registre apparaît déjà sous **System** ou **National system**, utilisez-le et passez cette tâche. Ne créez pas une seconde source pour le même registre.
+1. Ouvrir Facilities
+Sélectionnez **Facilities** dans le menu principal à gauche.
+2. Ouvrir Import facilities
+Dans **Registry**, ouvrez les points à droite des onglets et sélectionnez **Import facilities**.
+3. Choisir Register a source
+Sélectionnez **Register a source**. Vous pouvez enregistrer la source avant de choisir un fichier. Si des sources existent déjà, cette action se trouve dans le menu du panneau d'import.
+4. Saisir l'URI permanente du registre
+Dans **Canonical URI**, utilisez l'identifiant fourni par l'organisme responsable. Pour votre propre liste, choisissez une URI stable. L'exemple fictif utilise `urn:example:facilities:guide`.
+5. Saisir son nom
+Dans **Display name**, saisissez le nom à afficher dans les choix. L'exemple utilise `Example facility register`.
+6. Saisir un code court
+Dans **Code**, saisissez un identifiant court pour le registre. L'exemple utilise `EXAMPLE`. Version, jurisdiction et contact sont facultatifs.
+7. Enregistrer la source
+Ouvrez le menu de ce panneau et sélectionnez **Register**.
+**Résultat attendu :** le nouveau registre est sélectionné dans le panneau d'import. L'enregistrement de la source n'a importé aucun établissement.
+8. Fermer le panneau pour un ajout manuel
+Sélectionnez **Close** en haut à droite. Pour importer un fichier, gardez le panneau ouvert et [continuez avec l'import](#dg-import).
+Commencer une fiche d'établissement
+Ajoutez un établissement manuellement pour saisir un seul site. Les étapes suivantes utilisent le formulaire publié dans cette installation. Complétez les champs obligatoires de votre propre formulaire.
+1. Choisir Add facility
+Dans **Registry**, ouvrez le menu de la page et sélectionnez **Add facility**.
+2. Choisir System
+Sous **System**, choisissez la source enregistrée de cet établissement. Le nom sélectionne son URI canonique.
+3. Saisir Facility code
+Saisissez le code exact du registre, en conservant les zéros initiaux. L'exemple utilise `EXAMPLE-CLINIC-01`.
+4. Saisir Name
+Saisissez le nom lisible de l'établissement. L'exemple utilise `Example Clinic North`.
+5. Choisir Country
+Recherchez le pays, puis sélectionnez un résultat. Saisir uniquement le texte de recherche ne sélectionne pas de réponse.
+6. Saisir Zone si votre formulaire l'exige
+Saisissez la zone réelle de l'établissement. Les suggestions viennent des localisations déjà saisies dans ce registre. La capture utilise `Example Zone`.
+7. Saisir District et les autres localisations obligatoires
+Ce formulaire exige aussi **District**. Saisissez le district de l'établissement. Complétez Region ou Council si vous avez ces informations.
+**Continuez ci-dessous :** la fiche reste ouverte dans New facility. Elle n'est pas encore enregistrée.
+Compléter et enregistrer l'établissement
+Continuez dans le panneau **New facility** ouvert. Choisissez le statut et le type dans la terminologie configurée, puis enregistrez.
+1. Choisir Status
+Recherchez sous **Status** et sélectionnez le bon résultat. L'exemple choisit **Active**.
+2. Choisir Level
+**Level** sélectionne le type d'établissement. Recherchez et choisissez le type correspondant au site parmi les valeurs de votre installation.
+3. Ouvrir le menu du panneau
+Sélectionnez les points sous le titre du panneau, vers la droite.
+4. Choisir Create
+Sélectionnez **Create**. Si le formulaire indique des champs manquants, complétez-les et réessayez.
+**Résultat attendu :** le panneau se ferme et Registry se recharge. L'établissement apparaît avec son code, son nom et sa source. Si un filtre le masque, recherchez son code.
+Trouver et modifier un établissement
+Utilisez cette tâche pour corriger un nom, une localisation ou un autre détail. Rechercher d'abord évite aussi de créer un second enregistrement pour un établissement existant.
+1. Rechercher l'établissement
+Dans **Search facilities…**, saisissez son nom ou son code. L'exemple recherche `EXAMPLE-CLINIC-01`.
+2. Ouvrir sa ligne
+Sélectionnez la ligne de l'établissement. Ses informations s'ouvrent dans **Edit facility**.
+3. Modifier les informations
+Modifiez le champ à corriger. Ici, Name devient `Example Clinic North Updated`.
+4. Ouvrir le menu du panneau
+Sélectionnez les points sous le titre du panneau.
+5. Choisir Save
+Sélectionnez **Save**. Les fiches existantes utilisent Save ; les nouvelles utilisent Create.
+**Résultat attendu :** Registry affiche les changements. L'exemple conserve le code. System et Facility code peuvent aussi être corrigés. Ne supprimez pas la fiche uniquement pour corriger son code.
+Consulter les changements
+History affiche les changements d'un établissement avec leur date et leur auteur. Vous pouvez le consulter sans modifier la fiche.
+1. Ouvrir le menu de la ligne
+Sélectionnez les points à droite de la ligne de l'établissement.
+2. Choisir History
+Sélectionnez **History**.
+**Résultat attendu :** Facility history affiche les changements les plus récents en premier. L'exemple montre le changement de nom et la création initiale.
+3. Fermer History
+Sélectionnez **Close** en haut à droite pour revenir à Registry.
+Choisir le fichier du registre
+Importez votre liste existante au format CSV, JSON Lines ou Excel `.xlsx`. Il faut une colonne de codes et une colonne de noms. Les autres champs peuvent être associés, fournis comme valeurs fixes ou conservés comme données supplémentaires.
+Utilisez la source enregistrée qui possède les codes du fichier. Les exigences du formulaire manuel ne déterminent pas les colonnes obligatoires de l'import.
+1. Ouvrir Import facilities
+Dans Registry, ouvrez le menu de la page et sélectionnez **Import facilities**.
+2. Choisir le fichier
+Sélectionnez la zone File et choisissez votre fichier. Son nom apparaît sous Source. Le format suit le fichier choisi.
+3. Choisir National system
+Sélectionnez la source enregistrée de ce fichier. Si elle manque, [enregistrez sa source](#dg-register) d'abord.
+4. Indiquer si le fichier est une version complète
+Cochez **This file is a complete release** uniquement si le fichier contient le registre entier. Laissez cette case vide pour un fichier partiel. Une version complète permet de vérifier les établissements existants absents du fichier.
+5. Continuer vers Mapping
+Sélectionnez **Continue**. Le fichier est envoyé et stocké, puis Mapping s'ouvre. Aucun établissement n'a encore été importé.
+Associer les colonnes et les valeurs fixes
+Mapping relie les en-têtes du fichier aux champs OpenLDR. Vérifiez les suggestions pour le code et le nom, puis décidez du traitement des autres colonnes.
+1. Vérifier les colonnes obligatoires
+La colonne du code doit correspondre à `national_code`. Le nom lisible doit correspondre à `name`. Ouvrez la liste à côté d'un en-tête pour corriger sa destination.
+2. Corriger les autres destinations
+Choisissez le champ approprié à côté de chaque en-tête. Ici, **Operating Status** doit correspondre à `status` au lieu de rester une donnée supplémentaire.
+3. Conserver les colonnes supplémentaires utiles
+Pour une colonne sans champ standard, ouvrez le menu de sa ligne et sélectionnez **Keep as extra**. L'exemple conserve Notes.
+4. Fournir des valeurs fixes pour les colonnes absentes
+Si tous les établissements partagent une valeur absente du fichier, saisissez-la sous **Fixed values**. Ici, Country est sélectionné dans la terminologie. Chaque ligne reçoit ce pays.
+5. Décider du traitement des changements après l'aperçu
+Sous **Rows changed since this preview**, choisissez d'ignorer ces lignes ou de les remplacer par le fichier. Par défaut, ces lignes du registre restent inchangées.
+6. Valider le fichier
+Sélectionnez **Validate all**. La vérification s'exécute en arrière-plan, puis Review s'ouvre. Corrigez toute colonne obligatoire non associée avant de continuer.
+**Résultat attendu :** Review décrit les effets du fichier et des associations actuelles. Si des valeurs n'ont pas d'association canonique, définissez-les comme ci-dessous.
+Définir les valeurs inconnues
+Le fichier peut utiliser d'autres mots que votre terminologie. Associez-les aux valeurs voulues. L'exemple utilise Operating et Closed comme statuts.
+1. Revenir à Mapping
+Dans Review, sélectionnez **Map these values**. Les choix apparaissent sous la colonne concernée dans Mapping.
+2. Définir le sens de Operating
+Pour cet exemple, choisissez **Active** pour Operating. Pour votre fichier, choisissez une valeur ayant le même sens.
+3. Définir le sens de Closed
+Pour cet exemple, choisissez **Inactive** pour Closed. Ne fusionnez pas des sens différents uniquement pour supprimer un avertissement.
+4. Vérifier à nouveau
+Sélectionnez **Validate all**. Les décisions sont enregistrées pour ce registre et le fichier est vérifié à nouveau.
+**Résultat attendu :** Review reflète les nouvelles décisions. Dans cet exemple, l'avertissement de statut non associé disparaît.
+Vérifier et appliquer l'import
+Lisez les changements prévus avant de les appliquer. Un fichier peut créer des lignes, modifier des lignes ou correspondre aux lignes existantes. Les nombres dépendent du fichier et du registre actuel.
+1. Lire le résumé
+Vérifiez les nombres de lignes nouvelles, modifiées, inchangées et ignorées, ainsi que les avertissements. Si nécessaire, revenez à Mapping et validez à nouveau. Review présente les décisions sans les modifier.
+2. Confirmer l'import vérifié
+Sélectionnez **Confirm import**. Attendez le panneau de fin.
+**Résultat attendu :** Import complete indique les créations, mises à jour, lignes inchangées et lignes ignorées.
+3. Revenir à Registry
+Sélectionnez **Close** en haut à droite. Le registre se recharge avec les établissements importés.
+Actualiser un registre existant
+À la prochaine version du fichier, répétez l'import avec le même National system. Le registre et le code identifient les lignes existantes. Inutile de recréer ces établissements manuellement.
+1. Réutiliser la source enregistrée
+Choisissez le même registre dans le nouvel import et répétez les étapes Source et Mapping. Vérifiez à nouveau les colonnes.
+2. Lire les changements prévus
+Après validation, vérifiez les nombres. Le même fichier d'exemple retrouve deux lignes inchangées et n'en crée aucune.
+3. Appliquer les changements vérifiés
+Sélectionnez **Confirm import** quand le résumé correspond à votre intention.
+**Résultat attendu :** le fichier répété signale les lignes inchangées sans créer de doublons. Un fichier modifié présente ses différences réelles.
+Relier les codes reçus qui correspondent au registre
+Faites cette tâche après l'arrivée des données de laboratoire. Observed liste les codes reçus. Si cette liste est vide, vous pouvez construire Registry maintenant et revenir après l'arrivée du flux habituel.
+La correspondance exacte relie un code reçu à l'établissement portant le même code dans le registre choisi. Les associations existantes sont conservées.
+1. Ouvrir Observed
+Sélectionnez **Observed** à côté de Registry.
+2. Choisir Link matching codes
+Ouvrez le menu de la page Observed et sélectionnez **Link matching codes**.
+3. Choisir le registre
+Sélectionnez le registre dont vous voulez rapprocher les codes.
+4. Lire les correspondances proposées
+Vérifiez les nombres et les noms. L'exemple comporte trois codes à relier et un sans correspondance. Vos nombres viennent de vos données.
+5. Ouvrir Link actions
+Sélectionnez les points en haut à droite de ce panneau.
+6. Appliquer les correspondances
+Sélectionnez **Link N codes**, N étant le nombre de votre aperçu. L'exemple affiche Link 3 codes.
+**Résultat attendu :** les codes correspondants affichent l'établissement sous Resolves to. Report facilities peut afficher Updating pendant la reconstruction des liens de rapports, puis Current.
+Relier un code différent utilisé par la source
+Utilisez cette tâche quand une source emploie un autre code pour le même établissement. Choisissez sa véritable fiche Registry. L'exemple relie EXTERNAL-CLINIC à la clinique nord existante.
+1. Choisir Map sur la ligne reçue
+Ouvrez le menu de cette ligne et sélectionnez **Map**. Une ligne déjà associée propose Edit mapping.
+2. Rechercher l'établissement de destination
+Dans Target, utilisez **Search terms** pour rechercher le nom ou le code. System est fixé à FACILITY-REGISTRY dans ce parcours.
+3. Sélectionner l'établissement correspondant
+Choisissez le bon établissement parmi les résultats.
+4. Vérifier le type d'association
+Gardez **Same as** lorsque les codes désignent le même établissement. Une relation plus large ou plus étroite n'est pas une correspondance d'identité.
+5. Ouvrir le menu de l'association
+Sélectionnez les points en haut à droite du panneau d'association.
+6. Choisir Create
+Sélectionnez **Create** pour une nouvelle association. Une association existante utilise Save.
+**Résultat attendu :** Resolves to affiche l'établissement choisi à côté du code différent de la source.
+Utiliser Facilities sur un téléphone
+Les tâches Registry et Observed restent disponibles sur téléphone. L'en-tête passe à la ligne pour laisser de la place au statut des rapports.
+1. Choisir Registry
+Sélectionnez **Registry** en haut pour consulter la liste des établissements.
+2. Choisir Observed
+Sélectionnez **Observed** pour consulter les codes reçus.
+3. Ouvrir le menu de cet onglet
+Sélectionnez les points à droite des onglets. Les actions dépendent de l'onglet choisi. Faites défiler le tableau horizontalement pour voir les colonnes restantes.
+Pratique facultative avec des données fictives
+Toutes les tâches ci-dessus peuvent utiliser vos propres données. Ces fichiers servent uniquement à pratiquer dans une installation de test :
+[Télécharger le CSV de deux établissements](facilities-evidence/example-facilities.csv) utilisé dans les captures d'import.
+[Télécharger le lot de sept ressources](facilities-evidence/example-observed-data.json) utilisé pour montrer les codes reçus. Il contient un patient fictif, trois demandes et trois rapports.
+Pour obtenir les trois correspondances exactes montrées, ajoutez aussi `EXAMPLE-CLINIC-01` avec la tâche manuelle. Utilisez Example facility register pour ces fiches fictives. Le CSV seul donne moins de correspondances ; l'aperçu indique les codes sans correspondance.
+Importez le CSV dans le navigateur avec les étapes précédentes. Avant de charger le lot facultatif, lisez [Start here](/docs/start-here) pour les instructions CLI installées et de développement. Placez le JSON dans le dossier `data` de l'installation.
+Exemple pour une installation Linux ou macOS :
+Exemple pour une installation Windows :
+Exemple pour un dépôt de développement, après avoir placé le fichier dans son dossier `data` :
+Ces dossiers sont des exemples. Remplacez-les par votre vrai dossier, comme expliqué dans Start here. Revenez à Observed après l'import, puis suivez les tâches de liaison.
+Dépannage
+Create signale des champs obligatoires
+Complétez les champs indiqués. Pour un champ de terminologie, sélectionnez un résultat au lieu de laisser le texte de recherche seul. Choisissez ensuite Create à nouveau.
+Un établissement porte déjà ce code dans ce registre
+Une paire System et Facility code ne peut pas être ajoutée deux fois. Fermez le formulaire, trouvez la ligne existante et modifiez-la. L'erreur reproduite parle de code national ; ce formulaire l'appelle Facility code.
+Une colonne manque pour un champ obligatoire
+Associez la colonne de codes à `national_code` et celle des noms à `name`, ou fournissez la valeur fixe appropriée. Validez à nouveau.
+Un code reçu indique encore Not mapped
+Importer un registre ne relie pas les codes reçus. Utilisez Link matching codes pour les codes exacts, ou Map sur la ligne quand la source utilise un code différent.
+Add ou Edit est indisponible
+Ces actions nécessitent Manage facilities et un formulaire publié ciblant Facilities. La page indique le formulaire manquant. Ouvrez Forms pour le publier ou le corriger. L'import d'un registre ne nécessite pas ce formulaire.
+Un établissement enregistré est absent de la liste visible
+La recherche, les filtres et la page restent appliqués après l'enregistrement. Recherchez le code pour retrouver la fiche.
+Distinguer ces opérations
+Les saisies manuelles suivent votre formulaire Facilities. Les imports utilisent leurs associations de colonnes. Une source de registre, un établissement Registry et une association de code Observed sont des enregistrements distincts.
+Un fichier partiel n'évalue pas les établissements absents du fichier. Indiquez une version complète uniquement pour le registre entier, puis lisez les décisions supplémentaires dans Mapping et le résultat dans Review.
+Guides associés
+[Terminology](terminology-review.html) explique les listes et les codes. [Start here](/docs/start-here) explique la CLI. [Dashboards](dashboard-review.html) traite des graphiques et de la pratique facultative. [Your preferences](/docs/user-preferences) traite des réglages personnels.

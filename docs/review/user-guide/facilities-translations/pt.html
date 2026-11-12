@@ -1,0 +1,153 @@
+<article class="dg-article" id="dg-top">
+ <div class="dg-meta"><span>System setup</span><span>Browse or manage facilities</span><span>About 35 minutes</span></div>
+ <h1>Unidades de saúde</h1>
+ <p>Dê nomes, códigos e localizações consistentes às unidades dos seus dados. Adicione unidades, importe um registo e ligue os códigos recebidos às unidades certas.</p>
+ <p><strong>Esta configuração é opcional.</strong> O OpenLDR pode receber e processar dados antes de configurar Facilities. Recomendamos completar a configuração durante a utilização do sistema para identificar as unidades nos relatórios.</p>
+ <p><strong>Registry</strong> contém as unidades adicionadas ou importadas. <strong>Observed</strong> contém os códigos recebidos e mostra a unidade correspondente. Adicionar uma unidade e ligar um código recebido são tarefas distintas.</p>
+ <p>Um <strong>registo</strong> é uma lista mantida por uma organização, como um diretório nacional ou a lista da sua organização. <strong>System</strong> seleciona esse registo. O URI e o <strong>Facility code</strong> identificam a unidade em conjunto.</p>
+ <p>Use o seu próprio registo, os seus dados e ficheiros. As capturas mostram unidades fictícias. Não precisa de dados de exemplo. Os <a href="#dg-practice">ficheiros de prática opcionais</a> estão no fim.</p>
+ <p>A consulta exige <strong>View facilities</strong>. Adicionar, editar, importar e ligar exige <strong>Manage facilities</strong>. Add e Edit também exigem um formulário publicado destinado a Facilities. Esse formulário define os campos e as indicações obrigatórias.</p>
+
+ <h2 id="dg-register">Registar a origem da lista de unidades</h2>
+ <p>Faça isto uma vez por registo. Se o registo já aparece em <strong>System</strong> ou <strong>National system</strong>, use-o e passe esta tarefa. Não crie outra origem para o mesmo registo.</p>
+ <section class="dg-step"><h3>1. Abrir Facilities</h3><p>Selecione <strong>Facilities</strong> no menu principal à esquerda.</p>__SHOT:open-facilities:1__</section>
+ <section class="dg-step"><h3>2. Abrir Import facilities</h3><p>Em <strong>Registry</strong>, abra os pontos à direita dos separadores e selecione <strong>Import facilities</strong>.</p>__SHOT:source-actions:2____SHOT:source-import:2__</section>
+ <section class="dg-step"><h3>3. Escolher Register a source</h3><p>Selecione <strong>Register a source</strong>. Pode registar a origem antes de escolher um ficheiro. Quando já existem origens, esta ação está no menu do painel de importação.</p>__SHOT:register-source-button:3____SHOT:register-existing-actions:3____SHOT:register-existing-menu:3__</section>
+ <section class="dg-step"><h3>4. Introduzir o URI permanente do registo</h3><p>Em <strong>Canonical URI</strong>, use o identificador fornecido pela organização responsável. Para uma lista própria, escolha um URI estável. O exemplo fictício usa <code>urn:example:facilities:guide</code>.</p>__SHOT:register-url:4__</section>
+ <section class="dg-step"><h3>5. Introduzir o nome</h3><p>Em <strong>Display name</strong>, introduza o nome que as pessoas devem escolher. O exemplo usa <code>Example facility register</code>.</p>__SHOT:register-name:5__</section>
+ <section class="dg-step"><h3>6. Introduzir um código curto</h3><p>Em <strong>Code</strong>, introduza um identificador curto para o registo. O exemplo usa <code>EXAMPLE</code>. Version, jurisdiction e contact são opcionais.</p>__SHOT:register-code:6__</section>
+ <section class="dg-step"><h3>7. Registar a origem</h3><p>Abra o menu deste painel e selecione <strong>Register</strong>.</p>__SHOT:register-actions:7____SHOT:register-save:7__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> o novo registo fica selecionado no painel de importação. Registar a origem ainda não importou nenhuma unidade.</p></div>__SHOT:register-selected:0__
+ <section class="dg-step"><h3>8. Fechar o painel para adicionar manualmente</h3><p>Selecione <strong>Close</strong> no canto superior direito. Para importar um ficheiro, mantenha o painel aberto e <a href="#dg-import">continue a importação</a>.</p>__SHOT:close-import:8__</section>
+
+ <h2 id="dg-add">Começar uma ficha de unidade</h2>
+ <p>Adicione manualmente quando precisa de introduzir um único local. Os passos seguintes usam o formulário publicado nesta instalação. Preencha os campos obrigatórios do seu formulário.</p>
+ <section class="dg-step"><h3>1. Escolher Add facility</h3><p>Em <strong>Registry</strong>, abra o menu da página e selecione <strong>Add facility</strong>.</p>__SHOT:add-actions:1____SHOT:add-menu:1__</section>
+ <section class="dg-step"><h3>2. Escolher System</h3><p>Em <strong>System</strong>, selecione a origem registada desta unidade. O nome seleciona o URI canónico.</p>__SHOT:add-system:2__</section>
+ <section class="dg-step"><h3>3. Introduzir Facility code</h3><p>Introduza o código exato usado pelo registo, incluindo os zeros iniciais. O exemplo usa <code>EXAMPLE-CLINIC-01</code>.</p>__SHOT:add-code:3__</section>
+ <section class="dg-step"><h3>4. Introduzir Name</h3><p>Introduza o nome legível da unidade. O exemplo usa <code>Example Clinic North</code>.</p>__SHOT:add-name:4__</section>
+ <section class="dg-step"><h3>5. Escolher Country</h3><p>Pesquise o país e selecione um resultado. Escrever apenas a pesquisa não seleciona a resposta.</p>__SHOT:add-country:5__</section>
+ <section class="dg-step"><h3>6. Introduzir Zone se o formulário exigir</h3><p>Introduza a zona real da unidade. As sugestões vêm das localizações já introduzidas neste registo. A captura usa <code>Example Zone</code>.</p>__SHOT:add-zone:6__</section>
+ <section class="dg-step"><h3>7. Introduzir District e outras localizações obrigatórias</h3><p>Este formulário também exige <strong>District</strong>. Preencha o distrito da unidade. Complete Region ou Council quando tiver esses dados.</p>__SHOT:add-district:7__</section>
+ <div class="dg-result"><p><strong>Continue abaixo:</strong> a ficha continua aberta em New facility. Ainda não foi guardada.</p></div>
+
+ <h2 id="dg-save">Completar e guardar a unidade</h2>
+ <p>Continue no painel <strong>New facility</strong> aberto. Escolha o estado e o tipo na terminologia configurada e guarde.</p>
+ <section class="dg-step"><h3>1. Escolher Status</h3><p>Pesquise em <strong>Status</strong> e selecione o resultado adequado. O exemplo escolhe <strong>Active</strong>.</p>__SHOT:add-status:1__</section>
+ <section class="dg-step"><h3>2. Escolher Level</h3><p><strong>Level</strong> seleciona o tipo de unidade. Pesquise e escolha o tipo adequado entre os disponíveis na instalação.</p>__SHOT:add-level:2__</section>
+ <section class="dg-step"><h3>3. Abrir o menu do painel</h3><p>Selecione os pontos abaixo do título do painel, perto do canto superior direito.</p>__SHOT:add-sheet-actions:3__</section>
+ <section class="dg-step"><h3>4. Escolher Create</h3><p>Selecione <strong>Create</strong>. Se o formulário indicar campos em falta, preencha-os e tente novamente.</p>__SHOT:add-create:4__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> o painel fecha e Registry volta a carregar. A unidade aparece com código, nome e origem. Se um filtro a esconder, pesquise pelo código.</p></div>__SHOT:add-result:0__
+
+ <h2 id="dg-edit">Encontrar e alterar uma unidade</h2>
+ <p>Use esta tarefa para corrigir um nome, uma localização ou outro detalhe. Pesquisar primeiro também evita criar outra ficha para uma unidade existente.</p>
+ <section class="dg-step"><h3>1. Pesquisar a unidade</h3><p>Em <strong>Search facilities…</strong>, introduza o nome ou código. O exemplo pesquisa <code>EXAMPLE-CLINIC-01</code>.</p>__SHOT:search-input:1__</section>
+ <section class="dg-step"><h3>2. Abrir a linha</h3><p>Selecione a linha da unidade. Os dados guardados abrem em <strong>Edit facility</strong>.</p>__SHOT:edit-row:2__</section>
+ <section class="dg-step"><h3>3. Alterar os dados</h3><p>Edite o campo a corrigir. Aqui, Name passa a <code>Example Clinic North Updated</code>.</p>__SHOT:edit-name:3__</section>
+ <section class="dg-step"><h3>4. Abrir o menu do painel</h3><p>Selecione os pontos abaixo do título do painel.</p>__SHOT:edit-actions:4__</section>
+ <section class="dg-step"><h3>5. Escolher Save</h3><p>Selecione <strong>Save</strong>. As fichas existentes usam Save; as novas usam Create.</p>__SHOT:edit-save:5__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> Registry mostra as alterações. O exemplo mantém o código. System e Facility code também podem ser corrigidos. Não elimine a ficha apenas para corrigir o código.</p></div>__SHOT:edit-result:0__
+
+ <h2 id="dg-history">Consultar as alterações</h2>
+ <p>History mostra as alterações de uma unidade, com a data e o autor. Pode consultar sem alterar a ficha.</p>
+ <section class="dg-step"><h3>1. Abrir o menu da linha</h3><p>Selecione os pontos à direita da linha da unidade.</p>__SHOT:history-row-actions:1__</section>
+ <section class="dg-step"><h3>2. Escolher History</h3><p>Selecione <strong>History</strong>.</p>__SHOT:history-menu:2__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> Facility history mostra primeiro as alterações mais recentes. O exemplo mostra a alteração do nome e a criação inicial.</p></div>__SHOT:history-result:0__
+ <section class="dg-step"><h3>3. Fechar History</h3><p>Selecione <strong>Close</strong> no canto superior direito para regressar a Registry.</p>__SHOT:history-close:3__</section>
+
+ <h2 id="dg-import">Escolher o ficheiro do registo</h2>
+ <p>Importe uma lista existente em CSV, JSON Lines ou Excel <code>.xlsx</code>. Precisa de uma coluna de códigos e outra de nomes. Os restantes campos podem ser associados, fornecidos como valores fixos ou mantidos como dados adicionais.</p>
+ <p>Use a origem registada que detém os códigos deste ficheiro. Os requisitos do formulário manual não definem as colunas obrigatórias da importação.</p>
+ <section class="dg-step"><h3>1. Abrir Import facilities</h3><p>Em Registry, abra o menu da página e selecione <strong>Import facilities</strong>.</p>__SHOT:import-actions:1____SHOT:import-menu:1__</section>
+ <section class="dg-step"><h3>2. Escolher o ficheiro</h3><p>Selecione a área File e escolha o seu ficheiro. O nome aparece em Source. O formato acompanha o ficheiro escolhido.</p>__SHOT:import-file:2____SHOT:import-format:2__</section>
+ <section class="dg-step"><h3>3. Escolher National system</h3><p>Selecione a origem registada deste ficheiro. Se faltar, <a href="#dg-register">registe a origem</a> primeiro.</p>__SHOT:import-register:3__</section>
+ <section class="dg-step"><h3>4. Indicar se é uma versão completa</h3><p>Marque <strong>This file is a complete release</strong> apenas se o ficheiro contém todo o registo. Deixe desmarcado para um ficheiro parcial. Uma versão completa permite verificar as unidades existentes ausentes do ficheiro.</p>__SHOT:import-complete-release:4__</section>
+ <section class="dg-step"><h3>5. Continuar para Mapping</h3><p>Selecione <strong>Continue</strong>. O ficheiro é enviado e guardado e abre Mapping. Ainda não foi importada nenhuma unidade.</p>__SHOT:import-continue:5__</section>
+
+ <h2 id="dg-map">Associar colunas e valores fixos</h2>
+ <p>Mapping liga os cabeçalhos do ficheiro aos campos do OpenLDR. Verifique as sugestões para código e nome e decida como tratar as restantes colunas.</p>
+ <section class="dg-step"><h3>1. Verificar as colunas obrigatórias</h3><p>A coluna do código deve corresponder a <code>national_code</code>. O nome legível deve corresponder a <code>name</code>. Abra a lista ao lado de um cabeçalho para corrigir o destino.</p>__SHOT:map-code:1____SHOT:map-name:1__</section>
+ <section class="dg-step"><h3>2. Corrigir outros destinos</h3><p>Escolha o campo adequado ao lado de cada cabeçalho. Aqui, <strong>Operating Status</strong> deve corresponder a <code>status</code> em vez de permanecer como dado adicional.</p>__SHOT:map-status-option:2__</section>
+ <section class="dg-step"><h3>3. Manter colunas adicionais úteis</h3><p>Para uma coluna sem campo padrão, abra o menu da linha e selecione <strong>Keep as extra</strong>. O exemplo mantém Notes.</p>__SHOT:map-extra-actions:3____SHOT:map-extra-save:3__</section>
+ <section class="dg-step"><h3>4. Fornecer valores fixos para colunas ausentes</h3><p>Se todas as unidades partilham um valor ausente do ficheiro, introduza-o em <strong>Fixed values</strong>. Aqui, Country é selecionado na terminologia. Todas as linhas recebem esse país.</p>__SHOT:map-fixed-country:4__</section>
+ <section class="dg-step"><h3>5. Decidir o tratamento das alterações após a pré-visualização</h3><p>Em <strong>Rows changed since this preview</strong>, escolha ignorar essas linhas ou substituí-las pelo ficheiro. Por predefinição, essas linhas do registo ficam intactas.</p>__SHOT:map-conflict-policy:5__</section>
+ <section class="dg-step"><h3>6. Validar o ficheiro</h3><p>Selecione <strong>Validate all</strong>. A verificação decorre em segundo plano e depois abre Review. Corrija qualquer associação obrigatória em falta antes de continuar.</p>__SHOT:map-validate:6__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> Review descreve os efeitos do ficheiro e das associações atuais. Se houver valores sem associação canónica, defina-os como abaixo.</p></div>__SHOT:review-unmapped:0__
+
+ <h2 id="dg-values">Definir valores desconhecidos</h2>
+ <p>O ficheiro pode usar palavras diferentes da terminologia configurada. Associe-as aos valores pretendidos. O exemplo usa Operating e Closed como estados.</p>
+ <section class="dg-step"><h3>1. Regressar a Mapping</h3><p>Em Review, selecione <strong>Map these values</strong>. As opções aparecem abaixo da coluna correspondente em Mapping.</p>__SHOT:review-map-values:1__</section>
+ <section class="dg-step"><h3>2. Definir o significado de Operating</h3><p>Neste exemplo, escolha <strong>Active</strong> para Operating. No seu ficheiro, escolha o valor com o mesmo significado.</p>__SHOT:map-operating:2__</section>
+ <section class="dg-step"><h3>3. Definir o significado de Closed</h3><p>Neste exemplo, escolha <strong>Inactive</strong> para Closed. Não junte significados diferentes apenas para remover um aviso.</p>__SHOT:map-closed:3__</section>
+ <section class="dg-step"><h3>4. Verificar novamente</h3><p>Selecione <strong>Validate all</strong>. As decisões ficam guardadas para este registo e o ficheiro é verificado novamente.</p>__SHOT:map-revalidate:4__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> Review reflete as novas decisões. Neste exemplo, desaparece o aviso de estado sem associação.</p></div>
+
+ <h2 id="dg-confirm">Rever e aplicar a importação</h2>
+ <p>Leia as alterações previstas antes de as aplicar. Um ficheiro pode criar linhas, alterar linhas ou corresponder às existentes. Os números dependem do ficheiro e do registo atual.</p>
+ <section class="dg-step"><h3>1. Ler o resumo</h3><p>Verifique os números de linhas novas, alteradas, inalteradas e ignoradas, além dos avisos. Se necessário, volte a Mapping e valide novamente. Review apresenta as decisões sem as editar.</p>__SHOT:review-summary:1__</section>
+ <section class="dg-step"><h3>2. Confirmar a importação revista</h3><p>Selecione <strong>Confirm import</strong>. Aguarde o painel de conclusão.</p>__SHOT:import-confirm:2__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> Import complete indica as criações, atualizações e linhas inalteradas ou ignoradas.</p></div>__SHOT:import-complete:0__
+ <section class="dg-step"><h3>3. Regressar a Registry</h3><p>Selecione <strong>Close</strong> no canto superior direito. O registo volta a carregar com as unidades importadas.</p>__SHOT:import-close:3__</section>__SHOT:import-result:0__
+
+ <h2 id="dg-refresh">Atualizar um registo existente</h2>
+ <p>Quando chegar a próxima versão do ficheiro, repita a importação com o mesmo National system. O registo e o código identificam as linhas existentes. Não precisa de recriar essas unidades manualmente.</p>
+ <section class="dg-step"><h3>1. Reutilizar a origem registada</h3><p>Escolha o mesmo registo na nova importação e repita Source e Mapping. Verifique novamente as colunas.</p>__SHOT:import-register:1__</section>
+ <section class="dg-step"><h3>2. Ler as alterações previstas</h3><p>Após a validação, confira os números. Repetir o mesmo ficheiro de exemplo encontra duas linhas inalteradas e não cria nenhuma.</p>__SHOT:reimport-summary:2__</section>
+ <section class="dg-step"><h3>3. Aplicar as alterações revistas</h3><p>Selecione <strong>Confirm import</strong> quando o resumo corresponde à sua intenção.</p>__SHOT:reimport-confirm:3__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> o ficheiro repetido indica linhas inalteradas sem criar duplicados. Um ficheiro alterado apresenta as diferenças reais.</p></div>__SHOT:reimport-complete:0__
+
+ <h2 id="dg-observed">Ligar códigos recebidos que correspondem ao registo</h2>
+ <p>Faça esta tarefa após a chegada dos dados laboratoriais. Observed lista os códigos recebidos. Se estiver vazio, pode criar Registry agora e regressar após a chegada do fluxo habitual.</p>
+ <p>A correspondência exata liga um código recebido à unidade com o mesmo código no registo escolhido. As associações existentes são mantidas.</p>
+ <section class="dg-step"><h3>1. Abrir Observed</h3><p>Selecione <strong>Observed</strong> ao lado de Registry.</p>__SHOT:observed-tab:1__</section>
+ <section class="dg-step"><h3>2. Escolher Link matching codes</h3><p>Abra o menu da página Observed e selecione <strong>Link matching codes</strong>.</p>__SHOT:observed-actions:2____SHOT:matching-menu:2__</section>
+ <section class="dg-step"><h3>3. Escolher o registo</h3><p>Selecione o registo cujos códigos pretende comparar.</p>__SHOT:matching-register:3__</section>
+ <section class="dg-step"><h3>4. Ler as correspondências propostas</h3><p>Confira os números e nomes. O exemplo tem três códigos para ligar e um sem correspondência. Os seus números vêm dos seus dados.</p>__SHOT:matching-preview:4__</section>
+ <section class="dg-step"><h3>5. Abrir Link actions</h3><p>Selecione os pontos no canto superior direito deste painel.</p>__SHOT:matching-actions:5__</section>
+ <section class="dg-step"><h3>6. Aplicar as correspondências</h3><p>Selecione <strong>Link N codes</strong>, sendo N o número da sua pré-visualização. O exemplo mostra Link 3 codes.</p>__SHOT:matching-apply:6__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> os códigos correspondentes mostram a unidade em Resolves to. Report facilities pode mostrar Updating durante a reconstrução das ligações dos relatórios e depois Current.</p></div>__SHOT:matching-result:0__
+
+ <h2 id="dg-different">Ligar um código diferente usado pela origem</h2>
+ <p>Use esta tarefa quando uma origem usa outro código para a mesma unidade física. Escolha a ficha Registry que a representa. O exemplo liga EXTERNAL-CLINIC à clínica norte existente.</p>
+ <section class="dg-step"><h3>1. Escolher Map na linha recebida</h3><p>Abra o menu dessa linha e selecione <strong>Map</strong>. Uma linha já associada oferece Edit mapping.</p>__SHOT:mapping-row-actions:1____SHOT:mapping-menu:1__</section>
+ <section class="dg-step"><h3>2. Pesquisar a unidade de destino</h3><p>Em Target, use <strong>Search terms</strong> para pesquisar pelo nome ou código. System está fixo em FACILITY-REGISTRY neste percurso.</p>__SHOT:mapping-search:2__</section>
+ <section class="dg-step"><h3>3. Selecionar a unidade correspondente</h3><p>Escolha a unidade correta nos resultados.</p>__SHOT:mapping-target:3__</section>
+ <section class="dg-step"><h3>4. Verificar o tipo de associação</h3><p>Mantenha <strong>Same as</strong> quando os códigos representam a mesma unidade. Uma relação mais ampla ou mais restrita não corresponde à mesma identidade.</p>__SHOT:mapping-type:4__</section>
+ <section class="dg-step"><h3>5. Abrir o menu da associação</h3><p>Selecione os pontos no canto superior direito do painel de associação.</p>__SHOT:mapping-sheet-actions:5__</section>
+ <section class="dg-step"><h3>6. Escolher Create</h3><p>Selecione <strong>Create</strong> para a nova associação. Uma associação existente usa Save.</p>__SHOT:mapping-create:6__</section>
+ <div class="dg-result"><p><strong>Resultado esperado:</strong> Resolves to mostra a unidade escolhida junto do código diferente da origem.</p></div>__SHOT:mapping-result:0__
+
+ <h2 id="dg-phone">Usar Facilities num telemóvel</h2>
+ <p>As tarefas Registry e Observed continuam disponíveis no telemóvel. O cabeçalho muda de linha para deixar espaço ao estado dos relatórios.</p>
+ <section class="dg-step"><h3>1. Escolher Registry</h3><p>Selecione <strong>Registry</strong> no topo para consultar a lista de unidades.</p>__SHOT:phone-registry:1__</section>
+ <section class="dg-step"><h3>2. Escolher Observed</h3><p>Selecione <strong>Observed</strong> para consultar os códigos recebidos.</p>__SHOT:phone-observed:2__</section>
+ <section class="dg-step"><h3>3. Abrir o menu desse separador</h3><p>Selecione os pontos à direita dos separadores. As ações dependem do separador selecionado. Desloque a tabela horizontalmente para ver as restantes colunas.</p>__SHOT:phone-actions:3__</section>
+
+ <h2 id="dg-practice">Prática opcional com dados fictícios</h2>
+ <p>Pode concluir todas as tarefas acima com os seus próprios dados. Estes ficheiros servem apenas para praticar numa instalação de teste:</p>
+ <ul><li><a href="facilities-evidence/example-facilities.csv">Descarregar o CSV com duas unidades</a> usado nas capturas da importação.</li><li><a href="facilities-evidence/example-observed-data.json">Descarregar o lote com sete recursos</a> usado para demonstrar os códigos recebidos. Contém um paciente fictício, três pedidos e três relatórios.</li></ul>
+ <p>Para obter as três correspondências exatas mostradas, adicione também <code>EXAMPLE-CLINIC-01</code> com a tarefa manual. Use Example facility register nestas fichas fictícias. Apenas com o CSV há menos correspondências; a pré-visualização indica os códigos sem correspondência.</p>
+ <p>Importe o CSV no navegador com os passos anteriores. Antes de carregar o lote opcional, leia <a href="/docs/start-here">Start here</a> para as instruções da CLI instalada e de desenvolvimento. Coloque o JSON na pasta <code>data</code> da instalação.</p>
+ <p>Exemplo para uma instalação Linux ou macOS:</p><pre><code>cd ~/Downloads/openldr_ce
+./openldr ingest data/example-observed-data.json</code></pre>
+ <p>Exemplo para uma instalação Windows:</p><pre><code>cd C:\openldr_ce
+.\openldr.ps1 ingest data\example-observed-data.json</code></pre>
+ <p>Exemplo para um repositório de desenvolvimento, depois de colocar o ficheiro na sua pasta <code>data</code>:</p><pre><code>cd ~/Downloads/openldr_ce
+pnpm openldr ingest data/example-observed-data.json</code></pre>
+ <p>Estas pastas são exemplos. Substitua-as pela pasta real, como explicado em Start here. Regresse a Observed após a importação e siga as tarefas de ligação.</p>
+
+ <h2 id="dg-help">Resolução de problemas</h2>
+ <details><summary>Create indica campos obrigatórios</summary><p>Preencha os campos assinalados. Num campo de terminologia, selecione um resultado em vez de deixar apenas o texto da pesquisa. Escolha Create novamente.</p>__SHOT:required-error:0__</details>
+ <details><summary>Já existe uma unidade com esse código neste registo</summary><p>Não pode adicionar duas vezes o mesmo par System e Facility code. Feche o formulário, encontre a linha existente e edite-a. O erro reproduzido refere o código nacional; este formulário chama-lhe Facility code.</p>__SHOT:duplicate-error:0__</details>
+ <details><summary>Falta uma coluna para um campo obrigatório</summary><p>Associe a coluna de códigos a <code>national_code</code> e a de nomes a <code>name</code>, ou forneça o valor fixo adequado. Valide novamente.</p>__SHOT:missing-code-error:0____SHOT:missing-code-fix:0__</details>
+ <details><summary>Um código recebido ainda indica Not mapped</summary><p>Importar um registo não liga os códigos recebidos. Use Link matching codes para códigos exatos ou Map na linha quando a origem usa um código diferente.</p></details>
+ <details><summary>Add ou Edit está indisponível</summary><p>Estas ações exigem Manage facilities e um formulário publicado destinado a Facilities. A página indica o formulário em falta. Abra Forms para o publicar ou corrigir. A importação de um registo não exige esse formulário.</p></details>
+ <details><summary>Uma unidade guardada não aparece na lista visível</summary><p>A pesquisa, os filtros e a página continuam aplicados após guardar. Pesquise pelo código para encontrar a ficha.</p></details>
+
+ <h2 id="dg-limits">Distinguir estas operações</h2>
+ <p>A introdução manual segue o formulário Facilities publicado. As importações usam as associações de colunas. Uma origem de registo, uma unidade Registry e uma associação de código Observed são registos distintos.</p>
+ <p>Um ficheiro parcial não avalia as unidades ausentes. Marque uma versão completa apenas para o registo inteiro e leia as decisões adicionais em Mapping e o resultado em Review.</p>
+
+ <h2 id="dg-related">Guias relacionados</h2>
+ <p><a href="terminology-review.html">Terminology</a> explica as listas e os códigos. <a href="/docs/start-here">Start here</a> explica a CLI. <a href="dashboard-review.html">Dashboards</a> trata de gráficos e prática opcional. <a href="/docs/user-preferences">Your preferences</a> trata das definições pessoais.</p>
+</article>

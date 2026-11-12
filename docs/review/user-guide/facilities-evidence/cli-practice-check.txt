@@ -1,0 +1,6 @@
+Command: pnpm openldr ingest data/example-observed-data.json
+Isolation: guide_internal + guide_target on port 15439
+batch d954d8bd-ea81-4418-b5b8-2d7211fb14d5: done (7 resources)
+
+Exit: 0
+Windows and macOS installed launchers were not executed in this review.

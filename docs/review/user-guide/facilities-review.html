@@ -1,0 +1,1847 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/charts/; img-src 'self' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Facilities guide preview</title>
+<style>:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI",
+    Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget > :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  --btn-size: calc(12px + 2 * var(--control-spacing, 12px));
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: var(--btn-size);
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+/* Codex Button size="compact"; appearance stays with the button variant. */
+.btn-sm {
+  --btn-size: 24px;
+  padding-inline: 8px;
+  font-size: calc(var(--font-size-base) * 12 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 12 / 16), 1px);
+  line-height: 16px;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled="true"]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(> .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel > [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel > [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host's design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker > summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-picker > summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls > button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker > summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls > button > svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls > button::before,
+.viz-carousel-picker > summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.viz-carousel-controls > button:hover::before,
+.viz-carousel-picker > summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker > summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options > button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options > [aria-current="true"],
+.viz-carousel-options > button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type="file"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="color"]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type="file"]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select :is(option, optgroup) {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select :is(option, optgroup):disabled {
+  color: var(--muted-foreground);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: "";
+}
+
+.form-check-input[type="radio"] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type="radio"]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type="radio"]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host's proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn-sm {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 12 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 12 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(> .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker > summary,
+  .form-control,
+  .form-select {
+    --btn-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type="file"],
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="week"],
+    [type="time"],
+    [type="color"]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html>body{padding:0}
+:root{--guide-preview-height:100dvh}</style>
+</head>
+<body>
+<style>
+#facilities-evidence-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#facilities-evidence-guide * { box-sizing:border-box; }
+#facilities-evidence-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#facilities-evidence-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
+#facilities-evidence-guide .dg-head strong { font-size:16px; font-weight:600; }
+#facilities-evidence-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
+#facilities-evidence-guide .dg-head-icons { margin-left:auto; display:flex; align-items:center; gap:20px; color:var(--dg-muted); padding-right:80px; }
+#facilities-evidence-guide .dg-main { display:flex; min-height:0; flex:1; }
+#facilities-evidence-guide .dg-sidebar { width:256px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--dg-border); }
+#facilities-evidence-guide .dg-search { height:48px; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--dg-border); flex-shrink:0; }
+#facilities-evidence-guide .dg-search input { min-width:0; width:100%; border:1px solid var(--dg-border); border-radius:6px; padding:7px 10px; background:transparent; color:var(--dg-text); font:inherit; }
+#facilities-evidence-guide .dg-docnav { overflow:auto; min-height:0; padding:4px 0 16px; }
+#facilities-evidence-guide .dg-group { margin-top:5px; padding-top:8px; border-top:1px solid var(--dg-border); }
+#facilities-evidence-guide .dg-group:first-child { border:0; margin:0; }
+#facilities-evidence-guide .dg-group-label { display:block; padding:4px 12px; text-transform:uppercase; font-size:10px; color:var(--dg-muted); font-weight:600; letter-spacing:.03em; }
+#facilities-evidence-guide .dg-navitem { display:block; padding:8px 12px; color:var(--dg-text); text-decoration:none; }
+#facilities-evidence-guide .dg-selected { border-left:2px solid var(--dg-brand); background:var(--dg-wash); color:var(--dg-link); padding-left:10px; }
+#facilities-evidence-guide .dg-content { min-width:0; flex:1; display:flex; flex-direction:column; }
+#facilities-evidence-guide .dg-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:12px; height:48px; flex-shrink:0; border-bottom:1px solid var(--dg-border); padding:0 12px; }
+#facilities-evidence-guide .dg-version { font-size:12px; border:1px solid var(--dg-border); border-radius:6px; padding:4px 9px; color:var(--dg-muted); }
+#facilities-evidence-guide .dg-version b { color:var(--dg-text); font-weight:500; }
+#facilities-evidence-guide button { font:inherit; color:inherit; cursor:inherit; }
+#facilities-evidence-guide .dg-iconbtn { border:0; background:none; padding:5px; display:inline-flex; align-items:center; border-radius:4px; color:var(--dg-muted); }
+#facilities-evidence-guide .dg-iconbtn:hover { background:var(--dg-wash); }
+#facilities-evidence-guide .dg-scroll { min-height:0; flex:1; overflow:auto; padding:24px; scroll-behavior:smooth; }
+#facilities-evidence-guide .dg-columns { display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:32px; align-items:start; }
+#facilities-evidence-guide .dg-article { min-width:0; }
+#facilities-evidence-guide h1 { font-size:24px; line-height:1.3; margin:0 0 12px; font-weight:600; }
+#facilities-evidence-guide h2 { font-size:18px; font-weight:600; margin:30px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--dg-rule); scroll-margin-top:12px; }
+#facilities-evidence-guide h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#facilities-evidence-guide p { margin:8px 0; }
+#facilities-evidence-guide .dg-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; color:var(--dg-muted); }
+#facilities-evidence-guide .dg-meta span { border:1px solid var(--dg-border); border-radius:5px; padding:1px 7px; font-size:11px; }
+#facilities-evidence-guide .dg-intro { color:var(--dg-muted); }
+#facilities-evidence-guide .dg-example { border-left:2px solid var(--dg-brand); padding-left:12px; margin:18px 0; }
+#facilities-evidence-guide .dg-example p { margin:4px 0; }
+#facilities-evidence-guide .dg-onpage { position:sticky; top:0; color:var(--dg-muted); font-size:12px; }
+#facilities-evidence-guide .dg-onpage > p { text-transform:uppercase; font-size:10px; letter-spacing:.03em; margin:5px 0 12px; }
+#facilities-evidence-guide .dg-onpage a { display:block; color:inherit; text-decoration:none; padding:6px 0 6px 12px; border-left:2px solid transparent; }
+#facilities-evidence-guide .dg-onpage a:hover,#facilities-evidence-guide .dg-onpage a[aria-current] { color:var(--dg-link); border-color:var(--dg-brand); }
+#facilities-evidence-guide .dg-onpage small { display:block; font-size:11px; margin:24px 0 0 12px; }
+#facilities-evidence-guide .dg-loop { margin:14px 0 22px; max-width:500px; }
+#facilities-evidence-guide .dg-loop video { width:100%; display:block; border:1px solid var(--dg-border); border-radius:6px; background:#171717; }
+#facilities-evidence-guide .dg-loop-control { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--dg-muted); font-size:11px; margin-top:5px; }
+#facilities-evidence-guide .dg-loop-control button { border:0; padding:3px 0; color:var(--dg-link); background:none; }
+#facilities-evidence-guide .dg-step { padding:17px 0 18px; border-bottom:1px solid var(--dg-rule); }
+#facilities-evidence-guide .dg-step:last-child { border-bottom:0; }
+#facilities-evidence-guide .dg-number { color:var(--dg-muted); display:inline-block; min-width:22px; font-variant-numeric:tabular-nums; }
+#facilities-evidence-guide .dg-step p { margin:4px 0 10px 22px; }
+#facilities-evidence-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
+#facilities-evidence-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
+#facilities-evidence-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#facilities-evidence-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
+#facilities-evidence-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
+#facilities-evidence-guide .dg-result p { margin:3px 0; }
+#facilities-evidence-guide code { display:inline-block; max-width:100%; box-sizing:border-box; overflow-wrap:anywhere; font:12px/1.6 ui-monospace,monospace; background:var(--dg-pane); padding:2px 5px; border:1px solid var(--dg-border); border-radius:4px; }
+#facilities-evidence-guide pre { margin:12px 0; padding:12px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#facilities-evidence-guide pre code { background:none; border:0; padding:0; }
+#facilities-evidence-guide .dg-config { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 18px; margin:14px 0; }
+#facilities-evidence-guide .dg-config dt { color:var(--dg-muted); }
+#facilities-evidence-guide .dg-config dd { margin:0; }
+#facilities-evidence-guide .dg-onpage .dg-subtoc { padding-left:24px; }
+#facilities-evidence-guide details { padding:12px 0; border-bottom:1px solid var(--dg-rule); }
+#facilities-evidence-guide summary { font-weight:500; cursor:inherit; }
+#facilities-evidence-guide details p { color:var(--dg-muted); }
+#facilities-evidence-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
+#facilities-evidence-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#facilities-evidence-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#facilities-evidence-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
+#facilities-evidence-guide .dg-app { position:relative; }
+#facilities-evidence-guide [hidden] { display:none !important; }
+#facilities-evidence-guide.dg-folded .dg-sidebar { display:none; }
+@media(max-width:1279px) { #facilities-evidence-guide .dg-columns { grid-template-columns:minmax(0,1fr); } #facilities-evidence-guide .dg-onpage { display:none; } }
+@media(max-width:600px) { #facilities-evidence-guide .dg-sidebar { display:none; } #facilities-evidence-guide .dg-scroll { padding:18px; } #facilities-evidence-guide .dg-head { padding:0 12px; } #facilities-evidence-guide .dg-head-icons { padding-right:0; gap:12px; } #facilities-evidence-guide .dg-review { display:none; } #facilities-evidence-guide .dg-shot { margin-left:0; } #facilities-evidence-guide .dg-step p { margin-left:0; } }
+@media(prefers-reduced-motion:reduce) { #facilities-evidence-guide .dg-scroll { scroll-behavior:auto; } }
+</style>
+<div id="facilities-evidence-guide" aria-label="Facilities user guide preview">
+ <div class="dg-app">
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Facilities guide preview</span><div class="dg-head-icons"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-right" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bell" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><button type="button" class="dg-iconbtn cursor-interaction" data-theme-toggle aria-label="Switch preview theme"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></button></div></header>
+  <div class="dg-main">
+   <aside class="dg-sidebar">
+    <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-close" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m16 15-3-3 3-3"></path></svg></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
+    <nav class="dg-docnav" aria-label="Documentation sections"><div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem" href="start-here-review.html">Start Here</a></div><div class="dg-group"><span class="dg-group-label">Set up your system</span><a class="dg-navitem" href="terminology-review.html">Terminology</a><a class="dg-navitem dg-selected" href="#dg-top" aria-current="page" title="Optional setup. Strongly recommended as you use OpenLDR.">Facilities</a><span class="dg-navitem" title="Optional setup. Strongly recommended as you use OpenLDR.">Test catalog</span><span class="dg-navitem" title="Optional setup. Strongly recommended as you use OpenLDR.">Patients</span><span class="dg-navitem">Forms</span><span class="dg-navitem">Workflows</span></div><div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><span class="dg-navitem">Activity</span></div><div class="dg-group"><span class="dg-group-label">Build and manage</span><span class="dg-navitem">Scheduled reports with workflows</span><span class="dg-navitem">Custom Queries</span><span class="dg-navitem">Report Designer</span></div><div class="dg-group"><span class="dg-group-label">Administration</span><span class="dg-navitem">Layouts</span><span class="dg-navitem">Users and Roles</span><span class="dg-navitem">Roles</span><span class="dg-navitem">Audit</span><span class="dg-navitem">Settings</span><span class="dg-navitem">Setup checks</span><span class="dg-navitem">Laboratory</span><span class="dg-navitem">Data exposure</span><span class="dg-navitem">Distributed Sync</span><span class="dg-navitem">Connectors</span><span class="dg-navitem">Connect to SQL Server and diagnose a connection</span><span class="dg-navitem">Import from OpenLDR v1</span><span class="dg-navitem">Marketplace</span><span class="dg-navitem">Plugin cards and side panels</span><span class="dg-navitem">Authentication providers</span><span class="dg-navitem">Environment Variables</span><span class="dg-navitem">Planned upgrades</span></div><div class="dg-group"><span class="dg-group-label">Personal settings</span><a class="dg-navitem" href="preferences-review.html">Your preferences</a></div><div class="dg-group"><span class="dg-group-label">More</span><span class="dg-navitem">Deployment &amp; Developer Docs</span></div></nav>
+   </aside>
+   <section class="dg-content">
+    <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-open" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m14 9 3 3-3 3"></path></svg></button><span class="dg-version">Version <b>0.1.8</b></span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></div>
+    <div class="dg-scroll" data-reading-pane>
+     <div class="dg-columns">
+      <article class="dg-article" id="dg-top">
+ <div class="dg-meta"><span>System setup</span><span>Browse or manage facilities</span><span>About 35 minutes</span></div>
+ <h1>Facilities</h1>
+ <p>Give the facilities in your data consistent names, codes and locations. Add individual facilities, import a register, then link the codes arriving from your data sources to the right facility.</p>
+ <p><strong>This setup is optional.</strong> OpenLDR can receive and process data before you configure Facilities. We strongly recommend setting it up as you use the system, so reports can identify the facilities behind their codes.</p>
+ <p><strong>Registry</strong> holds the facilities you add or import. <strong>Observed</strong> holds the codes received in lab data and shows which facility each code resolves to. Adding a facility and linking an observed code are separate tasks.</p>
+ <p>A <strong>register</strong> is a list maintained by an organisation, such as a national facility directory or your own organisation's list. <strong>System</strong> selects that register. Its URI and the <strong>Facility code</strong> identify the facility together.</p>
+ <p>Use your own register, facility details and files throughout this guide. The screenshots use fictional facilities to make the actions visible. No documentation sample data is required. <a href="#dg-practice">Optional practice files</a> are at the end.</p>
+ <p>Reading needs <strong>View facilities</strong>. Adding, editing, importing and linking need <strong>Manage facilities</strong>. Add and Edit also need one published form targeting Facilities. That form determines the fields and required markers you see.</p>
+
+ <h2 id="dg-register">Register the source of your facility list</h2>
+ <p>Do this once for a register you will use for manual entries or imports. If your register already appears under <strong>System</strong> or <strong>National system</strong>, use it and skip this task. Do not create another source for the same register.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open Facilities</h3><p>Select <strong>Facilities</strong> in the main menu on the left.</p><figure class="dg-shot dg-context-shot" data-shot-id="open-facilities"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Facilities is in the main menu on the left."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:0.0%;top:-54.666666666666664%"><img class="fc-background" data-evidence="open-facilities" alt="Facilities is in the main menu on the left."><img class="fc-sharp" data-evidence="open-facilities" alt="" aria-hidden="true" style="clip-path:inset(37.0% 81.953125% 58.5% 0.625%)"><span class="fc-ring" aria-hidden="true" style="left:0.625%;top:37.0%;width:17.421875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Facilities is in the main menu on the left.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Open Import facilities</h3><p>On <strong>Registry</strong>, open the dots at the right of the tab strip and select <strong>Import facilities</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="source-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the page dots menu at the right of the tab strip."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="source-actions" alt="Open the page dots menu at the right of the tab strip."><img class="fc-sharp" data-evidence="source-actions" alt="" aria-hidden="true" style="clip-path:inset(6.25% 1.25% 89.75% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:6.25%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Open the page dots menu at the right of the tab strip.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="source-import"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Import facilities opens the source registration and file import controls."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="source-import" alt="Import facilities opens the source registration and file import controls."><img class="fc-sharp" data-evidence="source-import" alt="" aria-hidden="true" style="clip-path:inset(15.375% 1.636962890625% 80.625% 85.68359375%)"><span class="fc-ring" aria-hidden="true" style="left:85.68359375%;top:15.375%;width:12.679443359375%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Import facilities opens the source registration and file import controls.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose Register a source</h3><p>Select <strong>Register a source</strong>. You can register it before choosing a file. If sources already exist, this action is in the import sheet's dots menu.</p><figure class="dg-shot dg-context-shot" data-shot-id="register-source-button"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Register a source is available before choosing a file."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="register-source-button" alt="Register a source is available before choosing a file."><img class="fc-sharp" data-evidence="register-source-button" alt="" aria-hidden="true" style="clip-path:inset(94.5% 1.875% 1.5% 87.67822265625%)"><span class="fc-ring" aria-hidden="true" style="left:87.67822265625%;top:94.5%;width:10.44677734375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Register a source is available before choosing a file.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="register-existing-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the import sheet dots menu when sources already exist."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.1770833333333333%"><img class="fc-background" data-evidence="register-existing-actions" alt="Open the import sheet dots menu when sources already exist."><img class="fc-sharp" data-evidence="register-existing-actions" alt="" aria-hidden="true" style="clip-path:inset(17.44140625% 1.875% 79.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:17.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Open the import sheet dots menu when sources already exist.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="register-existing-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Register a source is available for adding a different register."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="register-existing-menu" alt="Register a source is available for adding a different register."><img class="fc-sharp" data-evidence="register-existing-menu" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Register a source is available for adding a different register.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Enter the register's permanent URI</h3><p>In <strong>Canonical URI</strong>, use the identifier supplied by the organisation maintaining the register. For your own list, choose a stable URI once. The fictional example uses <code>urn:example:facilities:guide</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="register-url"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the permanent URI that identifies this register."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-94.40266927083333%;top:-65.64583333333334%"><img class="fc-background" data-evidence="register-url" alt="Use the permanent URI that identifies this register."><img class="fc-sharp" data-evidence="register-url" alt="" aria-hidden="true" style="clip-path:inset(41.1171875% 31.953125% 54.3828125% 40.255126953125%)"><span class="fc-ring" aria-hidden="true" style="left:40.255126953125%;top:41.1171875%;width:27.791748046874996%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Use the permanent URI that identifies this register.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Enter its display name</h3><p>In <strong>Display name</strong>, enter the name people should choose. The example uses <code>Example facility register</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="register-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The display name appears when you choose a register."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-94.40266927083333%;top:-81.64583333333333%"><img class="fc-background" data-evidence="register-name" alt="The display name appears when you choose a register."><img class="fc-sharp" data-evidence="register-name" alt="" aria-hidden="true" style="clip-path:inset(47.1171875% 31.953125% 48.3828125% 40.255126953125%)"><span class="fc-ring" aria-hidden="true" style="left:40.255126953125%;top:47.1171875%;width:27.791748046874996%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>The display name appears when you choose a register.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Enter a short code</h3><p>In <strong>Code</strong>, enter a short identifier for this register. The example uses <code>EXAMPLE</code>. Version, jurisdiction and contact are optional.</p><figure class="dg-shot dg-context-shot" data-shot-id="register-code"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use a short code for this register."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-94.40266927083333%;top:-97.64583333333333%"><img class="fc-background" data-evidence="register-code" alt="Use a short code for this register."><img class="fc-sharp" data-evidence="register-code" alt="" aria-hidden="true" style="clip-path:inset(53.11718749999999% 31.953125% 42.3828125% 40.255126953125%)"><span class="fc-ring" aria-hidden="true" style="left:40.255126953125%;top:53.11718749999999%;width:27.791748046874996%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Use a short code for this register.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">7.</span> Register the source</h3><p>Open this panel's dots menu and select <strong>Register</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="register-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The source registration actions are in its own dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-128.54166666666666%;top:-17.020833333333332%"><img class="fc-background" data-evidence="register-actions" alt="The source registration actions are in its own dots menu."><img class="fc-sharp" data-evidence="register-actions" alt="" aria-hidden="true" style="clip-path:inset(23.3828125% 31.953125% 73.1171875% 65.859375%)"><span class="fc-ring" aria-hidden="true" style="left:65.859375%;top:23.3828125%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">7</span></span></span></span></button><figcaption>The source registration actions are in its own dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="register-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Register saves the source without importing a file."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-114.79166666666667%;top:-30.0%"><img class="fc-background" data-evidence="register-save" alt="Register saves the source without importing a file."><img class="fc-sharp" data-evidence="register-save" alt="" aria-hidden="true" style="clip-path:inset(28.000000000000004% 32.34375% 68.0% 55.93749999999999%)"><span class="fc-ring" aria-hidden="true" style="left:55.93749999999999%;top:28.000000000000004%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">7</span></span></span></span></button><figcaption>Register saves the source without importing a file.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the new register is selected in the import sheet. Registering the source has not imported any facility rows.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="register-selected"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The registered source is now available for adding or importing facilities."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-65.17708333333333%"><img class="fc-background" data-evidence="register-selected" alt="The registered source is now available for adding or importing facilities."><img class="fc-sharp" data-evidence="register-selected" alt="" aria-hidden="true" style="clip-path:inset(40.94140625% 1.875% 54.55859374999999% 72.611083984375%)"><span class="fc-ring" aria-hidden="true" style="left:72.611083984375%;top:40.94140625%;width:25.513916015625%;height:4.5%"></span></span></span></button><figcaption>The registered source is now available for adding or importing facilities.</figcaption></figure>
+ <section class="dg-step"><h3><span class="dg-number">8.</span> Close the import sheet if you are adding by hand</h3><p>Select <strong>Close</strong> at the top right. To import a file instead, keep the sheet open and <a href="#dg-import">continue with the file import</a>.</p><figure class="dg-shot dg-context-shot" data-shot-id="close-import"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Close the import sheet if you want to add a facility manually."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="close-import" alt="Close the import sheet if you want to add a facility manually."><img class="fc-sharp" data-evidence="close-import" alt="" aria-hidden="true" style="clip-path:inset(2.0% 1.25% 95.0% 96.5625%)"><span class="fc-ring" aria-hidden="true" style="left:96.5625%;top:2.0%;width:2.1875%;height:3.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">8</span></span></span></span></button><figcaption>Close the import sheet if you want to add a facility manually.</figcaption></figure></section>
+
+ <h2 id="dg-add">Start a facility record</h2>
+ <p>Add a facility by hand when you have one site to enter. The following steps use the published form in this installation. Fill the required fields shown by your own form.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose Add facility</h3><p>On <strong>Registry</strong>, open the page dots menu and select <strong>Add facility</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The Registry dots menu contains Add facility."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="add-actions" alt="The Registry dots menu contains Add facility."><img class="fc-sharp" data-evidence="add-actions" alt="" aria-hidden="true" style="clip-path:inset(6.25% 1.25% 89.75% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:6.25%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>The Registry dots menu contains Add facility.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="add-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Add facility to open the published form."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="add-menu" alt="Choose Add facility to open the published form."><img class="fc-sharp" data-evidence="add-menu" alt="" aria-hidden="true" style="clip-path:inset(11.375% 1.636962890625% 84.625% 85.68359375%)"><span class="fc-ring" aria-hidden="true" style="left:85.68359375%;top:11.375%;width:12.679443359375%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Choose Add facility to open the published form.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose System</h3><p>Under <strong>System</strong>, select the registered source this facility belongs to. The name selects its canonical URI.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-system"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the register this facility belongs to."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-35.17708333333333%"><img class="fc-background" data-evidence="add-system" alt="Choose the register this facility belongs to."><img class="fc-sharp" data-evidence="add-system" alt="" aria-hidden="true" style="clip-path:inset(29.691406250000004% 1.953125% 65.80859375% 72.5%)"><span class="fc-ring" aria-hidden="true" style="left:72.5%;top:29.691406250000004%;width:25.546875000000004%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose the register this facility belongs to.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Enter Facility code</h3><p>Enter the exact code used by that register, including any leading zeros. The example uses <code>EXAMPLE-CLINIC-01</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-code"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Keep the exact facility code, including any leading zeros."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-38.84375%"><img class="fc-background" data-evidence="add-code" alt="Keep the exact facility code, including any leading zeros."><img class="fc-sharp" data-evidence="add-code" alt="" aria-hidden="true" style="clip-path:inset(31.06640625% 1.875% 64.43359375% 72.421875%)"><span class="fc-ring" aria-hidden="true" style="left:72.421875%;top:31.06640625%;width:25.703125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Keep the exact facility code, including any leading zeros.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Enter Name</h3><p>Enter the facility's readable name. The example uses <code>Example Clinic North</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Enter the facility name people should see."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-56.177083333333336%"><img class="fc-background" data-evidence="add-name" alt="Enter the facility name people should see."><img class="fc-sharp" data-evidence="add-name" alt="" aria-hidden="true" style="clip-path:inset(37.56640625% 1.875% 57.93359375% 72.421875%)"><span class="fc-ring" aria-hidden="true" style="left:72.421875%;top:37.56640625%;width:25.703125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Enter the facility name people should see.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Choose Country</h3><p>Search for the country, then select a result. Typing a search alone does not select the answer.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-country"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search Country, then select the matching result."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-90.17708333333333%"><img class="fc-background" data-evidence="add-country" alt="Search Country, then select the matching result."><img class="fc-sharp" data-evidence="add-country" alt="" aria-hidden="true" style="clip-path:inset(49.19140625% 1.953125% 44.05859375% 72.5%)"><span class="fc-ring" aria-hidden="true" style="left:72.5%;top:49.19140625%;width:25.546875000000004%;height:6.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Search Country, then select the matching result.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Enter Zone if your form requires it</h3><p>Enter the facility's actual zone. Suggestions come from locations already entered in this register. The screenshot uses <code>Example Zone</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-zone"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Complete required location fields. This form requires Zone."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-91.51041666666667%"><img class="fc-background" data-evidence="add-zone" alt="Complete required location fields. This form requires Zone."><img class="fc-sharp" data-evidence="add-zone" alt="" aria-hidden="true" style="clip-path:inset(50.81640625% 1.875% 44.68359375% 72.421875%)"><span class="fc-ring" aria-hidden="true" style="left:72.421875%;top:50.81640625%;width:25.703125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Complete required location fields. This form requires Zone.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">7.</span> Enter District and any other required location fields</h3><p>This form also requires <strong>District</strong>. Fill it with the facility's district. Complete Region or Council when you have those details.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-district"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge This form also requires District."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-126.17708333333333%"><img class="fc-background" data-evidence="add-district" alt="This form also requires District."><img class="fc-sharp" data-evidence="add-district" alt="" aria-hidden="true" style="clip-path:inset(63.81640625% 1.875% 31.68359375% 72.421875%)"><span class="fc-ring" aria-hidden="true" style="left:72.421875%;top:63.81640625%;width:25.703125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">7</span></span></span></span></button><figcaption>This form also requires District.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Continue below:</strong> the record is still in the open New facility sheet. It has not been saved.</p></div>
+
+ <h2 id="dg-save">Finish and save the facility</h2>
+ <p>Continue in the open <strong>New facility</strong> sheet. Choose the facility's status and type from the configured terminology, then save it.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose Status</h3><p>Search under <strong>Status</strong> and select the appropriate result. The example chooses <strong>Active</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-status"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select a status from the terminology results."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="add-status" alt="Select a status from the terminology results."><img class="fc-sharp" data-evidence="add-status" alt="" aria-hidden="true" style="clip-path:inset(81.94140625% 1.953125% 11.30859375% 72.5%)"><span class="fc-ring" aria-hidden="true" style="left:72.5%;top:81.94140625%;width:25.546875000000004%;height:6.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Select a status from the terminology results.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose Level</h3><p><strong>Level</strong> selects the facility type. Search and choose the type that fits this site. Use the types available in your installation.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-level"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the facility type in Level from the available results."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="add-level" alt="Choose the facility type in Level from the available results."><img class="fc-sharp" data-evidence="add-level" alt="" aria-hidden="true" style="clip-path:inset(88.69140625% 1.953125% 4.55859375% 72.5%)"><span class="fc-ring" aria-hidden="true" style="left:72.5%;top:88.69140625%;width:25.546875000000004%;height:6.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose the facility type in Level from the available results.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Open the sheet dots menu</h3><p>Select the dots below the sheet title, near the top right.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-sheet-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The form actions are in the sheet dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.1770833333333333%"><img class="fc-background" data-evidence="add-sheet-actions" alt="The form actions are in the sheet dots menu."><img class="fc-sharp" data-evidence="add-sheet-actions" alt="" aria-hidden="true" style="clip-path:inset(17.44140625% 1.875% 79.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:17.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>The form actions are in the sheet dots menu.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Choose Create</h3><p>Select <strong>Create</strong>. If the form marks missing fields, complete them and try again.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-create"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Create saves the facility after checking the form."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="add-create" alt="Create saves the facility after checking the form."><img class="fc-sharp" data-evidence="add-create" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Create saves the facility after checking the form.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the sheet closes and Registry reloads. The facility appears with its code, name and source. If an active filter hides it, search for its code.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="add-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The facility now appears in Registry."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-73.95833333333334%;top:-17.5%"><img class="fc-background" data-evidence="add-result" alt="The facility now appears in Registry."><img class="fc-sharp" data-evidence="add-result" alt="" aria-hidden="true" style="clip-path:inset(21.75% 42.1875% 71.125% 35.15625%)"><span class="fc-ring" aria-hidden="true" style="left:35.15625%;top:21.75%;width:22.65625%;height:7.124999999999999%"></span></span></span></button><figcaption>The facility now appears in Registry.</figcaption></figure>
+
+ <h2 id="dg-edit">Find and change a facility</h2>
+ <p>Use this when a name, location or another detail needs correcting. Searching first also helps you avoid adding a second record for an existing facility.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Search for the facility</h3><p>In <strong>Search facilities…</strong>, enter its name or code. The example searches for <code>EXAMPLE-CLINIC-01</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="search-input"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Find a facility by its name or code."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-28.333333333333332%;top:0.0%"><img class="fc-background" data-evidence="search-input" alt="Find a facility by its name or code."><img class="fc-sharp" data-evidence="search-input" alt="" aria-hidden="true" style="clip-path:inset(11.625% 61.25000000000001% 84.375% 20.0%)"><span class="fc-ring" aria-hidden="true" style="left:20.0%;top:11.625%;width:18.75%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Find a facility by its name or code.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Open its row</h3><p>Select the facility's row. Its stored details open in <strong>Edit facility</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-row"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select a Registry row to open its details."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-65.05208333333333%;top:-17.5%"><img class="fc-background" data-evidence="edit-row" alt="Select a Registry row to open its details."><img class="fc-sharp" data-evidence="edit-row" alt="" aria-hidden="true" style="clip-path:inset(21.75% 48.919677734375% 71.125% 35.208740234375%)"><span class="fc-ring" aria-hidden="true" style="left:35.208740234375%;top:21.75%;width:15.87158203125%;height:7.124999999999999%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Select a Registry row to open its details.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Change the details</h3><p>Edit the field you need to correct. Here, Name changes to <code>Example Clinic North Updated</code>.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Change the name or the other details you need to correct."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-95.51041666666666%"><img class="fc-background" data-evidence="edit-name" alt="Change the name or the other details you need to correct."><img class="fc-sharp" data-evidence="edit-name" alt="" aria-hidden="true" style="clip-path:inset(52.31640625% 1.875% 43.18359375% 72.421875%)"><span class="fc-ring" aria-hidden="true" style="left:72.421875%;top:52.31640625%;width:25.703125%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Change the name or the other details you need to correct.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Open the sheet dots menu</h3><p>Select the sheet's dots below the title.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the sheet dots menu when your changes are ready."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-1.1770833333333333%"><img class="fc-background" data-evidence="edit-actions" alt="Open the sheet dots menu when your changes are ready."><img class="fc-sharp" data-evidence="edit-actions" alt="" aria-hidden="true" style="clip-path:inset(17.44140625% 1.875% 79.05859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:17.44140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Open the sheet dots menu when your changes are ready.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Choose Save</h3><p>Select <strong>Save</strong>. Existing records use Save; new records use Create.</p><figure class="dg-shot dg-context-shot" data-shot-id="edit-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Existing facilities use Save."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-14.166666666666666%"><img class="fc-background" data-evidence="edit-save" alt="Existing facilities use Save."><img class="fc-sharp" data-evidence="edit-save" alt="" aria-hidden="true" style="clip-path:inset(22.0625% 2.265625% 73.9375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.0625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Existing facilities use Save.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Registry shows the changed details. The example keeps the same facility code. System and Facility code can also be corrected when necessary; do not delete the record just to correct its code.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="edit-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The updated name appears beside the same code."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-73.95833333333334%;top:-17.5%"><img class="fc-background" data-evidence="edit-result" alt="The updated name appears beside the same code."><img class="fc-sharp" data-evidence="edit-result" alt="" aria-hidden="true" style="clip-path:inset(21.75% 42.1875% 71.125% 35.15625%)"><span class="fc-ring" aria-hidden="true" style="left:35.15625%;top:21.75%;width:22.65625%;height:7.124999999999999%"></span></span></span></button><figcaption>The updated name appears beside the same code.</figcaption></figure>
+
+ <h2 id="dg-history">See what changed</h2>
+ <p>History shows recorded changes to one facility, with the time and actor. You can read it without changing the record.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open the row dots menu</h3><p>Select the dots at the right end of the facility's row.</p><figure class="dg-shot dg-context-shot" data-shot-id="history-row-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Each facility row has its own dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-17.5%"><img class="fc-background" data-evidence="history-row-actions" alt="Each facility row has its own dots menu."><img class="fc-sharp" data-evidence="history-row-actions" alt="" aria-hidden="true" style="clip-path:inset(23.3125% 1.25% 72.6875% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:23.3125%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Each facility row has its own dots menu.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose History</h3><p>Select <strong>History</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="history-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge History opens the saved changes for this facility."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-31.166666666666664%"><img class="fc-background" data-evidence="history-menu" alt="History opens the saved changes for this facility."><img class="fc-sharp" data-evidence="history-menu" alt="" aria-hidden="true" style="clip-path:inset(28.4375% 1.640625% 67.5625% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:28.4375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>History opens the saved changes for this facility.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Facility history lists changes newest first. The example shows the name change and the original creation.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="history-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge History shows the actor, time and field changes, newest first."><span class="fc-screenshot"><span class="fc-scene" style="width:238.3612662942272%;height:238.3612662942272%;left:-138.3612662942272%;top:-4.683426443202979%"><img class="fc-background" data-evidence="history-result" alt="History shows the actor, time and field changes, newest first."><img class="fc-sharp" data-evidence="history-result" alt="" aria-hidden="true" style="clip-path:inset(18.56640625% 1.875% 72.68359375% 60.07812500000001%)"><span class="fc-ring" aria-hidden="true" style="left:60.07812500000001%;top:18.56640625%;width:38.046875%;height:8.75%"></span></span></span></button><figcaption>History shows the actor, time and field changes, newest first.</figcaption></figure>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Close History</h3><p>Select <strong>Close</strong> at the top right to return to Registry.</p><figure class="dg-shot dg-context-shot" data-shot-id="history-close"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Close returns to Registry without changing the facility."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="history-close" alt="Close returns to Registry without changing the facility."><img class="fc-sharp" data-evidence="history-close" alt="" aria-hidden="true" style="clip-path:inset(2.0% 1.25% 95.0% 96.5625%)"><span class="fc-ring" aria-hidden="true" style="left:96.5625%;top:2.0%;width:2.1875%;height:3.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Close returns to Registry without changing the facility.</figcaption></figure></section>
+
+ <h2 id="dg-import">Choose your register file</h2>
+ <p>Use an import when you already have a list of facilities. Choose your own CSV, JSON Lines or Excel <code>.xlsx</code> file. An import needs a column for the facility code and a column for the name. Other fields can be mapped, supplied as fixed values, or kept as extra data.</p>
+ <p>Use the registered source that owns the codes in this file. Manual form requirements do not determine the import's required columns.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open Import facilities</h3><p>On Registry, open the page dots menu and select <strong>Import facilities</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Import starts from the Registry page dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="import-actions" alt="Import starts from the Registry page dots menu."><img class="fc-sharp" data-evidence="import-actions" alt="" aria-hidden="true" style="clip-path:inset(6.25% 1.25% 89.75% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:6.25%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Import starts from the Registry page dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="import-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Import facilities to open the three-step wizard."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="import-menu" alt="Choose Import facilities to open the three-step wizard."><img class="fc-sharp" data-evidence="import-menu" alt="" aria-hidden="true" style="clip-path:inset(15.375% 1.636962890625% 80.625% 85.68359375%)"><span class="fc-ring" aria-hidden="true" style="left:85.68359375%;top:15.375%;width:12.679443359375%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Choose Import facilities to open the three-step wizard.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose your file</h3><p>Select the File area and choose your prepared file. Its name appears under Source. The format follows the file you chose.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-file"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The selected file name appears in Source."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-16.97573656845754%"><img class="fc-background" data-evidence="import-file" alt="The selected file name appears in Source."><img class="fc-sharp" data-evidence="import-file" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 1.875% 64.18359375% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:24.56640625%;width:41.171875%;height:11.25%"><span class="fc-marker" style="left:auto;right:4px">2</span></span></span></span></button><figcaption>The selected file name appears in Source.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="import-format"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The format follows the chosen file. Check it before continuing."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-91.84375%"><img class="fc-background" data-evidence="import-format" alt="The format follows the chosen file. Check it before continuing."><img class="fc-sharp" data-evidence="import-format" alt="" aria-hidden="true" style="clip-path:inset(50.94140625% 1.875% 44.55859375% 72.611083984375%)"><span class="fc-ring" aria-hidden="true" style="left:72.611083984375%;top:50.94140625%;width:25.513916015625%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>The format follows the chosen file. Check it before continuing.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose National system</h3><p>Select the registered source for this file. If it is missing, <a href="#dg-register">register its source</a> first.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-register"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the registered source that owns these facility codes."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-164.2529296875%;top:-78.16666666666666%"><img class="fc-background" data-evidence="import-register" alt="Choose the registered source that owns these facility codes."><img class="fc-sharp" data-evidence="import-register" alt="" aria-hidden="true" style="clip-path:inset(46.0625% 12.318115234375% 49.9375% 73.0078125%)"><span class="fc-ring" aria-hidden="true" style="left:73.0078125%;top:46.0625%;width:14.674072265624998%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose the registered source that owns these facility codes.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Decide whether this is a complete release</h3><p>Tick <strong>This file is a complete release</strong> only when it contains the whole register. Leave it unticked for a partial file. A complete release enables checking which existing facilities are absent from it.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-complete-release"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Leave complete release unticked when this is only part of a register."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-113.34375000000001%"><img class="fc-background" data-evidence="import-complete-release" alt="Leave complete release unticked when this is only part of a register."><img class="fc-sharp" data-evidence="import-complete-release" alt="" aria-hidden="true" style="clip-path:inset(56.94140625000001% 1.875% 34.43359375% 72.611083984375%)"><span class="fc-ring" aria-hidden="true" style="left:72.611083984375%;top:56.94140625000001%;width:25.513916015625%;height:8.625%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Leave complete release unticked when this is only part of a register.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Continue to Mapping</h3><p>Select <strong>Continue</strong>. This uploads and stores the file, then opens Mapping. No facility rows have been imported yet.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-continue"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Continue stores the file and opens Mapping. It does not import facility rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="import-continue" alt="Continue stores the file and opens Mapping. It does not import facility rows."><img class="fc-sharp" data-evidence="import-continue" alt="" aria-hidden="true" style="clip-path:inset(94.5% 1.875% 1.5% 91.871337890625%)"><span class="fc-ring" aria-hidden="true" style="left:91.871337890625%;top:94.5%;width:6.253662109374999%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Continue stores the file and opens Mapping. It does not import facility rows.</figcaption></figure></section>
+
+ <h2 id="dg-map">Map the columns and fixed values</h2>
+ <p>Mapping connects your file's headings to OpenLDR's fields. The suggested map is a starting point. Check the code and name columns, then decide how to handle the other columns.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Check the required columns</h3><p>The column carrying your facility code must map to <code>national_code</code>. The readable name must map to <code>name</code>. Open the list beside a heading to correct its target.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-code"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check that the file column carrying the facility code maps to national_code."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-161.04817708333334%;top:-21.510416666666668%"><img class="fc-background" data-evidence="map-code" alt="Check that the file column carrying the facility code maps to national_code."><img class="fc-sharp" data-evidence="map-code" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 8.125% 70.93359375% 66.4111328125%)"><span class="fc-ring" aria-hidden="true" style="left:66.4111328125%;top:24.56640625%;width:25.4638671875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Check that the file column carrying the facility code maps to national_code.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="map-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check that the facility name column maps to name."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-161.04817708333334%;top:-37.51041666666667%"><img class="fc-background" data-evidence="map-name" alt="Check that the facility name column maps to name."><img class="fc-sharp" data-evidence="map-name" alt="" aria-hidden="true" style="clip-path:inset(30.56640625% 8.125% 64.93359375% 66.4111328125%)"><span class="fc-ring" aria-hidden="true" style="left:66.4111328125%;top:30.56640625%;width:25.4638671875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Check that the facility name column maps to name.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Correct other column targets</h3><p>Choose the appropriate field beside each heading. Here, <strong>Operating Status</strong> must map to <code>status</code>, rather than remaining extra data.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-status-option"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose status for the column holding operating status."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-144.53450520833334%;top:-138.83333333333334%"><img class="fc-background" data-evidence="map-status-option" alt="Choose status for the column holding operating status."><img class="fc-sharp" data-evidence="map-status-option" alt="" aria-hidden="true" style="clip-path:inset(68.8125% 20.89599609375% 27.187499999999996% 66.796875%)"><span class="fc-ring" aria-hidden="true" style="left:66.796875%;top:68.8125%;width:12.30712890625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose status for the column holding operating status.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Keep additional columns when needed</h3><p>For a column that does not fill a standard field, open that row's dots menu and select <strong>Keep as extra</strong>. This example keeps Notes.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-extra-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the Notes row dots menu when you want to retain this extra column."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-131.16666666666669%"><img class="fc-background" data-evidence="map-extra-actions" alt="Use the Notes row dots menu when you want to retain this extra column."><img class="fc-sharp" data-evidence="map-extra-actions" alt="" aria-hidden="true" style="clip-path:inset(65.9375% 2.265625% 30.062499999999996% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:65.9375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Use the Notes row dots menu when you want to retain this extra column.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="map-extra-save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Keep as extra explicitly retains the source column."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-131.16666666666669%"><img class="fc-background" data-evidence="map-extra-save" alt="Keep as extra explicitly retains the source column."><img class="fc-sharp" data-evidence="map-extra-save" alt="" aria-hidden="true" style="clip-path:inset(65.9375% 2.265625% 30.062499999999996% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:65.9375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Keep as extra explicitly retains the source column.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Supply fixed values for missing columns</h3><p>If every facility shares a value absent from the file, enter it under <strong>Fixed values</strong>. Here, Country is selected from its terminology list. Every row receives that country.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-fixed-country"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge A fixed Country value fills that field for every row when the file has no country column."><span class="fc-screenshot"><span class="fc-scene" style="width:258.49610299454105%;height:258.49610299454105%;left:-158.49610299454105%;top:-116.25540374238743%"><img class="fc-background" data-evidence="map-fixed-country" alt="A fixed Country value fills that field for every row when the file has no country column."><img class="fc-sharp" data-evidence="map-fixed-country" alt="" aria-hidden="true" style="clip-path:inset(60.94140625% 1.953125% 32.30859375% 63.26782226562499%)"><span class="fc-ring" aria-hidden="true" style="left:63.26782226562499%;top:60.94140625%;width:34.779052734375%;height:6.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>A fixed Country value fills that field for every row when the file has no country column.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Decide how to handle changes after the preview</h3><p>Under <strong>Rows changed since this preview</strong>, choose whether to skip those rows or overwrite them with the file. The default keeps those registry rows untouched.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-conflict-policy"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Decide what to do if a row changes after this preview. The default keeps that row untouched."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="map-conflict-policy" alt="Decide what to do if a row changes after this preview. The default keeps that row untouched."><img class="fc-sharp" data-evidence="map-conflict-policy" alt="" aria-hidden="true" style="clip-path:inset(88.31640625% 1.875% 7.18359375% 74.375%)"><span class="fc-ring" aria-hidden="true" style="left:74.375%;top:88.31640625%;width:23.75%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Decide what to do if a row changes after this preview. The default keeps that row untouched.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Validate the file</h3><p>Select <strong>Validate all</strong>. The file is checked in the background, then the wizard opens Review. Fix any missing required column mapping before continuing.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-validate"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Validate all checks the stored file with the current mapping."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="map-validate" alt="Validate all checks the stored file with the current mapping."><img class="fc-sharp" data-evidence="map-validate" alt="" aria-hidden="true" style="clip-path:inset(94.5% 1.875% 1.5% 90.980224609375%)"><span class="fc-ring" aria-hidden="true" style="left:90.980224609375%;top:94.5%;width:7.144775390624999%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Validate all checks the stored file with the current mapping.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Review describes what the current file and mapping would do. If it lists values with no canonical mapping, decide those values as shown below.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="review-unmapped"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Review reports values that did not match the configured vocabulary."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-121.8370883882149%"><img class="fc-background" data-evidence="review-unmapped" alt="Review reports values that did not match the configured vocabulary."><img class="fc-sharp" data-evidence="review-unmapped" alt="" aria-hidden="true" style="clip-path:inset(70.31640625% 1.875% 8.93359375% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:70.31640625%;width:41.171875%;height:20.75%"></span></span></span></button><figcaption>Review reports values that did not match the configured vocabulary.</figcaption></figure>
+
+ <h2 id="dg-values">Decide unrecognised values</h2>
+ <p>A file can use different words from your configured terminology. Map those words to the intended values. The example file uses Operating and Closed for status.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Return to Mapping</h3><p>In Review, select <strong>Map these values</strong>. The choices appear below their file column on Mapping.</p><figure class="dg-shot dg-context-shot" data-shot-id="review-map-values"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Map these values returns to Mapping so you can decide the unmatched values."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-116.88151041666666%;top:-166.66666666666669%"><img class="fc-background" data-evidence="review-map-values" alt="Map these values returns to Mapping so you can decide the unmatched values."><img class="fc-sharp" data-evidence="review-map-values" alt="" aria-hidden="true" style="clip-path:inset(86.44140625% 32.8076171875% 10.05859375% 57.96875%)"><span class="fc-ring" aria-hidden="true" style="left:57.96875%;top:86.44140625%;width:9.2236328125%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Map these values returns to Mapping so you can decide the unmatched values.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose the meaning of Operating</h3><p>For this example, select <strong>Active</strong> for Operating. For your file, choose the value that has the same meaning.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-operating"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Map Operating from the file to the configured Active status."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-133.22916666666666%;top:-128.5%"><img class="fc-background" data-evidence="map-operating" alt="Map Operating from the file to the configured Active status."><img class="fc-sharp" data-evidence="map-operating" alt="" aria-hidden="true" style="clip-path:inset(64.9375% 26.6796875% 31.0625% 64.1015625%)"><span class="fc-ring" aria-hidden="true" style="left:64.1015625%;top:64.9375%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Map Operating from the file to the configured Active status.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose the meaning of Closed</h3><p>For this example, select <strong>Inactive</strong> for Closed. Do not map different meanings together just to remove a warning.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-closed"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Map Closed from the file to the configured Inactive status."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-133.22916666666666%;top:-152.5%"><img class="fc-background" data-evidence="map-closed" alt="Map Closed from the file to the configured Inactive status."><img class="fc-sharp" data-evidence="map-closed" alt="" aria-hidden="true" style="clip-path:inset(73.9375% 26.6796875% 22.0625% 64.1015625%)"><span class="fc-ring" aria-hidden="true" style="left:64.1015625%;top:73.9375%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Map Closed from the file to the configured Inactive status.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Check again</h3><p>Select <strong>Validate all</strong>. The value decisions are saved for this register and the file is checked again.</p><figure class="dg-shot dg-context-shot" data-shot-id="map-revalidate"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Validate all saves your value decisions and checks the file again."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="map-revalidate" alt="Validate all saves your value decisions and checks the file again."><img class="fc-sharp" data-evidence="map-revalidate" alt="" aria-hidden="true" style="clip-path:inset(94.5% 1.875% 1.5% 90.980224609375%)"><span class="fc-ring" aria-hidden="true" style="left:90.980224609375%;top:94.5%;width:7.144775390624999%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Validate all saves your value decisions and checks the file again.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Review reflects the new decisions. In this example, the unmapped-status warning disappears.</p></div>
+
+ <h2 id="dg-confirm">Review and apply the import</h2>
+ <p>Read the planned changes before writing them. A new file may create rows, change existing rows or match rows already in the registry. Counts depend on your file and current register.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Read the summary</h3><p>Check the new, changed, unchanged and skipped counts, plus any warnings. If something is wrong, return to Mapping and validate again. Review reports the decisions; it does not edit them.</p><figure class="dg-shot dg-context-shot" data-shot-id="review-summary"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read the planned new, changed, unchanged and skipped row counts before importing."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-84.08145580589255%"><img class="fc-background" data-evidence="review-summary" alt="Read the planned new, changed, unchanged and skipped row counts before importing."><img class="fc-sharp" data-evidence="review-summary" alt="" aria-hidden="true" style="clip-path:inset(52.06640625% 1.875% 31.18359375% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:52.06640625%;width:41.171875%;height:16.75%"><span class="fc-marker" style="left:auto;right:4px">1</span></span></span></span></button><figcaption>Read the planned new, changed, unchanged and skipped row counts before importing.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the reviewed import</h3><p>Select <strong>Confirm import</strong>. Wait for the completion panel.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-confirm"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Confirm import applies the reviewed changes."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="import-confirm" alt="Confirm import applies the reviewed changes."><img class="fc-sharp" data-evidence="import-confirm" alt="" aria-hidden="true" style="clip-path:inset(94.5% 1.875% 1.5% 89.078369140625%)"><span class="fc-ring" aria-hidden="true" style="left:89.078369140625%;top:94.5%;width:9.046630859375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Confirm import applies the reviewed changes.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Import complete reports what was created, updated, unchanged or skipped.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="import-complete"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The completion panel reports what was created, updated or skipped."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-18.36221837088388%"><img class="fc-background" data-evidence="import-complete" alt="The completion panel reports what was created, updated or skipped."><img class="fc-sharp" data-evidence="import-complete" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 1.875% 62.93359375000001% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:24.56640625%;width:41.171875%;height:12.5%"></span></span></span></button><figcaption>The completion panel reports what was created, updated or skipped.</figcaption></figure>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Return to Registry</h3><p>Select <strong>Close</strong> at the top right. The registry reloads with the imported facilities.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-close"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Close the completed import to return to Registry."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="import-close" alt="Close the completed import to return to Registry."><img class="fc-sharp" data-evidence="import-close" alt="" aria-hidden="true" style="clip-path:inset(2.0% 1.25% 95.0% 96.5625%)"><span class="fc-ring" aria-hidden="true" style="left:96.5625%;top:2.0%;width:2.1875%;height:3.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Close the completed import to return to Registry.</figcaption></figure></section><figure class="dg-shot dg-context-shot" data-shot-id="import-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The imported facilities appear alongside the facility you entered by hand."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-73.95833333333334%;top:-17.5%"><img class="fc-background" data-evidence="import-result" alt="The imported facilities appear alongside the facility you entered by hand."><img class="fc-sharp" data-evidence="import-result" alt="" aria-hidden="true" style="clip-path:inset(21.75% 42.1875% 71.125% 35.15625%)"><span class="fc-ring" aria-hidden="true" style="left:35.15625%;top:21.75%;width:22.65625%;height:7.124999999999999%"></span></span></span></button><figcaption>The imported facilities appear alongside the facility you entered by hand.</figcaption></figure>
+
+ <h2 id="dg-refresh">Refresh an existing register</h2>
+ <p>When a register's next file arrives, repeat the same import with the same National system. The register and facility code identify existing rows. You do not need to create those facilities again by hand.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Reuse the registered source</h3><p>Choose the same register in the new import and repeat the Source and Mapping steps above. Check the columns again.</p><figure class="dg-shot dg-context-shot" data-shot-id="import-register"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the registered source that owns these facility codes."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-164.2529296875%;top:-78.16666666666666%"><img class="fc-background" data-evidence="import-register" alt="Choose the registered source that owns these facility codes."><img class="fc-sharp" data-evidence="import-register" alt="" aria-hidden="true" style="clip-path:inset(46.0625% 12.318115234375% 49.9375% 73.0078125%)"><span class="fc-ring" aria-hidden="true" style="left:73.0078125%;top:46.0625%;width:14.674072265624998%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Choose the registered source that owns these facility codes.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Read which rows would change</h3><p>After validation, review the counts. Repeating the identical example file finds two unchanged rows and creates none.</p><figure class="dg-shot dg-context-shot" data-shot-id="reimport-summary"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The same register and codes are recognised on a repeat import. Unchanged rows are reported."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-56.90641247833622%"><img class="fc-background" data-evidence="reimport-summary" alt="The same register and codes are recognised on a repeat import. Unchanged rows are reported."><img class="fc-sharp" data-evidence="reimport-summary" alt="" aria-hidden="true" style="clip-path:inset(39.81640625% 1.875% 43.43359375% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:39.81640625%;width:41.171875%;height:16.75%"><span class="fc-marker" style="left:auto;right:4px">2</span></span></span></span></button><figcaption>The same register and codes are recognised on a repeat import. Unchanged rows are reported.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Apply the reviewed changes</h3><p>Select <strong>Confirm import</strong> when the summary matches your intention.</p><figure class="dg-shot dg-context-shot" data-shot-id="reimport-confirm"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Confirm import applies only the changes shown by the review."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="reimport-confirm" alt="Confirm import applies only the changes shown by the review."><img class="fc-sharp" data-evidence="reimport-confirm" alt="" aria-hidden="true" style="clip-path:inset(94.5% 1.875% 1.5% 89.078369140625%)"><span class="fc-ring" aria-hidden="true" style="left:89.078369140625%;top:94.5%;width:9.046630859375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Confirm import applies only the changes shown by the review.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the repeated file reports unchanged rows instead of creating duplicates. A changed file reports its actual differences.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="reimport-complete"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge A repeat import reports unchanged rows instead of creating duplicates."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-18.36221837088388%"><img class="fc-background" data-evidence="reimport-complete" alt="A repeat import reports unchanged rows instead of creating duplicates."><img class="fc-sharp" data-evidence="reimport-complete" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 1.875% 62.93359375000001% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:24.56640625%;width:41.171875%;height:12.5%"></span></span></span></button><figcaption>A repeat import reports unchanged rows instead of creating duplicates.</figcaption></figure>
+
+ <h2 id="dg-observed">Link received codes that match the register</h2>
+ <p>Do this after lab data has arrived. Observed lists the facility codes received with that data. If it is empty, you can still build Registry now and return after your normal data feed arrives.</p>
+ <p>Exact-code matching links an observed code to the facility with the same code in the register you choose. Existing mappings are kept.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open Observed</h3><p>Select <strong>Observed</strong> beside Registry.</p><figure class="dg-shot dg-context-shot" data-shot-id="observed-tab"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Observed shows facility codes received in lab data."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-28.689778645833336%;top:0.0%"><img class="fc-background" data-evidence="observed-tab" alt="Observed shows facility codes received in lab data."><img class="fc-sharp" data-evidence="observed-tab" alt="" aria-hidden="true" style="clip-path:inset(6.25% 67.1826171875% 89.75% 26.199951171875004%)"><span class="fc-ring" aria-hidden="true" style="left:26.199951171875004%;top:6.25%;width:6.617431640625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Observed shows facility codes received in lab data.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose Link matching codes</h3><p>Open the Observed page dots menu and select <strong>Link matching codes</strong>.</p><figure class="dg-shot dg-context-shot" data-shot-id="observed-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The Observed tab has its own page dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="observed-actions" alt="The Observed tab has its own page dots menu."><img class="fc-sharp" data-evidence="observed-actions" alt="" aria-hidden="true" style="clip-path:inset(6.25% 1.25% 89.75% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:6.25%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>The Observed tab has its own page dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="matching-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Link matching codes previews exact-code matches in a chosen register."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-7.000000000000001%"><img class="fc-background" data-evidence="matching-menu" alt="Link matching codes previews exact-code matches in a chosen register."><img class="fc-sharp" data-evidence="matching-menu" alt="" aria-hidden="true" style="clip-path:inset(19.375% 1.649169921875% 76.625% 84.39453125%)"><span class="fc-ring" aria-hidden="true" style="left:84.39453125%;top:19.375%;width:13.956298828125%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Link matching codes previews exact-code matches in a chosen register.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose the register</h3><p>Select the register whose codes you want to match.</p><figure class="dg-shot dg-context-shot" data-shot-id="matching-register"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the register to check against the observed codes."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.70084635416666%;top:-41.16666666666667%"><img class="fc-background" data-evidence="matching-register" alt="Choose the register to check against the observed codes."><img class="fc-sharp" data-evidence="matching-register" alt="" aria-hidden="true" style="clip-path:inset(32.1875% 22.650146484375% 63.81250000000001% 62.67578124999999%)"><span class="fc-ring" aria-hidden="true" style="left:62.67578124999999%;top:32.1875%;width:14.674072265624998%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose the register to check against the observed codes.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Read the proposed matches</h3><p>Check the counts and facility names. This example has three codes to link and one with no match. Your counts come from your own data.</p><figure class="dg-shot dg-context-shot" data-shot-id="matching-preview"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check which codes would link, which already link and which have no match."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-134.13899739583331%;top:-7.177083333333334%"><img class="fc-background" data-evidence="matching-preview" alt="Check which codes would link, which already link and which have no match."><img class="fc-sharp" data-evidence="matching-preview" alt="" aria-hidden="true" style="clip-path:inset(20.19140625% 18.848876953125% 77.30859375% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:20.19140625%;width:24.197998046875%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Check which codes would link, which already link and which have no match.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Open Link actions</h3><p>Select the dots at the top right of this sheet.</p><figure class="dg-shot dg-context-shot" data-shot-id="matching-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open the Link actions dots menu after reviewing the preview."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-7.177083333333334%"><img class="fc-background" data-evidence="matching-actions" alt="Open the Link actions dots menu after reviewing the preview."><img class="fc-sharp" data-evidence="matching-actions" alt="" aria-hidden="true" style="clip-path:inset(19.44140625% 1.875% 76.55859375% 95.625%)"><span class="fc-ring" aria-hidden="true" style="left:95.625%;top:19.44140625%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Open the Link actions dots menu after reviewing the preview.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Apply the matches</h3><p>Select <strong>Link N codes</strong>, where N is the number in your preview. The example shows Link 3 codes.</p><figure class="dg-shot dg-context-shot" data-shot-id="matching-apply"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Link 3 codes applies only the matches in this preview."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-20.833333333333336%"><img class="fc-background" data-evidence="matching-apply" alt="Link 3 codes applies only the matches in this preview."><img class="fc-sharp" data-evidence="matching-apply" alt="" aria-hidden="true" style="clip-path:inset(24.5625% 2.265625% 71.4375% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:24.5625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Link 3 codes applies only the matches in this preview.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the matched codes show the corresponding Registry facility under Resolves to. Report facilities may show Updating while the report lookup is rebuilt, then Current.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="matching-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The exact-code matches now resolve to their Registry facilities."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-126.25%;top:-1.1666666666666667%"><img class="fc-background" data-evidence="matching-result" alt="The exact-code matches now resolve to their Registry facilities."><img class="fc-sharp" data-evidence="matching-result" alt="" aria-hidden="true" style="clip-path:inset(15.625% 17.5% 77.25% 49.6875%)"><span class="fc-ring" aria-hidden="true" style="left:49.6875%;top:15.625%;width:32.8125%;height:7.124999999999999%"></span></span></span></button><figcaption>The exact-code matches now resolve to their Registry facilities.</figcaption></figure>
+
+ <h2 id="dg-different">Link a code that is different in the source</h2>
+ <p>Use this when a source uses a different code for the same physical facility. Choose the Registry facility it really represents. The example maps EXTERNAL-CLINIC to the existing north clinic.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose Map on the observed row</h3><p>Open that row's dots menu and select <strong>Map</strong>. A mapped row offers Edit mapping instead.</p><figure class="dg-shot dg-context-shot" data-shot-id="mapping-row-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge For a different code, use that observed row&#x27;s dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-39.166666666666664%"><img class="fc-background" data-evidence="mapping-row-actions" alt="For a different code, use that observed row&#x27;s dots menu."><img class="fc-sharp" data-evidence="mapping-row-actions" alt="" aria-hidden="true" style="clip-path:inset(31.4375% 1.25% 64.5625% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:31.4375%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>For a different code, use that observed row&#x27;s dots menu.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="mapping-menu"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Map code lets you choose the same facility when the source uses a different code."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-52.83333333333333%"><img class="fc-background" data-evidence="mapping-menu" alt="Map code lets you choose the same facility when the source uses a different code."><img class="fc-sharp" data-evidence="mapping-menu" alt="" aria-hidden="true" style="clip-path:inset(36.5625% 1.640625% 59.4375% 86.640625%)"><span class="fc-ring" aria-hidden="true" style="left:86.640625%;top:36.5625%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Map code lets you choose the same facility when the source uses a different code.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Search for the destination facility</h3><p>In Target, use <strong>Search terms</strong> to find the facility by its name or code. System is fixed to FACILITY-REGISTRY in this flow.</p><figure class="dg-shot dg-context-shot" data-shot-id="mapping-search"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Search for the Registry facility that this observed code represents."><span class="fc-screenshot"><span class="fc-scene" style="width:249.51267056530213%;height:249.51267056530213%;left:-149.51267056530216%;top:-109.85380116959065%"><img class="fc-background" data-evidence="mapping-search" alt="Search for the Registry facility that this observed code represents."><img class="fc-sharp" data-evidence="mapping-search" alt="" aria-hidden="true" style="clip-path:inset(61.81640625% 1.875% 33.68359375% 61.953125%)"><span class="fc-ring" aria-hidden="true" style="left:61.953125%;top:61.81640625%;width:36.171875%;height:4.5%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Search for the Registry facility that this observed code represents.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Select the matching facility</h3><p>Choose the correct facility from the results.</p><figure class="dg-shot dg-context-shot" data-shot-id="mapping-target"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the matching facility from the search results."><span class="fc-screenshot"><span class="fc-scene" style="width:250.48923679060664%;height:250.48923679060664%;left:-150.48923679060667%;top:-123.31702544031312%"><img class="fc-background" data-evidence="mapping-target" alt="Choose the matching facility from the search results."><img class="fc-sharp" data-evidence="mapping-target" alt="" aria-hidden="true" style="clip-path:inset(66.94140625% 1.953125% 28.55859375% 62.03125000000001%)"><span class="fc-ring" aria-hidden="true" style="left:62.03125000000001%;top:66.94140625%;width:36.015625%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose the matching facility from the search results.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Check the map type</h3><p>Keep <strong>Same as</strong> when both codes mean the same facility. A broader or narrower relationship is not an identity match.</p><figure class="dg-shot dg-context-shot" data-shot-id="mapping-type"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Same as means the observed code identifies the same facility."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-25.510416666666668%"><img class="fc-background" data-evidence="mapping-type" alt="Same as means the observed code identifies the same facility."><img class="fc-sharp" data-evidence="mapping-type" alt="" aria-hidden="true" style="clip-path:inset(26.06640625% 1.875% 69.43359375% 69.2236328125%)"><span class="fc-ring" aria-hidden="true" style="left:69.2236328125%;top:26.06640625%;width:28.9013671875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Same as means the observed code identifies the same facility.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Open the mapping dots menu</h3><p>Select the dots at the top right of the mapping sheet.</p><figure class="dg-shot dg-context-shot" data-shot-id="mapping-sheet-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Mapping actions are in the sheet dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-3.177083333333333%"><img class="fc-background" data-evidence="mapping-sheet-actions" alt="Mapping actions are in the sheet dots menu."><img class="fc-sharp" data-evidence="mapping-sheet-actions" alt="" aria-hidden="true" style="clip-path:inset(18.19140625% 1.875% 78.30859375% 95.9375%)"><span class="fc-ring" aria-hidden="true" style="left:95.9375%;top:18.19140625%;width:2.1875%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Mapping actions are in the sheet dots menu.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Choose Create</h3><p>Select <strong>Create</strong> for the new mapping. An existing mapping uses Save.</p><figure class="dg-shot dg-context-shot" data-shot-id="mapping-create"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Create saves this observed-code mapping."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-16.166666666666664%"><img class="fc-background" data-evidence="mapping-create" alt="Create saves this observed-code mapping."><img class="fc-sharp" data-evidence="mapping-create" alt="" aria-hidden="true" style="clip-path:inset(22.8125% 2.265625% 73.1875% 86.015625%)"><span class="fc-ring" aria-hidden="true" style="left:86.015625%;top:22.8125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">6</span></span></span></span></button><figcaption>Create saves this observed-code mapping.</figcaption></figure></section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Resolves to shows the chosen facility beside the source's different code.</p></div><figure class="dg-shot dg-context-shot" data-shot-id="mapping-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The source code now resolves to the selected Registry facility."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-126.25%;top:-39.166666666666664%"><img class="fc-background" data-evidence="mapping-result" alt="The source code now resolves to the selected Registry facility."><img class="fc-sharp" data-evidence="mapping-result" alt="" aria-hidden="true" style="clip-path:inset(29.875% 17.5% 63.0% 49.6875%)"><span class="fc-ring" aria-hidden="true" style="left:49.6875%;top:29.875%;width:32.8125%;height:7.124999999999999%"></span></span></span></button><figcaption>The source code now resolves to the selected Registry facility.</figcaption></figure>
+
+ <h2 id="dg-phone">Use Facilities on a phone</h2>
+ <p>The same Registry and Observed tasks are available on a phone. The header wraps to leave room for the report status.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose Registry</h3><p>Select <strong>Registry</strong> at the top to work with the facility list.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-registry"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Registry and Observed remain at the top on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-registry" alt="Registry and Observed remain at the top on a phone."><img class="fc-sharp" data-evidence="phone-registry" alt="" aria-hidden="true" style="clip-path:inset(6.0344827586206895% 75.6375% 89.77832512315271% 4.266666666666667%)"><span class="fc-ring" aria-hidden="true" style="left:4.266666666666667%;top:6.0344827586206895%;width:20.09583333333333%;height:4.1871921182266005%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Registry and Observed remain at the top on a phone.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose Observed</h3><p>Select <strong>Observed</strong> to work with received codes.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-observed"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use Observed on a phone to see received facility codes."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-observed" alt="Use Observed on a phone to see received facility codes."><img class="fc-sharp" data-evidence="phone-observed" alt="" aria-hidden="true" style="clip-path:inset(6.0344827586206895% 51.983333333333334% 89.77832512315271% 25.42916666666667%)"><span class="fc-ring" aria-hidden="true" style="left:25.42916666666667%;top:6.0344827586206895%;width:22.5875%;height:4.1871921182266005%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Use Observed on a phone to see received facility codes.</figcaption></figure></section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Open that tab's dots menu</h3><p>Select the dots at the right of the tab strip. The available actions follow the selected tab. Scroll a table horizontally if its remaining columns are off screen.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The same actions are available in the tab strip dots menu."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-22.96%"><img class="fc-background" data-evidence="phone-actions" alt="The same actions are available in the tab strip dots menu."><img class="fc-sharp" data-evidence="phone-actions" alt="" aria-hidden="true" style="clip-path:inset(19.088669950738915% 5.629166666666666% 76.9704433497537% 46.733333333333334%)"><span class="fc-ring" aria-hidden="true" style="left:46.733333333333334%;top:19.088669950738915%;width:47.6375%;height:3.9408866995073892%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>The same actions are available in the tab strip dots menu.</figcaption></figure></section>
+
+ <h2 id="dg-practice">Optional practice with fictional data</h2>
+ <p>You can complete every task above using your own data. These files are only for practice in a test installation:</p>
+ <ul><li><a href="facilities-evidence/example-facilities.csv" download>Download the two-facility CSV</a> used in the import screenshots.</li><li><a href="facilities-evidence/example-observed-data.json" download>Download the seven-resource lab-data bundle</a> used to demonstrate received facility codes. It contains a fictional patient, three requests and three reports.</li></ul>
+ <p>For the same three exact-code matches shown above, also add <code>EXAMPLE-CLINIC-01</code> using the manual-entry task. Use the Example facility register for these fictional records. With only the two-row CSV, there are fewer exact-code matches; the link preview explains which codes have no match.</p>
+ <p>Import the CSV through the browser using the instructions above. To load the optional lab-data bundle, first read <a href="start-here-review.html">Start here</a> for installed and development CLI instructions. Put the downloaded JSON in the installation's <code>data</code> folder.</p>
+ <p>Installed Linux or macOS example:</p><pre><code>cd ~/Downloads/openldr_ce
+./openldr ingest data/example-observed-data.json</code></pre>
+ <p>Installed Windows example:</p><pre><code>cd C:\openldr_ce
+.\openldr.ps1 ingest data\example-observed-data.json</code></pre>
+ <p>Development checkout example, after saving the file under its <code>data</code> folder:</p><pre><code>cd ~/Downloads/openldr_ce
+pnpm openldr ingest data/example-observed-data.json</code></pre>
+ <p>These are example installation folders. Replace them with your real folder, as explained in Start here. Return to Observed after the import completes, then follow the linking tasks above.</p>
+
+ <h2 id="dg-help">Troubleshooting</h2>
+ <details><summary>Create marks required fields</summary><p>Complete the marked fields in the published form. In a terminology field, select a search result rather than leaving only the search text. Then choose Create again.</p><figure class="dg-shot dg-context-shot" data-shot-id="required-error"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Missing required fields are shown on the form before anything is saved."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-27.177083333333336%"><img class="fc-background" data-evidence="required-error" alt="Missing required fields are shown on the form before anything is saved."><img class="fc-sharp" data-evidence="required-error" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 1.875% 66.68359375% 72.421875%)"><span class="fc-ring" aria-hidden="true" style="left:72.421875%;top:24.56640625%;width:25.703125%;height:8.75%"></span></span></span></button><figcaption>Missing required fields are shown on the form before anything is saved.</figcaption></figure></details>
+ <details><summary>A facility with that code already exists in this register</summary><p>The same System and Facility code pair cannot be added twice. Close the new form, find the existing row and edit it. The reproduced error below refers to the national code, which this form calls Facility code.</p><figure class="dg-shot dg-context-shot" data-shot-id="duplicate-error"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge An existing register and facility-code pair cannot be created twice."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-12.53899480069324%"><img class="fc-background" data-evidence="duplicate-error" alt="An existing register and facility-code pair cannot be created twice."><img class="fc-sharp" data-evidence="duplicate-error" alt="" aria-hidden="true" style="clip-path:inset(24.56640625% 1.875% 68.18359375% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:24.56640625%;width:41.171875%;height:7.249999999999999%"></span></span></span></button><figcaption>An existing register and facility-code pair cannot be created twice.</figcaption></figure></details>
+ <details><summary>The mapping says a required field has no column</summary><p>Map the facility-code column to <code>national_code</code> and the facility-name column to <code>name</code>, or supply the appropriate fixed value. Then validate again.</p><figure class="dg-shot dg-context-shot" data-shot-id="missing-code-error"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The mapping names required fields that have no source column or fixed value."><span class="fc-screenshot"><span class="fc-scene" style="width:221.8370883882149%;height:221.8370883882149%;left:-121.8370883882149%;top:-93.78682842287695%"><img class="fc-background" data-evidence="missing-code-error" alt="The mapping names required fields that have no source column or fixed value."><img class="fc-sharp" data-evidence="missing-code-error" alt="" aria-hidden="true" style="clip-path:inset(59.44140624999999% 1.875% 29.80859375% 56.95312500000001%)"><span class="fc-ring" aria-hidden="true" style="left:56.95312500000001%;top:59.44140624999999%;width:41.171875%;height:10.75%"></span></span></span></button><figcaption>The mapping names required fields that have no source column or fixed value.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="missing-code-fix"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Restore the facility-code column to national_code before checking again."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-144.53450520833334%;top:-48.16666666666667%"><img class="fc-background" data-evidence="missing-code-fix" alt="Restore the facility-code column to national_code before checking again."><img class="fc-sharp" data-evidence="missing-code-fix" alt="" aria-hidden="true" style="clip-path:inset(34.8125% 20.89599609375% 61.18749999999999% 66.796875%)"><span class="fc-ring" aria-hidden="true" style="left:66.796875%;top:34.8125%;width:12.30712890625%;height:4.0%"></span></span></span></button><figcaption>Restore the facility-code column to national_code before checking again.</figcaption></figure></details>
+ <details><summary>An observed code still says Not mapped</summary><p>Importing a register alone does not link received codes. Use Link matching codes for exact codes, or the observed row's Map action when the source uses a different code.</p></details>
+ <details><summary>Add or Edit is unavailable</summary><p>These actions need Manage facilities and one published form targeting Facilities. The page names a missing form. Open Forms to publish or correct that form before trying again. Importing a register does not require the facility-entry form.</p></details>
+ <details><summary>A saved facility is not in the visible list</summary><p>The current search, filters and page still apply after saving. Search for the facility code to check the record.</p></details>
+
+ <h2 id="dg-limits">Keep these distinctions in mind</h2>
+ <p>Manual entries follow your published Facility form. File imports use their column mapping instead. A register source, a Registry facility and a mapping from an Observed code are separate records.</p>
+ <p>A partial file does not evaluate facilities absent from the file. Only mark a file as a complete release when it contains the whole register, then read the additional decisions on Mapping and the resulting Review.</p>
+
+ <h2 id="dg-related">Related guides</h2>
+ <p><a href="terminology-review.html">Terminology</a> explains controlled lists and codes. <a href="start-here-review.html">Start here</a> explains the CLI. <a href="dashboard-review.html">Dashboards</a> covers charts and optional data practice. <a href="preferences-review.html">Your preferences</a> covers your personal settings.</p>
+</article>
+
+      <nav class="dg-onpage" aria-label="On this page"><p>On this page</p><a href="#dg-register">Register a source</a><a href="#dg-add">Start a facility record</a><a href="#dg-save">Save the facility</a><a href="#dg-edit">Find and edit</a><a href="#dg-history">Read History</a><a href="#dg-import">Choose your file</a><a href="#dg-map">Map columns</a><a href="#dg-values">Map values</a><a href="#dg-confirm">Apply the import</a><a href="#dg-refresh">Refresh a register</a><a href="#dg-observed">Link matching codes</a><a href="#dg-different">Link different codes</a><a href="#dg-phone">On a phone</a><a href="#dg-practice">Optional practice</a><a href="#dg-help">Troubleshooting</a><a href="#dg-limits">Keep in mind</a><a href="#dg-related">Related guides</a><small>Click any screenshot to enlarge it.</small></nav>
+     </div>
+    </div>
+   </section>
+  </div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><div data-lightbox-content></div></div>
+ </div>
+</div>
+<script type="application/json" id="facilities-evidence-assets">{"open-facilities":"./facilities-evidence/open-facilities.png","source-actions":"./facilities-evidence/source-actions.png","source-import":"./facilities-evidence/source-import.png","register-source-button":"./facilities-evidence/register-source-button.png","register-existing-actions":"./facilities-evidence/register-existing-actions.png","register-existing-menu":"./facilities-evidence/register-existing-menu.png","register-url":"./facilities-evidence/register-url.png","register-name":"./facilities-evidence/register-name.png","register-code":"./facilities-evidence/register-code.png","register-actions":"./facilities-evidence/register-actions.png","register-save":"./facilities-evidence/register-save.png","register-selected":"./facilities-evidence/register-selected.png","close-import":"./facilities-evidence/close-import.png","add-actions":"./facilities-evidence/add-actions.png","add-menu":"./facilities-evidence/add-menu.png","add-system":"./facilities-evidence/add-system.png","add-code":"./facilities-evidence/add-code.png","add-name":"./facilities-evidence/add-name.png","add-country":"./facilities-evidence/add-country.png","add-zone":"./facilities-evidence/add-zone.png","add-district":"./facilities-evidence/add-district.png","add-status":"./facilities-evidence/add-status.png","add-level":"./facilities-evidence/add-level.png","add-sheet-actions":"./facilities-evidence/add-sheet-actions.png","add-create":"./facilities-evidence/add-create.png","add-result":"./facilities-evidence/add-result.png","search-input":"./facilities-evidence/search-input.png","edit-row":"./facilities-evidence/edit-row.png","edit-name":"./facilities-evidence/edit-name.png","edit-actions":"./facilities-evidence/edit-actions.png","edit-save":"./facilities-evidence/edit-save.png","edit-result":"./facilities-evidence/edit-result.png","history-row-actions":"./facilities-evidence/history-row-actions.png","history-menu":"./facilities-evidence/history-menu.png","history-result":"./facilities-evidence/history-result.png","history-close":"./facilities-evidence/history-close.png","import-actions":"./facilities-evidence/import-actions.png","import-menu":"./facilities-evidence/import-menu.png","import-file":"./facilities-evidence/import-file.png","import-format":"./facilities-evidence/import-format.png","import-register":"./facilities-evidence/import-register.png","import-complete-release":"./facilities-evidence/import-complete-release.png","import-continue":"./facilities-evidence/import-continue.png","map-code":"./facilities-evidence/map-code.png","map-name":"./facilities-evidence/map-name.png","map-status-option":"./facilities-evidence/map-status-option.png","map-extra-actions":"./facilities-evidence/map-extra-actions.png","map-extra-save":"./facilities-evidence/map-extra-save.png","map-fixed-country":"./facilities-evidence/map-fixed-country.png","map-conflict-policy":"./facilities-evidence/map-conflict-policy.png","map-validate":"./facilities-evidence/map-validate.png","review-unmapped":"./facilities-evidence/review-unmapped.png","review-map-values":"./facilities-evidence/review-map-values.png","map-operating":"./facilities-evidence/map-operating.png","map-closed":"./facilities-evidence/map-closed.png","map-revalidate":"./facilities-evidence/map-revalidate.png","review-summary":"./facilities-evidence/review-summary.png","import-confirm":"./facilities-evidence/import-confirm.png","import-complete":"./facilities-evidence/import-complete.png","import-close":"./facilities-evidence/import-close.png","import-result":"./facilities-evidence/import-result.png","reimport-summary":"./facilities-evidence/reimport-summary.png","reimport-confirm":"./facilities-evidence/reimport-confirm.png","reimport-complete":"./facilities-evidence/reimport-complete.png","observed-tab":"./facilities-evidence/observed-tab.png","observed-actions":"./facilities-evidence/observed-actions.png","matching-menu":"./facilities-evidence/matching-menu.png","matching-register":"./facilities-evidence/matching-register.png","matching-preview":"./facilities-evidence/matching-preview.png","matching-actions":"./facilities-evidence/matching-actions.png","matching-apply":"./facilities-evidence/matching-apply.png","matching-result":"./facilities-evidence/matching-result.png","mapping-row-actions":"./facilities-evidence/mapping-row-actions.png","mapping-menu":"./facilities-evidence/mapping-menu.png","mapping-search":"./facilities-evidence/mapping-search.png","mapping-target":"./facilities-evidence/mapping-target.png","mapping-type":"./facilities-evidence/mapping-type.png","mapping-sheet-actions":"./facilities-evidence/mapping-sheet-actions.png","mapping-create":"./facilities-evidence/mapping-create.png","mapping-result":"./facilities-evidence/mapping-result.png","phone-registry":"./facilities-evidence/phone-registry.png","phone-observed":"./facilities-evidence/phone-observed.png","phone-actions":"./facilities-evidence/phone-actions.png","required-error":"./facilities-evidence/required-error.png","duplicate-error":"./facilities-evidence/duplicate-error.png","missing-code-error":"./facilities-evidence/missing-code-error.png","missing-code-fix":"./facilities-evidence/missing-code-fix.png"}</script>
+<script>
+(() => {
+ const root = document.getElementById('facilities-evidence-guide');
+ const assets = JSON.parse(document.getElementById('facilities-evidence-assets').textContent);
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
+ const pane = root.querySelector('[data-reading-pane]');
+ let previewTheme='dark';
+ function applyTheme(){root.style.colorScheme=previewTheme;root.querySelector('[data-theme-toggle]').setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');}
+ applyTheme();
+ root.querySelector('[data-theme-toggle]').addEventListener('click',()=>{previewTheme=previewTheme==='dark'?'light':'dark';applyTheme();});
+ const box = root.querySelector('.dg-lightbox');
+ let previousFocus = null;
+ function closeBox() { box.hidden = true; root.querySelector('.dg-main').inert=false; if(previousFocus) previousFocus.focus(); }
+ root.querySelector('[data-close-lightbox]').addEventListener('click', closeBox);
+ root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
+ root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
+  previousFocus = button;
+  const content = box.querySelector('[data-lightbox-content]');
+  const frame = button.querySelector('.fc-screenshot');
+  content.replaceChildren();
+  content.className = frame ? 'dg-context-shot' : '';
+  if(frame) {
+   content.dataset.shotId = button.closest('[data-shot-id]').dataset.shotId;
+   content.append(frame.cloneNode(true));
+  } else {
+   delete content.dataset.shotId;
+   content.append(button.querySelector('img').cloneNode(true));
+  }
+  box.hidden = false;
+  root.querySelector('.dg-main').inert=true;
+  box.querySelector('button').focus();
+ }));
+ root.querySelectorAll('a[href^="#dg-"]').forEach(link => link.addEventListener('click', event => {
+  const target = root.querySelector(link.getAttribute('href'));
+  if(!target) return;
+  event.preventDefault();
+  pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  root.querySelectorAll('.dg-onpage a').forEach(item => item.removeAttribute('aria-current'));
+  if(link.closest('.dg-onpage')) link.setAttribute('aria-current','location');
+ }));
+ root.querySelectorAll('[data-play-loop]').forEach(button => button.addEventListener('click', () => {
+  const video=button.closest('figure').querySelector('video');
+  if(video.paused) video.play().then(()=>button.textContent='Pause loop').catch(()=>button.textContent='Play loop');
+  else {video.pause();button.textContent='Play loop';}
+ }));
+ root.querySelectorAll('.dg-loop').forEach(figure=>{
+  const video=figure.querySelector('video');
+  const button=figure.querySelector('[data-play-loop]');
+  video.addEventListener('play',()=>{button.textContent='Pause loop';});
+  video.addEventListener('pause',()=>{button.textContent='Play loop';});
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+   video.autoplay=true;
+   video.play().catch(()=>{button.textContent='Play loop';});
+  }
+ });
+ const expand = root.querySelector('[data-expand]');
+ root.querySelector('[data-collapse]').addEventListener('click',()=>{root.classList.add('dg-folded');expand.hidden=false;});
+ expand.addEventListener('click',()=>{root.classList.remove('dg-folded');expand.hidden=true;});
+ root.querySelector('[data-search]').addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  root.querySelectorAll('.dg-navitem').forEach(item=>{item.hidden=!!query&&!item.textContent.toLowerCase().includes(query);});
+ });
+
+})();
+</script>
+<style>
+#facilities-evidence-guide .dg-context-shot { max-width:500px; }
+#facilities-evidence-guide .fc-screenshot { display:block; position:relative; width:100%; aspect-ratio:8/5; container-type:inline-size; overflow:hidden; background:var(--dg-bg); }
+#facilities-evidence-guide .dg-context-shot img { position:absolute; inset:0; display:block; width:100%; height:100%; max-height:none; object-fit:fill; }
+#facilities-evidence-guide .fc-scene { position:absolute; display:block; }
+#facilities-evidence-guide .fc-background { filter:blur(.25cqw); opacity:.9; }
+#facilities-evidence-guide .fc-sharp { pointer-events:none; }
+#facilities-evidence-guide .fc-ring { position:absolute; display:block; border:2px solid var(--dg-link); border-radius:3px; pointer-events:none; }
+#facilities-evidence-guide .fc-marker { position:absolute; right:calc(100% + 3px); top:-4px; display:flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; background:var(--dg-link); color:var(--dg-bg); font:500 11px/1 Arial,sans-serif; }
+#facilities-evidence-guide [data-shot-id="open-dashboard"] .fc-marker { left:calc(100% + 3px); right:auto; }
+#facilities-evidence-guide .dg-lightbox .dg-context-shot { margin:0; width:min(100%,calc((min(var(--guide-preview-height,840px),100dvh) - 64px)*1.6)); max-width:none; }
+</style>
+<style>#facilities-evidence-guide .fc-marker{left:calc(100% + 3px);right:auto}#facilities-evidence-guide .dg-head-icons{padding-right:0}@media(max-width:900px){#facilities-evidence-guide .fc-marker{left:auto!important;right:4px!important}}</style>
+</body></html>

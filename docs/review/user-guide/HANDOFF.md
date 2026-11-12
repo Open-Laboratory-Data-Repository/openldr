@@ -257,3 +257,56 @@ Browser publication results are recorded in high-resolution/publication-checks.j
 The browser checks cover all three Terminology locales, 47 numbered steps, 56 screenshot placements,
 5120px native image sources, mobile layout and the preview navigation round trip.
 A physical phone is still needed to verify controls against retracting browser chrome.
+
+## Facilities preview awaiting review
+
+The Facilities walkthrough is at facilities-review.html on the preview server at port 4392.
+It has 63 numbered steps and 88 screenshot placements. Every step has a screenshot.
+Desktop sources are native 5120 by 3200 PNGs. Phone sources are 1500 by 3248.
+The enlarged view keeps the page's crop, sharp focus and surrounding blur.
+
+The walkthrough starts with the user's own facility details and files.
+Optional practice downloads appear at the end. CLI setup links to Start here.
+All five active preview pages now keep the Facilities link in the same menu position.
+
+Review findings, commands and limits are in facilities-review-notes.md.
+The actual browser workflows used a separate temporary installation.
+Its database container, API, Studio server and temporary Vite config were removed afterward.
+The normal application and the static preview server remain available.
+See facilities-evidence/cleanup-checks.json for the owned resources removed.
+
+Rebuild with `python3 docs/review/user-guide/build-facilities.py`.
+Check with `node docs/review/user-guide/check-facilities-preview.cjs`.
+The check reported 63 steps, 88 frames, no missing screenshots, a 5120px lightbox source,
+an 812px mobile viewport without horizontal overflow and successful navigation and downloads.
+
+This is preview work only. Published Facilities content and original images are unchanged.
+No commit or push was made. Await the operator's review before publication.
+
+## Facilities approved for main, remaining sections authorized
+
+The operator approved Facilities publication and requested the remaining guides as previews.
+Commit and push after every section. Do not wait for routine review questions.
+Practice data remains optional. Contact the operator only for urgent or destructive choices.
+The resumable checklist is docs/superpowers/plans/2026-11-12-user-guide-review.md.
+
+Facilities now has English, French and Portuguese publication files, 88 native screenshot
+placements and two optional public practice downloads. All 94 Studio documentation tests
+and 29 web documentation tests passed. Studio typecheck and the production build passed.
+The build completed in 9.72 seconds with existing dependency annotation and chunk-size warnings.
+The web typecheck is also part of the publication checks.
+Browser checks on the isolated installation confirmed all three locales have 63 numbered
+steps and 88 images, with 5120px lightbox sources. The 375 by 812 layout had no horizontal
+page overflow. Physical phone browser chrome remains untested.
+The publication evidence is facilities-evidence/publication-checks.json.
+
+The active capture installation is separate from the normal app:
+- Container openldr-guides-review-pg, PostgreSQL port 15439, durable owned volume openldr-guides-review-pg-data.
+- Databases guide_internal and guide_target. Test credentials guide and guide.
+- API 3006, Studio 5186. Logs /tmp/openldr-guides-review-api.log and /tmp/openldr-guides-review-studio.log.
+- apps/studio/vite.guides-preview.config.ts is temporary and locally excluded from git.
+- API uses AUTH_DEV_BYPASS=true, MIGRATE_ON_START=true and SEED_ON_START=true.
+- Keep INTERNAL_DATABASE_URL and TARGET_DATABASE_URL pointed to the review databases on port 15439.
+Never run the general sample reset commands against the populated installation.
+
+Next section is Test catalog. Remaining sections stay in preview until the operator approves publication.
