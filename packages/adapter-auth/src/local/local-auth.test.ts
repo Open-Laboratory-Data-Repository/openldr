@@ -253,6 +253,23 @@ describe('directory', () => {
     expect((await login(signIn)).userId).toBe(adaId);
   });
 
+  it('ends every session on disable, so an old cookie stays dead after re-enable', async () => {
+    const a = await login(signIn);
+    const b = await login(signIn);
+    await auth.directory.update(adaId, { enabled: false });
+    await auth.directory.update(adaId, { enabled: true });
+    expect(await signIn.refresh(a.cookieValue)).toBeNull();
+    expect(await signIn.refresh(b.cookieValue)).toBeNull();
+    await expect(auth.verifyToken(a.accessToken)).rejects.toThrow('session ended');
+  });
+
+  it('keeps sessions when an update does not disable', async () => {
+    const a = await login(signIn);
+    await auth.directory.update(adaId, { email: 'a@example.org' });
+    await auth.directory.update(adaId, { enabled: true });
+    expect(await signIn.refresh(a.cookieValue)).not.toBeNull();
+  });
+
   it('throws user not found for an unknown ID and creates no rows', async () => {
     const before = (await users.list({ offset: 0, limit: 100 })).length;
     await expect(auth.directory.update('no-such-id', { email: 'x@example.org' })).rejects.toThrow('user not found');

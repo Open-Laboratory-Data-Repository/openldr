@@ -190,6 +190,9 @@ export async function createLocalAuth(deps: LocalAuthDeps): Promise<{ auth: Auth
         }
         if (Object.keys(patchUser).length > 0) await users.update(id, patchUser);
         if (patch.enabled !== undefined) await users.setStatus(id, patch.enabled ? 'active' : 'disabled');
+        // The auth plugin refuses a disabled user per request, but a session left in place
+        // would work again after re-enable. Disabling ends them all.
+        if (patch.enabled === false) await store.deleteSessionsForUser(id);
       },
 
       async setRoles(id, slugs) {
