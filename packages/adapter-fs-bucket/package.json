@@ -1,6 +1,6 @@
 {
   "name": "@openldr/adapter-fs-bucket",
-  "version": "0.1.11",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },

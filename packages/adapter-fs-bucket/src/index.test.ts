@@ -352,6 +352,30 @@ describe('createFsBucket', () => {
     }
   });
 
+  it('refuses an empty folder at construction', () => {
+    for (const empty of ['', '   ', '\t\n']) {
+      expect(() => createFsBucket({ dir: empty })).toThrow(Error);
+    }
+  });
+
+  it('keeps the folder it was given when the working folder changes later', async () => {
+    const startCwd = process.cwd();
+    const other = join(parent, 'elsewhere');
+    await mkdir(other);
+    let relBucket: BlobStoragePort;
+    try {
+      process.chdir(parent);
+      relBucket = createFsBucket({ dir: 'relative-store' });
+      process.chdir(other);
+      await relBucket.put('k', 'v');
+      expect(await relBucket.exists('k')).toBe(true);
+    } finally {
+      process.chdir(startCwd);
+    }
+    expect((await stat(join(parent, 'relative-store', 'objects', 'k'))).isFile()).toBe(true);
+    expect(await listEverythingUnder(other)).toEqual([]);
+  });
+
   it('does not support presign', async () => {
     await expect(bucket.presign('a')).rejects.toBeInstanceOf(BlobPresignUnsupportedError);
   });

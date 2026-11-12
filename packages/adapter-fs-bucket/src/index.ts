@@ -40,6 +40,9 @@ function errCode(err: unknown): string | undefined {
  * may fail, and the path rules there differ.
  */
 export function createFsBucket(cfg: FsBucketConfig): BlobStoragePort {
+  // An empty folder would resolve to the working folder and store objects there.
+  if (cfg.dir.trim() === '') throw new Error('file storage needs a folder, and dir is empty');
+  // Resolved once, so a later change of working folder cannot move the store.
   const root = resolve(cfg.dir);
   const objectsDir = join(root, 'objects');
   const tmpDir = join(root, 'tmp');
