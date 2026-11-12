@@ -24,9 +24,12 @@ irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/ma
 
 ## 2. Iniciar sessão
 
-1. Abra o URL que o instalador mostrou.
-2. Inicie sessão com as credenciais de administrador que ele mostrou.
-3. Abra **Documentação** no menu do estúdio e leia **Comece aqui**.
+1. Abra o endereço que o instalador mostrou. O estúdio mostra a página **Criar o administrador**.
+2. Introduza em **Código de configuração** o código que o instalador mostrou. É válido durante 30 minutos. Se tiver expirado, execute `./openldr auth setup-code` na pasta `openldr/` para obter um novo. No Windows, execute `.\openldr.ps1 auth setup-code`.
+3. Escolha um nome de utilizador e uma palavra-passe e selecione **Criar o administrador**. Fica com sessão iniciada como administrador.
+4. Abra **Documentação** no menu do estúdio e leia **Comece aqui**.
+
+Uma instalação feita com `--auth keycloak` não tem código de configuração. Inicie sessão como `labadmin` com a palavra-passe que o instalador mostrou e escolha uma nova palavra-passe quando lhe for pedido.
 
 Para parar a pilha, execute `docker compose down` na pasta `openldr/` criada pelo instalador. Para a voltar a arrancar, execute `docker compose up -d` na mesma pasta.
 

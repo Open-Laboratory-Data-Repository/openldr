@@ -139,6 +139,7 @@ Ces options correspondent à `TARGET_STORE_ADAPTER=mysql` et aux [variables d'en
 | `--no-start` | désactivé | Prépare et configure seulement, sans démarrer la pile. |
 | `--no-pull` | désactivé | Ne télécharge pas les images (utilise celles déjà présentes). |
 | `--seedless` | désactivé (avec données d'exemple) | Premier démarrage vide : sans le tableau de bord d'exemple ni les données de démonstration (installés par défaut). Windows : `-Seedless`. Nouvelle installation uniquement. |
+| `--auth <mode>` | demande, sinon `local` | Connexion d'une nouvelle installation : `local` ou `keycloak`. `local` garde les comptes propres à OpenLDR et ne lance pas Keycloak. Sans l'option, l'installateur pose la question s'il a un terminal, et prend `local` sinon. Une nouvelle exécution garde le mode choisi à l'installation. Windows : `-Auth`. |
 | `--target-db <db>` | `postgres` | Base analytique externe : `postgres`, `mssql` ou `mysql`. |
 | `--mssql-demo` | désactivé | Ajoute un conteneur SQL Server 2022 (évaluation uniquement). Implique `--target-db mssql`. |
 | `--mssql-host <host>` | aucune | Hôte de votre SQL Server (obligatoire pour `--target-db mssql` sans `--mssql-demo`). |
