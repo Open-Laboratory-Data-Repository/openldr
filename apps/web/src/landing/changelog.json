@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "334ce996",
+          "type": "fix",
+          "scope": "",
+          "title": "Share documentation scrolling and correct environment formatting"
+        },
+        {
           "hash": "30d9e025",
           "type": "fix",
           "scope": "",

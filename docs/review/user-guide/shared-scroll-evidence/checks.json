@@ -53,5 +53,17 @@
       "Test Files  1 failed (1)",
       "Tests  1 failed | 14 passed (15)"
     ]
+  },
+  {
+    "phase": "merged-main",
+    "commit": "334ce996",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx && pnpm --filter @openldr/config test src/env-docs.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  1 passed (1)",
+      "Tests  15 passed (15)",
+      "Test Files  1 passed (1)",
+      "Tests  8 passed (8)"
+    ]
   }
 ]
