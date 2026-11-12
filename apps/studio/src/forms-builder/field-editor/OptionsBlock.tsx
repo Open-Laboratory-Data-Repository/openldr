@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { lookupBinding } from '@openldr/fhir/paths';
 import type { BindingStrength, FormField } from '@openldr/forms/pure';
 import { listValueSets, storedValueSetCodes, type ValueSetSummary } from '../../api';
@@ -28,6 +29,7 @@ export function OptionsBlock({
   surveyMode: boolean;
   onUpdate: (patch: Partial<FormField>) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   const { hasCapability } = useAuth();
   const [sets, setSets] = useState<ValueSetSummary[]>([]);
   const [busy, setBusy] = useState(false);
@@ -63,7 +65,7 @@ export function OptionsBlock({
     try {
       return codesToOptions(await storedValueSetCodes(id));
     } catch {
-      setError('Could not read the ValueSet codes.');
+      setError(t('formBuilder.options.readFailed'));
       return null;
     } finally {
       setBusy(false);
@@ -98,20 +100,20 @@ export function OptionsBlock({
     <>
       <div className="border-t border-border" />
       <div className="flex items-center justify-between px-6 py-3">
-        <h3 className="text-sm font-medium text-foreground">Options</h3>
+        <h3 className="text-sm font-medium text-foreground">{t('formBuilder.options.title')}</h3>
         {hasActions && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Options actions">
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('formBuilder.options.actions')}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {standardHeld && (
-                <DropdownMenuItem disabled={busy} onSelect={() => void loadStandard()}>Load from terminology</DropdownMenuItem>
+                <DropdownMenuItem disabled={busy} onSelect={() => void loadStandard()}>{t('formBuilder.options.loadStandard')}</DropdownMenuItem>
               )}
-              {field.valueSetUrl && <DropdownMenuItem onSelect={unbind}>Unbind</DropdownMenuItem>}
-              {canSave && <DropdownMenuItem onSelect={() => setSaveOpen(true)}>Save as a new ValueSet</DropdownMenuItem>}
+              {field.valueSetUrl && <DropdownMenuItem onSelect={unbind}>{t('formBuilder.options.unbind')}</DropdownMenuItem>}
+              {canSave && <DropdownMenuItem onSelect={() => setSaveOpen(true)}>{t('formBuilder.options.saveAsValueSet')}</DropdownMenuItem>}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -119,22 +121,22 @@ export function OptionsBlock({
       <div className="border-t border-border" />
       <div className="px-6 py-2">
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 py-3">
-          <Label className="whitespace-nowrap">ValueSet</Label>
+          <Label className="whitespace-nowrap">{t('formBuilder.options.valueSet')}</Label>
           {field.valueSetUrl ? (
             <div className="min-w-0">
               <p className="truncate text-sm text-foreground">
-                {`${field.valueSetOptions?.length ?? 0} codes from ${bound?.title ?? bound?.name ?? field.valueSetUrl}`}
+                {t('formBuilder.options.codesFrom', { count: field.valueSetOptions?.length ?? 0, name: bound?.title ?? bound?.name ?? field.valueSetUrl })}
               </p>
-              {!bound && <p className="truncate text-xs text-muted-foreground">Not held on this install, so its codes cannot be read.</p>}
+              {!bound && <p className="truncate text-xs text-muted-foreground">{t('formBuilder.options.notHeld')}</p>}
             </div>
           ) : (
-            <ValueSetPicker onPick={(vs) => void bind(vs)} placeholder="Bind to a ValueSet…" />
+            <ValueSetPicker onPick={(vs) => void bind(vs)} placeholder={t('formBuilder.options.bindPlaceholder')} />
           )}
           {field.valueSetUrl && (
             <>
-              <Label htmlFor="options-strength" className="whitespace-nowrap">Strength</Label>
+              <Label htmlFor="options-strength" className="whitespace-nowrap">{t('formBuilder.options.strength')}</Label>
               <Select value={strength} onValueChange={(v) => changeStrength(v as BindingStrength)}>
-                <SelectTrigger id="options-strength" aria-label="Strength">
+                <SelectTrigger id="options-strength" aria-label={t('formBuilder.options.strength')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

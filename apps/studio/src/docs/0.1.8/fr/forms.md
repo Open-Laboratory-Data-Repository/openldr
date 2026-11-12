@@ -1,10 +1,10 @@
 # Formulaires
 
-Les **formulaires** sont les écrans de saisie à la main : une demande d'examens à la réception, un dossier patient, un établissement. Chaque formulaire se construit dans le **Form Builder** à partir de champs, et chaque champ peut correspondre à un élément FHIR, pour que la saisie devienne un vrai enregistrement. Un formulaire passe de **Draft** à **Published** puis **Archived**, pour être conçu sans risque avant que quelqu'un l'utilise.
+Les **formulaires** sont les écrans de saisie à la main : une demande d'examens à la réception, un dossier patient, un établissement. Chaque formulaire se construit dans le **Générateur de formulaires** à partir de champs, et chaque champ peut correspondre à un élément FHIR, pour que la saisie devienne un vrai enregistrement. Un formulaire passe de **Draft** à **Published** puis **Archived**, pour être conçu sans risque avant que quelqu'un l'utilise.
 
 Une installation neuve contient quatre formulaires publiés : **Lab order**, **Patient**, **Users** et **Facility**. Ce guide saisit une demande d'examens avec le formulaire fourni, puis construit et publie votre propre formulaire. Comptez 15 minutes. Sélectionnez une image ou un clip pour l'agrandir.
 
-Le Form Builder et ses menus sont en anglais à l'écran, ce guide garde donc leurs libellés anglais.
+Le Générateur de formulaires s'affiche dans la langue du studio. Les noms des champs du Lab order fourni, comme **Tests** ou **Priority**, et les menus de la page **Formulaires** restent en anglais. Ce guide les cite tels qu'ils s'affichent.
 
 ![Formulaires : les quatre formulaires fournis, avec leur type FHIR, nombre de champs, version et statut.](forms-tour.png)
 
@@ -14,7 +14,7 @@ Le Form Builder et ses menus sont en anglais à l'écran, ce guide garde donc le
 | --- | --- |
 | **Use forms** | Ouvrir les formulaires et lire leur définition |
 | **Submit forms** | Remplir un formulaire avec **View/Run** et l'envoyer. L'envoi écrit des données cliniques |
-| **Edit forms** | Créer et modifier des formulaires dans le builder, et les exporter |
+| **Edit forms** | Créer et modifier des formulaires dans le générateur, et les exporter |
 | **Publish forms** | Publier une nouvelle version |
 
 ## Avant de commencer
@@ -55,23 +55,23 @@ Construisez un formulaire plus court pour les demandes de charge virale à parti
 
 ![Nommer le formulaire, choisir R4 et ServiceRequest, garder cinq champs du pack et les ajouter.](forms-build.mp4)
 
-1. Sur **Formulaires**, ouvrez le menu **⋯** de la page et sélectionnez **New**. Le **Form Builder** s'ouvre.
-2. Dans **Form name**, tapez `Quick viral load request`.
-3. Réglez **FHIR Version** sur **R4 (most common)**.
-4. Réglez **Resource Type** sur **ServiceRequest**. Tapez pour filtrer la longue liste. Le **Lab order pack** s'ouvre de lui-même, avec **9 of 9 selected**. Chaque entrée dit pourquoi elle est là.
+1. Sur **Formulaires**, ouvrez le menu **⋯** de la page et sélectionnez **New**. Le **Générateur de formulaires** s'ouvre.
+2. Dans **Nom du formulaire**, tapez `Quick viral load request`.
+3. Réglez **Version FHIR** sur **R4 (la plus courante)**.
+4. Réglez **Type de ressource** sur **ServiceRequest**. Tapez pour filtrer la longue liste. Le **Pack Lab order** s'ouvre de lui-même, avec **9 sur 9 sélectionnés**. Chaque entrée dit pourquoi elle est là.
 5. Décochez **Requesting Clinician**, **Clinical Notes**, **Referring Facility** et **Order rejection**.
-6. Ouvrez le menu **⋯** du pack et sélectionnez **Add 5 fields**.
+6. Ouvrez le menu **⋯** du pack et sélectionnez **Ajouter 5 champs**.
 
-**Résultat attendu :** le builder liste **5 fields (5 enabled)** : Patient, Tests, Results, Priority, et Reference Number sous `identifier`. La **Library** à droite liste les entrées du pack laissées de côté, et tous les autres éléments ServiceRequest, à ajouter d'un clic. Une note indique que la soumission est configurée.
+**Résultat attendu :** le générateur liste **5 champs (5 activés)** : Patient, Tests, Results, Priority, et Reference Number sous `identifier`. La **Bibliothèque** à droite liste les entrées du pack laissées de côté, et tous les autres éléments ServiceRequest, à ajouter d'un clic. Une note indique que la soumission est configurée.
 
-![Le builder avec cinq champs, et la Library à côté.](forms-builder.png)
+![Le générateur avec cinq champs, et la Bibliothèque à côté.](forms-builder.png)
 
 ### Le prévisualiser
 
-![Ouvrir Preview depuis le menu du builder et le remplir de valeurs d'exemple.](forms-preview.mp4)
+![Ouvrir Preview depuis le menu du générateur et le remplir de valeurs d'exemple.](forms-preview.mp4)
 
-1. Ouvrez **Builder actions**, le **⋯** en haut à droite, et sélectionnez **Preview**. Le formulaire s'ouvre dans un panneau, exactement comme un utilisateur le voit.
-2. Ouvrez le menu **⋯** du panneau et sélectionnez **Fill example**. Chaque champ reçoit une valeur d'exemple. **Reset**, dans le même menu, les efface.
+1. Ouvrez **Actions du générateur**, le **⋯** en haut à droite, et sélectionnez **Aperçu**. Le formulaire s'ouvre dans un panneau, exactement comme un utilisateur le voit.
+2. Ouvrez le menu **⋯** du panneau et sélectionnez **Remplir un exemple**. Chaque champ reçoit une valeur d'exemple. **Réinitialiser**, dans le même menu, les efface.
 
 ![L'aperçu avec des valeurs d'exemple.](forms-preview-filled.png)
 
@@ -79,9 +79,9 @@ L'aperçu n'envoie jamais rien.
 
 ### Le publier
 
-![Publier depuis le menu du builder.](forms-publish.mp4)
+![Publier depuis le menu du générateur.](forms-publish.mp4)
 
-1. Fermez l'aperçu. Ouvrez **Builder actions** et sélectionnez **Publish**. Publish enregistre d'abord le formulaire, il n'y a donc pas d'étape d'enregistrement à part.
+1. Fermez l'aperçu. Ouvrez **Actions du générateur** et sélectionnez **Publier**. Publish enregistre d'abord le formulaire, il n'y a donc pas d'étape d'enregistrement à part.
 
 **Résultat attendu :** un message le confirme, et la pastille d'état à côté du nom passe au vert avec **v1**. Sur **Formulaires**, **Quick viral load request** est listé **Published**, avec **5** champs.
 
@@ -91,20 +91,20 @@ Pour le retirer, ouvrez le menu **⋯** de sa ligne et sélectionnez **Delete**.
 
 ## Le cycle de vie
 
-- **Save draft**, dans **Builder actions**, enregistre sans rien publier.
-- **Publish** enregistre le formulaire à l'écran, puis le publie.
-- **Compare** montre les changements entre deux versions.
+- **Enregistrer le brouillon**, dans **Actions du générateur**, enregistre sans rien publier.
+- **Publier** enregistre le formulaire à l'écran, puis le publie.
+- **Comparer** montre les changements entre deux versions.
 - **Versions** liste chaque version publiée, la plus récente d'abord, avec sa date. Elle est grisée tant que le formulaire n'a jamais été enregistré.
-- **Restore**, dans les actions d'une version, la remet en place. Cela remplace le formulaire en cours d'édition, et un formulaire publié repasse tout de suite en brouillon. Il disparaît de View/Run jusqu'à la prochaine publication. Undo dans le builder ne change que l'écran : enregistrez pour l'écrire.
+- **Restaurer**, dans les actions d'une version, la remet en place. Cela remplace le formulaire en cours d'édition, et un formulaire publié repasse tout de suite en brouillon. Il disparaît de View/Run jusqu'à la prochaine publication. Undo dans le générateur ne change que l'écran : enregistrez pour l'écrire.
 - Décocher un champ dans la liste le désactive : il n'est ni affiché, ni validé, et ne recueille aucune réponse. Il reste dans le formulaire pour être réactivé.
 - Le menu de chaque ligne de la liste duplique, compare, publie, archive, exporte (aussi en paquet marketplace) ou supprime le formulaire.
-- **Version label** est une légende libre. Le numéro de version est donné à la publication et s'affiche à côté du statut.
+- **Libellé de version** est une légende libre. Le numéro de version est donné à la publication et s'affiche à côté du statut.
 
 ## Conditions de soumission
 
-La publication permet le partage et les éditeurs intégrés. Elle ne garantit pas les soumissions View/Run. La saisie prend actuellement en charge ServiceRequest et les champs de réponse actifs avec Observation Extract et au moins un code. Un formulaire texte personnalisé sans extraction ne peut pas être soumis. Les modèles Patient et Facility restent utilisables dans leurs éditeurs dédiés.
+La publication permet le partage et les éditeurs intégrés. Elle ne garantit pas les soumissions View/Run. La saisie prend actuellement en charge ServiceRequest et les champs de réponse actifs avec Extraction en Observation et au moins un code. Un formulaire texte personnalisé sans extraction ne peut pas être soumis. Les modèles Patient et Facility restent utilisables dans leurs éditeurs dédiés.
 
-L’éditeur et la page de saisie indiquent cette capacité avant la saisie. Pour une observation, ouvrez la fiche du champ, sélectionnez un code terminologique sous Codes et cochez Observation Extract sous Mapping. Activez le champ, enregistrez et publiez. Renseignez au moins un champ d'extraction : un champ vide ou masqué ne produit aucune Observation.
+L’éditeur et la page de saisie indiquent cette capacité avant la saisie. Pour une observation, ouvrez la fiche du champ, sélectionnez un code terminologique sous Codes et cochez Extraction en Observation sous Correspondance. Activez le champ, enregistrez et publiez. Renseignez au moins un champ d'extraction : un champ vide ou masqué ne produit aucune Observation.
 
 Ce contrôle porte sur la configuration. Les réponses obligatoires, les références et le workflow d'ingestion actif doivent encore être validés.
 
@@ -113,35 +113,35 @@ Ce contrôle porte sur la configuration. Les réponses obligatoires, les référ
 - **L'entrée d'une liste remplie par un champ.** Un champ lié à une entrée d'une liste FHIR affiche une deuxième ligne sous son chemin, par exemple `system = urn:x`. Deux champs sur `Location.identifier.value` ne diffèrent que par cette ligne.
 - **Emplacements d'une même liste.** Les champs qui partagent une liste et ont un discriminateur et un champ de valeur sont réunis sous un en-tête. L'en-tête indique le nom de la liste, son chemin et le nombre d'emplacements. La liste le déduit des champs : on ne peut ni le déplacer ni le supprimer.
 - **Les formulaires fournis.** Le formulaire Patient réunit le prénom et le nom sous `Patient.name`, et le téléphone sous `Patient.telecom`. Le formulaire Users réunit le prénom et le nom sous `Practitioner.name`, et l'adresse e-mail sous `Practitioner.telecom`. Le formulaire Facility place son code sous `Location.identifier`, et le formulaire Lab order place son numéro de référence sous `ServiceRequest.identifier`. Une installation dont l'opérateur a modifié l'un de ces formulaires garde ses propres champs.
-- **Groupes imbriqués.** Définissez le **Group** d'un groupe pour le placer dans un autre groupe, à n'importe quelle profondeur. Le sélecteur ne propose jamais le groupe lui-même ni ce qu'il contient déjà.
-- **L'icône de répétition.** Un champ qui accepte plusieurs réponses, ou un groupe qui contient plusieurs entrées, affiche une icône de répétition. Un groupe contient une seule entrée s'il est lié à un élément unique, comme `Location.address`, ou si **Max Items** vaut 1. L'export Questionnaire marque alors ce groupe comme non répétable.
+- **Groupes imbriqués.** Définissez le **Groupe** d'un groupe pour le placer dans un autre groupe, à n'importe quelle profondeur. Le sélecteur ne propose jamais le groupe lui-même ni ce qu'il contient déjà.
+- **L'icône de répétition.** Un champ qui accepte plusieurs réponses, ou un groupe qui contient plusieurs entrées, affiche une icône de répétition. Un groupe contient une seule entrée s'il est lié à un élément unique, comme `Location.address`, ou si **Nombre max d'éléments** vaut 1. L'export Questionnaire marque alors ce groupe comme non répétable.
 - La saisie affiche encore chaque groupe une seule fois. L'ajout d'entrées à un groupe pendant la saisie arrivera dans une version ultérieure.
 
 ## Modifier un champ
 
-- **L'entrée d'une liste.** Sous Mapping, cochez **Array element (discriminator)**. Chaque condition est un élément, un opérateur et une valeur, par exemple `system` `equals` `urn:x`. Les opérateurs sont `equals`, `not equals` et `starts with`. À partir de deux conditions, choisissez **All** si toutes doivent être vraies, ou **Any** si une seule suffit. **Value Field** désigne l'élément qui porte la réponse, en général `value`.
+- **L'entrée d'une liste.** Sous Correspondance, cochez **Élément de liste (discriminant)**. Chaque condition est un élément, un opérateur et une valeur, par exemple `system` `equals` `urn:x`. Les opérateurs sont `equals`, `not equals` et `starts with`. À partir de deux conditions, choisissez **Toutes** si toutes doivent être vraies, ou **L'une** si une seule suffit. **Champ de valeur** désigne l'élément qui porte la réponse, en général `value`.
 - Le discriminateur sert aux contrôles du formulaire et à l'export Questionnaire. La saisie ne l'utilise pas encore, à une exception près : quand une demande Lab order est soumise, son numéro de référence porte le `system` que nomme son discriminateur.
-- **Un autre emplacement.** Sous le dernier emplacement d'une liste, **+ Add a named slot** ajoute une copie avec le même chemin, le même champ de valeur et le même type, et des valeurs de discriminateur vides. La propriété API, les codes et les traductions restent vides.
-- **Parties d'un groupe.** L'éditeur d'un groupe liste ses parties après Mapping. Cliquez sur une partie pour la modifier. Vos modifications non enregistrées du groupe sont d'abord enregistrées. **+ Add a part** ajoute un champ dans le groupe, sans chemin FHIR.
-- **Champs reference.** Un champ reference a un bloc **Reference Configuration** après General. **Target** vaut `Patient` ou un système de codes actif. **Searchable** est enregistré et exporté, mais la saisie ne l'utilise pas encore. **Depends On** sert dans un seul cas : un champ qui dépend d'un champ Tests lié à la liste des examens de ce laboratoire ne propose que les prélèvements acceptés par les examens choisis. La demande d'examens livrée ne s'en sert plus : chaque examen porte son propre prélèvement (voir Catalogue des examens). Tout autre réglage **Depends On** est enregistré mais pas utilisé.
+- **Un autre emplacement.** Sous le dernier emplacement d'une liste, **+ Ajouter un emplacement nommé** ajoute une copie avec le même chemin, le même champ de valeur et le même type, et des valeurs de discriminateur vides. La propriété API, les codes et les traductions restent vides.
+- **Parties d'un groupe.** L'éditeur d'un groupe liste ses parties après Correspondance. Cliquez sur une partie pour la modifier. Vos modifications non enregistrées du groupe sont d'abord enregistrées. **+ Ajouter une partie** ajoute un champ dans le groupe, sans chemin FHIR.
+- **Champs reference.** Un champ référence a un bloc **Configuration de la référence** après Général. **Cible** vaut `Patient` ou un système de codes actif. **Recherchable** est enregistré et exporté, mais la saisie ne l'utilise pas encore. **Dépend de** sert dans un seul cas : un champ qui dépend d'un champ Tests lié à la liste des examens de ce laboratoire ne propose que les prélèvements acceptés par les examens choisis. La demande d'examens livrée ne s'en sert plus : chaque examen porte son propre prélèvement (voir Catalogue des examens). Tout autre réglage **Dépend de** est enregistré mais pas utilisé.
 - **Champs verrouillés.** Un champ verrouillé ne peut être ni désactivé ni supprimé depuis la liste. Vous pouvez encore le renommer, le déplacer et le traduire.
-- **Formulaires d'enquête.** Si le Resource Type du formulaire est `Questionnaire`, l'éditeur masque FHIR Path, API Property et le discriminateur. Observation Extract et les autres réglages restent.
+- **Formulaires d'enquête.** Si le Type de ressource du formulaire est `Questionnaire`, l'éditeur masque Chemin FHIR, Propriété d'API et le discriminateur. Extraction en Observation et les autres réglages restent.
 
 ## Options et ValueSets
 
-- Un champ select ou multiselect peut prendre ses options dans un ValueSet. Dans le bloc Options, cherchez un ValueSet et choisissez-le. Ses codes sont copiés dans les options, et le champ garde un lien vers le ValueSet avec une force. Une force required empêche la saisie d'accepter d'autres valeurs.
-- **Unbind**, dans le menu ⋯ du bloc Options, retire le lien et garde les options. **Save as a new ValueSet** transforme des options saisies en un ValueSet réutilisable ; il n'apparaît que si vous pouvez gérer la terminologie.
-- Sous le FHIR Path, **bound:** nomme le ValueSet auquel FHIR lui-même lie cet élément, et avec quelle force. **Load from terminology**, dans le menu ⋯ du bloc Options, remplit les options depuis ce ValueSet.
-- Choisir un chemin que FHIR lie en required ou extensible, sur un champ sans ValueSet, le lie pour vous et en fait un select. Les liaisons preferred et example restent à votre choix, tout comme un champ qui nomme déjà une source de référence.
+- Un champ liste ou liste multiple peut prendre ses options dans un ValueSet. Dans le bloc Options, cherchez un ValueSet et choisissez-le. Ses codes sont copiés dans les options, et le champ garde un lien vers le ValueSet avec une force. Une force required empêche la saisie d'accepter d'autres valeurs.
+- **Délier**, dans le menu ⋯ du bloc Options, retire le lien et garde les options. **Enregistrer comme nouveau jeu de valeurs** transforme des options saisies en un ValueSet réutilisable ; il n'apparaît que si vous pouvez gérer la terminologie.
+- Sous le Chemin FHIR, **lié :** nomme le ValueSet auquel FHIR lui-même lie cet élément, et avec quelle force. **Charger depuis la terminologie**, dans le menu ⋯ du bloc Options, remplit les options depuis ce ValueSet.
+- Choisir un chemin que FHIR lie en required ou extensible, sur un champ sans ValueSet, le lie pour vous et en fait une liste. Les liaisons preferred et example restent à votre choix, tout comme un champ qui nomme déjà une source de référence.
 - Un champ de référence choisit son ValueSet dans le bloc Reference Configuration. Il y cherche en direct, donc rien n'est copié.
-- Chaque installation contient les 672 ValueSets standard de FHIR. Les formulaires d'enquête n'ont aucun élément lié, donc ils n'affichent pas de ligne **bound:**.
+- Chaque installation contient les 672 ValueSets standard de FHIR. Les formulaires d'enquête n'ont aucun élément lié, donc ils n'affichent pas de ligne **lié :**.
 
 ## Codes suggérés
 
-- Pour un champ qui a un FHIR Path, le bloc Codes affiche **Suggested codes** au-dessus de la recherche de termes.
-- Un code **Binding** vient du ValueSet du champ, ou du ValueSet auquel FHIR lie l'élément. **Your forms · N** signifie que N autres formulaires mettent ce code sur le même chemin.
+- Pour un champ qui a un Chemin FHIR, le bloc Codes affiche **Codes suggérés** au-dessus de la recherche de termes.
+- Un code **Liaison** vient du ValueSet du champ, ou du ValueSet auquel FHIR lie l'élément. **Vos formulaires · N** signifie que N autres formulaires mettent ce code sur le même chemin.
 - Cliquez sur une ligne pour mettre le code sur le champ.
-- **not in your terminology** marque un code que CE ne contient pas. L'ajouter l'ajoute aussi à votre terminologie, et le panneau le dit, avec **Undo**. Undo le retire de votre terminologie ; le code reste sur le champ.
+- **absent de votre terminologie** marque un code que CE ne contient pas. L'ajouter l'ajoute aussi à votre terminologie, et le panneau le dit, avec **Annuler**. Undo le retire de votre terminologie ; le code reste sur le champ.
 - Seul un utilisateur qui peut gérer la terminologie peut ajouter un tel code. Les autres auteurs le voient grisé.
 - Un code d'un système de codage que CE n'a pas est refusé. Ajoutez d'abord le système sur la page Terminology.
 - Une liste vide signifie que votre terminologie est incomplète, pas qu'aucun code n'existe. Cherchez plus bas, ou ajoutez des codes sur la page Terminology.
@@ -149,38 +149,38 @@ Ce contrôle porte sur la configuration. Les réponses obligatoires, les référ
 
 ## Packs de départ
 
-- Un pack de départ est une liste de champs prête pour un Resource Type, tirée des formulaires fournis avec OpenLDR : Location (Facility), Practitioner (Users), Patient et ServiceRequest (Lab order).
-- Quand vous choisissez un Resource Type sur un formulaire vide, son pack s'ouvre tout seul dans un panneau latéral. Sur un formulaire qui a déjà des champs, choisissez **Start from a pack** dans le menu ⋯.
-- Chaque entrée dit pourquoi elle est là. Décochez ce que vous ne collectez pas, puis choisissez **Add N fields** dans le menu ⋯ du panneau. L'ajout s'annule en une seule fois.
+- Un pack de départ est une liste de champs prête pour un Type de ressource, tirée des formulaires fournis avec OpenLDR : Location (Facility), Practitioner (Users), Patient et ServiceRequest (Lab order).
+- Quand vous choisissez un Type de ressource sur un formulaire vide, son pack s'ouvre tout seul dans un panneau latéral. Sur un formulaire qui a déjà des champs, choisissez **Partir d'un pack** dans le menu ⋯.
+- Chaque entrée dit pourquoi elle est là. Décochez ce que vous ne collectez pas, puis choisissez **Ajouter N champs** dans le menu ⋯ du panneau. L'ajout s'annule en une seule fois.
 - Une entrée verrouillée reste cochée, car la page qu'alimente le formulaire ne peut pas enregistrer sans elle.
 - Les entrées déjà présentes sur le formulaire n'apparaissent pas dans le panneau.
-- Les entrées codées prennent leurs options dans la liste propre à FHIR. Le pack Lab order laisse de côté **Ward / Department**, car ses codes sont locaux ; ajoutez-le depuis **Library** et donnez-lui des options.
-- Les formulaires d'enquête et les formulaires sans Resource Type n'ont pas de pack.
+- Les entrées codées prennent leurs options dans la liste propre à FHIR. Le pack Lab order laisse de côté **Ward / Department**, car ses codes sont locaux ; ajoutez-le depuis **Bibliothèque** et donnez-lui des options.
+- Les formulaires d'enquête et les formulaires sans Type de ressource n'ont pas de pack.
 
-## Le volet Library
+## Le volet Bibliothèque
 
-- Le volet de droite liste les éléments FHIR du Resource Type du formulaire qu'aucun champ n'utilise encore. Cliquez sur un élément pour l'ajouter comme champ ; son éditeur s'ouvre.
-- Au-dessus des éléments, **Left out of the pack** liste les entrées du pack absentes du formulaire, dans l'ordre du pack. Cliquez sur une entrée pour l'ajouter.
-- Un champ ajouté ainsi prend le nom et le type de l'élément. Un élément codé devient un select, avec des options quand l'élément liste ses codes. Les dates arrivent en champs texte ; changez le type dans l'éditeur.
+- Le volet de droite liste les éléments FHIR du Type de ressource du formulaire qu'aucun champ n'utilise encore. Cliquez sur un élément pour l'ajouter comme champ ; son éditeur s'ouvre.
+- Au-dessus des éléments, **Laissés hors du pack** liste les entrées du pack absentes du formulaire, dans l'ordre du pack. Cliquez sur une entrée pour l'ajouter.
+- Un champ ajouté ainsi prend le nom et le type de l'élément. Un élément codé devient une liste, avec des options quand l'élément liste ses codes. Les dates arrivent en champs texte ; changez le type dans l'éditeur.
 - Un élément qui appartient à un groupe déjà présent sur le formulaire va dans ce groupe.
 - La recherche filtre par nom et par chemin. La liste descend sur deux niveaux, par exemple `Location.address.city`.
-- Un formulaire d'enquête n'a pas de **Library**.
-- Si l'éditeur fait moins de 980 pixels de large, **Form** et **Library** deviennent des onglets. Un ajout depuis **Library** ramène à **Form**. Replier la barre latérale peut réafficher les deux volets.
+- Un formulaire d'enquête n'a pas de **Bibliothèque**.
+- Si l'éditeur fait moins de 980 pixels de large, **Formulaire** et **Bibliothèque** deviennent des onglets. Un ajout depuis **Bibliothèque** ramène à **Formulaire**. Replier la barre latérale peut réafficher les deux volets.
 
 ## Travailler sur plusieurs champs
 
 - Cliquez sur un champ pour ouvrir son éditeur. Maj-clic sélectionne tous les champs entre le dernier cliqué et celui-ci. Ctrl-clic (Cmd-clic sur Mac) ajoute ou retire un champ. Aucun des deux n'ouvre l'éditeur.
 - Ctrl+A (Cmd+A) sélectionne tous les champs affichés par la liste. Échap vide la sélection.
 - Avec deux champs ou plus sélectionnés, l'en-tête de la liste en indique le nombre, et son menu ⋯ les déplace vers une section, les active ou les désactive, ou les supprime. La suppression demande confirmation. Chaque action s'annule en une seule fois.
-- **Toggle enabled** les désactive tous si au moins la moitié sont actifs, et les active tous sinon. Il ignore les champs verrouillés, tout comme **Delete**.
+- **Activer ou désactiver** les désactive tous si au moins la moitié sont actifs, et les active tous sinon. Il ignore les champs verrouillés, tout comme **Supprimer**.
 - Quand aucune zone de saisie ni aucun menu n'a le focus : j et k (ou les flèches) descendent et remontent dans la liste, Entrée ouvre le champ, Espace l'active ou le désactive, d le supprime et Ctrl+D le duplique. Avec deux champs ou plus sélectionnés, Espace et d agissent sur tous. Ctrl+F place le curseur dans la recherche de champs.
 - Un téléphone n'a pas de touche Maj ni Ctrl : sur téléphone, on sélectionne un champ à la fois.
 
 ## Sections
 
-- Faites glisser un champ par sa poignée. Pendant le glissement, un panneau en haut de la liste affiche **(no section)** et chaque section, avec son nombre de champs. Déposez le champ sur l'une d'elles pour l'y déplacer. Le panneau n'apparaît que si le formulaire a des sections.
-- Dans la liste Sections, le menu ⋯ de chaque section propose **Edit visibility**, **Move up**, **Move down** et **Delete**.
-- **Edit visibility** ouvre le même éditeur de règle que pour un champ. Seuls les champs actifs peuvent servir dans une condition. La saisie masque la section tant que sa règle n'est pas remplie.
+- Faites glisser un champ par sa poignée. Pendant le glissement, un panneau en haut de la liste affiche **(aucune section)** et chaque section, avec son nombre de champs. Déposez le champ sur l'une d'elles pour l'y déplacer. Le panneau n'apparaît que si le formulaire a des sections.
+- Dans la liste Sections, le menu ⋯ de chaque section propose **Modifier la visibilité**, **Monter**, **Descendre** et **Supprimer**.
+- **Modifier la visibilité** ouvre le même éditeur de règle que pour un champ. Seuls les champs actifs peuvent servir dans une condition. La saisie masque la section tant que sa règle n'est pas remplie.
 - Un champ ou une section qui a une règle de visibilité affiche une icône de branche.
 
 ## Exemple : soumettre une demande de laboratoire
@@ -189,9 +189,9 @@ Utilisez une installation de test avec un patient existant, la terminologie LOIN
 
 1. Dans Forms, ouvrez le menu ⋯ de la page et choisissez New. Nommez le formulaire Exemple de demande.
 2. Sélectionnez R4, le type ServiceRequest et la page cible Forms. Ouvrez l'éditeur.
-3. Ajoutez un champ reference actif et obligatoire, nommé Patient. Dans **Reference Configuration**, définissez Target sur Patient. Sous Mapping, définissez FHIR Path sur ServiceRequest.subject.
-4. Ajoutez un champ reference actif et obligatoire, nommé Tests. Dans **Reference Configuration**, définissez Target sur le système LOINC installé, http://loinc.org, et FHIR Path sur ServiceRequest.code. Sélectionnez les codes dans la terminologie, sans inventer de code.
-5. Enregistrez chaque champ dans son menu ⋯. Vérifiez le message de configuration. Observation Extract n'est pas nécessaire pour ce formulaire ServiceRequest.
+3. Ajoutez un champ référence actif et obligatoire, nommé Patient. Dans **Configuration de la référence**, définissez Cible sur Patient. Sous Correspondance, définissez Chemin FHIR sur ServiceRequest.subject.
+4. Ajoutez un champ référence actif et obligatoire, nommé Tests. Dans **Configuration de la référence**, définissez Cible sur le système LOINC installé, http://loinc.org, et Chemin FHIR sur ServiceRequest.code. Sélectionnez les codes dans la terminologie, sans inventer de code.
+5. Enregistrez chaque champ dans son menu ⋯. Vérifiez le message de configuration. Extraction en Observation n'est pas nécessaire pour ce formulaire ServiceRequest.
 6. Dans le menu ⋯ de l'éditeur, choisissez Publish. Corrigez les erreurs éventuelles. La publication enregistre aussi le schéma actuel.
 7. Revenez à Forms et choisissez View/Run dans le menu ⋯ du formulaire. Sélectionnez un patient existant et un test chargé dans les listes.
 8. Choisissez Submit dans Form actions. Attendez Response captured. La réponse et le ServiceRequest dérivé passent par le workflow d'ingestion.
@@ -228,7 +228,7 @@ Une demande envoyée écrit un enregistrement de résultat par valeur saisie. Le
 
 ## Validation des chemins FHIR
 
-Quand un formulaire correspond à un type de ressource FHIR, le builder vérifie le chemin FHIR de chaque champ dans la liste des éléments. Un badge rouge est une erreur qui bloque la publication. Un badge jaune est un avertissement qui ne la bloque pas, mais à revoir. Le builder ne vérifie que neuf types de ressource courants. Les autres types n'ont aucun badge, car leurs chemins ne sont pas vérifiés.
+Quand un formulaire correspond à un type de ressource FHIR, le générateur vérifie le chemin FHIR de chaque champ dans la liste des éléments. Un badge rouge est une erreur qui bloque la publication. Un badge jaune est un avertissement qui ne la bloque pas, mais à revoir. Le générateur ne vérifie que neuf types de ressource courants. Les autres types n'ont aucun badge, car leurs chemins ne sont pas vérifiés.
 
 - **unknown-fhir-path (erreur).** Le chemin n'est pas un élément de ce type de ressource. En général une faute de frappe : vérifiez l'orthographe et la profondeur.
 - **facility-admin-order (erreur).** Les niveaux administratifs de l'établissement sont liés aux parties d'adresse FHIR dans le mauvais ordre. FHIR Address a quatre niveaux, le registre six. Zone est le niveau sans place : effacez le chemin FHIR du champ Zone et laissez-le sans correspondance. Un formulaire Facility enregistré par une ancienne migration peut encore lier Zone à `address.district`. Aucune migration ne le corrige : effacez ce chemin à la main.
@@ -243,14 +243,13 @@ Quand un formulaire correspond à un type de ressource FHIR, le builder vérifie
 
 ## Limites
 
-- **Un Lab order modifié garde l'ancien Referring Facility.** La mise à jour ne change le Lab order fourni que si personne ne l'a modifié. Sur une copie modifiée, Referring Facility reste un champ de texte, et la demande ne le garde pas. Pour corriger, ouvrez le champ. Mettez **FHIR Path** à `ServiceRequest.requester`. Cochez **Array element (discriminator)** et faites correspondre `type` égal à `Organization`. Mettez **Target** à `urn:openldr:cs:facility-registry`. Donnez ensuite le même chemin à **Requesting Clinician**, avec `type` égal à `Practitioner`.
+- **Un Lab order modifié garde l'ancien Referring Facility.** La mise à jour ne change le Lab order fourni que si personne ne l'a modifié. Sur une copie modifiée, Referring Facility reste un champ de texte, et la demande ne le garde pas. Pour corriger, ouvrez le champ. Mettez **Type de champ** à `référence` : le bloc **Configuration de la référence** apparaît. Mettez-y **Cible** à `urn:openldr:cs:facility-registry`. Mettez **Chemin FHIR** à `ServiceRequest.requester`. Cochez **Élément de liste (discriminant)** et faites correspondre `type` égal à `Organization`. Donnez ensuite le même chemin à **Requesting Clinician**, avec `type` égal à `Practitioner`.
 - **La saisie affiche chaque groupe une seule fois.** Ajouter des entrées à un groupe pendant la saisie n'est pas encore possible.
 - **Une demande envoyée ne se modifie pas.** Les résultats se saisissent avec la demande, en une fois.
-- **Le Form Builder n'est pas traduit.** Ses libellés restent en anglais.
 
 ## Sur un téléphone
 
-Les formulaires fonctionnent sur un téléphone. **View/Run** place chaque libellé au-dessus de son champ. L'aperçu du builder s'ouvre aussi en panneau. Un téléphone n'a pas de touche Maj ou Ctrl, donc dans le builder on sélectionne un champ à la fois. Sous 980 pixels de large, **Form** et **Library** deviennent des onglets.
+Les formulaires fonctionnent sur un téléphone. **View/Run** place chaque libellé au-dessus de son champ. L'aperçu du générateur s'ouvre aussi en panneau. Un téléphone n'a pas de touche Maj ou Ctrl, donc dans le générateur on sélectionne un champ à la fois. Sous 980 pixels de large, **Formulaire** et **Bibliothèque** deviennent des onglets.
 
 ## Dépannage
 

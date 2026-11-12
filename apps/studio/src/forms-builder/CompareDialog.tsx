@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getFormVersion, listFormVersions, type FormVersionSummary } from '../api';
@@ -10,18 +12,18 @@ interface CompareRow {
   kind: string;
 }
 
-function flattenDiff(diff: FormSchemaDiff): CompareRow[] {
+function flattenDiff(t: TFunction, diff: FormSchemaDiff): CompareRow[] {
   const rows: CompareRow[] = [];
   for (const change of diff.metadata) {
-    rows.push({ key: `metadata-${change.path}`, label: `Metadata · ${change.path}`, kind: change.kind });
+    rows.push({ key: `metadata-${change.path}`, label: t('formBuilder.compare.metadata', { path: change.path }), kind: change.kind });
   }
   for (const change of diff.sections) {
     const suffix = change.kind === 'changed' ? ` · ${change.path}` : '';
-    rows.push({ key: `section-${change.sectionId}-${change.kind}-${'path' in change ? change.path : ''}`, label: `Section ${change.sectionId}${suffix}`, kind: change.kind });
+    rows.push({ key: `section-${change.sectionId}-${change.kind}-${'path' in change ? change.path : ''}`, label: t('formBuilder.compare.section', { id: change.sectionId }) + suffix, kind: change.kind });
   }
   for (const change of diff.fields) {
     const suffix = change.kind === 'changed' ? ` · ${change.path}` : '';
-    rows.push({ key: `field-${change.fieldId}-${change.kind}-${'path' in change ? change.path : ''}`, label: `Field ${change.fieldId}${suffix}`, kind: change.kind });
+    rows.push({ key: `field-${change.fieldId}-${change.kind}-${'path' in change ? change.path : ''}`, label: t('formBuilder.compare.field', { id: change.fieldId }) + suffix, kind: change.kind });
   }
   return rows;
 }
@@ -36,13 +38,14 @@ async function sideSchema(formId: string, side: Side, current: FormSchema): Prom
 }
 
 /** Display label for one side, matching how the selector renders that option. */
-function sideLabel(side: Side, versions: FormVersionSummary[]): string {
-  if (side === 'draft') return 'Current draft';
+function sideLabel(t: TFunction, side: Side, versions: FormVersionSummary[]): string {
+  if (side === 'draft') return t('formBuilder.compare.currentDraft');
   const version = versions.find((v) => v.version === side);
   return version?.versionLabel ? `v${side} (${version.versionLabel})` : `v${side}`;
 }
 
 export function CompareDialog({ formId, current, open, onOpenChange }: { formId: string | null; current: FormSchema; open: boolean; onOpenChange: (open: boolean) => void }): JSX.Element {
+  const { t } = useTranslation();
   const [versions, setVersions] = useState<FormVersionSummary[]>([]);
   const [left, setLeft] = useState<Side | null>(null);
   const [right, setRight] = useState<Side>('draft');
@@ -115,26 +118,26 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
   // Derived, not stored: recomputes only when one of the two resolved schemas changes.
   const rows = useMemo(() => {
     if (!leftSchema || !rightSchema) return [];
-    return flattenDiff(diffFormSchemas(leftSchema, rightSchema));
-  }, [leftSchema, rightSchema]);
+    return flattenDiff(t, diffFormSchemas(leftSchema, rightSchema));
+  }, [t, leftSchema, rightSchema]);
 
-  const leftLabel = left !== null ? sideLabel(left, versions) : '';
-  const rightLabel = sideLabel(right, versions);
+  const leftLabel = left !== null ? sideLabel(t, left, versions) : '';
+  const rightLabel = sideLabel(t, right, versions);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <div className="border-b border-border px-6 py-4">
-          <DialogTitle className="text-base font-semibold">Compare form versions</DialogTitle>
+          <DialogTitle className="text-base font-semibold">{t('formBuilder.compare.title')}</DialogTitle>
           <p className="mt-1 text-xs text-muted-foreground">
             {listError ? (
-              <span className="text-destructive">Could not load versions.</span>
+              <span className="text-destructive">{t('formBuilder.compare.loadFailedShort')}</span>
             ) : versions.length > 0 ? (
               <>
-                <span className="font-medium text-foreground">{leftLabel}</span> vs{' '}
+                <span className="font-medium text-foreground">{leftLabel}</span> {t('formBuilder.compare.vs')}{' '}
                 <span className="font-medium text-foreground">{rightLabel}</span>
               </>
             ) : (
-              'No published versions yet.'
+              t('formBuilder.compare.noVersionsShort')
             )}
           </p>
           <div className="mt-3 flex items-center gap-2">
@@ -142,11 +145,11 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
               value={String(left ?? '')}
               onValueChange={(v) => setLeft(v === 'draft' ? 'draft' : Number(v))}
             >
-              <SelectTrigger className="w-44 text-xs" aria-label="Compare from">
+              <SelectTrigger className="w-44 text-xs" aria-label={t('formBuilder.compare.from')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="draft">Current draft</SelectItem>
+                <SelectItem value="draft">{t('formBuilder.compare.currentDraft')}</SelectItem>
                 {versions.map((v) => (
                   <SelectItem key={v.id} value={String(v.version)}>
                     {v.versionLabel ? `v${v.version} (${v.versionLabel})` : `v${v.version}`}
@@ -154,16 +157,16 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
                 ))}
               </SelectContent>
             </Select>
-            <span className="text-xs text-muted-foreground">to</span>
+            <span className="text-xs text-muted-foreground">{t('formBuilder.compare.toWord')}</span>
             <Select
               value={right === 'draft' ? 'draft' : String(right)}
               onValueChange={(v) => setRight(v === 'draft' ? 'draft' : Number(v))}
             >
-              <SelectTrigger className="w-44 text-xs" aria-label="Compare to">
+              <SelectTrigger className="w-44 text-xs" aria-label={t('formBuilder.compare.to')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="draft">Current draft</SelectItem>
+                <SelectItem value="draft">{t('formBuilder.compare.currentDraft')}</SelectItem>
                 {versions.map((v) => (
                   <SelectItem key={v.id} value={String(v.version)}>
                     {v.versionLabel ? `v${v.version} (${v.versionLabel})` : `v${v.version}`}
@@ -176,34 +179,34 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
 
         {listError ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium text-destructive">Could not load versions</p>
+            <p className="text-sm font-medium text-destructive">{t('formBuilder.compare.loadFailed')}</p>
             <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">{listError}</p>
           </div>
         ) : versions.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium">No published versions yet</p>
+            <p className="text-sm font-medium">{t('formBuilder.compare.noVersions')}</p>
             <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">
-              Publish this form to create a snapshot you can compare the current draft against.
+              {t('formBuilder.compare.noVersionsHint')}
             </p>
           </div>
         ) : leftError || rightError ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium text-destructive">Could not load the comparison</p>
+            <p className="text-sm font-medium text-destructive">{t('formBuilder.compare.comparisonFailed')}</p>
             <p className="mx-auto mt-1 max-w-xs text-xs text-muted-foreground">{leftError || rightError}</p>
           </div>
         ) : rows.length === 0 ? (
           <div className="px-6 py-12 text-center">
-            <p className="text-sm font-medium">No differences</p>
-            <p className="mt-1 text-xs text-muted-foreground">{leftLabel} matches {rightLabel}.</p>
+            <p className="text-sm font-medium">{t('formBuilder.compare.noDifferences')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('formBuilder.compare.matches', { left: leftLabel, right: rightLabel })}</p>
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between border-b border-border bg-muted/30 px-6 py-2 text-xs text-muted-foreground">
-              <span>{rows.length} change{rows.length === 1 ? '' : 's'} between {leftLabel} and {rightLabel}</span>
+              <span>{t('formBuilder.compare.changes', { count: rows.length, left: leftLabel, right: rightLabel })}</span>
             </div>
             <div className="max-h-[55vh] divide-y divide-border overflow-auto">
               {rows.map((row) => {
-                const meta = kindMeta(row.kind);
+                const meta = kindMeta(t, row.kind);
                 return (
                   <div key={row.key} className="flex items-start gap-3 px-6 py-2.5">
                     <span className={`mt-0.5 shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${meta.cls}`}>
@@ -221,8 +224,8 @@ export function CompareDialog({ formId, current, open, onOpenChange }: { formId:
   );
 }
 
-function kindMeta(kind: string): { label: string; cls: string } {
-  if (kind === 'added') return { label: 'Added', cls: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600' };
-  if (kind === 'removed') return { label: 'Removed', cls: 'border-destructive/30 bg-destructive/15 text-destructive' };
-  return { label: 'Changed', cls: 'border-amber-500/30 bg-amber-500/15 text-amber-600' };
+function kindMeta(t: TFunction, kind: string): { label: string; cls: string } {
+  if (kind === 'added') return { label: t('formBuilder.compare.added'), cls: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-600' };
+  if (kind === 'removed') return { label: t('formBuilder.compare.removed'), cls: 'border-destructive/30 bg-destructive/15 text-destructive' };
+  return { label: t('formBuilder.compare.changed'), cls: 'border-amber-500/30 bg-amber-500/15 text-amber-600' };
 }

@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { FormField } from '@openldr/forms/pure';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,7 @@ export function TranslationsEditor({
   languages,
   onUpdate,
 }: TranslationsEditorProps): JSX.Element {
+  const { t } = useTranslation();
   function handleLabelChange(locale: string, value: string): void {
     onUpdate({
       translations: {
@@ -38,14 +40,13 @@ export function TranslationsEditor({
     <section className="mt-2">
       {languages.length === 0 ? (
         <p className="text-xs text-muted-foreground py-4">
-          No translation languages yet. Add one with the language control in the
-          form header.
+          {t('formBuilder.translations.empty')}
         </p>
       ) : (
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 py-4">
           {languages.map((locale) => {
             const inputId = `translations-${locale}-label`;
-            const ariaLabel = `${locale} label`;
+            const ariaLabel = t('formBuilder.translations.labelAria', { locale });
             return (
               <React.Fragment key={locale}>
                 <Label htmlFor={inputId} className="whitespace-nowrap font-mono text-xs uppercase">
@@ -56,7 +57,7 @@ export function TranslationsEditor({
                   aria-label={ariaLabel}
                   value={field.translations?.[locale]?.label ?? ''}
                   onChange={(e) => handleLabelChange(locale, e.target.value)}
-                  placeholder={`Label in ${locale}`}
+                  placeholder={t('formBuilder.translations.labelIn', { locale })}
                 />
               </React.Fragment>
             );

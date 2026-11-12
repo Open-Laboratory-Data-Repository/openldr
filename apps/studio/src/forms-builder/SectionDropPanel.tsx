@@ -1,4 +1,5 @@
 import { useDroppable } from '@dnd-kit/core';
+import { useTranslation } from 'react-i18next';
 import type { FormSection } from '@openldr/forms/pure';
 
 const TARGET_PREFIX = 'section-target:';
@@ -61,6 +62,7 @@ export function SectionDropPanel({
   fieldCountBySection: Record<string, number>;
   unsectionedCount: number;
 }): JSX.Element {
+  const { t } = useTranslation();
   return (
     <div
       aria-hidden={!visible}
@@ -68,9 +70,9 @@ export function SectionDropPanel({
         visible ? 'max-h-72 translate-y-0 opacity-100' : 'max-h-0 -translate-y-2 opacity-0'
       }`}
     >
-      <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">Drop on a section to reassign</p>
+      <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('formBuilder.list.dropHint')}</p>
       <div className="space-y-1.5">
-        <DropRow id={sectionDropTargetId(undefined)} label="(no section)" count={unsectionedCount} />
+        <DropRow id={sectionDropTargetId(undefined)} label={t('formBuilder.list.noSection')} count={unsectionedCount} />
         {sections.map((s) => (
           <DropRow key={s.id} id={sectionDropTargetId(s.id)} label={s.label} count={fieldCountBySection[s.id] ?? 0} />
         ))}

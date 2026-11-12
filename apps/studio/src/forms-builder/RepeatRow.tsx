@@ -1,4 +1,5 @@
 import { Repeat } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -12,6 +13,7 @@ import type { RepeatNode } from './fieldTree';
  * not two unrelated fields that happen to share a path.
  */
 export function RepeatRow({ node }: { node: RepeatNode }): JSX.Element {
+  const { t } = useTranslation();
   const count = node.slots.length;
   return (
     <div className="flex items-center gap-2 px-1 py-1.5">
@@ -26,7 +28,7 @@ export function RepeatRow({ node }: { node: RepeatNode }): JSX.Element {
         <TruncatedText as="span" text={node.path} className="block font-mono text-[10px] text-muted-foreground" />
       </div>
       <Badge variant="secondary" className="ml-auto shrink-0 text-[10px]">
-        {count === 1 ? '1 slot' : `${count} slots`}
+        {t('formBuilder.list.slots', { count })}
       </Badge>
     </div>
   );
@@ -37,6 +39,7 @@ export function RepeatRow({ node }: { node: RepeatNode }): JSX.Element {
  * it sits under that list's slots rather than in a page menu, as in corlix `RepeatRow.tsx`.
  */
 export function AddNamedSlotRow({ onAdd }: { onAdd: () => void }): JSX.Element {
+  const { t } = useTranslation();
   return (
     <Button
       type="button"
@@ -44,7 +47,7 @@ export function AddNamedSlotRow({ onAdd }: { onAdd: () => void }): JSX.Element {
       onClick={onAdd}
       className="h-auto w-full justify-start rounded-md border border-dashed border-border px-3 py-1.5 text-xs font-normal text-muted-foreground hover:border-primary hover:bg-transparent hover:text-primary"
     >
-      + Add a named slot
+      {t('formBuilder.list.addSlot')}
     </Button>
   );
 }

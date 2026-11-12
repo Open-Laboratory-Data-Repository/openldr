@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { FormField, FormFieldCoding } from '@openldr/forms/pure';
 import { TermPicker, type PickedTerm } from '@/terminology/TermPicker';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +31,7 @@ export interface CodesEditorProps {
  * other forms on the same path (spec S7).
  */
 export function CodesEditor({ field, onUpdate, fhirResourceType = null, formId = null }: CodesEditorProps): JSX.Element {
+  const { t } = useTranslation();
   const codes: FormFieldCoding[] = field.code ?? [];
   const [systemId, setSystemId] = React.useState('http://loinc.org');
   // null = search mode, value = just picked (reset back to null so picker stays open)
@@ -92,7 +94,7 @@ export function CodesEditor({ field, onUpdate, fhirResourceType = null, formId =
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Remove code"
+                aria-label={t('formBuilder.codes.remove')}
                 className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => removeCode(i)}
               >
@@ -109,11 +111,11 @@ export function CodesEditor({ field, onUpdate, fhirResourceType = null, formId =
       <div className="py-3 space-y-2">
         <div className="flex items-center gap-2">
           <Label htmlFor="codes-system-input" className="whitespace-nowrap text-xs">
-            System
+            {t('formBuilder.codes.system')}
           </Label>
           <Input
             id="codes-system-input"
-            aria-label="Terminology system"
+            aria-label={t('formBuilder.codes.systemAria')}
             value={systemId}
             onChange={(e) => setSystemId(e.target.value)}
             placeholder="http://loinc.org"

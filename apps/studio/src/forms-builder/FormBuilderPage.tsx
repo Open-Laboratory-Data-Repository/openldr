@@ -1,4 +1,5 @@
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AppShell } from '@/shell/AppShell';
@@ -49,6 +50,7 @@ import {
 } from '@openldr/forms/pure';
 
 export function FormBuilderPage(): JSX.Element {
+  const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const [formId, setFormId] = useState<string | null>(id ?? null);
@@ -144,7 +146,9 @@ export function FormBuilderPage(): JSX.Element {
   const addField = () => {
     history.pushHistory();
     const nextOrder = schema.fields.reduce((max, f) => Math.max(max, f.order), -1) + 1;
-    const field = newField('New text field', 'text');
+    const field = newField(t('formBuilder.page.newTextField'), 'text');
+    // The id stays English whatever the language, so a form's ids do not depend on who made it.
+    field.id = newField('New text field', 'text').id;
     field.order = nextOrder;
     field.id = makeUniqueFieldId(field.id, new Set(schema.fields.map((f) => f.id)));
     setSchema((prev) => ({ ...prev, fields: [...prev.fields, field] }));
@@ -232,7 +236,7 @@ export function FormBuilderPage(): JSX.Element {
   /** Another slot of a repeating list. One undo step; the new slot opens. It stays on Cancel, as in corlix. */
   const addNamedSlot = (node: RepeatNode) => {
     history.pushHistory();
-    const slot = buildNamedSlot(node, freshId('New slot'), 'New slot');
+    const slot = buildNamedSlot(node, freshId('New slot'), t('formBuilder.page.newSlot'));
     const anchor = node.slots[node.slots.length - 1].id;
     setSchema((prev) => ({ ...prev, fields: insertFieldAfter(prev.fields, anchor, slot) }));
     setPendingNewFieldId(null);
@@ -250,7 +254,7 @@ export function FormBuilderPage(): JSX.Element {
   /** Save the group's edits, add a part after its last part, and open the part. One undo step. */
   const addGroupPart = (draft: FormField) => {
     history.pushHistory();
-    const part = buildGroupPart(draft, freshId('New part'), 'New part');
+    const part = buildGroupPart(draft, freshId('New part'), t('formBuilder.page.newPart'));
     setSchema((prev) => {
       const committed = prev.fields.map((f) => (f.id === draft.id ? draft : f));
       return { ...prev, fields: insertFieldAfter(committed, lastPartIdOf(committed, draft.id), part) };
@@ -426,7 +430,7 @@ export function FormBuilderPage(): JSX.Element {
    * have landed yet, so publish-after-create has to read the id from here, not from state.
    */
   const saveDraft = async (): Promise<FormDefinition> => {
-    const effectiveName = schema.name.trim() || 'Untitled form';
+    const effectiveName = schema.name.trim() || t('formBuilder.page.untitled');
     const nextSchema: FormSchema = { ...schema, name: effectiveName };
     const payload = {
       name: effectiveName,
@@ -447,7 +451,7 @@ export function FormBuilderPage(): JSX.Element {
   const save = async () => {
     try {
       const saved = await saveDraft();
-      toast.success(`Saved ${saved.name}`);
+      toast.success(t('formBuilder.page.saved', { name: saved.name }));
     } catch (err) {
       toast.error(messageOf(err));
     }
@@ -464,7 +468,7 @@ export function FormBuilderPage(): JSX.Element {
       const published = await publishForm(saved.id, { versionLabel: schema.versionLabel ?? null });
       setStatus(published.status);
       setPublishedVersion(await latestVersionOf(saved.id));
-      toast.success(`Published ${published.name}`);
+      toast.success(t('formBuilder.page.published', { name: published.name }));
     } catch (err) {
       toast.error(messageOf(err));
     }
@@ -475,7 +479,7 @@ export function FormBuilderPage(): JSX.Element {
     try {
       const f = await setFormStatus(formId, 'archived');
       setStatus(f.status);
-      toast.success(`Archived ${f.name}`);
+      toast.success(t('formBuilder.page.archived', { name: f.name }));
     } catch (err) {
       toast.error(messageOf(err));
     }
@@ -489,7 +493,7 @@ export function FormBuilderPage(): JSX.Element {
       setStatus(f.status);
       // Reports the archive, not the menu item. Disable has no endpoint of its own yet, so telling
       // the operator "Disabled" while the status badge turns amber Archived would be a lie.
-      toast.success(`Archived ${f.name}`);
+      toast.success(t('formBuilder.page.archived', { name: f.name }));
     } catch (err) {
       toast.error(messageOf(err));
     }
@@ -501,7 +505,7 @@ export function FormBuilderPage(): JSX.Element {
       await deleteForm(formId);
       // Toasted before the navigate: the Toaster lives at the app root, so the message survives the
       // route change and is waiting on the list the operator lands on.
-      toast.success(`Deleted ${schema.name || 'form'}`);
+      toast.success(t('formBuilder.page.deleted', { name: schema.name || t('formBuilder.page.formWord') }));
       navigate('/forms');
     } catch (err) {
       toast.error(messageOf(err));
@@ -555,7 +559,7 @@ export function FormBuilderPage(): JSX.Element {
   );
 
   return (
-    <AppShell title="Form Builder" fullBleed>
+    <AppShell title={t('formBuilder.page.title')} fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Top: BuilderHeader */}
         <BuilderHeader
@@ -590,7 +594,7 @@ export function FormBuilderPage(): JSX.Element {
             assistive tech. The status region is visually hidden because the state is already shown
             as a colored dot in the header; the live region gives non-visual users the same update. */}
         <p role="status" aria-live="polite" className="sr-only">
-          {status ? `Form status: ${status}` : ''}
+          {status ? t('formBuilder.page.statusLive', { status: t(`formBuilder.header.status.${status}`, { defaultValue: status }) }) : ''}
         </p>
 
         {error ? (
@@ -612,11 +616,11 @@ export function FormBuilderPage(): JSX.Element {
             >
               <TabsList className="shrink-0 px-4">
                 <TabsTrigger value="form" className="gap-1.5">
-                  Form
+                  {t('formBuilder.page.tabForm')}
                   <span className="rounded-full border border-border px-1.5 font-mono text-[10px] leading-4 text-muted-foreground">{schema.fields.length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="library" className="gap-1.5">
-                  Library
+                  {t('formBuilder.page.tabLibrary')}
                   <span className="rounded-full border border-border px-1.5 font-mono text-[10px] leading-4 text-muted-foreground">{packLeft.length + elements.length}</span>
                 </TabsTrigger>
               </TabsList>
@@ -709,9 +713,9 @@ export function FormBuilderPage(): JSX.Element {
       <ConfirmDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        title="Delete form?"
-        description="This will permanently delete the form and all its versions. This action cannot be undone."
-        confirmLabel="Delete"
+        title={t('formBuilder.page.deleteTitle')}
+        description={t('formBuilder.page.deleteBody')}
+        confirmLabel={t('formBuilder.page.delete')}
         destructive
         onConfirm={() => { void handleDelete(); }}
       />
@@ -720,9 +724,9 @@ export function FormBuilderPage(): JSX.Element {
       <ConfirmDialog
         open={confirmBulkDeleteOpen}
         onOpenChange={setConfirmBulkDeleteOpen}
-        title={`Delete ${selection.ids.size} fields?`}
-        description="This removes them from the form. Locked fields stay. You can undo it with Ctrl+Z."
-        confirmLabel="Delete"
+        title={t('formBuilder.page.deleteFieldsTitle', { count: selection.ids.size })}
+        description={t('formBuilder.page.deleteFieldsBody')}
+        confirmLabel={t('formBuilder.page.delete')}
         destructive
         onConfirm={bulkDelete}
       />

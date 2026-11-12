@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,6 +41,7 @@ export function SectionsManager({
   onFieldsClearSection,
   onEditVisibility,
 }: SectionsManagerProps): JSX.Element {
+  const { t } = useTranslation();
   const [newLabel, setNewLabel] = useState('');
 
   // Always work with sections sorted by order
@@ -86,7 +88,7 @@ export function SectionsManager({
   return (
     <div className="flex flex-col gap-2 p-3">
       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-        Sections
+        {t('formBuilder.sections.title')}
       </p>
 
       <div className="flex flex-col gap-1">
@@ -96,7 +98,7 @@ export function SectionsManager({
             className="flex items-center gap-1 rounded-md border border-border px-2 py-1"
           >
             <Input
-              aria-label={`Section label for ${section.id}`}
+              aria-label={t('formBuilder.sections.labelFor', { id: section.id })}
               value={section.label}
               onChange={(e) => handleLabelChange(section.id, e.target.value)}
               className="h-7 flex-1 text-sm border-0 shadow-none focus-visible:ring-0 px-1"
@@ -112,27 +114,27 @@ export function SectionsManager({
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6 shrink-0"
-                  aria-label={`Actions for section ${section.label}`}
+                  aria-label={t('formBuilder.sections.actionsFor', { label: section.label })}
                 >
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 {onEditVisibility && (
-                  <DropdownMenuItem onSelect={() => onEditVisibility(section.id)}>Edit visibility</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => onEditVisibility(section.id)}>{t('formBuilder.sections.editVisibility')}</DropdownMenuItem>
                 )}
                 <DropdownMenuItem disabled={index === 0} onSelect={() => handleMove(index, 'up')}>
-                  Move up
+                  {t('formBuilder.sections.moveUp')}
                 </DropdownMenuItem>
                 <DropdownMenuItem disabled={index === sorted.length - 1} onSelect={() => handleMove(index, 'down')}>
-                  Move down
+                  {t('formBuilder.sections.moveDown')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="text-destructive focus:text-destructive"
                   onSelect={() => handleDelete(section.id)}
                 >
-                  Delete
+                  {t('formBuilder.sections.delete')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -143,8 +145,8 @@ export function SectionsManager({
       {/* Add new section: input + button (Corlix style) */}
       <div className="flex gap-1">
         <Input
-          aria-label="Section name"
-          placeholder="Section name…"
+          aria-label={t('formBuilder.sections.name')}
+          placeholder={t('formBuilder.sections.namePlaceholder')}
           value={newLabel}
           onChange={(e) => setNewLabel(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -158,7 +160,7 @@ export function SectionsManager({
           disabled={newLabel.trim() === ''}
           onClick={handleAdd}
         >
-          Add
+          {t('formBuilder.sections.add')}
         </Button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   DndContext,
   closestCenter,
@@ -84,6 +85,7 @@ export function FieldListPane({
   searchText,
   onSearchTextChange,
 }: FieldListPaneProps): JSX.Element {
+  const { t } = useTranslation();
   const [localSearch, setLocalSearch] = useState('');
   const search = searchText ?? localSearch;
   const setSearch = onSearchTextChange ?? setLocalSearch;
@@ -186,15 +188,15 @@ export function FieldListPane({
             {/* m-0: studio ships Tailwind without its reset (tokens.css), so a bare <p> keeps the
                 browser's 1em margin and makes this row 57px tall instead of 44px. */}
             <p className="m-0 text-xs text-muted-foreground">
-              {fields.length} fields ({enabledCount} enabled)
+              {t('formBuilder.list.fieldCount', { count: fields.length, enabled: enabledCount })}
             </p>
             <span aria-hidden="true" className="text-muted-foreground">·</span>
             <div data-list-search className="relative w-48 min-w-0 max-w-full">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 id="builder-field-search"
-                aria-label="Search fields"
-                placeholder="Search fields…"
+                aria-label={t('formBuilder.list.search')}
+                placeholder={t('formBuilder.list.searchPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-7 pl-7 pr-7 text-xs"
@@ -204,7 +206,7 @@ export function FieldListPane({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  aria-label="Clear search"
+                  aria-label={t('formBuilder.list.clearSearch')}
                   onClick={() => setSearch('')}
                   className="absolute right-1 top-1/2 h-5 w-5 -translate-y-1/2 hover:bg-transparent"
                 >

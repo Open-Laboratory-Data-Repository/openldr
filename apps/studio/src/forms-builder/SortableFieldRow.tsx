@@ -1,5 +1,6 @@
 import React from 'react';
 import { GripVertical, MoreHorizontal, Repeat } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -47,6 +48,14 @@ export function SortableFieldRow({
   onDuplicate,
   onDelete,
 }: SortableFieldRowProps): JSX.Element {
+  const { t, i18n } = useTranslation();
+  // The forms package writes each lint message in English, naming the path and the type. English
+  // keeps that message. Other languages get one sentence per rule, naming the field.
+  const lintText = !lintIssue
+    ? ''
+    : i18n.language.startsWith('en')
+      ? lintIssue.message
+      : t(`formBuilder.lint.${lintIssue.code}`, { field: lintIssue.fieldId ?? '', defaultValue: lintIssue.message });
   const {
     attributes,
     listeners,
@@ -64,7 +73,7 @@ export function SortableFieldRow({
 
   const discLabel = discriminatorLabel(field.fhirDiscriminator);
   const showRepeat = field.fieldType === 'group' ? repeats : field.repeatable === true;
-  const repeatText = field.fieldType === 'group' ? 'Repeating group' : 'Repeats';
+  const repeatText = field.fieldType === 'group' ? t('formBuilder.list.repeatingGroup') : t('formBuilder.list.repeats');
 
   return (
     <div
@@ -81,7 +90,7 @@ export function SortableFieldRow({
       <button
         type="button"
         className="cursor-grab text-muted-foreground hover:text-foreground shrink-0 touch-none"
-        aria-label="Drag to reorder"
+        aria-label={t('formBuilder.list.drag')}
         {...attributes}
         {...listeners}
         onClick={(e) => e.stopPropagation()}
@@ -95,7 +104,7 @@ export function SortableFieldRow({
         onCheckedChange={() => onToggleEnabled(field.id)}
         onClick={(e) => e.stopPropagation()}
         disabled={field.locked}
-        aria-label={`Toggle enabled for ${field.displayLabel}`}
+        aria-label={t('formBuilder.list.toggleEnabled', { label: field.displayLabel })}
       />
 
       {/* Label region — a real button so selecting a field works by click and keyboard
@@ -106,7 +115,7 @@ export function SortableFieldRow({
         data-row-label
         onClick={(e) => onSelect(field, e)}
         aria-pressed={selected}
-        aria-label={`Edit field ${field.displayLabel}`}
+        aria-label={t('formBuilder.list.edit', { label: field.displayLabel })}
         className="flex-1 min-w-0 cursor-pointer text-left leading-tight"
       >
         <span className="m-0 flex items-baseline gap-0.5 text-sm font-medium text-foreground leading-5">
@@ -134,8 +143,8 @@ export function SortableFieldRow({
               ? 'bg-destructive text-destructive-foreground'
               : 'bg-amber-100 text-amber-700'
           }`}
-          title={lintIssue.message}
-          aria-label={lintIssue.message}
+          title={lintText}
+          aria-label={lintText}
         >
           {lintIssue.severity === 'error' ? '!' : '?'}
         </span>
@@ -164,7 +173,7 @@ export function SortableFieldRow({
 
       {/* Type badge */}
       <Badge variant="secondary" className="text-[10px] shrink-0">
-        {field.fieldType}
+        {t(`formBuilder.fieldType.${field.fieldType}`, { defaultValue: field.fieldType })}
       </Badge>
 
       {/* Section badge: the section's label, as corlix's FieldRow prints it, not its id */}
@@ -181,7 +190,7 @@ export function SortableFieldRow({
             variant="ghost"
             size="icon"
             className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
-            aria-label={`Actions for ${field.displayLabel}`}
+            aria-label={t('formBuilder.list.actions', { label: field.displayLabel })}
             onClick={(e) => e.stopPropagation()}
           >
             <MoreHorizontal className="h-4 w-4" />
@@ -189,10 +198,10 @@ export function SortableFieldRow({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
           <DropdownMenuItem onSelect={() => onDuplicate(field.id)}>
-            Duplicate
+            {t('formBuilder.list.duplicate')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onToggleRequired(field.id)}>
-            Required
+            {t('formBuilder.list.required')}
           </DropdownMenuItem>
           {/* A locked field is one the form cannot work without, so it offers no Delete. */}
           {!field.locked && (
@@ -202,7 +211,7 @@ export function SortableFieldRow({
                 className="text-destructive focus:text-destructive"
                 onSelect={() => onDelete(field.id)}
               >
-                Delete
+                {t('formBuilder.list.delete')}
               </DropdownMenuItem>
             </>
           )}

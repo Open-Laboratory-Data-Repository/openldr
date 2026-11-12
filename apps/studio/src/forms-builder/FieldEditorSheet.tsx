@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
 import { FieldType, childrenOf, eligibleParents, groupRepeats, isSurveyForm } from '@openldr/forms/pure';
 import { ReferenceEditor } from './field-editor/ReferenceEditor';
@@ -34,9 +35,8 @@ import { Button } from '@/components/ui/button';
 // Derived from the FieldType zod enum (not hand-copied) so the picklist can
 // never drift from the schema: `.options` is a readonly tuple of the literal
 // strings in declaration order, which is exactly the order the UI wants.
-const FIELD_TYPES: { value: string; label: string }[] = FieldType.options.map(
-  (value) => ({ value, label: value }),
-);
+// Each shows its name from formBuilder.fieldType.
+const FIELD_TYPES: readonly string[] = FieldType.options;
 
 export interface FieldEditorSheetProps {
   field: FormField | null;
@@ -71,6 +71,8 @@ export function FieldEditorSheet({
   onOpenField,
   onAddPart,
 }: FieldEditorSheetProps) {
+  const { t } = useTranslation();
+  const typeName = (v: string) => t(`formBuilder.fieldType.${v}`, { defaultValue: v });
   const [draft, setDraft] = useState<FormField | null>(field);
   // Bumped on every path pick and every field switch, so a slower auto-bind lookup never lands on
   // a later path or on another field's draft.
@@ -131,28 +133,28 @@ export function FieldEditorSheet({
       <SheetContent className="p-0 gap-0 overflow-y-auto">
         {/* ── Sheet Header ───────────────────────────────────────────── */}
         <SheetHeader className="px-6 py-4 border-b border-border">
-          <SheetTitle>Edit Field</SheetTitle>
+          <SheetTitle>{t('formBuilder.field.title')}</SheetTitle>
           <SheetDescription>{activeDraft.displayLabel}</SheetDescription>
         </SheetHeader>
 
         {/* ── General ──────────────────────────────────────────────────── */}
         <section>
           <div className="flex items-center justify-between px-6 py-3">
-            <h3 className="text-sm font-medium text-foreground">General</h3>
+            <h3 className="text-sm font-medium text-foreground">{t('formBuilder.field.general')}</h3>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 shrink-0"
-                  aria-label="Field actions"
+                  aria-label={t('formBuilder.field.actions')}
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleSave}>Save</DropdownMenuItem>
-                <DropdownMenuItem onClick={handleCancel}>Cancel</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleSave}>{t('formBuilder.field.save')}</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleCancel}>{t('formBuilder.field.cancel')}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -162,18 +164,18 @@ export function FieldEditorSheet({
 
             {/* Display Label */}
             <Label htmlFor="field-display-label" className="whitespace-nowrap">
-              Display Label
+              {t('formBuilder.field.displayLabel')}
             </Label>
             <Input
               id="field-display-label"
-              aria-label="Display Label"
+              aria-label={t('formBuilder.field.displayLabel')}
               value={activeDraft.displayLabel}
               onChange={(e) => patchDraft({ displayLabel: e.target.value })}
             />
 
             {/* Field Type */}
             <Label htmlFor="field-type-trigger" className="whitespace-nowrap">
-              Field Type
+              {t('formBuilder.field.fieldType')}
             </Label>
             <Select
               value={activeDraft.fieldType}
@@ -181,13 +183,13 @@ export function FieldEditorSheet({
                 patchDraft({ fieldType: v as FormField['fieldType'] })
               }
             >
-              <SelectTrigger id="field-type-trigger" aria-label="Field Type">
+              <SelectTrigger id="field-type-trigger" aria-label={t('formBuilder.field.fieldType')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {FIELD_TYPES.map((ft) => (
-                  <SelectItem key={ft.value} value={ft.value}>
-                    {ft.label}
+                  <SelectItem key={ft} value={ft}>
+                    {typeName(ft)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -195,7 +197,7 @@ export function FieldEditorSheet({
 
             {/* Section */}
             <Label htmlFor="field-section-trigger" className="whitespace-nowrap">
-              Section
+              {t('formBuilder.field.section')}
             </Label>
             <Select
               value={activeDraft.section ?? '__none'}
@@ -203,11 +205,11 @@ export function FieldEditorSheet({
                 patchDraft({ section: v === '__none' ? undefined : v })
               }
             >
-              <SelectTrigger id="field-section-trigger" aria-label="Section">
+              <SelectTrigger id="field-section-trigger" aria-label={t('formBuilder.field.section')}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none">No section</SelectItem>
+                <SelectItem value="__none">{t('formBuilder.field.noSection')}</SelectItem>
                 {sections.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     {s.label}
@@ -218,7 +220,7 @@ export function FieldEditorSheet({
 
             {/* Group. A group can sit inside another group, to any depth. */}
             <Label htmlFor="field-group-trigger" className="whitespace-nowrap">
-              Group
+              {t('formBuilder.field.group')}
             </Label>
             <div className="flex flex-col gap-1">
               <Select
@@ -227,11 +229,11 @@ export function FieldEditorSheet({
                   patchDraft({ groupId: v === '__none' ? undefined : v })
                 }
               >
-                <SelectTrigger id="field-group-trigger" aria-label="Group">
+                <SelectTrigger id="field-group-trigger" aria-label={t('formBuilder.field.group')}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">No group</SelectItem>
+                  <SelectItem value="__none">{t('formBuilder.field.noGroup')}</SelectItem>
                   {groupFields.map((g) => (
                     <SelectItem key={g.id} value={g.id}>
                       {g.displayLabel}
@@ -240,41 +242,41 @@ export function FieldEditorSheet({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Nest this field under a Group field. Create one by setting a field&apos;s Type to Group.
+                {t('formBuilder.field.groupHint')}
               </p>
               {activeDraft.fieldType === 'group' && !groupRepeats(activeDraft, fhirResourceType) && (
                 <p className="text-xs text-muted-foreground">
-                  This group holds a single instance, so data entry shows no add control.
+                  {t('formBuilder.field.groupSingle')}
                 </p>
               )}
             </div>
 
             {/* Placeholder */}
             <Label htmlFor="field-placeholder" className="whitespace-nowrap">
-              Placeholder
+              {t('formBuilder.field.placeholder')}
             </Label>
             <Input
               id="field-placeholder"
-              aria-label="Placeholder"
+              aria-label={t('formBuilder.field.placeholder')}
               value={activeDraft.placeholder ?? ''}
               onChange={(e) =>
                 patchDraft({ placeholder: e.target.value || undefined })
               }
-              placeholder="Hint text"
+              placeholder={t('formBuilder.field.placeholderHint')}
             />
 
             {/* Unit */}
             <Label htmlFor="field-unit" className="whitespace-nowrap">
-              Unit
+              {t('formBuilder.field.unit')}
             </Label>
             <Input
               id="field-unit"
-              aria-label="Unit"
+              aria-label={t('formBuilder.field.unit')}
               value={activeDraft.unit ?? ''}
               onChange={(e) =>
                 patchDraft({ unit: e.target.value || undefined })
               }
-              placeholder="e.g. mg/dL"
+              placeholder={t('formBuilder.field.unitHint')}
             />
 
             {/* Required + Enabled checkboxes */}
@@ -282,27 +284,27 @@ export function FieldEditorSheet({
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="field-required"
-                  aria-label="Required"
+                  aria-label={t('formBuilder.field.required')}
                   checked={activeDraft.required}
                   onCheckedChange={(checked) =>
                     patchDraft({ required: !!checked })
                   }
                 />
                 <Label htmlFor="field-required" className="text-xs">
-                  Required
+                  {t('formBuilder.field.required')}
                 </Label>
               </div>
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="field-enabled"
-                  aria-label="Enabled"
+                  aria-label={t('formBuilder.field.enabled')}
                   checked={activeDraft.enabled}
                   onCheckedChange={(checked) =>
                     patchDraft({ enabled: !!checked })
                   }
                 />
                 <Label htmlFor="field-enabled" className="text-xs">
-                  Enabled
+                  {t('formBuilder.field.enabled')}
                 </Label>
               </div>
             </div>
@@ -314,7 +316,7 @@ export function FieldEditorSheet({
           <>
             <div className="border-t border-border" />
             <div className="px-6 py-3">
-              <h3 className="text-sm font-medium text-foreground">Reference Configuration</h3>
+              <h3 className="text-sm font-medium text-foreground">{t('formBuilder.field.referenceConfig')}</h3>
             </div>
             <div className="border-t border-border" />
             <div className="px-6 py-2">
@@ -330,7 +332,7 @@ export function FieldEditorSheet({
         {/* ── Mapping / FHIR section. Above Codes, as in corlix: mapping is what authors get wrong. ── */}
         <div className="border-t border-border" />
         <div className="px-6 py-3">
-          <h3 className="text-sm font-medium text-foreground">Mapping</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('formBuilder.field.mapping')}</h3>
         </div>
         <div className="border-t border-border" />
         <div className="px-6 py-2">
@@ -347,13 +349,13 @@ export function FieldEditorSheet({
           <>
             <div className="border-t border-border" />
             <div className="flex items-baseline gap-2 px-6 py-3">
-              <h3 className="text-sm font-medium text-foreground">Parts</h3>
-              <span className="text-[11px] text-muted-foreground">click one to edit it</span>
+              <h3 className="text-sm font-medium text-foreground">{t('formBuilder.field.parts')}</h3>
+              <span className="text-[11px] text-muted-foreground">{t('formBuilder.field.partsHint')}</span>
             </div>
             <div className="border-t border-border" />
             <div className="space-y-1 px-6 py-4">
               {childrenOf(allFields, activeDraft.id).length === 0 ? (
-                <p className="pb-1 text-xs text-muted-foreground">No parts yet.</p>
+                <p className="pb-1 text-xs text-muted-foreground">{t('formBuilder.field.noParts')}</p>
               ) : (
                 childrenOf(allFields, activeDraft.id).map((part) => (
                   <Button
@@ -369,11 +371,11 @@ export function FieldEditorSheet({
                         {part.required && <span className="text-destructive">*</span>}
                       </span>
                       <span className="block truncate font-mono text-[10px] text-muted-foreground">
-                        {part.fhirPath ?? 'no FHIR path yet'}
+                        {part.fhirPath ?? t('formBuilder.field.noPathYet')}
                       </span>
                     </span>
                     <span className="ml-auto shrink-0 rounded-full border border-border px-2 text-[10px] text-muted-foreground">
-                      {part.fieldType}
+                      {typeName(part.fieldType)}
                     </span>
                   </Button>
                 ))
@@ -384,7 +386,7 @@ export function FieldEditorSheet({
                 onClick={() => draft && onAddPart?.(draft)}
                 className="h-7 w-full border-dashed text-[11px] font-normal text-primary"
               >
-                + Add a part
+                {t('formBuilder.field.addPart')}
               </Button>
             </div>
           </>
@@ -393,7 +395,7 @@ export function FieldEditorSheet({
         {/* ── Codes section ────────────────────────────────────────── */}
         <div className="border-t border-border" />
         <div className="px-6 py-3">
-          <h3 className="text-sm font-medium text-foreground">Codes</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('formBuilder.field.codes')}</h3>
         </div>
         <div className="border-t border-border" />
         <div className="px-6 py-2">
@@ -403,7 +405,7 @@ export function FieldEditorSheet({
         {/* ── Translations section ─────────────────────────────────── */}
         <div className="border-t border-border" />
         <div className="px-6 py-3">
-          <h3 className="text-sm font-medium text-foreground">Translations</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('formBuilder.field.translations')}</h3>
         </div>
         <div className="border-t border-border" />
         <div className="px-6 py-2">
@@ -413,7 +415,7 @@ export function FieldEditorSheet({
         {/* ── Visibility / conditions section ─────────────────────── */}
         <div className="border-t border-border" />
         <div className="px-6 py-3">
-          <h3 className="text-sm font-medium text-foreground">Visibility</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('formBuilder.field.visibility')}</h3>
         </div>
         <div className="border-t border-border" />
         <div className="px-6 py-2">

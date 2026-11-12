@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { isKnownFhirResourceType, type FhirPathInfo } from '@openldr/fhir/paths';
 import { discriminatorLabel, type StarterPackEntry } from '@openldr/forms/pure';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ export function LibraryPane({
   onAddElement: (element: FhirPathInfo) => void;
   onAddPackEntry?: (entry: StarterPackEntry) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   const [query, setQuery] = useState('');
 
   const q = query.trim().toLowerCase();
@@ -76,14 +78,14 @@ export function LibraryPane({
     >
       {showHeader && (
         <div className="flex h-[38px] shrink-0 items-center border-b border-border px-3">
-          <h2 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Library</h2>
+          <h2 className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{t('formBuilder.library.title')}</h2>
         </div>
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-6 pt-2.5">
         {!resourceType ? (
           <p className="px-0.5 text-xs leading-relaxed text-muted-foreground">
-            Pick a resource type and the library will list what this form could hold.
+            {t('formBuilder.library.pickType')}
           </p>
         ) : (
           <>
@@ -92,8 +94,8 @@ export function LibraryPane({
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                aria-label="Search the library"
-                placeholder="Search the library…"
+                aria-label={t('formBuilder.library.search')}
+                placeholder={t('formBuilder.library.searchPlaceholder')}
                 className="h-8 pl-8 text-xs"
               />
             </div>
@@ -105,13 +107,13 @@ export function LibraryPane({
             ) : packName ? (
               <div className="mb-4">
                 <div className="flex items-center gap-1.5 px-0.5 py-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                  <span className="min-w-0 truncate">Left out of the pack</span>
+                  <span className="min-w-0 truncate">{t('formBuilder.library.leftOut')}</span>
                   <span className="ml-auto shrink-0 font-mono text-[10px]">{matchingPack.length}</span>
                 </div>
                 <p className={`px-0.5 pb-2 text-xs leading-relaxed ${packLeft.length > 0 ? 'text-muted-foreground' : 'text-emerald-500'}`}>
                   {packLeft.length > 0
-                    ? `These are in the ${packName} pack and not on the form. Click one to put it back.`
-                    : `Every entry in the ${packName} pack is on the form.`}
+                    ? t('formBuilder.library.leftOutHint', { pack: packName })
+                    : t('formBuilder.library.packAllOn', { pack: packName })}
                 </p>
                 {matchingPack.map((e) => (
                   <Button
@@ -125,7 +127,7 @@ export function LibraryPane({
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate text-xs text-foreground">{e.label}</span>
-                      <span className="block truncate font-mono text-[10px] text-muted-foreground">{e.fhirPath ?? 'No FHIR path'}</span>
+                      <span className="block truncate font-mono text-[10px] text-muted-foreground">{e.fhirPath ?? t('formBuilder.library.noPath')}</span>
                       {discriminatorLabel(e.discriminator) && (
                         <span className="block truncate font-mono text-[10px] text-primary">{discriminatorLabel(e.discriminator)}</span>
                       )}
@@ -136,20 +138,20 @@ export function LibraryPane({
             ) : null}
 
             <div className="flex items-center gap-1.5 px-0.5 py-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-              <span className="min-w-0 truncate">{`All ${resourceType} elements`}</span>
+              <span className="min-w-0 truncate">{t('formBuilder.library.allElements', { type: resourceType })}</span>
               <span className="ml-auto shrink-0 font-mono text-[10px]">{matching.length}</span>
             </div>
 
             {elements.length === 0 ? (
               <StripedEmpty className="min-h-[8rem] rounded-md">
                 {isKnownFhirResourceType(resourceType)
-                  ? 'Every element is on the form.'
-                  : `The library has no element list for ${resourceType}.`}
+                  ? t('formBuilder.library.allElementsOn')
+                  : t('formBuilder.library.noElementList', { type: resourceType })}
               </StripedEmpty>
             ) : (
               <>
                 <p className="px-0.5 pb-2 text-xs leading-relaxed text-muted-foreground">
-                  {`Everything the FHIR schema defines on ${resourceType}. No pack has an opinion about these.`}
+                  {t('formBuilder.library.elementsHint', { type: resourceType })}
                 </p>
                 {matching.map((e) => (
                   <Button
@@ -169,7 +171,7 @@ export function LibraryPane({
                 ))}
                 {q && matching.length === 0 && matchingPack.length === 0 && (
                   <p className="px-0.5 pt-1 text-xs text-muted-foreground">
-                    {`Nothing in the library matches "${query.trim()}".`}
+                    {t('formBuilder.library.noMatch', { query: query.trim() })}
                   </p>
                 )}
               </>

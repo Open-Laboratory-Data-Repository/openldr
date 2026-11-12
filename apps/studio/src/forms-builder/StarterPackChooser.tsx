@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Lock, MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { discriminatorLabel, type FormField, type StarterPackEntry, type StarterPackWithEntries } from '@openldr/forms/pure';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,7 @@ export function StarterPackChooser({
   resourceType: string | null;
   onAdd: (entries: StarterPackEntry[]) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   const offered = useMemo(
     () => (pack ? packEntriesNotOnForm(pack.entries, fields, resourceType) : []),
     [pack, fields, resourceType],
@@ -66,26 +68,25 @@ export function StarterPackChooser({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex w-full max-w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="border-b border-border px-6 py-4">
-          <SheetTitle>{pack ? `${pack.name} pack` : 'Starter pack'}</SheetTitle>
+          <SheetTitle>{pack ? t('formBuilder.pack.titleNamed', { name: pack.name }) : t('formBuilder.pack.title')}</SheetTitle>
           <SheetDescription>
-            FHIR lists every element and ranks none. These are the fields OpenLDR's own form uses. Uncheck
-            what you do not collect.
+            {t('formBuilder.pack.description')}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex items-center justify-between px-6 py-3">
-          <h3 className="text-sm font-medium text-foreground">{`${kept.length} of ${offered.length} selected`}</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('formBuilder.pack.selected', { kept: kept.length, total: offered.length })}</h3>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Pack actions">
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('formBuilder.pack.actions')}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem disabled={kept.length === 0} onSelect={add}>
-                {`Add ${kept.length} field${kept.length === 1 ? '' : 's'}`}
+                {t('formBuilder.pack.add', { count: kept.length })}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onOpenChange(false)}>Cancel</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onOpenChange(false)}>{t('formBuilder.pack.cancel')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -95,9 +96,9 @@ export function StarterPackChooser({
           {loading ? (
             <LoadingState className="min-h-[16rem]" />
           ) : !pack ? (
-            <StripedEmpty className="min-h-[16rem]">{`No starter pack for ${resourceType ?? 'this form'}.`}</StripedEmpty>
+            <StripedEmpty className="min-h-[16rem]">{resourceType ? t('formBuilder.pack.noneFor', { type: resourceType }) : t('formBuilder.pack.noneForForm')}</StripedEmpty>
           ) : offered.length === 0 ? (
-            <StripedEmpty className="min-h-[16rem]">Every entry in this pack is on the form.</StripedEmpty>
+            <StripedEmpty className="min-h-[16rem]">{t('formBuilder.pack.allOnForm')}</StripedEmpty>
           ) : (
             offered.map((e) => (
               <div key={e.ord} className="flex items-start gap-3 border-b border-border px-6 py-2.5 last:border-b-0">
@@ -106,23 +107,23 @@ export function StarterPackChooser({
                   checked={checked.has(e.ord)}
                   disabled={e.locked}
                   onCheckedChange={() => toggle(e)}
-                  aria-label={`Include ${e.label}`}
+                  aria-label={t('formBuilder.pack.include', { label: e.label })}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium text-foreground">{e.label}</span>
-                    {e.required && <Badge variant="secondary" className="text-[10px]">Required</Badge>}
+                    {e.required && <Badge variant="secondary" className="text-[10px]">{t('formBuilder.pack.required')}</Badge>}
                     {e.locked && (
                       <span
                         role="img"
-                        aria-label="Locked"
+                        aria-label={t('formBuilder.pack.locked')}
                         className="inline-flex h-4 w-4 items-center justify-center rounded bg-muted text-muted-foreground"
                       >
                         <Lock className="h-3 w-3" />
                       </span>
                     )}
                   </div>
-                  <div className="font-mono text-[10px] text-muted-foreground">{e.fhirPath ?? 'No FHIR path'}</div>
+                  <div className="font-mono text-[10px] text-muted-foreground">{e.fhirPath ?? t('formBuilder.pack.noPath')}</div>
                   {/* Two slots of one list share a path, so the discriminator gets its own line. */}
                   {discriminatorLabel(e.discriminator) && (
                     <div className="font-mono text-[10px] text-primary">{discriminatorLabel(e.discriminator)}</div>

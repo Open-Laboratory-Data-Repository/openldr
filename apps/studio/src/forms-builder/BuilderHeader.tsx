@@ -1,4 +1,6 @@
 import { ChevronDown } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -125,9 +127,9 @@ function statusDotClass(status: string | null | undefined): string {
   return 'bg-muted-foreground/50';
 }
 
-function statusLabel(status: string | null | undefined): string {
-  if (!status) return 'Draft';
-  return status.charAt(0).toUpperCase() + status.slice(1);
+function statusLabel(t: TFunction, status: string | null | undefined): string {
+  const s = status ?? 'draft';
+  return t(`formBuilder.header.status.${s}`, { defaultValue: s.charAt(0).toUpperCase() + s.slice(1) });
 }
 
 export function BuilderHeader({
@@ -152,6 +154,9 @@ export function BuilderHeader({
   onCancel,
   languageSlot,
 }: BuilderHeaderProps): JSX.Element {
+  const { t } = useTranslation();
+  const fhirVersionName = (v: { value: string; label: string }) => t(`formBuilder.header.fhirVersions.${v.value}`, { defaultValue: v.label });
+  const pageLabel = (p: { id: string; label: string }) => t(`formBuilder.pages.${p.id}`, { defaultValue: p.label });
   const targetPages = schema.targetPages ?? [];
 
   // Offer only pages that exist today, plus any already-selected page (e.g. a legacy
@@ -171,10 +176,10 @@ export function BuilderHeader({
 
   const targetLabel =
     targetPages.length === 0
-      ? 'Target pages…'
+      ? t('formBuilder.header.targetPagesEmpty')
       : targetPages.length === 1
-        ? (PAGE_TARGETS.find((p) => p.id === targetPages[0])?.label ?? targetPages[0])
-        : `${targetPages.length} pages selected`;
+        ? (() => { const p = PAGE_TARGETS.find((x) => x.id === targetPages[0]); return p ? pageLabel(p) : targetPages[0]; })()
+        : t('formBuilder.header.pagesSelected', { count: targetPages.length });
 
   // The Select value is always set (falls back to the '__none' item), so we can
   // render a computed label as SelectValue's child wrapped in TruncatedText —
@@ -182,9 +187,9 @@ export function BuilderHeader({
   // "CoverageEligibilityResponse") a tooltip-when-clipped instead of a bare cut-off.
   const fhirVersionLabel =
     schema.fhirVersion == null
-      ? 'None'
-      : (FHIR_VERSIONS.find((v) => v.value === schema.fhirVersion)?.label ?? schema.fhirVersion);
-  const resourceTypeLabel = schema.fhirResourceType ?? 'None';
+      ? t('formBuilder.header.none')
+      : (() => { const v = FHIR_VERSIONS.find((x) => x.value === schema.fhirVersion); return v ? fhirVersionName(v) : schema.fhirVersion; })();
+  const resourceTypeLabel = schema.fhirResourceType ?? t('formBuilder.header.none');
 
   return (
     <div>
@@ -197,10 +202,10 @@ export function BuilderHeader({
               <TooltipTrigger asChild>
                 <span
                   className={`h-2.5 w-2.5 rounded-full shrink-0 mb-3 ${statusDotClass(status)}`}
-                  aria-label={`Status: ${statusLabel(status)}`}
+                  aria-label={t('formBuilder.header.statusAria', { status: statusLabel(t, status) })}
                 />
               </TooltipTrigger>
-              <TooltipContent>{statusLabel(status)}</TooltipContent>
+              <TooltipContent>{statusLabel(t, status)}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           {publishedVersion != null ? (
@@ -209,25 +214,24 @@ export function BuilderHeader({
                 <TooltipTrigger asChild>
                   <span
                     className="mb-3 shrink-0 cursor-help text-xs font-medium text-muted-foreground"
-                    aria-label={`What version ${publishedVersion} means`}
+                    aria-label={t('formBuilder.header.versionMeans', { n: publishedVersion })}
                   >
                     v{publishedVersion}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent className="max-w-xs">
-                  Snapshot {publishedVersion} of this form. Publishing takes the next number. You
-                  cannot type this one.
+                  {t('formBuilder.header.versionTip', { n: publishedVersion })}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           ) : null}
           <div className="flex-1 min-w-0 space-y-1">
-            <Label className="text-xs" htmlFor="builder-name">Form name</Label>
+            <Label className="text-xs" htmlFor="builder-name">{t('formBuilder.header.formName')}</Label>
             <Input
               id="builder-name"
-              aria-label="Form name"
+              aria-label={t('formBuilder.header.formName')}
               value={schema.name}
-              placeholder="e.g. Patient Registration"
+              placeholder={t('formBuilder.header.formNamePlaceholder')}
               onChange={(e) => onChange({ name: e.target.value })}
             />
           </div>
@@ -242,44 +246,42 @@ export function BuilderHeader({
                 <Label
                   className="w-fit cursor-help text-xs"
                   htmlFor="builder-version"
-                  aria-label="What the version label is"
+                  aria-label={t('formBuilder.header.versionLabelWhat')}
                 >
-                  Version label
+                  {t('formBuilder.header.versionLabel')}
                 </Label>
               </TooltipTrigger>
               <TooltipContent className="max-w-xs">
-                Your own name for this release, free text. It is not the snapshot number beside the
-                form name. It ships as the FHIR Questionnaire version, and as the marketplace bundle
-                version when it reads as semver like 1.2.0.
+                {t('formBuilder.header.versionLabelTip')}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <Input
             id="builder-version"
-            aria-label="Version label"
+            aria-label={t('formBuilder.header.versionLabel')}
             value={schema.versionLabel ?? ''}
-            placeholder="e.g. v1"
+            placeholder={t('formBuilder.header.versionPlaceholder')}
             onChange={(e) => onChange({ versionLabel: e.target.value })}
           />
         </div>
 
         {/* FHIR Version */}
         <div className="space-y-1">
-          <Label className="text-xs">FHIR Version</Label>
+          <Label className="text-xs">{t('formBuilder.header.fhirVersion')}</Label>
           <Select
             value={schema.fhirVersion ?? '__none'}
             onValueChange={(v) => onChange({ fhirVersion: v === '__none' ? null : v })}
           >
-            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label="FHIR Version">
-              <SelectValue placeholder="None">
+            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label={t('formBuilder.header.fhirVersion')}>
+              <SelectValue placeholder={t('formBuilder.header.none')}>
                 <TruncatedText text={fhirVersionLabel} className="min-w-0" />
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none">None</SelectItem>
+              <SelectItem value="__none">{t('formBuilder.header.none')}</SelectItem>
               {FHIR_VERSIONS.map((v) => (
                 <SelectItem key={v.value} value={v.value}>
-                  {v.label}
+                  {fhirVersionName(v)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -288,12 +290,12 @@ export function BuilderHeader({
 
         {/* Target pages */}
         <div className="space-y-1">
-          <Label className="text-xs">Target pages</Label>
+          <Label className="text-xs">{t('formBuilder.header.targetPages')}</Label>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                aria-label="Target pages"
+                aria-label={t('formBuilder.header.targetPages')}
                 className="flex h-9 w-44 items-center justify-between gap-2 whitespace-nowrap rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <TruncatedText
@@ -313,7 +315,7 @@ export function BuilderHeader({
                     onCheckedChange={(v) => toggleTargetPage(p.id, v)}
                     onSelect={(e) => e.preventDefault()}
                   >
-                    {p.label}
+                    {pageLabel(p)}
                   </DropdownMenuCheckboxItem>
                 );
               })}
@@ -323,18 +325,18 @@ export function BuilderHeader({
 
         {/* Resource Type */}
         <div className="space-y-1">
-          <Label className="text-xs">Resource Type</Label>
+          <Label className="text-xs">{t('formBuilder.header.resourceType')}</Label>
           <Select
             value={schema.fhirResourceType ?? '__none'}
             onValueChange={(v) => onChange({ fhirResourceType: v === '__none' ? null : v })}
           >
-            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label="Resource Type">
-              <SelectValue placeholder="None">
+            <SelectTrigger className="w-44 text-xs whitespace-nowrap [&>span]:min-w-0 [&>span]:flex-1" aria-label={t('formBuilder.header.resourceType')}>
+              <SelectValue placeholder={t('formBuilder.header.none')}>
                 <TruncatedText text={resourceTypeLabel} className="min-w-0" />
               </SelectValue>
             </SelectTrigger>
             <SelectContent className="max-h-72">
-              <SelectItem value="__none">None</SelectItem>
+              <SelectItem value="__none">{t('formBuilder.header.none')}</SelectItem>
               {FHIR_RESOURCE_TYPES.map((rt) => (
                 <SelectItem key={rt} value={rt}>
                   {rt}
@@ -354,7 +356,7 @@ export function BuilderHeader({
               <Button
                 variant="outline"
                 size="icon"
-                aria-label="Builder actions"
+                aria-label={t('formBuilder.header.actions')}
                 className="h-9 w-9"
               >
                 <span aria-hidden className="flex items-center justify-center">
@@ -366,51 +368,51 @@ export function BuilderHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => onAddField()}>
-                Add field
+                {t('formBuilder.header.addField')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onPreview()}>
-                Preview
+                {t('formBuilder.header.preview')}
               </DropdownMenuItem>
               {onStartFromPack ? (
                 <DropdownMenuItem onSelect={() => onStartFromPack()}>
-                  Start from a pack
+                  {t('formBuilder.header.startFromPack')}
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => onSave()}>
-                Save draft
+                {t('formBuilder.header.saveDraft')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 disabled={!canPublish}
                 onSelect={() => onPublish()}
               >
-                Publish
+                {t('formBuilder.header.publish')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onCompare()}>
-                Compare
+                {t('formBuilder.header.compare')}
               </DropdownMenuItem>
               <DropdownMenuItem disabled={!formId} onSelect={() => onVersions()}>
-                Versions
+                {t('formBuilder.header.versions')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem disabled={!formId} onSelect={() => onArchive()}>
-                Archive
+                {t('formBuilder.header.archive')}
               </DropdownMenuItem>
               <DropdownMenuItem disabled={!formId} onSelect={() => onExport()}>
-                Export
+                {t('formBuilder.header.export')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem disabled={!formId} onSelect={() => onDisable()}>
-                Disable
+                {t('formBuilder.header.disable')}
               </DropdownMenuItem>
               <DropdownMenuItem disabled={!formId} onSelect={() => onDelete()}>
-                Delete
+                {t('formBuilder.header.delete')}
               </DropdownMenuItem>
               {onCancel ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={() => onCancel()}>
-                    Cancel
+                    {t('formBuilder.header.cancel')}
                   </DropdownMenuItem>
                 </>
               ) : null}

@@ -1,4 +1,5 @@
 import { GitBranch } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { VisibilityRule } from '@openldr/forms/pure';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -8,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
  * touch, hence the aria-label, as on the repeat marker.
  */
 export function VisibilityMarker({ rule }: { rule: VisibilityRule | undefined }): JSX.Element | null {
+  const { t } = useTranslation();
   if (!rule || rule.conditions.length === 0) return null;
   return (
     <TooltipProvider>
@@ -15,13 +17,13 @@ export function VisibilityMarker({ rule }: { rule: VisibilityRule | undefined })
         <TooltipTrigger asChild>
           <span
             role="img"
-            aria-label="Conditional"
+            aria-label={t('formBuilder.list.conditional')}
             className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground"
           >
             <GitBranch className="h-3 w-3" />
           </span>
         </TooltipTrigger>
-        <TooltipContent>Conditional</TooltipContent>
+        <TooltipContent>{t('formBuilder.list.conditional')}</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

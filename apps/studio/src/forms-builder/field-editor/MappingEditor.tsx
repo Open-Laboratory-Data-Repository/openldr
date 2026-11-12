@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { FormField, FormFieldConstraints } from '@openldr/forms/pure';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ function parseNum(raw: string): number | undefined {
 }
 
 export function MappingEditor({ field, fhirResourceType, surveyMode = false, onUpdate }: MappingEditorProps): JSX.Element {
+  const { t } = useTranslation();
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
 
   function patchConstraints(patch: Partial<FormFieldConstraints>): void {
@@ -67,18 +69,18 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
           <>
           {/* FHIR Path */}
           <Label htmlFor="mapping-fhir-path" className="whitespace-nowrap">
-            FHIR Path
+            {t('formBuilder.mapping.fhirPath')}
           </Label>
           <div className="min-w-0">
             <SuggestCombobox
               id="mapping-fhir-path"
-              label="FHIR Path"
+              label={t('formBuilder.mapping.fhirPath')}
               value={field.fhirPath ?? ''}
               onChange={(next) => onUpdate({ fhirPath: next || null })}
               options={pathOptions.map((option) => option.path)}
               optionDescriptions={pathDescriptions}
-              placeholder={fhirResourceType ? `e.g. ${fhirResourceType}.name` : 'e.g. Patient.name'}
-              noSuggestionsLabel="No matching element in FHIR R4"
+              placeholder={t('formBuilder.mapping.fhirPathHint', { example: `${fhirResourceType ?? 'Patient'}.name` })}
+              noSuggestionsLabel={t('formBuilder.mapping.noElement')}
               // A FHIR path carries its meaning in the tail (`.period.start` vs
               // `.period.end`), so clip the head instead of the tail here.
               optionLabelTruncateFrom="start"
@@ -91,7 +93,7 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
             {/* FHIR's own binding for this element, named by its URL's last segment, as corlix does. */}
             {binding && (
               <p data-testid="fhir-path-binding" className="mt-1 text-xs text-muted-foreground">
-                {`bound: ${binding.valueSet.split('/').pop()} ${binding.strength}`}
+                {t('formBuilder.mapping.bound', { valueSet: binding.valueSet.split('/').pop(), strength: binding.strength })}
               </p>
             )}
           </div>
@@ -101,16 +103,16 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
 
           {/* API Property */}
           <Label htmlFor="mapping-api-property" className="whitespace-nowrap">
-            API Property
+            {t('formBuilder.mapping.apiProperty')}
           </Label>
           <Input
             id="mapping-api-property"
-            aria-label="API Property"
+            aria-label={t('formBuilder.mapping.apiProperty')}
             value={field.apiProperty ?? ''}
             onChange={(e) =>
               onUpdate({ apiProperty: e.target.value || undefined })
             }
-            placeholder="e.g. patientName"
+            placeholder={t('formBuilder.mapping.apiPropertyHint')}
             className="font-mono text-xs"
           />
           </>
@@ -120,14 +122,14 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
           <div className="col-span-2 flex items-center gap-2 pt-1">
             <Checkbox
               id="mapping-observation-extract"
-              aria-label="Observation Extract"
+              aria-label={t('formBuilder.mapping.observationExtract')}
               checked={field.observationExtract ?? false}
               onCheckedChange={(checked) =>
                 onUpdate({ observationExtract: !!checked })
               }
             />
             <Label htmlFor="mapping-observation-extract" className="text-xs">
-              Observation Extract
+              {t('formBuilder.mapping.observationExtract')}
             </Label>
           </div>
 
@@ -138,12 +140,12 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
       <section className="mt-4">
         <button
           type="button"
-          aria-label="Advanced"
+          aria-label={t('formBuilder.mapping.advanced')}
           aria-expanded={advancedOpen}
           onClick={() => setAdvancedOpen((o) => !o)}
           className="w-full flex items-center justify-between text-sm font-medium text-foreground pb-2 border-b border-border"
         >
-          <span>Advanced</span>
+          <span>{t('formBuilder.mapping.advanced')}</span>
           <span className="text-xs text-muted-foreground">{advancedOpen ? '▲' : '▼'}</span>
         </button>
 
@@ -152,33 +154,33 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
 
             {/* ── Constraints ──────────────────────────────────── */}
             <span className="col-span-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-1">
-              Constraints
+              {t('formBuilder.mapping.constraints')}
             </span>
 
-            <Label htmlFor="adv-constraint-min" className="whitespace-nowrap">Min</Label>
+            <Label htmlFor="adv-constraint-min" className="whitespace-nowrap">{t('formBuilder.mapping.min')}</Label>
             <Input
               id="adv-constraint-min"
-              aria-label="Min"
+              aria-label={t('formBuilder.mapping.min')}
               type="number"
               value={field.constraints?.min ?? ''}
               onChange={(e) => patchConstraints({ min: parseNum(e.target.value) })}
               placeholder="—"
             />
 
-            <Label htmlFor="adv-constraint-max" className="whitespace-nowrap">Max</Label>
+            <Label htmlFor="adv-constraint-max" className="whitespace-nowrap">{t('formBuilder.mapping.max')}</Label>
             <Input
               id="adv-constraint-max"
-              aria-label="Max"
+              aria-label={t('formBuilder.mapping.max')}
               type="number"
               value={field.constraints?.max ?? ''}
               onChange={(e) => patchConstraints({ max: parseNum(e.target.value) })}
               placeholder="—"
             />
 
-            <Label htmlFor="adv-constraint-max-length" className="whitespace-nowrap">Max Length</Label>
+            <Label htmlFor="adv-constraint-max-length" className="whitespace-nowrap">{t('formBuilder.mapping.maxLength')}</Label>
             <Input
               id="adv-constraint-max-length"
-              aria-label="Max Length"
+              aria-label={t('formBuilder.mapping.maxLength')}
               type="number"
               value={field.constraints?.maxLength ?? ''}
               onChange={(e) => patchConstraints({ maxLength: parseNum(e.target.value) })}
@@ -186,11 +188,11 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
             />
 
             <Label htmlFor="adv-constraint-decimal-places" className="whitespace-nowrap">
-              Decimal Places
+              {t('formBuilder.mapping.decimalPlaces')}
             </Label>
             <Input
               id="adv-constraint-decimal-places"
-              aria-label="Decimal Places"
+              aria-label={t('formBuilder.mapping.decimalPlaces')}
               type="number"
               value={field.constraints?.decimalPlaces ?? ''}
               onChange={(e) => patchConstraints({ decimalPlaces: parseNum(e.target.value) })}
@@ -199,25 +201,25 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
 
             {/* ── Repetition ───────────────────────────────────── */}
             <span className="col-span-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">
-              Repetition
+              {t('formBuilder.mapping.repetition')}
             </span>
 
             <div className="col-span-2 flex items-center gap-2">
               <Checkbox
                 id="adv-repeatable"
-                aria-label="Repeatable"
+                aria-label={t('formBuilder.mapping.repeatable')}
                 checked={field.repeatable ?? false}
                 onCheckedChange={(checked) =>
                   onUpdate({ repeatable: !!checked })
                 }
               />
-              <Label htmlFor="adv-repeatable" className="text-xs">Repeatable</Label>
+              <Label htmlFor="adv-repeatable" className="text-xs">{t('formBuilder.mapping.repeatable')}</Label>
             </div>
 
-            <Label htmlFor="adv-min-items" className="whitespace-nowrap">Min Items</Label>
+            <Label htmlFor="adv-min-items" className="whitespace-nowrap">{t('formBuilder.mapping.minItems')}</Label>
             <Input
               id="adv-min-items"
-              aria-label="Min Items"
+              aria-label={t('formBuilder.mapping.minItems')}
               type="number"
               value={field.minItems ?? ''}
               onChange={(e) =>
@@ -226,10 +228,10 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
               placeholder="—"
             />
 
-            <Label htmlFor="adv-max-items" className="whitespace-nowrap">Max Items</Label>
+            <Label htmlFor="adv-max-items" className="whitespace-nowrap">{t('formBuilder.mapping.maxItems')}</Label>
             <Input
               id="adv-max-items"
-              aria-label="Max Items"
+              aria-label={t('formBuilder.mapping.maxItems')}
               type="number"
               value={field.maxItems ?? ''}
               onChange={(e) =>
@@ -240,18 +242,18 @@ export function MappingEditor({ field, fhirResourceType, surveyMode = false, onU
 
             {/* ── Admin Note ───────────────────────────────────── */}
             <span className="col-span-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide pt-2">
-              Notes
+              {t('formBuilder.mapping.notes')}
             </span>
 
-            <Label htmlFor="adv-admin-note" className="whitespace-nowrap">Admin Note</Label>
+            <Label htmlFor="adv-admin-note" className="whitespace-nowrap">{t('formBuilder.mapping.adminNote')}</Label>
             <Textarea
               id="adv-admin-note"
-              aria-label="Admin Note"
+              aria-label={t('formBuilder.mapping.adminNote')}
               value={field.adminNote ?? ''}
               onChange={(e) =>
                 onUpdate({ adminNote: e.target.value || undefined })
               }
-              placeholder="Internal notes…"
+              placeholder={t('formBuilder.mapping.adminNoteHint')}
               className="text-xs"
             />
           </div>

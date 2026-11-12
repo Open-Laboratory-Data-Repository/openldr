@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Globe, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/cn';
 
@@ -89,6 +90,7 @@ export interface LanguageControlProps {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function LanguageControl({ languages, onChange }: LanguageControlProps): JSX.Element {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -122,7 +124,7 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label="Languages"
+            aria-label={t('formBuilder.languages.title')}
             className={cn(
               'inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-input bg-transparent text-xs text-muted-foreground shadow-sm hover:text-foreground hover:bg-accent transition-colors',
             )}
@@ -135,11 +137,11 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
           {/* Search */}
           <input
             type="text"
-            placeholder="Search languages…"
+            placeholder={t('formBuilder.languages.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="mb-2 w-full rounded-md border border-input bg-transparent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-            aria-label="Search languages"
+            aria-label={t('formBuilder.languages.search')}
           />
 
           <div className="max-h-56 overflow-y-auto space-y-0.5">
@@ -147,13 +149,13 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
             {languages.length > 0 && (
               <div>
                 <p className="px-1 pb-0.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Selected ({languages.length})
+                  {t('formBuilder.languages.selected', { count: languages.length })}
                 </p>
                 {languages.map((code) => (
                   <button
                     key={code}
                     type="button"
-                    aria-label={`Remove ${code}`}
+                    aria-label={t('formBuilder.languages.remove', { code })}
                     className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-foreground hover:bg-accent transition-colors"
                     onClick={() => remove(code)}
                   >
@@ -168,13 +170,13 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
             {suggested.length > 0 && (
               <div>
                 <p className="px-1 pb-0.5 pt-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  Suggested
+                  {t('formBuilder.languages.suggested')}
                 </p>
                 {suggested.map((code) => (
                   <button
                     key={code}
                     type="button"
-                    aria-label={`Add ${code}`}
+                    aria-label={t('formBuilder.languages.add', { code })}
                     className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent transition-colors"
                     onClick={() => add(code)}
                   >
@@ -188,13 +190,13 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
             {rest.length > 0 && (
               <div>
                 <p className="px-1 pb-0.5 pt-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                  All languages
+                  {t('formBuilder.languages.all')}
                 </p>
                 {rest.map((l) => (
                   <button
                     key={l.code}
                     type="button"
-                    aria-label={`Add ${l.code}`}
+                    aria-label={t('formBuilder.languages.add', { code: l.code })}
                     className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent transition-colors"
                     onClick={() => add(l.code)}
                   >
@@ -205,7 +207,7 @@ export function LanguageControl({ languages, onChange }: LanguageControlProps): 
             )}
 
             {suggested.length === 0 && rest.length === 0 && languages.length === 0 && (
-              <p className="px-2 py-2 text-xs text-muted-foreground">No languages found.</p>
+              <p className="px-2 py-2 text-xs text-muted-foreground">{t('formBuilder.languages.none')}</p>
             )}
           </div>
         </PopoverContent>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -13,6 +14,7 @@ import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
  * sit in the sheet's ⋯ menu, per AGENTS.md §5, where corlix shows them as header buttons.
  */
 export function PreviewSheet({ schema, open, onOpenChange }: { schema: FormSchema; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { t } = useTranslation();
   const [answers, setAnswers] = useState<RuntimeAnswers>({});
   const [remountKey, setRemountKey] = useState(0);
 
@@ -23,21 +25,21 @@ export function PreviewSheet({ schema, open, onOpenChange }: { schema: FormSchem
       <SheetContent className="flex w-full max-w-full flex-col gap-0 p-0 sm:max-w-xl">
         <SheetHeader className="flex-row items-center justify-between space-y-0 border-b border-border px-6 py-3 pr-12">
           <div>
-            <SheetTitle>Preview</SheetTitle>
-            <SheetDescription className="sr-only">The form as data entry will draw it.</SheetDescription>
+            <SheetTitle>{t('formBuilder.preview.title')}</SheetTitle>
+            <SheetDescription className="sr-only">{t('formBuilder.preview.description')}</SheetDescription>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Preview actions">
+              <Button variant="ghost" size="icon" className="h-7 w-7" aria-label={t('formBuilder.preview.actions')}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onSelect={() => { setAnswers(makeExampleAnswers(schema)); setRemountKey((k) => k + 1); }}>
-                Fill example
+                {t('formBuilder.preview.fillExample')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => { setAnswers({}); setRemountKey((k) => k + 1); }}>
-                Reset
+                {t('formBuilder.preview.reset')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

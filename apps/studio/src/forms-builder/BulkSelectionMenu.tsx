@@ -1,4 +1,5 @@
 import { MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { FormSection } from '@openldr/forms/pure';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,27 +31,28 @@ export function BulkSelectionMenu({
   onDelete: () => void;
   onClear: () => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   return (
     <div className="flex w-full items-center justify-between gap-2">
-      <p className="text-xs font-medium text-foreground">{`${count} selected`}</p>
+      <p className="text-xs font-medium text-foreground">{t('formBuilder.bulk.selected', { count })}</p>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Selection actions">
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('formBuilder.bulk.actions')}>
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => onMove(undefined)}>Move to (no section)</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onMove(undefined)}>{t('formBuilder.bulk.moveToNone')}</DropdownMenuItem>
           {sections.map((s) => (
-            <DropdownMenuItem key={s.id} onSelect={() => onMove(s.id)}>{`Move to ${s.label}`}</DropdownMenuItem>
+            <DropdownMenuItem key={s.id} onSelect={() => onMove(s.id)}>{t('formBuilder.bulk.moveTo', { section: s.label })}</DropdownMenuItem>
           ))}
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onToggleEnabled()}>Toggle enabled</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onToggleEnabled()}>{t('formBuilder.bulk.toggleEnabled')}</DropdownMenuItem>
           <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => onDelete()}>
-            Delete
+            {t('formBuilder.bulk.delete')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => onClear()}>Clear selection</DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onClear()}>{t('formBuilder.bulk.clear')}</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

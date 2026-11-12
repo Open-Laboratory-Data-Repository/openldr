@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { FormFieldOption } from '@openldr/forms/pure';
 import { saveValueSet } from '../../api';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -28,6 +29,7 @@ export function SaveOptionsAsValueSetSheet({
   fieldLabel: string;
   onSaved: (url: string) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   const [title, setTitle] = useState(fieldLabel);
   const [url, setUrl] = useState(suggestValueSetUrl(fieldLabel));
   const [urlTouched, setUrlTouched] = useState(false);
@@ -50,7 +52,7 @@ export function SaveOptionsAsValueSetSheet({
       onSaved(saved.url);
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not save the ValueSet.');
+      setError(e instanceof Error ? e.message : t('formBuilder.saveValueSet.failed'));
     } finally {
       setSaving(false);
     }
@@ -60,26 +62,26 @@ export function SaveOptionsAsValueSetSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0">
         <SheetHeader className="border-b border-border px-6 py-4">
-          <SheetTitle>Save as a new ValueSet</SheetTitle>
-          <SheetDescription>{`Create a reusable ValueSet from ${options.length} options and bind this field to it.`}</SheetDescription>
+          <SheetTitle>{t('formBuilder.saveValueSet.title')}</SheetTitle>
+          <SheetDescription>{t('formBuilder.saveValueSet.description', { count: options.length })}</SheetDescription>
         </SheetHeader>
         <div className="flex items-center justify-between px-6 py-3">
-          <h3 className="text-sm font-medium text-foreground">ValueSet</h3>
+          <h3 className="text-sm font-medium text-foreground">{t('formBuilder.saveValueSet.section')}</h3>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Save actions">
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('formBuilder.saveValueSet.actions')}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={saving || !title.trim() || !url.trim()} onSelect={() => void save()}>Save</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => onOpenChange(false)}>Cancel</DropdownMenuItem>
+              <DropdownMenuItem disabled={saving || !title.trim() || !url.trim()} onSelect={() => void save()}>{t('formBuilder.saveValueSet.save')}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onOpenChange(false)}>{t('formBuilder.saveValueSet.cancel')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
         <div className="border-t border-border" />
         <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-6 py-4">
-          <Label htmlFor="vs-save-title" className="whitespace-nowrap">Title</Label>
+          <Label htmlFor="vs-save-title" className="whitespace-nowrap">{t('formBuilder.saveValueSet.titleLabel')}</Label>
           <Input
             id="vs-save-title"
             value={title}
@@ -88,7 +90,7 @@ export function SaveOptionsAsValueSetSheet({
               if (!urlTouched) setUrl(suggestValueSetUrl(e.target.value));
             }}
           />
-          <Label htmlFor="vs-save-url" className="whitespace-nowrap">Canonical URL</Label>
+          <Label htmlFor="vs-save-url" className="whitespace-nowrap">{t('formBuilder.saveValueSet.url')}</Label>
           <Input
             id="vs-save-url"
             className="font-mono text-xs"

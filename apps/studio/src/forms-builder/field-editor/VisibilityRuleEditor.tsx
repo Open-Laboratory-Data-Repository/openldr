@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Plus, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { FormField, VisibilityCondition, VisibilityOperator, VisibilityRule } from '@openldr/forms/pure';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ export function VisibilityRuleEditor({
   candidateFields,
   onChange,
 }: VisibilityRuleEditorProps): JSX.Element {
+  const { t } = useTranslation();
   const combinator = rule?.combinator ?? 'all';
   const conditions = rule?.conditions ?? [];
 
@@ -66,23 +68,23 @@ export function VisibilityRuleEditor({
       <div className="py-4 space-y-2">
         {/* Combinator row */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Show when</span>
+          <span className="text-xs text-muted-foreground">{t('formBuilder.visibility.showWhen')}</span>
           <Select
             value={combinator}
             onValueChange={(v) => emit(conditions, v as 'all' | 'any')}
           >
             <SelectTrigger
-              aria-label="Combinator"
+              aria-label={t('formBuilder.visibility.combinator')}
               className="h-7 w-20 text-xs"
             >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">all</SelectItem>
-              <SelectItem value="any">any</SelectItem>
+              <SelectItem value="all">{t('formBuilder.visibility.all')}</SelectItem>
+              <SelectItem value="any">{t('formBuilder.visibility.any')}</SelectItem>
             </SelectContent>
           </Select>
-          <span className="text-xs text-muted-foreground">of the following are true</span>
+          <span className="text-xs text-muted-foreground">{t('formBuilder.visibility.areTrue')}</span>
         </div>
 
         {/* Condition rows */}
@@ -97,10 +99,10 @@ export function VisibilityRuleEditor({
                 onValueChange={(v) => updateCondition(i, { fieldId: v === '__none' ? '' : v })}
               >
                 <SelectTrigger
-                  aria-label="Controlling field"
+                  aria-label={t('formBuilder.visibility.controllingField')}
                   className="h-7 flex-1 text-xs"
                 >
-                  <SelectValue placeholder="Select field" />
+                  <SelectValue placeholder={t('formBuilder.visibility.selectField')} />
                 </SelectTrigger>
                 <SelectContent>
                   {candidateFields.map((f) => (
@@ -119,7 +121,7 @@ export function VisibilityRuleEditor({
                 }
               >
                 <SelectTrigger
-                  aria-label="Operator"
+                  aria-label={t('formBuilder.visibility.operator')}
                   className="h-7 w-28 text-xs"
                 >
                   <SelectValue />
@@ -127,7 +129,7 @@ export function VisibilityRuleEditor({
                 <SelectContent>
                   {OPERATORS.map((op) => (
                     <SelectItem key={op} value={op}>
-                      {op}
+                      {t(`formBuilder.visibility.operators.${op}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -136,10 +138,10 @@ export function VisibilityRuleEditor({
               {/* Value input — hidden for isEmpty/isNotEmpty */}
               {showValue && (
                 <Input
-                  aria-label="Value"
+                  aria-label={t('formBuilder.visibility.value')}
                   className="h-7 w-32 text-xs"
                   value={cond.value ?? ''}
-                  placeholder="value"
+                  placeholder={t('formBuilder.visibility.valuePlaceholder')}
                   onChange={(e) => updateCondition(i, { value: e.target.value })}
                 />
               )}
@@ -150,7 +152,7 @@ export function VisibilityRuleEditor({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-                aria-label="Remove condition"
+                aria-label={t('formBuilder.visibility.removeCondition')}
                 onClick={() => removeCondition(i)}
               >
                 <X className="h-3.5 w-3.5" />
@@ -168,7 +170,7 @@ export function VisibilityRuleEditor({
           onClick={addCondition}
         >
           <Plus className="mr-1 h-3 w-3" />
-          Add condition
+          {t('formBuilder.visibility.addCondition')}
         </Button>
       </div>
     </section>

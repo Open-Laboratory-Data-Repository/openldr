@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { FormField, FormSection, VisibilityRule } from '@openldr/forms/pure';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { VisibilityRuleEditor } from './field-editor/VisibilityRuleEditor';
@@ -20,14 +21,15 @@ export function SectionVisibilitySheet({
   onChange: (sectionId: string, rule: VisibilityRule | undefined) => void;
   onOpenChange: (open: boolean) => void;
 }): JSX.Element {
+  const { t } = useTranslation();
   return (
     <Sheet open={section !== null} onOpenChange={onOpenChange}>
       <SheetContent className="flex flex-col gap-0 p-0">
         <SheetHeader className="border-b border-border px-6 py-4">
-          <SheetTitle>Visibility</SheetTitle>
+          <SheetTitle>{t('formBuilder.sectionVisibility.title')}</SheetTitle>
           <SheetDescription>
             {section
-              ? `Show ${section.label} only when conditions on other fields are met. No conditions means always visible.`
+              ? t('formBuilder.sectionVisibility.description', { section: section.label })
               : ''}
           </SheetDescription>
         </SheetHeader>

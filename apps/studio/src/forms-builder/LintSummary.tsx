@@ -1,7 +1,6 @@
 import { AlertCircle, AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { FormLintIssue } from '@openldr/forms/pure';
-
-const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
  * The lint banner, as corlix's FormBuilderPage draws it: an icon, only the counts that are not
@@ -9,10 +8,11 @@ const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
  * measured 2.15:1 against the dark theme's ground. amber-400 there measures 8.84:1.
  */
 export function LintSummary({ issues }: { issues: FormLintIssue[] }): JSX.Element | null {
+  const { t } = useTranslation();
   if (issues.length === 0) return null;
   const errors = issues.filter((issue) => issue.severity === 'error').length;
   const warnings = issues.length - errors;
-  const parts = [errors > 0 ? count(errors, 'error') : null, warnings > 0 ? count(warnings, 'warning') : null];
+  const parts = [errors > 0 ? t('formBuilder.lint.errors', { count: errors }) : null, warnings > 0 ? t('formBuilder.lint.warnings', { count: warnings }) : null];
   const Icon = errors > 0 ? AlertCircle : AlertTriangle;
   return (
     <div

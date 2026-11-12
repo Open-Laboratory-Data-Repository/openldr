@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   normalizeDiscriminator,
   toStoredDiscriminator,
@@ -13,10 +14,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const OPS: { value: DiscriminatorOp; label: string }[] = [
-  { value: 'equals', label: 'equals' },
-  { value: 'not equals', label: 'not equals' },
-  { value: 'starts with', label: 'starts with' },
+/** Each shows its name from formBuilder.discriminator.ops, keyed without spaces. */
+const OPS: { value: DiscriminatorOp; key: string }[] = [
+  { value: 'equals', key: 'equals' },
+  { value: 'not equals', key: 'notEquals' },
+  { value: 'starts with', key: 'startsWith' },
 ];
 
 export interface DiscriminatorEditorProps {
@@ -32,6 +34,7 @@ export interface DiscriminatorEditorProps {
  * the map and an old form opened and left alone stays byte-identical.
  */
 export function DiscriminatorEditor({ field, onUpdate }: DiscriminatorEditorProps): JSX.Element {
+  const { t } = useTranslation();
   const rule: DiscriminatorRule = normalizeDiscriminator(field.fhirDiscriminator) ?? { join: 'all', conds: [] };
   const writeRule = (next: DiscriminatorRule) => onUpdate({ fhirDiscriminator: toStoredDiscriminator(next) });
   const writeCond = (i: number, patch: Partial<DiscriminatorCondition>) =>
@@ -42,7 +45,7 @@ export function DiscriminatorEditor({ field, onUpdate }: DiscriminatorEditorProp
       <div className="flex items-center gap-2">
         <Checkbox
           id="mapping-array-element"
-          aria-label="Array element (discriminator)"
+          aria-label={t('formBuilder.discriminator.arrayElement')}
           checked={!!field.fhirDiscriminator}
           onCheckedChange={(checked) =>
             onUpdate(
@@ -53,14 +56,14 @@ export function DiscriminatorEditor({ field, onUpdate }: DiscriminatorEditorProp
           }
         />
         <Label htmlFor="mapping-array-element" className="text-xs">
-          Array element (discriminator)
+          {t('formBuilder.discriminator.arrayElement')}
         </Label>
       </div>
 
       {field.fhirDiscriminator && (
         <div className="min-w-0 space-y-2 rounded-md border border-border p-3">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">Match criteria</span>
+            <span className="text-[10px] text-muted-foreground">{t('formBuilder.discriminator.matchCriteria')}</span>
             {/* The join decides nothing with one condition, so it is not asked until there are two. */}
             {rule.conds.length > 1 && (
               <div className="ml-auto inline-flex shrink-0 overflow-hidden rounded border border-border">
@@ -76,7 +79,7 @@ export function DiscriminatorEditor({ field, onUpdate }: DiscriminatorEditorProp
                     }`}
                     onClick={() => writeRule({ ...rule, join })}
                   >
-                    {join === 'all' ? 'All' : 'Any'}
+                    {join === 'all' ? t('formBuilder.discriminator.all') : t('formBuilder.discriminator.any')}
                   </Button>
                 ))}
               </div>
@@ -86,28 +89,28 @@ export function DiscriminatorEditor({ field, onUpdate }: DiscriminatorEditorProp
           {rule.conds.map((cond, i) => (
             <div key={i} className="flex min-w-0 flex-wrap items-center gap-1 sm:flex-nowrap">
               <Input
-                aria-label={`Condition ${i + 1} element`}
+                aria-label={t('formBuilder.discriminator.condElement', { n: i + 1 })}
                 className="h-7 min-w-0 flex-1 text-xs"
-                placeholder="element"
+                placeholder={t('formBuilder.discriminator.element')}
                 value={cond.el}
                 onChange={(e) => writeCond(i, { el: e.target.value })}
               />
               <Select value={cond.op} onValueChange={(v) => writeCond(i, { op: v as DiscriminatorOp })}>
-                <SelectTrigger aria-label={`Condition ${i + 1} operator`} className="h-7 w-[104px] shrink-0 text-xs">
+                <SelectTrigger aria-label={t('formBuilder.discriminator.condOperator', { n: i + 1 })} className="h-7 w-[104px] shrink-0 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {OPS.map((op) => (
                     <SelectItem key={op.value} value={op.value}>
-                      {op.label}
+                      {t(`formBuilder.discriminator.ops.${op.key}`)}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Input
-                aria-label={`Condition ${i + 1} value`}
+                aria-label={t('formBuilder.discriminator.condValue', { n: i + 1 })}
                 className="h-7 min-w-0 flex-1 text-xs"
-                placeholder="value"
+                placeholder={t('formBuilder.discriminator.value')}
                 value={cond.val}
                 onChange={(e) => writeCond(i, { val: e.target.value })}
               />
@@ -115,7 +118,7 @@ export function DiscriminatorEditor({ field, onUpdate }: DiscriminatorEditorProp
                 type="button"
                 variant="ghost"
                 size="icon"
-                aria-label="Remove condition"
+                aria-label={t('formBuilder.discriminator.removeCondition')}
                 className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => writeRule({ ...rule, conds: rule.conds.filter((_, k) => k !== i) })}
               >
@@ -131,20 +134,20 @@ export function DiscriminatorEditor({ field, onUpdate }: DiscriminatorEditorProp
             className="h-7 w-full border-dashed text-[11px] font-normal text-primary"
             onClick={() => writeRule({ ...rule, conds: [...rule.conds, { el: '', op: 'equals', val: '' }] })}
           >
-            + Add condition
+            {t('formBuilder.discriminator.addCondition')}
           </Button>
 
           <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4">
             <Label htmlFor="mapping-value-field" className="whitespace-nowrap text-xs">
-              Value Field
+              {t('formBuilder.discriminator.valueField')}
             </Label>
             <Input
               id="mapping-value-field"
-              aria-label="Value Field"
+              aria-label={t('formBuilder.discriminator.valueField')}
               className="h-7 font-mono text-xs"
               value={field.fhirValueField ?? ''}
               onChange={(e) => onUpdate({ fhirValueField: e.target.value || undefined })}
-              placeholder="e.g. value"
+              placeholder={t('formBuilder.discriminator.valueFieldHint')}
             />
           </div>
         </div>

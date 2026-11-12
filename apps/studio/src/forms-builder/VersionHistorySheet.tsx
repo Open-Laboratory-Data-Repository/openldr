@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { LoadingState } from '@/components/ui/spinner';
@@ -27,6 +28,7 @@ export interface VersionHistorySheetProps {
 export function VersionHistorySheet({
   formId, open, onOpenChange, onRestored,
 }: VersionHistorySheetProps): JSX.Element {
+  const { t } = useTranslation();
   const [versions, setVersions] = useState<FormVersionSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function VersionHistorySheet({
     try {
       const restored = await restoreFormVersion(formId, version);
       onRestored(restored);
-      toast.success(`Restored version ${version}`);
+      toast.success(t('formBuilder.versions.restored', { n: version }));
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
@@ -79,10 +81,9 @@ export function VersionHistorySheet({
             Same shape as workflows/components/panels/run-history-drawer.tsx. */}
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-xl">
           <SheetHeader className="border-b border-border px-4 py-3">
-            <SheetTitle>Version history</SheetTitle>
+            <SheetTitle>{t('formBuilder.versions.title')}</SheetTitle>
             <SheetDescription>
-              Every published version of this form, newest first. Restoring one replaces the draft
-              you are editing.
+              {t('formBuilder.versions.description')}
             </SheetDescription>
           </SheetHeader>
 
@@ -96,7 +97,7 @@ export function VersionHistorySheet({
             // Stripes imply emptiness, so they never show while loading. An empty table's header
             // forces intrinsic width and scrolls sideways on a phone, so render no table at all.
             <StripedEmpty className="min-h-[16rem]">
-              This form has never been published. Publishing takes a snapshot you can come back to.
+              {t('formBuilder.versions.empty')}
             </StripedEmpty>
           ) : (
             <>
@@ -104,9 +105,9 @@ export function VersionHistorySheet({
                 <Table wrapperClassName="min-h-0 flex-1">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Version</TableHead>
-                      <TableHead>Label</TableHead>
-                      <TableHead>Published</TableHead>
+                      <TableHead>{t('formBuilder.versions.version')}</TableHead>
+                      <TableHead>{t('formBuilder.versions.label')}</TableHead>
+                      <TableHead>{t('formBuilder.versions.published')}</TableHead>
                       <TableHead className="w-10" />
                     </TableRow>
                   </TableHeader>
@@ -125,14 +126,14 @@ export function VersionHistorySheet({
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7"
-                                aria-label={`Actions for version ${v.version}`}
+                                aria-label={t('formBuilder.versions.rowActions', { n: v.version })}
                               >
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onSelect={() => setPendingRestore(v)}>
-                                Restore
+                                {t('formBuilder.versions.restore')}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -157,9 +158,9 @@ export function VersionHistorySheet({
       <ConfirmDialog
         open={pendingRestore !== null}
         onOpenChange={(o) => { if (!o) setPendingRestore(null); }}
-        title={pendingRestore ? `Restore version ${pendingRestore.version}?` : 'Restore version?'}
-        description="This overwrites the form you are editing. A published form drops out of View/Run right away. Undo puts your previous draft back on screen. Save it to keep that."
-        confirmLabel="Restore"
+        title={pendingRestore ? t('formBuilder.versions.confirmTitle', { n: pendingRestore.version }) : t('formBuilder.versions.confirmTitleBare')}
+        description={t('formBuilder.versions.confirmBody')}
+        confirmLabel={t('formBuilder.versions.restore')}
         destructive
         onConfirm={() => { void confirmRestore(); }}
       />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { REFERENCE_ENTITY_TARGETS, type FormField } from '@openldr/forms/pure';
 import { listCodingSystems, listValueSets, type CodingSystem, type ValueSetSummary } from '../../api';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ export interface ReferenceEditorProps {
  * linter warns (`lint.ts:117`).
  */
 export function ReferenceEditor({ field, allFields, onUpdate }: ReferenceEditorProps): JSX.Element {
+  const { t } = useTranslation();
   const [systems, setSystems] = useState<CodingSystem[]>([]);
   const [sets, setSets] = useState<ValueSetSummary[]>([]);
 
@@ -67,15 +69,15 @@ export function ReferenceEditor({ field, allFields, onUpdate }: ReferenceEditorP
 
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 py-4">
-      <Label htmlFor="ref-target" className="whitespace-nowrap">Target</Label>
+      <Label htmlFor="ref-target" className="whitespace-nowrap">{t('formBuilder.reference.target')}</Label>
       <Select value={current} onValueChange={(v) => onUpdate({ referenceTarget: v })}>
-        <SelectTrigger id="ref-target" aria-label="Target">
-          <SelectValue placeholder="Select target..." />
+        <SelectTrigger id="ref-target" aria-label={t('formBuilder.reference.target')}>
+          <SelectValue placeholder={t('formBuilder.reference.targetPlaceholder')} />
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            {REFERENCE_ENTITY_TARGETS.map((t) => (
-              <SelectItem key={t} value={t}>{t}</SelectItem>
+            {REFERENCE_ENTITY_TARGETS.map((target) => (
+              <SelectItem key={target} value={target}>{target}</SelectItem>
             ))}
           </SelectGroup>
           {codeSystems.length > 0 && <SelectSeparator />}
@@ -93,53 +95,53 @@ export function ReferenceEditor({ field, allFields, onUpdate }: ReferenceEditorP
         </SelectContent>
       </Select>
 
-      <Label className="whitespace-nowrap">Value Set</Label>
+      <Label className="whitespace-nowrap">{t('formBuilder.reference.valueSet')}</Label>
       {field.valueSetUrl ? (
         <div className="flex min-w-0 items-center gap-1">
           <TruncatedText text={boundSet?.title ?? boundSet?.name ?? field.valueSetUrl} className="min-w-0 flex-1 text-sm" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label="Value Set actions">
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('formBuilder.reference.valueSetActions')}>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => onUpdate({ valueSetUrl: undefined })}>Unbind</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onUpdate({ valueSetUrl: undefined })}>{t('formBuilder.reference.unbind')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       ) : (
-        <ValueSetPicker onPick={(vs) => onUpdate({ valueSetUrl: vs.url })} placeholder="Search a ValueSet…" />
+        <ValueSetPicker onPick={(vs) => onUpdate({ valueSetUrl: vs.url })} placeholder={t('formBuilder.reference.searchValueSet')} />
       )}
 
-      <Label htmlFor="ref-display-field" className="whitespace-nowrap">Display Field</Label>
+      <Label htmlFor="ref-display-field" className="whitespace-nowrap">{t('formBuilder.reference.displayField')}</Label>
       <Input
         id="ref-display-field"
-        aria-label="Display Field"
+        aria-label={t('formBuilder.reference.displayField')}
         value={field.referenceDisplayField ?? ''}
         onChange={(e) => onUpdate({ referenceDisplayField: e.target.value || undefined })}
         placeholder="displayName"
       />
 
-      <Label htmlFor="ref-value-field" className="whitespace-nowrap">Value Field</Label>
+      <Label htmlFor="ref-value-field" className="whitespace-nowrap">{t('formBuilder.reference.valueField')}</Label>
       <Input
         id="ref-value-field"
-        aria-label="Value Field"
+        aria-label={t('formBuilder.reference.valueField')}
         value={field.referenceValueField ?? ''}
         onChange={(e) => onUpdate({ referenceValueField: e.target.value || undefined })}
         placeholder="id"
       />
 
-      <Label htmlFor="ref-depends-on" className="whitespace-nowrap">Depends On</Label>
+      <Label htmlFor="ref-depends-on" className="whitespace-nowrap">{t('formBuilder.reference.dependsOn')}</Label>
       <Select
         value={field.referenceDependsOn ?? '__none'}
         onValueChange={(v) => onUpdate({ referenceDependsOn: v === '__none' ? undefined : v })}
       >
-        <SelectTrigger id="ref-depends-on" aria-label="Depends On">
+        <SelectTrigger id="ref-depends-on" aria-label={t('formBuilder.reference.dependsOn')}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="__none">None</SelectItem>
+          <SelectItem value="__none">{t('formBuilder.reference.none')}</SelectItem>
           {others.map((f) => (
             <SelectItem key={f.id} value={f.id}>{`${f.displayLabel} (${f.id})`}</SelectItem>
           ))}
@@ -150,20 +152,20 @@ export function ReferenceEditor({ field, allFields, onUpdate }: ReferenceEditorP
         <div className="flex items-center gap-2">
           <Checkbox
             id="ref-multiple"
-            aria-label="Multiple"
+            aria-label={t('formBuilder.reference.multiple')}
             checked={field.referenceMultiple ?? false}
             onCheckedChange={(checked) => onUpdate({ referenceMultiple: !!checked })}
           />
-          <Label htmlFor="ref-multiple" className="text-xs">Multiple</Label>
+          <Label htmlFor="ref-multiple" className="text-xs">{t('formBuilder.reference.multiple')}</Label>
         </div>
         <div className="flex items-center gap-2">
           <Checkbox
             id="ref-searchable"
-            aria-label="Searchable"
+            aria-label={t('formBuilder.reference.searchable')}
             checked={field.referenceSearchable ?? true}
             onCheckedChange={(checked) => onUpdate({ referenceSearchable: !!checked })}
           />
-          <Label htmlFor="ref-searchable" className="text-xs">Searchable</Label>
+          <Label htmlFor="ref-searchable" className="text-xs">{t('formBuilder.reference.searchable')}</Label>
         </div>
       </div>
     </div>

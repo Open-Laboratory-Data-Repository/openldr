@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Plus, Undo2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { lookupBinding } from '@openldr/fhir/paths';
 import {
   codingKey, isSurveyForm, offerSuggestions, resolveFhirPath,
@@ -30,6 +31,7 @@ export function CodeSuggestionPanel({ field, fhirResourceType, formId, onAdd }: 
   formId: string | null;
   onAdd: (coding: FormFieldCoding) => void;
 }): JSX.Element | null {
+  const { t } = useTranslation();
   const { hasCapability } = useAuth();
   const canManage = hasCapability('terminology.manage');
   const path = resolveFhirPath(field.fhirPath, fhirResourceType);
@@ -73,7 +75,7 @@ export function CodeSuggestionPanel({ field, fhirResourceType, formId, onAdd }: 
     try {
       const result = await importSuggestedCode({ system: s.system, code: s.code, display: s.display });
       if (!result.ok && result.reason === 'unknown-system') {
-        setNotice('That code belongs to a coding system this installation does not have. Add the system on the Terminology page first.');
+        setNotice(t('formBuilder.suggest.unknownSystem'));
         return;
       }
       // 'already-present' means someone added the code since the list loaded. It is real, so it
@@ -101,20 +103,20 @@ export function CodeSuggestionPanel({ field, fhirResourceType, formId, onAdd }: 
 
   return (
     <div className="space-y-1.5 py-3">
-      <div className="text-xs font-medium text-muted-foreground">Suggested codes</div>
+      <div className="text-xs font-medium text-muted-foreground">{t('formBuilder.suggest.title')}</div>
 
       {loadError ? (
         <p className="text-xs text-destructive">{loadError}</p>
       ) : rows === null ? (
-        <LoadingState label="Looking for suggestions…" className="min-h-[4rem] rounded-md" />
+        <LoadingState label={t('formBuilder.suggest.loading')} className="min-h-[4rem] rounded-md" />
       ) : rows.length === 0 ? (
         // Nothing found means the terminology is thin, not that no code exists.
         <StripedEmpty className="min-h-[4rem] rounded-md px-3 py-2">
-          No suggestions yet. Your terminology may be thin rather than complete. Add codes on the Terminology page, or search below.
+          {t('formBuilder.suggest.empty')}
         </StripedEmpty>
       ) : shown.length === 0 ? (
         // Everything found is already on the field. That is a success, so no advice about the terminology.
-        <p className="text-xs text-muted-foreground">Every suggestion for this field is already on it.</p>
+        <p className="text-xs text-muted-foreground">{t('formBuilder.suggest.allAdded')}</p>
       ) : (
         <div>
           {shown.map((s) => {
@@ -134,20 +136,20 @@ export function CodeSuggestionPanel({ field, fhirResourceType, formId, onAdd }: 
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-1.5">
                     <span className="text-xs text-foreground">{s.display ?? s.code}</span>
-                    {s.source === 'binding' && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">Binding</Badge>}
-                    {s.count !== undefined && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{`Your forms · ${s.count}`}</Badge>}
-                    {!s.inTerminology && <span className="text-[10px] text-primary">not in your terminology</span>}
+                    {s.source === 'binding' && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{t('formBuilder.suggest.binding')}</Badge>}
+                    {s.count !== undefined && <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">{t('formBuilder.suggest.yourForms', { count: s.count })}</Badge>}
+                    {!s.inTerminology && <span className="text-[10px] text-primary">{t('formBuilder.suggest.notHeld')}</span>}
                   </span>
                   <span className="block truncate font-mono text-[10px] text-muted-foreground">{`${s.code} · ${s.system}`}</span>
                   {blocked && (
-                    <span className="block text-[10px] text-muted-foreground">Someone who can manage terminology must add this code first.</span>
+                    <span className="block text-[10px] text-muted-foreground">{t('formBuilder.suggest.blocked')}</span>
                   )}
                 </span>
               </Button>
             );
           })}
           {hidden > 0 && (
-            <p className="px-2 pt-1 text-[11px] text-muted-foreground">{`${hidden} more codes from the binding. Search below to find one.`}</p>
+            <p className="px-2 pt-1 text-[11px] text-muted-foreground">{t('formBuilder.suggest.more', { count: hidden })}</p>
           )}
         </div>
       )}
@@ -156,10 +158,10 @@ export function CodeSuggestionPanel({ field, fhirResourceType, formId, onAdd }: 
 
       {added && (
         <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 px-2 py-1.5">
-          <span className="min-w-0 flex-1 text-[11px] text-muted-foreground">{`Added “${added.label}” to your terminology.`}</span>
+          <span className="min-w-0 flex-1 text-[11px] text-muted-foreground">{t('formBuilder.suggest.added', { label: added.label })}</span>
           <Button type="button" variant="ghost" size="sm" className="h-6 shrink-0 px-2 text-[11px]" onClick={() => void undo()}>
             <Undo2 className="mr-1 h-3 w-3" />
-            Undo
+            {t('formBuilder.suggest.undo')}
           </Button>
         </div>
       )}
