@@ -8,7 +8,7 @@ import type { Config } from '@openldr/config';
 import type { DirectoryCreateInput } from '@openldr/ports';
 import {
   createSetupCode, createLocalAccount, resetLocalPassword, endLocalSessions, generateTemporaryPassword,
-  LocalSignInNotEnabledError, SetupAlreadyDoneError, UnknownUserError,
+  LocalSignInNotEnabledError, SetupAlreadyDoneError, UnknownUserError, UnknownRoleError,
 } from './local-accounts';
 import { setAccountStatus } from './account-status';
 import type { AppContext } from './index';
@@ -43,8 +43,12 @@ function makeCtx(localSignIn: LocalSignIn | undefined) {
       ? { id: adaId, subject: adaId, username: 'ada', displayName: null, email: null, roles: [], status: 'active', lastLoginAt: null, createdAt: null, rbacInitialized: true }
       : undefined)),
   };
+  const knownRoles = ['lab_admin', 'lab_technician'];
+  const roles = {
+    getBySlug: vi.fn(async (slug: string) => (knownRoles.includes(slug) ? { id: `role-${slug}`, slug } : null)),
+  };
   const logger = { error: vi.fn(), warn: vi.fn(), info: vi.fn() };
-  const ctx = { localSignIn, auth, users, audit, logger } as unknown as AppContext;
+  const ctx = { localSignIn, auth, users, roles, audit, logger } as unknown as AppContext;
   return { ctx, auth, users, audit };
 }
 
@@ -128,6 +132,23 @@ describe('createLocalAccount', () => {
     expect(input.firstName).toBeUndefined();
     expect(input.email).toBeUndefined();
     expect(input.roles).toBeUndefined();
+  });
+
+  it('refuses a role that does not exist and creates nothing', async () => {
+    const { ctx, auth, audit } = makeCtx(fake({ setupRequired: false }));
+    const attempt = createLocalAccount(ctx, actor, { username: 'bo', roles: ['lab_tech'] });
+    await expect(attempt).rejects.toBeInstanceOf(UnknownRoleError);
+    await expect(attempt).rejects.toThrow('no role named lab_tech');
+    expect(auth.directory.create).not.toHaveBeenCalled();
+    expect(audit.events).toHaveLength(0);
+  });
+
+  it('creates nothing when one role exists and another does not', async () => {
+    const { ctx, auth, audit } = makeCtx(fake({ setupRequired: false }));
+    await expect(createLocalAccount(ctx, actor, { username: 'bo', roles: ['lab_admin', 'lab_boss'] }))
+      .rejects.toThrow('no role named lab_boss');
+    expect(auth.directory.create).not.toHaveBeenCalled();
+    expect(audit.events).toHaveLength(0);
   });
 });
 

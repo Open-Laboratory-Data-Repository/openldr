@@ -26,11 +26,18 @@ export class UnknownUserError extends Error {
   }
 }
 
+export class UnknownRoleError extends Error {
+  constructor(readonly slug: string) {
+    super(`no role named ${slug}`);
+    this.name = 'UnknownRoleError';
+  }
+}
+
 // No 0, 1, I, i, L, l, O or o, so a password read aloud or copied by hand comes out right.
 const TEMPORARY_PASSWORD_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
 const TEMPORARY_PASSWORD_LENGTH = 16;
 
-type AccountContext = Pick<AppContext, 'localSignIn' | 'auth' | 'users' | 'audit' | 'logger'>;
+type AccountContext = Pick<AppContext, 'localSignIn' | 'auth' | 'users' | 'roles' | 'audit' | 'logger'>;
 
 export function generateTemporaryPassword(): string {
   let out = '';
@@ -59,13 +66,17 @@ export async function createSetupCode(ctx: Pick<AppContext, 'localSignIn'>): Pro
   return signIn.createSetupCode();
 }
 
-/** The account must change the returned password at first sign-in. */
+/** The account must change the returned password at first sign-in. Every role slug must exist,
+ *  or nothing is created: the directory drops an unknown slug, which would leave a user with no role. */
 export async function createLocalAccount(
   ctx: AccountContext,
   actor: AuditActor,
   input: { username: string; name?: string; email?: string; roles?: string[] },
 ): Promise<{ user: DirectoryUser; temporaryPassword: string }> {
   requireLocalSignIn(ctx);
+  for (const slug of input.roles ?? []) {
+    if (!(await ctx.roles.getBySlug(slug))) throw new UnknownRoleError(slug);
+  }
   const temporaryPassword = generateTemporaryPassword();
   const user = await ctx.auth.directory.create({
     username: input.username,

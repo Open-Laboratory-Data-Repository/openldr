@@ -2,6 +2,7 @@ import {
   createAppContext, recordAuditEvent, setAccountStatus, AccountNotFoundError, listUserDirectory,
   getUserPreferences, saveUserPreferences, userPreferencesPatchSchema, type UserPreferencesPatch,
   createLocalAccount, resetLocalPassword, endLocalSessions, LocalSignInNotEnabledError, UnknownUserError,
+  UnknownRoleError,
 } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
@@ -65,9 +66,17 @@ export async function runUserCreate(opts: JsonOpt & { username: string; name?: s
         process.stderr.write('no administrator exists yet. Run "openldr auth setup-code" and finish setup in studio first.\n');
         return 1;
       }
-      const { user, temporaryPassword } = await createLocalAccount(ctx, cliActor(), {
-        username: opts.username, name: opts.name, email: opts.email, roles: opts.role,
-      });
+      let created: Awaited<ReturnType<typeof createLocalAccount>>;
+      try {
+        created = await createLocalAccount(ctx, cliActor(), {
+          username: opts.username, name: opts.name, email: opts.email, roles: opts.role,
+        });
+      } catch (err) {
+        if (!(err instanceof UnknownRoleError)) throw err;
+        process.stderr.write(`no role named ${err.slug}\n`);
+        return 1;
+      }
+      const { user, temporaryPassword } = created;
       emit(
         opts.json,
         { user, temporaryPassword },

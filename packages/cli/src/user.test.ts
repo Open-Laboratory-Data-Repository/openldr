@@ -62,6 +62,9 @@ function localCtx() {
       getByUsername: vi.fn(async (username: string) => (username === 'bob' ? { id: 'u1', username: 'bob' } : undefined)),
       create: vi.fn(),
     },
+    roles: {
+      getBySlug: vi.fn(async (slug: string) => (slug === 'lab_technician' ? { id: 'role-tech', slug } : null)),
+    },
     audit: {},
     logger: {},
     close: vi.fn(),
@@ -177,13 +180,13 @@ describe('user commands under local sign-in', () => {
   });
 
   it('user create under local sign-in goes through the directory', async () => {
-    const code = await runUserCreate({ username: 'carol', name: 'Carol', email: 'carol@lab.test', role: ['lab_tech'], json: false });
+    const code = await runUserCreate({ username: 'carol', name: 'Carol', email: 'carol@lab.test', role: ['lab_technician'], json: false });
 
     expect(code).toBe(0);
     expect(createLocalAccount).toHaveBeenCalledWith(
       ctx,
       expect.objectContaining({ actorType: 'cli' }),
-      { username: 'carol', name: 'Carol', email: 'carol@lab.test', roles: ['lab_tech'] },
+      { username: 'carol', name: 'Carol', email: 'carol@lab.test', roles: ['lab_technician'] },
     );
     expect(ctx.users.create).not.toHaveBeenCalled();
     const password = ctx.auth.directory.create.mock.calls[0][0].password!;
@@ -206,6 +209,17 @@ describe('user commands under local sign-in', () => {
     const body = JSON.parse(out);
     expect(body.temporaryPassword).toBe(password);
     expect(body.user).toMatchObject({ id: 'u-new', username: 'carol' });
+  });
+
+  it('user create under local sign-in refuses a role that does not exist', async () => {
+    const code = await runUserCreate({ username: 'carol', role: ['lab_tech'], json: false });
+
+    expect(code).toBe(1);
+    expect(err).toBe('no role named lab_tech\n');
+    expect(out).toBe('');
+    expect(ctx.auth.directory.create).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(ctx.close).toHaveBeenCalled();
   });
 
   it('user create under local sign-in refuses before setup is done', async () => {

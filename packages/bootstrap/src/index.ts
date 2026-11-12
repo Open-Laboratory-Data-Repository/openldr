@@ -2136,7 +2136,7 @@ export { inspectConnectorConfig, updateConnectorConfig, hostConnectorPatchSchema
 export { setAccountStatus, AccountNotFoundError } from './account-status';
 export {
   createSetupCode, createLocalAccount, resetLocalPassword, endLocalSessions, generateTemporaryPassword,
-  LocalSignInNotEnabledError, SetupAlreadyDoneError, UnknownUserError,
+  LocalSignInNotEnabledError, SetupAlreadyDoneError, UnknownUserError, UnknownRoleError,
 } from './local-accounts';
 
 
