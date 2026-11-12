@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('./screenshots', () => ({
   resolveImg: (src: string) =>
-    ({ 'dashboard.png': '/assets/dashboard.png', 'tour.mp4': '/assets/tour.mp4', 'tour.png': '/assets/tour.png' })[src] ?? null,
+    ({ 'dashboard.png': '/assets/dashboard.png', 'dashboard-create-menu.png': '/assets/original-menu.png', 'terminal-linux-ready.png': '/assets/linux.png', 'terminal-windows-ready.png': '/assets/windows.png', 'tour.mp4': '/assets/tour.mp4', 'tour.png': '/assets/tour.png' })[src] ?? null,
   isClip: (src: string) => src.endsWith('.mp4'),
   posterName: (src: string) => src.replace(/\.mp4$/, '.png'),
 }));
@@ -11,6 +11,26 @@ vi.mock('./screenshots', () => ({
 import { DocMarkdown } from './DocMarkdown';
 
 describe('DocMarkdown', () => {
+  it('keeps the focused target sharp and sends its focus to the lightbox', () => {
+    const click = vi.fn();
+    const { container } = render(<DocMarkdown content={'![Menu](dashboard-create-menu.png)'} onImageClick={click} />);
+    const images = container.querySelectorAll('img');
+    expect(images).toHaveLength(2);
+    expect(images[0].style.filter).toBe('blur(1.25px)');
+    expect(images[1].style.clipPath).toContain('inset(');
+    expect(images[1]).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom: Menu' }));
+    expect(click).toHaveBeenCalledWith({ url: '/assets/original-menu.png', alt: 'Menu', focus: 'dashboard-create-menu.png' });
+    expect(screen.queryByRole('button', { name: 'Unblurred' })).toBeNull();
+  });
+  it('changes the CLI command and screenshot together when Windows is selected', () => {
+    const content = '# Start\n\n<!-- cli-platform -->\n\n```sh\ncd ~/Downloads/openldr_ce\n./openldr --help\n```\n\n![Terminal](terminal-linux-ready.png)';
+    render(<DocMarkdown content={content} onImageClick={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Windows' }));
+    expect(screen.getByText(/cd C:/)).toHaveTextContent('.\\openldr.ps1 --help');
+    expect(screen.getByAltText('Terminal')).toHaveAttribute('src', '/assets/windows.png');
+  });
+
   it('renders a resolved screenshot as a zoom thumbnail and calls onImageClick', () => {
     const onImageClick = vi.fn();
     render(<DocMarkdown content={'# Title\n\n![Dash](dashboard.png)'} onImageClick={onImageClick} />);

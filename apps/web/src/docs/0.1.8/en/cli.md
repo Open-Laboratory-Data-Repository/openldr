@@ -50,6 +50,68 @@ Most read commands accept `--json` for machine-readable output. In a deployed st
 common lifecycle steps (schema migration and seeding) run automatically on startup, and
 admin/danger actions are also available in the Studio UI under Settings.
 
+### Choose your actual installation folder
+
+Run the installed CLI on the computer hosting OpenLDR. For a remote host, use the SSH or remote terminal access you configured. Opening Studio over Tailscale does not open a terminal on that host.
+
+For example, if you downloaded and installed OpenLDR in `~/Downloads/openldr_ce` on Linux or macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+ls
+./openldr --help
+./openldr ingest --help
+```
+
+If you installed it in `C:\openldr_ce` on Windows, open PowerShell and run:
+
+```powershell
+cd C:\openldr_ce
+Get-ChildItem -Name
+.\openldr.ps1 --help
+.\openldr.ps1 ingest --help
+```
+
+Replace the example folder with your actual installation folder. It contains `docker-compose.yml`, `data`, and the launcher. Enter one command at a time. The help commands do not change records. The in-app **Start here** guide illustrates each step.
+
+### Run from a development checkout
+
+Use the repository root, where `package.json`, `pnpm-workspace.yaml`, `apps` and `packages` are present. The same example paths apply to a source checkout. On Linux or macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+pnpm openldr --help
+pnpm openldr ingest --help
+```
+
+On Windows, use `cd C:\openldr_ce`, then the same `pnpm openldr` commands. Set up dependencies and `.env` first, as described in [Development](/docs/development).
+
+The source CLI runs on the host and uses the databases and storage in `.env`. Those services must be running for an import. It does not require the Studio or API development server. It can read local files outside the installed launcher's shared `data` folder. For your own valid FHIR JSON file at `files/my-file.json`:
+
+```sh
+pnpm openldr fhir validate files/my-file.json
+```
+
+Validation does not import the file. When you intend to write it to your development database, check `.env`, then run:
+
+```sh
+pnpm openldr ingest files/my-file.json
+pnpm openldr pipeline status
+```
+
+The Linux source check imported one Organization resource and reported a completed batch. Your batch ID and count depend on your file.
+
+## Recover from an installed CLI error
+
+These cases were reproduced on Linux with the installed launcher and real CLI in an isolated stack. Windows and macOS were not tested natively. Start in your installation folder and match the error first.
+
+| Error | What recovered in the test |
+| --- | --- |
+| `./openldr: not found` or `no configuration file provided: not found` | Return to the actual installation folder, then run `./openldr --help`. Check that the launcher and Compose file are there. |
+| `failed to connect to the docker API` with an incorrect `DOCKER_HOST` address | Run `docker info`. If the override is wrong, clear it with `unset DOCKER_HOST`, then retry `docker info` and CLI help. In PowerShell, clear it with `$env:DOCKER_HOST = $null`. This does not start a stopped Docker engine. |
+| `service "api" is not running` | Inspect `docker compose ps -a api`, run `docker compose up -d api`, then retry CLI help. The check proved launcher recovery, not full HTTP application startup. |
+| `ingest failed: ENOENT` when the file is beside the launcher | Move the file into the installation's `data` folder. Run `./openldr fhir validate data/my-file.json`, then import that same path when intended. The development CLI reads ordinary local paths instead. |
+
 ## Command groups
 
 | Group | What it does |

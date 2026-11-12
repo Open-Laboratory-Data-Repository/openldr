@@ -1,0 +1,50 @@
+ <h2 id="sh-problems">Fix an installed CLI command</h2>
+ <p>Start in the folder where you installed OpenLDR. Match the error below before changing anything. The commands follow the operating-system choice above.</p>
+ <p class="dg-illustration-note">These error messages and recoveries were reproduced on Linux with the installed launcher and the real CLI. The transcript pictures show that Linux test. Windows and macOS wording can differ.</p>
+
+ <details class="cursor-interaction" open>
+  <summary>The launcher or Compose configuration cannot be found</summary>
+  <p>You may see <code>./openldr: not found</code>, or <code>no configuration file provided: not found</code>.</p>
+  <p>The first error means the launcher is not in your current folder. The second occurred when the launcher was called from another folder, so Docker Compose could not find the installation's configuration.</p>
+  <p>Return to the actual installation folder. In this guide's example, run:</p>
+  <pre><code data-cli-fix-folder>cd ~/Downloads/openldr_ce
+./openldr --help</code></pre>
+  <p>The help usage line confirms that the launcher ran. If it still cannot be found, list the folder's files as shown in step 3. Check for <code data-cli-wrapper>openldr</code> and <code>docker-compose.yml</code>.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested wrong-folder recovery"><img src="__IMAGE:proof-wrong-folder__" alt="Illustrated Linux transcript showing launcher not found, changing into the installation folder, then successful CLI help."></button><figcaption>Tested result: returning to the installation folder restored the help command.</figcaption></figure>
+ </details>
+
+ <details class="cursor-interaction">
+  <summary>Docker is using an unreachable connection address</summary>
+  <p>The test reported <code>failed to connect to the docker API</code>. This happened before OpenLDR started because <code>DOCKER_HOST</code> pointed to a socket that did not exist.</p>
+  <p>Run <code>docker info</code> to check the Docker connection. Read the address in its error. If you previously set <code>DOCKER_HOST</code> and that value is now wrong, clear it in this terminal:</p>
+  <pre><code data-cli-clear-docker-host>unset DOCKER_HOST</code></pre>
+  <p>This clears the override for the current terminal. Use it only when that override is the cause. It does not start a stopped Docker engine.</p>
+  <pre><code data-cli-check-docker>docker info
+./openldr --help</code></pre>
+  <p>The test recovered after clearing the incorrect address. If <code>docker info</code> still fails, Docker is not yet reachable. Read that Docker error before retrying OpenLDR.</p>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested Docker connection recovery"><img src="__IMAGE:proof-docker__" alt="Illustrated Linux transcript showing an unreachable Docker socket, clearing DOCKER_HOST, and successful CLI help."></button><figcaption>The test used a deliberately missing Docker socket. The running Docker engine was left untouched.</figcaption></figure>
+ </details>
+
+ <details class="cursor-interaction">
+  <summary>Docker says service api is not running</summary>
+  <p>The exact tested error was <code>service "api" is not running</code>. Docker was reachable, but the installation's API container was stopped. The installed CLI runs inside that container.</p>
+  <p>From your installation folder, inspect the container and start it again:</p>
+  <pre><code>docker compose ps -a api
+docker compose up -d api</code></pre>
+  <p>Then run the help command again:</p>
+  <pre><code data-cli-help>./openldr --help</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested stopped-container recovery"><img src="__IMAGE:proof-api__" alt="Illustrated Linux transcript showing the stopped API error, starting the API service, and successful CLI help."></button><figcaption>Tested result: starting the stopped container restored the help command.</figcaption></figure>
+ </details>
+
+ <details class="cursor-interaction">
+  <summary>The import reports ENOENT for my file</summary>
+  <p>The test reported <code>ingest failed: ENOENT: no such file or directory, open 'my-file.json'</code>.</p>
+  <p>The file existed on the computer, beside the launcher. The installed CLI could not see it because only the installation's <code>data</code> folder was shared with its container.</p>
+  <p>Move the file into that <code>data</code> folder. In this guide's example, its full location becomes <code data-cli-example-file>~/Downloads/openldr_ce/data/my-file.json</code>.</p>
+  <p>Check the moved file without importing it:</p>
+  <pre><code data-cli-validate-installed>./openldr fhir validate data/my-file.json</code></pre>
+  <p>For a valid FHIR JSON file, the result includes <code>all valid</code>. If you intend to import it, retry with the shared path:</p>
+  <pre><code data-cli-import>./openldr ingest data/my-file.json</code></pre>
+  <figure class="dg-shot" style="max-width:500px"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge the tested missing-file recovery"><img src="__IMAGE:proof-file__" alt="Illustrated Linux transcript showing ENOENT outside the shared data folder, moving the file, successful validation and a completed import."></button><figcaption>The same file failed outside data, then validated and imported after moving into it.</figcaption></figure>
+  <p>This shared-folder rule applies to the installed Docker launcher. The development CLI can read normal local paths, as shown in the development walkthrough.</p>
+ </details>

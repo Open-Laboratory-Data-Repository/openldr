@@ -1,0 +1,401 @@
+{
+  "notes": [
+    "Actual existing app captures, not a new browser execution.",
+    "Images were only cropped and encoded. No controls or values were added.",
+    "The download format submenu is absent.",
+    "No OS terminal screenshot or CLI execution is included.",
+    "Phone closed and open menu states come from separate existing screenshots. No new mobile browser sequence was run."
+  ],
+  "steps": [
+    {
+      "id": "user-menu-location",
+      "title": "Open your user menu",
+      "path": "./start-evidence/user-menu-location.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-language.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 0.2,
+      "full_frame": "./start-evidence/user-location-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        0,
+        690,
+        215,
+        800
+      ],
+      "crop_dimensions": [
+        215,
+        110
+      ],
+      "bytes": 2410,
+      "evidence_kind": "control-visible",
+      "note": "Your name is at the bottom of the main sidebar."
+    },
+    {
+      "id": "language-menu",
+      "title": "Choose Language",
+      "path": "./start-evidence/language-menu.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-language.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 1.8,
+      "full_frame": "./start-evidence/language-menu-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        0,
+        595,
+        210,
+        800
+      ],
+      "crop_dimensions": [
+        210,
+        205
+      ],
+      "bytes": 7623,
+      "evidence_kind": "recorded-action",
+      "note": "Open user menu shows Language, Settings and Sign out."
+    },
+    {
+      "id": "language-francais",
+      "title": "Choose Fran\u00e7ais",
+      "path": "./start-evidence/language-francais.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-language.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 2.7,
+      "full_frame": "./start-evidence/language-choice-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        0,
+        600,
+        345,
+        800
+      ],
+      "crop_dimensions": [
+        345,
+        200
+      ],
+      "bytes": 9848,
+      "evidence_kind": "recorded-action",
+      "note": "Language submenu shows Fran\u00e7ais."
+    },
+    {
+      "id": "language-result",
+      "title": "Check the language changed",
+      "path": "./start-evidence/language-result.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-language.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 3.8,
+      "full_frame": "./start-evidence/language-result-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        0,
+        0,
+        445,
+        222
+      ],
+      "crop_dimensions": [
+        445,
+        222
+      ],
+      "bytes": 13991,
+      "evidence_kind": "result-visible",
+      "note": "Main menu displays French labels."
+    },
+    {
+      "id": "docs-entry",
+      "title": "Open Docs",
+      "path": "./start-evidence/docs-entry.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-docs.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 0.4,
+      "full_frame": "./start-evidence/docs-entry-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        0,
+        438,
+        213,
+        552
+      ],
+      "crop_dimensions": [
+        213,
+        114
+      ],
+      "bytes": 2081,
+      "evidence_kind": "recorded-action",
+      "note": "Docs entry is visible in the main sidebar."
+    },
+    {
+      "id": "docs-search-control",
+      "title": "Find the documentation search box",
+      "path": "./start-evidence/docs-search-control.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-docs.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 1.5,
+      "full_frame": "./start-evidence/docs-search-empty-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        215,
+        32,
+        443,
+        94
+      ],
+      "crop_dimensions": [
+        228,
+        62
+      ],
+      "bytes": 1905,
+      "evidence_kind": "control-visible",
+      "note": "Empty Search control above guide navigation."
+    },
+    {
+      "id": "docs-search-results",
+      "title": "Type a search term",
+      "path": "./start-evidence/docs-search-results.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-docs.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 3.8,
+      "full_frame": "./start-evidence/docs-search-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        215,
+        32,
+        443,
+        215
+      ],
+      "crop_dimensions": [
+        228,
+        183
+      ],
+      "bytes": 6476,
+      "evidence_kind": "result-visible",
+      "note": "Search contains sample data and shows matching guides."
+    },
+    {
+      "id": "docs-select-guide",
+      "title": "Choose a matching guide",
+      "path": "./start-evidence/docs-select-guide.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-docs.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 6.4,
+      "full_frame": "./start-evidence/docs-section-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        215,
+        90,
+        790,
+        176
+      ],
+      "crop_dimensions": [
+        575,
+        86
+      ],
+      "bytes": 8614,
+      "evidence_kind": "result-visible",
+      "note": "Dashboards is selected and the guide title is visible."
+    },
+    {
+      "id": "docs-on-this-page",
+      "title": "Use On this page",
+      "path": "./start-evidence/docs-on-this-page.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-docs.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 6.4,
+      "full_frame": "./start-evidence/docs-section-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        1052,
+        94,
+        1278,
+        322
+      ],
+      "crop_dimensions": [
+        226,
+        228
+      ],
+      "bytes": 8187,
+      "evidence_kind": "control-visible",
+      "note": "Right-hand section navigation."
+    },
+    {
+      "id": "docs-download",
+      "title": "Open the documentation download menu",
+      "path": "./start-evidence/docs-download.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-docs-download.png",
+      "source_kind": "screenshot",
+      "timestamp_seconds": null,
+      "full_frame": "./start-evidence/docs-download-full.png",
+      "source_dimensions": [
+        1440,
+        900
+      ],
+      "crop_box": [
+        1175,
+        42,
+        1440,
+        188
+      ],
+      "crop_dimensions": [
+        265,
+        146
+      ],
+      "bytes": 7168,
+      "evidence_kind": "control-visible",
+      "note": "Menu shows This page and All docs. Format submenu is not visible."
+    },
+    {
+      "id": "phone-menu",
+      "title": "Choose a page from the phone menu",
+      "path": "./start-evidence/phone-menu.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-phone-menu.png",
+      "source_kind": "screenshot",
+      "timestamp_seconds": null,
+      "full_frame": "./start-evidence/phone-menu-full.png",
+      "source_dimensions": [
+        390,
+        844
+      ],
+      "crop_box": [
+        0,
+        0,
+        390,
+        250
+      ],
+      "crop_dimensions": [
+        390,
+        250
+      ],
+      "bytes": 9919,
+      "evidence_kind": "result-visible",
+      "note": "Menu is already open. Close and first navigation entries are visible. Closed-state Open menu is not captured."
+    },
+    {
+      "id": "studio-navigation",
+      "title": "Find the main menu",
+      "path": "./start-evidence/studio-navigation.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-tour.png",
+      "source_kind": "screenshot",
+      "timestamp_seconds": null,
+      "full_frame": "./start-evidence/studio-tour-full.png",
+      "source_dimensions": [
+        1440,
+        900
+      ],
+      "crop_box": [
+        0,
+        0,
+        240,
+        254
+      ],
+      "crop_dimensions": [
+        240,
+        254
+      ],
+      "bytes": 9243,
+      "evidence_kind": "control-visible",
+      "note": "Desktop sidebar. Numbered callouts belong to the original capture."
+    },
+    {
+      "id": "studio-header-controls",
+      "title": "Find notifications and theme",
+      "path": "./start-evidence/studio-header-controls.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/start-here-language.mp4",
+      "source_kind": "video",
+      "timestamp_seconds": 0.2,
+      "full_frame": "./start-evidence/user-location-full.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "crop_box": [
+        1120,
+        0,
+        1280,
+        104
+      ],
+      "crop_dimensions": [
+        160,
+        104
+      ],
+      "bytes": 1868,
+      "evidence_kind": "control-visible",
+      "note": "Actual header controls without numbered callout overlays. The bell and theme control are visible."
+    },
+    {
+      "id": "phone-menu-button",
+      "title": "Open the phone navigation menu",
+      "path": "./start-evidence/phone-menu-button.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-phone.png",
+      "source_kind": "screenshot",
+      "timestamp_seconds": null,
+      "full_frame": "./start-evidence/phone-menu-button-full.png",
+      "source_dimensions": [
+        390,
+        844
+      ],
+      "crop_box": [
+        0,
+        0,
+        390,
+        110
+      ],
+      "crop_dimensions": [
+        390,
+        110
+      ],
+      "bytes": 7235,
+      "evidence_kind": "control-visible",
+      "note": "Closed phone navigation. The top-left hamburger button is visible. The dashboard selector and header provide context."
+    },
+    {
+      "id": "studio-actions-menu",
+      "title": "Read the page actions menu",
+      "path": "./start-evidence/studio-actions-menu.jpg",
+      "source": "../../../../apps/studio/src/docs/0.1.0/screenshots/dashboard-menu-edit.png",
+      "source_kind": "screenshot",
+      "timestamp_seconds": null,
+      "full_frame": "./start-evidence/studio-actions-menu-full.png",
+      "source_dimensions": [
+        246,
+        342
+      ],
+      "crop_box": [
+        0,
+        0,
+        246,
+        342
+      ],
+      "crop_dimensions": [
+        246,
+        342
+      ],
+      "bytes": 12729,
+      "evidence_kind": "control-visible",
+      "note": "Actual open dashboard actions menu. The dots trigger itself is outside this source screenshot. New dashboard is disabled while changes save."
+    }
+  ]
+}

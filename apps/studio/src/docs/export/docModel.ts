@@ -1,3 +1,5 @@
+import { CLI_PLATFORM_MARKER, cliPlatformMarkdown } from '../cliPlatform';
+
 export type Block =
   | { type: 'heading'; level: number; text: string }
   | { type: 'paragraph'; text: string }
@@ -19,7 +21,7 @@ export function inlineText(s: string): string {
 const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)]+)\)\s*$/;
 
 export function parseBlocks(md: string): Block[] {
-  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  const lines = cliPlatformMarkdown(md, 'linux').replaceAll(CLI_PLATFORM_MARKER, '').replace(/\r\n/g, '\n').split('\n');
   const blocks: Block[] = [];
   let i = 0;
 

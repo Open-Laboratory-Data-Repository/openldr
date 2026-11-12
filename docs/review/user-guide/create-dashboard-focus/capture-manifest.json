@@ -1,0 +1,84 @@
+{
+  "capturedAt": "2026-11-12T03:43:28.314Z",
+  "source": "Live Studio frontend with live API; no mocked dashboard responses.",
+  "viewport": [
+    1280,
+    800
+  ],
+  "steps": [
+    {
+      "id": "open-dashboard",
+      "path": "./create-dashboard-focus/raw/open-dashboard.png",
+      "focus": [
+        {
+          "x": 0,
+          "y": 48,
+          "width": 239,
+          "height": 52
+        }
+      ],
+      "note": "Dashboard is an item in the full main menu. The screenshot starts in Docs."
+    },
+    {
+      "id": "open-actions",
+      "path": "./create-dashboard-focus/raw/open-actions.png",
+      "focus": [
+        {
+          "x": 1224,
+          "y": 54,
+          "width": 48,
+          "height": 48
+        }
+      ],
+      "note": "The dots menu sits on the dashboard toolbar, beside Refresh."
+    },
+    {
+      "id": "choose-new-dashboard",
+      "path": "./create-dashboard-focus/raw/choose-new-dashboard.png",
+      "focus": [
+        {
+          "x": 1101,
+          "y": 95,
+          "width": 166,
+          "height": 48
+        }
+      ],
+      "note": "New dashboard is selected from the opened dots menu."
+    },
+    {
+      "id": "dashboard-created",
+      "path": "./create-dashboard-focus/raw/dashboard-created.png",
+      "focus": [
+        {
+          "x": 248,
+          "y": 84,
+          "width": 240,
+          "height": 52
+        },
+        {
+          "x": 232,
+          "y": 133,
+          "width": 1048,
+          "height": 32
+        }
+      ],
+      "note": "The created dashboard is selected; its empty grid is in edit mode."
+    }
+  ],
+  "checks": {
+    "postStatus": 200,
+    "createdName": "New dashboard",
+    "createdId": "7186260b-e529-462c-9435-c4f8f6b5dac0",
+    "blankWidgets": true,
+    "blankLayout": true,
+    "blankFilters": true,
+    "editModeActions": [
+      "Add widget",
+      "Done"
+    ],
+    "serverPersisted": true,
+    "temporaryDashboardDeleted": true,
+    "sidebarRestored": true,
+    "existingDashboardsUnchanged": true
+  }
+}

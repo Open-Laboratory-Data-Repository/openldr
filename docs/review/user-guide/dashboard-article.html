@@ -1,0 +1,43 @@
+<article class="dg-article" id="dg-top">
+ <div class="dg-meta"><span>All users</span><span>Beginner</span></div>
+ <h1>Dashboards</h1>
+ <p>A dashboard brings charts, tables and totals together on one page. Each item is a widget.</p>
+ <p class="dg-intro">Create a dashboard, then choose what each widget should show from your lab's data. You can also configure widgets before records arrive.</p>
+
+ <h2 id="dg-create">Create a dashboard</h2>
+ <p>Create an empty page for the information you want to follow. You can add widgets to it as you need them.</p>
+ <p>You need permission to create and edit dashboards.</p>
+ __CREATE_STEPS__
+
+ <h2 id="dg-widget">Add a widget</h2>
+ <p>Add a widget to show a chart, table or total on your dashboard. Choose the lab records it reads, then choose a calculation and chart type.</p>
+ __WIDGET_STEPS__
+ <div class="dg-result"><p><strong>Expected result</strong></p><p>Your widget appears with the title and display you chose. Its values come from your selected data. Repeat the task to add more widgets.</p></div>
+
+ <h2 id="dg-check">Troubleshooting</h2>
+ <details class="cursor-interaction"><summary>The widget shows No data or a zero total</summary><p>Check whether records have arrived for the data you selected. An empty database can give an empty chart or a zero total. You can save the widget before records arrive.</p></details>
+ <details class="cursor-interaction"><summary>I cannot find my new widget</summary><p>New widgets appear at the bottom of the dashboard. Scroll down to find it.</p></details>
+ <details class="cursor-interaction"><summary>I cannot find the edit action</summary><p>Ask an administrator to check your dashboard permissions.</p></details>
+
+ <h2 id="dg-practice">Optional: practise with sample data</h2>
+ <p>Use this section to try the controls with fictional records and check known results. It includes the data file and two exercises. You can skip it when building dashboards from your own records.</p>
+ __SAMPLE_SETUP__
+
+ <h3 id="dg-example">Try an orders-by-test widget</h3>
+ <p>After loading the practice records, create a bar chart that counts orders for each test. This exercise uses the same widget controls explained above, with exact values to enter.</p>
+ <dl class="dg-config"><dt>Title</dt><dd><code>Orders by test</code></dd><dt>Data</dt><dd>Test Orders</dd><dt>Summarize</dt><dd>Count</dd><dt>Group by</dt><dd>Test</dd><dt>Chart</dt><dd>Bar</dd></dl>
+ <p>Use a dashboard in edit mode on the test install. The Add a widget task above shows how to enter edit mode.</p>
+ __BUILD_STEPS__
+ <div class="dg-result"><p><strong>Expected result with the practice records</strong></p><p>The chart has five bars. <strong>Full blood count</strong> is tallest, with <strong>18 orders</strong>.</p></div>
+ <figure class="dg-loop"><video src="__BUILD_VIDEO__" poster="__BUILD_POSTER__" loop muted playsinline preload="metadata" aria-label="Recorded walkthrough of the complete practice widget exercise"></video><figcaption class="dg-loop-control"><span>Watch the complete practice exercise.</span><button class="cursor-interaction" type="button" data-play-loop>Play loop</button></figcaption></figure>
+
+ <h3 id="dg-filter">Try the sample dashboard filters</h3>
+ <p>Use the built-in <strong>Lab Overview (Sample)</strong> dashboard for this exercise. You will choose a date range, a test and a priority, then read the matching order count.</p>
+ <div class="dg-example"><p><strong>Your question</strong></p><p>How many urgent HIV viral load orders arrived in October?</p></div>
+ <figure class="dg-loop"><video src="__FILTER_VIDEO__" poster="__FILTER_POSTER__" loop muted playsinline preload="metadata" aria-label="Recorded walkthrough of filtering the practice dashboard"></video><figcaption class="dg-loop-control"><span>Watch the practice task, then follow the screenshots.</span><button class="cursor-interaction" type="button" data-play-loop>Play loop</button></figcaption></figure>
+ __FILTER_STEPS__
+ <div class="dg-result"><p><strong>Expected result with the practice records</strong></p><p><strong>Total Orders</strong> and <strong>Distinct Patients</strong> each read <strong>1</strong>. <strong>Results Recorded</strong> reads <strong>4</strong>, because it does not use the Priority filter.</p></div>
+ <details class="cursor-interaction"><summary>Why did some widgets keep their old values?</summary><p>Each widget follows its configured filters. Orders by Test compares all tests, so choosing one test does not change it.</p></details>
+ <details class="cursor-interaction"><summary>My practice totals differ from these numbers</summary><p>These results assume only the practice records are loaded. Other imported data or extra submitted orders change the totals.</p></details>
+ <a class="dg-return cursor-interaction" href="#dg-top">Back to the top</a>
+</article>

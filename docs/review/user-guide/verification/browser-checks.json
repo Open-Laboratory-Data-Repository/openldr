@@ -1,0 +1,68 @@
+[
+  {
+    "locale": "en",
+    "os": "Linux",
+    "terminalImages": 13
+  },
+  {
+    "locale": "en",
+    "os": "macOS",
+    "terminalImages": 13
+  },
+  {
+    "locale": "en",
+    "os": "Windows",
+    "terminalImages": 13
+  },
+  {
+    "locale": "en",
+    "fullOriginal": [
+      1280,
+      800
+    ]
+  },
+  {
+    "locale": "fr",
+    "os": "Linux",
+    "terminalImages": 13
+  },
+  {
+    "locale": "fr",
+    "os": "macOS",
+    "terminalImages": 13
+  },
+  {
+    "locale": "fr",
+    "os": "Windows",
+    "terminalImages": 13
+  },
+  {
+    "locale": "fr",
+    "fullOriginal": [
+      1280,
+      800
+    ]
+  },
+  {
+    "locale": "pt",
+    "os": "Linux",
+    "terminalImages": 13
+  },
+  {
+    "locale": "pt",
+    "os": "macOS",
+    "terminalImages": 13
+  },
+  {
+    "locale": "pt",
+    "os": "Windows",
+    "terminalImages": 13
+  },
+  {
+    "locale": "pt",
+    "fullOriginal": [
+      1280,
+      800
+    ]
+  }
+]

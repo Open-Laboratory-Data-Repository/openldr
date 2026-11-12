@@ -1,4 +1,4 @@
-import { isValidElement, type ReactNode } from 'react';
+import { Fragment, isValidElement, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -6,6 +6,9 @@ import remarkGfm from 'remark-gfm';
 import { isClip, posterName, resolveImg } from './screenshots';
 import type { LightboxImage } from './Lightbox';
 import { headingIdMaker } from './toc';
+import { Button } from '@/components/ui/button';
+import { FocusedScreenshot, focusedScreenshot } from './FocusedScreenshot';
+import { CLI_PLATFORM_MARKER, cliPlatformMarkdown, type CliPlatform } from './cliPlatform';
 
 function text(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(text).join('');
@@ -44,6 +47,7 @@ export function DocMarkdown({
   content: string;
   onImageClick: (image: LightboxImage) => void;
 }) {
+  const [platform, setPlatform] = useState<CliPlatform>('linux');
   const headingId = makeHeadingId();
   const components: Components = {
     img(props) {
@@ -85,13 +89,16 @@ export function DocMarkdown({
           </span>
         );
       }
+      if (focusedScreenshot(src)) {
+        return <FocusedScreenshot src={src} url={url} alt={alt} onImageClick={onImageClick} />;
+      }
       return (
         <span className="my-4 block">
           <button
             type="button"
             onClick={() => onImageClick({ url, alt })}
             aria-label={alt ? `Zoom: ${alt}` : 'Zoom screenshot'}
-            className="group block w-full max-w-2xl cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-ring"
+            className={`group block w-full ${/^(terminal-|proof-)/.test(src) ? 'max-w-[500px]' : 'max-w-2xl'} cursor-zoom-in overflow-hidden rounded-md border border-border transition-colors hover:border-ring`}
           >
             <img src={url} alt={alt} loading="lazy" className="block w-full" />
           </button>
@@ -126,5 +133,14 @@ export function DocMarkdown({
     ),
   };
 
-  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{content}</ReactMarkdown>;
+  const parts = cliPlatformMarkdown(content, platform).split(CLI_PLATFORM_MARKER);
+  return <>{parts.map((part, index) => <Fragment key={index}>
+    {index > 0 ? <span className="my-4 flex flex-wrap gap-2" role="group" aria-label="Linux, macOS, Windows">
+      {(['linux', 'mac', 'windows'] as const).map((name) => <Button key={name} size="sm"
+        variant={platform === name ? 'default' : 'outline'} aria-pressed={platform === name}
+        onClick={() => setPlatform(name)}>{name === 'mac' ? 'macOS' : name === 'linux' ? 'Linux' : 'Windows'}</Button>)}
+    </span> : null}
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{part}</ReactMarkdown>
+  </Fragment>)}</>;
+
 }

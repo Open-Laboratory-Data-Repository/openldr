@@ -1,0 +1,198 @@
+<style>
+#start-here-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#start-here-guide * { box-sizing:border-box; }
+#start-here-guide .dg-app { display:flex; flex-direction:column; height:840px; min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#start-here-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
+#start-here-guide .dg-head strong { font-size:16px; font-weight:600; }
+#start-here-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
+#start-here-guide .dg-head-icons { margin-left:auto; display:flex; align-items:center; gap:20px; color:var(--dg-muted); padding-right:80px; }
+#start-here-guide .dg-main { display:flex; min-height:0; flex:1; }
+#start-here-guide .dg-sidebar { width:256px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--dg-border); }
+#start-here-guide .dg-search { height:48px; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--dg-border); flex-shrink:0; }
+#start-here-guide .dg-search input { min-width:0; width:100%; border:1px solid var(--dg-border); border-radius:6px; padding:7px 10px; background:transparent; color:var(--dg-text); font:inherit; }
+#start-here-guide .dg-docnav { overflow:auto; min-height:0; padding:4px 0 16px; }
+#start-here-guide .dg-group { margin-top:5px; padding-top:8px; border-top:1px solid var(--dg-border); }
+#start-here-guide .dg-group:first-child { border:0; margin:0; }
+#start-here-guide .dg-group-label { display:block; padding:4px 12px; text-transform:uppercase; font-size:10px; color:var(--dg-muted); font-weight:600; letter-spacing:.03em; }
+#start-here-guide .dg-navitem { display:block; padding:8px 12px; color:var(--dg-text); text-decoration:none; }
+#start-here-guide .dg-selected { border-left:2px solid var(--dg-brand); background:var(--dg-wash); color:var(--dg-link); padding-left:10px; }
+#start-here-guide .dg-content { min-width:0; flex:1; display:flex; flex-direction:column; }
+#start-here-guide .dg-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:12px; height:48px; flex-shrink:0; border-bottom:1px solid var(--dg-border); padding:0 12px; }
+#start-here-guide .dg-version { font-size:12px; border:1px solid var(--dg-border); border-radius:6px; padding:4px 9px; color:var(--dg-muted); }
+#start-here-guide .dg-version b { color:var(--dg-text); font-weight:500; }
+#start-here-guide button { font:inherit; color:inherit; cursor:inherit; }
+#start-here-guide .dg-iconbtn { border:0; background:none; padding:5px; display:inline-flex; align-items:center; border-radius:4px; color:var(--dg-muted); }
+#start-here-guide .dg-iconbtn:hover { background:var(--dg-wash); }
+#start-here-guide .dg-scroll { min-height:0; flex:1; overflow:auto; padding:24px; scroll-behavior:smooth; }
+#start-here-guide .dg-columns { display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:32px; align-items:start; }
+#start-here-guide .dg-article { min-width:0; }
+#start-here-guide h1 { font-size:24px; line-height:1.3; margin:0 0 12px; font-weight:600; }
+#start-here-guide h2 { font-size:18px; font-weight:600; margin:30px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--dg-rule); scroll-margin-top:12px; }
+#start-here-guide h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#start-here-guide p { margin:8px 0; }
+#start-here-guide .dg-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; color:var(--dg-muted); }
+#start-here-guide .dg-meta span { border:1px solid var(--dg-border); border-radius:5px; padding:1px 7px; font-size:11px; }
+#start-here-guide .dg-intro { color:var(--dg-muted); }
+#start-here-guide .dg-example { border-left:2px solid var(--dg-brand); padding-left:12px; margin:18px 0; }
+#start-here-guide .dg-example p { margin:4px 0; }
+#start-here-guide .dg-onpage { position:sticky; top:0; color:var(--dg-muted); font-size:12px; }
+#start-here-guide .dg-onpage > p { text-transform:uppercase; font-size:10px; letter-spacing:.03em; margin:5px 0 12px; }
+#start-here-guide .dg-onpage a { display:block; color:inherit; text-decoration:none; padding:6px 0 6px 12px; border-left:2px solid transparent; }
+#start-here-guide .dg-onpage a:hover,#start-here-guide .dg-onpage a[aria-current] { color:var(--dg-link); border-color:var(--dg-brand); }
+#start-here-guide .dg-onpage small { display:block; font-size:11px; margin:24px 0 0 12px; }
+#start-here-guide .dg-loop { margin:14px 0 22px; max-width:500px; }
+#start-here-guide .dg-loop video { width:100%; display:block; border:1px solid var(--dg-border); border-radius:6px; background:#171717; }
+#start-here-guide .dg-loop-control { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--dg-muted); font-size:11px; margin-top:5px; }
+#start-here-guide .dg-loop-control button { border:0; padding:3px 0; color:var(--dg-link); background:none; }
+#start-here-guide .dg-step { padding:17px 0 18px; border-bottom:1px solid var(--dg-rule); }
+#start-here-guide .dg-step:last-child { border-bottom:0; }
+#start-here-guide .dg-number { color:var(--dg-muted); display:inline-block; min-width:22px; font-variant-numeric:tabular-nums; }
+#start-here-guide .dg-step p { margin:4px 0 10px 22px; }
+#start-here-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
+#start-here-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
+#start-here-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#start-here-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
+#start-here-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
+#start-here-guide .dg-result p { margin:3px 0; }
+#start-here-guide .dg-platform-picker { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:20px 0 8px; }
+#start-here-guide .dg-platform-picker > span { margin-right:4px; }
+#start-here-guide .dg-platform-picker button { border:1px solid var(--dg-border); border-radius:5px; background:var(--dg-pane); padding:6px 12px; }
+#start-here-guide .dg-platform-picker button[aria-pressed="true"] { color:var(--dg-text); border-color:var(--dg-brand); background:var(--dg-wash); }
+#start-here-guide .dg-illustration-note { color:var(--dg-muted); font-size:12px; }
+#start-here-guide .dg-step .dg-result p { margin:3px 0; }
+#start-here-guide code { display:inline-block; max-width:100%; box-sizing:border-box; overflow-wrap:anywhere; vertical-align:baseline; font:12px/1.6 ui-monospace,monospace; background:var(--dg-pane); padding:2px 5px; border:1px solid var(--dg-border); border-radius:4px; }
+#start-here-guide pre { margin:12px 0; padding:12px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#start-here-guide pre code { background:none; border:0; padding:0; }
+#start-here-guide .dg-config { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 18px; margin:14px 0; }
+#start-here-guide .dg-config dt { color:var(--dg-muted); }
+#start-here-guide .dg-config dd { margin:0; }
+#start-here-guide .dg-onpage .dg-subtoc { padding-left:24px; }
+#start-here-guide details { padding:12px 0; border-bottom:1px solid var(--dg-rule); }
+#start-here-guide summary { font-weight:500; cursor:inherit; }
+#start-here-guide details p { color:var(--dg-muted); }
+#start-here-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
+#start-here-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#start-here-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#start-here-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
+#start-here-guide .dg-app { position:relative; }
+#start-here-guide [hidden] { display:none !important; }
+#start-here-guide.dg-folded .dg-sidebar { display:none; }
+@media(max-width:1279px) { #start-here-guide .dg-columns { grid-template-columns:minmax(0,1fr); } #start-here-guide .dg-onpage { display:none; } }
+@media(max-width:600px) { #start-here-guide .dg-sidebar { display:none; } #start-here-guide .dg-scroll { padding:18px; } #start-here-guide .dg-head { padding:0 12px; } #start-here-guide .dg-head-icons { padding-right:0; gap:12px; } #start-here-guide .dg-review { display:none; } #start-here-guide .dg-shot { margin-left:0; } #start-here-guide .dg-step p { margin-left:0; } }
+@media(prefers-reduced-motion:reduce) { #start-here-guide .dg-scroll { scroll-behavior:auto; } }
+@media(pointer:coarse) { #start-here-guide .dg-platform-picker button { min-height:44px; } }
+</style>
+<div id="start-here-guide" aria-label="Start here user guide review preview">
+ <div class="dg-app">
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Start here guide preview</span><div class="dg-head-icons"><i data-lucide="panel-right" aria-hidden="true"></i><i data-lucide="bell" aria-hidden="true"></i><i data-lucide="sun" aria-hidden="true"></i></div></header>
+  <div class="dg-main">
+   <aside class="dg-sidebar">
+    <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><i data-lucide="panel-left-close" aria-hidden="true"></i></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
+    <nav class="dg-docnav" aria-label="Documentation sections">
+     <div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem dg-selected" href="#sh-top" aria-current="page">Start here</a><span class="dg-navitem">Your preferences</span></div>
+     <div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><span class="dg-navitem">Activity</span></div>
+     <div class="dg-group"><span class="dg-group-label">Data and design</span><span class="dg-navitem">Workflows</span><span class="dg-navitem">Scheduled reports with workflows</span><span class="dg-navitem">Custom Queries</span><span class="dg-navitem">Report Designer</span><span class="dg-navitem">Forms</span><span class="dg-navitem">Terminology</span></div>
+     <div class="dg-group"><span class="dg-group-label">Administration</span><span class="dg-navitem">Facilities</span><span class="dg-navitem">Test catalog</span><span class="dg-navitem">Users and Roles</span><span class="dg-navitem">Settings</span></div>
+    </nav>
+   </aside>
+   <section class="dg-content">
+    <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><i data-lucide="panel-left-open" aria-hidden="true"></i></button><span class="dg-version">Version <b>0.1.8</b></span><i data-lucide="download" aria-hidden="true"></i></div>
+    <div class="dg-scroll" data-reading-pane>
+     <div class="dg-columns">
+      __START_ARTICLE__
+      <nav class="dg-onpage" aria-label="On this page"><p>On this page</p><a href="#sh-sign-in">Open Studio</a><a href="#sh-cli">Use the command line</a><a href="#sh-cli-server" class="dg-subtoc">Before you begin</a><a href="#sh-cli-open" class="dg-subtoc">Open a terminal</a><a href="#sh-cli-folder" class="dg-subtoc">Go to the install folder</a><a href="#sh-cli-check" class="dg-subtoc">Check the folder</a><a href="#sh-cli-help" class="dg-subtoc">Ask OpenLDR for help</a><a href="#sh-cli-command-help" class="dg-subtoc">Help for one command</a><a href="#sh-cli-dev">Development checkout</a><a href="#sh-files">Installed file paths</a><a href="#sh-problems">Fix an installed command</a><a href="#sh-next">Continue with a task</a></nav>
+     </div>
+    </div>
+   </section>
+  </div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><img alt=""></div>
+ </div>
+</div>
+<script type="application/json" id="start-here-assets">__EVIDENCE_ASSETS__</script>
+<script>
+(() => {
+ const root = document.getElementById('start-here-guide');
+ const assets = JSON.parse(document.getElementById('start-here-assets').textContent);
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.src=assets[img.dataset.evidence];});
+ const platforms = {
+  linux:{path:'~/Downloads/openldr_ce',cd:'cd ~/Downloads/openldr_ce',list:'ls',wrapper:'openldr',prefix:'./openldr',end:'$',launch:'Press the Super key, often the Windows-logo key. Type Terminal in the applications search, then select Terminal. These Linux pictures use Ubuntu as an example.',explanation:'Here, ~ means your home folder. ~/Downloads/openldr_ce means the openldr_ce folder inside your Downloads folder.'},
+  mac:{path:'~/Downloads/openldr_ce',cd:'cd ~/Downloads/openldr_ce',list:'ls',wrapper:'openldr',prefix:'./openldr',end:'%',launch:'Press Command and Space together to open Spotlight. Type Terminal, then press Return to open the Terminal application.',explanation:'Here, ~ means your home folder. ~/Downloads/openldr_ce means the openldr_ce folder inside your Downloads folder.'},
+  windows:{path:'C:\\openldr_ce',cd:'cd C:\\openldr_ce',list:'Get-ChildItem -Name',wrapper:'openldr.ps1',prefix:'.\\openldr.ps1',end:'>',launch:'Press the Windows key to open Start. Type PowerShell, then select Windows PowerShell and choose Open.',explanation:'Here, C:\\openldr_ce means the openldr_ce folder directly on the C: drive. It is our example installation location.'}
+ };
+ function showPlatform(key,save=false) {
+  const platform=platforms[key];
+  if(!platform) return;
+  root.querySelectorAll('[data-cli-platform]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.cliPlatform===key)));
+  const separator=key==='windows'?'\\':'/';
+  const devPath=key==='windows'?'C:\\openldr_ce':'~/Downloads/openldr_ce';
+  const values={'path':platform.path,'cd':platform.cd,'path-explanation':platform.explanation,'list':platform.list,'wrapper':platform.wrapper,'help':platform.prefix+' --help','ingest-help':platform.prefix+' ingest --help','launch':platform.launch,'prompt-end':platform.end,'prefix':platform.prefix,'import':platform.prefix+' ingest data/my-file.json','example-file':platform.path+separator+'data'+separator+'my-file.json','file-tree':platform.path+separator+'\n  docker-compose.yml\n  '+platform.wrapper+'\n  data'+separator+'\n    my-file.json','dev-path':devPath,'dev-cd':'cd '+devPath,'dev-file':devPath+separator+'files'+separator+'my-file.json','fix-folder':platform.cd+'\n'+platform.prefix+' --help','clear-docker-host':key==='windows'?'$env:DOCKER_HOST = $null':'unset DOCKER_HOST','check-docker':'docker info\n'+platform.prefix+' --help','validate-installed':platform.prefix+' fhir validate data/my-file.json'};
+  Object.entries(values).forEach(([name,value])=>root.querySelectorAll('[data-cli-'+name+']').forEach(node=>{node.textContent=value;}));
+  root.querySelectorAll('img[data-terminal-stage]').forEach(img=>{
+   const id='terminal-'+key+'-'+img.dataset.terminalStage;
+   img.src=assets[id];
+   img.dataset.evidence=id;
+  });
+  if(save && globalThis.openai?.setWidgetState) globalThis.openai.setWidgetState({modelContent:{terminalPlatform:key},privateContent:null}).catch(()=>{});
+ }
+ showPlatform(globalThis.openai?.widgetState?.modelContent?.terminalPlatform || 'linux');
+ root.querySelectorAll('[data-cli-platform]').forEach(button=>button.addEventListener('click',()=>showPlatform(button.dataset.cliPlatform,true)));
+ window.addEventListener('openai:set_globals',event=>{
+  const platform=event.detail?.globals?.widgetState?.modelContent?.terminalPlatform;
+  if(platform) showPlatform(platform);
+ });
+ const pane = root.querySelector('[data-reading-pane]');
+ window.addEventListener('load',()=>{
+  if(!location.hash.startsWith('#sh-')) return;
+  const target=root.querySelector(location.hash);
+  if(target) pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12});
+ });
+ const box = root.querySelector('.dg-lightbox');
+ let previousFocus = null;
+ function closeBox() { box.hidden = true; root.querySelector('.dg-main').inert=false; if(previousFocus) previousFocus.focus(); }
+ root.querySelector('[data-close-lightbox]').addEventListener('click', closeBox);
+ root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
+ root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
+  previousFocus = button;
+  box.querySelector('img').src = button.querySelector('img').src;
+  box.querySelector('img').alt = button.querySelector('img').alt;
+  box.hidden = false;
+  root.querySelector('.dg-main').inert=true;
+  box.querySelector('button').focus();
+ }));
+ root.querySelectorAll('a[href^="#sh-"]').forEach(link => link.addEventListener('click', event => {
+  const target = root.querySelector(link.getAttribute('href'));
+  if(!target) return;
+  event.preventDefault();
+  pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  root.querySelectorAll('.dg-onpage a').forEach(item => item.removeAttribute('aria-current'));
+  if(link.closest('.dg-onpage')) link.setAttribute('aria-current','location');
+ }));
+ root.querySelectorAll('[data-play-loop]').forEach(button => button.addEventListener('click', () => {
+  const video=button.closest('figure').querySelector('video');
+  if(video.paused) video.play().then(()=>button.textContent='Pause loop').catch(()=>button.textContent='Play loop');
+  else {video.pause();button.textContent='Play loop';}
+ }));
+ root.querySelectorAll('.dg-loop').forEach(figure=>{
+  const video=figure.querySelector('video');
+  const button=figure.querySelector('[data-play-loop]');
+  video.addEventListener('play',()=>{button.textContent='Pause loop';});
+  video.addEventListener('pause',()=>{button.textContent='Play loop';});
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+   video.autoplay=true;
+   video.play().catch(()=>{button.textContent='Play loop';});
+  }
+ });
+ const expand = root.querySelector('[data-expand]');
+ root.querySelector('[data-collapse]').addEventListener('click',()=>{root.classList.add('dg-folded');expand.hidden=false;});
+ expand.addEventListener('click',()=>{root.classList.remove('dg-folded');expand.hidden=true;});
+ root.querySelector('[data-search]').addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  root.querySelectorAll('.dg-navitem').forEach(item=>{item.hidden=!!query&&!item.textContent.toLowerCase().includes(query);});
+ });
+ if(globalThis.Tweak) {
+  const options={evidenceWidth:500};
+  const tweak=new Tweak({container:root,onChange:()=>{root.querySelectorAll('.dg-shot').forEach(shot=>{shot.style.maxWidth=options.evidenceWidth+'px';});}});
+  tweak.addSlider(options,'evidenceWidth',{label:'Screenshot width',min:300,max:620,step:20,unit:'px'});
+ }
+})();
+</script>

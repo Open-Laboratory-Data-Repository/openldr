@@ -12,6 +12,21 @@ describe('Lightbox', () => {
     const img = screen.getByAltText('Dash') as HTMLImageElement;
     expect(img.getAttribute('src')).toBe('/assets/dashboard.png');
   });
+  it('retains the crop, blur and marker while enlarging a focused screenshot', () => {
+    render(<Lightbox image={{ url: '/assets/open.png', alt: 'Open Dashboard', focus: 'dashboard-create-open.png' }} onClose={() => {}} />);
+    const img = screen.getByAltText('Open Dashboard');
+    const frame = img.parentElement!.parentElement!;
+    expect(frame).toHaveStyle({ aspectRatio: '8 / 5' });
+    expect(img).toHaveStyle({ filter: 'blur(1.25px)' });
+    const sharp = img.nextElementSibling!.querySelector('img')!;
+    expect(sharp.style.clipPath).toContain('inset(');
+    expect(screen.getByText('1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(screen.getByText('150%')).toBeInTheDocument();
+    expect(frame.parentElement).toHaveStyle({ width: '150%' });
+    expect(img).toHaveStyle({ filter: 'blur(1.25px)' });
+    expect(sharp.style.clipPath).toContain('inset(');
+  });
   it('calls onClose when the close button is clicked', () => {
     const onClose = vi.fn();
     render(<Lightbox image={{ url: '/assets/x.png', alt: 'X' }} onClose={onClose} />);

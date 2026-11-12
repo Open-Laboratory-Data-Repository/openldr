@@ -1,18 +1,38 @@
 # Tableaux de bord
 
-Un tableau de bord est une page de graphiques, de chiffres et de tableaux. Chaque tuile est un **widget**. Un widget exécute une requête sur l'entrepôt du laboratoire et dessine la réponse. Les filtres en haut de la page changent ce que les widgets comptent.
+Un tableau de bord réunit des graphiques, des tableaux et des totaux. Chaque élément est un widget.
+Créez un tableau de bord pour les données de votre laboratoire. Vous pouvez configurer les widgets avant l'arrivée des dossiers.
+Les exercices avec les données d'exemple ci-dessous sont facultatifs.
 
-Ce guide prend environ 45 minutes. Vous chargez un petit jeu de données de laboratoire fictives, vous explorez le tableau de bord d'exemple, puis vous construisez votre propre tableau de bord avec quatre widgets. Chaque étape a une image ou un court clip. Sélectionnez une image ou un clip pour l'agrandir.
+## Créer un tableau de bord
 
-Certaines parties de l'interface sont encore en anglais. Ce guide écrit chaque libellé tel qu'il apparaît à l'écran.
+Créez un tableau de bord vide pour les informations à suivre. Ajoutez ensuite les widgets.
+Vous devez avoir les autorisations de création et de modification des tableaux de bord.
 
-![Le tableau de bord d'exemple. 1 Sélecteur. 2 Actualiser. 3 Menu du tableau de bord. 4 Filtres. 5 Un widget.](dashboard-tour.png)
+### 1. Ouvrir Tableau de bord
 
-1. **Sélecteur.** Passe d'un tableau de bord à l'autre.
-2. **Actualiser.** Relance tous les widgets tout de suite.
-3. **Menu du tableau de bord.** Le menu à trois points. Il contient toutes les actions : créer, modifier, ajouter un widget, filtres, exporter, importer, supprimer.
-4. **Filtres.** Réduisent le tableau de bord à une période, un examen ou une priorité.
-5. **Un widget.** Une requête et une image de sa réponse.
+Sélectionnez **Tableau de bord** en haut du menu principal à gauche.
+
+![Tableau de bord en haut du menu principal.](dashboard-create-open.png)
+
+### 2. Ouvrir le menu du tableau de bord
+
+Sélectionnez le **menu à trois points** à droite de la barre d'outils, à côté du bouton d'actualisation.
+
+![Le menu à trois points à côté du bouton d'actualisation.](dashboard-create-menu.png)
+
+### 3. Choisir Nouveau tableau de bord
+
+Sélectionnez **Nouveau tableau de bord**, le premier élément du menu ouvert.
+
+![Nouveau tableau de bord est le premier élément du menu ouvert.](dashboard-create-new.png)
+
+**Résultat attendu :** un tableau de bord vide s'ouvre en mode modification. Son nom commence par **Nouveau tableau de bord**.
+Si ce nom existe déjà, OpenLDR ajoute un numéro. Vous pouvez maintenant ajouter des widgets.
+
+![Le nouveau tableau de bord est sélectionné et sa grille est vide.](dashboard-create-result.png)
+
+Sélectionnez une image pour agrandir la même zone mise en évidence. Ces captures montrent l'interface en anglais.
 
 ## Qui peut faire quoi
 
@@ -34,6 +54,8 @@ Deux paramètres comptent aussi. Ils sont réservés aux administrateurs et déc
 
 ## Charger les données d'exemple
 
+Ces exercices utilisent des dossiers fictifs et des résultats connus. Ils sont facultatifs si vous utilisez vos propres données. Consultez [Commencer ici](/docs/start-here#utiliser-la-ligne-de-commande) pour la CLI installée, ou les [instructions de développement](/docs/start-here#exemple-1-utiliser-la-cli-dans-un-environnement-de-developpement).
+
 Une nouvelle installation contient le tableau de bord d'exemple, **Lab Overview (Sample)**, mais presque aucune donnée de laboratoire. Chaque chiffre affiche 0 et chaque graphique affiche **No data**. Les exemples de ce guide ont besoin de données. Chargez d'abord le fichier d'exemple.
 
 Le fichier est un Bundle FHIR de type transaction, rempli d'activité fictive. Il contient 24 patients et 60 demandes d'examen sur cinq examens, venant de trois établissements, avec leurs échantillons, résultats et comptes rendus. Toutes les dates tombent en septembre et octobre 2026. Le même fichier donne toujours les mêmes chiffres, donc votre écran doit correspondre à ce guide.
@@ -43,15 +65,17 @@ Le fichier est un Bundle FHIR de type transaction, rempli d'activité fictive. I
 **Sur une installation faite avec l'installateur en une ligne**, lancez ces commandes depuis le dossier d'installation. La commande `openldr` tourne dans le conteneur `api`, qui ne voit que le dossier `data`. Le fichier doit donc s'y trouver.
 
 ```bash
+cd ~/Downloads/openldr_ce
 curl -L -o data/openldr-sample-lab-data.json https://openldr.online/docs-samples/openldr-sample-lab-data.json
 ./openldr ingest data/openldr-sample-lab-data.json
 ```
 
-Sous Windows, téléchargez le même fichier dans `data`, puis lancez `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
+Sous Windows, téléchargez le même fichier dans `data`, puis lancez `cd C:\openldr_ce`, puis `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
 
 **Depuis une copie du code source**, le fichier est déjà dans le dépôt :
 
 ```bash
+cd ~/Downloads/openldr_ce
 pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
 ```
 

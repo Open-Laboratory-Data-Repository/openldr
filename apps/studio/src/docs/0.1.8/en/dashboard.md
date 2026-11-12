@@ -1,16 +1,38 @@
 # Dashboards
 
-A dashboard is one page of charts, numbers and tables. Each tile is a **widget**. A widget runs one query against the lab warehouse and draws the answer. Filters at the top of the page change what the widgets count.
+A dashboard brings charts, tables and totals together on one page. Each item is a widget.
+Create a dashboard for your lab's own data. You can configure widgets before records arrive.
+The sample exercises below are optional.
 
-This guide takes about 45 minutes. You load a small set of made-up lab data, explore the sample dashboard, then build a dashboard of your own with four widgets. Every step has a picture or a short clip. Select a picture or clip to enlarge it.
+## Create a dashboard
 
-![The sample dashboard. 1 Dashboard selector. 2 Refresh. 3 Dashboard menu. 4 Filters. 5 A widget.](dashboard-tour.png)
+Create an empty dashboard for the information you want to follow. Add widgets to it afterward.
+You need permission to create and edit dashboards.
 
-1. **Dashboard selector.** Switches between the dashboards you can see.
-2. **Refresh.** Runs every widget again now.
-3. **Dashboard menu.** The dots menu. It holds every action: new, edit, add widget, filters, export, import, delete.
-4. **Filters.** Narrow the dashboard to a period, a test or a priority.
-5. **A widget.** One query and one picture of its answer.
+### 1. Open Dashboard
+
+Select **Dashboard** near the top of the main menu on the left.
+
+![Dashboard near the top of the main menu.](dashboard-create-open.png)
+
+### 2. Open the dashboard menu
+
+Select the **dots menu** at the right end of the dashboard toolbar, beside Refresh.
+
+![The dashboard dots menu beside Refresh.](dashboard-create-menu.png)
+
+### 3. Choose New dashboard
+
+Select **New dashboard** at the top of the open menu.
+
+![New dashboard is the first item in the open menu.](dashboard-create-new.png)
+
+**Expected result:** a blank dashboard opens in edit mode. Its name starts with **New dashboard**.
+If that name is already used, OpenLDR adds a number. You can now add widgets.
+
+![The new dashboard is selected and its editing grid is empty.](dashboard-create-result.png)
+
+Select any screenshot to enlarge the same focused image.
 
 ## Who can do what
 
@@ -32,7 +54,9 @@ Two settings also matter. Both are for administrators, and both are covered in [
 
 ## Load the sample data
 
-A new install has the sample dashboard, **Lab Overview (Sample)**, but almost no lab data. Every number reads 0 and every chart says **No data**. The examples in this guide need data, so load the sample file first.
+These exercises use fictional records and known totals. You can skip them when using your own data. See [Start here](/docs/start-here#use-the-command-line) for installed CLI instructions, or its [development walkthrough](/docs/start-here#example-1-use-the-cli-in-a-development-checkout).
+
+A new install has the sample dashboard, **Lab Overview (Sample)**, but almost no lab data. Every number reads 0 and every chart says **No data**. The optional exercises below use this sample file.
 
 The file is a FHIR transaction Bundle of made-up activity. It holds 24 patients, 60 test orders across five tests from three facilities, and their specimens, results and reports. All dates fall in September and October 2026. The same file always gives the same numbers, so your screen should match this guide.
 
@@ -41,15 +65,17 @@ The file is a FHIR transaction Bundle of made-up activity. It holds 24 patients,
 **On an install made with the one-line installer**, run these from the install folder. The `openldr` command runs inside the `api` container, which can only see the `data` folder, so the file goes there.
 
 ```bash
+cd ~/Downloads/openldr_ce
 curl -L -o data/openldr-sample-lab-data.json https://openldr.online/docs-samples/openldr-sample-lab-data.json
 ./openldr ingest data/openldr-sample-lab-data.json
 ```
 
-On Windows, download the same file into `data`, then run `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
+On Windows, download the same file into `data`, then run `cd C:\openldr_ce`, then run `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
 
 **From a source checkout**, the file is already in the repository:
 
 ```bash
+cd ~/Downloads/openldr_ce
 pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
 ```
 

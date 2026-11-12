@@ -54,6 +54,68 @@ pilha instalada, os passos comuns do ciclo de vida (migração do esquema e cria
 iniciais) correm automaticamente no arranque, e as ações de administração e da zona de
 perigo também estão disponíveis no Studio, em Definições.
 
+### Escolher a pasta real da instalação
+
+Execute a CLI instalada no computador que aloja o OpenLDR. À distância, use o acesso SSH ou o terminal remoto que configurou. Abrir o Studio pelo Tailscale não abre um terminal nesse computador.
+
+Se descarregou e instalou o OpenLDR em `~/Downloads/openldr_ce` no Linux ou macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+ls
+./openldr --help
+./openldr ingest --help
+```
+
+Se o instalou em `C:\openldr_ce` no Windows, abra o PowerShell e execute:
+
+```powershell
+cd C:\openldr_ce
+Get-ChildItem -Name
+.\openldr.ps1 --help
+.\openldr.ps1 ingest --help
+```
+
+Substitua a pasta de exemplo pela sua pasta real. Contém `docker-compose.yml`, `data` e o iniciador. Execute um comando de cada vez. Os comandos de ajuda não alteram registos. O guia **Comece aqui** da aplicação ilustra cada passo.
+
+### Usar uma cópia do código-fonte
+
+Use a raiz do repositório, com `package.json`, `pnpm-workspace.yaml`, `apps` e `packages`. Os mesmos caminhos de exemplo aplicam-se ao código-fonte. Em Linux ou macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+pnpm openldr --help
+pnpm openldr ingest --help
+```
+
+Em Windows, use `cd C:\openldr_ce`, depois os mesmos comandos `pnpm openldr`. Configure primeiro as dependências e `.env`, como descrito em [Desenvolvimento](/docs/development).
+
+A CLI de código-fonte executa no computador e usa as bases e o armazenamento de `.env`. Esses serviços devem estar iniciados para importar. Não exige os servidores de desenvolvimento do Studio ou da API. Lê ficheiros locais fora da pasta partilhada `data`. Para o seu ficheiro JSON FHIR válido em `files/my-file.json`:
+
+```sh
+pnpm openldr fhir validate files/my-file.json
+```
+
+A validação não importa o ficheiro. Para o escrever na base de desenvolvimento, verifique `.env`, depois execute:
+
+```sh
+pnpm openldr ingest files/my-file.json
+pnpm openldr pipeline status
+```
+
+O teste Linux importou um recurso Organization e indicou um lote concluído. O seu identificador e a contagem dependem do ficheiro.
+
+## Recuperar de um erro da CLI instalada
+
+Estes casos foram reproduzidos em Linux com o iniciador instalado e a CLI real numa instalação isolada. Windows e macOS não foram testados nativamente. Comece na pasta da instalação e identifique o erro.
+
+| Erro | Recuperação verificada no teste |
+| --- | --- |
+| `./openldr: not found` ou `no configuration file provided: not found` | Regresse à pasta real da instalação e execute `./openldr --help`. Confirme a presença do iniciador e do ficheiro Compose. |
+| `failed to connect to the docker API` com um endereço `DOCKER_HOST` incorreto | Execute `docker info`. Se esse valor forçado estiver errado, retire-o com `unset DOCKER_HOST`, depois repita `docker info` e a ajuda CLI. Em PowerShell: `$env:DOCKER_HOST = $null`. Isto não inicia o Docker. |
+| `service "api" is not running` | Verifique `docker compose ps -a api`, execute `docker compose up -d api` e repita a ajuda. O teste prova a recuperação do iniciador, não o arranque HTTP completo da aplicação. |
+| `ingest failed: ENOENT` com o ficheiro ao lado do iniciador | Mova o ficheiro para a pasta `data` da instalação. Execute `./openldr fhir validate data/my-file.json`, depois importe esse caminho se quiser. A CLI de desenvolvimento lê caminhos locais normais. |
+
 ## Grupos de comandos
 
 | Grupo | O que faz |
