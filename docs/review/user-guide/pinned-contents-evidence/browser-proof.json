@@ -1,0 +1,351 @@
+{
+  "sizes": [
+    {
+      "width": 1600,
+      "height": 500,
+      "tasks": 17,
+      "positions": [
+        {
+          "active": "Finish and save the test",
+          "navTop": 120,
+          "navBottom": 476,
+          "height": 500,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Set the reference band and save",
+          "navTop": 120,
+          "navBottom": 476,
+          "height": 500,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Use Test catalog on a phone",
+          "navTop": 120,
+          "navBottom": 476,
+          "height": 500,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 43
+        },
+        {
+          "active": "Find and export tests",
+          "navTop": 120,
+          "navBottom": 476,
+          "height": 500,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 43
+        }
+      ],
+      "wheelMovesArticle": true,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "tasks": 17,
+      "positions": [
+        {
+          "active": "Finish and save the test",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 1080,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Set the reference band and save",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 1080,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Use Test catalog on a phone",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 1080,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Find and export tests",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 1080,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        }
+      ],
+      "wheelMovesArticle": true,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1440,
+      "height": 350,
+      "tasks": 17,
+      "positions": [
+        {
+          "active": "Finish and save the test",
+          "navTop": 120,
+          "navBottom": 326,
+          "height": 350,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 24
+        },
+        {
+          "active": "Set the reference band and save",
+          "navTop": 120,
+          "navBottom": 326,
+          "height": 350,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 65
+        },
+        {
+          "active": "Use Test catalog on a phone",
+          "navTop": 120,
+          "navBottom": 326,
+          "height": 350,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 193
+        },
+        {
+          "active": "Find and export tests",
+          "navTop": 120,
+          "navBottom": 326,
+          "height": 350,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 112
+        }
+      ],
+      "wheelMovesArticle": true,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1280,
+      "height": 720,
+      "tasks": 17,
+      "positions": [
+        {
+          "active": "Finish and save the test",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 720,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Set the reference band and save",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 720,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Use Test catalog on a phone",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 720,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Find and export tests",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 720,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        }
+      ],
+      "wheelMovesArticle": true,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1600,
+      "height": 300,
+      "tasks": 17,
+      "positions": [
+        {
+          "active": "Finish and save the test",
+          "navTop": 120,
+          "navBottom": 276,
+          "height": 300,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 24
+        },
+        {
+          "active": "Set the reference band and save",
+          "navTop": 120,
+          "navBottom": 276,
+          "height": 300,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 115
+        },
+        {
+          "active": "Use Test catalog on a phone",
+          "navTop": 120,
+          "navBottom": 276,
+          "height": 300,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 243
+        },
+        {
+          "active": "Find and export tests",
+          "navTop": 120,
+          "navBottom": 276,
+          "height": 300,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 112
+        }
+      ],
+      "wheelMovesArticle": true,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1600,
+      "height": 1100,
+      "tasks": 17,
+      "positions": [
+        {
+          "active": "Finish and save the test",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 1100,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Set the reference band and save",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 1100,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Use Test catalog on a phone",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 1100,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        },
+        {
+          "active": "Find and export tests",
+          "navTop": 120,
+          "navBottom": 615,
+          "height": 1100,
+          "position": "sticky",
+          "userScrollAreas": 0,
+          "activeVisible": true,
+          "listTop": 0
+        }
+      ],
+      "wheelMovesArticle": true,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1279,
+      "height": 720,
+      "tasks": 17,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 1024,
+      "height": 600,
+      "tasks": 17,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    },
+    {
+      "width": 375,
+      "height": 812,
+      "tasks": 17,
+      "fullMenuJump": true,
+      "horizontalOverflow": false
+    }
+  ],
+  "locales": [
+    {
+      "locale": "fr",
+      "active": "Utiliser Test catalog sur un téléphone",
+      "navTop": 120,
+      "navBottom": 326,
+      "height": 350,
+      "position": "sticky",
+      "userScrollAreas": 0,
+      "activeVisible": true,
+      "listTop": 257
+    },
+    {
+      "locale": "pt",
+      "active": "Usar Test catalog num telemóvel",
+      "navTop": 120,
+      "navBottom": 326,
+      "height": 350,
+      "position": "sticky",
+      "userScrollAreas": 0,
+      "activeVisible": true,
+      "listTop": 273
+    }
+  ],
+  "limits": "Headless Chromium layout and input checks. Physical phone chrome was not tested.",
+  "browserErrors": []
+}

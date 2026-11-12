@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { PanelLeftClose, PanelLeftOpen, Download, ListTree } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -79,12 +79,19 @@ function useActiveHeading(pane: RefObject<HTMLDivElement | null>, entries: TocEn
         const heading = document.getElementById(entry.id);
         if (heading && heading.getBoundingClientRect().top <= top) current = entry.id;
       }
+      // The final heading may be too close to the page end to reach the pane's top.
+      if (el.clientHeight > 0 && el.scrollHeight > el.clientHeight
+        && el.scrollTop + el.clientHeight >= el.scrollHeight - 2) current = entries[entries.length - 1].id;
       setActive(current);
     };
     const onScroll = () => { if (!frame) frame = requestAnimationFrame(update); };
     update();
     el.addEventListener('scroll', onScroll, { passive: true });
+    const observer = new ResizeObserver(onScroll);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
     return () => {
+      observer.disconnect();
       el.removeEventListener('scroll', onScroll);
       if (frame) cancelAnimationFrame(frame);
     };
@@ -96,30 +103,32 @@ function useActiveHeading(pane: RefObject<HTMLDivElement | null>, entries: TocEn
 function OnThisPage({ entries, active, pane }: {
   entries: TocEntry[]; active: string | null; pane: RefObject<HTMLDivElement | null>;
 }) {
-  const navRef = useRef<HTMLElement>(null);
-  const [fits, setFits] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const reveal = useCallback((target: HTMLElement | null) => {
+    const list = listRef.current;
+    if (!list || !target || !list.clientHeight) return;
+    const bounds = list.getBoundingClientRect();
+    const item = target.getBoundingClientRect();
+    if (item.top < bounds.top) list.scrollTop -= bounds.top - item.top;
+    else if (item.bottom > bounds.bottom) list.scrollTop += item.bottom - bounds.bottom;
+  }, []);
   useEffect(() => {
-    const nav = navRef.current;
-    const content = pane.current;
-    if (!nav || !content) return;
-    // A tall contents list must scroll with the article so all links stay reachable.
-    const measure = () => {
-      const style = getComputedStyle(content);
-      const inset = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
-      setFits(nav.offsetHeight <= content.clientHeight - inset);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(nav);
-    observer.observe(content);
+    const list = listRef.current;
+    if (!list) return;
+    const followActive = () => reveal(list.querySelector<HTMLElement>('[aria-current="location"]'));
+    followActive();
+    const observer = new ResizeObserver(followActive);
+    observer.observe(list);
+    if (pane.current) observer.observe(pane.current);
     return () => observer.disconnect();
-  }, [pane, entries]);
+  }, [active, entries, pane, reveal]);
   return (
-    <nav ref={navRef} aria-label="On this page" className={`hidden w-56 shrink-0 self-start xl:block${fits ? ' sticky top-0' : ''}`}>
+    <nav aria-label="On this page" className="sticky top-0 hidden max-h-[calc(100dvh-9rem)] w-56 shrink-0 self-start xl:flex xl:flex-col">
       <div className="shrink-0 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
         On this page
       </div>
-      <div>
+      {/* Only code and keyboard focus move this list. Wheel input scrolls the article. */}
+      <div ref={listRef} className="min-h-0 overflow-hidden" onFocus={(event) => reveal(event.target)}>
         {entries.map((entry) => (
           <a
             key={entry.id}
@@ -375,10 +384,10 @@ export function Docs() {
               </SelectContent>
             </Select>
             {showToc && (
-              // Narrow screens have no room for the right-hand list, so it lives here instead.
+              // Every task remains available, including those outside the pinned panel's view.
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="On this page" className="xl:hidden">
+                  <Button variant="ghost" size="icon" aria-label="On this page">
                     <ListTree className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>

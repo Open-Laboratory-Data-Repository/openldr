@@ -1,0 +1,47 @@
+[
+  {
+    "phase": "before-unit",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx",
+    "exitCode": 1,
+    "output": [
+      "Test Files  1 failed (1)",
+      "Tests  1 failed | 14 passed (15)"
+    ]
+  },
+  {
+    "phase": "without-page-end-condition",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx -t 'highlights the final task'",
+    "exitCode": 1,
+    "output": [
+      "Test Files  1 failed (1)",
+      "Tests  1 failed | 15 skipped (16)"
+    ]
+  },
+  {
+    "phase": "final-tests-and-types",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx src/docs && pnpm --filter @openldr/config test src/env-docs.test.ts && pnpm --filter @openldr/studio typecheck",
+    "exitCode": 0,
+    "output": [
+      "Test Files  14 passed (14)",
+      "Tests  111 passed (111)",
+      "Test Files  1 passed (1)",
+      "Tests  8 passed (8)"
+    ]
+  },
+  {
+    "phase": "build",
+    "command": "pnpm --filter @openldr/studio typecheck && pnpm --filter @openldr/studio build",
+    "exitCode": 0,
+    "output": [
+      "\u2713 built in 10.57s"
+    ]
+  },
+  {
+    "phase": "browser",
+    "command": "node docs/review/user-guide/pinned-contents-evidence/check-pinned-contents.cjs",
+    "exitCode": 0,
+    "output": [
+      "PINNED CONTENTS PASS: 9 window sizes; active task visible in both scroll directions; wheel scrolls article; full task menu and keyboard navigation; en/fr/pt"
+    ]
+  }
+]

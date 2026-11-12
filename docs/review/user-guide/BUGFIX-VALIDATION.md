@@ -1,3 +1,5 @@
+See [pinned-contents validation](PINNED-CONTENTS-VALIDATION.md) for the current panel behavior.
+
 The later [shared-scroll repair](SHARED-SCROLL-VALIDATION.md) replaces the inner contents scrollbar.
 It also resolves the three environment-doc formatting failures recorded below.
 

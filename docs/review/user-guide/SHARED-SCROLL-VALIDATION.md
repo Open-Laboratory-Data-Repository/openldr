@@ -1,3 +1,7 @@
+The later [pinned-contents repair](PINNED-CONTENTS-VALIDATION.md) replaces this layout.
+The panel now remains visible in short windows and follows the active task.
+This file preserves the earlier review and its evidence.
+
 # Shared documentation scrolling
 
 The operator approved removing the contents menu's independent scrollbar and correcting three formatting failures.

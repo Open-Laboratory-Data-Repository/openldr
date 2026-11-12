@@ -173,7 +173,7 @@ describe('DocsLayout', () => {
     expect(within(await screen.findByRole('menu')).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['First part', 'Second part', 'Third part']);
   });
 
-  it('highlights the active task without scrolling either the menu or the article', async () => {
+  it('reveals the active task without scrolling the article', async () => {
     renderAt('/docs/audit');
     const list = screen.getByRole('navigation', { name: 'On this page' });
     const first = within(list).getByRole('link', { name: 'First part' });
@@ -196,8 +196,28 @@ describe('DocsLayout', () => {
     thirdRect.mockImplementation(() => rect(10, 30));
     fireEvent.scroll(pane);
     await waitFor(() => expect(third).toHaveAttribute('aria-current', 'location'));
-    expect(scroller.scrollTop).toBe(0);
+    expect(scroller.scrollTop).toBe(80);
     expect(pane.scrollTop).toBe(222);
+  });
+
+  it('highlights the final task at the bottom when its heading cannot reach the top', async () => {
+    renderAt('/docs/audit');
+    const pane = screen.getByRole('heading', { level: 1, name: 'Audit' }).closest('.overflow-y-auto')!;
+    Object.defineProperty(pane, 'clientHeight', { configurable: true, value: 500 });
+    Object.defineProperty(pane, 'scrollHeight', { configurable: true, value: 1400 });
+    // Markdown headings can be replaced on a render. Keep geometry on their prototype.
+    const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return { top: this.id === 'third-part' ? 300 : 0 } as DOMRect;
+    });
+    try {
+      const list = screen.getByRole('navigation', { name: 'On this page' });
+      (pane as HTMLElement).scrollTop = 500;
+      fireEvent.scroll(pane);
+      await waitFor(() => expect(within(list).getByRole('link', { name: 'Second part' })).toHaveAttribute('aria-current', 'location'));
+      (pane as HTMLElement).scrollTop = 900;
+      fireEvent.scroll(pane);
+      await waitFor(() => expect(within(list).getByRole('link', { name: 'Third part' })).toHaveAttribute('aria-current', 'location'));
+    } finally { geometry.mockRestore(); }
   });
 
   it('exposes a download menu in the toolbar', () => {
