@@ -100,6 +100,8 @@ Sélectionnez **Développer la barre latérale** en haut de la barre étroite.
 
 **Résultat attendu :** les noms des pages réapparaissent. Studio mémorise si vous laissez la barre latérale ouverte ou repliée.
 
+Quand la fenêtre est trop basse pour toutes les pages, la barre latérale ne défile pas et ne réduit pas ses icônes. Elle garde chaque page à la même taille et place celles qui ne tiennent pas dans **Plus** (**⋯**), en bas. Cela fonctionne de même sur un téléphone et sur un ordinateur, barre ouverte ou repliée.
+
 ## Retrouver vos préférences sur téléphone
 
 Le menu principal est replié sur téléphone. Ouvrez-le pour choisir votre langue et votre page de démarrage.

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useState } from 'react';
-import { NavLink, useNavigate, useMatch, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, FileText, BookOpen, Library, FileInput, Users, ShieldCheck, Settings,
   Workflow, Activity, Database, PanelLeftClose, PanelLeftOpen, PanelRight, Menu, X, Sun, Moon, LogOut, PencilRuler, ShieldAlert, Building2, FlaskConical, Contact, type LucideIcon,
@@ -26,6 +26,7 @@ import { closePluginPanel, openPluginPanel, syncPluginPanel, usePluginPanel } fr
 import { onPluginsChanged } from '@/plugins/pluginEvents';
 import { NotificationBell } from './NotificationBell';
 import { NotificationToaster } from './NotificationToaster';
+import { SidebarNav } from './SidebarNav';
 
 // Exported for the first-page choice: StartPageGate only redirects to a page listed here.
 export const NAV: { to: string; labelKey: string; end: boolean; icon: LucideIcon; caps?: string[] }[] = [
@@ -54,40 +55,6 @@ export function visibleNav(hasCapability: (c: string) => boolean, layout: Layout
   return NAV
     .filter((n) => !n.caps || n.caps.some((c) => hasCapability(c)))
     .filter((n) => !layout || n.to === '/docs' || layout.pages.includes(n.to));
-}
-
-// One sidebar entry. Active state is computed with useMatch and passed to NavLink as a
-// STRING className. When collapsed the item is wrapped in a Tooltip via `asChild`, and
-// Radix's Slot stringifies a FUNCTION className (dumping BOTH color classes into the class
-// list → every icon rendered primary/blue). A resolved string className avoids that.
-function SidebarNavItem({
-  to, end, icon: Icon, label, collapsed, onNavigate,
-}: { to: string; end?: boolean; icon: LucideIcon; label: string; collapsed: boolean; onNavigate?: () => void }) {
-  const active = useMatch({ path: to, end: Boolean(end) }) != null;
-  // `collapsed` is a desktop-only affordance: on mobile the sidebar is a full-width drawer that
-  // always shows labels, so every collapse-driven style is scoped to `md:` and the label is kept
-  // in the DOM (hidden only on the desktop-collapsed rail) rather than conditionally rendered.
-  const link = (
-    <NavLink
-      to={to}
-      end={end}
-      onClick={onNavigate}
-      className={cn(
-        'flex h-9 items-center gap-3 rounded-md px-3 text-sm font-medium no-underline transition-colors',
-        collapsed && 'md:justify-center md:px-0',
-        active ? 'bg-accent text-primary' : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-      )}
-    >
-      <Icon className="h-4 w-4 shrink-0" />
-      <span className={cn('truncate', collapsed && 'md:hidden')}>{label}</span>
-    </NavLink>
-  );
-  return collapsed ? (
-    <Tooltip>
-      <TooltipTrigger asChild>{link}</TooltipTrigger>
-      <TooltipContent side="right" className="hidden md:block">{label}</TooltipContent>
-    </Tooltip>
-  ) : link;
 }
 
 export function AppShell({
@@ -219,14 +186,15 @@ export function AppShell({
           </Button>
         </div>
 
-        <nav aria-label={t('a11y.primaryNav', { defaultValue: 'Primary' })} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-          {nav.map(({ to, labelKey, end, icon: Icon }) => (
-            <SidebarNavItem key={to} to={to} end={end} icon={Icon} label={t(labelKey)} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-          ))}
-          {pluginUis.map((p) => (
-            <SidebarNavItem key={p.id} to={`/x/${p.id}`} icon={pluginIcon(p.nav.icon)} label={p.nav.label} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-          ))}
-        </nav>
+        {/* Links keep one size. Those that do not fit move into a ⋯ menu, so the nav never scrolls. */}
+        <SidebarNav
+          items={[
+            ...nav.map(({ to, labelKey, end, icon }) => ({ key: to, to, end, icon, label: t(labelKey) })),
+            ...pluginUis.map((p) => ({ key: p.id, to: `/x/${p.id}`, icon: pluginIcon(p.nav.icon), label: p.nav.label })),
+          ]}
+          collapsed={collapsed}
+          onNavigate={() => setMobileOpen(false)}
+        />
 
         <div className="border-t border-border p-2">
           <DropdownMenu>

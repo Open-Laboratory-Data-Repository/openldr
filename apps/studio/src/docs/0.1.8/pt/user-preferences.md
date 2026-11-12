@@ -100,6 +100,8 @@ Selecione **Expandir barra lateral** no topo da barra estreita.
 
 **Resultado esperado:** os nomes das páginas voltam a aparecer. O Studio memoriza se deixa a barra lateral expandida ou recolhida.
 
+Quando a janela é demasiado baixa para todas as páginas, a barra lateral não desliza nem encolhe os ícones. Mantém cada página do mesmo tamanho e põe as que não cabem em **Mais** (**⋯**), em baixo. Funciona da mesma forma num telemóvel e num computador, com a barra aberta ou recolhida.
+
 ## Encontrar as preferências num telemóvel
 
 O menu principal fica recolhido num telemóvel. Abra-o para escolher o idioma e a página inicial.

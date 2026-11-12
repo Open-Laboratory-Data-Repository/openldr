@@ -1409,6 +1409,7 @@ export const en = {
     query: 'Query',
     reportDesigner: 'Report Designer',
     docs: 'Docs',
+    more: 'More',
   },
   facilities: {
     title: 'Facilities',

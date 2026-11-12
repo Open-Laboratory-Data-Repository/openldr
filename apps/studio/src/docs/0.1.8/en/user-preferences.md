@@ -100,6 +100,8 @@ Select **Expand sidebar** at the top of the narrow sidebar.
 
 **Expected result:** the page names return. Studio remembers whether you leave the sidebar expanded or collapsed.
 
+When the window is too short for every page, the sidebar does not scroll or shrink its icons. It keeps each page the same size and moves the ones that do not fit into **More** (**⋯**) at the bottom. This works the same on a phone and on a computer, with the sidebar open or collapsed.
+
 ## Find your preferences on a phone
 
 The main menu is folded away on a phone. Open it to reach your language and start-page choices.

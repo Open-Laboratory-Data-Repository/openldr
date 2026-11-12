@@ -1399,6 +1399,7 @@ export const fr: EnShape = {
     query: 'Requête',
     reportDesigner: 'Concepteur de rapports',
     docs: 'Documentation',
+    more: 'Plus',
   },
   facilities: {
     title: 'Établissements',

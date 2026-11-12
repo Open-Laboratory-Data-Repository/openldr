@@ -1399,6 +1399,7 @@ export const pt: EnShape = {
     query: 'Consulta',
     reportDesigner: 'Designer de relatórios',
     docs: 'Documentação',
+    more: 'Mais',
   },
   facilities: {
     title: 'Unidades',
