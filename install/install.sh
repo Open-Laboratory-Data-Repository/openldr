@@ -313,6 +313,17 @@ fi
 # 1. Preflight
 command -v docker >/dev/null 2>&1 || err "Docker is not installed. See https://docs.docker.com/get-docker/"
 docker compose version >/dev/null 2>&1 || err "Docker Compose plugin not found. Update Docker Desktop or install docker-compose-plugin."
+# docker-compose.yml uses `depends_on` with `required: false`, which needs Compose 2.20 or later.
+# An older Compose refuses the file, so stop here, before anything is written. A version this
+# cannot read is let through with a warning: refusing it would block a Compose we do not know.
+COMPOSE_VERSION="$(docker compose version --short 2>/dev/null | head -1 | tr -d '\r')"
+COMPOSE_MAJOR="$(printf '%s' "$COMPOSE_VERSION" | sed -n 's/^v\{0,1\}\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1/p')"
+COMPOSE_MINOR="$(printf '%s' "$COMPOSE_VERSION" | sed -n 's/^v\{0,1\}\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\2/p')"
+if [ -z "$COMPOSE_MAJOR" ] || [ -z "$COMPOSE_MINOR" ]; then
+  echo "⚠ Could not read the Docker Compose version ('$COMPOSE_VERSION'). It needs 2.20 or later. Continuing."
+elif [ "$COMPOSE_MAJOR" -lt 2 ] || { [ "$COMPOSE_MAJOR" -eq 2 ] && [ "$COMPOSE_MINOR" -lt 20 ]; }; then
+  err "Docker Compose 2.20 or later is needed. This machine has $COMPOSE_VERSION."
+fi
 docker info >/dev/null 2>&1 || err "Docker daemon is not running. Start Docker and retry."
 
 # Port-conflict detection — fail fast with remediation instead of a confusing failure deep

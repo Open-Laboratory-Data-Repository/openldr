@@ -288,6 +288,8 @@ function installSh(
     join(bin, 'docker'),
     [
       '#!/usr/bin/env bash',
+      // The preflight reads the Compose version. FAKE_COMPOSE_VERSION picks the answer.
+      'if [ "$*" = "compose version --short" ]; then echo "${FAKE_COMPOSE_VERSION:-2.29.1}"; exit 0; fi',
       'echo "FAKE-DOCKER: $*"',
       // The local-install summary asks the api container for a setup code. FAKE_SETUP_CODE_ERROR
       // makes that call fail: a log line on stdout, then the given reason on stderr, exit 1.
@@ -396,6 +398,33 @@ describe('install.sh readiness gate', () => {
     const r = installSh(['--require-ready', '--no-start']);
     expect(r.code).toBe(2);
     expect(r.out).toMatch(/--no-start/);
+  }, 60_000);
+});
+
+// `depends_on` with `required: false` needs Compose 2.20 or later. An older Compose refuses the
+// file the installer writes, for Keycloak installs too.
+describe('install.sh Docker Compose version', () => {
+  it('refuses 2.19.0 before writing anything', () => {
+    const r = installSh(['--no-start'], undefined, { FAKE_COMPOSE_VERSION: '2.19.0' });
+    expect(r.code).not.toBe(0);
+    expect(r.out).toContain('Docker Compose 2.20 or later is needed. This machine has 2.19.0.');
+    expect(existsSync(r.dir)).toBe(false);
+  }, 60_000);
+
+  it.each(['2.20.0', '5.4.0'])('accepts %s', (version) => {
+    const r = installSh(['--no-start'], undefined, { FAKE_COMPOSE_VERSION: version });
+    expect(r.code).toBe(0);
+    expect(r.out).not.toMatch(/is needed/);
+    expect(r.out).not.toMatch(/Could not read the Docker Compose version/);
+    expect(existsSync(join(r.dir, '.env'))).toBe(true);
+  }, 60_000);
+
+  it('lets a version it cannot read through with a one-line warning', () => {
+    const r = installSh(['--no-start'], undefined, { FAKE_COMPOSE_VERSION: 'not-a-version' });
+    expect(r.code).toBe(0);
+    const warnings = r.out.split('\n').filter((l) => l.includes('Could not read the Docker Compose version'));
+    expect(warnings).toEqual(["⚠ Could not read the Docker Compose version ('not-a-version'). It needs 2.20 or later. Continuing."]);
+    expect(existsSync(join(r.dir, '.env'))).toBe(true);
   }, 60_000);
 });
 

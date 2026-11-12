@@ -237,6 +237,18 @@ function Invoke-NativeProcessChecked([string]$FilePath, [string[]]$ArgumentList,
 # 1. Preflight
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Die "Docker is not installed. See https://docs.docker.com/get-docker/" }
 docker compose version *> $null; if ($LASTEXITCODE -ne 0) { Die "Docker Compose plugin not found. Update Docker Desktop." }
+# docker-compose.yml uses `depends_on` with `required: false`, which needs Compose 2.20 or later.
+# An older Compose refuses the file, so stop here, before anything is written. A version this
+# cannot read is let through with a warning: refusing it would block a Compose we do not know.
+$composeVersion = "$(docker compose version --short 2>$null | Select-Object -First 1)".Trim()
+if ($composeVersion -match '^v?(\d+)\.(\d+)') {
+  $composeMajor = [int]$Matches[1]; $composeMinor = [int]$Matches[2]
+  if ($composeMajor -lt 2 -or ($composeMajor -eq 2 -and $composeMinor -lt 20)) {
+    Die "Docker Compose 2.20 or later is needed. This machine has $composeVersion."
+  }
+} else {
+  Write-Host "! Could not read the Docker Compose version ('$composeVersion'). It needs 2.20 or later. Continuing."
+}
 docker info *> $null; if ($LASTEXITCODE -ne 0) { Die "Docker daemon is not running. Start Docker Desktop and retry." }
 
 # Port-conflict detection  -  fail fast with remediation instead of a confusing failure
