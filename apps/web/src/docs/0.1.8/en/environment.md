@@ -1,22 +1,74 @@
 # Environment variables
 
-OpenLDR is configured through environment variables read at startup. In a Docker
-deployment they live in the `.env` file the installer generates next to
-`docker-compose.yml`. Change a value, then recreate the stack to apply it:
+<!-- operator-platform -->
 
+Run maintenance on the OpenLDR host, from your installed Compose folder. The examples use `~/Downloads/openldr_ce` on Linux/macOS and `C:\openldr_ce` in PowerShell. Replace these paths with your installation. The blue prompt is already shown by the terminal. Type the command only. File illustrations show text to edit in the named file. Pictures are examples, not proof that maintenance succeeded. Sample data is optional.
+
+## Change one API setting
+
+This example changes log verbosity. Plan a short interruption for the API recreation. Values are read at startup. A plain restart does not replace a container’s environment. Do not change keys, issuer or database choice as part of this example.
+
+### 1. Find the installation and hidden environment file
+
+Use your actual installation folder, not the folder on the device reading this guide. Preserve all Compose overlays.
+
+```sh
+{{operator:env-folder}}
 ```
-docker compose up -d
+
+![Find the installation and hidden environment file.](guide:operator-env-folder)
+
+### 2. Keep a private copy
+
+The copy contains secrets too. Keep access restricted and never commit either file. Do not overwrite an existing backup you still need.
+
+```sh
+{{operator:env-backup}}
 ```
 
-Most operators never edit these by hand. The installer writes sensible defaults and
-generates every secret for you. This page is a reference for the values that matter
-once you move beyond a single-host install: a public domain, an external database, or
-SQL Server as the analytics store.
+![Keep a private copy.](guide:operator-env-backup)
 
-> Secrets (`*_PASSWORD`, `*_SECRET_*`, `SECRETS_ENCRYPTION_KEY`) are generated on first
-> install. Never share or commit them. Rotating `SECRETS_ENCRYPTION_KEY` after
-> connectors exist makes their stored credentials unreadable, so treat it as permanent
-> once the stack is live.
+### 3. Edit the existing LOG_LEVEL line
+
+Open .env in your text editor. Set this one value without replacing the whole file or duplicating the key. Use info again when debugging ends. Never rotate SECRETS_ENCRYPTION_KEY casually; existing encrypted connector credentials depend on it.
+
+```text
+{{operator:env-loglevel}}
+```
+
+![Edit the existing LOG_LEVEL line.](guide:operator-env-loglevel)
+
+### 4. Check Compose syntax without printing secrets
+
+Require exit 0. This checks Compose configuration, not every application value. Avoid pasting full docker compose config output because it can reveal credentials.
+
+```sh
+{{operator:env-check}}
+```
+
+![Check Compose syntax without printing secrets.](guide:operator-env-check)
+
+### 5. Recreate the affected service
+
+For LOG_LEVEL, recreate api and read its startup log. Gateway or Keycloak settings need their own affected services recreated. Public host and certificate changes also need the Install procedures; changing one variable is insufficient.
+
+```sh
+{{operator:env-recreate}}
+```
+
+![Recreate the affected service.](guide:operator-env-recreate)
+
+### 6. Read the applied value and health
+
+Expect debug for this example and inspect actual health results. This does not prove a changed integration works. Return to info with the same edit, validation and recreation steps.
+
+```sh
+{{operator:env-verify}}
+```
+
+![Read the applied value and health.](guide:operator-env-verify)
+
+The reference below describes the installed stack where stated. Code-level defaults can differ: absent MIGRATE_ON_START and SEED_ON_START both default to false in the API schema. The installer sets migrations on and chooses sample seeding from the install options. Essential system definitions are still installed when samples are off. TLS_MODE and LETSENCRYPT_EMAIL record installer choices; editing them does not issue a certificate. Use the Install certificate task.
 
 ## Runtime
 

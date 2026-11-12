@@ -1,22 +1,74 @@
 # Variáveis de ambiente
 
-O OpenLDR é configurado por variáveis de ambiente lidas no arranque. Numa instalação
-Docker, ficam no ficheiro `.env` que o instalador gera ao lado de `docker-compose.yml`.
-Altere um valor e depois recrie a pilha para o aplicar:
+<!-- operator-platform -->
 
+Faça a manutenção no anfitrião OpenLDR, na pasta Compose instalada. Os exemplos usam `~/Downloads/openldr_ce` no Linux/macOS e `C:\openldr_ce` no PowerShell. Substitua estes caminhos. O terminal já mostra o prompt azul; escreva apenas o comando. As ilustrações de ficheiros mostram texto para editar no ficheiro indicado. As imagens não provam uma operação concluída. Os dados de exemplo são opcionais.
+
+## Alterar um parâmetro API
+
+Este exemplo altera o nível de registo. Planeie interrupção para recriar a API. Valores são lidos ao iniciar. Um simples reinício não substitui o ambiente do contentor. Não altere chaves, emissor nem base neste exemplo.
+
+### 1. Encontrar a instalação e o ficheiro oculto
+
+Use a pasta real no anfitrião, não no dispositivo que lê o guia. Preserve sobreposições Compose.
+
+```sh
+{{operator:env-folder}}
 ```
-docker compose up -d
+
+![Encontrar a instalação e o ficheiro oculto.](guide:operator-env-folder)
+
+### 2. Guardar uma cópia privada
+
+A cópia também contém segredos. Restrinja acesso e não publique nenhum ficheiro. Não substitua uma cópia ainda necessária.
+
+```sh
+{{operator:env-backup}}
 ```
 
-A maioria dos operadores nunca edita estes valores à mão. O instalador escreve valores por
-omissão adequados e gera todos os segredos. Esta página é uma referência para os valores
-que importam quando vai além de uma instalação num único anfitrião: um domínio público,
-uma base de dados externa, ou o SQL Server como armazém analítico.
+![Guardar uma cópia privada.](guide:operator-env-backup)
 
-> Os segredos (`*_PASSWORD`, `*_SECRET_*`, `SECRETS_ENCRYPTION_KEY`) são gerados na
-> primeira instalação. Nunca os partilhe nem os coloque no controlo de versões. Alterar
-> `SECRETS_ENCRYPTION_KEY` depois de existirem conectores torna ilegíveis as credenciais
-> guardadas. Considere esta chave definitiva quando a pilha estiver em produção.
+### 3. Editar a linha LOG_LEVEL existente
+
+Abra .env no editor. Altere só este valor sem substituir o ficheiro nem duplicar a chave. Volte a info depois. Não mude SECRETS_ENCRYPTION_KEY sem procedimento; as credenciais cifradas dependem dela.
+
+```text
+{{operator:env-loglevel}}
+```
+
+![Editar a linha LOG_LEVEL existente.](guide:operator-env-loglevel)
+
+### 4. Verificar Compose sem mostrar segredos
+
+Exija código 0. Verifica Compose, não todos os valores da aplicação. Não partilhe a saída completa de docker compose config, que pode revelar credenciais.
+
+```sh
+{{operator:env-check}}
+```
+
+![Verificar Compose sem mostrar segredos.](guide:operator-env-check)
+
+### 5. Recriar o serviço afetado
+
+Para LOG_LEVEL, recrie api e leia o registo. Gateway ou Keycloak exigem recriar os serviços respetivos. Endereço público e certificados precisam dos procedimentos de Instalação; uma variável não basta.
+
+```sh
+{{operator:env-recreate}}
+```
+
+![Recriar o serviço afetado.](guide:operator-env-recreate)
+
+### 6. Ler o valor aplicado e a saúde
+
+Espere debug neste exemplo e examine a saúde real. Isto não prova uma integração alterada. Volte a info com os mesmos passos.
+
+```sh
+{{operator:env-verify}}
+```
+
+![Ler o valor aplicado e a saúde.](guide:operator-env-verify)
+
+A referência descreve a instalação fornecida quando indicado. Valores no código diferem: MIGRATE_ON_START e SEED_ON_START ausentes são false. O instalador ativa migrações e escolhe exemplos pelas opções. Definições essenciais continuam instaladas sem exemplos. TLS_MODE e LETSENCRYPT_EMAIL registam escolhas; alterá-los não emite certificado. Use a tarefa em Instalação.
 
 ## Execução
 
