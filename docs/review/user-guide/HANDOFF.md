@@ -2,7 +2,7 @@
 
 These files preserve the documentation review if the desktop loses power.
 The operator authorized merging this checkpoint to main on 2026-11-12.
-The remaining guide sections still need review before they replace existing app content.
+On 2026-11-12, the operator also approved the full Dashboard preview as the starting point for the app guide.
 
 ## Open the previews
 
@@ -36,8 +36,8 @@ These pages include their media. They need no database, Docker, or app server.
 
 Start here has been reviewed through the installed CLI, development CLI, and reproduced Linux errors.
 The Create a dashboard task has been checked against the live app and approved.
-The remaining Dashboard tasks are drafts. Review them one task at a time.
-Do not claim those remaining instructions have been verified by this session.
+The full Dashboard walkthrough is approved as a starting point and promoted to the app guide.
+Its screenshots come from earlier app recordings. Only Create received a new live behavior check during this review.
 
 The accepted image treatment is in create-dashboard-zoom-review.html.
 The earlier full-screen comparison is create-dashboard-focus-review.html.
@@ -96,13 +96,14 @@ The old capture image comparisons remain archived. Their original files are also
 
 Approved Start here and Create a dashboard are now in apps/studio/src/docs/0.1.8 in English, French, and Portuguese.
 The website CLI reference in apps/web/src/docs/0.1.8 has matching installed and source examples.
-FocusedScreenshot.tsx applies the approved crop and blur to the four new Create captures.
+FocusedScreenshot.tsx applies the approved crop and blur to all 32 screenshot placements in the promoted walkthrough.
+dashboard-focus.json contains the additional framing taken from the preview.
 The browser lightbox retains the page crop, blur and markers when enlarging the image. PDF and Word exports show the original full images.
 CLI exports use the default Linux walkthrough. Platform buttons affect the browser view.
-The rest of the app Dashboard guide keeps its earlier content pending review.
+The app guide now contains Create, Add a widget, optional practice, and the existing advanced reference.
 The full Dashboard preview applies the new treatment to all 32 screenshot placements.
-Its widget and sample instructions still need task-by-task review.
-Do not confuse the reviewed Create task with those remaining drafts.
+The user can continue improving individual tasks after this starting point.
+No new widget behavior check is implied by moving the approved draft into the app.
 The operator authorized merging and pushing this review on 2026-11-12. No deployment was requested.
 
 
@@ -111,3 +112,11 @@ The operator authorized merging and pushing this review on 2026-11-12. No deploy
 See verification/checks.md for commands, outputs, and limits.
 The browser checked all three guide languages and all three CLI platform choices.
 This review was merged to main at the operator's request in 13511e2b. The release changelog was regenerated after merging. No deployment was requested.
+
+
+## Start here illustration review
+
+neutral-terminal-files.html is the editable neutral window illustration.
+neutral-terminal-files-review.html is its standalone preview.
+It shows a source checkout and the cross-platform development command pnpm openldr --help.
+It does not change Start here. The current OS-specific illustrations remain available until the user selects a replacement.

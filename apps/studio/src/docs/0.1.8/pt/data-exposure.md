@@ -49,7 +49,7 @@ Para a repor, ligue `sex` e selecione **Guardar** outra vez.
 
 Faça isto enquanto `sex` ainda está oculta pelo Exemplo 1.
 
-1. Abra **Painéis** e edite um widget, ou adicione um. Veja [Painéis, Exemplo 2](/docs/dashboard#exemplo-2-criar-um-painel-e-um-grafico-de-barras).
+1. Abra **Painéis** e edite um widget, ou adicione um. Veja [Painéis, Exemplo 1](/docs/dashboard#exemplo-1-criar-um-widget-de-pedidos-por-exame).
 2. No Builder, selecione **Join data**. Defina a tabela como **Patient**.
 3. Veja as colunas de Patient que oferece.
 

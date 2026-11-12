@@ -1,3 +1,4 @@
+import additionalFocus from './dashboard-focus.json';
 import { Button } from '@/components/ui/button';
 import type { LightboxImage } from './Lightbox';
 
@@ -5,6 +6,7 @@ interface Rect { x: number; y: number; width: number; height: number }
 interface Focus { crop: Rect; targets: Rect[]; step?: number }
 
 const FOCUS: Record<string, Focus> = {
+  ...additionalFocus,
   'dashboard-create-open.png': {
     crop: { x: 0, y: 0, width: 640, height: 400 },
     targets: [{ x: 0, y: 48, width: 239, height: 52 }], step: 1,

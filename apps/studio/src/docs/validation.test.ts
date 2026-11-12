@@ -275,7 +275,7 @@ describe('authored guide structure', () => {
     expect(long.map((g) => g.slug)).toEqual(expect.arrayContaining(['start-here', 'dashboard', 'reports', 'query', 'workflows', 'activity', 'patients', 'users', 'roles', 'audit', 'laboratory', 'data-exposure', 'connectors', 'test-catalog', 'facilities', 'forms', 'terminology', 'report-designer', 'report-pipeline', 'marketplace', 'sync', 'user-preferences', 'setup-checks', 'connector-diagnose']));
     for (const g of long) {
       const content = resolve('en', g.slug)!.content;
-      expect(content, `${g.slug} needs a worked example`).toMatch(/^## Example \d+: /m);
+      expect(content, `${g.slug} needs a worked example`).toMatch(/^#{2,3} Example \d+: /m);
       expect(content, `${g.slug} needs troubleshooting`).toContain('## Troubleshooting');
       expect(content, `${g.slug} needs related guides`).toContain('## Related guides');
     }

@@ -34,7 +34,271 @@ If that name is already used, OpenLDR adds a number. You can now add widgets.
 
 Select any screenshot to enlarge the same focused image.
 
-## Who can do what
+
+## Add a widget
+
+Add a widget to show a chart, table or total on your dashboard. Choose the lab records it reads, then choose a calculation and chart type.
+
+
+### 1. Open the widget editor
+
+A new dashboard is already in edit mode. For an existing dashboard, open its dots menu and select **Edit**.
+
+![Edit in the dashboard menu.](dashboard-guide-bar-step-1-new-dashboard.png)
+Open the dashboard's dots menu and select **Add widget**.
+
+![Add widget in the dashboard edit menu.](dashboard-guide-bar-step-2-add-widget.png)
+
+
+
+
+### 2. Give the widget a title
+
+Enter a title that describes what the widget will show. For example, use `Orders by test` for a chart comparing test volumes.
+
+![The title field at the top of the widget editor.](dashboard-guide-bar-step-3-title.png)
+
+
+### 3. Choose the data and calculation
+
+Under **Data**, choose the records to use. Under **Summarize**, choose the calculation. **Count** counts records. Other calculations depend on the data you selected.
+
+![This example uses Test Orders and Count. Choose the data and calculation for your question.](dashboard-guide-bar-step-4-defaults.png)
+
+
+### 4. Choose a grouping, if needed
+
+To compare categories, select **Group by**, then choose a field. For one total, leave the widget without a grouping.
+
+![Group by sits between Filter and Breakdown.](dashboard-guide-bar-step-5-group-button.png)
+
+
+
+![The fields depend on Data. Test gives one group for each test name.](dashboard-guide-bar-step-5-group-menu.png)
+For a date field, use **Grain** to choose an available time interval.
+
+![A date grouping with Authored and Grain set to week.](dashboard-guide-widget-date-grain.png)
+
+
+
+
+### 5. Choose how to display the result
+
+Open the widget editor's dots menu and select **Charts**.
+
+![Charts opens the visualization picker.](dashboard-guide-bar-step-6-chart-menu.png)
+Choose **Number** for one total, **Bar** to compare categories, or **Line** for changes over time.
+
+![The Visualization Type picker.](dashboard-guide-bar-step-6-bar-picker.png)
+
+
+
+
+### 6. Save the widget
+
+Open the editor's dots menu and select **Save**.
+
+![The editor closes after you save.](dashboard-guide-bar-step-7-save.png)
+
+
+### 7. Check the result on your dashboard
+
+Find the widget by its title. New widgets appear at the bottom. Check that its labels and values describe the data you chose.
+
+![Your selected records determine the labels and values.](dashboard-guide-bar-result.png)
+
+
+### 8. Finish editing
+
+Open the dashboard's dots menu and select **Done**.
+
+![Done saves the dashboard and leaves edit mode.](dashboard-guide-dashboard-done.png)
+
+**Expected result:** your widget appears with the title and display you chose. Its values come from your selected data. Repeat the task to add more widgets.
+
+
+## Optional: practise with sample data
+
+Use these optional exercises with fictional records and known results. Skip them when building dashboards from your own records.
+
+
+### Load the sample data
+
+The practice file contains **60 fictional orders** from September and October 2026. Use an empty test installation. Loading the file writes records into that installation.
+
+For opening a terminal and running commands, see [Start here](/docs/start-here#use-the-command-line), or its [development walkthrough](/docs/start-here#example-1-use-the-cli-in-a-development-checkout). Replace the example folder with your actual installation folder.
+
+
+#### 1. Download the sample file
+
+Linux / macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+curl -fL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/apps/web/public/docs-samples/openldr-sample-lab-data.json -o data/openldr-sample-lab-data.json
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\openldr_ce
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/apps/web/public/docs-samples/openldr-sample-lab-data.json" -OutFile data/openldr-sample-lab-data.json
+```
+
+
+#### 2. Import the records
+
+Linux / macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+./openldr ingest data/openldr-sample-lab-data.json
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\openldr_ce
+.\openldr.ps1 ingest data/openldr-sample-lab-data.json
+```
+
+**Expected result:** `batch <id>: done (226 resources)`. Allow a few seconds for the records to appear.
+
+
+#### From a source checkout
+
+The sample file is already included. From your test checkout at `~/Downloads/openldr_ce` or `C:\openldr_ce`, run the command below. It uses the databases configured in that checkout's `.env`.
+
+```sh
+pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
+```
+
+
+### Example 1: make an orders-by-test widget
+
+After loading the practice records, use a dashboard in edit mode. You will count orders by test using the same widget controls described above.
+
+
+### 1. Add a widget
+
+Open the dashboard's dots menu and select **Add widget**.
+
+![Add a widget](dashboard-guide-bar-step-2-add-widget.png)
+
+
+### 2. Name the widget
+
+Enter `Orders by test` in the title field at the top left.
+
+![Name the widget](dashboard-guide-bar-step-3-title.png)
+
+
+### 3. Count test orders
+
+Keep **Data** on **Test Orders** and **Summarize** on **Count**.
+
+![Count test orders](dashboard-guide-bar-step-4-defaults.png)
+
+
+### 4. Group the orders by test
+
+Select **Group by**, then choose **Test** from its list.
+
+![Group the orders by test](dashboard-guide-bar-step-5-group-button.png)
+
+
+
+![Group the orders by test](dashboard-guide-bar-step-5-group-menu.png)
+
+
+### 5. Choose a bar chart
+
+Open the editor's dots menu and select **Charts**. In **Visualization Type**, select **Bar**.
+
+![Choose a bar chart](dashboard-guide-bar-step-6-chart-menu.png)
+
+
+
+![Choose a bar chart](dashboard-guide-bar-step-6-bar-picker.png)
+
+
+### 6. Save the widget
+
+Open the editor's dots menu and select **Save**.
+
+![Save the widget](dashboard-guide-bar-step-7-save.png)
+
+
+### 7. Check your chart
+
+Find **Orders by test** at the bottom of the dashboard.
+
+![Check your chart](dashboard-guide-bar-result.png)
+
+**Expected result with the practice records:** five bars. **Full blood count** is tallest, with **18 orders**.
+
+![Orders by test](dashboard-new-widget.mp4)
+
+
+### Example 2: filter the sample dashboard
+
+Use **Lab Overview (Sample)** to find how many urgent HIV viral load orders arrived in October 2026.
+
+![Lab Overview (Sample)](dashboard-filters.mp4)
+
+
+### 1. Open Dashboard
+
+Select **Dashboard** in the main menu.
+
+![Open Dashboard](dashboard-guide-filter-step-1-dashboard.png)
+
+
+### 2. Choose the sample dashboard
+
+Select **Lab Overview (Sample)** above the charts.
+
+![Choose the sample dashboard](dashboard-guide-filter-step-2-selector.png)
+
+
+### 3. Set the October date range
+
+Open **Period**. Go to October 2026. Select **1**, then **31**, and click outside the calendar.
+
+![Set the October date range](dashboard-guide-filter-step-3-calendar.png)
+
+
+
+![Set the October date range](dashboard-guide-filter-step-3-selected.png)
+
+
+### 4. Choose the test
+
+Open **Test** and select **HIV viral load**.
+
+![Choose the test](dashboard-guide-filter-step-4-test.png)
+
+
+### 5. Choose urgent orders
+
+Open **Priority** and select **urgent**.
+
+![Choose urgent orders](dashboard-guide-filter-step-5-priority.png)
+
+
+### 6. Read the answer
+
+Read **Total Orders** and **Distinct Patients** below the filters.
+
+![Read the answer](dashboard-guide-filter-result.png)
+
+**Expected result with the practice records:** **Total Orders** and **Distinct Patients** each read **1**. **Results Recorded** reads **4**, because it does not use Priority. **Orders by Test** keeps all tests because it does not use Test.
+
+
+## More dashboard tasks
+
+The following reference covers additional editor controls, layout, filters, SQL and export.
+### Who can do what
 
 What you see depends on the permissions in your role. An administrator sets them in **Roles**.
 
@@ -52,84 +316,7 @@ Two settings also matter. Both are for administrators, and both are covered in [
 - **Dashboard raw SQL** decides whether anyone can write SQL widgets. It is off on a new install.
 - **Data exposure** decides which extra columns the Builder can offer.
 
-## Load the sample data
-
-These exercises use fictional records and known totals. You can skip them when using your own data. See [Start here](/docs/start-here#use-the-command-line) for installed CLI instructions, or its [development walkthrough](/docs/start-here#example-1-use-the-cli-in-a-development-checkout).
-
-A new install has the sample dashboard, **Lab Overview (Sample)**, but almost no lab data. Every number reads 0 and every chart says **No data**. The optional exercises below use this sample file.
-
-The file is a FHIR transaction Bundle of made-up activity. It holds 24 patients, 60 test orders across five tests from three facilities, and their specimens, results and reports. All dates fall in September and October 2026. The same file always gives the same numbers, so your screen should match this guide.
-
-> **Use a test install.** The sample rows become real rows in your warehouse. No command removes only them. To start clean again, run `./openldr db reset`, which drops and recreates the whole database. Never load the sample on a live lab install.
-
-**On an install made with the one-line installer**, run these from the install folder. The `openldr` command runs inside the `api` container, which can only see the `data` folder, so the file goes there.
-
-```bash
-cd ~/Downloads/openldr_ce
-curl -L -o data/openldr-sample-lab-data.json https://openldr.online/docs-samples/openldr-sample-lab-data.json
-./openldr ingest data/openldr-sample-lab-data.json
-```
-
-On Windows, download the same file into `data`, then run `cd C:\openldr_ce`, then run `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
-
-**From a source checkout**, the file is already in the repository:
-
-```bash
-cd ~/Downloads/openldr_ce
-pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
-```
-
-A good run ends with `batch <id>: done (226 resources)`. Open **Dashboard**. Within a few seconds you should see:
-
-| Widget | Value with the sample loaded |
-| --- | --- |
-| Total Orders | 60 |
-| Distinct Patients | 21 |
-| Results Recorded | 51 |
-| Orders by Test | Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6 |
-
-If the numbers are higher, the warehouse already held other data. The examples still work, but your numbers will differ.
-
-## What the sample dashboard shows
-
-**Lab Overview (Sample)** ships with every install. Each widget is written in SQL. They run even while **Dashboard raw SQL** is off, because the server knows these queries. Not every widget listens to every filter.
-
-| Widget | Shows | Follows filters |
-| --- | --- | --- |
-| Total Orders | Number of test orders | Period, Test, Priority |
-| Distinct Patients | Patients with at least one order | Period, Test, Priority |
-| Results Recorded | Results that were not cancelled | Period, Test |
-| Result Finalisation % | Share of reports that are final or amended | None |
-| Orders by Test | Orders per test, top 15 | Period, Priority |
-| Orders Trend | Orders per day | Period, Test, Priority |
-| Orders by Status | Orders per status | Period, Test, Priority |
-| Orders by Priority | Orders per priority | Period, Test |
-| Order → Report Pipeline | Ordered, specimen received, result recorded, report issued | None |
-| Abnormal Results | Results flagged high, low or abnormal | Period |
-| Results Trend | Results per day | Period, Test |
-| Analyte Volume vs Avg Value | Result count against average value, per analyte | None |
-| Recent Orders | The 50 newest orders | Period, Test, Priority |
-
-**Test** lists order names, such as Full blood count. **Results Recorded** and **Results Trend** count the results of the orders for that test. A Full blood count order has two results, Haemoglobin and White cell count, so both are counted.
-
-## Example 1: filter the sample dashboard
-
-Find out how many urgent HIV viral load orders came in during October 2026.
-
-![Filtering the sample dashboard to October 2026, HIV viral load, urgent.](dashboard-filters.mp4)
-
-1. Open **Dashboard**. The selector shows **Lab Overview (Sample)**.
-2. Select **Period**. Go back to October 2026. Select 1 October, then 31 October.
-3. Open **Test** and choose **HIV viral load**.
-4. Open **Priority** and choose **urgent**.
-
-**Expected result:** Total Orders reads 1 and Distinct Patients reads 1. Results Recorded reads 4, because it ignores **Priority**. Orders by Test still shows every test, because it ignores **Test**.
-
-![The dashboard after the three filters.](dashboard-filters-result.png)
-
-To clear a filter, open it and choose **All**. To clear **Period**, open it and select **Clear**. Filters are not saved. Reloading the page puts every filter back to its default.
-
-## Refresh
+### Refresh
 
 Select **Refresh** to run every widget again now.
 
@@ -142,21 +329,7 @@ How refresh behaves:
 - Changing a filter, or leaving the page, cancels the request in the browser. A late answer never replaces a newer one.
 - Cancelling in the browser does not always stop the query in the database.
 
-## Example 2: make a dashboard and a bar chart
-
-Build a bar chart of orders per test with the **Builder**. No SQL needed.
-
-![Making a new dashboard and a bar chart with the Builder.](dashboard-new-widget.mp4)
-
-1. Open the **Dashboard menu** and select **New dashboard**. A blank dashboard named **New dashboard** opens in edit mode. Edit mode shows a dotted grid.
-2. Open the **Dashboard menu** again and select **Add widget**. The widget editor opens.
-3. Select the title at the top left and type `Orders by test`.
-4. **Data** already says **Test Orders**, and **Summarize** already says **Count**. Leave both.
-5. Select the **Group by** button, the second icon in the row under **Summarize**. In the new **Group by** box, choose **Test**.
-6. The preview on the right now shows five numbers. Open the editor's own dots menu, the **Editor menu**, and select **Charts**. Choose **Bar**.
-7. Open the **Editor menu** again and select **Save**.
-
-**Expected result:** the bar chart sits on the grid. Full blood count is the tallest bar, at 18.
+### Rename a dashboard
 
 Every new dashboard is called **New dashboard**, then **New dashboard (2)**, and so on. To give it a name, open the **Dashboard menu**, select **Rename**, type the name, then select **Save** in the sheet's **⋯** menu. **Rename** waits while unsaved edits are pending. The sample dashboard keeps its own name: OpenLDR restores it when the server restarts.
 
@@ -386,6 +559,14 @@ PostgreSQL, MySQL, MariaDB and SQL Server all stop the database work at the time
 **Data exposure**, also in Settings, decides which extra warehouse columns the Builder may offer, for example under **Join data**. See [Data exposure](/docs/data-exposure).
 
 ## Troubleshooting
+
+**The widget shows No data or a zero total.** Check whether records have arrived for the selected data. You can save a widget before records arrive.
+
+**I cannot find my new widget.** New widgets appear at the bottom of the dashboard. Scroll down.
+
+**I cannot find the edit action.** Check that your role has permission to edit dashboards.
+
+**My practice totals differ.** The quoted totals assume only the practice records are loaded. Other data changes the totals.
 
 - **Every number is 0 and every chart says No data.** The warehouse is empty. [Load the sample data](#load-the-sample-data), or load your own.
 - **No dashboard appears.** None exists yet. The empty page offers **New dashboard** and **Import dashboard**.

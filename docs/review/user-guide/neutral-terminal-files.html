@@ -1,0 +1,68 @@
+<style>
+#neutral-cli-preview { --nc-bg:light-dark(#fff,#17191c); --nc-chrome:light-dark(#f5f6f8,#25282d); --nc-line:light-dark(#d9dce2,#3a3e46); --nc-text:light-dark(#262a32,#e1e4e9); --nc-muted:light-dark(#697180,#9ea6b3); --nc-accent:light-dark(#23679b,#86bce5); --nc-active:light-dark(#e8f1f9,#293c4b); display:grid; gap:24px; padding:20px 0; font:14px/1.5 Inter,Arial,sans-serif; color:var(--nc-text); }
+#neutral-cli-preview * { box-sizing:border-box; }
+#neutral-cli-preview .nc-window { background:var(--nc-bg); border:1px solid var(--nc-line); border-radius:9px; overflow:hidden; box-shadow:0 7px 22px light-dark(#17233512,#0003); }
+#neutral-cli-preview .nc-titlebar { display:flex; align-items:center; gap:10px; min-height:43px; padding:0 17px; background:var(--nc-chrome); border-bottom:1px solid var(--nc-line); font-weight:500; }
+#neutral-cli-preview .nc-titlebar small { font-size:12px; font-weight:400; color:var(--nc-muted); margin-left:auto; padding-right:76px; }
+#neutral-cli-preview .nc-titlebar i { width:16px; height:16px; }
+#neutral-cli-preview .nc-address { display:flex; align-items:center; flex-wrap:wrap; gap:12px; min-height:47px; padding:8px 17px; border-bottom:1px solid var(--nc-line); }
+#neutral-cli-preview .nc-address i { width:16px; height:16px; color:var(--nc-muted); }
+#neutral-cli-preview .nc-breadcrumb { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+#neutral-cli-preview .nc-breadcrumb span { color:var(--nc-muted); }
+#neutral-cli-preview .nc-browser { display:grid; grid-template-columns:155px minmax(0,1fr); min-height:232px; }
+#neutral-cli-preview .nc-sidebar { border-right:1px solid var(--nc-line); padding:14px 9px; background:var(--nc-chrome); }
+#neutral-cli-preview .nc-sidebar div { display:flex; align-items:center; gap:9px; padding:8px; color:var(--nc-muted); border-radius:4px; }
+#neutral-cli-preview .nc-sidebar .nc-selected { background:var(--nc-active); color:var(--nc-accent); }
+#neutral-cli-preview .nc-sidebar i, #neutral-cli-preview .nc-row i { width:17px; height:17px; flex:none; }
+#neutral-cli-preview .nc-list { padding:7px 14px 15px; }
+#neutral-cli-preview .nc-row { display:grid; grid-template-columns:minmax(0,1fr) 90px; align-items:center; min-height:39px; gap:12px; padding:0 9px; }
+#neutral-cli-preview .nc-row>span:first-child { display:flex; align-items:center; gap:10px; min-width:0; overflow-wrap:anywhere; }
+#neutral-cli-preview .nc-row>span:last-child { color:var(--nc-muted); font-size:12px; }
+#neutral-cli-preview .nc-labels { color:var(--nc-muted); border-bottom:1px solid var(--nc-line); min-height:31px; font-size:12px; margin-bottom:5px; }
+#neutral-cli-preview .nc-folder { color:var(--nc-accent); }
+#neutral-cli-preview .nc-file { color:var(--nc-muted); }
+#neutral-cli-preview .nc-status { padding:6px 17px; border-top:1px solid var(--nc-line); color:var(--nc-muted); font-size:12px; }
+#neutral-cli-preview .nc-tabs { background:var(--nc-chrome); border-bottom:1px solid var(--nc-line); padding-left:13px; display:flex; }
+#neutral-cli-preview .nc-tab { background:var(--nc-bg); color:var(--nc-text); padding:9px 18px; border-left:1px solid var(--nc-line); border-right:1px solid var(--nc-line); border-top:2px solid var(--nc-accent); margin-top:7px; border-radius:5px 5px 0 0; font:12px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace; }
+#neutral-cli-preview .nc-console { min-height:305px; padding:20px 20px 27px; font:14px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace; overflow-wrap:anywhere; }
+#neutral-cli-preview .nc-console pre { white-space:pre-wrap; overflow-wrap:anywhere; margin:16px 0 18px; background:none; border:none; border-radius:0; padding:0; font:inherit; color:var(--nc-text); }
+#neutral-cli-preview .nc-path { color:var(--nc-accent); }
+#neutral-cli-preview .nc-prompt { color:var(--nc-muted); padding:0 9px; }
+#neutral-cli-preview .nc-subtle { color:var(--nc-muted); }
+#neutral-cli-preview .nc-caret { display:inline-block; height:17px; border-left:2px solid var(--nc-text); vertical-align:middle; margin-left:2px; }
+@media(max-width:480px) { #neutral-cli-preview { gap:18px; } #neutral-cli-preview .nc-browser { grid-template-columns:minmax(0,1fr); } #neutral-cli-preview .nc-sidebar { display:none; } #neutral-cli-preview .nc-console { font-size:12px; padding:17px 13px 23px; } #neutral-cli-preview .nc-row { grid-template-columns:minmax(0,1fr) 69px; font-size:12px; } #neutral-cli-preview .nc-address { gap:9px; padding:8px 13px; } #neutral-cli-preview .nc-titlebar { padding:0 13px; } }
+</style>
+<div id="neutral-cli-preview" class="viz-dotted-background" aria-label="Neutral file browser and terminal illustrations">
+ <section class="nc-window" aria-label="File browser showing an OpenLDR source checkout">
+  <div class="nc-titlebar"><i data-lucide="folder-open" aria-hidden="true"></i><span>Files</span><small>Illustration</small></div>
+  <div class="nc-address"><i data-lucide="arrow-left" aria-hidden="true"></i><i data-lucide="arrow-up" aria-hidden="true"></i><div class="nc-breadcrumb"><span>Downloads</span><i data-lucide="chevron-right" aria-hidden="true"></i><strong>openldr_ce</strong></div></div>
+  <div class="nc-browser">
+   <div class="nc-sidebar" aria-hidden="true"><div><i data-lucide="house"></i>Home</div><div class="nc-selected"><i data-lucide="download"></i>Downloads</div><div><i data-lucide="file-text"></i>Documents</div></div>
+   <div class="nc-list" role="list" aria-label="Example source checkout files">
+    <div class="nc-row nc-labels" aria-hidden="true"><span>Name</span><span>Type</span></div>
+    <div class="nc-row" role="listitem"><span><i class="nc-folder" data-lucide="folder" aria-hidden="true"></i>apps</span><span>Folder</span></div>
+    <div class="nc-row" role="listitem"><span><i class="nc-folder" data-lucide="folder" aria-hidden="true"></i>packages</span><span>Folder</span></div>
+    <div class="nc-row" role="listitem"><span><i class="nc-file" data-lucide="file-code" aria-hidden="true"></i>package.json</span><span>JSON file</span></div>
+    <div class="nc-row" role="listitem"><span><i class="nc-file" data-lucide="file-text" aria-hidden="true"></i>pnpm-workspace.yaml</span><span>YAML file</span></div>
+   </div>
+  </div>
+  <div class="nc-status">4 items shown · Example development checkout</div>
+ </section>
+ <section class="nc-window" aria-label="Terminal showing an OpenLDR help command">
+  <div class="nc-titlebar"><i data-lucide="terminal" aria-hidden="true"></i><span>Terminal</span><small>Illustration</small></div>
+  <div class="nc-tabs"><span class="nc-tab">openldr_ce</span></div>
+  <div class="nc-console">
+   <div><span class="nc-path">openldr_ce</span><span class="nc-prompt">›</span>pnpm openldr --help</div>
+   <pre>Usage: openldr [options] [command]
+
+Options:
+  -h, --help     display help for command
+
+Commands:
+  <span class="nc-subtle">…</span>
+  ingest        Ingest a file through the pipeline
+  <span class="nc-subtle">…</span></pre>
+   <div><span class="nc-path">openldr_ce</span><span class="nc-prompt">›</span><span class="nc-caret" aria-hidden="true"></span></div>
+  </div>
+ </section>
+</div>

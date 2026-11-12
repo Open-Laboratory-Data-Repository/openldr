@@ -49,7 +49,7 @@ To put it back, switch `sex` on and select **Save** again.
 
 Do this while `sex` is still hidden from Example 1.
 
-1. Open **Dashboards** and edit any widget, or add one. See [Dashboards, Example 2](/docs/dashboard#example-2-make-a-dashboard-and-a-bar-chart).
+1. Open **Dashboards** and edit any widget, or add one. See [Dashboards, Example 1](/docs/dashboard#example-1-make-an-orders-by-test-widget).
 2. In the Builder, select **Join data**. Set the table to **Patient**.
 3. Look at the Patient columns it offers.
 

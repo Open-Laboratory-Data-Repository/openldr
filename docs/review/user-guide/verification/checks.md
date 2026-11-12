@@ -86,3 +86,24 @@ On the merged code, `pnpm --filter @openldr/studio test src/docs` reported 92 te
 `pnpm --filter @openldr/studio build` reported built in 10.71s and exited 0.
 `pnpm make:changelog` reported 3074 entries across 88 days.
 These checks cover documentation behavior and compilation. They do not retest unrelated application features.
+
+## Full Dashboard promotion and neutral illustrations
+
+The operator approved the full Dashboard preview as the app guide's starting point.
+The app now includes the own-data widget walkthrough, sample setup, and both practice exercises in en/fr/pt.
+The existing permissions, refresh, rename, SQL, layout and export reference remains below the walkthrough.
+
+`pnpm --filter @openldr/studio test src/docs` reported 92 tests passed.
+`pnpm --filter @openldr/studio typecheck` exited 0.
+`pnpm --filter @openldr/studio build` reported built in 9.78s and exited 0.
+An incoming-link check reported `Broken incoming Dashboard heading links: []` for all three languages.
+
+Headless Chromium counted 32 focused screenshot placements in each language.
+The expanded widget screenshot retained blur(1.25px).
+All three language pages fit a 375 by 812 viewport without page overflow.
+No new live widget behavior test was run. The promoted images come from the approved preview's existing recordings.
+
+The neutral terminal and file browser are illustrations for review.
+Their standalone page fit 736-, 375- and 320-pixel widths without page overflow.
+No JavaScript page errors were reported.
+Start here's existing OS-specific content and pictures were not changed.

@@ -34,7 +34,271 @@ Si ce nom existe déjà, OpenLDR ajoute un numéro. Vous pouvez maintenant ajout
 
 Sélectionnez une image pour agrandir la même zone mise en évidence. Ces captures montrent l'interface en anglais.
 
-## Qui peut faire quoi
+
+## Ajouter un widget
+
+Ajoutez un widget pour afficher un graphique, un tableau ou un total. Choisissez les dossiers du laboratoire, puis le calcul et le type de graphique.
+
+
+### 1. Ouvrir l'éditeur de widget
+
+Un nouveau tableau de bord est déjà en mode modification. Pour un tableau existant, ouvrez son menu à trois points et sélectionnez **Edit**.
+
+![Edit dans le menu du tableau de bord.](dashboard-guide-bar-step-1-new-dashboard.png)
+Ouvrez le menu à trois points du tableau et sélectionnez **Add widget**.
+
+![Add widget dans le menu de modification.](dashboard-guide-bar-step-2-add-widget.png)
+
+
+
+
+### 2. Donner un titre au widget
+
+Saisissez un titre qui décrit le résultat. Par exemple, utilisez `Orders by test` pour comparer le nombre de demandes par examen.
+
+![Le titre en haut de l'éditeur de widget.](dashboard-guide-bar-step-3-title.png)
+
+
+### 3. Choisir les données et le calcul
+
+Dans **Data**, choisissez les dossiers à utiliser. Dans **Summarize**, choisissez le calcul. **Count** compte les dossiers. Les autres calculs dépendent des données choisies.
+
+![Cet exemple utilise Test Orders et Count. Choisissez les données et le calcul adaptés à votre question.](dashboard-guide-bar-step-4-defaults.png)
+
+
+### 4. Choisir un regroupement si nécessaire
+
+Pour comparer des catégories, sélectionnez **Group by**, puis un champ. Pour un total unique, ne choisissez aucun regroupement.
+
+![Group by se trouve entre Filter et Breakdown.](dashboard-guide-bar-step-5-group-button.png)
+
+
+
+![Les champs dépendent de Data. Test forme un groupe par nom d'examen.](dashboard-guide-bar-step-5-group-menu.png)
+Pour une date, utilisez **Grain** pour choisir un intervalle disponible.
+
+![Un regroupement par Authored avec Grain réglé sur week.](dashboard-guide-widget-date-grain.png)
+
+
+
+
+### 5. Choisir l'affichage
+
+Ouvrez le menu à trois points de l'éditeur et sélectionnez **Charts**.
+
+![Charts ouvre le choix de visualisation.](dashboard-guide-bar-step-6-chart-menu.png)
+Choisissez **Number** pour un total, **Bar** pour comparer des catégories ou **Line** pour une évolution dans le temps.
+
+![Le choix Visualization Type.](dashboard-guide-bar-step-6-bar-picker.png)
+
+
+
+
+### 6. Enregistrer le widget
+
+Ouvrez le menu à trois points de l'éditeur et sélectionnez **Save**.
+
+![L'éditeur se ferme après l'enregistrement.](dashboard-guide-bar-step-7-save.png)
+
+
+### 7. Vérifier le résultat
+
+Retrouvez le widget par son titre. Les nouveaux widgets apparaissent en bas du tableau. Vérifiez que les libellés et les valeurs décrivent les données choisies.
+
+![Les dossiers choisis déterminent les libellés et les valeurs.](dashboard-guide-bar-result.png)
+
+
+### 8. Terminer la modification
+
+Ouvrez le menu à trois points du tableau de bord et sélectionnez **Done**.
+
+![Done enregistre le tableau et quitte le mode modification.](dashboard-guide-dashboard-done.png)
+
+**Résultat attendu :** le widget affiche le titre et la présentation choisis. Les valeurs viennent des données sélectionnées. Répétez la tâche pour ajouter des widgets.
+
+
+## Facultatif : pratiquer avec les données d'exemple
+
+Ces exercices facultatifs utilisent des dossiers fictifs et des résultats connus. Ignorez-les si vous utilisez vos propres données.
+
+
+### Charger les données d'exemple
+
+Le fichier contient **60 demandes fictives** de septembre et octobre 2026. Utilisez une installation de test vide. Importer le fichier écrit des dossiers dans cette installation.
+
+Pour ouvrir un terminal et exécuter les commandes, consultez [Commencer ici](/docs/start-here#utiliser-la-ligne-de-commande) ou ses [instructions de développement](/docs/start-here#exemple-1-utiliser-la-cli-dans-un-environnement-de-developpement). Remplacez le dossier d'exemple par le vôtre.
+
+
+#### 1. Télécharger le fichier d'exemple
+
+Linux / macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+curl -fL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/apps/web/public/docs-samples/openldr-sample-lab-data.json -o data/openldr-sample-lab-data.json
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\openldr_ce
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/apps/web/public/docs-samples/openldr-sample-lab-data.json" -OutFile data/openldr-sample-lab-data.json
+```
+
+
+#### 2. Importer les dossiers
+
+Linux / macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+./openldr ingest data/openldr-sample-lab-data.json
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\openldr_ce
+.\openldr.ps1 ingest data/openldr-sample-lab-data.json
+```
+
+**Résultat attendu :** `batch <id>: done (226 resources)`. Patientez quelques secondes avant de lire les données.
+
+
+#### Depuis une copie du code source
+
+Le fichier d'exemple est déjà inclus. Depuis votre copie de test dans `~/Downloads/openldr_ce` ou `C:\openldr_ce`, exécutez la commande ci-dessous. Elle utilise les bases configurées dans `.env`.
+
+```sh
+pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
+```
+
+
+### Exemple 1 : créer un widget de demandes par examen
+
+Après l'import, utilisez un tableau en mode modification. Vous allez compter les demandes par examen avec les mêmes commandes que ci-dessus.
+
+
+### 1. Ajouter un widget
+
+Ouvrez le menu à trois points du tableau et sélectionnez **Add widget**.
+
+![Ajouter un widget](dashboard-guide-bar-step-2-add-widget.png)
+
+
+### 2. Nommer le widget
+
+Saisissez `Orders by test` dans le titre en haut à gauche.
+
+![Nommer le widget](dashboard-guide-bar-step-3-title.png)
+
+
+### 3. Compter les demandes
+
+Conservez **Test Orders** dans **Data** et **Count** dans **Summarize**.
+
+![Compter les demandes](dashboard-guide-bar-step-4-defaults.png)
+
+
+### 4. Regrouper par examen
+
+Sélectionnez **Group by**, puis **Test** dans la liste.
+
+![Regrouper par examen](dashboard-guide-bar-step-5-group-button.png)
+
+
+
+![Regrouper par examen](dashboard-guide-bar-step-5-group-menu.png)
+
+
+### 5. Choisir des barres
+
+Ouvrez le menu de l'éditeur et sélectionnez **Charts**. Dans **Visualization Type**, choisissez **Bar**.
+
+![Choisir des barres](dashboard-guide-bar-step-6-chart-menu.png)
+
+
+
+![Choisir des barres](dashboard-guide-bar-step-6-bar-picker.png)
+
+
+### 6. Enregistrer le widget
+
+Ouvrez le menu de l'éditeur et sélectionnez **Save**.
+
+![Enregistrer le widget](dashboard-guide-bar-step-7-save.png)
+
+
+### 7. Vérifier le graphique
+
+Retrouvez **Orders by test** en bas du tableau.
+
+![Vérifier le graphique](dashboard-guide-bar-result.png)
+
+**Résultat attendu avec les données d'exemple :** cinq barres. **Full blood count** est la plus haute, avec **18 demandes**.
+
+![Orders by test](dashboard-new-widget.mp4)
+
+
+### Exemple 2 : filtrer le tableau de bord d'exemple
+
+Utilisez **Lab Overview (Sample)** pour compter les demandes urgentes de charge virale VIH reçues en octobre 2026.
+
+![Lab Overview (Sample)](dashboard-filters.mp4)
+
+
+### 1. Ouvrir le tableau
+
+Sélectionnez **Tableau de bord** dans le menu principal.
+
+![Ouvrir le tableau](dashboard-guide-filter-step-1-dashboard.png)
+
+
+### 2. Choisir le tableau d'exemple
+
+Sélectionnez **Lab Overview (Sample)** au-dessus des graphiques.
+
+![Choisir le tableau d'exemple](dashboard-guide-filter-step-2-selector.png)
+
+
+### 3. Choisir les dates d'octobre
+
+Ouvrez **Period** et allez en octobre 2026. Sélectionnez **1**, puis **31**, et cliquez hors du calendrier.
+
+![Choisir les dates d'octobre](dashboard-guide-filter-step-3-calendar.png)
+
+
+
+![Choisir les dates d'octobre](dashboard-guide-filter-step-3-selected.png)
+
+
+### 4. Choisir l'examen
+
+Ouvrez **Test** et sélectionnez **HIV viral load**.
+
+![Choisir l'examen](dashboard-guide-filter-step-4-test.png)
+
+
+### 5. Choisir les demandes urgentes
+
+Ouvrez **Priority** et sélectionnez **urgent**.
+
+![Choisir les demandes urgentes](dashboard-guide-filter-step-5-priority.png)
+
+
+### 6. Lire le résultat
+
+Lisez **Total Orders** et **Distinct Patients** sous les filtres.
+
+![Lire le résultat](dashboard-guide-filter-result.png)
+
+**Résultat attendu avec les données d'exemple :** **Total Orders** et **Distinct Patients** affichent **1**. **Results Recorded** affiche **4**, car il ignore Priority. **Orders by Test** conserve tous les examens, car il ignore Test.
+
+
+## Autres tâches des tableaux de bord
+
+La référence suivante décrit les autres commandes de l'éditeur, la disposition, les filtres, SQL et l'export.
+### Qui peut faire quoi
 
 Ce que vous voyez dépend des autorisations de votre rôle. Un administrateur les règle dans **Rôles**. Les noms des autorisations s'affichent en anglais.
 
@@ -52,84 +316,7 @@ Deux paramètres comptent aussi. Ils sont réservés aux administrateurs et déc
 - **SQL brut pour les tableaux de bord** décide si quelqu'un peut écrire des widgets SQL. Il est désactivé sur une nouvelle installation.
 - **Exposition des données** décide quelles colonnes supplémentaires le Builder peut proposer.
 
-## Charger les données d'exemple
-
-Ces exercices utilisent des dossiers fictifs et des résultats connus. Ils sont facultatifs si vous utilisez vos propres données. Consultez [Commencer ici](/docs/start-here#utiliser-la-ligne-de-commande) pour la CLI installée, ou les [instructions de développement](/docs/start-here#exemple-1-utiliser-la-cli-dans-un-environnement-de-developpement).
-
-Une nouvelle installation contient le tableau de bord d'exemple, **Lab Overview (Sample)**, mais presque aucune donnée de laboratoire. Chaque chiffre affiche 0 et chaque graphique affiche **No data**. Les exemples de ce guide ont besoin de données. Chargez d'abord le fichier d'exemple.
-
-Le fichier est un Bundle FHIR de type transaction, rempli d'activité fictive. Il contient 24 patients et 60 demandes d'examen sur cinq examens, venant de trois établissements, avec leurs échantillons, résultats et comptes rendus. Toutes les dates tombent en septembre et octobre 2026. Le même fichier donne toujours les mêmes chiffres, donc votre écran doit correspondre à ce guide.
-
-> **Utilisez une installation de test.** Les lignes d'exemple deviennent de vraies lignes dans votre entrepôt. Aucune commande ne retire seulement celles-ci. Pour repartir de zéro, lancez `./openldr db reset`, qui supprime et recrée toute la base. Ne chargez jamais l'exemple sur l'installation d'un laboratoire en service.
-
-**Sur une installation faite avec l'installateur en une ligne**, lancez ces commandes depuis le dossier d'installation. La commande `openldr` tourne dans le conteneur `api`, qui ne voit que le dossier `data`. Le fichier doit donc s'y trouver.
-
-```bash
-cd ~/Downloads/openldr_ce
-curl -L -o data/openldr-sample-lab-data.json https://openldr.online/docs-samples/openldr-sample-lab-data.json
-./openldr ingest data/openldr-sample-lab-data.json
-```
-
-Sous Windows, téléchargez le même fichier dans `data`, puis lancez `cd C:\openldr_ce`, puis `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
-
-**Depuis une copie du code source**, le fichier est déjà dans le dépôt :
-
-```bash
-cd ~/Downloads/openldr_ce
-pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
-```
-
-Un chargement réussi se termine par `batch <id>: done (226 resources)`. Ouvrez **Tableau de bord**. En quelques secondes, vous devez voir :
-
-| Widget | Valeur avec l'exemple chargé |
-| --- | --- |
-| Total Orders | 60 |
-| Distinct Patients | 21 |
-| Results Recorded | 51 |
-| Orders by Test | Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6 |
-
-Si les chiffres sont plus élevés, l'entrepôt contenait déjà d'autres données. Les exemples fonctionnent toujours, mais vos chiffres seront différents.
-
-## Ce que montre le tableau de bord d'exemple
-
-**Lab Overview (Sample)** est livré avec chaque installation. Ses widgets portent des noms anglais. Chacun est écrit en SQL. Ils s'exécutent même lorsque **SQL brut pour les tableaux de bord** est désactivé, car le serveur connaît ces requêtes. Tous les widgets n'écoutent pas tous les filtres.
-
-| Widget | Montre | Suit les filtres |
-| --- | --- | --- |
-| Total Orders | Nombre de demandes d'examen | Period, Test, Priority |
-| Distinct Patients | Patients ayant au moins une demande | Period, Test, Priority |
-| Results Recorded | Résultats non annulés | Period, Test |
-| Result Finalisation % | Part des comptes rendus définitifs ou modifiés | Aucun |
-| Orders by Test | Demandes par examen, les 15 premiers | Period, Priority |
-| Orders Trend | Demandes par jour | Period, Test, Priority |
-| Orders by Status | Demandes par statut | Period, Test, Priority |
-| Orders by Priority | Demandes par priorité | Period, Test |
-| Order → Report Pipeline | Demandé, échantillon reçu, résultat saisi, compte rendu émis | Aucun |
-| Abnormal Results | Résultats marqués haut, bas ou anormal | Period |
-| Results Trend | Résultats par jour | Period, Test |
-| Analyte Volume vs Avg Value | Nombre de résultats face à la valeur moyenne, par analyte | Aucun |
-| Recent Orders | Les 50 demandes les plus récentes | Period, Test, Priority |
-
-**Test** liste des noms de demandes, comme Full blood count. **Results Recorded** et **Results Trend** comptent les résultats des demandes de cet examen. Une demande Full blood count a deux résultats, Haemoglobin et White cell count, donc les deux sont comptés.
-
-## Exemple 1 : filtrer le tableau de bord d'exemple
-
-Trouvez combien de demandes urgentes de HIV viral load sont arrivées en octobre 2026.
-
-![Filtrer le tableau de bord d'exemple sur octobre 2026, HIV viral load, urgent.](dashboard-filters.mp4)
-
-1. Ouvrez **Tableau de bord**. Le sélecteur affiche **Lab Overview (Sample)**.
-2. Sélectionnez **Period**. Revenez à octobre 2026. Sélectionnez le 1er octobre, puis le 31 octobre.
-3. Ouvrez **Test** et choisissez **HIV viral load**.
-4. Ouvrez **Priority** et choisissez **urgent**.
-
-**Résultat attendu :** Total Orders affiche 1 et Distinct Patients affiche 1. Results Recorded affiche 4, car il ignore **Priority**. Orders by Test montre toujours tous les examens, car il ignore **Test**.
-
-![Le tableau de bord après les trois filtres.](dashboard-filters-result.png)
-
-Pour effacer un filtre, ouvrez-le et choisissez **All**. Pour effacer **Period**, ouvrez-le et sélectionnez **Clear**. Les filtres ne sont pas enregistrés. Recharger la page remet chaque filtre à sa valeur par défaut.
-
-## Actualiser
+### Actualiser
 
 Sélectionnez **Actualiser**, l'icône en forme de flèches, pour relancer tous les widgets tout de suite.
 
@@ -142,21 +329,7 @@ Comment l'actualisation se comporte :
 - Changer un filtre, ou quitter la page, annule la requête dans le navigateur. Une réponse tardive ne remplace jamais une réponse plus récente.
 - Annuler dans le navigateur n'arrête pas toujours la requête dans la base.
 
-## Exemple 2 : créer un tableau de bord et un graphique en barres
-
-Construisez un graphique en barres des demandes par examen avec le **Builder**. Aucun SQL n'est nécessaire.
-
-![Créer un tableau de bord et un graphique en barres avec le Builder.](dashboard-new-widget.mp4)
-
-1. Ouvrez le menu à trois points et sélectionnez **Nouveau tableau de bord**. Un tableau de bord vide nommé **Nouveau tableau de bord** s'ouvre en mode modification. Le mode modification affiche une grille de points.
-2. Ouvrez de nouveau le menu et sélectionnez **Add widget**. L'éditeur de widget s'ouvre.
-3. Sélectionnez le titre en haut à gauche et tapez `Orders by test`.
-4. **Data** indique déjà **Test Orders**, et **Summarize** indique déjà **Count**. Laissez les deux.
-5. Sélectionnez le bouton **Group by**, la deuxième icône de la rangée sous **Summarize**. Dans la nouvelle zone **Group by**, choisissez **Test**.
-6. L'aperçu à droite montre maintenant cinq chiffres. Ouvrez le menu à trois points de l'éditeur, l'**Editor menu**, et sélectionnez **Charts**. Choisissez **Bar**.
-7. Ouvrez de nouveau l'**Editor menu** et sélectionnez **Save**.
-
-**Résultat attendu :** le graphique en barres apparaît sur la grille. Full blood count est la barre la plus haute, à 18.
+### Renommer un tableau de bord
 
 Chaque nouveau tableau de bord s'appelle **Nouveau tableau de bord**, puis **Nouveau tableau de bord (2)**, et ainsi de suite. Pour lui donner un nom, ouvrez le **Dashboard menu**, choisissez **Renommer**, tapez le nom, puis choisissez **Enregistrer** dans le menu **⋯** du volet. **Renommer** attend tant que des modifications ne sont pas enregistrées. Le tableau de bord d'exemple garde son nom : OpenLDR le rétablit au redémarrage du serveur.
 
@@ -386,6 +559,14 @@ PostgreSQL, MySQL, MariaDB et SQL Server arrêtent tous le travail de la base au
 **Exposition des données**, aussi dans Paramètres, décide quelles colonnes supplémentaires de l'entrepôt le Builder peut proposer, par exemple dans **Join data**. Voir [Exposition des données](/docs/data-exposure).
 
 ## Dépannage
+
+**Le widget affiche No data ou un total nul.** Vérifiez que des dossiers sont arrivés pour les données choisies. Vous pouvez enregistrer le widget avant leur arrivée.
+
+**Mon nouveau widget est introuvable.** Les nouveaux widgets apparaissent en bas du tableau. Faites défiler la page.
+
+**La commande de modification est absente.** Vérifiez que votre rôle permet de modifier les tableaux de bord.
+
+**Mes totaux sont différents.** Les résultats supposent que seules les données d'exemple sont chargées. Les autres données changent les totaux.
 
 - **Chaque chiffre vaut 0 et chaque graphique affiche No data.** L'entrepôt est vide. [Chargez les données d'exemple](#charger-les-donnees-d-exemple), ou chargez les vôtres.
 - **Aucun tableau de bord n'apparaît.** Il n'en existe encore aucun. La page vide propose **Nouveau tableau de bord** et **Importer**.

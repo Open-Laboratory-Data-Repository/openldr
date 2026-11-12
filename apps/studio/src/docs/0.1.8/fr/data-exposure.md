@@ -49,7 +49,7 @@ Pour la remettre, activez `sex` et sélectionnez de nouveau **Enregistrer**.
 
 Faites-le pendant que `sex` est encore masquée par l'Exemple 1.
 
-1. Ouvrez **Tableaux de bord** et modifiez un widget, ou ajoutez-en un. Voir [Tableaux de bord, Exemple 2](/docs/dashboard#exemple-2-creer-un-tableau-de-bord-et-un-graphique-en-barres).
+1. Ouvrez **Tableaux de bord** et modifiez un widget, ou ajoutez-en un. Voir [Tableaux de bord, Exemple 1](/docs/dashboard#exemple-1-creer-un-widget-de-demandes-par-examen).
 2. Dans le Builder, sélectionnez **Join data**. Réglez la table sur **Patient**.
 3. Regardez les colonnes Patient proposées.
 

@@ -34,7 +34,271 @@ Se esse nome já existir, o OpenLDR acrescenta um número. Pode agora acrescenta
 
 Selecione uma imagem para ampliar a mesma área em destaque. Estas capturas mostram a interface em inglês.
 
-## Quem pode fazer o quê
+
+## Adicionar um widget
+
+Adicione um widget para mostrar um gráfico, uma tabela ou um total. Escolha os registos do laboratório, o cálculo e o tipo de gráfico.
+
+
+### 1. Abrir o editor de widgets
+
+Um painel novo já está no modo de edição. Num painel existente, abra o menu de três pontos e selecione **Edit**.
+
+![Edit no menu do painel.](dashboard-guide-bar-step-1-new-dashboard.png)
+Abra o menu de três pontos do painel e selecione **Add widget**.
+
+![Add widget no menu de edição.](dashboard-guide-bar-step-2-add-widget.png)
+
+
+
+
+### 2. Dar um título ao widget
+
+Escreva um título que descreva o resultado. Por exemplo, use `Orders by test` para comparar o número de pedidos por exame.
+
+![O título no topo do editor de widgets.](dashboard-guide-bar-step-3-title.png)
+
+
+### 3. Escolher os dados e o cálculo
+
+Em **Data**, escolha os registos a usar. Em **Summarize**, escolha o cálculo. **Count** conta registos. Os outros cálculos dependem dos dados escolhidos.
+
+![Este exemplo usa Test Orders e Count. Escolha os dados e o cálculo para a sua pergunta.](dashboard-guide-bar-step-4-defaults.png)
+
+
+### 4. Escolher um agrupamento, se necessário
+
+Para comparar categorias, selecione **Group by** e escolha um campo. Para um total único, deixe o widget sem agrupamento.
+
+![Group by fica entre Filter e Breakdown.](dashboard-guide-bar-step-5-group-button.png)
+
+
+
+![Os campos dependem de Data. Test cria um grupo por nome de exame.](dashboard-guide-bar-step-5-group-menu.png)
+Para uma data, use **Grain** para escolher um intervalo disponível.
+
+![Um agrupamento por Authored com Grain definido como week.](dashboard-guide-widget-date-grain.png)
+
+
+
+
+### 5. Escolher a apresentação
+
+Abra o menu de três pontos do editor e selecione **Charts**.
+
+![Charts abre a escolha da visualização.](dashboard-guide-bar-step-6-chart-menu.png)
+Escolha **Number** para um total, **Bar** para comparar categorias ou **Line** para mudanças ao longo do tempo.
+
+![A escolha Visualization Type.](dashboard-guide-bar-step-6-bar-picker.png)
+
+
+
+
+### 6. Guardar o widget
+
+Abra o menu de três pontos do editor e selecione **Save**.
+
+![O editor fecha depois de guardar.](dashboard-guide-bar-step-7-save.png)
+
+
+### 7. Verificar o resultado
+
+Encontre o widget pelo título. Os widgets novos aparecem no fundo do painel. Confirme que os rótulos e os valores descrevem os dados escolhidos.
+
+![Os registos escolhidos determinam os rótulos e os valores.](dashboard-guide-bar-result.png)
+
+
+### 8. Terminar a edição
+
+Abra o menu de três pontos do painel e selecione **Done**.
+
+![Done guarda o painel e sai do modo de edição.](dashboard-guide-dashboard-done.png)
+
+**Resultado esperado:** o widget mostra o título e a apresentação escolhidos. Os valores vêm dos dados selecionados. Repita a tarefa para adicionar widgets.
+
+
+## Opcional: praticar com dados de exemplo
+
+Estes exercícios opcionais usam registos fictícios e resultados conhecidos. Ignore-os se usa os seus próprios dados.
+
+
+### Carregar os dados de exemplo
+
+O ficheiro contém **60 pedidos fictícios** de setembro e outubro de 2026. Use uma instalação de teste vazia. Importar o ficheiro escreve registos nessa instalação.
+
+Para abrir um terminal e executar os comandos, consulte [Comece aqui](/docs/start-here#usar-a-linha-de-comandos) ou os [passos de desenvolvimento](/docs/start-here#exemplo-1-usar-a-cli-num-ambiente-de-desenvolvimento). Substitua a pasta de exemplo pela sua pasta real.
+
+
+#### 1. Descarregar o ficheiro de exemplo
+
+Linux / macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+curl -fL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/apps/web/public/docs-samples/openldr-sample-lab-data.json -o data/openldr-sample-lab-data.json
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\openldr_ce
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/apps/web/public/docs-samples/openldr-sample-lab-data.json" -OutFile data/openldr-sample-lab-data.json
+```
+
+
+#### 2. Importar os registos
+
+Linux / macOS:
+
+```sh
+cd ~/Downloads/openldr_ce
+./openldr ingest data/openldr-sample-lab-data.json
+```
+
+Windows PowerShell:
+
+```powershell
+cd C:\openldr_ce
+.\openldr.ps1 ingest data/openldr-sample-lab-data.json
+```
+
+**Resultado esperado:** `batch <id>: done (226 resources)`. Espere alguns segundos até os registos aparecerem.
+
+
+#### A partir de uma cópia do código-fonte
+
+O ficheiro de exemplo já está incluído. Na sua cópia de teste em `~/Downloads/openldr_ce` ou `C:\openldr_ce`, execute o comando abaixo. Usa as bases configuradas em `.env`.
+
+```sh
+pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
+```
+
+
+### Exemplo 1: criar um widget de pedidos por exame
+
+Depois de importar os registos, use um painel no modo de edição. Vai contar os pedidos por exame com os mesmos comandos descritos acima.
+
+
+### 1. Adicionar um widget
+
+Abra o menu de três pontos do painel e selecione **Add widget**.
+
+![Adicionar um widget](dashboard-guide-bar-step-2-add-widget.png)
+
+
+### 2. Dar um nome ao widget
+
+Escreva `Orders by test` no título no canto superior esquerdo.
+
+![Dar um nome ao widget](dashboard-guide-bar-step-3-title.png)
+
+
+### 3. Contar os pedidos
+
+Mantenha **Test Orders** em **Data** e **Count** em **Summarize**.
+
+![Contar os pedidos](dashboard-guide-bar-step-4-defaults.png)
+
+
+### 4. Agrupar por exame
+
+Selecione **Group by**, depois **Test** na lista.
+
+![Agrupar por exame](dashboard-guide-bar-step-5-group-button.png)
+
+
+
+![Agrupar por exame](dashboard-guide-bar-step-5-group-menu.png)
+
+
+### 5. Escolher barras
+
+Abra o menu do editor e selecione **Charts**. Em **Visualization Type**, escolha **Bar**.
+
+![Escolher barras](dashboard-guide-bar-step-6-chart-menu.png)
+
+
+
+![Escolher barras](dashboard-guide-bar-step-6-bar-picker.png)
+
+
+### 6. Guardar o widget
+
+Abra o menu do editor e selecione **Save**.
+
+![Guardar o widget](dashboard-guide-bar-step-7-save.png)
+
+
+### 7. Verificar o gráfico
+
+Encontre **Orders by test** no fundo do painel.
+
+![Verificar o gráfico](dashboard-guide-bar-result.png)
+
+**Resultado esperado com os dados de exemplo:** cinco barras. **Full blood count** é a mais alta, com **18 pedidos**.
+
+![Orders by test](dashboard-new-widget.mp4)
+
+
+### Exemplo 2: filtrar o painel de exemplo
+
+Use **Lab Overview (Sample)** para contar os pedidos urgentes de carga viral VIH recebidos em outubro de 2026.
+
+![Lab Overview (Sample)](dashboard-filters.mp4)
+
+
+### 1. Abrir o painel
+
+Selecione **Painel** no menu principal.
+
+![Abrir o painel](dashboard-guide-filter-step-1-dashboard.png)
+
+
+### 2. Escolher o painel de exemplo
+
+Selecione **Lab Overview (Sample)** acima dos gráficos.
+
+![Escolher o painel de exemplo](dashboard-guide-filter-step-2-selector.png)
+
+
+### 3. Definir as datas de outubro
+
+Abra **Period** e vá a outubro de 2026. Selecione **1**, depois **31**, e clique fora do calendário.
+
+![Definir as datas de outubro](dashboard-guide-filter-step-3-calendar.png)
+
+
+
+![Definir as datas de outubro](dashboard-guide-filter-step-3-selected.png)
+
+
+### 4. Escolher o exame
+
+Abra **Test** e selecione **HIV viral load**.
+
+![Escolher o exame](dashboard-guide-filter-step-4-test.png)
+
+
+### 5. Escolher pedidos urgentes
+
+Abra **Priority** e selecione **urgent**.
+
+![Escolher pedidos urgentes](dashboard-guide-filter-step-5-priority.png)
+
+
+### 6. Ler o resultado
+
+Leia **Total Orders** e **Distinct Patients** por baixo dos filtros.
+
+![Ler o resultado](dashboard-guide-filter-result.png)
+
+**Resultado esperado com os dados de exemplo:** **Total Orders** e **Distinct Patients** mostram **1**. **Results Recorded** mostra **4**, porque ignora Priority. **Orders by Test** mantém todos os exames, porque ignora Test.
+
+
+## Outras tarefas dos painéis
+
+A referência seguinte descreve outros comandos do editor, a disposição, os filtros, SQL e a exportação.
+### Quem pode fazer o quê
 
 O que vê depende das permissões da sua função. Um administrador define-as em **Funções**. Os nomes das permissões aparecem em inglês.
 
@@ -52,84 +316,7 @@ Duas definições também contam. São para administradores e estão descritas e
 - **SQL bruto no painel** decide se alguém pode escrever widgets SQL. Está desativada numa instalação nova.
 - **Exposição de dados** decide que colunas extra o Builder pode oferecer.
 
-## Carregar os dados de exemplo
-
-Estes exercícios usam registos fictícios e totais conhecidos. Pode ignorá-los se usa os seus dados. Veja [Comece aqui](/docs/start-here#usar-a-linha-de-comandos) para a CLI instalada ou os [passos de desenvolvimento](/docs/start-here#exemplo-1-usar-a-cli-num-ambiente-de-desenvolvimento).
-
-Uma instalação nova tem o painel de exemplo, **Lab Overview (Sample)**, mas quase nenhum dado de laboratório. Cada número mostra 0 e cada gráfico mostra **No data**. Os exemplos deste guia precisam de dados. Carregue primeiro o ficheiro de exemplo.
-
-O ficheiro é um Bundle FHIR do tipo transação, com atividade fictícia. Tem 24 pacientes e 60 pedidos de exame em cinco exames, vindos de três unidades, com as suas amostras, resultados e relatórios. Todas as datas caem em setembro e outubro de 2026. O mesmo ficheiro dá sempre os mesmos números, por isso o seu ecrã deve coincidir com este guia.
-
-> **Use uma instalação de teste.** As linhas de exemplo tornam-se linhas reais no seu armazém. Nenhum comando remove só essas linhas. Para recomeçar do zero, execute `./openldr db reset`, que apaga e recria toda a base de dados. Nunca carregue o exemplo na instalação de um laboratório em produção.
-
-**Numa instalação feita com o instalador de uma linha**, execute estes comandos a partir da pasta de instalação. O comando `openldr` corre dentro do contentor `api`, que só vê a pasta `data`. Por isso o ficheiro tem de ficar lá.
-
-```bash
-cd ~/Downloads/openldr_ce
-curl -L -o data/openldr-sample-lab-data.json https://openldr.online/docs-samples/openldr-sample-lab-data.json
-./openldr ingest data/openldr-sample-lab-data.json
-```
-
-No Windows, transfira o mesmo ficheiro para `data` e depois execute `cd C:\openldr_ce`, depois `.\openldr.ps1 ingest data/openldr-sample-lab-data.json`.
-
-**A partir de uma cópia do código-fonte**, o ficheiro já está no repositório:
-
-```bash
-cd ~/Downloads/openldr_ce
-pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-lab-data.json
-```
-
-Um carregamento bem-sucedido termina com `batch <id>: done (226 resources)`. Abra **Painel**. Em poucos segundos deve ver:
-
-| Widget | Valor com o exemplo carregado |
-| --- | --- |
-| Total Orders | 60 |
-| Distinct Patients | 21 |
-| Results Recorded | 51 |
-| Orders by Test | Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6 |
-
-Se os números forem mais altos, o armazém já tinha outros dados. Os exemplos continuam a funcionar, mas os seus números serão diferentes.
-
-## O que mostra o painel de exemplo
-
-**Lab Overview (Sample)** vem com cada instalação. Os seus widgets têm nomes em inglês. Cada um é escrito em SQL. Executam mesmo com **SQL bruto no painel** desativada, porque o servidor conhece estas consultas. Nem todos os widgets ouvem todos os filtros.
-
-| Widget | Mostra | Segue os filtros |
-| --- | --- | --- |
-| Total Orders | Número de pedidos de exame | Period, Test, Priority |
-| Distinct Patients | Pacientes com pelo menos um pedido | Period, Test, Priority |
-| Results Recorded | Resultados não cancelados | Period, Test |
-| Result Finalisation % | Parte dos relatórios finais ou corrigidos | Nenhum |
-| Orders by Test | Pedidos por exame, os 15 primeiros | Period, Priority |
-| Orders Trend | Pedidos por dia | Period, Test, Priority |
-| Orders by Status | Pedidos por estado | Period, Test, Priority |
-| Orders by Priority | Pedidos por prioridade | Period, Test |
-| Order → Report Pipeline | Pedido, amostra recebida, resultado registado, relatório emitido | Nenhum |
-| Abnormal Results | Resultados marcados como alto, baixo ou anormal | Period |
-| Results Trend | Resultados por dia | Period, Test |
-| Analyte Volume vs Avg Value | Número de resultados face ao valor médio, por analito | Nenhum |
-| Recent Orders | Os 50 pedidos mais recentes | Period, Test, Priority |
-
-**Test** lista nomes de pedidos, como Full blood count. **Results Recorded** e **Results Trend** contam os resultados dos pedidos desse exame. Um pedido de Full blood count tem dois resultados, Haemoglobin e White cell count, por isso contam-se os dois.
-
-## Exemplo 1: filtrar o painel de exemplo
-
-Descubra quantos pedidos urgentes de HIV viral load chegaram em outubro de 2026.
-
-![Filtrar o painel de exemplo para outubro de 2026, HIV viral load, urgent.](dashboard-filters.mp4)
-
-1. Abra **Painel**. O seletor mostra **Lab Overview (Sample)**.
-2. Selecione **Period**. Volte a outubro de 2026. Selecione 1 de outubro e depois 31 de outubro.
-3. Abra **Test** e escolha **HIV viral load**.
-4. Abra **Priority** e escolha **urgent**.
-
-**Resultado esperado:** Total Orders mostra 1 e Distinct Patients mostra 1. Results Recorded mostra 4, porque ignora **Priority**. Orders by Test continua a mostrar todos os exames, porque ignora **Test**.
-
-![O painel depois dos três filtros.](dashboard-filters-result.png)
-
-Para limpar um filtro, abra-o e escolha **All**. Para limpar **Period**, abra-o e selecione **Clear**. Os filtros não ficam guardados. Recarregar a página repõe cada filtro no seu valor predefinido.
-
-## Atualizar
+### Atualizar
 
 Selecione **Atualizar**, o ícone com setas, para voltar a executar todos os widgets agora.
 
@@ -142,21 +329,7 @@ Como a atualização funciona:
 - Mudar um filtro, ou sair da página, cancela o pedido no navegador. Uma resposta tardia nunca substitui uma mais recente.
 - Cancelar no navegador nem sempre para a consulta na base de dados.
 
-## Exemplo 2: criar um painel e um gráfico de barras
-
-Construa um gráfico de barras dos pedidos por exame com o **Builder**. Não precisa de SQL.
-
-![Criar um painel e um gráfico de barras com o Builder.](dashboard-new-widget.mp4)
-
-1. Abra o menu de três pontos e selecione **Novo painel**. Um painel vazio chamado **Novo painel** abre no modo de edição. O modo de edição mostra uma grelha de pontos.
-2. Abra de novo o menu e selecione **Add widget**. O editor de widgets abre.
-3. Selecione o título no canto superior esquerdo e escreva `Orders by test`.
-4. **Data** já diz **Test Orders**, e **Summarize** já diz **Count**. Deixe os dois.
-5. Selecione o botão **Group by**, o segundo ícone da fila por baixo de **Summarize**. Na nova caixa **Group by**, escolha **Test**.
-6. A pré-visualização à direita mostra agora cinco números. Abra o menu de três pontos do editor, o **Editor menu**, e selecione **Charts**. Escolha **Bar**.
-7. Abra de novo o **Editor menu** e selecione **Save**.
-
-**Resultado esperado:** o gráfico de barras aparece na grelha. Full blood count é a barra mais alta, com 18.
+### Mudar o nome de um painel
 
 Cada painel novo chama-se **Novo painel**, depois **Novo painel (2)**, e assim por diante. Para lhe dar um nome, abra o **Dashboard menu**, escolha **Mudar o nome**, escreva o nome e escolha **Guardar** no menu **⋯** do painel lateral. **Mudar o nome** espera enquanto houver alterações por guardar. O painel de exemplo mantém o seu nome: o OpenLDR repõe-no quando o servidor reinicia.
 
@@ -386,6 +559,14 @@ O PostgreSQL, o MySQL, o MariaDB e o SQL Server param todos o trabalho da base n
 **Exposição de dados**, também em Definições, decide que colunas extra do armazém o Builder pode oferecer, por exemplo em **Join data**. Veja [Exposição de dados](/docs/data-exposure).
 
 ## Resolução de problemas
+
+**O widget mostra No data ou um total zero.** Confirme que chegaram registos para os dados escolhidos. Pode guardar o widget antes de chegarem.
+
+**Não encontro o meu widget novo.** Os widgets novos aparecem no fundo do painel. Desloque a página para baixo.
+
+**Não encontro a ação de edição.** Confirme que a sua função permite editar painéis.
+
+**Os meus totais são diferentes.** Os resultados pressupõem apenas os registos de exemplo. Outros dados mudam os totais.
 
 - **Cada número é 0 e cada gráfico mostra No data.** O armazém está vazio. [Carregue os dados de exemplo](#carregar-os-dados-de-exemplo), ou carregue os seus.
 - **Não aparece nenhum painel.** Ainda não existe nenhum. A página vazia oferece **Novo painel** e **Importar**.
