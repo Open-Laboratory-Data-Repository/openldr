@@ -104,3 +104,56 @@ it('still lists payloads when the import runs cannot be read', async () => {
   expect((await svc.listRecent({ limit: 10, offset: 0 })).map((p) => p.correlationId)).toEqual(['A']);
 });
 
+
+// Bug 14: `openldr ingest` saves a batch directly (ingest-context.ts handleIngestEvent) and starts no
+// workflow run, so a lab that loads from the CLI saw nothing in Activity. Layer proven: the merge
+// and the mapping, with fake sources. Not proven: the real batch store.
+const batch = (over: Record<string, unknown> = {}) => ({
+  batch_id: 'b-1', source: 'cli', converter: 'fhir-bundle', status: 'done', resource_count: 42,
+  last_error: null, created_at: new Date('2026-07-03T11:00:00Z'), ...over,
+});
+const withBatches = (rows: ReturnType<typeof batch>[], extra: Record<string, unknown> = {}) => createActivityService({
+  ...deps,
+  batches: { get: async (id: string) => rows.find((b) => b.batch_id === id) ?? null },
+  ingestBatches: async () => rows,
+  ...extra,
+} as any);
+
+describe('batches loaded from the CLI', () => {
+  it('lists a CLI batch beside the payloads, newest first', async () => {
+    const list = await withBatches([batch()]).listRecent({ limit: 10, offset: 0 });
+    expect(list.map((r) => r.correlationId)).toEqual(['b-1', 'A']);
+    expect(list[0]).toMatchObject({ workflowId: 'ingest:fhir-bundle', source: 'cli', currentStage: 'persisted', status: 'complete' });
+  });
+
+  it('names a failed batch failed, with its error, and a waiting one running', async () => {
+    const svc = withBatches([batch({ batch_id: 'bad', status: 'failed', resource_count: 0, last_error: 'no converter' }), batch({ batch_id: 'wait', status: 'processing' })]);
+    const failed = await svc.getLifecycle('bad');
+    expect(failed?.status).toBe('failed');
+    expect(failed?.stages.at(-1)).toMatchObject({ stage: 'persisted', status: 'failed', detail: 'no converter' });
+    expect((await svc.getLifecycle('wait'))?.status).toBe('running');
+  });
+
+  it('gives a finished batch a lifecycle with its source and what it saved', async () => {
+    const lc = await withBatches([batch()]).getLifecycle('b-1');
+    expect(lc?.status).toBe('complete');
+    expect(lc?.stages.map((s) => s.stage)).toEqual(['received', 'persisted']);
+    expect(lc?.stages[1]?.detail).toBe('42 resources');
+  });
+
+  it('shows a batch once when a workflow run shares its id', async () => {
+    const list = await withBatches([batch({ batch_id: 'A' })]).listRecent({ limit: 10, offset: 0 });
+    expect(list.map((r) => r.correlationId)).toEqual(['A']);
+  });
+
+  it('pages over payloads, import runs and batches together', async () => {
+    const svc = withBatches([batch()], { importRuns: async () => [importRun()] });
+    expect((await svc.listRecent({ limit: 2, offset: 0 })).map((r) => r.correlationId)).toEqual(['imp-1', 'b-1']);
+    expect((await svc.listRecent({ limit: 2, offset: 2 })).map((r) => r.correlationId)).toEqual(['A']);
+  });
+
+  it('still lists payloads when the batches cannot be read', async () => {
+    const svc = withBatches([], { ingestBatches: async () => { throw new Error('gone'); } });
+    expect((await svc.listRecent({ limit: 10, offset: 0 })).map((r) => r.correlationId)).toEqual(['A']);
+  });
+});

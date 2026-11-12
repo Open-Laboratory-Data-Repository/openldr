@@ -21,16 +21,31 @@ export interface ActivityImportRun {
   startedBy: string;
 }
 
+/** An ingest batch (packages/ingest batch-store.ts), as much of it as Activity shows. `openldr
+ *  ingest` saves a batch directly and starts no workflow run, so without this a lab that loads from
+ *  the CLI saw nothing here (bug 14). */
+export interface ActivityBatch {
+  batch_id: string;
+  source: string | null;
+  converter: string;
+  status: string;
+  resource_count: number;
+  last_error: string | null;
+  created_at: Date | string;
+}
+
 export interface ActivityDeps {
   runs: {
     listByCorrelation(id: string): Promise<ActivityRun[]>;
     listCorrelations(opts?: { limit?: number; offset?: number }): Promise<Array<{ correlationId: string; latestAt: string; latestStatus: string; workflowId: string }>>;
   };
-  batches: { get(batchId: string): Promise<{ created_at?: unknown; source?: unknown; status?: unknown } | null | undefined> };
+  batches: { get(batchId: string): Promise<Partial<ActivityBatch> | null | undefined> };
   /** Reads the data.persisted event for a batch from outbox_events (null if not yet persisted). */
   persistedEvent(correlationId: string): Promise<{ at: string; count: number; resourceTypes: string[] } | null>;
   /** Every import run. Optional so older callers and tests need not supply it. */
   importRuns?: () => Promise<ActivityImportRun[]>;
+  /** The newest ingest batches. Optional so older callers and tests need not supply it. */
+  ingestBatches?: () => Promise<ActivityBatch[]>;
 }
 
 export interface RecentPayload { correlationId: string; workflowId: string; source: string | null; startedAt: string; currentStage: string; status: string; }
@@ -66,10 +81,31 @@ function importLifecycle(run: ActivityImportRun): ActivityLifecycle {
   return { correlationId: run.id, status: importStatus(run.status), stages, runIds: [] };
 }
 
+function batchStatus(status: string): ActivityLifecycle['status'] {
+  if (status === 'done') return 'complete';
+  if (status === 'failed') return 'failed';
+  return 'running';
+}
+
+const isoOf = (v: Date | string | undefined): string => (v instanceof Date ? v.toISOString() : String(v ?? ''));
+
+/** One batch with no workflow run as a lifecycle: where it came from, then what it saved. Read from
+ *  the batch's own status, not from runs, so a failed batch reads as failed rather than stuck. */
+function batchLifecycle(b: Partial<ActivityBatch> & { batch_id?: string }, id: string): ActivityLifecycle {
+  const at = isoOf(b.created_at);
+  const stages: ActivityLifecycle['stages'] = [
+    { stage: 'received', status: 'ok', at, detail: `${b.source ?? 'cli'}: ${b.converter ?? ''}`.replace(/: $/, '') },
+  ];
+  if (b.status === 'done') stages.push({ stage: 'persisted', status: 'ok', at, detail: `${b.resource_count ?? 0} resources` });
+  if (b.status === 'failed') stages.push({ stage: 'persisted', status: 'failed', at, detail: b.last_error ?? 'failed' });
+  return { correlationId: id, status: batchStatus(String(b.status ?? '')), stages, runIds: [] };
+}
+
 export function createActivityService(deps: ActivityDeps): ActivityService {
-  async function assemble(correlationId: string): Promise<Lifecycle | null> {
+  async function assemble(correlationId: string): Promise<ActivityLifecycle | null> {
     const runs = await deps.runs.listByCorrelation(correlationId);
     const batchRow = await deps.batches.get(correlationId);
+    if (runs.length === 0 && batchRow) return batchLifecycle(batchRow, correlationId);
     const persistedEvent = await deps.persistedEvent(correlationId);
     if (runs.length === 0 && !batchRow) return null;
     const ingestBatch = batchRow
@@ -86,6 +122,22 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
     } catch {
       return [];
     }
+  }
+
+  /** The newest ingest batches. Activity must keep working when they cannot be read. */
+  async function ingestBatches(): Promise<ActivityBatch[]> {
+    if (!deps.ingestBatches) return [];
+    try {
+      return await deps.ingestBatches();
+    } catch {
+      return [];
+    }
+  }
+
+  function batchPayload(b: ActivityBatch): RecentPayload {
+    const lc = batchLifecycle(b, b.batch_id);
+    return { correlationId: b.batch_id, workflowId: `ingest:${b.converter}`, source: b.source ?? 'cli',
+      startedAt: isoOf(b.created_at), currentStage: lc.stages[lc.stages.length - 1]!.stage, status: lc.status };
   }
 
   async function workflowPayload(h: { correlationId: string; latestAt: string; workflowId: string }): Promise<RecentPayload> {
@@ -114,25 +166,30 @@ export function createActivityService(deps: ActivityDeps): ActivityService {
     },
     async listRecent(opts) {
       const imports = await importRuns();
-      if (imports.length === 0) {
+      const batches = await ingestBatches();
+      if (imports.length === 0 && batches.length === 0) {
         const out: RecentPayload[] = [];
         for (const h of await deps.runs.listCorrelations(opts)) out.push(await workflowPayload(h));
         return out;
       }
-      // Two sources, one page. Ask the store for enough rows to cover the page once the import
-      // runs are merged in, order both by time, then cut the page. Only the rows on the page are
-      // assembled, which is the costly part.
+      // Three sources, one page. Ask the store for enough rows to cover the page once the import
+      // runs and batches are merged in, order all by time, then cut the page. Only the rows on the
+      // page are assembled, which is the costly part. A batch that also has a workflow run is shown
+      // once, as the payload.
       const offset = opts?.offset ?? 0;
       const limit = opts?.limit;
       const heads = await deps.runs.listCorrelations(limit === undefined ? opts : { limit: offset + limit, offset: 0 });
       const merged = [
-        ...heads.map((h) => ({ at: h.latestAt, head: h, run: undefined as ActivityImportRun | undefined })),
+        ...heads.map((h) => ({ at: h.latestAt, head: h, run: undefined as ActivityImportRun | undefined, batch: undefined as ActivityBatch | undefined })),
         ...imports.map((run) => ({ at: run.startedAt, head: undefined, run })),
+        ...batches
+          .filter((b) => !heads.some((h) => h.correlationId === b.batch_id))
+          .map((b) => ({ at: isoOf(b.created_at), head: undefined, run: undefined, batch: b })),
       // Compare as times, not text: the two sources need not format a timestamp the same way.
       ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
       const page = limit === undefined ? merged : merged.slice(offset, offset + limit);
       const out: RecentPayload[] = [];
-      for (const e of page) out.push(e.run ? importPayload(e.run) : await workflowPayload(e.head!));
+      for (const e of page) out.push(e.run ? importPayload(e.run) : e.batch ? batchPayload(e.batch) : await workflowPayload(e.head!));
       return out;
     },
   };

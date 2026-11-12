@@ -14,7 +14,7 @@ Une seule autorisation couvre cette page : **View activity**. Elle ne fait que l
 
 ## Avant de commencer
 
-Une nouvelle installation affiche **Aucune charge récente.** Activité liste les charges passées par un flux de travail. Les données d'exemple chargées avec `openldr ingest` n'y passent pas, elles n'apparaissent donc pas ici.
+Une nouvelle installation affiche **Aucune charge récente.** Activité liste les charges passées par un flux de travail, les imports, et les lots chargés avec `openldr ingest`. Les données d'exemple, une fois chargées avec `openldr ingest`, apparaissent ici comme un lot. Sa **Source** vaut `cli`. Son **Statut** affiche **Terminée** une fois enregistré, ou **Échouée** avec l'erreur.
 
 Pour voir une charge, envoyez-en une par le webhook Ingest. Voir [Flux de travail, exemples 1 et 2](/docs/workflows#exemple-1-preparer-le-webhook-ingest). Cela prend environ cinq minutes et ne change aucun compte.
 
@@ -57,7 +57,7 @@ Le détail liste les étapes enregistrées. Tous les flux n'enregistrent pas les
 
 ## Dépannage
 
-- **La liste est vide.** Cela ne prouve pas que rien n'est arrivé. Effacez la recherche et les filtres, sélectionnez **Actualiser**, et vérifiez l'**History** du flux. Les données chargées avec `openldr ingest` n'apparaissent pas. Une charge sans historique de flux peut aussi manquer.
+- **La liste est vide.** Cela ne prouve pas que rien n'est arrivé. Effacez la recherche et les filtres, sélectionnez **Actualiser**, et vérifiez l'**History** du flux. Activité montre les 100 derniers lots chargés avec `openldr ingest`. Pour les plus anciens, lancez `openldr pipeline status`.
 - **Une erreur de chargement s'affiche.** Sélectionnez de nouveau **Actualiser**. Si elle reste, signalez l'erreur à un administrateur.
 - **Le panneau du cycle de vie reste en chargement.** Fermez-le, sélectionnez **Actualiser**, et rouvrez la ligne. La page ne distingue pas toujours une requête échouée d'une requête lente.
 - **Une charge est Échouée.** Ouvrez le flux par lequel elle est passée, puis **History**, et lisez l'erreur du nœud en échec. Cette page n'a pas de bouton pour relancer. Suivez la procédure de reprise du flux.

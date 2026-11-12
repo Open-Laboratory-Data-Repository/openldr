@@ -916,6 +916,8 @@ const reporting: ReportingApi = {
       for (const p of await imports.importers()) out.push(...await imports.list(p.id));
       return out;
     },
+    // `openldr ingest` saves a batch with no workflow run (bug 14). The newest 100, newest first.
+    ingestBatches: () => ingestBatches.list(),
   });
 
   const health = new HealthRegistry();

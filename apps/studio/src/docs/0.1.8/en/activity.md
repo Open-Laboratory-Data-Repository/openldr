@@ -14,7 +14,7 @@ One permission covers this page: **View activity**. It is read-only. Nothing her
 
 ## Before you start
 
-A new install shows **No recent payloads.** Activity lists payloads that went through a workflow. The sample data loaded with `openldr ingest` does not, so it is not listed here.
+A new install shows **No recent payloads.** Activity lists payloads that went through a workflow, import runs, and batches loaded with `openldr ingest`. The sample data, once loaded with `openldr ingest`, shows here as one batch. Its **Source** is `cli`, and it reads **Complete** once it is stored, or **Failed** with the error.
 
 To see a payload, send one through the Ingest webhook. See [Workflows, Example 1 and 2](/docs/workflows#example-1-get-the-ingest-webhook-ready). It takes about five minutes and changes no counts.
 
@@ -57,7 +57,7 @@ The detail lists the stages that were recorded. Not every workflow records all f
 
 ## Troubleshooting
 
-- **The list is empty.** That does not prove nothing arrived. Clear search and filters, select **Refresh**, and check the workflow's **History**. Data loaded with `openldr ingest` is not listed. A payload with no workflow history may be missing too.
+- **The list is empty.** That does not prove nothing arrived. Clear search and filters, select **Refresh**, and check the workflow's **History**. Activity shows the newest 100 batches loaded with `openldr ingest`. For older ones, run `openldr pipeline status`.
 - **A loading error appears.** Select **Refresh** again. If it stays, report the error to an administrator.
 - **The lifecycle panel stays on Loading.** Close it, select **Refresh**, and open the row again. The page cannot always tell a failed request from a slow one.
 - **A payload is Failed.** Open the workflow it went through, then **History**, and read the failed node's error. This page has no retry. Follow the workflow's own recovery steps.

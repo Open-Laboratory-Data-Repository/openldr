@@ -14,7 +14,7 @@ Uma só permissão cobre esta página: **View activity**. Só lê. Nada aqui alt
 
 ## Antes de começar
 
-Uma instalação nova mostra **Nenhuma carga recente.** A Atividade lista cargas que passaram por um fluxo de trabalho. Os dados de exemplo carregados com `openldr ingest` não passam, por isso não aparecem aqui.
+Uma instalação nova mostra **Nenhuma carga recente.** A Atividade lista cargas que passaram por um fluxo de trabalho, importações, e lotes carregados com `openldr ingest`. Os dados de exemplo, depois de carregados com `openldr ingest`, aparecem aqui como um lote. A **Origem** é `cli`. O **Status** mostra **Concluída** quando fica guardado, ou **Falhou** com o erro.
 
 Para ver uma carga, envie uma pelo webhook Ingest. Veja [Fluxos de trabalho, exemplos 1 e 2](/docs/workflows#exemplo-1-preparar-o-webhook-ingest). Leva cerca de cinco minutos e não muda nenhuma contagem.
 
@@ -57,7 +57,7 @@ O detalhe lista as etapas registadas. Nem todos os fluxos registam as quatro. A 
 
 ## Resolução de problemas
 
-- **A lista está vazia.** Isso não prova que nada chegou. Limpe a pesquisa e os filtros, selecione **Atualizar**, e veja o **History** do fluxo. Os dados carregados com `openldr ingest` não aparecem. Uma carga sem histórico de fluxo também pode faltar.
+- **A lista está vazia.** Isso não prova que nada chegou. Limpe a pesquisa e os filtros, selecione **Atualizar**, e veja o **History** do fluxo. A Atividade mostra os 100 lotes mais recentes carregados com `openldr ingest`. Para os mais antigos, execute `openldr pipeline status`.
 - **Aparece um erro ao carregar.** Selecione **Atualizar** de novo. Se continuar, comunique o erro a um administrador.
 - **O painel do ciclo de vida fica a carregar.** Feche-o, selecione **Atualizar** e abra de novo a linha. A página nem sempre distingue um pedido falhado de um lento.
 - **Uma carga Falhou.** Abra o fluxo por onde passou, depois **History**, e leia o erro do nó que falhou. Esta página não tem botão para repetir. Siga o procedimento de recuperação do fluxo.

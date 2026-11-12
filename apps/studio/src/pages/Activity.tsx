@@ -194,7 +194,7 @@ export function Activity() {
         { value: 'complete', labelKey: 'activity.status.complete' },
         { value: 'stuck', labelKey: 'activity.status.stuck' },
         { value: 'failed', labelKey: 'activity.status.failed' },
-        // Import runs only: a payload from a workflow is never running or stopped.
+        // Import runs and CLI batches only: a payload from a workflow is never running or stopped.
         { value: 'running', labelKey: 'activity.status.running' },
         { value: 'stopped', labelKey: 'activity.status.stopped' },
       ],
