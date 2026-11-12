@@ -112,9 +112,9 @@ Consultez [Fournisseurs d'authentification](/docs/auth-providers) avant de chang
 
 | Variable | Valeur par défaut ou source | Signification |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | keycloak | Connexion keycloak ou oidc générique. |
-| `IDENTITY_ADMIN_ADAPTER` | Dépend de AUTH_ADAPTER | keycloak ou none. L'oidc générique exige none. |
-| `OIDC_ISSUER_URL` | Obligatoire | Émetteur attendu des jetons. Conservez-le pour un espace d'identité existant. |
+| `AUTH_ADAPTER` | keycloak | Connexion local, keycloak ou oidc générique. Les nouvelles installations utilisent local. |
+| `IDENTITY_ADMIN_ADAPTER` | Dépend de AUTH_ADAPTER | keycloak, local ou none. La connexion locale utilise local. L'oidc générique exige none. |
+| `OIDC_ISSUER_URL` | Obligatoire pour keycloak et oidc | Émetteur attendu des jetons. La connexion locale ne l'utilise pas. Conservez-le pour un espace d'identité existant. |
 | `OIDC_WEB_CLIENT_ID` | openldr-web | Identifiant du client public du navigateur. |
 | `OIDC_AUDIENCE` | Facultatif | Audience exigée du jeton d'accès API si configurée. |
 | `OIDC_SCOPES` | openid profile email | Portées demandées par le navigateur. Doit inclure openid. |

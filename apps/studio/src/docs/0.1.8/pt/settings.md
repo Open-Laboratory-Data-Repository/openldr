@@ -244,7 +244,7 @@ Selecione **Factory reset** para executar a operação. Aguarde a conclusão.
 
 ![Confirmar Factory reset apenas para a operação pretendida.](settings-guide-factory-reset-confirm.png)
 
-**Resultado esperado:** a base interna é apagada e as predefinições de fábrica são recriadas. Os dados externos de destino e as contas do fornecedor de identidade ficam fora desta reposição.
+**Resultado esperado:** a base interna é apagada e as predefinições de fábrica são recriadas. Os dados externos de destino e as contas do fornecedor de identidade ficam fora desta reposição. Com o início de sessão próprio do OpenLDR, todas as contas e palavras-passe são também removidas. Para voltar a iniciar sessão é preciso um novo código de configuração obtido na linha de comandos do servidor.
 
 ![A página indica a conclusão de Factory reset.](settings-guide-factory-reset-result.png)
 

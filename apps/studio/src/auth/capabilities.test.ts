@@ -10,4 +10,9 @@ describe('provider administration availability', () => {
   it('honors explicit unavailable flags', () => {
     expect(resolveAuthCapabilities({ oidc: null, authCapabilities: { identityAdmin: false, syncClientAdmin: false } }).identityAdmin).toBe(false);
   });
+  it('passes passwordResetEmail through from the server', () => {
+    expect(resolveAuthCapabilities({ oidc: null, authCapabilities: { identityAdmin: true, syncClientAdmin: false, passwordResetEmail: false } }))
+      .toEqual({ identityAdmin: true, syncClientAdmin: false, passwordResetEmail: false });
+    expect(resolveAuthCapabilities({ oidc: null, authCapabilities: { identityAdmin: true, syncClientAdmin: true, passwordResetEmail: true } }).passwordResetEmail).toBe(true);
+  });
 });

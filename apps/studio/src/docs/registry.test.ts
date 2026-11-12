@@ -27,6 +27,13 @@ describe('docs registry', () => {
     expect(guide?.content).toContain('openldr user assign-role SUBJECT lab_admin');
     expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('auth-providers');
   });
+  it.each(LOCALES)('authors and indexes the sign-in guide in %s', (locale) => {
+    const guide = resolve(locale, 'sign-in');
+    expect(guide?.localeUsed).toBe(locale);
+    expect(guide?.content).toContain('openldr user reset-password');
+    expect(guide?.content).toContain('/docs/users');
+    expect(searchDocs(buildIndex(list(locale)), guide!.title).map((hit) => hit.slug)).toContain('sign-in');
+  });
   it.each(LOCALES)('authors and indexes the data exposure guide in %s', (locale) => {
     const guide = resolve(locale, 'data-exposure');
     expect(guide?.localeUsed).toBe(locale);
@@ -78,6 +85,7 @@ describe('docs registry', () => {
       'environment',
       'upgrading',
       'user-preferences',
+      'sign-in',
       'advanced-docs',
     ]);
     expect(DOC_ORDER).toEqual(DOC_GUIDES.map((guide) => guide.slug));
@@ -89,6 +97,7 @@ describe('docs registry', () => {
     ).toEqual({
       'start-here': ['dashboard', 'reports', 'advanced-docs'],
       'user-preferences': ['start-here', 'dashboard', 'layouts'],
+      'sign-in': ['user-preferences', 'users', 'setup-checks'],
       layouts: ['user-preferences', 'roles'],
       dashboard: ['reports', 'workflows', 'query', 'data-exposure', 'settings'],
       reports: ['dashboard', 'audit', 'report-designer', 'query'],

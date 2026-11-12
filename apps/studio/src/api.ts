@@ -434,9 +434,12 @@ export async function saveColumnPolicy(payload: Record<string, string[]>): Promi
   if (!r.ok) throw new Error(`save column policy failed: ${r.status}`);
 }
 
-export interface AuthCapabilities { identityAdmin: boolean; syncClientAdmin: boolean }
+export interface AuthCapabilities { identityAdmin: boolean; syncClientAdmin: boolean; passwordResetEmail?: boolean }
 export interface OidcConfig { scopes?: string; resource?: string | null; mode?: 'keycloak' | 'oidc'; issuerUrl: string; clientId: string; audience: string | null }
-export interface ClientConfig { authCapabilities?: AuthCapabilities; dashboardSqlEnabled: boolean; authEnforced: boolean; version: string; environment: string; oidc: OidcConfig | null }
+/** Which sign-in the server runs. An older server sends no `auth` block; read that as not local. */
+export interface AuthModeConfig { mode: 'keycloak' | 'oidc' | 'local'; setupRequired: boolean }
+/** `oidc` is null under local sign-in and under the dev bypass. */
+export interface ClientConfig { authCapabilities?: AuthCapabilities; auth?: AuthModeConfig; dashboardSqlEnabled: boolean; authEnforced: boolean; version: string; environment: string; oidc: OidcConfig | null }
 export async function fetchClientConfig(): Promise<ClientConfig> {
   const r = await authFetch('/api/config');
   if (!r.ok) return { dashboardSqlEnabled: false, authEnforced: false, version: '', environment: '', oidc: null };
@@ -760,8 +763,31 @@ export const listUserDirectory = (options: { offset?: number; limit?: number; se
   return apiGet(`/api/users?${query}`, 'list user directory');
 };
 
+/** The password rules local sign-in checks when an admin sets a password. */
+export type PasswordRule = 'too_short' | 'too_long' | 'same_as_username';
+const PASSWORD_RULES = new Set<string>(['too_short', 'too_long', 'same_as_username']);
+
+/** createUser and resetUserPassword throw this when the server answers 400 with a password rule. */
+export class PasswordRuleError extends Error {
+  constructor(readonly rule: PasswordRule, what: string) {
+    super(`${what} failed: ${rule}`);
+    this.name = 'PasswordRuleError';
+  }
+}
+
+/** Throws PasswordRuleError for a 400 that names a password rule. Reads a copy, so the body stays readable. */
+async function throwIfPasswordRule(res: Response, what: string): Promise<void> {
+  if (res.status !== 400) return;
+  const body = await res.clone().json().catch(() => null) as { error?: unknown } | null;
+  const rule = body?.error;
+  if (typeof rule === 'string' && PASSWORD_RULES.has(rule)) throw new PasswordRuleError(rule as PasswordRule, what);
+}
+
 export const createUser = (i: CreateUserPayload): Promise<UserSummary> =>
-  authFetch('/api/users', jbody(i, 'POST')).then((r) => okJson<UserSummary>(r, 'create user'));
+  authFetch('/api/users', jbody(i, 'POST')).then(async (r) => {
+    await throwIfPasswordRule(r, 'create user');
+    return okJson<UserSummary>(r, 'create user');
+  });
 export const updateUser = (id: string, i: Partial<CreateUserPayload>): Promise<UserSummary> =>
   authFetch(`/api/users/${id}`, jbody(i, 'PUT')).then((r) => okJson<UserSummary>(r, 'update user'));
 export const setUserStatus = (id: string, enabled: boolean): Promise<UserSummary> =>
@@ -788,7 +814,10 @@ export const getMyPreferences = (): Promise<UserPreferences> =>
 export const saveMyPreferences = (patch: UserPreferencesPatch): Promise<UserPreferences> =>
   authFetch('/api/me/preferences', jbody(patch, 'PUT')).then((res) => okJson<UserPreferences>(res, 'save preferences'));
 export const resetUserPassword = (id: string, password: string, temporary: boolean): Promise<void> =>
-  authFetch(`/api/users/${id}/reset-password`, jbody({ password, temporary }, 'POST')).then((r) => { if (!r.ok) throw new Error(`reset password failed: ${r.status}`); });
+  authFetch(`/api/users/${id}/reset-password`, jbody({ password, temporary }, 'POST')).then(async (r) => {
+    await throwIfPasswordRule(r, 'reset password');
+    if (!r.ok) throw new Error(`reset password failed: ${r.status}`);
+  });
 export const sendUserResetEmail = (id: string): Promise<void> =>
   authFetch(`/api/users/${id}/send-reset-email`, { method: 'POST' }).then((r) => { if (!r.ok) throw new Error(`send reset email failed: ${r.status}`); });
 export const forceUserLogout = (id: string): Promise<void> =>
@@ -3301,7 +3330,7 @@ export const diagnoseConnector = (id: string): Promise<DiagnoseResult> =>
 // so the id and hint lists are repeated here; SetupChecks.test.tsx checks each has its strings.
 export const SETUP_CHECK_IDS = ['adapters', 'signIn', 'secretsKey', 'labName', 'timeZone', 'connectors', 'sync'] as const;
 export const SETUP_HINTS = [
-  'adapterDown', 'adapterDegraded', 'signInOff', 'secretsKeyMissing', 'labNameDefault', 'timeZoneEmpty',
+  'adapterDown', 'adapterDegraded', 'signInOff', 'signInSetup', 'secretsKeyMissing', 'labNameDefault', 'timeZoneEmpty',
   'timeZoneSqlServer', 'connectorFailed', 'syncIncomplete', 'syncFailing', 'checkError',
 ] as const;
 export type SetupStatus = 'pass' | 'warn' | 'fail' | 'skip';

@@ -29,7 +29,9 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       storage: { condition: service_healthy }
-      keycloak: { condition: service_healthy }
+      # `required: false` (Compose 2.20 or later): wait for Keycloak when its profile is on,
+      # start without it when it is off (AUTH_ADAPTER=local).
+      keycloak: { condition: service_healthy, required: false }
     restart: unless-stopped
 
   studio:
@@ -56,7 +58,7 @@ services:
       api: { condition: service_started }
       studio: { condition: service_started }
       web: { condition: service_started }
-      keycloak: { condition: service_healthy }
+      keycloak: { condition: service_healthy, required: false }
     restart: unless-stopped
 
   postgres:
@@ -101,7 +103,11 @@ services:
       retries: 20
     restart: unless-stopped
 
+  # Runs only with the `keycloak` profile on. The installer writes `COMPOSE_PROFILES=keycloak` into
+  # .env for a Keycloak install, so a plain `docker compose up -d` starts it. Local sign-in needs
+  # no Keycloak.
   keycloak:
+    profiles: ["keycloak"]
     image: ghcr.io/open-laboratory-data-repository/openldr-keycloak:${OPENLDR_VERSION:-latest}
     # Production mode (`start`, not `start-dev`): persistent Postgres store instead of the throwaway H2
     # dev database. The stock image isn't pre-built for a specific DB vendor, so `start` (without

@@ -1,3 +1,4 @@
+import { requireOidcIssuer } from '@openldr/config';
 import type { SyncSiteRow } from '@openldr/db';
 import { generatePublisherKeypair } from '@openldr/marketplace';
 // `import type` (not a value import): index.ts re-exports this module, so a runtime import of
@@ -185,7 +186,7 @@ export async function enrollSite(
     siteId,
     centralUrl,
     // NOT ctx.cfg.OIDC_ISSUER_URL verbatim — that is central's own address. See issuerForSite.
-    oidcIssuer: issuerForSite(ctx.cfg.OIDC_ISSUER_URL, centralUrl),
+    oidcIssuer: issuerForSite(requireOidcIssuer(ctx.cfg), centralUrl),
     signingPrivateKey,
     centralPublicKey,
   };

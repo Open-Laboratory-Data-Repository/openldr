@@ -1,6 +1,8 @@
 import {
   createAppContext, recordAuditEvent, setAccountStatus, AccountNotFoundError, listUserDirectory,
   getUserPreferences, saveUserPreferences, userPreferencesPatchSchema, type UserPreferencesPatch,
+  createLocalAccount, resetLocalPassword, endLocalSessions, LocalSignInNotEnabledError, UnknownUserError,
+  UnknownRoleError,
 } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { cliActor } from './cli-actor';
@@ -47,9 +49,41 @@ export async function runUserShow(id: string, opts: JsonOpt): Promise<number> {
   }
 }
 
+/** One line for each error a local-account action throws on purpose. Anything else is the caller's to redact. */
+function localAccountRefusal(err: unknown, username: string): string | null {
+  if (err instanceof LocalSignInNotEnabledError) return 'local sign-in is not enabled';
+  if (err instanceof UnknownUserError) return `no user named ${username}. Usernames here match exactly, including case.`;
+  return null;
+}
+
 export async function runUserCreate(opts: JsonOpt & { username: string; name?: string; email?: string; role?: string[] }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
+    if (ctx.localSignIn) {
+      // The role store refuses a change that leaves nobody able to manage roles, so the first
+      // admin has to come from studio's setup page.
+      if (await ctx.localSignIn.setupRequired()) {
+        process.stderr.write('no administrator exists yet. Run "openldr auth setup-code" and finish setup in studio first.\n');
+        return 1;
+      }
+      let created: Awaited<ReturnType<typeof createLocalAccount>>;
+      try {
+        created = await createLocalAccount(ctx, cliActor(), {
+          username: opts.username, name: opts.name, email: opts.email, roles: opts.role,
+        });
+      } catch (err) {
+        if (!(err instanceof UnknownRoleError)) throw err;
+        process.stderr.write(`no role named ${err.slug}\n`);
+        return 1;
+      }
+      const { user, temporaryPassword } = created;
+      emit(
+        opts.json,
+        { user, temporaryPassword },
+        `created ${user.username} (${user.id})\ntemporary password: ${temporaryPassword}\n${user.username} must change it at first sign-in.`,
+      );
+      return 0;
+    }
     const u = await ctx.users.create({ username: opts.username, displayName: opts.name, email: opts.email, roles: opts.role });
     await recordAuditEvent(ctx, cliActor(), {
       action: 'user.create',
@@ -58,6 +92,56 @@ export async function runUserCreate(opts: JsonOpt & { username: string; name?: s
       metadata: { username: opts.username, roles: opts.role, backend: 'local' },
     });
     emit(opts.json, u, `created ${u.username} (${u.id})`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** Sets a new temporary password and ends the user's sessions. Refuses without --force before opening the database. */
+export async function runUserResetPassword(username: string, opts: JsonOpt & { force: boolean }): Promise<number> {
+  if (!opts.force) {
+    process.stderr.write(
+      `user reset-password refused: this sets a new temporary password for ${username} and ends all of their sessions.\n`
+      + 'Re-run with --force to go ahead.\n',
+    );
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    let temporaryPassword: string;
+    try {
+      ({ temporaryPassword } = await resetLocalPassword(ctx, cliActor(), username));
+    } catch (err) {
+      const refusal = localAccountRefusal(err, username);
+      if (refusal === null) throw err;
+      process.stderr.write(refusal + '\n');
+      return 1;
+    }
+    emit(
+      opts.json,
+      { username, temporaryPassword },
+      `temporary password for ${username}: ${temporaryPassword}\n${username} must change it at the next sign-in. Their sessions have ended.`,
+    );
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** Signs the user out everywhere. */
+export async function runUserEndSessions(username: string, opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    try {
+      await endLocalSessions(ctx, cliActor(), username);
+    } catch (err) {
+      const refusal = localAccountRefusal(err, username);
+      if (refusal === null) throw err;
+      process.stderr.write(refusal + '\n');
+      return 1;
+    }
+    emit(opts.json, { username, sessionsEnded: true }, `ended sessions for ${username}`);
     return 0;
   } finally {
     await ctx.close();

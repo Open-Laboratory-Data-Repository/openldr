@@ -244,7 +244,7 @@ Select **Factory reset** to perform the operation. Wait for completion.
 
 ![Confirm Factory reset only for the intended operation.](settings-guide-factory-reset-confirm.png)
 
-**Expected result:** The internal database is wiped and factory defaults are reseeded. External target data and identity-provider accounts are outside this reset.
+**Expected result:** The internal database is wiped and factory defaults are reseeded. External target data and identity-provider accounts are outside this reset. Under OpenLDR's own sign-in, every account and password is removed too. Signing in again needs a new setup code from the server's command line.
 
 ![The page reports completion of Factory reset.](settings-guide-factory-reset-result.png)
 

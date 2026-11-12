@@ -310,6 +310,34 @@ Na CLI, use `openldr user deactivate <local-id>` ou `openldr user activate <loca
 
 Se outra mudança de estado estiver em curso para esta conta, a API devolve `409`. Espere que essa ação termine e depois tente de novo. Isto também se aplica quando o Studio e a CLI alteram a mesma conta.
 
+## Contas do início de sessão local
+
+Estes comandos servem uma instalação com `AUTH_ADAPTER=local`. Veja [Fornecedores de autenticação](/docs/auth-providers). As linhas de utilização abaixo foram copiadas do `--help` de cada comando:
+
+```text
+Usage: openldr auth setup-code [options]
+Usage: openldr user create [options]
+Usage: openldr user assign-role [options] <subject> <slug>
+Usage: openldr user reset-password [options] <username>
+Usage: openldr user end-sessions [options] <username>
+```
+
+- `openldr auth setup-code` mostra um código de uso único para criar o primeiro administrador no Studio. É válido durante 30 minutos, e um código novo substitui o anterior. Assim que existe um administrador, o comando recusa com `an administrator already exists`. O código nunca é escrito no registo de auditoria.
+- `openldr user create --username <u>` cria uma conta que pode iniciar sessão. O comando mostra o ID do novo utilizador e uma palavra-passe temporária, uma só vez. A pessoa tem de alterar essa palavra-passe no primeiro início de sessão. `--role` recebe o identificador de uma função, como `lab_technician`. Uma função que não existe faz o comando recusar com `no role named <slug>`, e nada é criado. Enquanto o primeiro administrador não existir, o comando recusa e diz-lhe para executar `openldr auth setup-code`.
+- `openldr user assign-role <subject> <slug>` junta uma função. Com início de sessão local, o sujeito é o ID do utilizador que `user create` mostra. Com um nome de utilizador, o comando indica sucesso e não concede nada.
+- `openldr user reset-password <username> --force` define uma nova palavra-passe temporária, mostra-a uma só vez e termina as sessões do utilizador. O utilizador tem de escolher uma nova palavra-passe no próximo início de sessão. Sem `--force`, recusa e não altera nada. É assim que se recupera a palavra-passe esquecida de um administrador.
+- `openldr user end-sessions <username>` termina a sessão do utilizador em todo o lado. A palavra-passe não muda.
+
+`reset-password` e `end-sessions` comparam o nome de utilizador exatamente, incluindo maiúsculas. Com Keycloak ou OIDC, recusam com `local sign-in is not enabled`. `user create`, `reset-password` e `end-sessions` escrevem um evento de auditoria com o tipo de ator `cli`. Uma palavra-passe temporária nunca aparece no registo de auditoria.
+
+```
+./openldr user create --username amina --name "Amina Hassan" --role lab_technician
+./openldr user reset-password amina --force
+./openldr user end-sessions amina
+```
+
+`user create` mostra três linhas: `created amina (<id>)`, `temporary password: <password>` e `amina must change it at first sign-in.` Entregue a palavra-passe diretamente à pessoa.
+
 ## Paginação do diretório de utilizadores
 
 Utilizadores começa com as contas ativas. A pesquisa procura nomes de utilizador do fornecedor, nomes e endereços de email em todo o diretório. Selecione Todos os estados para incluir as contas desativadas. Mudar a pesquisa, o estado ou o tamanho da página volta à primeira página.

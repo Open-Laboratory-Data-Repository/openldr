@@ -2,6 +2,8 @@
 
 OpenLDR supports Keycloak and generic OpenID Connect, or OIDC, for sign-in. Generic OIDC uses provider discovery and signed JWT access tokens. Opaque access tokens are unsupported.
 
+A third mode, `AUTH_ADAPTER=local`, keeps accounts and passwords in OpenLDR itself, with no Keycloak. This guide does not cover it. See [Sign-in and passwords](/docs/sign-in) for using it, and the OpenLDR website's Authentication providers page for setting it up.
+
 Use a fresh deployment for a new identity provider. An existing application database belongs to its original issuer and provider subjects. Matching usernames do not make accounts from different providers interchangeable.
 
 The configuration pictures are labelled illustrations. The login pictures use a real isolated Keycloak provider through generic OIDC mode, with authentication enforced. Your provider can use a different login page. This proves the local test flow, not every provider deployment.

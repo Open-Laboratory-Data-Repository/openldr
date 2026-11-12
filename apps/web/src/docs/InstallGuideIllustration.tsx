@@ -34,7 +34,7 @@ function Scene({ scene, platform, alt, expanded = false, command }: { scene: Ins
         {lines.map((line, index) => <text key={index} data-terminal-kind={line.kind} x="70" y={127 + index * 30} fill={line.kind === 'output' ? 'var(--text-muted)' : 'var(--text)'}>
           {line.prompt ? <tspan fill="var(--brand)">{line.prompt}</tspan> : null}<tspan fontWeight={line.kind === 'input' ? 600 : 400}>{line.text || (line.prompt ? '' : '\u00a0')}</tspan>{line.cursor ? <tspan fill="var(--text)">│</tspan> : null}
         </text>)}
-        {scene === 'ready' ? <g fill="none" stroke="var(--brand)" strokeWidth="2"><rect x="63" y="102" width="665" height="37" rx="4" /><rect x="63" y="222" width="665" height="37" rx="4" /></g> : null}
+        {scene === 'ready' ? <g fill="none" stroke="var(--brand)" strokeWidth="2"><rect x="63" y="102" width="665" height="37" rx="4" /><rect x="63" y="162" width="665" height="37" rx="4" /></g> : null}
       </g>}
     </svg></DottedGuideFrame>
   );

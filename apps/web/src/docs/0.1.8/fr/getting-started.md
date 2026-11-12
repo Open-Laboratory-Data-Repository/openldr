@@ -21,9 +21,9 @@ L'installateur crée la configuration, génère les mots de passe et démarre le
 
 1. Ouvrez le guide adapté à votre hôte ci-dessus. Vérifiez ses prérequis avant de lancer les commandes.
 2. Suivez ses étapes d'installation. Attendez que les services soient prêts.
-3. Conservez l'adresse et les identifiants **App sign-in** affichés à la fin. Le mot de passe administrateur Keycloak sert séparément à gérer l'authentification.
+3. Conservez l'adresse et le code **Setup code** affichés à la fin. Le code de configuration est valable 30 minutes.
 
-![Illustration de la sortie de l'installateur. Les lignes encadrées montrent l'adresse et les identifiants App sign-in. Les mots de passe sont des espaces réservés.](guide:install-result)
+![Illustration de la sortie de l'installateur. Les lignes encadrées montrent l'adresse et le code de configuration. Le code est un espace réservé.](guide:install-result)
 
 **Résultat attendu :** L'installateur affiche **OpenLDR is ready** et l'adresse à ouvrir. S'il affiche **OpenLDR is starting**, certains services ne sont pas encore prêts. Examinez `docker compose ps` et `docker compose logs` depuis le dossier d'installation avant de continuer.
 
@@ -31,7 +31,7 @@ L'adresse illustrée est celle d'une installation locale par défaut. Pour un ac
 
 ## Première connexion
 
-Utilisez vos identifiants **App sign-in** générés. Suivez la tâche illustrée [Se connecter et ouvrir les guides](/docs/install). Elle montre le mot de passe temporaire, son changement et le menu de documentation.
+Suivez les parcours illustrés dans [Installation](/docs/install). Une installation locale neuve utilise le code de configuration pour créer le premier administrateur. Keycloak utilise les identifiants App sign-in générés. Chaque parcours montre une capture à chaque étape.
 
 ## Continuer dans l'application
 

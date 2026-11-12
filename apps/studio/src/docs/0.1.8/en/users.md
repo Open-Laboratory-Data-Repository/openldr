@@ -6,7 +6,7 @@ Use your own staff accounts and approved access decisions. The pictures use a fi
 
 View users allows the directory. Manage users allows account creation, profile changes and enabling or disabling access. Manage roles allows role assignment. Reset passwords and Force logout allow their respective security actions.
 
-Creating accounts, editing provider profiles, resetting passwords and ending provider sessions require a configured identity administrator. When it is unavailable, the page tells you to contact your identity provider administrator. OpenLDR role and account-access controls remain available.
+Creating accounts, editing provider profiles, resetting passwords and ending provider sessions require a configured identity administrator. When it is unavailable, the page tells you to contact your identity provider administrator. OpenLDR role and account-access controls remain available. Under OpenLDR's own sign-in, these actions are always available. See [Sign-in and passwords](/docs/sign-in).
 
 For installation and command-line setup, read [Start here](/docs/start-here). To define role permissions, read [Roles](/docs/roles).
 
@@ -36,7 +36,7 @@ Enter the person's sign-in username. The example uses `documentation.operator`.
 
 ### 4. Choose an initial password
 
-Enter an initial **Password**, or leave it blank and arrange activation through your identity provider. An initial password requires a change at the next sign-in. Share account credentials through your approved process.
+Enter an initial **Password**, or leave it blank and arrange activation through your identity provider. An initial password requires a change at the next sign-in. Share account credentials through your approved process. Under OpenLDR's own sign-in there is no provider. An account created without a password cannot sign in until you reset its password.
 
 ![Enter an initial password, or leave it blank and arrange activation through your provider.](users-guide-password.png)
 
@@ -212,7 +212,7 @@ Select **Reset password**. Share the password securely using your approved proce
 
 ## End a user's provider sessions
 
-Use this when existing provider sessions should end. This requires identity administration and Force logout.
+Use this when existing provider sessions should end. This requires identity administration and Force logout. Under OpenLDR's own sign-in, it ends the person's OpenLDR sessions.
 
 ### 1. Choose Force sign-out
 
@@ -248,7 +248,7 @@ Select its row. Scroll the User sheet to read its profile and role. Select **Clo
 
 ## Send a reset email when mail is configured
 
-The account row dots also offer **Send reset email**. It asks the identity provider to send the account a reset link. Check the email address and your provider's outgoing mail configuration first. The documented test did not send email.
+The account row dots also offer **Send reset email**. It asks the identity provider to send the account a reset link. Check the email address and your provider's outgoing mail configuration first. The documented test did not send email. OpenLDR's own sign-in has no reset email, so Studio hides this item there.
 
 ## Optional practice
 

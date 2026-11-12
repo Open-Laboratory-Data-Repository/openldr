@@ -2,6 +2,8 @@
 
 OpenLDR prend en charge Keycloak et OpenID Connect générique, ou OIDC, pour la connexion. OIDC générique utilise la découverte du fournisseur et des jetons d'accès JWT signés. Les jetons d'accès opaques ne sont pas pris en charge.
 
+Un troisième mode, `AUTH_ADAPTER=local`, garde les comptes et les mots de passe dans OpenLDR lui-même, sans Keycloak. Ce guide ne le couvre pas. Voir [Connexion et mots de passe](/docs/sign-in) pour l'utiliser, et la page Fournisseurs d'authentification du site OpenLDR pour le mettre en place.
+
 Utilisez un nouveau déploiement pour un nouveau fournisseur d'identité. Une base existante appartient à son émetteur et aux sujets d'origine du fournisseur. Des noms d'utilisateur identiques ne rendent pas interchangeables les comptes de fournisseurs différents.
 
 Les images de configuration portent la mention Illustration. Les captures de connexion utilisent un vrai fournisseur Keycloak isolé en mode OIDC générique, avec authentification obligatoire. Votre fournisseur peut avoir une autre page de connexion. Cela vérifie le parcours local de test, pas tous les déploiements.

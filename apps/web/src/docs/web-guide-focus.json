@@ -1394,5 +1394,311 @@
     },
     "step": 6,
     "markerPlacement": "inside"
+  },
+  "local-setup-open.png": {
+    "image": "/docs-images/install/local-setup-open.png",
+    "lightImage": "/docs-images/install/local-setup-open-light.png",
+    "crop": {
+      "x": 320,
+      "y": 198,
+      "width": 640,
+      "height": 400
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 228,
+        "width": 334,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 1,
+    "markerPlacement": "inside"
+  },
+  "local-setup-code.png": {
+    "image": "/docs-images/install/local-setup-code.png",
+    "lightImage": "/docs-images/install/local-setup-code-light.png",
+    "crop": {
+      "x": 320,
+      "y": 198,
+      "width": 640,
+      "height": 400
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 284.05,
+        "width": 334.0,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  "local-setup-username.png": {
+    "image": "/docs-images/install/local-setup-username.png",
+    "lightImage": "/docs-images/install/local-setup-username-light.png",
+    "crop": {
+      "x": 320,
+      "y": 198,
+      "width": 640,
+      "height": 400
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 400.05,
+        "width": 334.0,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 3,
+    "markerPlacement": "inside"
+  },
+  "local-setup-password.png": {
+    "image": "/docs-images/install/local-setup-password.png",
+    "lightImage": "/docs-images/install/local-setup-password-light.png",
+    "crop": {
+      "x": 320,
+      "y": 198,
+      "width": 640,
+      "height": 400
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 448.05,
+        "width": 334.0,
+        "height": 36
+      },
+      {
+        "x": 473,
+        "y": 496.05,
+        "width": 334.0,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 4,
+    "markerPlacement": "inside"
+  },
+  "local-setup-submit.png": {
+    "image": "/docs-images/install/local-setup-submit.png",
+    "lightImage": "/docs-images/install/local-setup-submit-light.png",
+    "crop": {
+      "x": 320,
+      "y": 198,
+      "width": 640,
+      "height": 400
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 548.05,
+        "width": 334,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 5,
+    "markerPlacement": "inside"
+  },
+  "local-open-docs.png": {
+    "image": "/docs-images/install/local-open-docs.png",
+    "lightImage": "/docs-images/install/local-open-docs-light.png",
+    "crop": {
+      "x": 0,
+      "y": 410,
+      "width": 400,
+      "height": 250
+    },
+    "targets": [
+      {
+        "x": 8,
+        "y": 576,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 6,
+    "markerPlacement": "inside"
+  },
+  "local-login-open.png": {
+    "image": "/docs-images/install/local-login-open.png",
+    "lightImage": "/docs-images/install/local-login-open-light.png",
+    "crop": {
+      "x": 400,
+      "y": 270,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 310,
+        "width": 334,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 1,
+    "markerPlacement": "inside"
+  },
+  "local-login-credentials.png": {
+    "image": "/docs-images/install/local-login-credentials.png",
+    "lightImage": "/docs-images/install/local-login-credentials-light.png",
+    "crop": {
+      "x": 400,
+      "y": 270,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 366.05,
+        "width": 334.0,
+        "height": 36
+      },
+      {
+        "x": 473,
+        "y": 414.05,
+        "width": 334.0,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 2,
+    "markerPlacement": "inside"
+  },
+  "local-login-submit.png": {
+    "image": "/docs-images/install/local-login-submit.png",
+    "lightImage": "/docs-images/install/local-login-submit-light.png",
+    "crop": {
+      "x": 400,
+      "y": 270,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 466.05,
+        "width": 334,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 3,
+    "markerPlacement": "inside"
+  },
+  "local-change-current.png": {
+    "image": "/docs-images/install/local-change-current.png",
+    "lightImage": "/docs-images/install/local-change-current-light.png",
+    "crop": {
+      "x": 400,
+      "y": 245,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 316.05,
+        "width": 334.0,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 4,
+    "markerPlacement": "inside"
+  },
+  "local-change-new.png": {
+    "image": "/docs-images/install/local-change-new.png",
+    "lightImage": "/docs-images/install/local-change-new-light.png",
+    "crop": {
+      "x": 400,
+      "y": 245,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 364.05,
+        "width": 334.0,
+        "height": 36
+      },
+      {
+        "x": 473,
+        "y": 412.05,
+        "width": 334.0,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 5,
+    "markerPlacement": "inside"
+  },
+  "local-change-submit.png": {
+    "image": "/docs-images/install/local-change-submit.png",
+    "lightImage": "/docs-images/install/local-change-submit-light.png",
+    "crop": {
+      "x": 400,
+      "y": 245,
+      "width": 480,
+      "height": 300
+    },
+    "targets": [
+      {
+        "x": 473,
+        "y": 464.05,
+        "width": 334,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "step": 6,
+    "markerPlacement": "inside"
   }
 }

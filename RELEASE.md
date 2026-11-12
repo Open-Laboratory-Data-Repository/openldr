@@ -62,6 +62,13 @@ which nothing checks for. In both cases: check
 origin` before re-running. **This rollback path has never executed** — see "What is NOT proven
 by tests".
 
+### Upgrade guide checklist
+
+Before `pnpm release`, update this release's upgrading guide in
+`apps/web/src/docs/<version>/{en,fr,pt}/upgrading.md`. The command does not check it.
+
+- [ ] Keycloak installs: the guide tells them to add `COMPOSE_PROFILES=keycloak` to `.env` on a one-line install, or to `.env.prod` from source, before they start the new compose file. Without it Keycloak silently stops starting and nobody can sign in. Re-running the one-line installer adds the line itself. See "Upgrading an install made before local sign-in" in `DEPLOYMENT.md`.
+
 ### The verification install leaves a stack running
 
 Step 9 installs the published tag into a fresh `openldr-release-*` temporary directory and starts

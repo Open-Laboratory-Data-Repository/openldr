@@ -6,7 +6,7 @@ Use as contas reais da equipa e decisões de acesso aprovadas. As imagens usam u
 
 View users permite consultar o diretório. Manage users permite criar contas, alterar perfis e ativar ou desativar o acesso. Manage roles permite atribuir papéis. Reset passwords e Force logout permitem as respetivas ações de segurança.
 
-Criar contas, editar perfis do fornecedor, repor palavras-passe e terminar sessões do fornecedor exige administração de identidade configurada. Quando não está disponível, a página pede para contactar o administrador do fornecedor de identidade. Os controlos de papéis e acesso OpenLDR continuam disponíveis.
+Criar contas, editar perfis do fornecedor, repor palavras-passe e terminar sessões do fornecedor exige administração de identidade configurada. Quando não está disponível, a página pede para contactar o administrador do fornecedor de identidade. Os controlos de papéis e acesso OpenLDR continuam disponíveis. Com o início de sessão próprio do OpenLDR, estas ações estão sempre disponíveis. Veja [Início de sessão e palavras-passe](/docs/sign-in).
 
 Para instalação e linha de comandos, leia [Começar aqui](/docs/start-here). Para definir permissões dos papéis, leia [Papéis](/docs/roles).
 
@@ -36,7 +36,7 @@ Introduza o nome de acesso da pessoa. O exemplo usa `documentation.operator`.
 
 ### 4. Escolher uma palavra-passe inicial
 
-Introduza uma **Password** inicial, ou deixe vazia e combine a ativação pelo fornecedor de identidade. Uma palavra-passe inicial exige alteração no próximo acesso. Partilhe as credenciais pelo processo aprovado.
+Introduza uma **Password** inicial, ou deixe vazia e combine a ativação pelo fornecedor de identidade. Uma palavra-passe inicial exige alteração no próximo acesso. Partilhe as credenciais pelo processo aprovado. Com o início de sessão próprio do OpenLDR não há fornecedor. Uma conta criada sem palavra-passe não consegue iniciar sessão até repor a sua palavra-passe.
 
 ![Introduza uma palavra-passe inicial ou deixe vazia e combine a ativação pelo fornecedor.](users-guide-password.png)
 
@@ -212,7 +212,7 @@ Selecione **Reset password**. Partilhe a palavra-passe de forma segura pelo proc
 
 ## Terminar as sessões do fornecedor de um utilizador
 
-Faça esta tarefa quando as sessões existentes do fornecedor devem terminar. Exige administração de identidade e Force logout.
+Faça esta tarefa quando as sessões existentes do fornecedor devem terminar. Exige administração de identidade e Force logout. Com o início de sessão próprio do OpenLDR, termina as sessões OpenLDR da pessoa.
 
 ### 1. Escolher Force sign-out
 
@@ -248,7 +248,7 @@ Selecione a linha. Desloque o painel User para ler o perfil e o papel. Selecione
 
 ## Enviar email de reposição quando o correio está configurado
 
-Os pontos da conta também oferecem **Send reset email**. Pede ao fornecedor de identidade para enviar uma ligação de reposição. Verifique primeiro o email e a configuração de envio do fornecedor. O teste documentado não enviou email.
+Os pontos da conta também oferecem **Send reset email**. Pede ao fornecedor de identidade para enviar uma ligação de reposição. Verifique primeiro o email e a configuração de envio do fornecedor. O teste documentado não enviou email. O início de sessão próprio do OpenLDR não tem email de reposição, por isso o Studio oculta aí esta ação.
 
 ## Prática opcional
 

@@ -26,6 +26,9 @@
 #          connection — required when --target-db mysql without --mysql-demo; keep the password
 #          free of '#', spaces, or quote characters — they confuse Docker Compose's .env reader),
 #        --mysql-ssl true|false (default false).
+#        --auth local|keycloak (sign-in for a new install. local keeps OpenLDR's own accounts and
+#          runs no Keycloak. Without the flag the installer asks when it has a terminal, and
+#          otherwise uses local. A re-run keeps the mode the install was made with.)
 set -eu
 
 # Overridable so the test suite can point at the local checkout with a file:// prefix. A real
@@ -72,6 +75,8 @@ MYSQL_DATABASE="openldr_target"
 MYSQL_USER=""
 MYSQL_PASSWORD=""
 MYSQL_SSL="false"
+# Empty until --auth, the existing .env, or the question below decides it.
+AUTH=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -103,9 +108,15 @@ while [ $# -gt 0 ]; do
     --mysql-user) MYSQL_USER="$2"; shift 2 ;;
     --mysql-password) MYSQL_PASSWORD="$2"; shift 2 ;;
     --mysql-ssl) MYSQL_SSL="$2"; shift 2 ;;
+    --auth) AUTH="$2"; shift 2 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
+
+case "$AUTH" in
+  ''|local|keycloak) ;;
+  *) echo "✗ --auth must be 'local' or 'keycloak' (got '$AUTH')" >&2; exit 2 ;;
+esac
 
 # Resolve `auto` to a concrete published version, so .env records exactly what this lab runs.
 # Two installs on the same day then get the same stack, and a rollback has something to name.
@@ -180,6 +191,17 @@ if [ -f "$DIR/.env" ]; then
     # host 'mysql' is the managed-demo signature → re-enable the overlay on re-runs
     [ "$EXISTING_MYSQL_HOST" = "mysql" ] && MYSQL_DEMO=1
   fi
+  # An existing install keeps its sign-in mode. The database records the mode it first started
+  # with and refuses another, so a switch here would only break the stack. No AUTH_ADAPTER line
+  # means keycloak: the server's default, and what every install made before this flag runs.
+  EXISTING_AUTH="$(grep -E '^AUTH_ADAPTER=' "$DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+  [ -n "$EXISTING_AUTH" ] || EXISTING_AUTH="keycloak"
+  if [ -n "$AUTH" ] && [ "$AUTH" != "$EXISTING_AUTH" ]; then
+    echo "✗ This install uses $EXISTING_AUTH sign-in. Moving an install between sign-in modes is not supported." >&2
+    echo "  To start again with $AUTH sign-in, install into a new directory." >&2
+    exit 2
+  fi
+  AUTH="$EXISTING_AUTH"
 fi
 if [ "$HTTPS_PORT" = "443" ]; then
   ORIGIN="https://$HOST"
@@ -192,13 +214,20 @@ fi
 # place or the flag would win in this script and lose everywhere it matters.
 if [ "$HOST_CHANGED" -eq 1 ]; then
   echo "→ --server-name $HOST overrides the stored $PREVIOUS_HOST"
-  for kv in "SERVER_NAME=$HOST" "PUBLIC_ORIGIN=$ORIGIN" \
-            "OIDC_ISSUER_URL=$ORIGIN/auth/realms/openldr" "KC_HOSTNAME=$ORIGIN/auth"; do
+  HOST_KEYS="SERVER_NAME=$HOST PUBLIC_ORIGIN=$ORIGIN"
+  if [ "$AUTH" != "local" ]; then
+    HOST_KEYS="$HOST_KEYS OIDC_ISSUER_URL=$ORIGIN/auth/realms/openldr KC_HOSTNAME=$ORIGIN/auth"
+  fi
+  for kv in $HOST_KEYS; do
     k="${kv%%=*}"
     # `|` as the delimiter: every value here contains the `/` of a URL.
     sed "s|^$k=.*|$kv|" "$DIR/.env" > "$DIR/.env.tmp" && mv "$DIR/.env.tmp" "$DIR/.env"
   done
-  echo "→ Rewrote SERVER_NAME, PUBLIC_ORIGIN, OIDC_ISSUER_URL and KC_HOSTNAME in .env"
+  if [ "$AUTH" = "local" ]; then
+    echo "→ Rewrote SERVER_NAME and PUBLIC_ORIGIN in .env"
+  else
+    echo "→ Rewrote SERVER_NAME, PUBLIC_ORIGIN, OIDC_ISSUER_URL and KC_HOSTNAME in .env"
+  fi
   # The self-signed cert carries the OLD host in its SAN, and the generator below only runs when
   # fullchain.pem is absent. Drop it so it is reissued for the new host. Let's Encrypt certs are
   # left alone: they are issued by a different path and are not ours to delete.
@@ -284,6 +313,17 @@ fi
 # 1. Preflight
 command -v docker >/dev/null 2>&1 || err "Docker is not installed. See https://docs.docker.com/get-docker/"
 docker compose version >/dev/null 2>&1 || err "Docker Compose plugin not found. Update Docker Desktop or install docker-compose-plugin."
+# docker-compose.yml uses `depends_on` with `required: false`, which needs Compose 2.20 or later.
+# An older Compose refuses the file, so stop here, before anything is written. A version this
+# cannot read is let through with a warning: refusing it would block a Compose we do not know.
+COMPOSE_VERSION="$(docker compose version --short 2>/dev/null | head -1 | tr -d '\r')"
+COMPOSE_MAJOR="$(printf '%s' "$COMPOSE_VERSION" | sed -n 's/^v\{0,1\}\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1/p')"
+COMPOSE_MINOR="$(printf '%s' "$COMPOSE_VERSION" | sed -n 's/^v\{0,1\}\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\2/p')"
+if [ -z "$COMPOSE_MAJOR" ] || [ -z "$COMPOSE_MINOR" ]; then
+  echo "⚠ Could not read the Docker Compose version ('$COMPOSE_VERSION'). It needs 2.20 or later. Continuing."
+elif [ "$COMPOSE_MAJOR" -lt 2 ] || { [ "$COMPOSE_MAJOR" -eq 2 ] && [ "$COMPOSE_MINOR" -lt 20 ]; }; then
+  err "Docker Compose 2.20 or later is needed. This machine has $COMPOSE_VERSION."
+fi
 docker info >/dev/null 2>&1 || err "Docker daemon is not running. Start Docker and retry."
 
 # Port-conflict detection — fail fast with remediation instead of a confusing failure deep
@@ -314,6 +354,22 @@ if [ "$ENV_EXISTS" -eq 0 ]; then
   done
 fi
 
+# Sign-in for a new install. `curl | bash` feeds this script on stdin, so the answer is read from
+# /dev/tty. With no terminal (CI, `pnpm release`, a test) the installer asks nothing and uses local.
+if [ -z "$AUTH" ]; then
+  AUTH="local"
+  if [ -t 1 ] && (: < /dev/tty) 2>/dev/null; then
+    printf '\nHow should people sign in?\n' > /dev/tty
+    printf '  1) OpenLDR accounts, called local. No Keycloak runs. This is the default.\n' > /dev/tty
+    printf '  2) Keycloak. Pick this for a sync central.\n' > /dev/tty
+    printf 'Choose 1 or 2 [1]: ' > /dev/tty
+    ANSWER=""
+    read -r ANSWER < /dev/tty || ANSWER=""
+    case "$ANSWER" in 2|keycloak) AUTH="keycloak" ;; esac
+  fi
+  echo "→ Sign-in: $AUTH. To choose without the question, pass --auth local or --auth keycloak."
+fi
+
 # 2. Scaffold
 echo "→ Scaffolding $DIR"
 mkdir -p "$DIR/config/nginx/certs" "$DIR/config/nginx/certs/central" "$DIR/config/keycloak" "$DIR/data"
@@ -327,8 +383,14 @@ mkdir -p "$DIR/config/nginx/certs" "$DIR/config/nginx/certs/central" "$DIR/confi
 [ -f "$DIR/config/nginx/certs/central/fullchain.pem" ] || : > "$DIR/config/nginx/certs/central/fullchain.pem"
 fetch() { curl -fsSL "$REPO_RAW/$1" -o "$2" || err "failed to download $1"; }
 fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
-fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.json"
+# The realm is imported by Keycloak only, so a local install does not download it.
+if [ "$AUTH" != "local" ]; then
+  fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.json"
+fi
 fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
+# Fetched for every install: the postgres service mounts it whatever the sign-in mode, and Docker
+# turns a missing bind-mount source into a directory, which breaks postgres's first start. Under
+# local sign-in it creates an empty `keycloak` database that nothing uses.
 fetch "scripts/init-keycloak-db.sql" "$DIR/config/init-keycloak-db.sql"
 fetch "deploy/install/garage.toml" "$DIR/config/garage.toml"
 fetch "deploy/install/renew-cert.sh" "$DIR/renew-cert.sh"
@@ -390,6 +452,17 @@ if [ "$MYSQL_DEMO" -eq 1 ]; then
   fetch "scripts/init-target-db-mysql.sql" "$DIR/config/init-target-db-mysql.sql"
 fi
 
+# 3. Secrets + cert (only on first run — never overwrite an existing .env)
+# Read a bounded block of /dev/urandom (not an unbounded stream) and take the
+# first 24 alnum chars with cut — cut consumes all of its input, so no early
+# pipe close can SIGPIPE an upstream reader even under `set -o pipefail`.
+rand() { head -c 3072 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24; }
+# Garage refuses any other format: key ID is GK + 24 hex, secrets are 64 hex.
+hex() { od -An -tx1 -N"$1" /dev/urandom | tr -d ' \n'; }
+
+# Keycloak only: register the origin in the realm, and give it per-install secrets. Local sign-in
+# has no realm, no labadmin user and no Keycloak admin, so it writes none of this.
+if [ "$AUTH" != "local" ]; then
 # Register this deploy's origin as a valid OIDC redirect so studio login works behind the
 # gateway. The shipped realm lists localhost + dev URLs; a non-localhost host (or https://localhost)
 # must be added or Keycloak rejects the /studio/auth/callback redirect. webOrigins is already "+".
@@ -398,14 +471,6 @@ if ! grep -qF "\"$ORIGIN/*\"" "$REALM" 2>/dev/null; then
   sed "s|\"redirectUris\": \[|\"redirectUris\": [\"$ORIGIN/*\", |" "$REALM" > "$REALM.tmp" && mv "$REALM.tmp" "$REALM"
   echo "→ Registered $ORIGIN/* as an OIDC redirect in the realm"
 fi
-
-# 3. Secrets + cert (only on first run — never overwrite an existing .env)
-# Read a bounded block of /dev/urandom (not an unbounded stream) and take the
-# first 24 alnum chars with cut — cut consumes all of its input, so no early
-# pipe close can SIGPIPE an upstream reader even under `set -o pipefail`.
-rand() { head -c 3072 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-24; }
-# Garage refuses any other format: key ID is GK + 24 hex, secrets are 64 hex.
-hex() { od -An -tx1 -N"$1" /dev/urandom | tr -d ' \n'; }
 
 # Pin the openldr-admin service-account secret in the realm import to a per-install value. The
 # committed realm ships a well-known dev secret ("openldr-admin-dev-secret") that a real deployment
@@ -431,6 +496,7 @@ else
   LABADMIN_PW="$(rand)"
 fi
 sed "s|\"value\": \"labadmin\"|\"value\": \"$LABADMIN_PW\"|" "$REALM" > "$REALM.tmp" && mv "$REALM.tmp" "$REALM"
+fi
 
 if [ ! -f "$DIR/.env" ]; then
   PG_PW="$(rand)"; KC_PW="$(rand)"; S3_KEY="GK$(hex 12)"; S3_SECRET="$(hex 32)"; GARAGE_RPC="$(hex 32)"; GARAGE_ADMIN="$(hex 32)"
@@ -482,6 +548,25 @@ MYSQL_SSL=$MYSQL_SSL"
     TARGET_DB_ENV_BLOCK="TARGET_STORE_ADAPTER=pg
 TARGET_DATABASE_URL=postgres://openldr:$PG_PW@postgres:5432/openldr_target"
   fi
+  # Local sign-in writes no OIDC or Keycloak key. The server refuses an empty OIDC_ISSUER_URL, and
+  # needs SECRETS_ENCRYPTION_KEY, which is written below for every install. A Keycloak install
+  # writes the same keys as before, plus COMPOSE_PROFILES so `docker compose up` starts Keycloak.
+  if [ "$AUTH" = "local" ]; then
+    AUTH_ENV_BLOCK="AUTH_ADAPTER=local"
+  else
+    AUTH_ENV_BLOCK="AUTH_ADAPTER=keycloak
+COMPOSE_PROFILES=keycloak
+OIDC_ISSUER_URL=$ORIGIN/auth/realms/openldr
+OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
+OIDC_INTERNAL_ISSUER_URL=http://keycloak:8080/auth/realms/openldr
+OIDC_WEB_CLIENT_ID=openldr-web
+KC_HOSTNAME=$ORIGIN/auth
+KEYCLOAK_ADMIN=admin
+KEYCLOAK_ADMIN_PASSWORD=$KC_PW
+KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
+KEYCLOAK_ADMIN_CLIENT_SECRET=$KC_ADMIN_SECRET
+INITIAL_LAB_ADMIN_PASSWORD=$LABADMIN_PW"
+  fi
   cat > "$DIR/.env" <<EOF
 OPENLDR_VERSION=$VERSION
 SERVER_NAME=$HOST
@@ -506,16 +591,7 @@ S3_BUCKET=openldr
 S3_FORCE_PATH_STYLE=true
 GARAGE_RPC_SECRET=$GARAGE_RPC
 GARAGE_ADMIN_TOKEN=$GARAGE_ADMIN
-OIDC_ISSUER_URL=$ORIGIN/auth/realms/openldr
-OIDC_INTERNAL_JWKS_URL=http://keycloak:8080/auth/realms/openldr/protocol/openid-connect/certs
-OIDC_INTERNAL_ISSUER_URL=http://keycloak:8080/auth/realms/openldr
-OIDC_WEB_CLIENT_ID=openldr-web
-KC_HOSTNAME=$ORIGIN/auth
-KEYCLOAK_ADMIN=admin
-KEYCLOAK_ADMIN_PASSWORD=$KC_PW
-KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
-KEYCLOAK_ADMIN_CLIENT_SECRET=$KC_ADMIN_SECRET
-INITIAL_LAB_ADMIN_PASSWORD=$LABADMIN_PW
+$AUTH_ENV_BLOCK
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
 NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
@@ -527,6 +603,27 @@ EOF
   echo "→ Wrote $DIR/.env (generated secrets, compose project '$PROJECT_NAME')"
 else
   echo "→ Reusing existing $DIR/.env"
+  # The compose file downloaded above starts Keycloak only under the `keycloak` profile. An install
+  # made before that has no COMPOSE_PROFILES line, so without this Keycloak would stop on the next
+  # `docker compose up` and sign-in would break. Add the profile, keep any others, change nothing else.
+  if [ "$AUTH" != "local" ]; then
+    CUR_PROFILES="$(grep -E '^COMPOSE_PROFILES=' "$DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
+    case ",$CUR_PROFILES," in
+      *,keycloak,*) ;;
+      *)
+        if grep -qE '^COMPOSE_PROFILES=' "$DIR/.env"; then
+          NEW_PROFILES="${CUR_PROFILES:+$CUR_PROFILES,}keycloak"
+          ( umask 077; sed "s|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=$NEW_PROFILES|" "$DIR/.env" > "$DIR/.env.tmp" )
+          mv "$DIR/.env.tmp" "$DIR/.env"
+        else
+          # Start on a new line if the file does not end with one.
+          [ -z "$(tail -c1 "$DIR/.env")" ] || printf '\n' >> "$DIR/.env"
+          printf 'COMPOSE_PROFILES=keycloak\n' >> "$DIR/.env"
+        fi
+        echo "→ Added the keycloak profile to COMPOSE_PROFILES in .env, so Keycloak keeps running"
+        ;;
+    esac
+  fi
 fi
 
 if [ ! -f "$DIR/config/nginx/certs/fullchain.pem" ]; then
@@ -583,6 +680,9 @@ cd "$DIR"
 COMPOSE_FILES="-f docker-compose.yml"
 [ "$MSSQL_DEMO" -eq 1 ] && COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.mssql.yml"
 [ "$MYSQL_DEMO" -eq 1 ] && COMPOSE_FILES="$COMPOSE_FILES -f docker-compose.mysql.yml"
+# COMPOSE_PROFILES in .env already turns Keycloak on for a Keycloak install. The flag says it again
+# so this command does not depend on that line.
+[ "$AUTH" = "local" ] || COMPOSE_FILES="$COMPOSE_FILES --profile keycloak"
 [ "$NO_PULL" -eq 1 ] || docker compose $COMPOSE_FILES pull
 docker compose $COMPOSE_FILES up -d
 
@@ -602,6 +702,8 @@ if [ "$READY_TIMEOUT" -gt 0 ]; then
   echo ""
   echo "→ Waiting for services to be ready (up to ${READY_TIMEOUT}s)..."
   ok_gw=0; ok_studio=0; ok_api=0; ok_kc=0
+  # Local sign-in runs no Keycloak, so there is no realm to wait for.
+  [ "$AUTH" != "local" ] || ok_kc=1
   deadline=$(( $(date +%s) + READY_TIMEOUT ))
   while : ; do
     if [ "$ok_gw" -eq 0 ] && ready_check "/"; then ok_gw=1; echo "  ✓ gateway (TLS)"; fi
@@ -626,7 +728,11 @@ if [ "$READY_TIMEOUT" -gt 0 ]; then
     [ "$ok_studio" -eq 0 ] && echo "  ! studio still starting"
     [ "$ok_api" -eq 0 ] && echo "  ! api still starting"
     [ "$ok_kc" -eq 0 ] && echo "  ! keycloak realm still starting"
-    echo "  Give it another minute, or inspect: docker compose logs -f keycloak"
+    if [ "$AUTH" = "local" ]; then
+      echo "  Give it another minute, or inspect: docker compose logs -f api"
+    else
+      echo "  Give it another minute, or inspect: docker compose logs -f keycloak"
+    fi
     if [ "$REQUIRE_READY" -eq 1 ]; then
       echo ""
       echo "✗ --require-ready: the stack did not become ready within ${READY_TIMEOUT}s." >&2
@@ -672,14 +778,34 @@ if [ "$READY_OK" -eq 1 ]; then
 else
   echo "✓ OpenLDR is starting. Open $ORIGIN"
 fi
-echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
-echo "  App sign-in: labadmin / $(grep '^INITIAL_LAB_ADMIN_PASSWORD=' .env | cut -d= -f2-)  (change it on first login)"
+if [ "$AUTH" = "local" ]; then
+  # The first administrator is made in Studio with a setup code. Ask the api container for one
+  # through the ./openldr wrapper, the same command an operator runs. --json, so the code can be
+  # picked out even if a log line lands in the same output. The code goes to this terminal only.
+  SETUP_OUT="$(sh ./openldr auth setup-code --json 2>&1)" || true
+  SETUP_CODE="$(printf '%s\n' "$SETUP_OUT" | sed -n 's/.*"setupCode": *"\([^"]*\)".*/\1/p' | head -1)"
+  if [ -n "$SETUP_CODE" ]; then
+    echo "  Setup code: $SETUP_CODE, valid for 30 minutes"
+    echo "  Open $ORIGIN/studio/ and enter it on the Create the administrator page."
+    echo "  For a new code, run: ./openldr auth setup-code"
+  elif printf '%s\n' "$SETUP_OUT" | grep -q 'an administrator already exists'; then
+    echo "  An administrator already exists. Sign in at $ORIGIN/studio/"
+  else
+    echo "  Could not get a setup code yet. Once the api is up, run: ./openldr auth setup-code"
+    # One line of the reason, no more. It is the last thing the command printed.
+    SETUP_REASON="$(printf '%s\n' "$SETUP_OUT" | sed '/^[[:space:]]*$/d' | tail -1)"
+    [ -z "$SETUP_REASON" ] || echo "  Reason: $SETUP_REASON"
+  fi
+else
+  echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
+  echo "  App sign-in: labadmin / $(grep '^INITIAL_LAB_ADMIN_PASSWORD=' .env | cut -d= -f2-)  (change it on first login)"
+fi
 # ⛔ The one part of a host change this script CANNOT do for you. The realm patch above edits the
 # JSON, but the compose runs `start --import-realm`, and Keycloak imports a realm only when it is
 # not already in its database. On an existing install it is, carrying the OLD redirect URI, so
 # login will bounce to $PREVIOUS_HOST no matter what this script rewrote. Saying nothing here is
-# how the operator concludes the whole flag was ignored again.
-if [ "$HOST_CHANGED" -eq 1 ]; then
+# how the operator concludes the whole flag was ignored again. Local sign-in has no realm.
+if [ "$HOST_CHANGED" -eq 1 ] && [ "$AUTH" != "local" ]; then
   echo ""
   echo "  ⚠ Keycloak still has the realm it imported as $PREVIOUS_HOST, and an existing realm is"
   echo "    never re-imported. Sign-in will redirect to $PREVIOUS_HOST until you either:"
@@ -697,7 +823,9 @@ fi
 if [ "$HTTP_PORT" != "80" ] || [ "$HTTPS_PORT" != "443" ]; then
   echo "  Gateway ports: HTTP $HTTP_PORT / HTTPS $HTTPS_PORT"
 fi
-echo "  Distributed Sync: identity-admin client provisioned (unique secret in .env) — site enrollment is ready."
+if [ "$AUTH" != "local" ]; then
+  echo "  Distributed Sync: identity-admin client provisioned (unique secret in .env) — site enrollment is ready."
+fi
 echo ""
 echo "  Public domain + trusted TLS in one shot:"
 echo "    install.sh --server-name your.domain.com --letsencrypt you@email.com"

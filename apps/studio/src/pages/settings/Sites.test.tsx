@@ -59,6 +59,6 @@ it('hides enrollment and credential changes without client administration', asyn
   adminState.syncClientAdmin = false;
   render(<MemoryRouter><Sites /></MemoryRouter>);
   await screen.findByText('lab-north');
-  expect(screen.getByText(/require Keycloak client administration/)).toBeTruthy();
+  expect(screen.getByText(/not available with this server's sign-in setup/)).toBeTruthy();
   expect(screen.queryByRole('button', { name: /actions for/i })).toBeNull();
 });

@@ -112,9 +112,9 @@ Use [Authentication providers](/docs/auth-providers) before changing an issuer. 
 
 | Variable | Default or source | Meaning |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | keycloak | keycloak or generic oidc sign-in. |
-| `IDENTITY_ADMIN_ADAPTER` | Depends on AUTH_ADAPTER | keycloak or none. Generic oidc requires none. |
-| `OIDC_ISSUER_URL` | Required | Expected token issuer. Preserve it for an existing identity namespace. |
+| `AUTH_ADAPTER` | keycloak | local, keycloak or generic oidc sign-in. New installs set local. |
+| `IDENTITY_ADMIN_ADAPTER` | Depends on AUTH_ADAPTER | keycloak, local or none. Local sign-in uses local. Generic oidc requires none. |
+| `OIDC_ISSUER_URL` | Required for keycloak and oidc | Expected token issuer. Local sign-in does not use it. Preserve it for an existing identity namespace. |
 | `OIDC_WEB_CLIENT_ID` | openldr-web | Public browser client id. |
 | `OIDC_AUDIENCE` | Optional | Required API access-token audience when configured. |
 | `OIDC_SCOPES` | openid profile email | Requested browser scopes. Must include openid. |

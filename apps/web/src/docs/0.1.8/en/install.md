@@ -74,13 +74,13 @@ The sample-free option is intentional. To include the starter dashboard and demo
 
 ![Illustrated install command with the example installation folder and sample-free option.](guide:install-run)
 
-### 2. Wait for readiness and keep the credentials
+### 2. Wait for readiness and keep the setup code
 
-Wait for **OpenLDR is ready**. Keep the printed address and **App sign-in** username and password. Use the App sign-in credentials for Studio. The separate Keycloak admin password manages authentication.
+Wait for **OpenLDR is ready**. Keep the printed address and **Setup code**. In Studio, the **Create the administrator** page asks for this code to make the first administrator. The code works for 30 minutes. On Linux and macOS, `./openldr auth setup-code` prints a new one. On Windows, use `.\openldr.ps1 auth setup-code`. An install made with `--auth keycloak` prints a Keycloak admin password and an **App sign-in** username and password instead.
 
 If the message says **OpenLDR is starting**, follow **Check an installation that is still starting** below. A successful script exit alone does not prove every service is ready.
 
-![Illustrated final installer output. Passwords are placeholders; use the credentials printed on your host.](guide:install-ready)
+![Illustrated final installer output. The setup code is a placeholder; use the code printed on your host.](guide:install-ready)
 
 ### 3. Find the installation folder
 
@@ -97,11 +97,99 @@ The hidden `.env` file contains generated settings and passwords. Keep it with t
 
 ![Illustrated file browser showing the example installation folder and generated files.](guide:install-folder)
 
-**Expected result:** Services are ready, you have the Studio credentials, and you can find the installation files.
+**Expected result:** Services are ready, you have the setup code, and you can find the installation files.
 
-## Sign in and open the user guides
+## Create the first administrator
 
-Use the **App sign-in** credentials printed by your installer. This task changes the temporary password for your new `labadmin` account, then opens the in-app guides. You do not need sample data. If you already changed this account's password, use your current password and skip the password-change steps.
+New installations use OpenLDR's own sign-in. Follow this task once, using the **Setup code** printed by the installer. You choose the administrator's username and password. There is no default `labadmin` password for this path. Sample data is optional.
+
+If you installed with `--auth keycloak` or `-Auth keycloak`, use **Sign in through Keycloak** below instead. An existing installation keeps its authentication mode when upgraded.
+
+### 1. Open Studio
+
+Open the address printed after **OpenLDR is ready**, with `/studio/` at the end. If you open the landing page first, select **Studio**. From another device, use the hostname configured during installation. `localhost` refers to the device opening the browser.
+
+The default local setup uses a self-signed certificate. Check that you opened your own installation before proceeding past a browser certificate warning. The screenshot shows Studio after that check.
+
+![A fresh installation opens Create the administrator.](/docs-images/operator/local-setup-open.png)
+
+### 2. Enter your setup code
+
+Paste your installer's code into **Setup code**. It lasts 30 minutes. A new code replaces the earlier one. If it expired or the installer could not obtain one yet, use the server command explained in [Create the first administrator with a setup code](/docs/auth-providers), then return here. Use your own code, not the one in this example.
+
+![Paste the setup code printed for your installation into Setup code.](/docs-images/operator/local-setup-code.png)
+
+### 3. Choose the administrator's username
+
+Enter the username you want in **Username**. Use 3 to 64 letters, digits, dots, dashes or underscores. The example uses `guide.admin`; choose your own name.
+
+![Choose the first administrator's username.](/docs-images/operator/local-setup-username.png)
+
+### 4. Choose and repeat a password
+
+Enter a private password in **Password**, then repeat it in **Repeat password**. Use 10 to 128 characters. It cannot be the username. The masked example is not a password to copy.
+
+![Enter the same private password in Password and Repeat password.](/docs-images/operator/local-setup-password.png)
+
+### 5. Create the administrator
+
+Select **Create the administrator**. If an error appears, correct the indicated value and try again. On success, Studio signs you in as the first administrator. This setup page no longer appears.
+
+![Create the administrator submits this first account.](/docs-images/operator/local-setup-submit.png)
+
+### 6. Open the user guides
+
+Select **Docs** in Studio's main menu on the left. On a phone, open the main menu first. **Start here** opens in the documentation area.
+
+![Select Docs in the main menu after creating your account.](/docs-images/operator/local-open-docs.png)
+
+**Expected result:** Your first administrator exists, Studio is open and the in-app guides are available. A sample-free installation may have empty data pages. It can still open Docs.
+
+## Sign in with an existing or temporary account
+
+Use this task after the first administrator exists. Sign in with your own account. If an administrator created or reset your account with a temporary password, steps 4 to 6 replace it. Otherwise, Studio opens after step 3 and you can skip those steps.
+
+### 1. Open your Studio address
+
+Open your installation's `/studio/` address. The page now says **Sign in to OpenLDR**.
+
+![The sign-in page appears after the first administrator exists.](/docs-images/operator/local-login-open.png)
+
+### 2. Enter your account details
+
+Enter your username or email in **Username or email**. Enter your password in **Password**. For a newly created or reset account, use the temporary password given to you. The screenshot's `guide.user` is an example account in an isolated test installation.
+
+![Enter your username and password in the local sign-in form.](/docs-images/operator/local-login-credentials.png)
+
+### 3. Select Sign in
+
+Select **Sign in** below the fields. A normal account opens Studio. A temporary password opens **Choose a new password**.
+
+![Sign in is below the username and password fields.](/docs-images/operator/local-login-submit.png)
+
+### 4. Enter the temporary password again
+
+On **Choose a new password**, enter the password you just used in **Current password**. This step applies only when Studio requires a password change.
+
+![Current password is the temporary password you just used.](/docs-images/operator/local-change-current.png)
+
+### 5. Choose and repeat a new password
+
+Enter your own password in **New password** and repeat it in **Repeat password**. It must have 10 to 128 characters. It cannot be your username or the temporary password.
+
+![Enter the same new password in New password and Repeat password.](/docs-images/operator/local-change-new.png)
+
+### 6. Save the new password
+
+Select **Change password**. Studio opens after the change succeeds. Use the new password at later sign-ins. If Studio returns to the sign-in form, sign in with that new password.
+
+![Change password saves your new password and opens Studio.](/docs-images/operator/local-change-submit.png)
+
+**Expected result:** Studio opens with your own account. Select **Docs** to continue with the user guides. You do not need sample data.
+
+## Sign in through Keycloak
+
+Use the **App sign-in** credentials printed by your installer. This task changes the temporary password for your new Keycloak `labadmin` account, then opens the in-app guides. You do not need sample data. If you already changed this account's password, use your current password and skip the password-change steps.
 
 ### 1. Open Studio at your installation address
 
@@ -280,7 +368,7 @@ Replace the example hostname with the one on your certificate. Use this from a c
 
 ![Illustrated terminal: Check the certificate from the client computer.](guide:install-certificate-check)
 
-**Expected result:** The configured address responds over HTTPS with your certificate. Continue with **Sign in and open the user guides** above.
+**Expected result:** The configured address responds over HTTPS with your certificate. Continue with the matching sign-in task above.
 
 ## Choose an analytics database
 
@@ -312,7 +400,7 @@ Expect the additional `mssql` service and adapter value `mssql`. Read actual con
 
 ### 3. Keep the generated database credential
 
-Read the MSSQL demo password line from your installer output. The picture uses a placeholder. This is the database SA password, separate from App sign-in. Keep it private.
+Read the MSSQL demo password line from your installer output. The picture uses a placeholder. This is the database SA password, separate from Studio sign-in. Keep it private.
 
 ![Illustrated terminal: Keep the generated database credential.](guide:install-mssql-ready)
 
@@ -366,7 +454,7 @@ Expect the additional `mysql` service and adapter value `mysql`. Check actual st
 
 ### 3. Keep the generated database credential
 
-Read the MySQL demo root password line from your installer output. The illustration uses a placeholder. This database credential is separate from App sign-in. Keep it private.
+Read the MySQL demo root password line from your installer output. The illustration uses a placeholder. This database credential is separate from Studio sign-in. Keep it private.
 
 ![Illustrated terminal: Keep the generated database credential.](guide:install-mysql-ready)
 
@@ -409,6 +497,7 @@ Expect adapter value `mysql`, including for MariaDB. Check actual service status
 | `--no-start` | `-NoStart` | off | Scaffold and configure only; don't start the stack. |
 | `--no-pull` | `-NoPull` | off | Skip pulling images (use what's already local). |
 | `--seedless` | `-Seedless` | off (seeded) | Empty first run. Skip the seeded sample dashboard + demo data (the default seeds them). Windows: `-Seedless`. Fresh install only. |
+| `--auth <mode>` | `-Auth` | asks, else `local` | Sign-in for a new install: `local` or `keycloak`. `local` keeps OpenLDR's own accounts and runs no Keycloak. Without the flag the installer asks when it has a terminal, and otherwise uses `local`. A re-run keeps the mode the install was made with. Windows: `-Auth`. |
 | `--target-db <db>` | `-TargetDb` | `postgres` | External analytics database: `postgres`, `mssql`, or `mysql`. |
 | `--mssql-demo` | `-MssqlDemo` | off | Bundle a SQL Server 2022 container (evaluation only); implies `--target-db mssql`. |
 | `--mssql-host <host>` | `-MssqlHost` | not set | BYO SQL Server host (required for `--target-db mssql` without `--mssql-demo`). |

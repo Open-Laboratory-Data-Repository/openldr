@@ -74,13 +74,13 @@ A opção sem exemplos é intencional. Para incluir o painel inicial e os dados 
 
 ![Ilustração do comando com a pasta de exemplo e a opção sem dados iniciais.](guide:install-run)
 
-### 2. Aguardar os serviços e guardar as credenciais
+### 2. Aguardar os serviços e guardar o código de configuração
 
-Aguarde **OpenLDR is ready**. Guarde o endereço e as credenciais **App sign-in**. Servem para o Studio. A palavra-passe de administrador do Keycloak serve separadamente para gerir a autenticação.
+Aguarde **OpenLDR is ready**. Guarde o endereço e o código **Setup code**. No Studio, a página **Criar o administrador** pede este código para criar o primeiro administrador. O código é válido durante 30 minutos. Em Linux e macOS, `./openldr auth setup-code` mostra um novo. No Windows, use `.\openldr.ps1 auth setup-code`. Uma instalação feita com `--auth keycloak` mostra, em vez disso, uma palavra-passe de administrador do Keycloak e as credenciais **App sign-in**.
 
 Se aparecer **OpenLDR is starting**, siga **Verificar uma instalação ainda a iniciar** abaixo. Um código de saída zero não prova que todos os serviços estejam prontos.
 
-![Ilustração da saída final. As palavras-passe são marcadores; use as apresentadas no seu anfitrião.](guide:install-ready)
+![Ilustração da saída final. O código de configuração é um marcador; use o apresentado no seu anfitrião.](guide:install-ready)
 
 ### 3. Encontrar a pasta de instalação
 
@@ -97,11 +97,99 @@ O ficheiro oculto `.env` contém definições e palavras-passe geradas. Guarde-o
 
 ![Ilustração do gestor de ficheiros com a pasta de exemplo e os ficheiros gerados.](guide:install-folder)
 
-**Resultado esperado:** Os serviços estão prontos, tem as credenciais do Studio e encontra os ficheiros da instalação.
+**Resultado esperado:** Os serviços estão prontos, tem o código de configuração e encontra os ficheiros da instalação.
 
-## Iniciar sessão e abrir os guias
+## Criar o primeiro administrador
 
-Use as credenciais **App sign-in** apresentadas pelo instalador. Esta tarefa substitui a palavra-passe temporária da conta nova `labadmin` e abre os guias da aplicação. Não precisa de dados de exemplo. Se já alterou essa palavra-passe, use a atual e ignore os passos de alteração.
+As instalações novas usam o início de sessão do OpenLDR. Execute esta tarefa uma vez com o **Setup code** apresentado pelo instalador. Escolhe o nome e a palavra-passe do administrador. Este percurso não tem palavra-passe `labadmin` predefinida. Os dados de exemplo são opcionais.
+
+Com `--auth keycloak` ou `-Auth keycloak`, siga **Iniciar sessão com Keycloak** abaixo. Uma atualização conserva o modo de autenticação existente. As capturas mostram os nomes em inglês.
+
+### 1. Abrir o Studio
+
+Abra o endereço apresentado após **OpenLDR is ready**, seguido de `/studio/`. Se abrir o site público, selecione **Studio**. Noutro dispositivo, use o nome de anfitrião configurado. `localhost` refere-se ao dispositivo que abre o navegador.
+
+A configuração local usa um certificado autoassinado. Confirme o endereço da instalação antes de ultrapassar um aviso de certificado. A captura mostra o Studio após essa verificação.
+
+![Uma instalação nova abre Create the administrator.](/docs-images/operator/local-setup-open.png)
+
+### 2. Introduzir o código de configuração
+
+Cole o código do instalador em **Setup code**. Dura 30 minutos. Um código novo substitui o anterior. Se expirou ou ainda não estava disponível, use o comando do servidor descrito em [Criar o primeiro administrador com um código](/docs/auth-providers) e volte aqui. Use o seu próprio código.
+
+![Cole o código da sua instalação em Setup code.](/docs-images/operator/local-setup-code.png)
+
+### 3. Escolher o nome do administrador
+
+Escreva o nome pretendido em **Username**. Use 3 a 64 letras, dígitos, pontos, hífenes ou sublinhados. O exemplo usa `guide.admin`; escolha o seu próprio nome.
+
+![Escolha o nome do primeiro administrador.](/docs-images/operator/local-setup-username.png)
+
+### 4. Escolher e repetir uma palavra-passe
+
+Introduza uma palavra-passe privada em **Password** e repita-a em **Repeat password**. Use 10 a 128 caracteres. Não pode ser o nome de utilizador. O exemplo oculto não é para copiar.
+
+![Introduza a mesma palavra-passe em Password e Repeat password.](/docs-images/operator/local-setup-password.png)
+
+### 5. Criar o administrador
+
+Selecione **Create the administrator**. Se surgir um erro, corrija o valor indicado e tente novamente. Após o sucesso, o Studio inicia sessão como primeiro administrador. Esta página de configuração não volta a aparecer.
+
+![Create the administrator guarda esta primeira conta.](/docs-images/operator/local-setup-submit.png)
+
+### 6. Abrir os guias da aplicação
+
+Selecione **Docs** no menu principal à esquerda. Num telefone, abra primeiro esse menu. **Start here** aparece na documentação.
+
+![Selecione Docs após criar a sua conta.](/docs-images/operator/local-open-docs.png)
+
+**Resultado esperado:** O primeiro administrador existe, o Studio está aberto e os guias estão acessíveis. Sem dados de exemplo, algumas páginas de dados podem estar vazias. A documentação continua disponível.
+
+## Usar uma conta existente ou temporária
+
+Siga esta tarefa após a criação do primeiro administrador. Use a sua própria conta. Se um administrador lhe deu uma palavra-passe temporária, os passos 4 a 6 substituem-na. Caso contrário, o Studio abre após o passo 3 e pode ignorar os restantes.
+
+### 1. Abrir o endereço Studio
+
+Abra o endereço `/studio/` da instalação. A página apresenta agora **Sign in to OpenLDR**.
+
+![A página de início de sessão aparece após a criação do primeiro administrador.](/docs-images/operator/local-login-open.png)
+
+### 2. Introduzir as credenciais
+
+Escreva o nome ou e-mail em **Username or email** e a palavra-passe em **Password**. Numa conta nova ou reposta, use a palavra-passe temporária recebida. `guide.user` é uma conta de teste isolada neste exemplo.
+
+![Introduza o nome e a palavra-passe no formulário local.](/docs-images/operator/local-login-credentials.png)
+
+### 3. Selecionar Sign in
+
+Selecione **Sign in** abaixo dos campos. Uma conta normal abre o Studio. Uma palavra-passe temporária abre **Choose a new password**.
+
+![Sign in fica abaixo dos campos das credenciais.](/docs-images/operator/local-login-submit.png)
+
+### 4. Repetir a palavra-passe temporária
+
+Em **Choose a new password**, introduza a palavra-passe usada para iniciar sessão em **Current password**. Este passo aplica-se apenas se o Studio exigir uma alteração.
+
+![Current password é a palavra-passe temporária usada para iniciar sessão.](/docs-images/operator/local-change-current.png)
+
+### 5. Escolher e repetir uma palavra-passe nova
+
+Introduza a nova palavra-passe em **New password** e repita-a em **Repeat password**. Deve ter 10 a 128 caracteres. Não pode ser o nome de utilizador nem a palavra-passe temporária.
+
+![Repita a palavra-passe nova nos dois campos.](/docs-images/operator/local-change-new.png)
+
+### 6. Guardar a palavra-passe nova
+
+Selecione **Change password**. O Studio abre após o sucesso. Use a palavra-passe nova nos próximos inícios de sessão. Se voltar ao formulário de início de sessão, entre com a palavra-passe nova.
+
+![Change password guarda a palavra-passe nova e abre o Studio.](/docs-images/operator/local-change-submit.png)
+
+**Resultado esperado:** O Studio abre com a sua conta. Selecione **Docs** para ler os guias da aplicação. Não precisa de dados de exemplo.
+
+## Iniciar sessão com Keycloak
+
+Use as credenciais **App sign-in** apresentadas pelo instalador. Esta tarefa substitui a palavra-passe temporária da conta Keycloak nova `labadmin` e abre os guias da aplicação. Não precisa de dados de exemplo. Se já alterou essa palavra-passe, use a atual e ignore os passos de alteração.
 
 ### 1. Abrir o Studio no endereço da instalação
 
@@ -280,7 +368,7 @@ Substitua o nome de exemplo pelo do certificado. O cliente deve confiar no emiss
 
 ![Terminal ilustrado: Verificar o certificado no computador cliente.](guide:install-certificate-check)
 
-**Resultado esperado:** O endereço configurado responde por HTTPS com o seu certificado. Continue em **Iniciar sessão e abrir os guias** acima.
+**Resultado esperado:** O endereço configurado responde por HTTPS com o seu certificado. Continue no percurso de início de sessão correspondente acima.
 
 ## Escolher uma base analítica
 
@@ -409,6 +497,7 @@ Espere `mysql`, também para MariaDB. Verifique estado real e registos. Isto con
 | `--no-start` | `-NoStart` | desligada | Apenas criar e configurar, sem arrancar a pilha. |
 | `--no-pull` | `-NoPull` | desligada | Não descarregar imagens (usa as que já existem localmente). |
 | `--seedless` | `-Seedless` | desligada (com dados) | Primeiro arranque vazio: não cria o painel de exemplo nem os dados de demonstração (por omissão, são criados). Windows: `-Seedless`. Apenas numa instalação nova. |
+| `--auth <mode>` | `-Auth` | pergunta, senão `local` | Início de sessão de uma instalação nova: `local` ou `keycloak`. `local` mantém as contas próprias do OpenLDR e não executa o Keycloak. Sem a opção, o instalador pergunta quando tem um terminal e, caso contrário, usa `local`. Uma nova execução mantém o modo com que a instalação foi feita. Windows: `-Auth`. |
 | `--target-db <db>` | `-TargetDb` | `postgres` | Base de dados analítica externa: `postgres`, `mssql` ou `mysql`. |
 | `--mssql-demo` | `-MssqlDemo` | desligada | Incluir um contentor SQL Server 2022 (apenas para avaliação). Implica `--target-db mssql`. |
 | `--mssql-host <host>` | `-MssqlHost` | nenhuma | Anfitrião do seu SQL Server (obrigatório com `--target-db mssql` sem `--mssql-demo`). |

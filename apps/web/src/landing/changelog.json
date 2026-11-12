@@ -18,10 +18,76 @@
           "title": "Show configuration snippets once without terminal frames"
         },
         {
+          "hash": "dc407fc0",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Warn that a factory reset removes local accounts"
+        },
+        {
+          "hash": "684ac6f9",
+          "type": "fix",
+          "scope": "install",
+          "title": "Refuse a Docker Compose older than 2.20"
+        },
+        {
+          "hash": "18cdb11d",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Give a true issuer refusal under local sign-in"
+        },
+        {
+          "hash": "a1d743b9",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Delete a user's dead session rows at sign-in"
+        },
+        {
+          "hash": "27b067fa",
+          "type": "fix",
+          "scope": "auth",
+          "title": "End a local user's sessions when the account is disabled"
+        },
+        {
+          "hash": "3e1047b0",
+          "type": "fix",
+          "scope": "users",
+          "title": "Answer 400 for a password that breaks a local sign-in rule"
+        },
+        {
+          "hash": "8b75a917",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Audit a lock from a wrong current password and refuse keeping a temporary one"
+        },
+        {
+          "hash": "3573563a",
+          "type": "fix",
+          "scope": "config",
+          "title": "Refuse the public development secrets key in production"
+        },
+        {
+          "hash": "42a9e677",
+          "type": "fix",
+          "scope": "server",
+          "title": "Make the session cookie end with the browser"
+        },
+        {
+          "hash": "38beb914",
+          "type": "fix",
+          "scope": "install",
+          "title": "Ship a dev env template the server starts on"
+        },
+        {
           "hash": "04217ec6",
           "type": "feat",
           "scope": "web",
           "title": "Add themed landing visuals and refresh getting started"
+        },
+        {
+          "hash": "bc1c758f",
+          "type": "feat",
+          "scope": "install",
+          "title": "New installs use local sign-in, Keycloak is optional"
         },
         {
           "hash": "09f22cb5",
@@ -36,10 +102,34 @@
           "title": "Move docs version picker and overlay phone navigation"
         },
         {
+          "hash": "82f293d1",
+          "type": "feat",
+          "scope": "setup",
+          "title": "Warn while local sign-in has no administrator"
+        },
+        {
+          "hash": "5c82b700",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Refuse an unknown role when creating a local user"
+        },
+        {
+          "hash": "54f0fd52",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Setup code, password reset and session commands"
+        },
+        {
           "hash": "6ac8080a",
           "type": "fix",
           "scope": "",
           "title": "Keep documentation contents pinned to the active task"
+        },
+        {
+          "hash": "03d979ed",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Setup, forced change and change-password screens"
         },
         {
           "hash": "334ce996",
@@ -52,6 +142,120 @@
           "type": "fix",
           "scope": "",
           "title": "Correct report dates, package actions and guide navigation"
+        },
+        {
+          "hash": "1635f851",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Tell the person when sign-out did not reach the server"
+        },
+        {
+          "hash": "8559d603",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Sign-in page for local sign-in"
+        },
+        {
+          "hash": "b5176b58",
+          "type": "fix",
+          "scope": "server",
+          "title": "Key the sign-in limiter by network and never refuse on a full map"
+        },
+        {
+          "hash": "71c08695",
+          "type": "feat",
+          "scope": "server",
+          "title": "Sign-in, refresh, logout, password and setup routes"
+        },
+        {
+          "hash": "b95f2e6a",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Wire local sign-in into the app context"
+        },
+        {
+          "hash": "6b493d7f",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Make password replacement a compare-and-set and re-check sign-in after the session opens"
+        },
+        {
+          "hash": "66c483e3",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Refuse a password change that races an admin reset"
+        },
+        {
+          "hash": "b7b9bf52",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Prove signature refusal, bind sessions to users, close a reset race"
+        },
+        {
+          "hash": "21be0cbe",
+          "type": "feat",
+          "scope": "auth",
+          "title": "AuthPort backed by local accounts"
+        },
+        {
+          "hash": "d67cebd5",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Re-check the lock after the hash when changing a password"
+        },
+        {
+          "hash": "e4548d80",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Close the parallel lockout gap and two setup and password edges"
+        },
+        {
+          "hash": "d3f04634",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Report lock start and write the first admin's password last"
+        },
+        {
+          "hash": "eb978c66",
+          "type": "feat",
+          "scope": "auth",
+          "title": "Local sign-in service with lockout and setup"
+        },
+        {
+          "hash": "97d6cdeb",
+          "type": "feat",
+          "scope": "auth",
+          "title": "Local signing key and access tokens"
+        },
+        {
+          "hash": "180d1844",
+          "type": "fix",
+          "scope": "auth",
+          "title": "Normalize passwords to NFKC before hashing"
+        },
+        {
+          "hash": "fe5efab7",
+          "type": "feat",
+          "scope": "auth",
+          "title": "Password rules and scrypt hashing"
+        },
+        {
+          "hash": "b2418027",
+          "type": "fix",
+          "scope": "db",
+          "title": "Keep one signing key when two processes start together"
+        },
+        {
+          "hash": "7825cac7",
+          "type": "feat",
+          "scope": "db",
+          "title": "Tables and store for local sign-in"
+        },
+        {
+          "hash": "d454e045",
+          "type": "feat",
+          "scope": "config",
+          "title": "Accept AUTH_ADAPTER=local"
         },
         {
           "hash": "4e9981a0",

@@ -136,6 +136,8 @@ The report describes the checks at the time they ran. All checks passed does not
 
 **Sign-in warns that it is switched off.** Turn off the development authentication bypass in server configuration before real use.
 
+**Sign-in warns that no administrator exists yet.** The install uses OpenLDR's own sign-in, and nobody has finished setup. `openldr doctor` prints `No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.` Studio shows its **Create the administrator** page until then, not this page. See [Sign-in and passwords](/docs/sign-in).
+
 **A linked page is unavailable.** Ask an administrator with permission to edit that setting.
 
 ## Related guides

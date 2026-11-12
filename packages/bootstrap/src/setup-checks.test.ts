@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runSetupChecks, SETUP_CHECK_TITLE, SETUP_HINT_TEXT, type SetupCheckDeps, type SetupCheckId } from './setup-checks';
+import { runSetupChecks, setupCheckDeps, SETUP_CHECK_TITLE, SETUP_HINT_TEXT, type SetupCheckDeps, type SetupCheckId } from './setup-checks';
 
 // Layer proven here: the rules that turn install state into a check list, with every source faked.
 // Not proven: that the real stores return what the fakes do. The route and CLI tests, and the
@@ -63,6 +63,43 @@ describe('setup checks', () => {
     expect(prod.check).toMatchObject({ status: 'fail', hint: 'signInOff' });
     const dev = await check('signIn', { cfg: { AUTH_DEV_BYPASS: true, NODE_ENV: 'development', SECRETS_ENCRYPTION_KEY: 'k' } });
     expect(dev.check).toMatchObject({ status: 'warn', hint: 'signInOff' });
+  });
+
+  it('warns while local sign-in still needs setup, with no link', async () => {
+    const { check: c, report } = await check('signIn', { setupRequired: async () => true });
+    expect(c).toEqual({ id: 'signIn', status: 'warn', hint: 'signInSetup' });
+    expect(report.ok).toBe(true);
+    expect(SETUP_HINT_TEXT.signInSetup).toBe('No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.');
+  });
+
+  it('passes once an administrator exists', async () => {
+    expect((await check('signIn', { setupRequired: async () => false })).check).toEqual({ id: 'signIn', status: 'pass' });
+  });
+
+  it('reports the bypass before the setup state', async () => {
+    const { check: c } = await check('signIn', {
+      cfg: { AUTH_DEV_BYPASS: true, NODE_ENV: 'development', SECRETS_ENCRYPTION_KEY: 'k' },
+      setupRequired: async () => true,
+    });
+    expect(c).toMatchObject({ status: 'warn', hint: 'signInOff' });
+  });
+
+  it('passes when setupRequired is not provided (keycloak and oidc installs)', async () => {
+    expect((await check('signIn')).check).toEqual({ id: 'signIn', status: 'pass' });
+  });
+
+  it('reports the sign-in check as failed when the setup state cannot be read, and runs the others', async () => {
+    const report = await runSetupChecks(deps({ setupRequired: async () => { throw new Error('db gone at 10.1.2.3'); } }));
+    expect(report.checks.find((c) => c.id === 'signIn')).toEqual({ id: 'signIn', status: 'fail', hint: 'checkError' });
+    expect(report.checks.map((c) => c.id)).toHaveLength(8);
+    expect(JSON.stringify(report)).not.toContain('10.1.2.3');
+  });
+
+  it('takes the setup state from ctx.localSignIn, and leaves it out when there is none', async () => {
+    const base = { cfg: deps().cfg, targetEngine: 'postgres' } as unknown as Parameters<typeof setupCheckDeps>[0];
+    expect(setupCheckDeps(base).setupRequired).toBeUndefined();
+    const local = setupCheckDeps({ ...base, localSignIn: { setupRequired: async () => true } });
+    expect(await local.setupRequired?.()).toBe(true);
   });
 
   it('warns when the secrets key is not set', async () => {

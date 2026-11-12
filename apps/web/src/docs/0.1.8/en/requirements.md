@@ -24,7 +24,7 @@ Microsoft documents the [WSL setup for Server 2022 and 2025](https://learn.micro
 | Item | Requirement |
 | --- | --- |
 | Docker | A maintained Docker Engine or Docker Desktop installation. The Docker service must be running and accessible from the account running the installer. |
-| Compose | The `docker compose` command must work. An old `docker-compose` command alone does not satisfy the installer. |
+| Compose | The `docker compose` command must work, at version 2.20 or later. The installer stops on an older Compose. An old `docker-compose` command alone does not satisfy the installer. |
 | Linux/macOS terminal | A shell and `curl` to download and run the installer. |
 | Windows terminal | Windows PowerShell 5.1 or later to download and run the PowerShell installer. |
 | Installation folder | The installing account must be able to create and write the chosen folder. Docker Desktop must be able to share that folder with its Linux VM. |
@@ -55,7 +55,7 @@ For the normal installer, allow outbound HTTPS downloads from GitHub and GitHub 
 | Over a private network or Tailscale | A hostname or IP address other devices can reach. Configure it during installation so sign-in redirects use that same address. The devices need access to the configured HTTPS port. |
 | Public domain with Let's Encrypt | A domain pointing to the host, inbound TCP 80 and 443, and the Linux certificate setup described in [Install](/docs/install). |
 
-The gateway uses host ports **80 and 443 by default**. They must be available, or you must choose other ports before installing. PostgreSQL, object storage and Keycloak communicate inside the Docker network; the default stack does not require opening their internal ports to users.
+The gateway uses host ports **80 and 443 by default**. They must be available, or you must choose other ports before installing. PostgreSQL, object storage and, on a Keycloak install, Keycloak communicate inside the Docker network; the default stack does not require opening their internal ports to users.
 
 ## Check the host before installing
 
@@ -79,7 +79,7 @@ For the packaged AMD64 path, expect `linux/x86_64` or `linux/amd64`. If it repor
 docker compose version
 ```
 
-A version should be printed without an error. Your version may differ from the illustration. If the command is missing, install the Compose plugin or update Docker Desktop.
+A version should be printed without an error. Your version may differ from the illustration, but it must be 2.20 or later. If the command is missing or older, install the Compose plugin or update Docker Desktop.
 
 ![Illustrated Compose version check. Your version number may differ.](guide:install-compose)
 

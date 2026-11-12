@@ -92,6 +92,16 @@ Use `docker compose run --rm --no-deps api node /app/cli/dist/index.js db migrat
 
 **Resultado esperado:** se a migração falhar, pare aqui. Algumas alterações podem já estar guardadas. Diagnostique ou restaure o conjunto correspondente. Não inicie os executáveis antigos sobre um esquema parcialmente atualizado.
 
+## Instalações que usam o Keycloak
+
+Faça isto antes de arrancar o novo ficheiro compose. Se o serviço `keycloak` do `docker-compose.yml` para o qual está a passar tiver uma linha `profiles`, acrescente esta linha ao ficheiro `.env` da instalação:
+
+```sh
+COMPOSE_PROFILES=keycloak
+```
+
+Sem ela, o Keycloak não arranca e ninguém consegue iniciar sessão. Se o `.env` já tiver uma linha `COMPOSE_PROFILES`, acrescente-lhe `keycloak` depois de uma vírgula. Voltar a executar o instalador de uma linha acrescenta a linha por si. Uma instalação com início de sessão local não tem nada a fazer aqui.
+
 ## Verificar a nova versão antes de retomar o tráfego
 
 Inicie os serviços pela ordem das dependências. Mantenha o tráfego de entrada e os emissores suspensos até as verificações passarem.

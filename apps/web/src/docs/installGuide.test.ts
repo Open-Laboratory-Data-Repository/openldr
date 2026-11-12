@@ -16,12 +16,18 @@ describe('Install guide', () => {
         expect(markdown).toContain(INSTALL_COMMANDS[platform].run);
         if (platform === 'windows') expect(markdown).not.toContain('~/Downloads/openldr_ce');
         const steps = markdown.split(/(?=^#{2,3} )/m).filter(section => /^### \d+\./.test(section));
-        expect(steps.length).toBe(34);
+        expect(steps.length).toBe(46);
         const signIn = markdown.split(/^## /m).find(section => section.includes('/docs-images/operator/install-login-open.png'))!;
         expect(signIn.match(/^### /gm)).toHaveLength(6);
         expect(signIn).toContain('labadmin');
         expect(signIn).toContain('App sign-in');
         expect(signIn).toContain('Submit');
+        const setup = markdown.split(/^## /m).find(section => section.includes('/docs-images/operator/local-setup-open.png'))!;
+        expect(setup.match(/^### /gm)).toHaveLength(6);
+        expect(setup).toContain('Setup code');
+        const temporary = markdown.split(/^## /m).find(section => section.includes('/docs-images/operator/local-login-open.png'))!;
+        expect(temporary.match(/^### /gm)).toHaveLength(6);
+        expect(temporary).toContain('Current password');
         for (const step of steps) {
           expect(step).toMatch(/!\[[^\]]+\]\(/);
           const image = step.match(/!\[[^\]]*\]\(([^)]+)\)/)?.[1] ?? '';

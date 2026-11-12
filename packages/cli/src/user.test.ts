@@ -23,16 +23,229 @@ vi.mock('@openldr/config', async (importOriginal) => ({
 
 vi.mock('../../bootstrap/src/record-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
 
-vi.mock('@openldr/bootstrap', async () => ({
-  ...await import('../../bootstrap/src/account-status'),
-  createAppContext: mocks.createAppContext,
-  recordAuditEvent: mocks.recordAuditEvent,
-  listUserDirectory: mocks.listUserDirectory,
-}));
+// The local-account actions run for real, wrapped so a test can see whether they were called.
+// Their audit writes land in mocks.recordAuditEvent through the record-audit mock above.
+vi.mock('@openldr/bootstrap', async () => {
+  const local = await import('../../bootstrap/src/local-accounts');
+  return {
+    ...await import('../../bootstrap/src/account-status'),
+    ...local,
+    createLocalAccount: vi.fn(local.createLocalAccount),
+    resetLocalPassword: vi.fn(local.resetLocalPassword),
+    endLocalSessions: vi.fn(local.endLocalSessions),
+    createAppContext: mocks.createAppContext,
+    recordAuditEvent: mocks.recordAuditEvent,
+    listUserDirectory: mocks.listUserDirectory,
+  };
+});
 
+import { createLocalAccount, resetLocalPassword, endLocalSessions } from '@openldr/bootstrap';
 import { accountFixture } from '../../bootstrap/src/account-status.test-support';
 
-import { runUserDirectoryList, runUserCreate, runUserSetRole, runUserSetStatus } from './user';
+import {
+  runUserDirectoryList, runUserCreate, runUserSetRole, runUserSetStatus, runUserResetPassword, runUserEndSessions,
+} from './user';
+
+function localCtx() {
+  return {
+    localSignIn: { setupRequired: vi.fn().mockResolvedValue(false) },
+    auth: {
+      directory: {
+        create: vi.fn(async (input: { username: string; password?: string }) => ({
+          id: 'u-new', username: input.username, email: null, firstName: null, lastName: null, enabled: true, roles: [], createdAt: null,
+        })),
+      },
+      resetPassword: vi.fn().mockResolvedValue(undefined),
+      forceLogout: vi.fn().mockResolvedValue(undefined),
+    },
+    users: {
+      getByUsername: vi.fn(async (username: string) => (username === 'bob' ? { id: 'u1', username: 'bob' } : undefined)),
+      create: vi.fn(),
+    },
+    roles: {
+      getBySlug: vi.fn(async (slug: string) => (slug === 'lab_technician' ? { id: 'role-tech', slug } : null)),
+    },
+    audit: {},
+    logger: {},
+    close: vi.fn(),
+  };
+}
+
+function occurrences(haystack: string, needle: string): number {
+  return haystack.split(needle).length - 1;
+}
+
+describe('user commands under local sign-in', () => {
+  let out: string;
+  let err: string;
+  let ctx: ReturnType<typeof localCtx>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    out = '';
+    err = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { out += String(chunk); return true; });
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => { err += String(chunk); return true; });
+    ctx = localCtx();
+    mocks.createAppContext.mockResolvedValue(ctx);
+  });
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('reset-password refuses without --force and changes nothing', async () => {
+    const code = await runUserResetPassword('bob', { json: false, force: false });
+
+    expect(code).toBe(1);
+    expect(err).toContain('sessions');
+    expect(err).toContain('--force');
+    expect(resetLocalPassword).not.toHaveBeenCalled();
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+    expect(ctx.auth.resetPassword).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('reset-password prints the temporary password once with --force', async () => {
+    const code = await runUserResetPassword('bob', { json: false, force: true });
+
+    expect(code).toBe(0);
+    const [userId, password, temporary] = ctx.auth.resetPassword.mock.calls[0];
+    expect(userId).toBe('u1');
+    expect(temporary).toBe(true);
+    expect(occurrences(out, password)).toBe(1);
+    expect(err).not.toContain(password);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'user.reset_password', entityId: 'u1' }),
+    );
+    expect(JSON.stringify(mocks.recordAuditEvent.mock.calls)).not.toContain(password);
+    expect(ctx.close).toHaveBeenCalled();
+  });
+
+  it('reset-password puts the temporary password in the JSON output', async () => {
+    const code = await runUserResetPassword('bob', { json: true, force: true });
+
+    expect(code).toBe(0);
+    const password = ctx.auth.resetPassword.mock.calls[0][1];
+    expect(JSON.parse(out)).toEqual({ username: 'bob', temporaryPassword: password });
+  });
+
+  it('reset-password exits 1 for an unknown user', async () => {
+    const code = await runUserResetPassword('Bob', { json: false, force: true });
+
+    expect(code).toBe(1);
+    expect(err).toBe('no user named Bob. Usernames here match exactly, including case.\n');
+    expect(out).toBe('');
+    expect(ctx.auth.resetPassword).not.toHaveBeenCalled();
+  });
+
+  it('reset-password exits 1 when local sign-in is off', async () => {
+    const { localSignIn: _off, ...keycloakCtx } = ctx;
+    mocks.createAppContext.mockResolvedValue(keycloakCtx);
+
+    const code = await runUserResetPassword('bob', { json: false, force: true });
+
+    expect(code).toBe(1);
+    expect(err).toBe('local sign-in is not enabled\n');
+    expect(ctx.auth.resetPassword).not.toHaveBeenCalled();
+  });
+
+  it('end-sessions calls endLocalSessions', async () => {
+    const code = await runUserEndSessions('bob', { json: false });
+
+    expect(code).toBe(0);
+    expect(endLocalSessions).toHaveBeenCalledWith(ctx, expect.objectContaining({ actorType: 'cli' }), 'bob');
+    expect(ctx.auth.forceLogout).toHaveBeenCalledWith('u1');
+    expect(out).toBe('ended sessions for bob\n');
+    expect(ctx.close).toHaveBeenCalled();
+  });
+
+  it('end-sessions exits 1 for an unknown user', async () => {
+    const code = await runUserEndSessions('Bob', { json: false });
+
+    expect(code).toBe(1);
+    expect(err).toBe('no user named Bob. Usernames here match exactly, including case.\n');
+    expect(ctx.auth.forceLogout).not.toHaveBeenCalled();
+  });
+
+  it('end-sessions exits 1 when local sign-in is off', async () => {
+    const { localSignIn: _off, ...keycloakCtx } = ctx;
+    mocks.createAppContext.mockResolvedValue(keycloakCtx);
+
+    const code = await runUserEndSessions('bob', { json: false });
+
+    expect(code).toBe(1);
+    expect(err).toBe('local sign-in is not enabled\n');
+    expect(ctx.auth.forceLogout).not.toHaveBeenCalled();
+  });
+
+  it('user create under local sign-in goes through the directory', async () => {
+    const code = await runUserCreate({ username: 'carol', name: 'Carol', email: 'carol@lab.test', role: ['lab_technician'], json: false });
+
+    expect(code).toBe(0);
+    expect(createLocalAccount).toHaveBeenCalledWith(
+      ctx,
+      expect.objectContaining({ actorType: 'cli' }),
+      { username: 'carol', name: 'Carol', email: 'carol@lab.test', roles: ['lab_technician'] },
+    );
+    expect(ctx.users.create).not.toHaveBeenCalled();
+    const password = ctx.auth.directory.create.mock.calls[0][0].password!;
+    expect(password).toHaveLength(16);
+    expect(occurrences(out, password)).toBe(1);
+    expect(err).not.toContain(password);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'user.create', entityId: 'u-new' }),
+    );
+    expect(JSON.stringify(mocks.recordAuditEvent.mock.calls)).not.toContain(password);
+  });
+
+  it('user create under local sign-in puts the temporary password in the JSON output', async () => {
+    const code = await runUserCreate({ username: 'carol', json: true });
+
+    expect(code).toBe(0);
+    const password = ctx.auth.directory.create.mock.calls[0][0].password!;
+    const body = JSON.parse(out);
+    expect(body.temporaryPassword).toBe(password);
+    expect(body.user).toMatchObject({ id: 'u-new', username: 'carol' });
+  });
+
+  it('user create under local sign-in refuses a role that does not exist', async () => {
+    const code = await runUserCreate({ username: 'carol', role: ['lab_tech'], json: false });
+
+    expect(code).toBe(1);
+    expect(err).toBe('no role named lab_tech\n');
+    expect(out).toBe('');
+    expect(ctx.auth.directory.create).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(ctx.close).toHaveBeenCalled();
+  });
+
+  it('user create under local sign-in refuses before setup is done', async () => {
+    ctx.localSignIn.setupRequired.mockResolvedValue(true);
+
+    const code = await runUserCreate({ username: 'carol', json: false });
+
+    expect(code).toBe(1);
+    expect(err).toBe('no administrator exists yet. Run "openldr auth setup-code" and finish setup in studio first.\n');
+    expect(createLocalAccount).not.toHaveBeenCalled();
+    expect(ctx.auth.directory.create).not.toHaveBeenCalled();
+    expect(ctx.users.create).not.toHaveBeenCalled();
+  });
+
+  it('user create under keycloak still writes the local row', async () => {
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+    mocks.appCtx.users.create.mockResolvedValue({ id: 'u1', username: 'bob', roles: [] });
+
+    const code = await runUserCreate({ username: 'bob', json: true });
+
+    expect(code).toBe(0);
+    expect(mocks.appCtx.users.create).toHaveBeenCalledWith({ username: 'bob', displayName: undefined, email: undefined, roles: undefined });
+    expect(createLocalAccount).not.toHaveBeenCalled();
+    expect(JSON.parse(out)).toEqual({ id: 'u1', username: 'bob', roles: [] });
+  });
+});
 
 describe('user CLI audit', () => {
   beforeEach(() => {

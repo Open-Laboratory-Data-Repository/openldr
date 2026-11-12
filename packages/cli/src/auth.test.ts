@@ -13,11 +13,13 @@ const mocks = vi.hoisted(() => ({
 const NEW_ISSUER = 'https://lab.example.org/auth/realms/openldr';
 const OLD_ISSUER = 'https://192.168.1.20:8443/auth/realms/openldr';
 
-vi.mock('@openldr/config', () => ({
+vi.mock('@openldr/config', async (importOriginal) => ({
+  requireOidcIssuer: (await importOriginal<typeof import('@openldr/config')>()).requireOidcIssuer,
   loadConfig: vi.fn(() => ({ OIDC_ISSUER_URL: NEW_ISSUER })),
 }));
 
-vi.mock('@openldr/bootstrap', () => ({
+vi.mock('@openldr/bootstrap', async () => ({
+  ...await import('../../bootstrap/src/local-accounts'),
   createDbContext: mocks.createDbContext,
   createAppContext: mocks.createAppContext,
   recordAuditEvent: mocks.recordAuditEvent,
@@ -25,7 +27,73 @@ vi.mock('@openldr/bootstrap', () => ({
   rebindAuthIssuer: mocks.rebindAuthIssuer,
 }));
 
-import { runAuthRebindIssuer } from './auth';
+import { runAuthRebindIssuer, runAuthSetupCode } from './auth';
+
+describe('auth setup-code', () => {
+  let out: string;
+  let err: string;
+  const localSignIn = { setupRequired: vi.fn(), createSetupCode: vi.fn() };
+  const close = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    out = '';
+    err = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => { out += String(chunk); return true; });
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => { err += String(chunk); return true; });
+    localSignIn.setupRequired.mockResolvedValue(true);
+    localSignIn.createSetupCode.mockResolvedValue('ABCD-EFGH-JK23');
+    mocks.createAppContext.mockResolvedValue({ localSignIn, close });
+  });
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('setup-code prints a code under local sign-in', async () => {
+    const code = await runAuthSetupCode({ json: false });
+
+    expect(code).toBe(0);
+    expect(out).toMatch(/[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/);
+    expect(out).toContain('valid for 30 minutes');
+    expect(err).toBe('');
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('setup-code prints the code as JSON with --json', async () => {
+    const code = await runAuthSetupCode({ json: true });
+
+    expect(code).toBe(0);
+    expect(JSON.parse(out)).toEqual({ setupCode: 'ABCD-EFGH-JK23', validForMinutes: 30 });
+  });
+
+  it('setup-code exits 1 when an administrator exists', async () => {
+    localSignIn.setupRequired.mockResolvedValue(false);
+
+    const code = await runAuthSetupCode({ json: false });
+
+    expect(code).toBe(1);
+    expect(err).toBe('an administrator already exists\n');
+    expect(out).toBe('');
+    expect(localSignIn.createSetupCode).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+  });
+
+  it('setup-code exits 1 when local sign-in is off', async () => {
+    mocks.createAppContext.mockResolvedValue({ close });
+
+    const code = await runAuthSetupCode({ json: false });
+
+    expect(code).toBe(1);
+    expect(err).toBe('local sign-in is not enabled\n');
+    expect(out).toBe('');
+  });
+
+  it('setup-code passes any other error up for the caller to redact', async () => {
+    localSignIn.createSetupCode.mockRejectedValue(new Error('database unavailable'));
+
+    await expect(runAuthSetupCode({ json: false })).rejects.toThrow('database unavailable');
+    expect(close).toHaveBeenCalled();
+  });
+});
 
 describe('auth rebind-issuer', () => {
   let out: string;

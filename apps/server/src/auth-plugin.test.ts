@@ -245,3 +245,74 @@ describe('registerAuth', () => {
     expect(second.json().user.capabilities).toEqual(['reports.manage']); // unaffected by the new token roles
   });
 });
+
+describe('registerAuth with local sign-in', () => {
+  const SIGN_IN_PATHS = ['/api/auth/login', '/api/auth/refresh', '/api/auth/logout', '/api/auth/setup'];
+
+  async function withProbes(c: AppContext) {
+    const app = await appWith(c);
+    for (const url of [...SIGN_IN_PATHS, '/api/auth/change-password', '/api/auth/change-password/x', '/api/auth/change-passwordx']) {
+      app.post(url, async (req) => ({ user: req.user ?? null, sessionId: req.sessionId ?? null }));
+    }
+    return app;
+  }
+
+  it('lets the four sign-in routes through with no token under local sign-in', async () => {
+    const c = ctx({ bypass: false });
+    (c as { localSignIn?: unknown }).localSignIn = {};
+    const app = await withProbes(c);
+    for (const url of SIGN_IN_PATHS) {
+      const res = await app.inject({ method: 'POST', url });
+      expect(res.statusCode, url).toBe(200);
+      expect(res.json().user).toBeNull();
+    }
+    const gated = await app.inject({ method: 'POST', url: '/api/auth/change-password' });
+    expect(gated.statusCode).toBe(401);
+  });
+
+  it('keeps the sign-in paths gated without local sign-in', async () => {
+    const app = await withProbes(ctx({ bypass: false }));
+    for (const url of SIGN_IN_PATHS) {
+      expect((await app.inject({ method: 'POST', url })).statusCode, url).toBe(401);
+    }
+  });
+
+  const local = (c: AppContext): AppContext => Object.assign(c, { localSignIn: {} });
+
+  it('lets a must-change token reach only the exact change-password path', async () => {
+    const app = await withProbes(local(ctx({ verify: async () => ({ sub: 's1', sid: 'sess-1', pwd_change: true }) })));
+    const headers = { authorization: 'Bearer good' };
+    const ok = await app.inject({ method: 'POST', url: '/api/auth/change-password', headers });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().user.username).toBe('ada');
+    for (const url of ['/api/probe', '/api/auth/change-password/x', '/api/auth/change-passwordx']) {
+      const res = await app.inject({ method: url === '/api/probe' ? 'GET' : 'POST', url, headers });
+      expect(res.statusCode, url).toBe(403);
+      expect(res.json()).toEqual({ error: 'password_change_required' });
+    }
+    const query = await app.inject({ method: 'POST', url: '/api/auth/change-password?x=1', headers });
+    expect(query.statusCode).toBe(200);
+  });
+
+  it('ignores pwd_change unless it is exactly true', async () => {
+    const app = await appWith(local(ctx({ verify: async () => ({ sub: 's1', pwd_change: 'true' }) })));
+    const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('ignores pwd_change without local sign-in', async () => {
+    const app = await appWith(ctx({ verify: async () => ({ sub: 's1', pwd_change: true }) }));
+    const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.username).toBe('ada');
+  });
+
+  it('keeps the session ID from a string sid claim only', async () => {
+    const withSid = await withProbes(ctx({ verify: async () => ({ sub: 's1', sid: 'sess-1' }) }));
+    const a = await withSid.inject({ method: 'POST', url: '/api/auth/change-password', headers: { authorization: 'Bearer good' } });
+    expect(a.json().sessionId).toBe('sess-1');
+    const numeric = await withProbes(ctx({ verify: async () => ({ sub: 's1', sid: 42 }) }));
+    const b = await numeric.inject({ method: 'POST', url: '/api/auth/change-password', headers: { authorization: 'Bearer good' } });
+    expect(b.json().sessionId).toBeNull();
+  });
+});

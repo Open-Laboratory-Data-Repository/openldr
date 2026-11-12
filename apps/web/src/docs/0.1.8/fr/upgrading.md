@@ -198,6 +198,16 @@ Remplacez OLD_KEY, OLD_SECRET et SOURCE_BUCKET. Ces secrets apparaissent dans ar
 
 ![Copier et vérifier les objets.](guide:operator-upgrade-storage-copy)
 
+## Installations qui utilisent Keycloak
+
+Faites-le avant de démarrer le nouveau fichier compose. Si le service `keycloak` du `docker-compose.yml` vers lequel vous passez a une ligne `profiles`, ajoutez cette ligne au fichier `.env` de l'installation :
+
+```sh
+COMPOSE_PROFILES=keycloak
+```
+
+Sans elle, Keycloak ne démarre pas et personne ne peut se connecter. Si `.env` a déjà une ligne `COMPOSE_PROFILES`, ajoutez-y `keycloak` après une virgule. Relancer l'installateur en une ligne ajoute la ligne pour vous. Une installation en connexion locale n'a rien à faire ici.
+
 ## Vérifier avant de reprendre le trafic
 
 Démarrez la nouvelle API seulement après migration et copie réussies. Si le trafic avait repris, réconciliez livraisons et effets externes avant une restauration ancienne.

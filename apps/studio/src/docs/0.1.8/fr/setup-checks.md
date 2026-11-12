@@ -136,6 +136,8 @@ Le rapport décrit les vérifications au moment de leur exécution. All checks p
 
 **Un avertissement indique que l'authentification est désactivée.** Désactivez le contournement d'authentification de développement dans la configuration serveur avant toute utilisation réelle.
 
+**La connexion des utilisateurs avertit qu'aucun administrateur n'existe.** L'installation utilise la connexion propre à OpenLDR, et personne n'a terminé la configuration. `openldr doctor` affiche `No administrator exists yet. Run "openldr auth setup-code", then open studio to create one.` Jusque-là, Studio affiche sa page **Créer l'administrateur**, et non cette page. Voir [Connexion et mots de passe](/docs/sign-in).
+
 **Une page liée est inaccessible.** Demandez à un administrateur ayant la permission de modifier ce paramètre.
 
 ## Guides associés
