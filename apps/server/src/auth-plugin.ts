@@ -125,8 +125,9 @@ export function registerAuth(app: FastifyInstance<any, any, any, any>, ctx: AppC
       return reply.send({ error: 'invalid token' });
     }
 
-    // Only local sign-in issues `pwd_change`. Such a token works on change-password alone.
-    if ((claims as { pwd_change?: unknown }).pwd_change === true && path !== CHANGE_PASSWORD_PATH) {
+    // Only local sign-in issues `pwd_change`. Such a token works on change-password alone. Other
+    // modes have no change-password route, so a claim of that name from them is ignored.
+    if (ctx.localSignIn && (claims as { pwd_change?: unknown }).pwd_change === true && path !== CHANGE_PASSWORD_PATH) {
       reply.code(403);
       return reply.send({ error: 'password_change_required' });
     }

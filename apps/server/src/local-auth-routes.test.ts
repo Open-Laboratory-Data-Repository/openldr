@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { registerAuth } from './auth-plugin';
-import { createAttemptLimiter, registerLocalAuthRoutes } from './local-auth-routes';
+import { createAttemptLimiter, networkKey, registerLocalAuthRoutes } from './local-auth-routes';
 
 type LocalSignIn = NonNullable<AppContext['localSignIn']>;
 type LoginResult = Awaited<ReturnType<LocalSignIn['login']>>;
@@ -406,27 +406,101 @@ describe('without local sign-in', () => {
   });
 });
 
+describe('sign-in limit per network', () => {
+  async function exhaust(app: ReturnType<typeof appFor>, remoteAddress: string) {
+    for (let i = 0; i < 30; i++) {
+      await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'ada', password: 'x' }, remoteAddress });
+    }
+  }
+  const attempt = (app: ReturnType<typeof appFor>, remoteAddress: string) =>
+    app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'ada', password: 'x' }, remoteAddress });
+
+  function freshApp() {
+    const fake = fakeSignIn();
+    fake.state.loginResult = { ok: false, reason: 'invalid' };
+    return appFor(fakeCtx({ localSignIn: fake.signIn }).ctx);
+  }
+
+  it('gives two addresses in one IPv6 /64 one budget', async () => {
+    const app = freshApp();
+    await exhaust(app, '2001:db8:1:2::1');
+    expect((await attempt(app, '2001:db8:1:2:ffff:ffff:ffff:ffff')).statusCode).toBe(429);
+  });
+
+  it('gives addresses in different /64s separate budgets', async () => {
+    const app = freshApp();
+    await exhaust(app, '2001:db8:1:2::1');
+    expect((await attempt(app, '2001:db8:1:3::1')).statusCode).toBe(401);
+  });
+
+  it('gives ::ffff:1.2.3.4 and 1.2.3.4 one budget', async () => {
+    const app = freshApp();
+    await exhaust(app, '::ffff:1.2.3.4');
+    expect((await attempt(app, '1.2.3.4')).statusCode).toBe(429);
+    expect((await attempt(app, '1.2.3.5')).statusCode).toBe(401);
+  });
+});
+
+describe('networkKey', () => {
+  it('keys IPv4 and IPv4-mapped IPv6 by the IPv4 address', () => {
+    expect(networkKey('1.2.3.4')).toBe('1.2.3.4');
+    expect(networkKey('::ffff:1.2.3.4')).toBe('1.2.3.4');
+    expect(networkKey('::ffff:0102:0304')).toBe('1.2.3.4');
+  });
+
+  it('keys IPv6 by its /64, however it is written', () => {
+    expect(networkKey('2001:db8:1:2::1')).toBe('2001:db8:1:2::/64');
+    expect(networkKey('2001:0db8:0001:0002:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2::/64');
+    expect(networkKey('2001:DB8:1:2::9')).toBe('2001:db8:1:2::/64');
+    expect(networkKey('fe80::1%eth0')).toBe('fe80:0:0:0::/64');
+    expect(networkKey('::1')).toBe('0:0:0:0::/64');
+  });
+
+  it('keys an address that does not parse as itself', () => {
+    expect(networkKey('not-an-ip')).toBe('not-an-ip');
+    expect(networkKey('')).toBe('');
+  });
+});
+
 describe('createAttemptLimiter', () => {
-  it('allows the limit in a window, then refuses until the window ends', () => {
-    let t = 0;
-    const allow = createAttemptLimiter({ limit: 3, windowMs: 1000, now: () => t });
-    expect([allow('a'), allow('a'), allow('a'), allow('a')]).toEqual([true, true, true, false]);
-    expect(allow('b')).toBe(true);
-    t = 999;
+  it('refuses the 31st attempt in a minute from one key', () => {
+    const allow = createAttemptLimiter({ now: () => 0 });
+    for (let i = 0; i < 30; i++) expect(allow('a')).toBe(true);
     expect(allow('a')).toBe(false);
-    t = 1000;
+    expect(allow('b')).toBe(true);
+  });
+
+  it("resets a key's window after 60 seconds", () => {
+    let t = 0;
+    const allow = createAttemptLimiter({ now: () => t });
+    for (let i = 0; i < 30; i++) allow('a');
+    t = 59_999;
+    expect(allow('a')).toBe(false);
+    t = 60_000;
     expect(allow('a')).toBe(true);
   });
 
-  it('drops ended windows and refuses new addresses once full', () => {
-    let t = 0;
-    const allow = createAttemptLimiter({ limit: 5, windowMs: 1000, maxEntries: 2, now: () => t });
+  it('accepts a new key when full and evicts the oldest key', () => {
+    const allow = createAttemptLimiter({ limit: 1, maxEntries: 2, now: () => 0 });
     expect(allow('a')).toBe(true);
     expect(allow('b')).toBe(true);
+    expect(allow('c')).toBe(true);
+    // 'a' was evicted, so it starts a new window. 'c' is still tracked and stays refused.
     expect(allow('c')).toBe(false);
     expect(allow('a')).toBe(true);
+    // Adding 'a' back evicted 'b', the oldest left, so 'b' starts again too.
+    expect(allow('b')).toBe(true);
+  });
+
+  it('moves a key with an ended window to the back of the eviction order', () => {
+    let t = 0;
+    const allow = createAttemptLimiter({ limit: 1, windowMs: 1000, maxEntries: 2, now: () => t });
+    allow('a');
+    t = 500;
+    allow('b');
     t = 1000;
-    expect(allow('c')).toBe(true);
-    expect(allow('d')).toBe(true);
+    expect(allow('a')).toBe(true); // a's window ended: new window, now newest
+    expect(allow('c')).toBe(true); // full: evicts b, the oldest
+    expect(allow('a')).toBe(false); // a is still tracked
   });
 });

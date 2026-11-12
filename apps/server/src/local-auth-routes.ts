@@ -4,6 +4,7 @@
 //
 // No audit row or log line here holds a password, a setup code, a cookie value or the identifier
 // typed at sign-in. People type passwords into the username field.
+import { isIPv4, isIPv6 } from 'node:net';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { safeRecord } from '@openldr/audit';
@@ -14,27 +15,69 @@ import { clearSessionCookie, readSessionCookie, setSessionCookie } from './sessi
 export const SIGN_IN_ATTEMPTS_PER_WINDOW = 30;
 export const SIGN_IN_WINDOW_MS = 60_000;
 
+/** The eight 16-bit groups of a valid IPv6 address, or null. A dotted IPv4 tail becomes two groups. */
+function ipv6Groups(address: string): number[] | null {
+  let s = address.split('%')[0] ?? '';
+  const lastColon = s.lastIndexOf(':');
+  const tail = s.slice(lastColon + 1);
+  if (tail.includes('.')) {
+    if (!isIPv4(tail)) return null;
+    const [a, b, c, d] = tail.split('.').map(Number) as [number, number, number, number];
+    s = `${s.slice(0, lastColon + 1)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = s.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const rest = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const missing = 8 - head.length - rest.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 0) return null;
+  const groups = [...head, ...Array<string>(missing).fill('0'), ...rest].map((g) => parseInt(g, 16));
+  return groups.length === 8 && groups.every((g) => Number.isInteger(g) && g >= 0 && g <= 0xffff) ? groups : null;
+}
+
 /**
- * A fixed-window counter per key. Returns true when the attempt is allowed. Ended windows are
- * dropped on every call. When the map is full a new key is refused, so a flood from many
- * addresses cannot grow memory and cannot get past the limit.
+ * The limiter key for an address. IPv4 and IPv4-mapped IPv6 (`::ffff:1.2.3.4`) key by the IPv4
+ * address. Other IPv6 keys by its /64, because one host usually owns a whole /64 and could
+ * otherwise rotate addresses to skip the limit. Anything that does not parse keys as itself.
+ */
+export function networkKey(address: string): string {
+  if (isIPv4(address)) return address;
+  if (!isIPv6(address)) return address;
+  const g = ipv6Groups(address);
+  if (!g) return address;
+  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) {
+    return `${g[6]! >> 8}.${g[6]! & 0xff}.${g[7]! >> 8}.${g[7]! & 0xff}`;
+  }
+  return `${g.slice(0, 4).map((x) => x.toString(16)).join(':')}::/64`;
+}
+
+/**
+ * A fixed-window counter per key. Returns true when the attempt is allowed. A full map never
+ * refuses anyone: a new key evicts the oldest one. Refusing on a full map would let one attacker
+ * who fills it block every new sign-in. The four-hash cap and the per-account lock already bound
+ * CPU use and password guessing, so failing open here costs less than that.
  */
 export function createAttemptLimiter(opts: { limit?: number; windowMs?: number; maxEntries?: number; now?: () => number } = {}) {
   const limit = opts.limit ?? SIGN_IN_ATTEMPTS_PER_WINDOW;
   const windowMs = opts.windowMs ?? SIGN_IN_WINDOW_MS;
   const maxEntries = opts.maxEntries ?? 10_000;
   const now = opts.now ?? Date.now;
+  // A Map keeps insertion order, so its first key is the oldest window.
   const windows = new Map<string, { count: number; endsAt: number }>();
   return function allow(key: string): boolean {
     const t = now();
-    for (const [k, w] of windows) if (w.endsAt <= t) windows.delete(k);
     const current = windows.get(key);
-    if (current) {
+    if (current && current.endsAt > t) {
       if (current.count >= limit) return false;
       current.count += 1;
       return true;
     }
-    if (windows.size >= maxEntries) return false;
+    // An ended window is deleted, so the new one goes to the end of the order.
+    if (current) windows.delete(key);
+    if (windows.size >= maxEntries) {
+      const oldest = windows.keys().next().value;
+      if (oldest !== undefined) windows.delete(oldest);
+    }
     windows.set(key, { count: 1, endsAt: t + windowMs });
     return true;
   };
@@ -90,8 +133,9 @@ export function registerLocalAuthRoutes(app: FastifyInstance<any, any, any, any>
   const signIn = ctx.localSignIn;
   if (!signIn) return;
 
-  // One limiter for login and setup, so both share the same budget per address.
-  const allowAttempt = createAttemptLimiter();
+  // One limiter for login and setup, so both share the same budget per network.
+  const limiter = createAttemptLimiter();
+  const allowAttempt = (ip: string) => limiter(networkKey(ip));
   const failedThrottle = createAuthFailedThrottle();
 
   /** The account's own username for the actor name. Never the typed identifier. */

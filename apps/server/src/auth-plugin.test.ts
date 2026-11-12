@@ -277,8 +277,10 @@ describe('registerAuth with local sign-in', () => {
     }
   });
 
+  const local = (c: AppContext): AppContext => Object.assign(c, { localSignIn: {} });
+
   it('lets a must-change token reach only the exact change-password path', async () => {
-    const app = await withProbes(ctx({ verify: async () => ({ sub: 's1', sid: 'sess-1', pwd_change: true }) }));
+    const app = await withProbes(local(ctx({ verify: async () => ({ sub: 's1', sid: 'sess-1', pwd_change: true }) })));
     const headers = { authorization: 'Bearer good' };
     const ok = await app.inject({ method: 'POST', url: '/api/auth/change-password', headers });
     expect(ok.statusCode).toBe(200);
@@ -293,9 +295,16 @@ describe('registerAuth with local sign-in', () => {
   });
 
   it('ignores pwd_change unless it is exactly true', async () => {
-    const app = await appWith(ctx({ verify: async () => ({ sub: 's1', pwd_change: 'true' }) }));
+    const app = await appWith(local(ctx({ verify: async () => ({ sub: 's1', pwd_change: 'true' }) })));
     const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
     expect(res.statusCode).toBe(200);
+  });
+
+  it('ignores pwd_change without local sign-in', async () => {
+    const app = await appWith(ctx({ verify: async () => ({ sub: 's1', pwd_change: true }) }));
+    const res = await app.inject({ method: 'GET', url: '/api/probe', headers: { authorization: 'Bearer good' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().user.username).toBe('ada');
   });
 
   it('keeps the session ID from a string sid claim only', async () => {
