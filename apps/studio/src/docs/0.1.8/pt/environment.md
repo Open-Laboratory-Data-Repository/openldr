@@ -77,6 +77,10 @@ O analisador da aplicação e o instalador têm predefinições diferentes. O an
 | `NODE_ENV` | Analisador: development | Defina production nos serviços instalados. |
 | `PORT` | 3000 | Porta de escuta interna da API. |
 | `LOG_LEVEL` | info | Nível dos registos do servidor. |
+| `LISTEN_HOST` | 0.0.0.0 | Endereço em que a API escuta. 0.0.0.0 significa todas as interfaces de rede. |
+| `ROOT_REDIRECT_TO_STUDIO` | false | Se true, o servidor responde a / com um redirecionamento para /studio/. Deixe false quando o site público de apresentação serve /. |
+| `LOG_FILE` | Não definido | Ficheiro onde o servidor escreve os registos, em vez da saída padrão. As linhas são acrescentadas no fim, e uma pasta em falta é criada. Se o ficheiro não puder ser aberto, o servidor não arranca. |
+| `OPENLDR_SKIP_ENV_FILE` | Não definido | Defina `true` para que o servidor e a CLI não leiam um ficheiro `.env`. Todas as definições têm então de vir do ambiente. |
 | `TRUST_PROXY` | Não definido | Proxies de confiança para atribuir o IP do cliente. Use apenas a cadeia real de proxies de confiança. |
 | `OPENLDR_VERSION` | Etiqueta da imagem instalada | Fixe a versão aprovada para as atualizações. |
 | `SERVER_NAME`, `PUBLIC_ORIGIN` | Valores da instalação | Nome público do servidor e origem externa completa. |

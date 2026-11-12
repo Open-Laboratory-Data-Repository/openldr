@@ -183,8 +183,8 @@ async function main(): Promise<void> {
   process.on('SIGTERM', close);
   process.on('SIGINT', close);
 
-  // Bind to all interfaces; the reverse proxy owns the external port (P1-NFR-7).
-  await app.listen({ port: cfg.PORT, host: '0.0.0.0' });
+  // LISTEN_HOST defaults to all interfaces; the reverse proxy owns the external port (P1-NFR-7).
+  await app.listen({ port: cfg.PORT, host: cfg.LISTEN_HOST });
 }
 
 main().catch((err) => {

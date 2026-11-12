@@ -26,8 +26,18 @@ function findEnvPath(): string | undefined {
   return undefined;
 }
 
+/**
+ * OPENLDR_SKIP_ENV_FILE=true (or 1) stops loadConfig() reading a `.env` file, so every setting
+ * must come from the environment. It is read here, before the schema, because the file load
+ * happens before parsing.
+ */
+function skipEnvFile(env: NodeJS.ProcessEnv): boolean {
+  const value = env.OPENLDR_SKIP_ENV_FILE;
+  return value === 'true' || value === '1';
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  if (env === process.env && !dotenvLoaded) {
+  if (env === process.env && !dotenvLoaded && !skipEnvFile(env)) {
     const envPath = findEnvPath();
     loadDotenv(envPath ? { path: envPath } : undefined);
     dotenvLoaded = true;

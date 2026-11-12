@@ -77,6 +77,10 @@ La référence décrit l’installation fournie lorsque précisé. Les valeurs d
 | `NODE_ENV` | `production` | Mode d'exécution. Gardez `production` pour les déploiements. |
 | `PORT` | `3000` | Port interne de l'API derrière la passerelle. |
 | `LOG_LEVEL` | `info` | Niveau de détail des journaux (`debug`, `info`, `warn`, `error`). |
+| `LISTEN_HOST` | `0.0.0.0` | Adresse d'écoute de l'API. `0.0.0.0` signifie toutes les interfaces réseau. `127.0.0.1` n'accepte que les connexions de cette machine. |
+| `ROOT_REDIRECT_TO_STUDIO` | `false` | Si `true`, le serveur répond à `/` par une redirection vers `/studio/`. Laissez `false` quand le site d'accueil sert `/`. |
+| `LOG_FILE` | non définie | Fichier où le serveur écrit ses journaux, à la place de la sortie standard. Les lignes sont ajoutées à la fin, et un dossier manquant est créé. Si le fichier ne peut pas être ouvert, le serveur ne démarre pas. |
+| `OPENLDR_SKIP_ENV_FILE` | non définie | Mettez `true` pour que le serveur et la CLI ne lisent pas de fichier `.env`. Chaque réglage doit alors venir de l'environnement. |
 | `OPENLDR_VERSION` | `latest` | Étiquette d'image que la pile télécharge et exécute. |
 | `TRUST_PROXY` | non définie | Nombre de proxys devant l'API auxquels faire confiance pour l'IP du client. Mettez `1` derrière la passerelle fournie, pour que les entrées d'audit montrent la vraie adresse du client. Ne la définissez que si un proxy de confiance se trouve vraiment devant l'API. Sinon, un client peut falsifier sa propre IP. |
 

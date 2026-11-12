@@ -77,6 +77,10 @@ The reference below describes the installed stack where stated. Code-level defau
 | `NODE_ENV` | `production` | Runtime mode. Keep `production` for deployments. |
 | `PORT` | `3000` | Internal API port behind the gateway. |
 | `LOG_LEVEL` | `info` | Log verbosity (`debug`, `info`, `warn`, `error`). |
+| `LISTEN_HOST` | `0.0.0.0` | Address the API listens on. `0.0.0.0` means every network interface. `127.0.0.1` accepts connections from this machine only. |
+| `ROOT_REDIRECT_TO_STUDIO` | `false` | When `true`, the server answers `/` with a redirect to `/studio/`. Leave it `false` when the landing site serves `/`. |
+| `LOG_FILE` | unset | File the server writes its logs to, instead of standard output. Lines are added to the end, and a missing folder is created. If the file cannot be opened, the server does not start. |
+| `OPENLDR_SKIP_ENV_FILE` | unset | Set to `true` to stop the server and the CLI reading a `.env` file. Every setting must then come from the environment. |
 | `OPENLDR_VERSION` | `latest` | Image tag the stack pulls and runs. |
 | `TRUST_PROXY` | unset | How many proxies in front of the API to trust for the client IP. Set `1` behind the bundled gateway, so audit entries show the real client address. Only set it when a trusted proxy really fronts the API. Otherwise a client can fake its own IP. |
 

@@ -77,6 +77,10 @@ A referência descreve a instalação fornecida quando indicado. Valores no cód
 | `NODE_ENV` | `production` | Modo de execução. Mantenha `production` numa instalação. |
 | `PORT` | `3000` | Porta interna da API atrás do gateway. |
 | `LOG_LEVEL` | `info` | Nível de detalhe dos registos (`debug`, `info`, `warn`, `error`). |
+| `LISTEN_HOST` | `0.0.0.0` | Endereço em que a API escuta. `0.0.0.0` significa todas as interfaces de rede. `127.0.0.1` aceita apenas ligações desta máquina. |
+| `ROOT_REDIRECT_TO_STUDIO` | `false` | Se `true`, o servidor responde a `/` com um redirecionamento para `/studio/`. Deixe `false` quando o site de apresentação serve `/`. |
+| `LOG_FILE` | não definido | Ficheiro onde o servidor escreve os registos, em vez da saída padrão. As linhas são acrescentadas no fim, e uma pasta em falta é criada. Se o ficheiro não puder ser aberto, o servidor não arranca. |
+| `OPENLDR_SKIP_ENV_FILE` | não definido | Defina `true` para que o servidor e a CLI não leiam um ficheiro `.env`. Todas as definições têm então de vir do ambiente. |
 | `OPENLDR_VERSION` | `latest` | Etiqueta da imagem que a pilha descarrega e executa. |
 | `TRUST_PROXY` | não definido | Quantos proxies à frente da API são de confiança para obter o IP do cliente. Use `1` atrás do gateway incluído, para que a auditoria mostre o endereço real do cliente. Defina-o apenas quando um proxy de confiança estiver mesmo à frente da API. Caso contrário, um cliente pode falsificar o próprio IP. |
 

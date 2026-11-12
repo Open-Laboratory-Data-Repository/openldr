@@ -183,3 +183,25 @@ describe('the public development secrets key', () => {
     expect(ConfigSchema.parse({ ...base, NODE_ENV: 'production', AUTH_ADAPTER: 'local', SECRETS_ENCRYPTION_KEY: key }).SECRETS_ENCRYPTION_KEY).toBe(key);
   });
 });
+
+describe('listen address, root redirect and log file', () => {
+  it('defaults LISTEN_HOST to all interfaces and the redirect to off', () => {
+    const cfg = ConfigSchema.parse(base);
+    expect(cfg.LISTEN_HOST).toBe('0.0.0.0');
+    expect(cfg.ROOT_REDIRECT_TO_STUDIO).toBe(false);
+    expect(cfg.LOG_FILE).toBeUndefined();
+  });
+  it('accepts a LISTEN_HOST override', () => {
+    expect(ConfigSchema.parse({ ...base, LISTEN_HOST: '127.0.0.1' }).LISTEN_HOST).toBe('127.0.0.1');
+  });
+  it('refuses an empty LISTEN_HOST', () => {
+    expect(ConfigSchema.safeParse({ ...base, LISTEN_HOST: '' }).success).toBe(false);
+  });
+  it('parses ROOT_REDIRECT_TO_STUDIO as a string boolean', () => {
+    expect(ConfigSchema.parse({ ...base, ROOT_REDIRECT_TO_STUDIO: 'true' }).ROOT_REDIRECT_TO_STUDIO).toBe(true);
+    expect(ConfigSchema.parse({ ...base, ROOT_REDIRECT_TO_STUDIO: '0' }).ROOT_REDIRECT_TO_STUDIO).toBe(false);
+  });
+  it('accepts a LOG_FILE path', () => {
+    expect(ConfigSchema.parse({ ...base, LOG_FILE: '/var/log/openldr/server.log' }).LOG_FILE).toBe('/var/log/openldr/server.log');
+  });
+});

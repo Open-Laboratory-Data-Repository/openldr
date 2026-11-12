@@ -20,7 +20,14 @@ export const ConfigSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
+    // Address the HTTP server binds to. The default is every interface.
+    LISTEN_HOST: z.string().min(1).default('0.0.0.0'),
+    // When on, GET / answers 302 to /studio/. Off by default, so / stays a 404 for the landing site.
+    ROOT_REDIRECT_TO_STUDIO: envBoolean(false),
     LOG_LEVEL: z.string().default('info'),
+    // When set, logs go to this file (append, parent folder created) instead of standard output.
+    // createLogger in @openldr/core reads it from process.env. Empty counts as unset.
+    LOG_FILE: z.string().optional(),
 
     // Reverse-proxy trust for `req.ip` / X-Forwarded-For (Fastify `trustProxy`). Unset = OFF: don't
     // trust XFF, so req.ip is the direct socket peer — correct for dev/direct and prevents a client

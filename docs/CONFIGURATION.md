@@ -53,6 +53,10 @@ Keycloak is proxied by nginx at `/auth`. The application accesses it two ways:
 | `NODE_ENV` | `development\|test\|production` | `development` | Controls production safeguards, especially auth bypass. |
 | `PORT` | positive integer | `3000` | HTTP server port. |
 | `LOG_LEVEL` | string | `info` | Logger verbosity. |
+| `LISTEN_HOST` | host or IP address | `0.0.0.0` | Address the HTTP server binds to. An empty value is refused. |
+| `ROOT_REDIRECT_TO_STUDIO` | boolean string | `false` | When `true`, `GET /` answers 302 with `Location: /studio/`. When `false`, `/` stays a 404 so the landing site can own it. |
+| `LOG_FILE` | path | unset | Write logs to this file instead of standard output, and instead of standard error for the CLI. Writes are synchronous and append to the file. A missing parent folder is created. Empty counts as unset. If the file cannot be opened, the logger throws an error naming the path. Read by `packages/core/src/logger.ts`. |
+| `OPENLDR_SKIP_ENV_FILE` | `true`, `1` or unset | unset | Set to `true` to stop the server and the CLI reading a `.env` file. Every setting must then come from the environment. Read by `packages/config/src/load.ts` before the schema runs. |
 | `INTERNAL_DATABASE_URL` | URL | required | Operational PostgreSQL database for users, audit, eventing, plugins, workflows, forms, marketplace, and schedules. |
 | `TARGET_STORE_ADAPTER` | `pg\|mssql\|mysql` | `pg` | Analytics warehouse adapter. |
 | `TARGET_DATABASE_URL` | URL | required when `TARGET_STORE_ADAPTER=pg` | PostgreSQL analytics warehouse. |

@@ -77,6 +77,10 @@ L'analyseur de l'application et l'installateur ont des valeurs par défaut diff�
 | `NODE_ENV` | Analyseur : development | Utilisez production pour les services déployés. |
 | `PORT` | 3000 | Port d'écoute interne de l'API. |
 | `LOG_LEVEL` | info | Niveau des journaux du serveur. |
+| `LISTEN_HOST` | 0.0.0.0 | Adresse d'écoute de l'API. 0.0.0.0 signifie toutes les interfaces réseau. |
+| `ROOT_REDIRECT_TO_STUDIO` | false | Si true, le serveur répond à / par une redirection vers /studio/. Laissez false quand le site public d'accueil sert /. |
+| `LOG_FILE` | Non défini | Fichier où le serveur écrit ses journaux, à la place de la sortie standard. Les lignes sont ajoutées à la fin, et un dossier manquant est créé. Si le fichier ne peut pas être ouvert, le serveur ne démarre pas. |
+| `OPENLDR_SKIP_ENV_FILE` | Non défini | Mettez `true` pour que le serveur et la CLI ne lisent pas de fichier `.env`. Chaque réglage doit alors venir de l'environnement. |
 | `TRUST_PROXY` | Non défini | Proxys de confiance pour attribuer l'IP du client. Utilisez uniquement la chaîne de proxys réellement fiable. |
 | `OPENLDR_VERSION` | Étiquette d'image du déploiement | Fixez la version approuvée pour les mises à niveau. |
 | `SERVER_NAME`, `PUBLIC_ORIGIN` | Valeurs du déploiement | Nom d'hôte public et origine externe complète. |

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Writable } from 'node:stream';
 import { pino } from 'pino';
 import { redactPaths, redactUrl } from './logger';
@@ -65,5 +65,117 @@ describe('log destination', () => {
     sendLogsToStderr();
     expect(logDestinationFd()).toBe(2);
     expect(fdOf(createLogger())).toBe(2);
+  });
+});
+
+describe('LOG_FILE', () => {
+  type Stream = { fd?: number; file?: string | null; destroy?: () => void };
+  let dir: string;
+  let saved: string | undefined;
+  const opened: Stream[] = [];
+
+  beforeEach(async () => {
+    const { mkdtempSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    dir = mkdtempSync(join(tmpdir(), 'openldr-log-file-'));
+    saved = process.env.LOG_FILE;
+    delete process.env.LOG_FILE;
+    // Fresh module each test, so one test's sendLogsToStderr() does not leak into the next.
+    vi.resetModules();
+  });
+
+  afterEach(async () => {
+    const { rmSync } = await import('node:fs');
+    for (const s of opened.splice(0)) s.destroy?.();
+    if (saved === undefined) delete process.env.LOG_FILE;
+    else process.env.LOG_FILE = saved;
+    rmSync(dir, { recursive: true, force: true });
+    vi.resetModules();
+  });
+
+  async function load() {
+    const mod = await import('./logger');
+    const { symbols } = await import('pino');
+    const streamOf = (l: unknown): Stream => {
+      const s = (l as Record<symbol, Stream>)[symbols.streamSym];
+      opened.push(s);
+      return s;
+    };
+    return { ...mod, streamOf };
+  }
+
+  it('writes log lines to LOG_FILE and nothing to standard output', async () => {
+    const { readFileSync, writeFileSync, mkdirSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const file = join(dir, 'logs', 'server.log');
+    mkdirSync(join(dir, 'logs'));
+    writeFileSync(file, 'earlier line\n');
+    process.env.LOG_FILE = file;
+    const { createLogger, streamOf } = await load();
+    const logger = createLogger();
+    logger.info('hello');
+    const stream = streamOf(logger);
+    expect(stream.file).toBe(file);
+    expect(stream.fd).not.toBe(1);
+    expect(stream.fd).not.toBe(2);
+    // Written synchronously, in append mode: the earlier line is kept and the new one is there now.
+    const text = readFileSync(file, 'utf8');
+    expect(text.startsWith('earlier line\n')).toBe(true);
+    expect(text).toContain('"msg":"hello"');
+  });
+
+  it('creates the parent folder of LOG_FILE', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const file = join(dir, 'a', 'b', 'server.log');
+    process.env.LOG_FILE = file;
+    const { createLogger, streamOf } = await load();
+    const logger = createLogger();
+    logger.info('made the folder');
+    streamOf(logger);
+    expect(readFileSync(file, 'utf8')).toContain('made the folder');
+  });
+
+  it('writes to LOG_FILE and nothing to standard error after sendLogsToStderr()', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const file = join(dir, 'cli.log');
+    process.env.LOG_FILE = file;
+    const { createLogger, sendLogsToStderr, streamOf } = await load();
+    sendLogsToStderr();
+    const logger = createLogger();
+    logger.info('from the cli');
+    const stream = streamOf(logger);
+    expect(stream.file).toBe(file);
+    expect(stream.fd).not.toBe(1);
+    expect(stream.fd).not.toBe(2);
+    expect(readFileSync(file, 'utf8')).toContain('from the cli');
+  });
+
+  it('logs to standard output when LOG_FILE is unset', async () => {
+    const { createLogger, streamOf } = await load();
+    const stream = streamOf(createLogger());
+    expect(stream.fd).toBe(1);
+    expect(stream.file ?? null).toBeNull();
+  });
+
+  it('treats an empty LOG_FILE as unset', async () => {
+    process.env.LOG_FILE = '';
+    const { createLogger, streamOf } = await load();
+    const stream = streamOf(createLogger());
+    expect(stream.fd).toBe(1);
+  });
+
+  it('fails with the path when LOG_FILE cannot be opened', async () => {
+    const { writeFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    // The parent "folder" is a plain file, so neither the folder nor the log can be created.
+    const blocker = join(dir, 'not-a-folder');
+    writeFileSync(blocker, '');
+    const file = join(blocker, 'server.log');
+    process.env.LOG_FILE = file;
+    const { createLogger } = await load();
+    expect(() => createLogger()).toThrow(file);
   });
 });
