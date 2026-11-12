@@ -15,6 +15,24 @@ const NEW = 'another long passphrase';
 // Fast stand-in for scrypt: a 64-byte digest of salt and password.
 const fakeScrypt: ScryptFn = async (password, salt) => createHash('sha512').update(salt).update(password).digest();
 
+/**
+ * The same digest, slowed down: 30 ms for GOOD and 5 ms for anything else. The hasher runs four
+ * at a time, so in a burst the wrong guesses finish and set the lock while GOOD still hashes.
+ * `peak` is the most hashes that ran at once; `calls` counts hashes per password.
+ */
+function burstScrypt() {
+  const track = { inFlight: 0, peak: 0, calls: new Map<string, number>() };
+  const scrypt: ScryptFn = async (password, salt, keylen, opts) => {
+    track.inFlight++;
+    track.peak = Math.max(track.peak, track.inFlight);
+    track.calls.set(password, (track.calls.get(password) ?? 0) + 1);
+    await new Promise((r) => setTimeout(r, password === GOOD ? 30 : 5));
+    track.inFlight--;
+    return fakeScrypt(password, salt, keylen, opts);
+  };
+  return { scrypt, track };
+}
+
 let store: FakeStore;
 let users: FakeUsers;
 let roles: FakeRoles;
@@ -86,16 +104,7 @@ describe('login', () => {
   });
 
   it('does not let a right guess in a parallel burst get past the lock', async () => {
-    // The right guess hashes in 30 ms and the wrong ones in 5 ms. The hasher runs four at a
-    // time, so the five wrong guesses finish and set the lock while the right one still hashes.
-    const track = { inFlight: 0, peak: 0 };
-    const slowScrypt: ScryptFn = async (password, salt, keylen, opts) => {
-      track.inFlight++;
-      track.peak = Math.max(track.peak, track.inFlight);
-      await new Promise((r) => setTimeout(r, password === GOOD ? 30 : 5));
-      track.inFlight--;
-      return fakeScrypt(password, salt, keylen, opts);
-    };
+    const { scrypt: slowScrypt, track } = burstScrypt();
     const slowHasher = createPasswordHasher({ scrypt: slowScrypt });
     const burn = vi.spyOn(slowHasher, 'burn');
     const slowSvc = createLocalSignIn({ store, users, roles, hasher: slowHasher, key, now: clock.now });
@@ -364,6 +373,31 @@ describe('changePassword', () => {
     expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: NEW })).toBe('wrong_current');
     expect(verify).not.toHaveBeenCalled();
     expect(await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'locked', userId: adaId });
+    clock.advance(LOCK_MS + 1);
+    expect((await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).ok).toBe(true);
+  });
+
+  it('does not let a right current password in a parallel burst get past the lock', async () => {
+    const sessionId = (await login()).cookieValue.split('.')[0]!;
+    const before = (await store.getCredential(adaId))!.passwordHash;
+    const { scrypt: slowScrypt, track } = burstScrypt();
+    const slowSvc = createLocalSignIn({
+      store, users, roles, hasher: createPasswordHasher({ scrypt: slowScrypt }), key, now: clock.now,
+    });
+    const attempt = (currentPassword: string) =>
+      slowSvc.changePassword({ userId: adaId, sessionId, currentPassword, newPassword: NEW });
+
+    const [right, ...wrong] = await Promise.all([attempt(GOOD), ...Array.from({ length: 5 }, () => attempt('wrong wrong!'))]);
+
+    // Proof the six calls overlapped: all six reached the hash, and four hashes ran at once.
+    expect(track.calls.get(GOOD)).toBe(1);
+    expect(track.calls.get('wrong wrong!')).toBe(5);
+    expect(track.peak).toBe(4);
+    expect(right).toBe('wrong_current');
+    expect(wrong).toEqual(Array(5).fill('wrong_current'));
+    // The new password was never hashed or stored.
+    expect(track.calls.has(NEW)).toBe(false);
+    expect((await store.getCredential(adaId))!.passwordHash).toBe(before);
     clock.advance(LOCK_MS + 1);
     expect((await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).ok).toBe(true);
   });

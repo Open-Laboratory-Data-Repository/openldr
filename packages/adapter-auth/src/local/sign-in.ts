@@ -106,6 +106,14 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
     return user.status === 'active' && !(await users.isSubjectBlocked(user.id));
   }
 
+  /**
+   * Reads the lock again after a hash. A burst of requests can all pass the first lock check
+   * and then wait in the hash queue while another request in the burst sets the lock.
+   */
+  async function lockActiveNow(userId: string, now: Date): Promise<boolean> {
+    return isLocked((await store.getCredential(userId))?.lockedUntil, now);
+  }
+
   async function touchIfStale(session: LocalSession, now: Date): Promise<void> {
     if (now.getTime() - session.lastUsedAt.getTime() > TOUCH_AFTER_MS) await store.touchSession(session.id, now);
   }
@@ -170,10 +178,8 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
         return { ok: false, reason: 'locked', userId };
       }
       const passwordOk = await hasher.verify(input.password, credential.passwordHash);
-      // Read the lock again. A burst of requests can all pass the check above and then wait in
-      // the hash queue while another request in the burst sets the lock. Right and wrong
-      // passwords get the same answer here, so the reply does not reveal a right guess.
-      const lockedAfterVerify = isLocked((await store.getCredential(userId))?.lockedUntil, now);
+      // Right and wrong passwords get the same answer here, so the reply does not reveal a right guess.
+      const lockedAfterVerify = await lockActiveNow(userId, now);
       if (!passwordOk) {
         const { lockedUntil } = await store.recordFailure(userId, now, MAX_FAILURES, LOCK_MS);
         if (lockedAfterVerify) return { ok: false, reason: 'locked', userId };
@@ -217,10 +223,13 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       if (!credential || !user) return 'wrong_current';
       // The same lock as sign-in, so this route is not a second way to guess the password.
       if (isLocked(credential.lockedUntil, now)) return 'wrong_current';
-      if (!(await hasher.verify(input.currentPassword, credential.passwordHash))) {
+      const currentOk = await hasher.verify(input.currentPassword, credential.passwordHash);
+      const lockedAfterVerify = await lockActiveNow(input.userId, now);
+      if (!currentOk) {
         await store.recordFailure(input.userId, now, MAX_FAILURES, LOCK_MS);
         return 'wrong_current';
       }
+      if (lockedAfterVerify) return 'wrong_current';
       const rule = checkPasswordRules(input.newPassword, user.username);
       if (rule !== 'ok') return rule;
       await store.setPassword(input.userId, await hasher.hash(input.newPassword), false);
