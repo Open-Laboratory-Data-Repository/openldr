@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,6 +9,7 @@ import {
   isBindFailure,
   postgresUrls,
   readPostmasterPid,
+  startPostgres,
   stopLeftoverPostgres,
   type PostgresSettings,
 } from './postgres.js';
@@ -29,11 +30,15 @@ function writePid(clusterDir: string, pid: number, dataDir: string): void {
 
 const pidFile = (clusterDir: string) => join(clusterDir, 'postmaster.pid');
 
-/** A process that idles. `extra` goes after `--` on its command line; `argv0` replaces argv[0]. */
-function idleChild(extra: string[] = [], argv0?: string): ChildProcess {
+/**
+ * A process that idles. `extra` goes after `--` on its command line; `argv0` replaces argv[0];
+ * `cwd` is its working folder.
+ */
+function idleChild(extra: string[] = [], argv0?: string, cwd?: string): ChildProcess {
   const c = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', ...extra], {
     stdio: 'ignore',
     ...(argv0 ? { argv0 } : {}),
+    ...(cwd ? { cwd } : {}),
   });
   children.push(c);
   return c;
@@ -168,6 +173,43 @@ describe('stopLeftoverPostgres', () => {
     },
   );
 
+  it.runIf(process.platform === 'linux')(
+    'keeps the pid file and rejects when a postgres-named process works from this cluster with a relative -D',
+    async () => {
+      const d = tempDir();
+      // A real postmaster works from inside its data folder, so a relative -D resolves to
+      // <cluster>/<rel>. Only the working-folder test can see it is this cluster's Postgres.
+      const c = idleChild(['-D', 'relative-data'], '/opt/pg/bin/postgres', d);
+      writePid(d, c.pid!, d);
+      const err = await stopLeftoverPostgres({ clusterDir: d, settings: settings(await unusedPort()), waitMs: 2000 }).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err).toBeInstanceOf(Error);
+      expect(err!.message).toContain(String(c.pid));
+      expect(existsSync(pidFile(d))).toBe(true);
+      expect(alive(c.pid!)).toBe(true);
+    },
+  );
+
+  it.runIf(process.platform === 'linux')(
+    'guards the line-2 mismatch path too: a Postgres working from this cluster under an old folder name keeps its file',
+    async () => {
+      const d = tempDir();
+      const c = idleChild(['-D', 'relative-data'], '/opt/pg/bin/postgres', d);
+      // Line 2 holds the path the cluster had before it was renamed.
+      writePid(d, c.pid!, join(tempDir(), 'old-name'));
+      const err = await stopLeftoverPostgres({ clusterDir: d, settings: settings(await unusedPort()), waitMs: 2000 }).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+      expect(err).toBeInstanceOf(Error);
+      expect(err!.message).toContain(d);
+      expect(existsSync(pidFile(d))).toBe(true);
+      expect(alive(c.pid!)).toBe(true);
+    },
+  );
+
   it('reports stale and removes the pid file when the cluster folder it names no longer exists', async () => {
     const d = tempDir();
     const c = idleChild();
@@ -176,6 +218,37 @@ describe('stopLeftoverPostgres', () => {
     expect(await stopLeftoverPostgres({ clusterDir: d, settings: settings(await unusedPort()) })).toBe('stale');
     expect(alive(c.pid!)).toBe(true);
     expect(existsSync(pidFile(d))).toBe(false);
+  });
+});
+
+describe('cluster folder checks', () => {
+  // Both tests hold their port open, so even code that skipped the folder checks would stop at
+  // the port check and never start a Postgres from this test set.
+  async function heldPort(): Promise<number> {
+    const s = await listen(0);
+    return (s.address() as { port: number }).port;
+  }
+
+  it('refuses a relative cluster folder in both startPostgres and stopLeftoverPostgres', async () => {
+    const s = settings(await heldPort());
+    await expect(startPostgres({ clusterDir: 'data/postgres', logFile: join(tempDir(), 'pg.log'), settings: s })).rejects.toThrow(
+      /data\/postgres/,
+    );
+    await expect(stopLeftoverPostgres({ clusterDir: 'data/postgres', settings: s })).rejects.toThrow(/data\/postgres/);
+    expect(existsSync(join(process.cwd(), 'data'))).toBe(false);
+  });
+
+  it('refuses a cluster folder that holds files but no PG_VERSION, and leaves it untouched', async () => {
+    const root = tempDir();
+    const clusterDir = join(root, 'postgres');
+    mkdirSync(clusterDir);
+    writeFileSync(join(clusterDir, 'stray.txt'), 'keep me');
+    const logFile = join(root, 'logs', 'pg.log');
+    await expect(startPostgres({ clusterDir, logFile, settings: settings(await heldPort()) })).rejects.toThrow(
+      `${clusterDir} holds files`,
+    );
+    expect(readdirSync(clusterDir)).toEqual(['stray.txt']);
+    expect(readFileSync(join(clusterDir, 'stray.txt'), 'utf8')).toBe('keep me');
   });
 });
 

@@ -233,6 +233,23 @@ describe.skipIf(!LIVE)('bundled Postgres, live', { timeout: 120_000 }, () => {
     expect(log.match(/The files belonging to this database system will be owned by user/g)).toHaveLength(1);
   });
 
+  it('removes a half-made initdb folder left by a cut-off first start, then runs initdb and works', async () => {
+    const c = await newCase();
+    // What a power cut late in initdb leaves: the sibling it was writing, with PG_VERSION and no
+    // more. Also an empty cluster folder, which a start must accept.
+    const half = `${c.clusterDir}.init-cutoff1`;
+    mkdirSync(half, { mode: 0o700 });
+    writeFileSync(join(half, 'PG_VERSION'), '16\n');
+    mkdirSync(c.clusterDir, { mode: 0o700 });
+
+    const pgr = await start(c);
+    expect(existsSync(half)).toBe(false);
+    expect(readdirSync(dirname(c.clusterDir)).filter((n) => n.includes('.init-'))).toEqual([]);
+    expect(readFileSync(c.logFile, 'utf8')).toMatch(/The files belonging to this database system will be owned by user/);
+    expect(existsSync(join(c.clusterDir, 'global', 'pg_control'))).toBe(true);
+    expect(await one(pgr.internalUrl, 'select current_user')).toBe('openldr_app');
+  });
+
   it('works in a folder whose path has spaces and non-ASCII letters', async () => {
     const c = await newCase('Lab São José ñ');
     expect(c.clusterDir).toContain('Lab São José ñ');
