@@ -23,7 +23,12 @@ export interface LocalSignInDeps {
 }
 export interface SessionGrant { accessToken: string; expiresIn: number; mustChangePassword: boolean }
 export interface NewSession extends SessionGrant { cookieValue: string; cookieExpiresAt: Date; userId: string }
-export type LoginResult = ({ ok: true } & NewSession) | { ok: false; reason: 'invalid' | 'locked' | 'disabled' };
+/**
+ * `userId` is set on a failure whenever the identifier matched a user. `lockStarted` marks the
+ * failed try that started a lock. Both are for audit rows and never go into an HTTP response.
+ */
+export type LoginResult = ({ ok: true } & NewSession)
+  | { ok: false; reason: 'invalid' | 'locked' | 'disabled'; userId?: string; lockStarted?: true };
 export type SetupResult = ({ ok: true } & NewSession)
   | { ok: false; reason: 'already_set_up' | 'bad_code' | 'bad_username' | PasswordRuleFailure };
 export interface LocalSignIn {
@@ -33,6 +38,11 @@ export interface LocalSignIn {
   logout(cookieValue: string): Promise<{ userId: string } | null>;
   changePassword(input: { userId: string; sessionId: string; currentPassword: string; newPassword: string }): Promise<'ok' | 'wrong_current' | PasswordRuleFailure>;
   createSetupCode(): Promise<string>;
+  /**
+   * Writes the user, then the lab_admin role, then the password. The password row is what ends
+   * setup, so a failure before it leaves setup still required and a new code can be used. There
+   * is no transaction and no cleanup: a leftover user row with no password is accepted.
+   */
   setup(input: { setupCode: string; username: string; displayName?: string; password: string; ip: string | null; userAgent: string | null }): Promise<SetupResult>;
   sessionIsLive(sessionId: string): Promise<boolean>;
 }
@@ -54,9 +64,7 @@ const FIRST_ADMIN_ROLE = 'lab_admin';
 // so a stray byte such as \0, which Postgres refuses in text, cannot make a lookup throw.
 const COOKIE_PART = /^[A-Za-z0-9_-]+$/;
 
-const INVALID = { ok: false, reason: 'invalid' } as const;
-const LOCKED = { ok: false, reason: 'locked' } as const;
-const DISABLED = { ok: false, reason: 'disabled' } as const;
+const UNKNOWN_USER = { ok: false, reason: 'invalid' } as const;
 
 function sha256Hex(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -147,25 +155,27 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       const userId = await store.findUserIdByIdentifier(input.identifier);
       if (!userId) {
         await hasher.burn();
-        return INVALID;
+        return UNKNOWN_USER;
       }
       const credential = await store.getCredential(userId);
       if (!credential) {
         await hasher.burn();
-        return INVALID;
+        return { ok: false, reason: 'invalid', userId };
       }
       // A lock time in the past is an old lock that has ended.
       if (credential.lockedUntil !== null && credential.lockedUntil > now) {
         await hasher.burn();
-        return LOCKED;
+        return { ok: false, reason: 'locked', userId };
       }
       if (!(await hasher.verify(input.password, credential.passwordHash))) {
-        await store.recordFailure(userId, now, MAX_FAILURES, LOCK_MS);
-        return INVALID;
+        const { lockedUntil } = await store.recordFailure(userId, now, MAX_FAILURES, LOCK_MS);
+        // recordFailure can hand back an old lock that has ended. Only a future one is new.
+        if (lockedUntil !== null && lockedUntil > now) return { ok: false, reason: 'invalid', userId, lockStarted: true };
+        return { ok: false, reason: 'invalid', userId };
       }
       const user = await users.get(userId);
-      if (!user) return INVALID;
-      if (!(await isAllowed(user))) return DISABLED;
+      if (!user) return { ok: false, reason: 'invalid', userId };
+      if (!(await isAllowed(user))) return { ok: false, reason: 'disabled', userId };
       await store.clearFailures(userId);
       return { ok: true, ...(await openSession(user, credential.mustChange, input.ip, input.userAgent, now)) };
     },
@@ -225,8 +235,9 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
 
       const passwordHash = await hasher.hash(input.password);
       const { id } = await store.createUser({ username: input.username, displayName: input.displayName ?? null });
-      await store.setPassword(id, passwordHash, false);
       await roles.setUserRoles(id, [adminRole.id]);
+      // Last write before the session. Until it lands, setupRequired() stays true.
+      await store.setPassword(id, passwordHash, false);
       const user = await users.get(id);
       if (!user) throw new Error('the first admin was created but cannot be read back');
       return { ok: true, ...(await openSession(user, false, input.ip, input.userAgent, now)) };

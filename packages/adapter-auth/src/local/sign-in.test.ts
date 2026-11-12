@@ -68,7 +68,14 @@ describe('login', () => {
 
   it('gives the same failure for an unknown user and a wrong password', async () => {
     expect(await svc.login({ identifier: 'nobody', password: 'x'.repeat(12), ip: null, userAgent: null })).toEqual({ ok: false, reason: 'invalid' });
-    expect(await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null })).toEqual({ ok: false, reason: 'invalid' });
+    expect(await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null })).toEqual({ ok: false, reason: 'invalid', userId: adaId });
+  });
+
+  it('gives no user ID for an unknown identifier', async () => {
+    const r = await svc.login({ identifier: 'nobody', password: GOOD, ip: null, userAgent: null });
+    expect(r).toEqual({ ok: false, reason: 'invalid' });
+    expect(r).not.toHaveProperty('userId');
+    expect(r).not.toHaveProperty('lockStarted');
   });
 
   it('burns a hash for an unknown user', async () => {
@@ -78,9 +85,9 @@ describe('login', () => {
   });
 
   it('burns a hash for a user with no password', async () => {
-    await store.createUser({ username: 'nopass' });
+    const { id } = await store.createUser({ username: 'nopass' });
     const burn = vi.spyOn(hasher, 'burn');
-    expect(await svc.login({ identifier: 'nopass', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'invalid' });
+    expect(await svc.login({ identifier: 'nopass', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'invalid', userId: id });
     expect(burn).toHaveBeenCalledTimes(1);
   });
 
@@ -92,10 +99,32 @@ describe('login', () => {
   it('locks after five wrong tries, even for the right password, then unlocks after five minutes', async () => {
     for (let i = 0; i < 5; i++) await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null });
     const burn = vi.spyOn(hasher, 'burn');
-    expect((await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null }))).toEqual({ ok: false, reason: 'locked' });
+    expect((await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null }))).toEqual({ ok: false, reason: 'locked', userId: adaId });
     expect(burn).toHaveBeenCalledTimes(1);
     clock.advance(LOCK_MS + 1);
     expect((await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).ok).toBe(true);
+  });
+
+  it('marks only the fifth wrong try as the start of a lock', async () => {
+    for (let i = 1; i <= 4; i++) {
+      expect(await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null })).toEqual({ ok: false, reason: 'invalid', userId: adaId });
+    }
+    expect(await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null }))
+      .toEqual({ ok: false, reason: 'invalid', userId: adaId, lockStarted: true });
+  });
+
+  it('does not mark a try made while already locked', async () => {
+    for (let i = 0; i < 5; i++) await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null });
+    const r = await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null });
+    expect(r).toEqual({ ok: false, reason: 'locked', userId: adaId });
+    expect(r).not.toHaveProperty('lockStarted');
+  });
+
+  it('does not mark a wrong try when recordFailure hands back a lock that has ended', async () => {
+    // One failure with a limit of one leaves an ended lock on the row.
+    await store.recordFailure(adaId, new Date(clock.now().getTime() - 2 * LOCK_MS), 1, LOCK_MS);
+    const r = await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null });
+    expect(r).toEqual({ ok: false, reason: 'invalid', userId: adaId });
   });
 
   it('does not lock after four wrong tries, and a good sign-in clears the count', async () => {
@@ -115,17 +144,17 @@ describe('login', () => {
 
   it('refuses a disabled user', async () => {
     users.disable('ada');
-    expect(await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'disabled' });
+    expect(await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'disabled', userId: adaId });
   });
 
   it('refuses a blocked user', async () => {
     users.block('ada');
-    expect(await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'disabled' });
+    expect(await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'disabled', userId: adaId });
   });
 
   it('answers invalid, not disabled, to a wrong password for a disabled user', async () => {
     users.disable('ada');
-    expect(await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null })).toEqual({ ok: false, reason: 'invalid' });
+    expect(await svc.login({ identifier: 'ada', password: 'wrong wrong!', ip: null, userAgent: null })).toEqual({ ok: false, reason: 'invalid', userId: adaId });
   });
 
   it('puts role slugs and the must-change mark in the token', async () => {
@@ -343,6 +372,17 @@ describe('setup', () => {
     expect(await svc.setup({ setupCode: code, username: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'bad_code' });
     expect(store.credentialCount()).toBe(0);
     expect(await store.findUserIdByIdentifier('ada')).toBeNull();
+  });
+
+  it('leaves setup required when a write before the password fails', async () => {
+    const code = await svc.createSetupCode();
+    vi.spyOn(roles, 'setUserRoles').mockRejectedValueOnce(new Error('database down'));
+    await expect(svc.setup({ setupCode: code, username: 'ada', password: GOOD, ip: null, userAgent: null })).rejects.toThrow('database down');
+    expect(await svc.setupRequired()).toBe(true);
+    expect(store.credentialCount()).toBe(0);
+    // The leftover user row has no password, so a new code and another name can finish setup.
+    const again = await svc.setup({ setupCode: await svc.createSetupCode(), username: 'eve', password: GOOD, ip: null, userAgent: null });
+    expect(again.ok).toBe(true);
   });
 
   it('checks the username and password before it spends the code', async () => {
