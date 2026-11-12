@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "150b798c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep sidebar icons one size and put overflow in a ⋯ menu"
+        },
+        {
           "hash": "f37702ef",
           "type": "feat",
           "scope": "docs",
