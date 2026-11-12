@@ -95,6 +95,7 @@ describe('ChangePasswordPage', () => {
     ['too_short', 'Use at least 10 characters.'],
     ['too_long', 'Use 128 characters or fewer.'],
     ['same_as_username', 'The password cannot be the username.'],
+    ['same_as_current', 'Choose a password different from the temporary one.'],
   ] as const)('shows %s in words', async (code, text) => {
     change.mockResolvedValue(code);
     renderPage();

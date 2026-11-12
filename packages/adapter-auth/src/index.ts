@@ -5,7 +5,7 @@ import { IdentityAdminNotConfiguredError } from '@openldr/ports';
 
 export { createLocalAuth, PasswordResetEmailUnsupportedError, type LocalAuthDeps } from './local/local-auth';
 export { LOCAL_ISSUER, SigningKeyUnreadableError } from './local/tokens';
-export type { LocalSignIn, LoginResult, SetupResult, SessionGrant, NewSession } from './local/sign-in';
+export type { LocalSignIn, LoginResult, SetupResult, ChangePasswordResult, SessionGrant, NewSession } from './local/sign-in';
 
 export interface AuthConfig {
   mode?: 'keycloak' | 'oidc';

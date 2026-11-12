@@ -24,7 +24,7 @@ function fakeSignIn() {
     loginResult: okLogin(),
     refreshResult: { accessToken: 'tok2', expiresIn: 600, mustChangePassword: false } as Grant,
     logoutResult: { userId: 'u1' } as { userId: string } | null,
-    changeResult: 'ok' as ChangeResult,
+    changeResult: { outcome: 'ok' } as ChangeResult,
     setupResult: { ...okLogin(), accessToken: 'tok-admin' } as SetupResult,
     setupRequired: true,
   };
@@ -294,12 +294,28 @@ describe('local sign-in routes', () => {
     });
 
     it('maps each failure to a 400', async () => {
-      for (const error of ['wrong_current', 'too_short', 'too_long', 'same_as_username'] as const) {
-        fake.state.changeResult = error;
+      for (const error of ['wrong_current', 'too_short', 'too_long', 'same_as_username', 'same_as_current'] as const) {
+        fake.state.changeResult = { outcome: error };
         const r = await change({ currentPassword: 'a', newPassword: GOOD });
         expect(r.statusCode).toBe(400);
         expect(r.json()).toEqual({ error });
       }
+      expect(events.filter((e) => e.action === 'user.change_password')).toHaveLength(0);
+      expect(events.filter((e) => e.action === 'auth.locked')).toHaveLength(0);
+    });
+
+    it('writes an unthrottled auth.locked row when a wrong current password starts the lock', async () => {
+      fake.state.changeResult = { outcome: 'wrong_current', lockStarted: true };
+      for (let i = 0; i < 2; i++) {
+        const r = await change({ currentPassword: 'my-real-password', newPassword: GOOD });
+        expect(r.statusCode).toBe(400);
+        // lockStarted is for the audit row only. The caller sees the plain failure.
+        expect(r.json()).toEqual({ error: 'wrong_current' });
+      }
+      const locked = events.filter((e) => e.action === 'auth.locked');
+      expect(locked).toHaveLength(2);
+      expect(locked[0]).toMatchObject({ actorType: 'user', actorId: 'u1', entityType: 'user', entityId: 'u1', metadata: { ip: '127.0.0.1', userId: 'u1' } });
+      expect(JSON.stringify(events)).not.toContain('my-real-password');
       expect(events.filter((e) => e.action === 'user.change_password')).toHaveLength(0);
     });
 

@@ -20,6 +20,11 @@ export function checkPasswordRules(password: string, username: string): 'ok' | P
   return 'ok';
 }
 
+/** True when two typed passwords are the same after the NFKC step `hash` and `verify` use. Spends no hash. */
+export function samePassword(a: string, b: string): boolean {
+  return normalize(a) === normalize(b);
+}
+
 /** Passwords are NFKC-normalized inside `hash` and `verify`. Callers pass the raw input. */
 export interface PasswordHasher {
   hash(password: string): Promise<string>;

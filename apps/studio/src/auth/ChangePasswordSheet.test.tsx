@@ -88,6 +88,17 @@ describe('ChangePasswordSheet', () => {
     expect(toast.success).not.toHaveBeenCalled();
   });
 
+  it('shows same_as_current in words and stays open', async () => {
+    change.mockResolvedValue('same_as_current');
+    render(<Host />);
+    fill('temporary pass', 'temporary pass', 'temporary pass');
+    save();
+    expect(await screen.findByText('Choose a password different from the temporary one.')).toBeInTheDocument();
+    expect(screen.getByLabelText('New password')).toHaveValue('');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
   it('shows the sign-in page when the server says the session ended', async () => {
     change.mockResolvedValue('session_ended');
     render(<Host />);

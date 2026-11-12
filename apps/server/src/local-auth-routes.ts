@@ -155,6 +155,15 @@ export function registerLocalAuthRoutes(app: FastifyInstance<any, any, any, any>
     });
   }
 
+  // A lock starts at most once per lock period, so this row needs no throttle.
+  async function recordLockStarted(req: FastifyRequest, userId: string): Promise<void> {
+    await safeRecord(ctx.audit, ctx.logger, {
+      actorType: 'user', actorId: userId, actorName: userId,
+      action: 'auth.locked', entityType: 'user', entityId: userId,
+      metadata: { ip: req.ip, userId },
+    });
+  }
+
   async function recordLoginFailure(
     req: FastifyRequest, failure: { reason: 'invalid' | 'locked' | 'disabled'; userId?: string; lockStarted?: true },
   ): Promise<void> {
@@ -170,13 +179,7 @@ export function registerLocalAuthRoutes(app: FastifyInstance<any, any, any, any>
         metadata: { reason: entityId, ip: req.ip, ...(userId ? { userId } : {}) },
       });
     }
-    // A lock starts at most once per lock period, so this row needs no throttle.
-    if (failure.lockStarted && userId) {
-      await safeRecord(ctx.audit, ctx.logger, {
-        ...actor, action: 'auth.locked', entityType: 'user', entityId: userId,
-        metadata: { ip: req.ip, userId },
-      });
-    }
+    if (failure.lockStarted && userId) await recordLockStarted(req, userId);
   }
 
   app.post('/api/auth/login', async (req, reply) => {
@@ -224,7 +227,11 @@ export function registerLocalAuthRoutes(app: FastifyInstance<any, any, any, any>
       userId: req.user.id, sessionId: req.sessionId,
       currentPassword: p.data.currentPassword, newPassword: p.data.newPassword,
     });
-    if (result !== 'ok') return reply.code(400).send({ error: result });
+    if (result.outcome !== 'ok') {
+      // A wrong current password counts toward the same lock as sign-in.
+      if (result.lockStarted) await recordLockStarted(req, req.user.id);
+      return reply.code(400).send({ error: result.outcome });
+    }
     await safeRecord(ctx.audit, ctx.logger, {
       actorType: 'user', actorId: req.user.id, actorName: req.user.username,
       action: 'user.change_password', entityType: 'user', entityId: req.user.id,

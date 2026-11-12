@@ -4,7 +4,7 @@
 // cookie value from login and setup and the code from createSetupCode.
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import type { LocalAuthStore, LocalSession } from '@openldr/ports';
-import { checkPasswordRules, type PasswordHasher, type PasswordRuleFailure } from './password';
+import { checkPasswordRules, samePassword, type PasswordHasher, type PasswordRuleFailure } from './password';
 import { ACCESS_TOKEN_TTL_SECONDS, signAccessToken, type SigningKey } from './tokens';
 
 export interface SignInUser { id: string; username: string; displayName: string | null; email: string | null; status: 'active' | 'disabled' }
@@ -31,12 +31,20 @@ export type LoginResult = ({ ok: true } & NewSession)
   | { ok: false; reason: 'invalid' | 'locked' | 'disabled'; userId?: string; lockStarted?: true };
 export type SetupResult = ({ ok: true } & NewSession)
   | { ok: false; reason: 'already_set_up' | 'bad_code' | 'bad_username' | 'username_taken' | PasswordRuleFailure };
+/**
+ * `same_as_current` refuses keeping a temporary password on a forced change. `lockStarted` marks
+ * the wrong try that started a lock, the same rule as login. It is for the audit row only.
+ */
+export interface ChangePasswordResult {
+  outcome: 'ok' | 'wrong_current' | PasswordRuleFailure | 'same_as_current';
+  lockStarted?: true;
+}
 export interface LocalSignIn {
   setupRequired(): Promise<boolean>;
   login(input: { identifier: string; password: string; ip: string | null; userAgent: string | null }): Promise<LoginResult>;
   refresh(cookieValue: string): Promise<SessionGrant | null>;
   logout(cookieValue: string): Promise<{ userId: string } | null>;
-  changePassword(input: { userId: string; sessionId: string; currentPassword: string; newPassword: string }): Promise<'ok' | 'wrong_current' | PasswordRuleFailure>;
+  changePassword(input: { userId: string; sessionId: string; currentPassword: string; newPassword: string }): Promise<ChangePasswordResult>;
   createSetupCode(): Promise<string>;
   /**
    * Writes the user, then the lab_admin role, then the password. The password row is what ends
@@ -237,27 +245,33 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
 
     async changePassword(input) {
       const now = clock();
+      const wrongCurrent: ChangePasswordResult = { outcome: 'wrong_current' };
       const credential = await store.getCredential(input.userId);
       const user = await users.get(input.userId);
-      if (!credential || !user) return 'wrong_current';
+      if (!credential || !user) return wrongCurrent;
       // The same lock as sign-in, so this route is not a second way to guess the password.
-      if (isLocked(credential.lockedUntil, now)) return 'wrong_current';
+      if (isLocked(credential.lockedUntil, now)) return wrongCurrent;
       const currentOk = await hasher.verify(input.currentPassword, credential.passwordHash);
       const { locked: lockedAfterVerify, passwordChanged } = await recheckAfterHash(input.userId, credential.passwordHash, now);
       if (!currentOk) {
-        await store.recordFailure(input.userId, now, MAX_FAILURES, LOCK_MS);
-        return 'wrong_current';
+        const { lockedUntil } = await store.recordFailure(input.userId, now, MAX_FAILURES, LOCK_MS);
+        if (lockedAfterVerify) return wrongCurrent;
+        // recordFailure can hand back an old lock that has ended. Only a future one is new.
+        if (isLocked(lockedUntil, now)) return { outcome: 'wrong_current', lockStarted: true };
+        return wrongCurrent;
       }
-      if (lockedAfterVerify) return 'wrong_current';
+      if (lockedAfterVerify) return wrongCurrent;
       // An admin reset during the hash wins. Writing now would undo it.
-      if (passwordChanged) return 'wrong_current';
+      if (passwordChanged) return wrongCurrent;
+      // Whoever set the temporary password has seen it, so a forced change must replace it.
+      if (credential.mustChange && samePassword(input.newPassword, input.currentPassword)) return { outcome: 'same_as_current' };
       const rule = checkPasswordRules(input.newPassword, user.username);
-      if (rule !== 'ok') return rule;
+      if (rule !== 'ok') return { outcome: rule };
       const newHash = await hasher.hash(input.newPassword);
       // Compare-and-set against the hash that was verified. A reset during the new hash wins.
-      if (!(await store.replacePassword(input.userId, credential.passwordHash, newHash, false))) return 'wrong_current';
+      if (!(await store.replacePassword(input.userId, credential.passwordHash, newHash, false))) return wrongCurrent;
       await store.deleteSessionsForUser(input.userId, input.sessionId);
-      return 'ok';
+      return { outcome: 'ok' };
     },
 
     async createSetupCode() {

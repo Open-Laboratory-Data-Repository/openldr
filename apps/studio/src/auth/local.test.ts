@@ -81,7 +81,7 @@ describe('local sign-in calls', () => {
     expect(url).toBe('/api/auth/change-password');
     expect(new Headers(init.headers).get('authorization')).toBe('Bearer tok');
     expect(JSON.parse(init.body as string)).toEqual({ currentPassword: 'old-password', newPassword: 'new-password' });
-    for (const error of ['wrong_current', 'too_short', 'too_long', 'same_as_username'] as const) {
+    for (const error of ['wrong_current', 'too_short', 'too_long', 'same_as_username', 'same_as_current'] as const) {
       fetchMock.mockResolvedValueOnce(reply(400, { error }));
       expect(await localChangePassword('a', 'b')).toBe(error);
     }

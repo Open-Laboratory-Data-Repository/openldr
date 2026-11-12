@@ -26,6 +26,7 @@ export const pt: EnShape = {
     tooShort: 'Utilize pelo menos 10 caracteres.',
     tooLong: 'Utilize 128 caracteres ou menos.',
     sameAsUsername: 'A palavra-passe não pode ser o nome de utilizador.',
+    sameAsCurrent: 'Escolha uma palavra-passe diferente da temporária.',
     passwordsDiffer: 'As duas palavras-passe não coincidem.',
     wrongCurrent: 'A palavra-passe atual está errada.',
     badCode: 'Este código de configuração está errado ou expirou.',

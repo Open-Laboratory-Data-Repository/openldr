@@ -307,7 +307,7 @@ describe('password and sessions', () => {
     await gated.auth.resetPassword(adaId, NEW, true);
     gated.release();
 
-    expect(await pending).toBe('wrong_current');
+    expect(await pending).toEqual({ outcome: 'wrong_current' });
     const credential = (await store.getCredential(adaId))!;
     expect(await hasher.verify(NEW, credential.passwordHash)).toBe(true);
     expect(await hasher.verify('user chosen pw 1', credential.passwordHash)).toBe(false);
@@ -326,7 +326,7 @@ describe('password and sessions', () => {
     await gated.auth.resetPassword(adaId, NEW, true);
     gated.release();
 
-    expect(await pending).toBe('wrong_current');
+    expect(await pending).toEqual({ outcome: 'wrong_current' });
     const credential = (await store.getCredential(adaId))!;
     expect(await hasher.verify(NEW, credential.passwordHash)).toBe(true);
     expect(credential.mustChange).toBe(true);

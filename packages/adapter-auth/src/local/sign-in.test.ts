@@ -353,7 +353,7 @@ describe('changePassword', () => {
     const b = await login();
     const aId = a.cookieValue.split('.')[0]!;
     const bId = b.cookieValue.split('.')[0]!;
-    expect(await svc.changePassword({ userId: adaId, sessionId: aId, currentPassword: GOOD, newPassword: NEW })).toBe('ok');
+    expect(await svc.changePassword({ userId: adaId, sessionId: aId, currentPassword: GOOD, newPassword: NEW })).toEqual({ outcome: 'ok' });
     expect((await store.getCredential(adaId))!.mustChange).toBe(false);
     expect(await store.getSession(bId)).toBeNull();
     expect(await store.getSession(aId)).not.toBeNull();
@@ -365,20 +365,23 @@ describe('changePassword', () => {
   it('refuses a wrong current password and a weak new one', async () => {
     const a = await login();
     const sessionId = a.cookieValue.split('.')[0]!;
-    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: NEW })).toBe('wrong_current');
-    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: 'short' })).toBe('too_short');
-    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: 'x'.repeat(129) })).toBe('too_long');
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: NEW })).toEqual({ outcome: 'wrong_current' });
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: 'short' })).toEqual({ outcome: 'too_short' });
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: 'x'.repeat(129) })).toEqual({ outcome: 'too_long' });
     expect((await store.getCredential(adaId))!.mustChange).toBe(true);
     expect((await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).ok).toBe(true);
   });
 
   it('locks after five wrong current passwords, and the lock holds for sign-in too', async () => {
     const sessionId = (await login()).cookieValue.split('.')[0]!;
-    for (let i = 0; i < 5; i++) {
-      expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: NEW })).toBe('wrong_current');
+    for (let i = 0; i < 4; i++) {
+      expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: NEW })).toEqual({ outcome: 'wrong_current' });
     }
+    // The fifth wrong try starts the lock, and only that call says so.
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: NEW }))
+      .toEqual({ outcome: 'wrong_current', lockStarted: true });
     const verify = vi.spyOn(hasher, 'verify');
-    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: NEW })).toBe('wrong_current');
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: NEW })).toEqual({ outcome: 'wrong_current' });
     expect(verify).not.toHaveBeenCalled();
     expect(await svc.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null })).toEqual({ ok: false, reason: 'locked', userId: adaId });
     clock.advance(LOCK_MS + 1);
@@ -401,8 +404,9 @@ describe('changePassword', () => {
     expect(track.calls.get(GOOD)).toBe(1);
     expect(track.calls.get('wrong wrong!')).toBe(5);
     expect(track.peak).toBe(4);
-    expect(right).toBe('wrong_current');
-    expect(wrong).toEqual(Array(5).fill('wrong_current'));
+    expect(right).toEqual({ outcome: 'wrong_current' });
+    expect(wrong.map((r) => r.outcome)).toEqual(Array(5).fill('wrong_current'));
+    expect(wrong.filter((r) => r.lockStarted)).toHaveLength(1);
     // The new password was never hashed or stored.
     expect(track.calls.has(NEW)).toBe(false);
     expect((await store.getCredential(adaId))!.passwordHash).toBe(before);
@@ -413,14 +417,54 @@ describe('changePassword', () => {
   it('checks the current password before the rules', async () => {
     const a = await login();
     const sessionId = a.cookieValue.split('.')[0]!;
-    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: 'short' })).toBe('wrong_current');
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: 'short' })).toEqual({ outcome: 'wrong_current' });
   });
 
   it('refuses a new password equal to the username', async () => {
     await store.createUser({ username: 'grace.hopper' });
     const id = (await store.findUserIdByIdentifier('grace.hopper'))!;
     await store.setPassword(id, await hasher.hash(GOOD), false);
-    expect(await svc.changePassword({ userId: id, sessionId: 'x', currentPassword: GOOD, newPassword: 'Grace.Hopper' })).toBe('same_as_username');
+    expect(await svc.changePassword({ userId: id, sessionId: 'x', currentPassword: GOOD, newPassword: 'Grace.Hopper' })).toEqual({ outcome: 'same_as_username' });
+  });
+
+  it('does not mark a wrong try made while already locked', async () => {
+    const sessionId = (await login()).cookieValue.split('.')[0]!;
+    for (let i = 0; i < 5; i++) await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: NEW });
+    const r = await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: NEW });
+    expect(r).toEqual({ outcome: 'wrong_current' });
+    expect(r).not.toHaveProperty('lockStarted');
+  });
+
+  it('refuses to keep the temporary password on a forced change, and writes nothing', async () => {
+    const a = await login();
+    const sessionId = a.cookieValue.split('.')[0]!;
+    const other = (await login()).cookieValue.split('.')[0]!;
+    const before = await store.getCredential(adaId);
+    const hash = vi.spyOn(hasher, 'hash');
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: GOOD })).toEqual({ outcome: 'same_as_current' });
+    expect(hash).not.toHaveBeenCalled();
+    expect(await store.getCredential(adaId)).toEqual(before);
+    expect(await store.getSession(other)).not.toBeNull();
+  });
+
+  it('compares the temporary password after NFKC normalization', async () => {
+    // U+FB01 is the "fi" ligature. NFKC turns it into the two letters f and i.
+    const { id } = await store.createUser({ username: 'fiona' });
+    await store.setPassword(id, await hasher.hash('final temporary'), true);
+    expect(await svc.changePassword({ userId: id, sessionId: 'x', currentPassword: 'final temporary', newPassword: 'ﬁnal temporary' }))
+      .toEqual({ outcome: 'same_as_current' });
+  });
+
+  it('lets an ordinary change keep the same password', async () => {
+    await store.setPassword(adaId, await hasher.hash(GOOD), false);
+    const sessionId = (await login()).cookieValue.split('.')[0]!;
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: GOOD })).toEqual({ outcome: 'ok' });
+  });
+
+  it('checks the current password before refusing the temporary one', async () => {
+    const sessionId = (await login()).cookieValue.split('.')[0]!;
+    expect(await svc.changePassword({ userId: adaId, sessionId, currentPassword: 'wrong wrong!', newPassword: 'wrong wrong!' }))
+      .toEqual({ outcome: 'wrong_current' });
   });
 });
 

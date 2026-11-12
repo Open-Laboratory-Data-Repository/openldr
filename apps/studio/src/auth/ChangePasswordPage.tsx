@@ -14,6 +14,7 @@ export const CHANGE_FAILURE_KEYS: Record<ChangeFailure, string> = {
   too_short: 'auth.tooShort',
   too_long: 'auth.tooLong',
   same_as_username: 'auth.sameAsUsername',
+  same_as_current: 'auth.sameAsCurrent',
 };
 
 /**

@@ -24,6 +24,7 @@ export const en = {
     tooShort: 'Use at least 10 characters.',
     tooLong: 'Use 128 characters or fewer.',
     sameAsUsername: 'The password cannot be the username.',
+    sameAsCurrent: 'Choose a password different from the temporary one.',
     passwordsDiffer: 'The two passwords do not match.',
     wrongCurrent: 'The current password is wrong.',
     badCode: 'That setup code is wrong or has expired.',

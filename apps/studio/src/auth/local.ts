@@ -73,14 +73,17 @@ export async function localLogout(): Promise<boolean> {
   }
 }
 
-const CHANGE_PASSWORD_FAILURES = new Set<string>(['wrong_current', 'too_short', 'too_long', 'same_as_username']);
+const CHANGE_PASSWORD_FAILURES = new Set<string>(['wrong_current', 'too_short', 'too_long', 'same_as_username', 'same_as_current']);
+
+type ChangePasswordFailure = 'wrong_current' | 'same_as_current' | PasswordFailure;
 
 /**
  * Changes the signed-in account's password. Throws on any answer it cannot map.
  * 'session_ended' covers every 401: the route's own `session_ended`, and the auth plugin's answer
  * when the token no longer verifies, which under local sign-in means the session is gone.
+ * 'same_as_current' means a forced change tried to keep the temporary password.
  */
-export async function localChangePassword(current: string, next: string): Promise<'ok' | 'wrong_current' | 'session_ended' | PasswordFailure> {
+export async function localChangePassword(current: string, next: string): Promise<'ok' | 'session_ended' | ChangePasswordFailure> {
   const token = getAccessToken();
   const res = await post(
     '/api/auth/change-password',
@@ -91,7 +94,7 @@ export async function localChangePassword(current: string, next: string): Promis
   if (res.status === 401) return 'session_ended';
   if (res.status === 400) {
     const code = await errorCode(res);
-    if (code && CHANGE_PASSWORD_FAILURES.has(code)) return code as 'wrong_current' | PasswordFailure;
+    if (code && CHANGE_PASSWORD_FAILURES.has(code)) return code as ChangePasswordFailure;
   }
   throw unexpected('/api/auth/change-password', res.status);
 }
