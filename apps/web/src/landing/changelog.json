@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "e0d8d59c",
+          "type": "feat",
+          "scope": "docs",
+          "title": "Publish Terminology guide and high-resolution images"
+        },
+        {
           "hash": "150b798c",
           "type": "fix",
           "scope": "studio",
