@@ -434,9 +434,12 @@ export async function saveColumnPolicy(payload: Record<string, string[]>): Promi
   if (!r.ok) throw new Error(`save column policy failed: ${r.status}`);
 }
 
-export interface AuthCapabilities { identityAdmin: boolean; syncClientAdmin: boolean }
+export interface AuthCapabilities { identityAdmin: boolean; syncClientAdmin: boolean; passwordResetEmail?: boolean }
 export interface OidcConfig { scopes?: string; resource?: string | null; mode?: 'keycloak' | 'oidc'; issuerUrl: string; clientId: string; audience: string | null }
-export interface ClientConfig { authCapabilities?: AuthCapabilities; dashboardSqlEnabled: boolean; authEnforced: boolean; version: string; environment: string; oidc: OidcConfig | null }
+/** Which sign-in the server runs. An older server sends no `auth` block; read that as not local. */
+export interface AuthModeConfig { mode: 'keycloak' | 'oidc' | 'local'; setupRequired: boolean }
+/** `oidc` is null under local sign-in and under the dev bypass. */
+export interface ClientConfig { authCapabilities?: AuthCapabilities; auth?: AuthModeConfig; dashboardSqlEnabled: boolean; authEnforced: boolean; version: string; environment: string; oidc: OidcConfig | null }
 export async function fetchClientConfig(): Promise<ClientConfig> {
   const r = await authFetch('/api/config');
   if (!r.ok) return { dashboardSqlEnabled: false, authEnforced: false, version: '', environment: '', oidc: null };

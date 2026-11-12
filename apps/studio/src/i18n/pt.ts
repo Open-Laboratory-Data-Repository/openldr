@@ -6,6 +6,13 @@ export const pt: EnShape = {
     heading: 'Não tem acesso a esta página',
     description: 'Peça a um administrador para rever as suas permissões. Pode usar a navegação disponível, abrir a documentação ou terminar a sessão no menu do utilizador.',
   },
+  auth: {
+    signInTitle: 'Iniciar sessão no OpenLDR',
+    username: 'Nome de utilizador ou e-mail',
+    password: 'Palavra-passe',
+    invalid: 'Estes dados estão errados, ou a conta está bloqueada durante alguns minutos.',
+    tooMany: 'Demasiadas tentativas. Aguarde um minuto e tente novamente.',
+  },
   workflowReceipts: {
   "title": "Recibos webhook",
   "runs": "Execuções",

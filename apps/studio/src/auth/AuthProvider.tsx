@@ -7,7 +7,9 @@ import type { AuthCapabilities } from '@/api';
 import { getOidc, type OidcClient } from './oidc';
 // Aliased: `setAuthEnforced` is also this component's React state setter. The token-module copy is
 // what api.ts's authFetch reads, so both have to be kept in sync from the one /api/config response.
-import { setAuthEnforced as setAuthEnforcedForFetch } from './token';
+import { setAccessToken, setAuthEnforced as setAuthEnforcedForFetch, setUnauthorizedHandler } from './token';
+import { keepSessionFresh, localLogout, localRefresh, type LocalSession } from './local';
+import { LoginPage } from './LoginPage';
 import { Button } from '@/components/ui/button';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 
@@ -50,8 +52,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [configError, setConfigError] = useState(false);
   const [authEnforced, setAuthEnforced] = useState(true);
   const oidcRef = useRef<OidcClient | null>(null);
+  // Local sign-in (AUTH_ADAPTER=local). `localScreen` is the pre-app screen to show, or null.
+  const [localScreen, setLocalScreen] = useState<'login' | 'change' | null>(null);
+  const localModeRef = useRef(false);
+  /** Stops the running refresh timer. Null when no local session is running. */
+  const localStopRef = useRef<(() => void) | null>(null);
+  const localRetryingRef = useRef(false);
   const location = useLocation();
   const { t } = useTranslation();
+
+  const stopLocalTimer = () => {
+    localStopRef.current?.();
+    localStopRef.current = null;
+  };
+
+  const showLocalSignIn = () => {
+    stopLocalTimer();
+    setAccessToken(null);
+    setUser(null);
+    setCapabilities([]);
+    setLocalScreen('login');
+    setLoading(false);
+  };
+
+  const keepLocalSession = (session: LocalSession) => {
+    stopLocalTimer();
+    localStopRef.current = keepSessionFresh(session, showLocalSignIn);
+  };
+
+  const openLocalSession = async (session: LocalSession) => {
+    keepLocalSession(session);
+    if (session.mustChangePassword) {
+      setLocalScreen('change');
+      setLoading(false);
+      return;
+    }
+    const [u, caps] = await Promise.all([
+      getMe().catch(() => null),
+      getMyCapabilities().catch(() => []),
+    ]);
+    setUser(u);
+    setCapabilities(caps);
+    setLocalScreen(null);
+    setLoading(false);
+  };
+
+  /** A request came back 401. Try one refresh; if the session has ended, show the sign-in page. */
+  const onLocalUnauthorized = () => {
+    const running = localStopRef.current;
+    if (!running || localRetryingRef.current) return;
+    localRetryingRef.current = true;
+    localRefresh().then((session) => {
+      // Signed out, ended or replaced while the refresh ran: its answer no longer applies.
+      if (localStopRef.current !== running) return;
+      if (session) keepLocalSession(session);
+      else showLocalSignIn();
+    }, () => {
+      // The network failed. Keep the session; the refresh timer retries on its own.
+    }).finally(() => { localRetryingRef.current = false; });
+  };
+
+  // On unmount, stop the refresh timer. A timer left running would keep the session alive.
+  useEffect(() => () => {
+    stopLocalTimer();
+    if (localModeRef.current) setUnauthorizedHandler(null);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -65,6 +130,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // leave authFetch on the fail-safe default while the server is actually in dev bypass.
         setAuthEnforcedForFetch(cfg.authEnforced);
         if (active) { setAuthEnforced(cfg.authEnforced); setAuthCapabilities(resolveAuthCapabilities(cfg)); }
+
+        // Local sign-in has no oidc block, so this must run before the bypass check below, which
+        // reads a missing oidc block as the dev bypass. An older server sends no auth block: not local.
+        if (cfg.authEnforced && cfg.auth?.mode === 'local') {
+          localModeRef.current = true;
+          setUnauthorizedHandler(onLocalUnauthorized);
+          // Navigation re-runs this effect. A running session needs nothing more.
+          if (localStopRef.current) return;
+          // Task 10 shows the setup page here. Until then, the sign-in page.
+          if (cfg.auth.setupRequired) {
+            if (active) { setLocalScreen('login'); setLoading(false); }
+            return;
+          }
+          const session = await localRefresh();
+          if (!active) return;
+          if (!session) { setLocalScreen('login'); setLoading(false); return; }
+          await openLocalSession(session);
+          return;
+        }
 
         if (!cfg.authEnforced || !cfg.oidc) {
           // Dev-bypass: server injects the dev actor; no interactive login. The server's dev actor
@@ -106,10 +190,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const hasCapability = (cap: string) => capabilities.includes(cap);
   const signOut = () => {
+    if (localModeRef.current) {
+      // Stop the timer first, so no refresh can run during sign-out and sign the person back in.
+      stopLocalTimer();
+      void localLogout().finally(showLocalSignIn);
+      return;
+    }
     void oidcRef.current?.signoutRedirect().then((result) => {
       if (result === 'local') { setUser(null); setCapabilities([]); setLocalSignout(true); }
     }).catch(() => setConfigError(true));
   };
+
+  if (localScreen) {
+    // Task 10 shows the forced password change page for 'change'. Until then, the sign-in page.
+    return <LoginPage onSignedIn={(session) => { void openLocalSession(session); }} />;
+  }
 
   if (localSignout) {
     return <StripedEmpty className="h-dvh"><div className="flex max-w-sm flex-col gap-4 p-6 text-center">

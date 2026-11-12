@@ -6,6 +6,13 @@ export const fr: EnShape = {
     heading: "Vous n'avez pas accès à cette page",
     description: "Demandez à un administrateur de vérifier vos autorisations. Vous pouvez utiliser la navigation disponible, ouvrir la documentation ou vous déconnecter depuis votre menu utilisateur.",
   },
+  auth: {
+    signInTitle: 'Connexion à OpenLDR',
+    username: "Nom d'utilisateur ou e-mail",
+    password: 'Mot de passe',
+    invalid: 'Ces informations sont incorrectes, ou le compte est verrouillé pour quelques minutes.',
+    tooMany: 'Trop de tentatives. Attendez une minute et réessayez.',
+  },
   workflowReceipts: {
   "title": "Reçus webhook",
   "runs": "Exécutions",

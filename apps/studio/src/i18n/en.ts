@@ -4,6 +4,13 @@ export const en = {
     heading: "You don't have access to this page",
     description: 'Ask an administrator to review your permissions. You can use the available navigation, open Docs, or sign out from your user menu.',
   },
+  auth: {
+    signInTitle: 'Sign in to OpenLDR',
+    username: 'Username or email',
+    password: 'Password',
+    invalid: 'Those details are wrong, or the account is locked for a few minutes.',
+    tooMany: 'Too many attempts. Wait a minute and try again.',
+  },
   workflowReceipts: {
   "title": "Webhook receipts",
   "runs": "Runs",
