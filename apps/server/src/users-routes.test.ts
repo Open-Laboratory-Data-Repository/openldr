@@ -574,6 +574,47 @@ describe('users routes — SP4 admin actions (reset-password / send-reset-email 
     expect(events.some((e) => e.action === 'user.send_reset_email')).toBe(false);
   });
 
+  describe('a password that breaks a rule under local sign-in', () => {
+    // Shaped like the adapter's PasswordRuleError. apps/server does not import the class.
+    function ruleError(failure: string): Error {
+      const e = Object.assign(new Error(`password ${failure}`), { failure });
+      e.name = 'PasswordRuleError';
+      return e;
+    }
+    const FAILURES = ['too_short', 'too_long', 'same_as_username'] as const;
+
+    it('reset-password answers 400 with the failure and writes no audit row', async () => {
+      for (const failure of FAILURES) {
+        const ctx = fakeCtx();
+        (ctx as unknown as { auth: { resetPassword: () => Promise<void> } }).auth.resetPassword = async () => { throw ruleError(failure); };
+        const res = await adminApp(ctx).inject({ method: 'POST', url: '/api/users/lu1/reset-password', payload: { password: 'short' } });
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({ error: failure });
+        const events = (ctx as unknown as { __auditEvents: Array<{ action: string }> }).__auditEvents;
+        expect(events.some((e) => e.action === 'user.reset_password')).toBe(false);
+      }
+    });
+
+    it('create answers 400 with the failure and writes no audit row', async () => {
+      for (const failure of FAILURES) {
+        const ctx = fakeCtx();
+        (ctx as unknown as { auth: { directory: { create: () => Promise<never> } } }).auth.directory.create = async () => { throw ruleError(failure); };
+        const res = await adminApp(ctx).inject({ method: 'POST', url: '/api/users', payload: { username: 'bo', password: 'short' } });
+        expect(res.statusCode).toBe(400);
+        expect(res.json()).toEqual({ error: failure });
+        const events = (ctx as unknown as { __auditEvents: Array<{ action: string }> }).__auditEvents;
+        expect(events.some((e) => e.action === 'user.create')).toBe(false);
+      }
+    });
+
+    it('still answers 502 for any other directory error', async () => {
+      const ctx = fakeCtx();
+      (ctx as unknown as { auth: { resetPassword: () => Promise<void> } }).auth.resetPassword = async () => { throw new Error('keycloak said no'); };
+      const res = await adminApp(ctx).inject({ method: 'POST', url: '/api/users/kc-sub-1/reset-password', payload: { password: 'pw' } });
+      expect(res.statusCode).toBe(502);
+    });
+  });
+
   it('reset-password: 503 when op throws IdentityAdminNotConfiguredError', async () => {
     const ctx = fakeCtx();
     (ctx as unknown as { auth: { resetPassword: () => Promise<void> } }).auth.resetPassword = async () => {

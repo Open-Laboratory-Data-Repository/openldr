@@ -7,7 +7,7 @@ import {
   IdentityAdminNotConfiguredError,
   type AuthPort, type DirectoryUser, type LocalAuthStore, type SyncClientPort, type TokenClaims,
 } from '@openldr/ports';
-import { checkPasswordRules, createPasswordHasher, type PasswordHasher } from './password';
+import { checkPasswordRules, createPasswordHasher, type PasswordHasher, type PasswordRuleFailure } from './password';
 import { createLocalSignIn, type LocalSignIn, type SignInRoles, type SignInUser, type SignInUsers } from './sign-in';
 import { LOCAL_ISSUER, loadOrCreateSigningKey } from './tokens';
 
@@ -15,6 +15,14 @@ export class PasswordResetEmailUnsupportedError extends Error {
   constructor() {
     super('password reset email is not supported under local sign-in');
     this.name = 'PasswordResetEmailUnsupportedError';
+  }
+}
+
+/** A password an admin set breaks a rule. Routes answer 400 with `failure`. Carries no password. */
+export class PasswordRuleError extends Error {
+  constructor(readonly failure: PasswordRuleFailure) {
+    super(`password ${failure}`);
+    this.name = 'PasswordRuleError';
   }
 }
 
@@ -51,10 +59,10 @@ export async function createLocalAuth(deps: LocalAuthDeps): Promise<{ auth: Auth
     return user;
   }
 
-  /** Throws `password <failure>` when the password breaks a rule. */
+  /** Throws PasswordRuleError when the password breaks a rule. */
   function assertPasswordRules(password: string, username: string): void {
     const rule = checkPasswordRules(password, username);
-    if (rule !== 'ok') throw new Error(`password ${rule}`);
+    if (rule !== 'ok') throw new PasswordRuleError(rule);
   }
 
   /** Role slugs to IDs. Unknown slugs are dropped. */

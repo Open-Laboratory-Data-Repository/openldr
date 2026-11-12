@@ -5,7 +5,7 @@ import { IdentityAdminNotConfiguredError, type AuthPort } from '@openldr/ports';
 import { createPasswordHasher, type PasswordHasher, type ScryptFn } from './password';
 import { LOCAL_ISSUER, loadOrCreateSigningKey, signAccessToken } from './tokens';
 import type { LocalSignIn, NewSession } from './sign-in';
-import { PasswordResetEmailUnsupportedError, createLocalAuth } from './local-auth';
+import { PasswordResetEmailUnsupportedError, PasswordRuleError, createLocalAuth } from './local-auth';
 import { FAKE_ROLES, makeFakes, type FakeClock, type FakeRoles, type FakeStore, type FakeUsers } from './test-support';
 
 const GOOD = 'correct horse battery';
@@ -176,6 +176,23 @@ describe('directory', () => {
     await expect(auth.directory.create({ username: 'bo', password: 'short' })).rejects.toThrow('password too_short');
     expect(await users.getByUsername('bo')).toBeUndefined();
     await expect(auth.resetPassword(adaId, 'short', true)).rejects.toThrow('password too_short');
+  });
+
+  it('throws a PasswordRuleError naming the failure, so a route can answer 400', async () => {
+    const cases = [
+      ['short', 'too_short'],
+      ['x'.repeat(129), 'too_long'],
+      ['Bo.Li.Example', 'same_as_username'],
+    ] as const;
+    for (const [password, failure] of cases) {
+      const onCreate = await auth.directory.create({ username: 'bo.li.example', password }).catch((e: unknown) => e);
+      expect(onCreate).toBeInstanceOf(PasswordRuleError);
+      expect(onCreate).toMatchObject({ name: 'PasswordRuleError', failure });
+    }
+    const onReset = await auth.resetPassword(adaId, 'ada', true).catch((e: unknown) => e);
+    expect(onReset).toBeInstanceOf(PasswordRuleError);
+    expect(onReset).toMatchObject({ name: 'PasswordRuleError', failure: 'too_short' });
+    expect(String(onReset)).not.toContain(GOOD);
   });
 
   it('refuses a username that already exists and writes nothing', async () => {

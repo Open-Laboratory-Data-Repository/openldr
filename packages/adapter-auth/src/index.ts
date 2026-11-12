@@ -3,7 +3,7 @@ import { createTokenVerifier } from './token-verifier';
 import type { AuthPort, DirectoryUser } from '@openldr/ports';
 import { IdentityAdminNotConfiguredError } from '@openldr/ports';
 
-export { createLocalAuth, PasswordResetEmailUnsupportedError, type LocalAuthDeps } from './local/local-auth';
+export { createLocalAuth, PasswordResetEmailUnsupportedError, PasswordRuleError, type LocalAuthDeps } from './local/local-auth';
 export { LOCAL_ISSUER, SigningKeyUnreadableError } from './local/tokens';
 export type { LocalSignIn, LoginResult, SetupResult, ChangePasswordResult, SessionGrant, NewSession } from './local/sign-in';
 

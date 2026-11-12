@@ -21,6 +21,14 @@ function isResetEmailUnsupported(e: unknown): boolean {
   return e instanceof Error && e.name === 'PasswordResetEmailUnsupportedError';
 }
 
+// Same duck-typing: a password an admin typed under local sign-in breaks a rule. The failure is
+// one of too_short, too_long or same_as_username, and the studio shows it in words.
+function passwordRuleFailure(e: unknown): string | null {
+  if (!(e instanceof Error) || e.name !== 'PasswordRuleError') return null;
+  const failure = (e as { failure?: unknown }).failure;
+  return typeof failure === 'string' ? failure : null;
+}
+
 // ---------------------------------------------------------------------------
 // Input schemas
 // ---------------------------------------------------------------------------
@@ -198,6 +206,8 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
         reply.code(503);
         return { error: 'identity provider admin client is not configured' };
       }
+      const rule = passwordRuleFailure(e);
+      if (rule) { reply.code(400); return { error: rule }; }
       reply.code(502);
       return { error: redact(e instanceof Error ? e.message : String(e)) };
     }
@@ -301,6 +311,8 @@ export function registerUsersRoutes(app: FastifyInstance<any, any, any, any>, ct
       await ctx.auth.resetPassword(id, p.data.password, p.data.temporary ?? true);
     } catch (e) {
       if (isNotConfigured(e)) { reply.code(503); return { error: 'identity provider admin client is not configured' }; }
+      const rule = passwordRuleFailure(e);
+      if (rule) { reply.code(400); return { error: rule }; }
       reply.code(502); return { error: redact(e instanceof Error ? e.message : String(e)) };
     }
     await recordAudit(ctx, req, { action: 'user.reset_password', entityType: 'user', entityId: id, before: null, after: null, metadata: { temporary: p.data.temporary ?? true } });

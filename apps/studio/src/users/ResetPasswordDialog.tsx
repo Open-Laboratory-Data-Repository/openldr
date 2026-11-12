@@ -6,7 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { resetUserPassword, type User } from '@/api';
+import { PasswordRuleError, resetUserPassword, type PasswordRule, type User } from '@/api';
+
+/** The i18n key for each password rule the server refuses under local sign-in. UserDialog uses it too. */
+export const PASSWORD_RULE_KEYS: Record<PasswordRule, string> = {
+  too_short: 'auth.tooShort',
+  too_long: 'auth.tooLong',
+  same_as_username: 'auth.sameAsUsername',
+};
 
 interface Props {
   open: boolean;
@@ -53,7 +60,8 @@ export function ResetPasswordDialog({ open, onOpenChange, user, onDone }: Props)
       onDone(user);
       onOpenChange(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof PasswordRuleError) setError(t(PASSWORD_RULE_KEYS[e.rule]));
+      else setError(e instanceof Error ? e.message : String(e));
     } finally { setSaving(false); }
   };
 
