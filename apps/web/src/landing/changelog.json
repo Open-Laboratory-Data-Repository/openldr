@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "6f82520a",
+          "type": "fix",
+          "scope": "web",
+          "title": "Show configuration snippets once without terminal frames"
+        },
+        {
           "hash": "04217ec6",
           "type": "feat",
           "scope": "web",
