@@ -29,17 +29,9 @@ O instalador cria a configuração, gera palavras-passe e inicia os serviços. E
 
 O endereço ilustrado é o predefinido numa instalação local. Para aceder a partir de outros computadores, configure um nome de anfitrião com [Instalar](/docs/install). Noutro computador, `localhost` refere-se a esse computador, não ao anfitrião OpenLDR.
 
-## Iniciar sessão no Studio
+## Primeiro início de sessão
 
-Use as credenciais da aplicação para entrar no Studio pela primeira vez.
-
-1. Abra o endereço apresentado pelo instalador. Numa instalação remota, use o nome de anfitrião configurado.
-2. Inicie sessão como `labadmin`, com a palavra-passe gerada na linha **App sign-in**.
-3. Altere a palavra-passe inicial quando lhe for pedido.
-
-**Resultado esperado:** O Studio abre. Uma nova instalação inclui um painel de exemplo, salvo se escolheu a opção sem dados iniciais. Numa atualização, os dados e as permissões existentes determinam o que aparece.
-
-A instalação local predefinida usa um certificado autoassinado. É esperado um aviso do navegador neste caso. Confirme que abriu o endereço da sua própria instalação antes de o aceitar. Consulte [Instalar](/docs/install) para obter um certificado reconhecido pelos navegadores.
+O percurso ilustrado do primeiro início de sessão fica adiado até à captura numa instalação nova. Conserve as credenciais **App sign-in** geradas para essa tarefa. Consulte [Instalar](/docs/install) para o endereço configurado e os certificados.
 
 ## Continuar na aplicação
 

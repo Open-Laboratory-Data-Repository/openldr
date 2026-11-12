@@ -29,17 +29,9 @@ The installer creates the configuration, generates passwords and starts the serv
 
 The illustrated address is the default for a local installation. If you need access from other computers, configure a hostname with [Install](/docs/install). On another computer, `localhost` refers to that computer, not your OpenLDR host.
 
-## Sign in to Studio
+## First sign-in
 
-Use the app credentials to enter Studio for the first time.
-
-1. Open the address the installer printed. For a remote installation, use the hostname you configured.
-2. Sign in as `labadmin`, using the generated password on the **App sign-in** line.
-3. Change the initial password when prompted.
-
-**Expected result:** Studio opens. A new installation includes a sample dashboard unless you chose the seedless option. Existing data and permissions determine what you see on an upgraded installation.
-
-The default local installation uses a self-signed certificate. A browser warning is expected for that setup. Check that you opened your own installation's address before accepting it. See [Install](/docs/install) for a trusted certificate.
+The illustrated first-sign-in walkthrough is deferred until it can be captured on a fresh installation. Keep the generated **App sign-in** credentials for that task. See [Install](/docs/install) for the configured address and certificate setup.
 
 ## Continue in the app
 

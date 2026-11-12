@@ -29,17 +29,9 @@ L'installateur crée la configuration, génère les mots de passe et démarre le
 
 L'adresse illustrée est celle d'une installation locale par défaut. Pour un accès depuis d'autres ordinateurs, configurez un nom d'hôte avec [Installation](/docs/install). Sur un autre ordinateur, `localhost` désigne cet ordinateur, pas votre hôte OpenLDR.
 
-## Se connecter à Studio
+## Première connexion
 
-Utilisez les identifiants de l'application pour entrer dans Studio pour la première fois.
-
-1. Ouvrez l'adresse affichée par l'installateur. Pour une installation distante, utilisez le nom d'hôte configuré.
-2. Connectez-vous avec `labadmin` et le mot de passe généré sur la ligne **App sign-in**.
-3. Changez le mot de passe initial lorsque cela vous est demandé.
-
-**Résultat attendu :** Studio s'ouvre. Une nouvelle installation comprend un tableau de bord d'exemple, sauf si vous avez choisi l'option sans données initiales. Après une mise à niveau, les données et les droits existants déterminent ce qui s'affiche.
-
-L'installation locale par défaut utilise un certificat auto-signé. Un avertissement du navigateur est attendu dans ce cas. Vérifiez que vous avez ouvert l'adresse de votre propre installation avant de l'accepter. Consultez [Installation](/docs/install) pour un certificat reconnu par les navigateurs.
+Le parcours illustré de première connexion attend une capture sur une installation neuve. Conservez les identifiants **App sign-in** générés pour cette étape. Consultez [Installation](/docs/install) pour l'adresse configurée et les certificats.
 
 ## Continuer dans l'application
 
