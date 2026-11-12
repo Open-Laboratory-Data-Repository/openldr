@@ -166,6 +166,12 @@ importers:
 
   apps/standalone:
     dependencies:
+      '@openldr/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       embedded-postgres:
         specifier: 16.15.0-beta.19
         version: 16.15.0-beta.19

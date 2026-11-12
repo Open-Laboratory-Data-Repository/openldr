@@ -9,6 +9,8 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
+    "@openldr/config": "workspace:*",
+    "@openldr/core": "workspace:*",
     "embedded-postgres": "16.15.0-beta.19",
     "pg": "8.21.0"
   },

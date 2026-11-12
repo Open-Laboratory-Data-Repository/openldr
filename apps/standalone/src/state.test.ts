@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { inspect } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { parseSecretKey } from '@openldr/core';
 import { newControlToken, startControl, type ControlServer } from './control.js';
 import {
   AlreadyRunningError,
@@ -137,9 +138,7 @@ describe('folders and state file', () => {
 
   it('creates a state with a key parseSecretKey accepts, and returns the same one next time', async () => {
     const first = await loadOrCreateState(paths, pick);
-    // parseSecretKey (packages/core/src/crypto.ts) accepts a string whose base64 decodes to 32 bytes.
-    expect(Buffer.from(first.secretsKey, 'base64')).toHaveLength(32);
-    expect(Buffer.from(first.secretsKey, 'base64').toString('base64')).toBe(first.secretsKey);
+    expect(parseSecretKey(first.secretsKey)).toHaveLength(32);
     for (const pw of [first.pgSuperPassword, first.pgAppPassword]) {
       expect(pw).toMatch(/^[A-Za-z0-9_-]{32}$/);
       expect(Buffer.from(pw, 'base64url')).toHaveLength(24);
