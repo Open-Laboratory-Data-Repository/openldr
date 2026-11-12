@@ -1,153 +1,258 @@
 # Marketplace
 
-**Marketplace** is where administrators find and install extras for OpenLDR: **plugins** that read or send data (a CSV importer, an HL7 v2 reader, a DHIS2 sender), **form templates**, and **content packs** of reference data such as code systems, a facility register and report queries. Everything comes from a **registry**, a published list of artefacts. A fresh install has one, **Default registry**, on GitHub.
+Use Marketplace to review and install plugins, form templates, reports and content packs. Packages come from registries, which are lists of files supplied by a publisher.
 
-This guide takes about 10 minutes and needs network access to GitHub. Select any picture or clip to enlarge it.
+**View marketplace** lets you browse packages and installed items. **Manage marketplace** lets you install, disable, remove and manage registries.
 
-![Marketplace, Browse: the artefacts in the default registry, each with its type, publisher, version and signature state.](marketplace-tour.png)
+Begin with the registry your organisation trusts. A fresh installation includes Default registry on GitHub. Its server must reach that registry to read packages.
 
-## Who can do what
+The pictures use a signed training sink from a local practice registry. You can follow the same tasks with your approved package. No documentation samples are required. Optional practice setup is at the end.
 
-| Permission | What it allows |
-| --- | --- |
-| **View marketplace** | Open Settings, Marketplace, and browse available and installed artefacts |
-| **Manage marketplace** | Install, enable, disable, remove, and manage registries |
+## Find your package
 
-## The three tabs
+Check its source and purpose before choosing a package. Installing a plugin grants its declared capabilities.
 
-- **Browse** lists what the registries offer. **All types** filters by plugin, form or content pack.
-- **Installed (N)** lists what this install has, with each artefact's state.
-- **Registries** lists where artefacts come from.
+### 1. Open Marketplace
 
-Each card shows **Unverified** until its signature has been checked. Opening it checks the signature and the card turns **Verified**.
+Open **Settings**, then **Marketplace**.
 
-## Example 1: read a plugin before installing it
+![Open Settings, then Marketplace.](marketplace-guide-open.png)
 
-![Opening tabular. The details, permissions and requirements load and it turns Verified.](marketplace-read.mp4)
+### 2. Choose Browse
 
-1. Open **Settings**, then **Marketplace**. **Browse** is open.
-2. Select **tabular**.
+Use **Browse** to see available packages from enabled registries.
 
-**Expected result:** after a few seconds the page reads **Verified**, with the description **CSV/Excel -> FHIR R4 ingestion plugin (configurable mapping)**. It shows:
+![Browse lists packages offered by enabled registries.](marketplace-guide-browse.png)
 
-| Field | Value |
-| --- | --- |
-| Entry point | `convert` |
-| Checksum (sha256) | the file's hash, checked before it runs |
-| Sandbox | WASI enabled |
-| Memory limit | 256 MB |
-| Time limit | 30000 ms |
-| Permissions | `read-input`, `emit-fhir` (Patient, Specimen, Observation) |
-| Requirements | Compatible with CE 0.1.11 |
+### 3. Search for the package
 
-![tabular's details: what it runs, what it may do, and what it needs.](marketplace-read-full.png)
+Enter the package id in Search. The fictional practice example uses `test-sink`.
 
-A plugin runs in a sandbox with fixed memory and time. Its permissions say what it may do: `tabular` may read the file it is given and write FHIR patients, specimens and observations, nothing else.
+![Search by the package id.](marketplace-guide-search.png)
 
-While registry package details load, Permissions shows **Loading permissions** and Install stays disabled. If retrieval fails, it shows **Permissions unavailable**. Neither state means the package requests no permissions. **No special permissions requested** appears only when the loaded details confirm an empty list. Selecting another version starts this check again. The installation approval uses the permissions for that selected version. Installed packages without a registry reference can use their stored permission list.
+### 4. Choose a type if useful
 
-The selected artifact is installed or updated, and registries control which available artifacts appear for administrators.
+Use **All types** to narrow the list to a plugin, form template, report or content pack.
 
-## Example 2: install it
+![Filter by type when you need a plugin, form, report or content pack.](marketplace-guide-filter.png)
 
-![Opening the menu, selecting Install, reading the capabilities and approving.](marketplace-install.mp4)
+### 5. Check the card
 
-1. On the **tabular** page, open **⋯** and select **Install**.
-2. **Review & approve: tabular** lists the version and the **Requested capabilities**. Read them.
-3. Select **Approve & install**.
+Read the id, version, publisher and registry. Open the correct package card.
 
-**Expected result:** the tab reads **Installed (1)**, and **tabular** is listed there as **Active**.
+![Read the package id, version, publisher and registry.](marketplace-guide-card.png)
 
-![tabular installed and Active.](marketplace-installed.png)
+**Expected result:** The package detail opens. Opening it retrieves the package information needed for signature, permission and compatibility checks.
 
-The approval is for the capabilities of the version you selected. Choosing another version starts the check again.
+## Read the package before installing
 
-## Example 3: remove it
+A signature check establishes whether the file matches the publisher key. Decide whether you trust that publisher and what the package may do.
 
-![Opening the installed plugin, choosing Remove and confirming.](marketplace-remove.mp4)
+### 1. Check the signature
 
-1. On **Installed**, select **tabular**. Open **⋯**. It offers **Disable**, **Remove** and **Back**.
-2. Select **Remove**, then **Remove** again in **Remove tabular?**. This uninstalls it from this install.
+Read **Verified** or the verification failure. An unopened remote card can be Unverified until details load.
 
-**Expected result:** **Installed (0)**.
+![Opening details checks the publisher signature.](marketplace-guide-signature.png)
 
-**Disable** keeps a plugin installed but stops it loading. **Rollback**, when an older version is installed, makes that version active again.
+### 2. Read the description
 
-## Registries
+Read what the package does and any required setup. This training package has no real destination.
 
-![The Registries tab: Default registry, Remote (HTTP), on GitHub.](marketplace-registry-list.png)
+![Read the package description before installing it.](marketplace-guide-readme.png)
 
-1. Open the **Registries** tab. **Default registry** is a **Remote (HTTP)** registry at `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main`.
-2. To add one, open the page's **⋯** menu and select **Add registry**. Fill in **Name**, **Type** and **Location (URL or directory)**, then choose **Save** from the sheet's **⋯** menu. Close the sheet without saving to discard it.
+### 3. Read permissions and requirements
 
-![The Add registry sheet.](marketplace-add-registry.png)
+Check publisher, selected version, permissions and compatibility. Loading permissions or Permissions unavailable does not mean no permissions are requested. Wait for confirmed details.
 
-A registry can be a web address or a folder on the server. A lab without internet can point a folder registry at a copy of the marketplace.
+![Read the selected version, permissions and compatibility.](marketplace-guide-permissions.png)
 
-## Content packs
+**Expected result:** Install becomes available only when the selected version passes the required checks. Selecting another version starts its checks again.
 
-A content pack is a signed bundle of reference data. It installs, in this order, code systems, value sets, a facility register, link-matching, and custom queries. A pack declares no capabilities.
+## Approve and install a package
 
-In **Browse**, filter by **Content pack**. A pack's detail lists its steps with counts. The install confirmation shows the same list. You need the marketplace manage permission, as for plugins.
+Use this only after reviewing the selected package and capabilities.
 
-Install checks every step first. A pack with no publisher signature is refused. It checks the signature and the publisher key, the file hash, and the step list. It checks that every query is SELECT-only, that the register file previews cleanly, and that the register is not deactivated. If a check fails, nothing is written.
+### 1. Choose Install
 
-The first install from a publisher pins its key. A later pack signed with a different key is refused.
+Open the package detail dots and select **Install**.
 
-Then install applies the steps in order. If a step fails, the earlier steps stay written. The pack shows **Failed at step N** with the error on its card and in its detail. Choose **Install again** in the `⋯` menu to finish it.
+![Choose Install after reviewing the details.](marketplace-guide-install.png)
 
-Installing twice is safe:
+### 2. Review the approval
 
-- Code systems and value sets are replaced by URL.
-- The register source is reused, and its rows are updated on their code.
-- Link-matching runs again.
-- Queries are replaced by name. A query an admin edited is overwritten when the pack is installed again.
+Check the version and **Requested capabilities**. A content pack shows its included steps instead.
 
-Rows dropped from a newer pack's register are reported. They are never retired.
+![Review the version and requested capabilities before approval.](marketplace-guide-consent.png)
 
-A register step can list extra columns. Their values go into each facility's `extras`, keyed by the column name in lowercase. Custom queries read them from the warehouse table `facility_registry`. Any other column the register does not know still refuses the pack. An older CE refuses a pack that lists extra columns, and writes nothing.
+### 3. Approve this installation
 
-A pack can map lab test codes to catalog tests (**Test mappings**). It names each code's LOINC code, and CE maps it to the catalog test linked to that LOINC. A code the pack cannot resolve is skipped and listed: no catalog test has that LOINC, or two do. A code already mapped here is kept. The CLI dry run (`openldr market install <dir> --dry-run`) lists what it would map, keep and skip.
+Select **Approve & install** to proceed. Cancel closes the approval without installing.
 
-Choose **Detach** to forget the install record. It keeps everything the pack wrote. There is no uninstall.
+![Approve and install authorizes only this reviewed installation.](marketplace-guide-approve.png)
 
-From the command line, `openldr market install <bundle-dir> --dry-run` runs the checks and prints the steps, with how many codes each link-matching step would link. It writes nothing.
+### 4. Check Installed
 
-## From the command line
+Use the detail dots and Back, then choose **Installed**. Check the installed id and Active state.
 
-The CLI installs from a bundle folder on the server, not from a registry.
+![Installed lists the saved plugin with its active state.](marketplace-guide-installed.png)
 
-```bash
-./openldr market list
-./openldr market verify <bundle-dir>
-./openldr market install <bundle-dir> --dry-run
-./openldr market disable tabular
-./openldr market remove tabular
+**Expected result:** The package is installed in this OpenLDR instance. Installation does not configure every external dependency or prove the plugin can import your data.
+
+## Disable or enable an installed plugin
+
+Disabling keeps the installed files and record. It stops the plugin loading.
+
+### 1. Choose Disable
+
+On Installed, open the plugin. Open its dots and select **Disable**.
+
+![Disable keeps the plugin installed but stops it loading.](marketplace-guide-disable.png)
+
+### 2. Enable it again when appropriate
+
+After disabling, reload the page and reopen the plugin from Installed. Open its dots and select **Enable**. This refreshes the current menu state.
+
+![Enable permits the installed plugin to load again.](marketplace-guide-enable.png)
+
+**Expected result:** The installed plugin can load again when enabled. This does not change its external connection settings.
+
+## Remove an installed plugin
+
+Check dependent workflows and imports before removing a plugin.
+
+### 1. Choose Remove
+
+Open the installed plugin detail dots and select **Remove**.
+
+![Remove uninstalls this plugin.](marketplace-guide-remove.png)
+
+### 2. Confirm the plugin id
+
+In the confirmation, choose **Remove** to uninstall this plugin or Cancel to keep it. The practice capture removes test-sink.
+
+![Confirm the plugin id before removing it.](marketplace-guide-remove-confirm.png)
+
+**Expected result:** The removed plugin is no longer installed. Its available registry card can still appear in Browse.
+
+## Add a registry
+
+Use the registry URL or server folder supplied by your organisation. A local registry folder contains package directories. It must be accessible to the OpenLDR server.
+
+### 1. Open Registries
+
+Choose the **Registries** tab. Check existing sources before adding a duplicate.
+
+![Registries lists package sources.](marketplace-guide-registries.png)
+
+### 2. Choose Add registry
+
+Open the tab-strip dots and select **Add registry**.
+
+![Choose Add registry from the tab strip dots.](marketplace-guide-add-registry.png)
+
+### 3. Name the source
+
+Enter a useful **Name**. The example uses Example local registry.
+
+![Use a name identifying the registry owner.](marketplace-guide-registry-name.png)
+
+### 4. Choose its type
+
+Choose **Local directory** for a folder on the API server or **Remote (HTTP)** for a web registry.
+
+![A local registry is a folder on the OpenLDR server.](marketplace-guide-registry-type.png)
+
+### 5. Enter its location
+
+Fill **Location** with the server folder or registry base URL. The picture uses an isolated practice folder.
+
+![Enter the folder visible to the API server, not your laptop.](marketplace-guide-registry-location.png)
+
+### 6. Save the source
+
+Open the sheet dots and select **Save**.
+
+![Save adds the registry.](marketplace-guide-registry-save.png)
+
+**Expected result:** The enabled registry appears in the list. Its available packages appear in Browse. A folder on your laptop is not automatically visible to a server or container.
+
+![The local registry is listed and enabled.](marketplace-guide-registry-saved.png)
+
+## Change a registry
+
+A disabled registry stops supplying available packages. It does not uninstall packages already installed.
+
+### 1. Choose Edit
+
+Open the registry row dots and select **Edit**.
+
+![Edit revises a registry name, kind, location or enabled state.](marketplace-guide-registry-edit.png)
+
+### 2. Check settings and Enabled
+
+Update the name, type, location or Enabled state. Save from the sheet dots. Close without Save to discard changes.
+
+![Check stored location and Enabled before changing a registry.](marketplace-guide-registry-settings.png)
+
+## Review packages on a phone
+
+The same tabs and package actions are available at phone width.
+
+### 1. Read a package card
+
+Search in Browse and open the correct card. Cards stack vertically.
+
+![Browse cards stack at phone width.](marketplace-guide-phone.png)
+
+### 2. Review version and permissions
+
+Read details above the package description, then scroll for the remaining sections.
+
+![Version and permissions appear before the description on a phone.](marketplace-guide-phone-details.png)
+
+## Content packs and other package types
+
+A content pack applies its declared reference-data steps in order. Review its list and counts before installing. Pack installation can update code systems, value sets, facilities, mappings and named queries. A retry can overwrite a query changed locally.
+
+If a pack fails during application, earlier steps can remain written. Read Failed at step N and its error, correct the cause, then choose Install again. A pack refuses invalid signatures and failed preflight checks before writing.
+
+**Detach** forgets an installed pack or form-template record while retaining its created data. It is not an uninstall. Plugins offer Remove. An older installed plugin version can offer Rollback. These alternatives depend on the selected package type and installed versions.
+
+A package whose details cannot load keeps installation disabled. Check registry availability before retrying. The documented test exercised the plugin path. It did not apply a content pack or roll back an older plugin.
+
+## Use a local bundle from the CLI
+
+Follow [Start here](/docs/start-here) for CLI setup. From `openldr_ce`, CLI install reads a bundle directory on the server. It does not browse the Studio registry list. Verify and dry-run before applying an approved bundle.
+
+```shell
+pnpm openldr market list
+pnpm openldr market verify <bundle-directory>
+pnpm openldr market install <bundle-directory> --dry-run
+pnpm openldr market install <bundle-directory>
+pnpm openldr market disable <plugin-id>
+pnpm openldr market remove <plugin-id>
 ```
 
-`verify` checks a bundle's manifest, file and publisher key. `install --dry-run` runs every check and writes nothing. `update` installs a content pack only when the bundle is newer than the one installed. `rollback <id> <version>` activates an older version of a plugin.
+## Optional practice with a local training sink
 
-## Reading what an artefact can do
+Use your approved registry and packages for normal work. The optional [practice manifest](https://openldr.online/docs-samples/user-guide/marketplace/manifest.json) belongs to a signed training bundle. It has no clinical sample data and sends nothing to a real destination.
 
-Compatibility tells you whether the artifact can run in this app version. Capabilities tell you what it can do. Registry source determines trust and update availability. When diagnosing install failures, compare registry state, artifact type, version, and capability requirements before retrying.
+In a source checkout on a disposable installation, `pnpm build:test-sink` and `pnpm make:docs-marketplace-bundle` create the repository training bundle. Use the generated bundle folder on that server as a local registry. Local registry roots contain immediate package directories. The HTTP index format is different.
 
-## On a phone
-
-Marketplace works on a phone. The cards stack in one column. On an artefact's page, the details, permissions and requirements come first, above its description.
+The pictures use a separate generated practice folder. Do not treat its test publisher key as a production trust decision.
 
 ## Troubleshooting
 
-- **Browse is empty.** The registry is unreachable or disabled. Check **Registries**, and that the server can reach the registry's address.
-- **The card stays Unverified.** Open it. The signature is checked when its details load.
-- **Permissions shows Permissions unavailable.** The details could not be fetched. This does not mean the artefact needs no permissions. Install stays disabled.
-- **Install fails:** inspect compatibility, capabilities, and registry availability.
-- **A package is missing:** check that the registry is enabled and reachable.
-- **The wrong version is installed:** open details and select the intended version if available.
-- **An installed artifact does not appear elsewhere:** confirm it is enabled and supported by that feature area.
+**Browse is empty.** Clear Search and the type filter. Check enabled registries and whether the API server can read the folder or URL. Use the tab-strip dots and Refresh after source changes.
+
+**A local package is missing.** Point the registry at the directory whose immediate children are readable bundle directories, each with its manifest and payload.
+
+**Permissions unavailable.** The package details could not be retrieved. This does not establish an empty permission list.
+
+**Approval stays open after an error.** Read the error notification. Correct storage, compatibility, signature or other reported requirements before retrying.
+
+**A plugin is installed but missing elsewhere.** Confirm it is enabled and declares the expected importer, page or other capability. For cards and panels, see [Plugin cards and side panels](/docs/plugin-sites).
 
 ## Related guides
 
-- [Settings](/docs/settings)
-- [Connectors](/docs/connectors)
-- [Forms](/docs/forms)
-- [Facilities](/docs/facilities)
+[Connectors](/docs/connectors) covers plugin destinations. [Forms](/docs/forms) covers form editing. [Plugin cards and side panels](/docs/plugin-sites) covers optional plugin places.

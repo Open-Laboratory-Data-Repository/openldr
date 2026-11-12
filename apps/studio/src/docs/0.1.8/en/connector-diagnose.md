@@ -1,136 +1,167 @@
-# Connect to SQL Server and diagnose a connection
+# Diagnose connections
 
-CE can connect to a SQL Server **named instance** and with a **Windows account**, as many lab systems need. When any database connection fails, **Diagnose** checks it one step at a time and says which step broke and what to change.
+Use Diagnose when a saved host connector cannot connect. It checks the settings, server name, port, login and server version in order.
 
-This guide takes about 10 minutes. Select any picture or clip to enlarge it.
+You need **Manage connectors**. Diagnosis runs from the OpenLDR server using stored credentials. It opens a test connection but does not import data.
 
-## Who can do what
+Use your own saved connection. The pictures show a real isolated Postgres connection and a deliberately absent SQL Server instance. A failed example does not prove a SQL Server login works.
 
-You need **Manage connectors**. Lab administrators have it.
+## Diagnose a saved connection
 
-## Before you start
+Begin with a connection you already use, or the warehouse connector on a new installation.
 
-- Know the server name, and the instance name if there is one. SQL Server Management Studio shows them as `SERVER\INSTANCE`.
-- Know whether the account is a SQL login or a Windows account.
+### 1. Open Connectors
 
-## Example 1: diagnose a connection that works
+Open **Settings**, then **Connectors**.
 
-![Choosing Diagnose on Target Warehouse (Postgres). Every step passes.](connector-diagnose-ok.mp4)
+![Open Settings, then Connectors.](connector-diagnose-guide-open.png)
 
-1. Open **Settings**, then **Connectors**.
-2. On the **Target Warehouse (Postgres)** row, open **⋯** and select **Diagnose**.
+### 2. Choose Diagnose
 
-**Expected result:** **All checks passed.** Each step shows what it found: the address, the name resolved to `127.0.0.1`, the port open, the login, and the server version.
+Open the host connector row dots and select **Diagnose**. Checks start as the sheet opens.
 
-![The diagnosis of the warehouse connector.](connector-diagnose-passed.png)
+![Choose Diagnose from a host connector row.](connector-diagnose-guide-diagnose.png)
 
-On this test install the **Settings** step shows a warning: the host is `localhost`. When CE runs in Docker, `localhost` means the CE container itself, not the machine that runs the database. Use the server's name or IP address.
+### 3. Read the settings result
 
-## Example 2: a named instance that does not answer
+Read the status and message for each step. A warning gives advice without stopping the later checks.
 
-Add a connector for a v1 database on a named instance, and see the diagnosis find the broken step.
+![Read the actual status of each diagnosis step.](connector-diagnose-guide-passed.png)
 
-![Adding a Microsoft SQL connector with localhost\SQLEXPRESS as the host.](connector-diagnose-add.mp4)
+### 4. Read the connection results
 
-1. On **Connectors**, open the page's **⋯** menu and select **Add connector**.
-2. Set **Category** to **Host** and **Database type** to **Microsoft SQL**.
-3. Fill in the form:
+Check **Port**, **Login** and **Server version**. The local Postgres example passes all checks.
 
-   | Field | Example value |
-   | --- | --- |
-   | Name | `v1 database (example)` |
-   | Host | `localhost\SQLEXPRESS` |
-   | Database | `OpenLDRData` |
-   | User | `v1_reader` |
-   | Password | the account's password |
+![Port, Login and Server version confirm the tested connection.](connector-diagnose-guide-login.png)
 
-   ![The Microsoft SQL form.](connector-diagnose-form.png)
+### 5. Repeat when needed
 
-4. Open the sheet's **⋯** menu and select **Save**.
-5. On the new row, open **⋯** and select **Diagnose**.
+Open the diagnosis sheet dots and select **Run again**. This uses the currently saved settings.
 
-![Diagnosing the new connector. It stops at SQL Server Browser.](connector-diagnose-browser.mp4)
+![Run again repeats the checks with saved settings.](connector-diagnose-guide-again.png)
 
-**Expected result:** **The connection check failed at: SQL Server Browser.** Server name passed. SQL Server Browser shows **no reply from SQL Server Browser within 3000 ms**, with the fix: start the SQL Server Browser service, open UDP 1434 in the firewall, or clear the instance name and enter the fixed TCP port. Port, Login and Server version were not tried.
+**Expected result:** A successful run ends with All checks passed. It proves the tested connection. It does not prove a particular report query, source schema or account permission.
 
-![The diagnosis, stopped at SQL Server Browser.](connector-diagnose-failed.png)
+## Enter SQL Server settings
 
-The Host box keeps `localhost\SQLEXPRESS` as typed. CE splits it into server and instance when it connects, which is why the SQL Server Browser step ran. Fix the instance or the firewall, then choose **Run again** from the diagnosis sheet's **⋯** menu.
+Ask the database operator whether you have a named instance, a fixed TCP port, a SQL login or a Windows domain account. Do not create the fictional connection unless you want an isolated failure example.
 
-To remove the example, open its row's **⋯** menu and select **Remove**.
+### 1. Add a host connector
 
-## The SQL Server form
+Close the diagnosis sheet. Open the Connectors page dots and choose **Add connector**. Enter a useful name and set Category to **Host**.
 
-| Field | What to enter |
-| --- | --- |
-| Host | The server name or IP address. You can also type `SERVER\INSTANCE`. CE splits it for you. |
-| Instance name | The part after the backslash, for example `SQLEXPRESS`. Leave it empty for the default instance. |
-| Port | Usually `1433`. CE ignores the port when an instance name is set, because SQL Server Browser reports the instance's port. |
-| Database | The database name. |
-| Windows domain | Leave empty for a SQL login. Fill it in for a Windows account, for example `LAB`. |
-| User | The SQL login, or the Windows user name without the domain. |
-| Password | The password. It is stored encrypted. |
-| Encrypt | On by default. Turn it off for an old SQL Server (2008 or 2012) that only offers old TLS. |
-| Trust server certificate | Turn on for a server inside the lab network that uses its own certificate. |
+![Choose Add connector for a SQL Server connection.](connector-diagnose-guide-add.png)
 
-When CE runs in Docker, `localhost` means the CE container, not your server. Use the server's name or IP address.
+### 2. Choose Microsoft SQL
 
-## The steps of a diagnosis
+Set **Database type** to **Microsoft SQL**.
 
-CE runs these in order and stops at the first failure. Steps after a failure show as skipped.
+![Choose Microsoft SQL.](connector-diagnose-guide-sql-type.png)
 
-| Step | What it checks |
-| --- | --- |
-| Settings | A host is set and the port is a valid number. |
-| Server name | The name resolves to an address from the CE server. |
-| SQL Server Browser | Only for a named instance. SQL Server Browser on UDP port 1434 lists the instance and its TCP port. |
-| Port | The TCP port answers. |
-| Login | CE can log in and open the database. |
-| Server version | CE can run a query, and shows the server version. |
+### 3. Enter server and instance
 
-Each failed step says what to change.
+Enter **Host**. A pasted `SERVER\INSTANCE` splits into Host and Instance name when you leave the field. Use a fixed Port only when Instance name is empty.
+
+![A pasted server and instance are split into separate fields.](connector-diagnose-guide-split.png)
+
+### 4. Enter database and account
+
+Fill **Database**, **User** and **Password**. For a Windows account, fill Windows domain and use the username without the domain. Leave the domain blank for a SQL login.
+
+![Enter the database and login. Windows domain is only for a Windows account.](connector-diagnose-guide-login-fields.png)
+
+### 5. Check encryption
+
+**Encrypt** starts on. Use the server operator's encryption and certificate requirements. Trust server certificate accepts a server certificate without normal certificate validation.
+
+![Encrypt starts on. Match encryption and certificate settings to your server.](connector-diagnose-guide-encryption.png)
+
+### 6. Save the connector
+
+Open the sheet dots and choose **Save**.
+
+![Save stores settings before diagnosis.](connector-diagnose-guide-save.png)
+
+**Expected result:** The saved connector can now be diagnosed. The screenshot example intentionally names an instance that does not exist.
+
+## Read and correct a failed diagnosis
+
+Diagnosis stops at the first failed check. Later steps show as skipped, so they have no result yet.
+
+### 1. Diagnose the saved row
+
+Open its row dots and choose **Diagnose**.
+
+![Choose Diagnose on the saved named instance.](connector-diagnose-guide-bad-diagnose.png)
+
+### 2. Read the first failure
+
+Read the failed step and correction message. This example gets no SQL Server Browser reply for its absent named instance.
+
+![This deliberately absent instance fails at SQL Server Browser.](connector-diagnose-guide-browser-failure.png)
+
+### 3. Check which steps were skipped
+
+Here Port, Login and Server version were not attempted. Do not treat a skipped login as an accepted password.
+
+![Later steps are skipped after the first failure.](connector-diagnose-guide-skipped.png)
+
+### 4. Correct the saved settings
+
+Close diagnosis, open row dots and choose **Edit**. Check Host and Instance name. If your operator supplies a fixed TCP port, clear Instance name and enter that port. Save any change, then diagnose again.
+
+![Check the server and instance. Alternatively clear Instance name and enter the real fixed TCP port.](connector-diagnose-guide-correction.png)
+
+**Expected result:** Follow the actual failed step. The correction can require a database service, firewall or name-resolution change outside OpenLDR. The absent instance was not repaired.
+
+## Read diagnosis on a phone
+
+The same row menu opens diagnosis at phone width.
+
+### 1. Read the check messages
+
+Open Diagnose, then scroll inside the sheet to read each result. Messages wrap beneath the step name.
+
+![The phone diagnosis sheet wraps each step message.](connector-diagnose-guide-phone.png)
+
+## What the checks mean
+
+**Settings.** A host is present and the port is valid. A localhost warning reminds you that Docker containers have their own loopback address.
+
+**Server name.** The OpenLDR server resolves the name to an address. A successful lookup does not prove the database port answers.
+
+**SQL Server Browser.** For a named SQL Server instance, UDP 1434 reports its TCP port. Ask the operator to start Browser and allow UDP, or use the actual fixed TCP port with no instance name.
+
+**Port.** A TCP connection opens. A wrong service can still answer the port.
+
+**Login.** The saved account opens the database. Check username, password, domain and database access when this fails.
+
+**Server version.** The server answers a small query. This still does not prove the tables or columns required by an importer exist.
+
+## Run the same check from the CLI
+
+Follow [Start here](/docs/start-here) for CLI setup. From `openldr_ce`, list connectors to get the id. Diagnose exits 1 when a step fails. Add `--json` for structured results.
+
+```shell
+pnpm openldr connectors list
+pnpm openldr connectors diagnose <id>
+pnpm openldr connectors diagnose <id> --json
+```
+
+## Optional practice and limits
+
+No sample data is needed. Test your existing warehouse connector first. A disposable Microsoft SQL connector with a nonexistent instance can demonstrate the Browser failure. Remove that example afterward through its row dots and confirmation.
+
+The documented checks exercised actual Postgres success and a real UDP timeout for an absent named instance. It did not exercise Windows authentication, a working named SQL Server instance, certificate replacement or an old TLS server.
 
 ## Troubleshooting
 
-- **Server name does not resolve.** Use the IP address, or add the name to DNS or the hosts file of the CE server.
-- **Port: no answer.** A firewall blocks the port. Open it on the database server, or on the network between the two machines.
-- **Port: nothing listens.** TCP/IP is turned off, or the port is wrong. Enable TCP/IP in SQL Server Configuration Manager.
-- **SQL Server Browser: no answer.** Start the SQL Server Browser service and open UDP 1434. Or clear the instance name and enter the instance's fixed TCP port.
-- **SQL Server Browser answered, but the instance is not listed.** Check the instance name, and enable TCP/IP for it.
-- **Login refused.** Check the user and password. SQL Server may allow Windows accounts only. Then fill in the Windows domain.
-- **The database does not open.** The login worked, but the database is missing or the user cannot open it. Check the name and the user's access.
-- **Certificate not trusted.** Turn on **Trust server certificate**.
-- **Old TLS refused.** Turn **Encrypt** off, or update the SQL Server.
+**The first check fails.** Read that check before the skipped results. Correct the saved settings in Edit and run Diagnose again.
 
-## From the command line
+**Browser times out for a named SQL Server instance.** Check the server and instance names and whether SQL Server Browser is reachable. Later checks are skipped until discovery succeeds.
 
-Run the same checks on a headless server:
-
-```bash
-openldr connectors diagnose <connector-id>
-```
-
-For the warehouse connector of Example 1 it prints:
-
-```text
-WARN  config   localhost:5433
-      When CE runs in Docker, localhost is the CE container itself. Use the server name or IP address of the machine that runs the database.
-PASS  dns      localhost resolved to 127.0.0.1
-PASS  tcp      port 5433 is open
-PASS  login
-PASS  version  PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
-
-All checks passed.
-```
-
-Add `--json` for machine-readable output. The command exits with code 1 when a step fails. Get the id with `GET /api/connectors`.
-
-## On a phone
-
-The diagnosis sheet covers most of the screen on a phone, and each step's message wraps under it. The connectors table is wider than the screen, so scroll it sideways to reach each row's **⋯** menu.
+**All checks pass but the importer fails.** Diagnosis verifies the connection and server response. It does not prove that the account can read each required source table.
 
 ## Related guides
 
-- [Connectors](/docs/connectors)
-- [Setup checks](/docs/setup-checks)
-- [Import from OpenLDR v1](/docs/v1-import)
+[Connectors](/docs/connectors) covers creation, testing and secret changes. [Import from OpenLDR v1](/docs/v1-import) uses a database connector.

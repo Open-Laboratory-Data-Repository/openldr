@@ -1,132 +1,149 @@
 # Laboratoire
 
-**Paramètres → Laboratoire** dit qui est votre laboratoire : le nom, l'adresse, le contact et le logo imprimés en en-tête de chaque rapport. La page règle aussi le registre des établissements proposé par défaut et le fuseau horaire du laboratoire.
+Laboratory conserve le nom, l'adresse, les coordonnées et le logo du laboratoire émetteur pour les modèles de rapport. Cette page définit aussi le registre d'établissements par défaut et le fuseau horaire local.
 
-Comptez 10 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Utilisez les coordonnées réelles et le logo approuvé de votre laboratoire. Les images montrent un laboratoire fictif sur une installation de test. Aucun jeu de données n'est nécessaire. View settings permet d'ouvrir la page. Edit general settings permet d'enregistrer.
 
-## Qui peut faire quoi
+Le laboratoire émetteur produit les rapports. Les établissements envoient les demandes. Choisir un registre par défaut ici ne crée ni n'importe d'établissements.
 
-| Capacité | Ce qu'elle permet |
-| --- | --- |
-| **View settings** | Ouvrir la page Laboratoire |
-| **Edit general settings** | Enregistrer ses modifications |
+## Enregistrer les coordonnées du laboratoire
 
-Toute personne qui peut voir les rapports voit l'en-tête qu'ils portent.
+Effectuez cette tâche après l'installation ou lorsque les coordonnées du laboratoire émetteur changent.
 
-## Exemple 1 : régler l'en-tête
+### 1. Ouvrir Settings puis Laboratory
 
-![Saisir le nom, l'adresse, le contact et le fuseau horaire du laboratoire, puis enregistrer depuis le menu à trois points.](laboratory-identity.mp4)
+Ouvrez votre menu utilisateur en bas à gauche, choisissez **Settings**, puis **Laboratory**.
 
-1. Ouvrez **Paramètres**, puis **Laboratoire**.
-2. Dans **Nom du laboratoire**, tapez `Sample Central Laboratory`.
-3. Dans **Adresse**, tapez `1 Sample Road, Sample City`. Appuyez sur Entrée pour aller à la ligne.
-4. Dans **Contact**, tapez `lab@example.org`. Un numéro de téléphone ou une ligne d'accréditation convient aussi.
-5. Dans **Fuseau horaire**, tapez `Africa/Dar_es_Salaam`. Mettez votre propre fuseau sur une vraie installation.
-6. Ouvrez le menu à trois points de la page et sélectionnez **Enregistrer**. Le message **Enregistré.** s'affiche.
-7. Rechargez la page et vérifiez que les valeurs sont toujours là.
+![Ouvrez votre menu utilisateur en bas à gauche.](laboratory-guide-user-menu.png)
 
-Rien n'est enregistré avant **Enregistrer**. Cela vaut aussi pour un nouveau logo ou un logo effacé. Si **Enregistrer** signale une erreur, gardez la page ouverte, corrigez la valeur et enregistrez de nouveau.
+![Choisissez Settings.](laboratory-guide-settings-menu.png)
 
-### Le logo
+![Sélectionnez Laboratory dans Settings.](laboratory-guide-laboratory-page.png)
 
-1. Sélectionnez **Choisir un fichier…** et prenez une image PNG, JPEG ou WebP de moins de 256 Ko. Un aperçu s'affiche à côté du bouton.
-2. Sélectionnez **Enregistrer** dans le menu à trois points.
+### 2. Saisir le nom du laboratoire
 
-**Effacer** retire le logo. Enregistrez pour garder ce changement. Le logo doit être un fichier image envoyé, pas une adresse web, car une image liée ne s'imprime pas dans le PDF. Il est lu à chaque rapport, d'où la limite de taille.
+Saisissez le nom du laboratoire émetteur dans **Laboratory name**. L'exemple utilise `Documentation laboratory`.
 
-## Exemple 2 : voir l'en-tête sur un rapport
+![Saisissez le nom du laboratoire émetteur.](laboratory-guide-name.png)
 
-Cet exemple a besoin des données d'exemple de la documentation. Voir [Tableaux de bord, Charger les données d'exemple](/docs/dashboard#charger-les-donnees-d-exemple).
+### 3. Saisir l'adresse
 
-1. Ouvrez **Rapports** et sélectionnez **Test Volume Over Time**.
-2. Ouvrez le menu à trois points, sélectionnez **Paramètres**, et réglez **Date range** du 1er septembre 2026 au 31 octobre 2026.
-3. Sélectionnez **Exécuter**.
+Saisissez l'adresse à imprimer sur l'en-tête dans **Address**. Elle peut comporter plusieurs lignes.
 
-**Résultat attendu :** le rapport s'ouvre avec votre en-tête en haut : le logo, **Sample Central Laboratory**, l'adresse et le contact. En dessous viennent le titre, la période et un tableau de 10 lignes, une par examen et par mois.
+![Saisissez l'adresse que vos modèles de rapport doivent imprimer.](laboratory-guide-address.png)
 
-![L'en-tête en haut de Test Volume Over Time : logo, nom, adresse et contact.](laboratory-letterhead.png)
+### 4. Saisir les coordonnées
 
-| Month | Test | Count |
-| --- | --- | --- |
-| 2026-09 | Full blood count | 10 |
-| 2026-09 | Malaria rapid test | 8 |
-| 2026-10 | HIV viral load | 8 |
+Saisissez les coordonnées approuvées dans **Contact**. L'image utilise une adresse électronique example.invalid.
 
-Ce sont 3 des 10 lignes. Ensemble, les lignes font 60, le nombre de demandes de l'exemple.
+![Saisissez les coordonnées du laboratoire émetteur.](laboratory-guide-contact.png)
 
-**Télécharger** enregistre un PDF avec le même en-tête. Les sorties CSV et XLSX ne contiennent que les données. Voir [Rapports, Exemple 1](/docs/reports#exemple-1-executer-un-rapport) pour toutes les étapes.
+### 5. Choisir le registre d'établissements
 
-### L'en-tête dans vos propres modèles
+Dans **Facility register**, sélectionnez une source déjà enregistrée. Si elle manque, enregistrez-la d'abord dans Facilities. Ce choix fournit le registre par défaut du formulaire Facility.
 
-Un modèle de rapport peut placer chaque partie de l'en-tête par son nom. La page liste les quatre noms sous son titre :
+![Choisissez un registre existant. Enregistrez la source dans Facilities si elle manque.](laboratory-guide-register.png)
 
-| Nom | Imprime |
-| --- | --- |
-| `{{lab.name}}` | Nom du laboratoire |
-| `{{lab.address}}` | Adresse |
-| `{{lab.contact}}` | Contact |
-| `{{lab.logo}}` | Logo |
+### 6. Définir le fuseau horaire si nécessaire
 
-Voir le [Concepteur de rapports](/docs/report-designer) pour construire un modèle.
+Pour PostgreSQL ou MySQL, saisissez un fuseau nommé comme `Africa/Dar_es_Salaam`. Lisez l'aide sous le champ. SQL Server exige plutôt un nom de fuseau Windows à chaque exécution de rapport. Laissez donc ce réglage vide avec SQL Server.
 
-## Choisir un registre des établissements
+![Saisissez un fuseau nommé pour PostgreSQL ou MySQL. Lisez l'exception SQL Server sous le champ.](laboratory-guide-timezone.png)
 
-**Registre des établissements** liste les sources actives enregistrées dans [Établissements](/docs/facilities). Celle que vous choisissez devient le **Système** de départ quand quelqu'un crée un établissement à la main.
+### 7. Enregistrer les coordonnées
 
-Choisissez le registre auquel appartiennent vos codes d'établissement. Son adresse de système sépare ces codes de ceux d'un autre registre.
+Ouvrez le menu à points de la page en haut à droite et sélectionnez **Save**.
 
-Enregistrer ce choix n'importe aucun établissement. Cela ne renomme pas, ne déplace pas et ne change pas les codes des établissements existants.
+![Ouvrez le menu à points de Laboratory.](laboratory-guide-page-actions.png)
 
-Si le registre voulu manque :
+![Choisissez Save pour conserver les paramètres du laboratoire.](laboratory-guide-save-identity.png)
 
-1. Ouvrez [Établissements](/docs/facilities), lancez **Importer des établissements** et enregistrez la source.
-2. Revenez au Laboratoire et rechargez la page.
-3. Sélectionnez-le dans **Registre des établissements** et enregistrez.
+**Résultat attendu :** les coordonnées enregistrées restent présentes lorsque vous rouvrez Laboratory.
 
-Une liste vide peut aussi vouloir dire que le chargement des sources a échoué. Vérifiez Établissements avant de conclure qu'il n'en existe aucune.
+![L'identité enregistrée du laboratoire reste présente après réouverture de la page.](laboratory-guide-identity-result.png)
 
-## Fuseau horaire
+## Retirer un ancien logo
 
-Le fuseau horaire décide du jour auquel un résultat appartient dans un rapport. Un résultat à 01:00 à Dar es Salaam tombe encore la veille en UTC.
+Effectuez cette tâche lorsque le logo actuel ne doit plus apparaître dans les modèles utilisant le logo du laboratoire.
 
-- Tapez un fuseau nommé, comme `Africa/Dar_es_Salaam`. Les décalages fixes sont refusés. `+03:00` est refusé. `Etc/GMT+3` l'est aussi, car il veut dire UTC−3, l'inverse de ce qu'il semble dire.
-- Il fixe la valeur de départ du filtre **Time zone** de chaque rapport. Vous pouvez encore la changer pour une exécution.
-- Une exécution planifiée ou en ligne de commande ne le lit pas. Donnez le fuseau directement à la planification ou à la commande. Voir [Rapports](/docs/reports).
-- Il ne règle pas l'heure à laquelle tournent les planifications.
-- **Entrepôt SQL Server :** laissez-le vide. SQL Server attend des noms de fuseau Windows, que ce champ refuse. Tapez le fuseau Windows dans le filtre **Time zone** à chaque exécution du rapport.
+### 1. Effacer le logo du brouillon
 
-## En ligne de commande
+Sélectionnez **Clear** à côté de Logo. Seul le brouillon change.
 
-`openldr settings lab` lit et écrit les mêmes valeurs que la page.
+![Clear retire le logo actuel du brouillon.](laboratory-guide-clear-logo.png)
 
-```bash
-./openldr settings lab show
-./openldr settings lab set --name "Sample Central Laboratory" --timezone Africa/Dar_es_Salaam
-./openldr settings lab set --logo-file ./logo.png
-```
+### 2. Enregistrer le retrait
 
-- `--address` accepte `\n` pour un retour à la ligne.
-- Une valeur vide efface un champ, par exemple `--timezone ""`.
-- `--logo-file` accepte un fichier PNG, JPEG ou WebP sous la même limite de 256 Ko.
+Ouvrez le menu à points de la page et sélectionnez **Save**.
 
-Le registre des établissements se règle seulement sur la page.
+![Choisissez Save pour conserver les paramètres du laboratoire.](laboratory-guide-save-clear-logo.png)
 
-## Sur un téléphone
+**Résultat attendu :** les paramètres enregistrés du laboratoire ne contiennent plus de logo.
 
-La page fonctionne sur un téléphone. Les libellés restent à gauche des champs, et les champs se rétrécissent. **Choisir un fichier…** ouvre le sélecteur de fichiers du téléphone, donc le logo peut venir des photos ou des fichiers.
+## Importer le logo du laboratoire
 
-## Dépannage
+Utilisez un fichier PNG ou JPEG de 256 Ko maximum. Un PNG transparent convient à un logo d'en-tête.
 
-- **Mes changements ont disparu après un rechargement.** Ils n'étaient pas enregistrés. Utilisez **Enregistrer** dans le menu à trois points et attendez **Enregistré.**
-- **Le fuseau horaire ne s'enregistre pas.** Utilisez un fuseau nommé comme `Africa/Dar_es_Salaam`, pas un décalage.
-- **Le logo est refusé.** Il doit être en PNG, JPEG ou WebP et faire moins de 256 Ko.
-- **Le rapport affiche encore l'ancien nom.** Exécutez de nouveau le rapport. Un résultat déjà affiché ou exporté garde l'en-tête avec lequel il a été produit.
-- **La liste des registres est vide.** Enregistrez une source dans Établissements, puis rechargez cette page.
-- **Impossible d'enregistrer l'identité du laboratoire.** Lisez d'abord le message sous le champ. S'il n'y en a pas, votre rôle n'a peut-être pas **Edit general settings**.
+### 1. Choisir l'image
+
+Sélectionnez **Choose file…** à côté de Logo, puis votre image locale approuvée.
+
+![Choose file ouvre la sélection d'un fichier image.](laboratory-guide-choose-logo.png)
+
+### 2. Vérifier l'aperçu
+
+Vérifiez que l'image attendue apparaît à côté de Logo. L'image reprend le symbole fourni avec l'installation de test.
+
+![Le PNG choisi apparaît dans l'aperçu avant l'enregistrement.](laboratory-guide-logo-preview.png)
+
+### 3. Enregistrer le logo
+
+Ouvrez le menu à points de la page et sélectionnez **Save**.
+
+![Choisissez Save pour conserver les paramètres du laboratoire.](laboratory-guide-save-logo.png)
+
+**Résultat attendu :** le logo reste présent après réouverture de Laboratory. Un modèle doit utiliser les variables du laboratoire pour afficher ces valeurs.
+
+![Le logo enregistré reste présent après réouverture de Laboratory.](laboratory-guide-logo-result.png)
+
+## Modifier les coordonnées sur un téléphone
+
+Utilisez les mêmes champs sur un téléphone. La page défile verticalement.
+
+### 1. Modifier les champs d'identité
+
+Saisissez le nom du laboratoire et les autres champs dans le formulaire adapté au téléphone.
+
+![Les champs de Laboratory tiennent dans la largeur du téléphone.](laboratory-guide-phone-name.png)
+
+### 2. Faire défiler jusqu'à Logo
+
+Descendez jusqu'à l'aperçu du logo et à Choose file. Enregistrez par le menu à points de la page.
+
+![Descendez jusqu'à Logo. L'aperçu et les commandes restent disponibles.](laboratory-guide-phone-logo.png)
+
+## Utiliser les coordonnées dans les modèles de rapport
+
+Les modèles peuvent utiliser `{{lab.name}}`, `{{lab.address}}`, `{{lab.contact}}` et `{{lab.logo}}`. La page affiche ces noms sous sa description. Placez-les dans un modèle avec Report Designer. Enregistrer Laboratory ne modifie aucun modèle.
+
+## Exercice facultatif
+
+Sur une installation de test, enregistrez un nom de laboratoire fictif et une adresse example.invalid. Utilisez un PNG ou JPEG de test approuvé pour l'importation. Rétablissez ensuite les paramètres souhaités.
+
+## Limites
+
+Le logo accepte les formats PNG et JPEG, jusqu'à 256 Ko. SVG, WebP et les adresses web d'images ne sont pas acceptés. Le sélecteur de registre liste les sources existantes. Il ne peut pas en enregistrer une.
+
+## Résolution des problèmes
+
+**La liste des registres est vide.** Ouvrez Facilities et enregistrez la source avant de revenir ici.
+
+**Le fuseau horaire est refusé.** Utilisez un fuseau nommé, sans décalage fixe. Suivez l'exception SQL Server indiquée sous le champ.
+
+**Le logo est refusé.** Vérifiez son format et sa taille. Choisissez un PNG ou JPEG de 256 Ko maximum.
+
+**Un rapport n'affiche pas les coordonnées enregistrées.** Vérifiez que son modèle utilise les variables du laboratoire.
 
 ## Guides associés
 
-- [Paramètres](/docs/settings)
-- [Rapports](/docs/reports)
-- [Concepteur de rapports](/docs/report-designer)
-- [Établissements](/docs/facilities)
+Lisez [Établissements](/docs/facilities) pour enregistrer une source. Lisez [Vérifications de configuration](/docs/setup-checks) pour contrôler la préparation. Lisez [Commencer ici](/docs/start-here) pour la configuration en ligne de commande.

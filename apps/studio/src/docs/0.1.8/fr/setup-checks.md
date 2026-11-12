@@ -1,129 +1,143 @@
-# Vérifications d'installation
+# Vérifications de configuration
 
-**Vérifications d'installation** montre ce qu'il manque encore à cette installation avant un usage réel, et ouvre la page qui règle chaque point. C'est le premier endroit à regarder après une installation, et après tout changement sur le serveur.
+Setup checks vérifie les services et les paramètres nécessaires à cette installation. Utilisez cette page après l'installation ou une modification, puis suivez les conseils de chaque avertissement ou échec.
 
-Comptez 5 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Vous avez besoin de View settings. Modifier un paramètre lié peut exiger une autre permission. Ces vérifications utilisent la même liste que `openldr doctor`. Consultez [Commencer ici](/docs/start-here) pour configurer la ligne de commande.
 
-![Les vérifications sur une installation de test neuve : trois avertissements, pour la connexion, le nom du laboratoire et le fuseau horaire.](setup-checks-tour.png)
+Consultez les résultats de votre installation. Les captures montrent une installation de développement isolée avec des omissions volontaires. Aucune donnée d'exemple n'est nécessaire.
 
-## Qui peut faire quoi
+## Lire le rapport de préparation actuel
 
-Il faut **View settings**. Les administrateurs du laboratoire l'ont. Régler un point demande la capacité de la page concernée, par exemple **Edit general settings** pour la page Laboratoire.
+Faites ces vérifications avant d'ouvrir l'installation au personnel. Elles s'exécutent à l'ouverture de la page.
 
-## Ouvrir les vérifications
+### 1. Ouvrir Settings puis Setup checks
 
-Ouvrez **Paramètres**, puis **Vérifications d'installation**, deuxième de la liste. CE lance les vérifications à l'ouverture de la page. Pour les relancer, ouvrez le menu **⋯** et choisissez **Relancer**.
+Ouvrez votre menu utilisateur en bas à gauche, choisissez **Settings**, puis **Setup checks**.
 
-Chaque vérification affiche un état :
+![Ouvrir le menu utilisateur en bas à gauche.](setup-checks-guide-user-menu.png)
 
-| État | Sens |
-| --- | --- |
-| Réussi | Rien à faire. |
-| Avertissement | CE fonctionne, mais un réglage n'est pas celui dont un vrai laboratoire a besoin. |
-| Échec | Quelque chose est cassé ou dangereux. Corrigez-le avant un usage réel. |
-| Ignoré | La vérification ne s'applique pas à cette installation. |
+![Choisir Settings.](setup-checks-guide-settings-menu.png)
 
-Un avertissement ou un échec dit quoi changer. Quand une page de paramètres le règle, un lien comme **Ouvrir Laboratoire** ouvre cette page. Le haut de la page compte les avertissements et les échecs, ou affiche **Toutes les vérifications ont réussi.**
+![Choisir Setup checks dans Settings.](setup-checks-guide-setup-page.png)
 
-## Exemple 1 : lire les vérifications d'une installation neuve
+### 2. Lire le résumé
 
-1. Ouvrez **Paramètres**, puis **Vérifications d'installation**.
+Lisez le nombre d'échecs et d'avertissements. Si aucun n'existe, le résumé indique All checks passed.
 
-**Résultat attendu** sur une installation de test neuve avec `AUTH_DEV_BYPASS` activé : **3 avertissements**.
+![Lire le nombre d'échecs et d'avertissements.](setup-checks-guide-summary.png)
 
-| Vérification | État | Pourquoi |
-| --- | --- | --- |
-| Services | Réussi | |
-| Connexion des utilisateurs | Avertissement | La connexion est désactivée (`AUTH_DEV_BYPASS`). Toute personne qui joint ce serveur est traitée comme administrateur. |
-| Clé des secrets | Réussi | |
-| Nom du laboratoire | Avertissement | Le nom est vide ou encore celui fourni par défaut. |
-| Fuseau horaire | Avertissement | Aucun fuseau horaire n'est défini. |
-| Connecteurs | Réussi, 1 sur 1 | Le connecteur de l'entrepôt fourni répond. |
-| Synchronisation avec le central | Ignoré | La synchronisation est désactivée. |
+### 3. Lire d'abord les échecs
 
-Sur une installation de production, la connexion des utilisateurs est en **Échec**, et non en avertissement.
+Lisez le détail du service et l'action conseillée. Cette installation de test signale un échec du stockage d'objets. Suivez les conseils correspondant à votre résultat.
 
-## Exemple 2 : régler deux avertissements
+![Lire le détail et l'action conseillée à côté d'un échec.](setup-checks-guide-failed-service.png)
 
-![Ouvrir Laboratoire depuis la vérification, saisir le nom et le fuseau horaire, enregistrer et relancer.](setup-checks-fix.mp4)
+### 4. Lire les avertissements
 
-1. Sous **Nom du laboratoire**, sélectionnez **Ouvrir Laboratoire**.
-2. Dans **Nom du laboratoire**, tapez le nom de votre laboratoire, par exemple `Sample Central Laboratory`.
-3. Dans **Fuseau horaire**, tapez votre fuseau, par exemple `Africa/Dar_es_Salaam`.
-4. Ouvrez le menu à trois points de la page et sélectionnez **Enregistrer**.
-5. Revenez à **Vérifications d'installation**, ouvrez **⋯** et sélectionnez **Relancer**.
+Un avertissement demande une vérification même si le service est disponible. L'exemple indique que Laboratory name utilise encore le nom fourni par défaut.
 
-**Résultat attendu :** **1 avertissement**. Le nom du laboratoire et le fuseau horaire passent à **Réussi** et montrent ce qui est réglé. Il ne reste que la connexion des utilisateurs, qui reste un avertissement sur une installation de test.
+![Lire chaque avertissement avant de déclarer l'installation prête.](setup-checks-guide-warning.png)
 
-![Les vérifications après correction : un avertissement restant.](setup-checks-after.png)
+### 5. Vérifier les éléments ignorés
 
-Voir [Laboratoire](/docs/laboratory) pour le nom, le logo et le fuseau horaire.
+**Skipped** signifie que la vérification ne s'appliquait pas. Cela ne prouve pas qu'une fonction inutilisée est configurée.
 
-## Les vérifications
+![Skipped indique une vérification non applicable, pas une configuration validée.](setup-checks-guide-skipped.png)
 
-| Vérification | Ce qu'elle regarde | Si ce n'est pas le cas |
-| --- | --- | --- |
-| Services | La connexion, le stockage des fichiers, les événements et l'entrepôt répondent. | CE ne peut ni servir ni stocker de données. Lancez `openldr health` sur le serveur pour voir quel service est arrêté. |
-| Connexion des utilisateurs | La connexion est activée. | Avec `AUTH_DEV_BYPASS` activé, toute personne qui joint le serveur est administrateur. C'est un échec en production et un avertissement ailleurs. |
-| Clé des secrets | `SECRETS_ENCRYPTION_KEY` est défini. | Un connecteur qui contient un mot de passe ne peut être ni enregistré ni lu. |
-| Nom du laboratoire | Le nom est défini, et n'est pas celui fourni par défaut. | Les rapports impriment le nom du produit comme laboratoire émetteur. |
-| Fuseau horaire | Un fuseau horaire est défini. | Le rapport mensuel de transmission compte les jours en UTC, donc les arrivées du soir tombent le mauvais jour. |
-| Connecteurs | Chaque connecteur hôte actif répond. | Les imports et requêtes sur ce connecteur échouent. La vérification nomme le connecteur. |
-| Synchronisation avec le central | La synchronisation a une URL du central et un site id, et son dernier cycle a réussi. | Les résultats n'arrivent pas au central. |
+**Résultat attendu :** vous savez quelles vérifications demandent une intervention et quels conseils concernent cette installation.
 
-Trois vérifications peuvent être ignorées :
+## Suivre un avertissement et vérifier la correction
 
-- **Fuseau horaire** sur un entrepôt SQL Server. Le réglage prend des noms de fuseau IANA, que SQL Server ne sait pas utiliser. Laissez-le vide et tapez le nom de fuseau Windows à chaque exécution de rapport.
-- **Connecteurs** quand aucun connecteur hôte n'est actif.
-- **Synchronisation avec le central** quand la synchronisation est désactivée.
+Utilisez la page liée pour corriger un problème. Cet exemple corrige le nom du laboratoire et le fuseau horaire manquant sur PostgreSQL.
 
-## Ce que les vérifications ne montrent pas
+### 1. Ouvrir la page liée
 
-Une vérification montre un nom ou un nombre, jamais un message d'erreur. Les messages d'erreur peuvent contenir des noms de serveurs et d'utilisateurs. Pour le détail d'un connecteur en échec, ouvrez **Paramètres**, **Connecteurs** et choisissez **Diagnostiquer** dessus. Voir [Connexions SQL Server et diagnostic](/docs/connector-diagnose).
+Sélectionnez **Open Laboratory** près de l'avertissement Laboratory name.
 
-Chaque exécution est écrite dans le journal d'audit, avec les noms des vérifications en échec ou en avertissement.
+![Suivre le lien vers le paramètre à corriger.](setup-checks-guide-open-laboratory.png)
 
-## En ligne de commande
+### 2. Saisir le nom du laboratoire
 
-Un serveur sans interface affiche la même liste :
+Saisissez le vrai nom du laboratoire émetteur. La capture utilise `Documentation laboratory` dans une installation de test.
 
-```bash
-openldr doctor
-```
+![Saisir le vrai nom du laboratoire. L'exemple utilise un nom fictif.](setup-checks-guide-correct-name.png)
 
-Sur l'installation de test de l'Exemple 1, il affiche :
+### 3. Définir le fuseau horaire si nécessaire
 
-```text
-PASS  Services
-WARN  Sign-in
-      Sign-in is switched off (AUTH_DEV_BYPASS). Anyone who can reach this server is treated as an administrator. Turn it off before real use.
-PASS  Secrets key
-WARN  Laboratory name
-      The laboratory name is empty or still the shipped default. Reports print it as the issuing laboratory. Set it in Settings, Laboratory.
-WARN  Time zone
-      No time zone is set. The monthly transmission report then counts days in UTC, which moves evening arrivals to the wrong day. Set it in Settings, Laboratory.
-PASS  Connectors: 1 of 1
-SKIP  Sync with central
+Sur PostgreSQL ou MySQL, saisissez le nom du fuseau local. L'exemple utilise `Africa/Dar_es_Salaam`. Sur SQL Server, suivez les conseils de la page et fournissez plutôt le fuseau Windows à chaque exécution de rapport.
 
-3 warnings.
-```
+![Utiliser un fuseau local nommé sur PostgreSQL ou MySQL.](setup-checks-guide-correct-zone.png)
 
-Ajoutez `--json` pour une sortie lisible par machine. La commande sort avec le code 1 quand une vérification est en échec. Les avertissements ne changent pas le code, donc cet exemple sort avec 0.
+### 4. Enregistrer la correction
 
-## Sur un téléphone
+Ouvrez le menu à points de Laboratory et choisissez **Save**.
 
-La page fonctionne sur un téléphone. Le message de chaque vérification passe sous son nom, et l'état reste à côté du nom.
+![Ouvrir le menu à points de Laboratory.](setup-checks-guide-laboratory-actions.png)
 
-## Dépannage
+![Choisir Save pour conserver les corrections.](setup-checks-guide-laboratory-save.png)
 
-- **Services en échec.** Lancez `openldr health` sur le serveur pour voir quel service est arrêté.
-- **Connecteurs en échec.** La vérification nomme le connecteur. Lancez **Diagnostiquer** dessus.
-- **Synchronisation avec le central en échec.** Le dernier cycle a échoué. **Paramètres**, **Synchronisation distribuée**, **Activité** dit pourquoi. Voir [Synchronisation distribuée](/docs/sync).
-- **Une vérification n'a pas pu s'exécuter.** Le journal du serveur en donne la raison.
+### 5. Revenir à Setup checks
+
+Sélectionnez **Setup checks** dans Settings. L'ouverture relance les vérifications.
+
+![Laboratory name et Time zone indiquent maintenant Passed.](setup-checks-guide-corrected-result.png)
+
+**Résultat attendu :** les vérifications Laboratory name et Time zone corrigées indiquent Passed. Les autres avertissements et échecs restent à traiter.
+
+## Relancer les vérifications
+
+Utilisez cette action après une modification de configuration ou le rétablissement d'un service.
+
+### 1. Ouvrir les actions de la page
+
+Sélectionnez les points en haut à droite de Setup checks.
+
+![Ouvrir le menu à points de Setup checks.](setup-checks-guide-setup-actions.png)
+
+### 2. Choisir Run again
+
+Sélectionnez **Run again**. Attendez la fin des vérifications.
+
+![Choisir Run again après une correction.](setup-checks-guide-run-again.png)
+
+**Résultat attendu :** le nouveau résumé montre le résultat actuel. Lisez les échecs et avertissements restants.
+
+![Lire le nouveau résumé et traiter les échecs et avertissements restants.](setup-checks-guide-rerun-result.png)
+
+## Lire les vérifications sur un téléphone
+
+Utilisez la même page sur téléphone. Chaque vérification présente son état et ses conseils.
+
+### 1. Lire le résumé
+
+Ouvrez Setup checks et lisez le résumé en haut.
+
+![Lire le résumé en haut sur téléphone.](setup-checks-guide-phone-summary.png)
+
+### 2. Parcourir les vérifications
+
+Lisez le détail de chaque vérification et les liens ou actions proposés.
+
+![Faire défiler les vérifications pour lire leurs détails et conseils.](setup-checks-guide-phone-check.png)
+
+## Pratique facultative
+
+Aucun exemple de données n'est nécessaire. Dans une installation de test, corrigez un véritable avertissement de nom ou de fuseau, enregistrez, puis relancez les vérifications. Ne provoquez pas de panne pour cet exercice.
+
+## Limites
+
+Le rapport décrit les vérifications au moment de leur exécution. All checks passed ne valide pas tous les rapports, flux ou tâches du personnel. Certaines corrections exigent une configuration serveur hors de Studio.
+
+## Résolution de problèmes
+
+**Les vérifications n'ont pas pu s'exécuter.** Vérifiez la connexion API et le journal serveur, puis choisissez Run again.
+
+**Des services ont échoué.** Suivez les commandes de diagnostic conseillées et examinez le service nommé.
+
+**Un avertissement indique que l'authentification est désactivée.** Désactivez le contournement d'authentification de développement dans la configuration serveur avant toute utilisation réelle.
+
+**Une page liée est inaccessible.** Demandez à un administrateur ayant la permission de modifier ce paramètre.
 
 ## Guides associés
 
-- [Paramètres](/docs/settings)
-- [Laboratoire](/docs/laboratory)
-- [Connecteurs](/docs/connectors)
-- [Connexions SQL Server et diagnostic](/docs/connector-diagnose)
+Consultez [Laboratoire](/docs/laboratory) pour les informations du laboratoire émetteur, [Connecteurs](/docs/connectors) pour tester les connexions et [Commencer ici](/docs/start-here) pour l'installation et la ligne de commande.

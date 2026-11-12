@@ -40,7 +40,7 @@ OpenLDR can receive and process lab data before you configure Facilities, Test c
 
 Open **Docs** in Studio and follow **Set up your system**, starting with Terminology. The in-app guides explain each task.
 
-The Facilities guide in Studio shows manual entry, file imports, change history and code linking. You can follow it with your own data. Its practice files are optional.
+Studio Docs includes illustrated tasks for Terminology, Facilities, Test catalog, Patients, Forms and Workflows. Follow the dashboard and report guides for daily work, or the settings guides to manage the installation. Each task starts with its purpose and shows the controls to use. Follow the guides with your own data; practice files are optional.
 
 ## 3. Next steps
 

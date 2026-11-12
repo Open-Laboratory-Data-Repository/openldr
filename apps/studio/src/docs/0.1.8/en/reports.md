@@ -1,230 +1,474 @@
 # Reports
 
-A report is a printable page of lab figures that you can run again whenever you need it. Each one joins two parts. A **Report Designer** template sets the layout. A **Custom Query** fetches the data. You run a report with a date range and other filters, read it as a document or a spreadsheet, download it, and schedule it to run by itself.
+Use Reports to run a library entry with filters, read its Document or Spreadsheet, export output and inspect its history. A schedule saves an output file for a reporting period. It does not email that file.
 
-This guide takes about 30 minutes. It uses the docs sample data, so load that first. Select any picture or clip to enlarge it.
+Start with a report suited to your own received data. No documentation sample data is required. The pictures use the Request summary report created in Report Designer. Its test warehouse has zero requests, so the query returns one row containing zero.
 
-![A report after a run. 1 Search the library. 2 Report actions menu. 3 Document view. 4 Spreadsheet view. 5 Download.](reports-tour.png)
+You need **View reports** to open the library, **Run reports** to execute entries and **Export reports** to download outputs. **Edit report templates** permits schedule management, Edit template and report-management actions.
 
-1. **Library search.** Filters the report list by name. Reports are grouped by category.
-2. **Actions.** The dots menu for the selected report: **Refresh**, **Parameters**, **Run History**, **Schedules**, and, for managers, **Edit template**, **Unpublish** and **Delete report**.
-3. **Document.** The printable PDF.
-4. **Spreadsheet.** The same rows as a table you can filter, sort and export.
-5. **Download.** Saves the PDF.
+To add a library report, save a design and use Create report from this design in [Report Designer](/docs/report-designer). Publish revision alone does not add a library entry.
 
-## Who can do what
+## Find and open a report
 
-| Permission | What it lets you do |
+Use the report name and category to choose the intended entry before setting filters.
+
+### 1. Open Reports
+
+Select Reports in the main menu.
+
+![Open Reports from the main menu.](reports-guide-open-page.png)
+
+### 2. Search the library
+
+Enter part of the report name in Search reports. Clear it to restore the full library.
+
+![Search the library by report name.](reports-guide-search.png)
+
+### 3. Select the report
+
+Select its name under the category. The example is Request summary report under Operational.
+
+![Select the report under its category.](reports-guide-select-report.png)
+
+### 4. Open its actions
+
+Select Actions beside the selected report heading.
+
+![The selected report has its own Actions menu.](reports-guide-report-actions.png)
+
+## Choose filters and run the report
+
+Choose dates and other filters that answer your reporting question. The query behind the example includes both selected calendar endpoints.
+
+### 1. Open Parameters
+
+Choose Parameters from the selected report Actions menu.
+
+![Parameters opens the report filters.](reports-guide-first-parameters.png)
+
+### 2. Open the date range
+
+Select the Period control. Other reports may call this Date range or use different filters.
+
+![Open the date-range control for the report period.](reports-guide-first-period.png)
+
+### 3. Choose the reporting dates
+
+Choose a preset, such as This year, or use the month and year selectors and calendar to pick dates. Complete other required filters.
+
+![Choose a preset or select your own calendar dates.](reports-guide-first-preset.png)
+
+### 4. Run the report
+
+Select Run in the parameter sheet. Wait for the completed result.
+
+![Run executes the report with the selected filters.](reports-guide-first-run.png)
+
+**Expected result:** Document renders the report with the selected values. The zero in this example is a valid query result.
+
+![Document renders the selected run as a PDF.](reports-guide-document.png)
+
+## Download the document and spreadsheet
+
+Use Document for the printable layout and Spreadsheet for exact query rows. Their column labels can differ because a design can relabel printed columns.
+
+### 1. Download the PDF
+
+In Document, use Download to save the PDF. Page arrows and zoom change your view.
+
+![Download saves the PDF for this run.](reports-guide-pdf-download.png)
+
+### 2. Open Spreadsheet
+
+Select Spreadsheet above the result.
+
+![Spreadsheet shows query rows in a table.](reports-guide-spreadsheet-tab.png)
+
+### 3. Check the row values
+
+Read the column labels and actual cells before exporting. The example shows requests equal to zero.
+
+![Read the actual count in the spreadsheet row.](reports-guide-spreadsheet-result.png)
+
+### 4. Export CSV when you need the query output
+
+Select Export CSV. It re-runs the report query with the parameters that produced the displayed run. Spreadsheet filters and sorting do not apply to CSV. Source changes since the run can affect the file.
+
+![Export CSV runs the report query with its current run parameters.](reports-guide-export-csv.png)
+
+### 5. Export the filtered rows as XLSX
+
+Select Export XLSX. It uses the loaded result with Spreadsheet filters and sorting across all pages. It includes all result columns, including fields hidden on screen.
+
+![Export XLSX downloads the current spreadsheet filtering and sort.](reports-guide-export-xlsx.png)
+
+**Expected result:** The browser downloads the chosen format. Choose the export whose row behavior matches your task.
+
+## Filter and arrange Spreadsheet rows
+
+These controls change the loaded Spreadsheet view. They do not change the report definition or the Document layout.
+
+### 1. Add a filter
+
+Select Filter, then Add filter.
+
+![Add filter creates a spreadsheet rule.](reports-guide-filter-add.png)
+
+### 2. Choose the column
+
+Select the result column to filter. The example has one requests column.
+
+![Choose the result column to filter.](reports-guide-filter-column.png)
+
+### 3. Set the rule value
+
+Choose an operator and enter its value. The example uses Equals and 0.
+
+![Enter a value appropriate to your result column.](reports-guide-filter-value.png)
+
+### 4. Apply the rule
+
+Select Apply to update the shown rows.
+
+![Apply changes the rows shown in Spreadsheet.](reports-guide-filter-apply.png)
+
+### 5. Add a sort
+
+Select Sort, then Add sort and choose a result column.
+
+![Choose Add sort to order the loaded spreadsheet rows.](reports-guide-sort-add.png)
+
+### 6. Choose the direction
+
+Use Asc or Desc and select Apply. This example has one row, so its order does not visibly change.
+
+![Asc sorts from smaller values upward; select it to switch direction.](reports-guide-sort-order.png)
+
+### 7. Choose visible columns
+
+Open Columns and use its checkboxes. The last visible column cannot be hidden. Close the menu when finished.
+
+![Columns changes which fields are visible on the page.](reports-guide-columns.png)
+
+![Use the checkboxes for the fields you need. The last visible column cannot be hidden.](reports-guide-column-options.png)
+
+### 8. Reset or use the pages
+
+Reset clears the table rules and column changes. Use Rows per page and the arrows when the result spans more than one page.
+
+![Reset clears spreadsheet filters, sorting and column changes.](reports-guide-reset-table.png)
+
+![Use the table page size and arrows when there are more rows.](reports-guide-pagination.png)
+
+## Refresh a displayed result
+
+Use this after data changes when you want the same reporting question run again.
+
+### 1. Choose Refresh
+
+Open the selected report Actions menu and choose Refresh. It uses the values that produced the displayed result, even if you have an unfinished parameter edit.
+
+![Refresh re-runs using the values that produced the displayed result.](reports-guide-refresh.png)
+
+**Expected result:** The query runs again. The new count may match the earlier count.
+
+## Inspect interactive run history
+
+Use history to identify when a report was run or downloaded and which parameter values belonged to that run.
+
+### 1. Open Run History
+
+Open report Actions and choose Run History.
+
+![Run History lists the interactive runs and saved schedule attempts.](reports-guide-history.png)
+
+### 2. Read Activity
+
+Check each format, row count, user and time. Preview is an interactive run; pdf, csv and xlsx identify downloads.
+
+![Read format, row count, user and time for each interactive run.](reports-guide-history-rows.png)
+
+### 3. Restore a previous parameter choice
+
+Select an Activity row to put its parameters back into the report controls. Open Parameters and Run when you want a new result. Selecting history does not replay its stored output.
+
+![Selecting an activity row restores its parameters. It does not replay the old output.](reports-guide-history-apply.png)
+
+## Create a report schedule
+
+Use a schedule to save output for a reporting period. The schedule has no recipient field. Check its generated file before relying on automatic runs.
+
+### 1. Open Schedules
+
+Open report Actions and choose Schedules.
+
+![Schedules manages automatic output for this report.](reports-guide-schedules.png)
+
+### 2. Choose New Schedule
+
+Select New Schedule in the schedule sheet.
+
+![New Schedule opens the schedule settings.](reports-guide-new-schedule.png)
+
+### 3. Choose the frequency
+
+Set Frequency. The example chooses Weekly.
+
+![Choose the schedule frequency.](reports-guide-weekly.png)
+
+### 4. Choose its day
+
+For Weekly, choose Day of week. The example uses Mon. Monthly instead offers days 1 to 28.
+
+![Choose the weekday for the weekly schedule.](reports-guide-weekday.png)
+
+### 5. Choose the output format
+
+Set Output format to CSV, XLSX or PDF. The example uses PDF.
+
+![Choose the saved output format.](reports-guide-schedule-format.png)
+
+### 6. Save the schedule
+
+Open the schedule editor Actions dots and choose Save. The date window is calculated at run time rather than saved as fixed dates.
+
+![The schedule editor has its own Actions menu.](reports-guide-schedule-actions.png)
+
+![Save records the schedule.](reports-guide-schedule-save-step-6.png)
+
+**Expected result:** The list shows the frequency, format, enabled switch and next due time.
+
+![The saved schedule shows its cadence, format and next due time.](reports-guide-schedule-saved.png)
+
+## Run a schedule now and download its saved output
+
+Run now is useful for checking a new schedule. A queued message does not prove success. Inspect Scheduled Runs for the outcome.
+
+### 1. Queue the run
+
+Keep the schedule enabled and select Run now. A disabled schedule does not execute even if it shows a queued message.
+
+![Run now queues an immediate run. Check Scheduled Runs for the result.](reports-guide-schedule-run.png)
+
+### 2. Open Scheduled Runs
+
+Close Schedules. Open report Actions, Run History and the Scheduled Runs tab. Reopen the sheet if the result has not arrived yet.
+
+![Scheduled Runs separates saved schedule outputs from interactive activity.](reports-guide-scheduled-tab.png)
+
+### 3. Read the status and period
+
+Check OK or Failed and the recorded reporting period. A failed attempt has no output file.
+
+![Check OK and the recorded date window before downloading.](reports-guide-scheduled-result.png)
+
+### 4. Download the successful output
+
+Select Download on a successful saved run.
+
+![Download fetches the successful saved output.](reports-guide-scheduled-download.png)
+
+**Expected result:** The downloaded PDF is the saved schedule output. It does not replace the result currently displayed on the report page.
+
+## Disable, change or remove a schedule
+
+Use the controls on the correct schedule row. The review turns its disposable schedule off and removes it after checking the saved output.
+
+### 1. Disable automatic runs
+
+Open Schedules and turn off the row switch. A displayed Next date does not override the disabled switch.
+
+![Turn the switch off to stop future automatic runs.](reports-guide-schedule-toggle.png)
+
+### 2. Edit the saved schedule
+
+Select Edit on the row.
+
+![Edit changes the saved cadence, filters or format.](reports-guide-schedule-edit.png)
+
+### 3. Save the intended changes
+
+Change the required settings, then use that editor's Actions and Save. The example changes its disabled schedule format to XLSX.
+
+![This disabled example changes the future format to XLSX.](reports-guide-schedule-edit-format.png)
+
+![Save records the schedule.](reports-guide-schedule-save-step-3.png)
+
+### 4. Remove an unneeded schedule
+
+Select Delete on the correct schedule row.
+
+![Delete removes only the selected schedule.](reports-guide-schedule-delete.png)
+
+### 5. Confirm its removal
+
+Read the confirmation and select Delete when you intend to remove that schedule.
+
+![Confirm the schedule removal when it is no longer needed.](reports-guide-schedule-delete-confirm.png)
+
+**Expected result:** The selected schedule disappears. The review leaves no enabled or saved schedule for its report.
+
+## Keep a report easy to find
+
+Pins arrange the library in this browser. They do not change report data.
+
+### 1. Pin the report
+
+Point at the report row and select its star. It also appears under Pinned.
+
+![Pin the report to keep it near the top of this browser library.](reports-guide-pin.png)
+
+### 2. Remove the pin
+
+Select the filled star again when you no longer need it pinned.
+
+![Select the filled star again to remove the pin.](reports-guide-unpin.png)
+
+## Open the linked design
+
+Use this when an authorised manager needs to change layout or template filters.
+
+### 1. Choose Edit template
+
+Open report Actions and select Edit template.
+
+![Edit template opens the linked Report Designer layout.](reports-guide-edit-template.png)
+
+### 2. Check the design name
+
+Confirm that Report Designer opened the intended linked design before editing it.
+
+![The linked template opens for an authorised manager.](reports-guide-edit-template-result.png)
+
+## Check an Unpublish attempt
+
+Unpublish is intended to hide an entry while keeping its design. In this review, a newly created custom entry returned Action failed and stayed published. This current failure is documented here; it was not repaired.
+
+### 1. Choose Unpublish only for the intended entry
+
+Open that report's Actions and select Unpublish when you intend to hide it. The pictured entry is disposable test content.
+
+![Unpublish attempts to remove the report from the library.](reports-guide-unpublish.png)
+
+### 2. Check the actual outcome
+
+If Action failed appears, the entry has not been unpublished. Keep its name or identifier and report the problem. Do not treat this as a successful removal.
+
+![New custom reports currently can show Action failed instead of unpublishing.](reports-guide-unpublish-failed.png)
+
+**Expected result:** The reviewed new-entry case failed with HTTP 400 and remained published. Other report-management actions do not establish that Unpublish succeeded.
+
+## Delete an unneeded library report
+
+Delete permanently removes the selected library definition. Check that the team no longer needs it. The example removes a disposable entry and keeps the main report and its design.
+
+### 1. Choose Delete report
+
+Open the unneeded report's Actions and select Delete report.
+
+![Delete report permanently removes the selected library entry.](reports-guide-delete-report.png)
+
+### 2. Confirm the named action
+
+Read the confirmation, then choose Delete report only when you intend that removal.
+
+![Confirm only the report entry you intend to remove.](reports-guide-delete-report-confirm.png)
+
+**Expected result:** The entry disappears from the library. Its linked design remains available in Report Designer.
+
+## Run an existing report on a phone
+
+The library starts folded into a rail. Use it to choose the report, then give the result more screen space.
+
+### 1. Expand the library
+
+Select Expand library on the narrow rail.
+
+![Expand the library rail on a phone.](reports-guide-phone-library.png)
+
+### 2. Find and choose the report
+
+Search its name and select it. Collapse the library afterward.
+
+![Search for and open the report.](reports-guide-phone-select.png)
+
+### 3. Choose dates
+
+Open report Actions and Parameters. Open the date-range control and choose a preset or calendar dates. Presets wrap above a single month on a phone.
+
+![Presets wrap above the single-month phone calendar.](reports-guide-phone-dates.png)
+
+### 4. Run with the selected values
+
+Select Run in the parameter sheet.
+
+![Run remains available in the report parameter sheet.](reports-guide-phone-run.png)
+
+### 5. Read Spreadsheet
+
+After the run completes, select Spreadsheet and inspect the values. Wide tables can scroll horizontally.
+
+![Spreadsheet shows the same completed query result on a phone.](reports-guide-phone-result.png)
+
+## Understand schedule time and date windows
+
+Report schedules run at 06:00 UTC. This editor has no separate time or timezone setting. Next and Last display in the browser's timezone. A report's own timezone filter controls data grouping, not the schedule clock.
+
+A newly saved Daily schedule starts tomorrow. Weekly uses the next chosen weekday, never today. Monthly uses the chosen day next month. Quarterly uses the first day of the next calendar quarter.
+
+| Frequency | Date window at run time |
 | --- | --- |
-| View reports | Open **Reports** and see the library. |
-| Run reports | Run a report and see its result. |
-| Export reports | Download the PDF, CSV or XLSX, and download saved schedule outputs. |
-| Edit report templates | Make, change and delete schedules. Use **Edit template**, **Unpublish** and **Delete report**. |
+| Daily | The previous UTC day. |
+| Weekly | The previous seven UTC days, ending yesterday. |
+| Monthly | The previous calendar month in UTC. |
+| Quarterly | The previous calendar quarter in UTC. |
 
-New reports are not made on this page. A lab manager builds a template in [Report Designer](/docs/report-designer) and publishes it. It then appears in the library.
+Run now uses that same computed window. It does not reuse the report page's chosen date range. The reporting query should include the complete end day. The review's weekly run covered 5 to 11 November 2026.
 
-## Before you start
+## Understand filters and report data
 
-The examples need the docs sample data. If **Total Orders** on the sample dashboard reads 0, load it first. See [Load the sample data](/docs/dashboard#load-the-sample-data).
+Filters come from the design's template parameters. Change them in Report Designer. The primary query supplies Spreadsheet rows; the design's element bindings supply Document content. A report can therefore contain several bound tables while Spreadsheet shows its primary query.
 
-A new install ships ten reports in four categories:
+The current Reports page supplies date filters as flat from and to values. A workbench Custom Query declaring one nested daterange parameter fails when bound directly here. The existing reporting pattern uses two Text query parameters named from and to, with one Date range control on the template. See Report Designer.
 
-| Category | Reports | Works with the sample data |
-| --- | --- | --- |
-| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | With the microbiology sample. See below. |
-| Operational | Clinical Microbiology Report, LIS Stakeholders Update, Specimen Turnaround Time, Test Volume Over Time | Turnaround and Test Volume, yes |
-| Quality | Patient Demographics | Yes |
-| Regulatory | AMR GLASS RIS (stratified) | With the microbiology sample. See below. |
+Different reports require different received data. A report needing specimens, organisms or susceptibility results cannot invent them from an unrelated order count. An empty result can be correct for the chosen filters or available source data.
 
-The AMR and microbiology reports read organisms and susceptibility results. The main sample has none. A second sample has 48 made-up cultures, from September to October 2026, for trying them:
+For built-in reports, Facility generally means the testing laboratory. Read that report's filter help and query before assuming it groups the clinic that sent a request.
 
-```bash
-cd ~/Downloads/openldr_ce
-curl -L -o data/openldr-sample-microbiology.json https://openldr.online/docs-samples/openldr-sample-microbiology.json
-./openldr ingest data/openldr-sample-microbiology.json
+## Run a report from the CLI
+
+Use `./openldr` in your installed Linux or macOS folder, `.\openldr.ps1` on Windows, or `pnpm openldr` in a development checkout. Run it from your actual `openldr_ce` folder. [Start here](/docs/start-here) explains the launcher and file paths.
+
+```shell
+./openldr report list
+./openldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --json
+./openldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --format pdf --out data/report.pdf
 ```
 
-From a source checkout, the file is already in the repository:
+Replace REPORT_ID with the entry listed by the first command. Replace dates and output paths with the values you intend. The reviewed CLI JSON run returned one row with requests equal to zero.
 
-```bash
-pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-microbiology.json
-```
+## Optional review output
 
-A good run ends with `batch <id>: done (455 resources)`. It adds to the main sample and changes none of its numbers.
+Normal use needs your reports and received data. No documentation bundle is required. To build the same small practice report, use the optional reporting query in [Report Designer](/docs/report-designer#optional-practice-reference).
 
-**Expected result:** **AMR Resistance Rate** from `2026-09-01` to `2026-10-31` lists 10 antibiotics. Ciprofloxacin reads 48 tested, 13 resistant, 4 intermediate, 31 susceptible, 27.1% resistant. Vancomycin reads 11 tested, none resistant. For one isolate's page, run **Clinical Microbiology Report** with lab number `MIC-0001`.
-
-Your own data fills these reports once your lab system sends microbiology, for example through a WHONET export. See [Load and push data](https://openldr.online/#/docs/load-data) on the website.
-
-## Example 1: run a report
-
-Count the tests ordered each month in September and October 2026.
-
-![Selecting Test Volume Over Time, setting the date range and running it.](reports-run.mp4)
-
-1. Open **Reports**.
-2. In the library, under **Operational**, select **Test Volume Over Time**. The page says **Run the report to see results.**
-3. Open **Actions** and select **Parameters**. A side panel lists the report's filters. A star marks a required one.
-4. Select **Date range**. Go back to September 2026. Select 1 September, then 31 October.
-5. Leave **Facility** on **All**.
-6. Select **Run**. The panel closes and the report runs.
-
-**Expected result:** **Total tests** reads 60. The document has ten rows, one per test per month. In October: Blood glucose 3, Creatinine 5, Full blood count 8, HIV viral load 8, Malaria rapid test 8.
-
-The filters come from the template's parameters. To add, remove or rename one, change the template in [Report Designer](/docs/report-designer), not this page. A report remembers the last values you ran it with, in this browser.
-
-## Read the result
-
-The document view has page arrows, zoom and **Download**. **Download** saves the PDF and records a `pdf` run in the history.
-
-Select **Spreadsheet** to see the same rows as a table.
-
-![The Spreadsheet view, with Filter, Sort, Columns and the two exports.](reports-spreadsheet.png)
-
-- **Filter.** Choose a column, an operator and a value, then **Apply**. Remove a filter chip to clear one rule, or use **Clear all**.
-- **Sort.** Changes the order.
-- **Columns.** Hides and shows columns.
-- **Export CSV** and **Export XLSX.** Download the rows for other tools.
-
-Use the spreadsheet when you need exact values, or to feed the rows into another tool.
-
-### What "Facility" means in the built-in reports
-
-The **Facility** filter and the facility columns in the built-in reports mean the **testing laboratory**, the lab that ran the test. They do not group by the clinic that sent the sample. On a new install the Facility list is empty until a facility register is loaded. See [Facilities](/docs/facilities).
-
-## Run history
-
-Open **Actions** and select **Run History**.
-
-![Run History. Activity lists each interactive run, with its format, rows, user and time.](reports-history.png)
-
-- **Activity** lists interactive runs. `preview` is a run on this page. `pdf`, `csv` and `xlsx` are downloads.
-- **Scheduled Runs** lists schedule attempts, their status, and the saved file. **Download** beside a good run fetches its CSV, XLSX or PDF.
-
-Use the history to compare repeated runs, and to check whether a result changed after new data arrived. For who changed report settings or schedules, see [Audit](/docs/audit).
-
-## Example 2: specimen turnaround time
-
-See how long each test takes from specimen received to report issued.
-
-![Specimen Turnaround Time for September and October 2026.](reports-turnaround.png)
-
-1. In the library, select **Specimen Turnaround Time**.
-2. Open **Actions**, then **Parameters**. Set **Date range** to 1 September to 31 October 2026.
-3. Select **Run**.
-
-**Expected result:** **Reports** reads 39 and **Avg hours** reads 19.0. Creatinine averages 15.0 hours, Malaria rapid test 17.1, Full blood count 20.5, Blood glucose 20.7 and HIV viral load 21.9.
-
-Each report is timed from its own specimen: from the time that specimen was received to the time the report was issued. A report with no specimen linked to it is left out.
-
-## Example 3: schedule a report
-
-Make Test Volume run every Monday and save a PDF.
-
-![Opening Schedules, making a weekly PDF schedule and saving it.](reports-schedule.mp4)
-
-1. Select **Test Volume Over Time**. Open **Actions** and select **Schedules**. Your role needs **Edit report templates**.
-2. Select **New Schedule**.
-3. Set **Frequency** to **Weekly**. Set **Day of week** to **Mon**.
-4. Set **Output format** to **PDF**. Leave **Facility** on **All**.
-5. Open the schedule's own **Actions** menu and select **Save**. A **Schedule saved.** message appears.
-
-**Expected result:** the list shows **Weekly · Mon**, a **PDF** badge, an enabled switch, and the **Next** run.
-
-![The saved schedule, with its switch, Run now, edit and delete.](reports-schedules.png)
-
-Each schedule row has a switch to turn it on and off, a play button, **Run now**, a pencil to edit, and a bin to delete.
-
-### Frequency, time and date window
-
-- **Daily**, **Weekly**, **Monthly** or **Quarterly**. Weekly needs a day of the week. Monthly offers days 1 to 28.
-- Every schedule runs at 06:00 UTC. You cannot pick another hour or time zone.
-- **Next** and **Last** show in your browser's time zone.
-- A report's **Time zone** filter sets how its data is counted, not when the schedule runs.
-- A new schedule starts with the report page's current filters, except the date range.
-
-The date range is not saved. The scheduler works out the window when the run starts, including **Run now**:
-
-| Frequency | Next date when saved | Date window |
-| --- | --- | --- |
-| Daily | Tomorrow | The previous UTC day |
-| Weekly | The next chosen weekday, never today | The previous seven UTC days, ending yesterday |
-| Monthly | The chosen day next month | The previous calendar month in UTC |
-| Quarterly | The first day of the next calendar quarter | The previous calendar quarter in UTC |
-
-A disabled schedule can still show **Next**. That date does not mean it will run. Check the switch. **Last** can be a failed attempt. Check its status in the history.
-
-### Run now and download the output
-
-1. Turn the schedule on, then select **Run now**.
-2. A message says the run was queued. That does not mean it worked. A disabled schedule shows the same message and runs nothing.
-3. Open **Actions**, **Run History**, **Scheduled Runs**. Automatic runs and **Run now** results appear here when they finish.
-4. Select **Download** beside a successful run. You need **Export reports**.
-5. If the run is missing, close and reopen **Scheduled Runs**. The list does not refresh by itself.
-
-A failed run has no file. On a computer, point at its failed status to read the error. Fix the schedule's filters and try **Run now** again. A scheduled run never replaces what the report page shows.
-
-## Manage a report
-
-With **Edit report templates**, the report's **Actions** menu also has:
-
-- **Edit template.** Opens the template in [Report Designer](/docs/report-designer).
-- **Unpublish.** Removes the report from the library and keeps the template.
-- **Delete report.** Removes it, after you confirm.
-
-## On a phone
-
-On a phone, the library starts folded into a thin strip on the left. Select the panel button at the top of the strip to open it. Long names are cut short in the list. The full name shows once you select the report. Fold the library again to give the report the whole screen.
-
-![The report library opened on a phone.](reports-phone.png)
-
-## Limits
-
-Each stored report query returns at most 1,000 rows. Exactly 1,000 is accepted. If any query behind a PDF goes over, the whole PDF is refused. CSV and XLSX exports refuse too. Narrow the date range or other filters and run again. A `LIMIT` written in the saved SQL is kept on purpose.
-
-A scheduled run over the limit records a failure and saves no file. The CLI reports the error before writing the export. Earlier saved outputs are not made again.
-
-## The LIS Stakeholders Update
-
-This report shows, per testing laboratory, whether any data reached OpenLDR on each working day of a month.
-
-- Dates sit in the column header, day number over month, and repeat on every page.
-- A filled cell means data arrived that day. An empty cell means none did.
-- Weekends are left off. No public-holiday calendar applies, so a holiday still counts as a working day.
-- Days are counted in the time zone set at **Settings**, **Laboratory**, **Time zone**. The run's own **Time zone** filter starts from that setting, and you can change it. A scheduled or CLI run does not read the setting, so give it the zone directly.
-- **HVL/EID panel codes** takes the codes your programme counts as HVL or EID, on each run. Everything else falls into the Other grid.
-- A laboratory that sent nothing that month is not on the grid.
-- The **Spreadsheet** view and the CSV are the raw query result. Their first row carries the column dates, not a laboratory, and they include the sort column the page hides. Skip that first row when you feed the file to another tool.
-
-## The Clinical Microbiology Report
-
-This report takes the **lab number** as its Request ID: the number on the request form and the specimen label, as the lab system sends it, for example `TZDISATDS0013538`.
-
-A lab system often splits one microbiology result into several orders under one lab number. The culture that grew the organism is one order, the susceptibility panel another. The report reads every order under the lab number and prints one isolate with its susceptibilities on one page. A specimen that grew more than one organism is refused, not merged, because two antibiograms under one organism name would read as one isolate. A single order id also works.
+The real review downloads are [the interactive PDF](https://openldr.online/docs-samples/user-guide/reports/request-summary.pdf), [CSV](https://openldr.online/docs-samples/user-guide/reports/request-summary.csv), [XLSX](https://openldr.online/docs-samples/user-guide/reports/request-summary.xlsx) and [the saved scheduled PDF](https://openldr.online/docs-samples/user-guide/reports/scheduled-request-summary.pdf). They contain only a zero request count.
 
 ## Troubleshooting
 
-- **Run is greyed out.** A required filter is empty. Open **Actions**, **Parameters**, and fill every filter marked with a star. Most reports need a date range.
-- **"date range not selected", or a message naming a parameter.** The report ran without a value it needs. Set it in **Parameters** and run again. The message names the parameter.
-- **The result is empty.** Widen the date range, clear optional filters, or check that the data is loaded. The AMR reports stay empty without microbiology data. Load the microbiology sample to check that they work.
-- **"no data for this report request" on the Clinical Microbiology Report.** That lab number has no microbiology. A chemistry or serology request has no organism. The report refuses rather than printing an empty page, because a microbiology report with no organism reads like a negative culture. Check the request's panels in **Query** first.
-- **A microbiology report shows an organism but no susceptibilities.** Usually a real result. The culture grew something and no sensitivity testing was done.
-- **Every microbiology report has an empty susceptibility table.** Check **Terminology** for the AST interpretation value set first. The report picks susceptibilities from that value set. If it never loaded on this install, every table is empty, which looks like cultures with no sensitivity testing. One empty table is a result. All of them is a setup problem.
-- **An antibiogram shows an `(unmapped)` column.** These are susceptibility results the report could not tie to one antibiotic, often a panel summary row, one result reporting two drugs, or a microscopy finding recorded as S, I or R. They are shown so the count is visible. A large number is a data-quality problem to raise with whoever sets up the analyser.
-- **A report is missing from Specimen Turnaround Time.** It has no specimen linked to it, or it was issued before its specimen was received. Neither gives a turnaround.
-- **Permission denied.** Your role can view reports but not manage schedules, edit templates, or unpublish and delete.
-- **A previous run failed.** Open **Run History**, read the error, change the filters, and run again.
-- **A report you expect is missing.** It may be unpublished, or not made yet. See [Report Designer](/docs/report-designer).
-- **The LIS Stakeholders Update has no data on a day you know a lab sent some.** Check **Settings**, **Laboratory**, **Time zone** first, or the run's **Time zone** filter. Days are counted in that zone, so a zone set to UTC on an install ahead of UTC can push a late-evening arrival to the previous day.
-- **On a SQL Server warehouse, the Time zone setting cannot be used.** That setting takes IANA zone names only, and SQL Server takes Windows zone names. On SQL Server, leave the setting empty and type the Windows zone name into each run's **Time zone** filter. The setting works on PostgreSQL and on MySQL or MariaDB.
-- **The run is refused with a message naming the Time zone filter.** The filter got a signed offset such as `+3`, `+03:00` or `Etc/GMT+3`. These are refused on purpose. The database reads the sign the other way round, so `+3` means three hours behind UTC, and the grid would shift by twice the offset with nothing on the page to show it. Type a named zone such as `Africa/Nairobi`, or the Windows zone name on SQL Server. A zone name the warehouse does not know is not refused here. The warehouse reports it clearly itself.
-- **A laboratory is missing from the LIS Stakeholders Update.** It sent nothing that month. If every laboratory is missing, see the next item first.
-- **Every laboratory is missing on a MySQL or MariaDB warehouse.** The server's time-zone tables are probably not loaded. Until someone runs `mysql_tzinfo_to_sql` on that server, every day comes out empty. The grid draws its date header with no rows, which looks like a month where nothing arrived. Ask the warehouse administrator to load the zone tables. PostgreSQL and SQL Server are not affected.
-- **The HVL/EID grid is empty but the Other grid is not.** The codes in **HVL/EID panel codes** do not match what this lab sends. The filter is required, so it was not blank. Open **Query**, find a request you know is an HVL or EID test, and read its panel code. That exact spelling, punctuation and case included, is what the filter needs.
+**The library is empty.** Clear its search and check View reports. A design publication alone does not create a library entry.
+
+**Run is unavailable.** Complete required filters and check Run reports. A custom query can still require values that the template did not mark required.
+
+**A report returns no rows.** Check the date window, facility choice and the source records that report needs. A sample file is not a prerequisite for real reporting.
+
+**A custom report says required parameter: period.** Check the date-parameter shape described above. A successful designer preview does not prove a Reports run.
+
+**A scheduled run is missing.** Check the enabled switch, then close and reopen Scheduled Runs. A queued message alone is not proof of execution.
+
+**A scheduled run is Failed.** On a computer, point at its status to read the recorded error. Correct the actual settings and try Run now again.
+
+**Unpublish says Action failed.** The reviewed newly created report failed this action and stayed published. Report its identifier. This guide does not claim that operation succeeded.
 
 ## Related guides
 
-- [Report Designer](/docs/report-designer)
-- [Custom Queries](/docs/query)
-- [Dashboards](/docs/dashboard)
-- [Audit](/docs/audit)
+[Report Designer](/docs/report-designer) defines page layout and creates library entries. [Query](/docs/query) defines data. [Scheduled reports with workflows](/docs/report-pipeline) covers custom workbook and email workflows.

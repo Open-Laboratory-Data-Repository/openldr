@@ -1,152 +1,387 @@
-# Relatórios agendados com fluxos de trabalho
+# Relatórios agendados com workflows
 
-Este guia constrói um relatório agendado clássico só com fluxos de trabalho: consultar uma base de dados, preencher um modelo Excel com a sua imagem e enviá-lo por e-mail. Ninguém escreve nem corre um programa à parte.
+Use dois workflows quando um relatório exige dados preparados e um modelo de livro. O primeiro lê a origem e guarda um conjunto de dados com nome. O segundo carrega essas linhas e preenche o livro.
 
-O padrão usa **dois fluxos ligados por um conjunto de dados** (dataset):
+Comece com a sua consulta de relatório e o seu livro. Não são necessários dados de exemplo. A pequena contagem abaixo também executa num armazém vazio. O livro opcional de prática encontra-se no fim.
 
-1. **Materialize**: a parte pesada. Num horário, lê a base de origem, reorganiza os dados e guarda um **dataset** com nome, uma tabela de resultados guardada. Corra-o tantas vezes quantas os dados precisarem de ser atualizados.
-2. **Relatório e e-mail**: a parte de entrega. **Carrega** esse dataset, preenche um modelo Excel e envia o ficheiro. Corra-o quando o relatório for devido.
+Precisa de **Edit workflows** e **Run workflows**. Configurar conectores de base ou correio também exige **Manage connectors**. Leia [Workflows](/docs/workflows) para os controlos da área de desenho.
 
-Separar o trabalho torna a entrega rápida, porque lê o dataset guardado e não as tabelas vivas. As duas partes podem também ter horários diferentes.
+Crie e verifique o livro antes de acrescentar um nó de envio. As capturas usam uma instalação de teste separada. As definições de correio servem apenas de explicação. Não foi enviado correio durante esta verificação.
 
-Os nomes dos nós e campos dos fluxos estão em inglês no ecrã, por isso este guia mantém-nos em inglês. Leva cerca de 20 minutos. Selecione uma imagem ou um clip para o ampliar.
+## Criar a consulta de resumo
 
-## Quem pode fazer o quê
+Use uma consulta só de leitura que devolva as colunas necessárias ao livro. Esta contagem inicial devolve uma linha mesmo sem pedidos.
 
-Precisa de **Edit workflows** para construir os fluxos, e de **Manage connectors** para criar os conectores de base de dados e de e-mail que usam. Veja [Fluxos de trabalho](/docs/workflows) e [Conectores](/docs/connectors).
+### 1. Criar um workflow
 
-## Antes de começar
+Abra Workflows, depois Workflow actions e escolha **New**.
 
-- **Os dados de exemplo da documentação**, para o exemplo. Veja [Painéis, Carregar os dados de exemplo](/docs/dashboard#carregar-os-dados-de-exemplo).
-- **Um conector de base de dados** para a sua origem. Uma instalação nova tem **Target Warehouse (Postgres)**, que o exemplo usa.
-- **Um conector de e-mail** para a parte B. SMTP é o mais simples, incluindo o Gmail com uma palavra-passe de aplicação. Veja [Conectores, Conectores de e-mail](/docs/connectors#conectores-de-e-mail).
-- **O seu modelo `.xlsx`** para a parte B, com uma linha de cabeçalho e os dados a começar logo abaixo.
+![New abre um workflow vazio.](report-pipeline-guide-build-new.png)
 
-## Exemplo 1: materializar um dataset a partir do exemplo
+### 2. Dar um nome
 
-Construa a parte Materialize com os dados de exemplo: conte os pedidos por exame em setembro e outubro de 2026, e guarde o resultado no dataset `orders_by_test_sample`.
+Defina um nome útil em Workflow name. O exemplo usa `Build request summary`.
 
-![Dar nome ao fluxo, largar Manual Trigger, Postgres e Materialize Dataset, ligá-los e escrever o SQL.](report-pipeline-build.mp4)
+![Dar um nome ao workflow conforme a tarefa.](report-pipeline-guide-build-name.png)
 
-1. Abra **Fluxos de trabalho**. Abra **Workflow actions** e selecione **New**.
-2. Em **Workflow name**, escreva `Materialize orders by test (sample)`.
-3. Da biblioteca de nós, arraste **Manual Trigger** (em **Core**), **Postgres** (em **Databases**) e **Materialize Dataset** (em **Core**) para a tela.
-4. Ligue-os: Manual Trigger a Postgres, e depois Postgres a Materialize Dataset. Arraste do ponto direito de um nó para o ponto esquerdo do seguinte.
-5. Selecione **Postgres** e depois a roda dentada. Escolha o conector **Target Warehouse (Postgres)** e escreva:
+### 3. Adicionar Manual Trigger
 
-```sql
-SELECT panel_desc AS test, COUNT(*) AS orders
-FROM lab_requests
-WHERE authored_at >= '2026-09-01' AND authored_at < '2026-11-01'
-GROUP BY panel_desc
-ORDER BY orders DESC
-```
+Pesquise Manual Trigger em Node library e arraste para a área de desenho.
 
-6. Selecione **Materialize Dataset** e depois a roda dentada. Em **Dataset name**, escreva `orders_by_test_sample`. Um dataset é substituído pelo nome: a última execução substitui as linhas anteriores.
+![Arrastar Manual Trigger de Node library para a área de desenho.](report-pipeline-guide-build-manual.png)
 
-![As definições do nó Materialize Dataset.](report-pipeline-materialize-config.png)
+### 4. Adicionar SQL Query
 
-![Guardar, executar, e a execução a terminar.](report-pipeline-run.mp4)
+Pesquise SQL Query e arraste junto do acionador. Este nó lê diretamente o esquema de relatórios. Para outra origem, use um nó de base de dados e um conector.
 
-7. Selecione **Save** e depois **Run**. Selecione o distintivo de reprodução em Manual Trigger.
+![Arrastar SQL Query de Node library para a área de desenho.](report-pipeline-guide-build-sql-node.png)
 
-**Resultado esperado:** **Completed, 3 steps**. O separador **Output** de Materialize Dataset lista cinco itens: Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6.
+### 5. Ligar os nós
 
-![A saída da execução: cinco linhas.](report-pipeline-output.png)
+Arraste o ponto de saída à direita do acionador para o ponto de entrada à esquerda de SQL Query.
 
-A janela de datas limita o exemplo aos dois meses da amostra. Num relatório real, a janela vem de um nó **Edit Fields**, como na parte A abaixo.
+![Ligar a saída de Manual Trigger à entrada de SQL Query.](report-pipeline-guide-build-connect.png)
 
-### Ver o dataset
+### 6. Introduzir o SELECT
 
-1. No editor de fluxos, selecione **Datasets** na barra de ferramentas. **orders_by_test_sample** aparece com **5** linhas, a data de atualização e uma transferência **CSV**.
+Selecione SQL Query e depois a engrenagem Configure. Introduza `SELECT COUNT(*) AS requests FROM lab_requests`. Feche o painel para adicionar o próximo nó.
 
-![A lista Datasets no editor de fluxos.](report-pipeline-datasets.png)
+![Contar os pedidos atuais do armazém. A contagem pode ser zero.](report-pipeline-guide-build-sql.png)
 
-2. Abra **Consulta**. No explorador, expanda **Datasets** e selecione **orders_by_test_sample**. As cinco linhas abrem num separador.
+## Guardar o resultado como conjunto de dados
 
-![O dataset aberto em Consulta.](report-pipeline-query.mp4)
+Um conjunto de dados mantém as últimas linhas materializadas sob um nome. Escolha um nome estável antes de outro workflow o ler.
 
-![As cinco linhas do dataset em Consulta.](report-pipeline-query-result.png)
+### 1. Adicionar Materialize Dataset
 
-Um dataset vive na base de dados interna. Para que os nós SQL e os painéis o consultem como uma tabela real do armazém Postgres, ligue **Publicar conjuntos de dados de fluxo de trabalho** em [Definições](/docs/settings).
+Pesquise Materialize Dataset e arraste depois de SQL Query.
 
-## Parte A: o fluxo Materialize completo
+![Arrastar Materialize Dataset de Node library para a área de desenho.](report-pipeline-guide-build-materialize.png)
 
-Construa este grafo (gatilho → campos → duas extrações SQL → reorganização → materialização):
+### 2. Ligar a SQL Query
 
-![O fluxo Materialize: horário, limites de datas, duas extrações, um pivot, uma junção e a materialização](report-materialize-builder.png)
+Ligue a saída de SQL Query à entrada de Materialize Dataset.
 
-1. **Schedule trigger**: defina o cron conforme a frequência de reconstrução dos dados.
-2. **Edit Fields**: calcule o período, por exemplo `periodStart` = primeiro dia do mês passado, `periodEnd` = primeiro dia deste mês. Estes valores alimentam as consultas.
-3. **Nó(s) de base de dados**: um ou mais nós **Postgres / Microsoft SQL**, cada um com o **conector** da origem e um `SELECT` simples. Injete o período com modelos:
+![Ligar a saída de SQL Query à entrada de Materialize Dataset.](report-pipeline-guide-build-materialize-connect.png)
 
-   ```sql
-   select ...
-   from requests r
-   where r.registered >= '{{ $json.periodStart }}'
-     and r.registered <  '{{ $json.periodEnd }}'
-   ```
+### 3. Dar um nome ao conjunto
 
-   Mantenha cada consulta um `SELECT` portável. Faça a reorganização nos nós seguintes, não em SQL próprio de uma base.
-4. **Pivot** (se precisar): transforme linhas longas em colunas largas (por exemplo uma coluna por antibiótico). Defina as chaves de agrupamento, a coluna pivot, a coluna de valor e a lista fixa de colunas de saída.
-5. **Merge → Combine by key** (se tiver duas extrações): junte-as por chaves comuns (por exemplo `requestid`, `organism`). Ligue primeiro o ramo "esquerdo" ao nó.
-6. **Materialize Dataset**: dê-lhe um nome estável, por exemplo `amr_ndola_monthly`.
+Abra a configuração de Materialize Dataset. Defina **Dataset name** com o nome escolhido. O exemplo usa `request_summary`.
 
-**Guarde e execute-o.** Confirme que a execução está verde e que o dataset tem linhas. Um dataset vazio quer dizer que a origem ou o período não devolveu nada.
+![Escolher um nome estável. Uma execução posterior substitui as linhas guardadas.](report-pipeline-guide-dataset-name.png)
 
-## Parte B: o fluxo Relatório e e-mail
+### 4. Guardar a definição
 
-Construa este grafo (gatilho → carregar → modelo → e-mail):
+Selecione **Save**.
 
-1. **Schedule trigger**: defina-o para disparar depois de a parte A atualizar o dataset.
-2. **Load Dataset**: o mesmo nome materializado (`amr_ndola_monthly`).
+![Guardar a definição antes de executar.](report-pipeline-guide-build-save.png)
 
-![A configuração do nó Excel Template, com o botão Upload template](report-excel-template.png)
+### 5. Preparar o workflow
 
-3. **Excel Template**:
-   - Clique em **Upload template** e escolha o seu `.xlsx`. A *Template artifact key* preenche-se sozinha. O fluxo tem de ser guardado primeiro, porque o ficheiro fica guardado com ele.
-   - **Start cell**: onde começam os dados, por exemplo `A2`.
-   - **Columns (ordered)**: os campos dos itens pela ordem das colunas do modelo. Os valores escrevem-se da esquerda para a direita a partir da célula inicial.
-   - **Auto-filter header cell**: por exemplo `A1`, para juntar um filtro à linha de cabeçalho (opcional).
-   - **Password**: para proteger o ficheiro, aponte para um conector ou segredo com a palavra-passe. Deixe vazio para um ficheiro sem proteção.
-4. **Send Email**:
-   - **Connector**: o seu conector SMTP ou de e-mail.
-   - **To** (e **Cc**): os destinatários.
-   - **Subject**, **Body**, **Body format**.
-   - **Attachment field**: defina como `file` para anexar a saída do Excel Template.
+Selecione **Run**.
 
-**Execute-o** e veja a caixa do destinatário, e o spam no primeiro envio.
+![Run prepara o acionador manual.](report-pipeline-guide-build-run.png)
 
-## Um exemplo maior: o relatório AMR mensal
+### 6. Iniciar o acionador manual
 
-O relatório de sensibilidade antimicrobiana leva o padrão ao máximo:
+Selecione o botão de reprodução de Manual Trigger. Aguarde Completed.
 
-- **Materialize:** dois `SELECT` portáveis, um para os isolados de cultura e outro para os resultados de antibiograma em formato longo. Depois um **Pivot** espalha cerca de 50 antibióticos por colunas, um **Merge → Combine by key** junta os isolados aos resultados pivotados por `requestid` + `organism`, e **Materialize Dataset** escreve `amr_ndola_monthly`.
-- **Relatório:** **Load Dataset** → **Excel Template** preenche o modelo `AMR_temp.xlsx` (início `A2`, filtro `A1`, palavra-passe opcional) → **Send Email** anexa o ficheiro para os destinatários.
+![Selecionar o botão de reprodução do acionador para iniciar a execução.](report-pipeline-guide-build-fire.png)
 
-Tudo o que é próprio dos antimicrobianos ou das datas vive nos nós, por isso os mesmos dois fluxos correm em Postgres ou SQL Server só com a escolha do conector certo.
+**Resultado esperado:** a execução de três passos guarda as linhas atuais da consulta com o nome escolhido.
 
-## Ordem das operações
+![Completed confirma que o workflow chegou ao fim.](report-pipeline-guide-build-completed.png)
 
-Corra sempre **Materialize antes de Relatório**: o Relatório lê o que Materialize escreveu. Num horário, defina o Relatório para disparar um pouco depois de Materialize.
+## Inspecionar e descarregar as linhas guardadas
+
+Verifique o conjunto antes de criar o livro. Uma consulta de contagem tem uma linha cujo valor pode ser zero.
+
+### 1. Abrir Datasets
+
+Selecione **Datasets** na barra do workflow.
+
+![Datasets abre os conjuntos de dados guardados dos workflows.](report-pipeline-guide-datasets-button.png)
+
+### 2. Verificar o conjunto guardado
+
+Leia o nome, a contagem de linhas e a hora de atualização. Confirme que o nome corresponde a Materialize Dataset.
+
+![Ler o nome guardado, a contagem de linhas e a hora de atualização.](report-pipeline-guide-dataset-row.png)
+
+### 3. Descarregar CSV
+
+Selecione **CSV** nessa linha para inspecionar os valores noutra ferramenta.
+
+![CSV descarrega as linhas guardadas.](report-pipeline-guide-dataset-csv.png)
+
+**Resultado esperado:** o CSV descarregado contém as linhas que o segundo workflow irá carregar.
+
+## Criar o workflow do livro
+
+Use um segundo workflow para ler as linhas preparadas. Pode executar depois de o primeiro atualizar o conjunto.
+
+### 1. Criar e dar um nome ao workflow
+
+Regresse a Workflows e escolha New. Defina um nome como `Create summary workbook`.
+
+![New abre um workflow vazio.](report-pipeline-guide-deliver-new.png)
+
+![Dar um nome ao workflow conforme a tarefa.](report-pipeline-guide-deliver-name.png)
+
+### 2. Adicionar Manual Trigger
+
+Arraste Manual Trigger da biblioteca para a área de desenho.
+
+![Arrastar Manual Trigger de Node library para a área de desenho.](report-pipeline-guide-deliver-manual.png)
+
+### 3. Adicionar Load Dataset
+
+Arraste Load Dataset para o lado.
+
+![Arrastar Load Dataset de Node library para a área de desenho.](report-pipeline-guide-deliver-load.png)
+
+### 4. Ligar o acionador
+
+Ligue a saída de Manual Trigger à entrada de Load Dataset.
+
+![Ligar a saída de Manual Trigger à entrada de Load Dataset.](report-pipeline-guide-deliver-load-connect.png)
+
+### 5. Escolher o conjunto guardado
+
+Abra a configuração de Load Dataset. Defina Dataset name com o nome exato escrito pelo primeiro workflow, como `request_summary`. Feche o painel.
+
+![Carregar o nome exato produzido pelo primeiro workflow.](report-pipeline-guide-load-name.png)
+
+### 6. Adicionar Excel Template
+
+Arraste Excel Template para a área de desenho depois de Load Dataset.
+
+![Arrastar Excel Template de Node library para a área de desenho.](report-pipeline-guide-deliver-excel.png)
+
+### 7. Ligar Excel Template
+
+Ligue a saída de Load Dataset à entrada de Excel Template.
+
+![Ligar a saída de Load Dataset à entrada de Excel Template.](report-pipeline-guide-deliver-excel-connect.png)
+
+## Configurar o modelo do livro
+
+Use o seu livro .xlsx. Coloque cabeçalhos por cima das células que irão receber dados. Associe os nomes dos campos recebidos às colunas.
+
+### 1. Guardar antes de carregar
+
+Selecione Save. Carregar um modelo exige um identificador de workflow guardado.
+
+![Guardar primeiro para que o carregamento tenha um identificador de workflow.](report-pipeline-guide-template-save.png)
+
+### 2. Carregar o modelo
+
+Abra a configuração de Excel Template, selecione **Upload template** e escolha o ficheiro .xlsx. A chave do artefacto é preenchida após carregar.
+
+![Carregar o seu livro .xlsx com uma linha de cabeçalhos.](report-pipeline-guide-template-upload.png)
+
+![O carregamento preenche a chave do artefacto do modelo.](report-pipeline-guide-template-uploaded.png)
+
+### 3. Definir a primeira célula de dados
+
+Defina **Start cell** como a célula de dados superior esquerda. Use A2 quando a primeira linha contém os cabeçalhos.
+
+![A2 escreve dados por baixo do cabeçalho da primeira linha.](report-pipeline-guide-start-cell.png)
+
+### 4. Associar as colunas por ordem
+
+Em **Columns (ordered)**, introduza os nomes dos campos recebidos separados por vírgulas. O exemplo de contagem usa apenas `requests`.
+
+![Listar os campos recebidos pela ordem das colunas do livro.](report-pipeline-guide-template-columns.png)
+
+### 5. Escolher um cabeçalho de filtro opcional
+
+Defina **Auto-filter header cell** como A1 para um filtro na primeira linha ou deixe vazio.
+
+![A1 ativa um filtro na linha de cabeçalhos.](report-pipeline-guide-auto-filter.png)
+
+### 6. Dar um nome ao ficheiro produzido
+
+Defina **File name**, por exemplo `request-summary.xlsx`.
+
+![Definir o nome do ficheiro a descarregar.](report-pipeline-guide-file-name.png)
+
+## Executar e verificar o livro
+
+Confirme o ficheiro antes de agendar ou enviar por correio. Verifique os valores reais, cabeçalhos e formatação na aplicação de folhas de cálculo.
+
+### 1. Guardar as definições do modelo
+
+Selecione Save.
+
+![Guardar a definição antes de executar.](report-pipeline-guide-deliver-save.png)
+
+### 2. Preparar a execução
+
+Selecione Run.
+
+![Run prepara o acionador manual.](report-pipeline-guide-deliver-run.png)
+
+### 3. Iniciar Manual Trigger
+
+Selecione o botão de reprodução e aguarde Completed.
+
+![Selecionar o botão de reprodução do acionador para iniciar a execução.](report-pipeline-guide-deliver-fire.png)
+
+### 4. Descarregar o ficheiro produzido
+
+Abra Excel Template, selecione Output e depois o livro identificado para descarregar.
+
+![Descarregar o livro produzido a partir de Output de Excel Template.](report-pipeline-guide-workbook-download.png)
+
+**Resultado esperado:** o livro contém as linhas guardadas. O exemplo tem Requests em A1 e zero numérico em A2.
+
+![Completed confirma que o workflow chegou ao fim.](report-pipeline-guide-deliver-completed.png)
+
+## Agendar a reconstrução
+
+Acrescente o agendamento depois de uma execução manual produzir as linhas pretendidas. Uma expressão cron de cinco partes define minuto, hora, dia do mês, mês e dia da semana.
+
+### 1. Adicionar Schedule
+
+Abra o primeiro workflow e arraste Schedule de Node library para a área de desenho.
+
+![Arrastar Schedule de Node library para a área de desenho.](report-pipeline-guide-schedule-node.png)
+
+### 2. Definir a expressão cron
+
+Abra a configuração de Schedule. Defina **Cron Expression** para a hora pretendida. `0 6 * * *` significa 06:00 todos os dias no fuso escolhido.
+
+![Definir uma expressão cron de cinco partes para a hora de reconstrução.](report-pipeline-guide-schedule-cron.png)
+
+### 3. Definir o fuso horário
+
+Introduza um fuso IANA como `Africa/Dar_es_Salaam`. Timezone vazio usa UTC.
+
+![Usar o fuso em que o agendamento deve ser interpretado.](report-pipeline-guide-schedule-timezone.png)
+
+### 4. Ligar o agendamento
+
+Feche a configuração e ligue a saída de Schedule à entrada de SQL Query. O acionador manual pode ficar para execuções manuais intencionais.
+
+![Ligar a saída de Schedule à entrada de SQL Query.](report-pipeline-guide-schedule-connect.png)
+
+### 5. Guardar a definição agendada
+
+Selecione Save quando pretende ativar o agendamento ligado. Consulte History após a primeira hora prevista.
+
+![Save ativa o agendamento ligado.](report-pipeline-guide-schedule-save.png)
+
+**Resultado esperado:** o agendamento guardado determina quando o conjunto é reconstruído. Esta verificação guardou as definições e depois desativou o workflow de teste. O acionamento pelo relógio não foi testado.
+
+## Configurar o envio opcional por correio
+
+Acrescente o envio apenas após aprovação do conector e dos destinatários. A verificação mostra um conector de retorno local não utilizado e um endereço example.invalid. Este nó não foi guardado nem executado.
+
+### 1. Adicionar e ligar Send Email
+
+Abra o workflow do livro, acrescente Send Email (SMTP) e ligue a saída de Excel Template à sua entrada.
+
+![Arrastar Send Email (SMTP) de Node library para a área de desenho.](report-pipeline-guide-email-node.png)
+
+![Ligar a saída de Excel Template à entrada de Send Email (SMTP).](report-pipeline-guide-email-connect.png)
+
+### 2. Escolher o conector de correio
+
+Abra a configuração do nó. Escolha o conector SMTP aprovado. Gmail e Outlook têm os seus próprios tipos de nós e conectores correspondentes.
+
+![Escolher o conector SMTP aprovado.](report-pipeline-guide-email-connector.png)
+
+### 3. Definir os destinatários
+
+Introduza os destinatários aprovados em To. Acrescente Cc apenas se necessário. Substitua o endereço de exemplo pelo destino real autorizado.
+
+![Introduzir o destinatário aprovado. Este endereço de exemplo não pode receber correio.](report-pipeline-guide-email-to.png)
+
+### 4. Definir o assunto
+
+Introduza um Subject claro.
+
+![Dar um assunto claro à mensagem.](report-pipeline-guide-email-subject.png)
+
+### 5. Escrever o corpo
+
+Introduza o Body da mensagem.
+
+![Escrever o corpo da mensagem.](report-pipeline-guide-email-body.png)
+
+### 6. Escolher o formato correspondente
+
+Escolha Plain text ou HTML conforme o texto escrito.
+
+![Escolher Plain text ou HTML conforme o corpo da mensagem.](report-pipeline-guide-email-format.png)
+
+### 7. Anexar o campo do livro
+
+Defina **Attachment field** como `file`, o campo de saída de Excel Template. Um valor vazio não envia anexo.
+
+![Usar file para anexar a saída de Excel Template.](report-pipeline-guide-email-attachment.png)
+
+**Resultado esperado:** as definições identificam o transporte, os destinatários, o conteúdo e o anexo. Guardar e executar um nó de correio ligado envia correio real. Verifique a caixa de destino apenas quando a equipa autorizar esse teste.
+
+## Inspecionar workflows de relatórios num telemóvel
+
+Construa a área de desenho num ecrã maior. No telemóvel, use a lista e History para inspecionar uma definição existente.
+
+### 1. Encontrar os workflows
+
+Pesquise os nomes em Workflows.
+
+![Encontrar os workflows de relatórios guardados no telemóvel.](report-pipeline-guide-phone-find.png)
+
+### 2. Abrir o workflow do livro
+
+Selecione o nome na lista.
+
+![Abrir o workflow do livro para inspecionar o histórico.](report-pipeline-guide-phone-open.png)
+
+### 3. Ler History
+
+Selecione History e verifique o estado e a hora da execução.
+
+![Ler a execução manual concluída em History.](report-pipeline-guide-phone-history.png)
+
+## Livro opcional de prática
+
+[Descarregar o livro de prática com uma coluna](https://openldr.online/docs-samples/user-guide/report-pipeline/example-summary-template.xlsx). Contém o cabeçalho Requests em A1. Destina-se ao exemplo de contagem só de leitura acima e não contém dados de pacientes. O seu livro pode usar outras colunas e formatação.
+
+[Descarregar o livro produzido na verificação](https://openldr.online/docs-samples/user-guide/report-pipeline/generated-request-summary.xlsx) para comparar o resultado esperado. Este ficheiro veio da execução real isolada, com zero pedidos no armazém.
+
+## Adaptar o resumo ao seu relatório
+
+Substitua a contagem pelo SELECT aprovado e associe os campos ao livro. Para outra base, use um nó de conector Postgres, MySQL ou Microsoft SQL correspondente.
+
+Para períodos de relatório, defina periodStart e periodEnd antes da consulta e leia com `{{ $json.periodStart }}`. Mantenha a consulta, os tipos dos parâmetros e os limites de datas coerentes com a origem.
+
+Use Pivot para transformar um valor recebido em várias colunas. Use Merge com Combine by key para juntar dois ramos. Configure as chaves reais e as regras de colisão necessárias. Estas transformações maiores não foram testadas nesta verificação.
+
+Também pode abrir os conjuntos em Datasets de [Consultas](/docs/query). Publicar conjuntos de workflows no SQL do armazém é uma opção de Settings. Mantenha o mesmo nome nos dois workflows.
+
+## Escolher a hora de envio
+
+Agende o workflow do livro para depois da hora prevista de conclusão da atualização. Reserve tempo para a consulta de origem. Um simples intervalo não garante que um primeiro workflow invulgarmente lento terminou. Verifique a hora de atualização do conjunto e History.
+
+Run manual também usa o conjunto atualmente guardado. Não reconstrói automaticamente o primeiro workflow. Execute novamente o primeiro quando precisa de dados recentes.
 
 ## Resolução de problemas
 
-- **O anexo está vazio ou só tem cabeçalhos:** o dataset estava vazio. Corra primeiro Materialize e veja o período e a consulta de origem.
-- **"Save the workflow first" ao carregar um modelo:** guarde o fluxo e depois carregue o ficheiro.
-- **O e-mail sai sem anexo:** defina **Attachment field** de Send Email como `file`.
-- **O Gmail recusa o início de sessão:** use uma palavra-passe de aplicação, não a palavra-passe normal. Veja [Conectores, Enviar do Gmail](/docs/connectors#enviar-do-gmail-com-uma-palavra-passe-de-aplicacao).
-- **Um nó de base de dados não tem onde correr:** crie e associe um conector. Veja [Conectores](/docs/connectors).
-- **A junção não dá linhas:** confirme que os dois ramos usam os **mesmos nomes de chave**, e que o ramo esquerdo foi ligado primeiro ao Merge.
+**Falta o conjunto de dados.** Execute o primeiro workflow e verifique erros em Materialize Dataset. Confirme o nome exato em Load Dataset.
 
-## Num telemóvel
+**O livro está vazio.** Inspecione o CSV e os nomes dos campos recebidos. Uma consulta filtrada pode legitimamente não devolver linhas.
 
-Os fluxos leem-se num telemóvel, mas construir um precisa de um ecrã grande. Um relatório agendado corre no servidor, não precisa do ecrã de ninguém.
+**O carregamento pede para guardar primeiro.** Guarde o workflow e carregue novamente. O carregamento pertence a esse workflow guardado.
+
+**Os valores surgem nas colunas erradas.** Verifique Start cell e Columns (ordered). A associação escreve os campos da esquerda para a direita na ordem indicada.
+
+**O agendamento não produziu o ficheiro esperado.** Verifique se o workflow está ativo, a expressão cron, o fuso e depois History. Um agendamento guardado não prova que foi acionado.
+
+**Um correio não tem o livro.** Verifique a saída anterior de Excel Template e Attachment field. Confirme separadamente o transporte e o destinatário reais.
 
 ## Guias relacionados
 
-- [Fluxos de trabalho](/docs/workflows)
-- [Conectores](/docs/connectors)
-- [Consultas personalizadas](/docs/query)
-- [Relatórios](/docs/reports)
-- [Definições](/docs/settings)
+[Workflows](/docs/workflows) explica a área de desenho e o histórico. [Consultas](/docs/query) permite consultar conjuntos guardados. [Conectores](/docs/connectors) configura os transportes de origem e envio.

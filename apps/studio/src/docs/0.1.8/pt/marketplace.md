@@ -1,161 +1,258 @@
 # Marketplace
 
-O **Marketplace** é onde os administradores encontram e instalam extras para o OpenLDR: **plugins** que leem ou enviam dados (um importador de CSV, um leitor HL7 v2, um envio para o DHIS2), **modelos de formulário**, e **pacotes de conteúdo** com dados de referência como sistemas de códigos, um registo de unidades e consultas de relatórios. Tudo vem de um **registo**, uma lista publicada de artefactos. Uma instalação nova tem um, **Default registry**, no GitHub.
+Use Marketplace para rever e instalar plugins, modelos de formulário, relatórios e pacotes de conteúdo. Os pacotes vêm de registos, listas de ficheiros fornecidas por um editor.
 
-Leva cerca de 10 minutos, com acesso de rede ao GitHub. Selecione uma imagem ou um clip para o ampliar.
+**View marketplace** permite consultar pacotes disponíveis e instalados. **Manage marketplace** permite instalar, desativar, remover e gerir registos.
 
-![Marketplace, Explorar: os artefactos do registo predefinido, com tipo, editor, versão e estado da assinatura.](marketplace-tour.png)
+Comece pelo registo aprovado pela organização. Uma instalação nova inclui Default registry no GitHub. O servidor tem de chegar a esse registo para ler os pacotes.
 
-## Quem pode fazer o quê
+As imagens usam um plugin de destino de treino assinado de um registo local de prática. Siga as mesmas tarefas com o pacote aprovado. Não precisa dos exemplos da documentação. A configuração de prática opcional está no fim.
 
-| Capacidade | O que permite |
-| --- | --- |
-| **View marketplace** | Abrir Definições, Marketplace, e ver os artefactos disponíveis e instalados |
-| **Manage marketplace** | Instalar, ativar, desativar, remover e gerir registos |
+## Encontrar o pacote
 
-## Os três separadores
+Verifique a origem e a finalidade antes de escolher um pacote. Instalar um plugin concede as capacidades declaradas.
 
-- **Explorar** lista o que os registos oferecem. **Todos os tipos** filtra por plugin, formulário ou pacote de conteúdo.
-- **Instalados (N)** lista o que esta instalação tem, com o estado de cada artefacto.
-- **Registos** lista de onde vêm os artefactos.
+### 1. Abrir Marketplace
 
-Cada cartão mostra **Não verificado** até a assinatura ser verificada. Abri-lo verifica a assinatura e o cartão passa a **Verificado**.
+Abra **Settings** e depois **Marketplace**.
 
-## Exemplo 1: ler um plugin antes de o instalar
+![Abra Settings e depois Marketplace.](marketplace-guide-open.png)
 
-![Abrir tabular. Os detalhes, permissões e requisitos carregam e passa a Verificado.](marketplace-read.mp4)
+### 2. Escolher Browse
 
-1. Abra **Definições** e depois **Marketplace**. **Explorar** está aberto.
-2. Selecione **tabular**.
+Use **Browse** para ver pacotes dos registos ativados.
 
-**Resultado esperado:** ao fim de alguns segundos a página mostra **Verificado**, com a descrição **CSV/Excel -> FHIR R4 ingestion plugin (configurable mapping)**. Mostra:
+![Browse lista os pacotes oferecidos pelos registos ativados.](marketplace-guide-browse.png)
 
-| Campo | Valor |
-| --- | --- |
-| Entry point | `convert` |
-| Checksum (sha256) | a impressão digital do ficheiro, verificada antes de correr |
-| Sandbox | WASI enabled |
-| Memory limit | 256 MB |
-| Time limit | 30000 ms |
-| Permissões | `read-input`, `emit-fhir` (Patient, Specimen, Observation) |
-| Requisitos | Compatible with CE 0.1.11 |
+### 3. Pesquisar o pacote
 
-![Os detalhes de tabular: o que corre, o que pode fazer e do que precisa.](marketplace-read-full.png)
+Introduza o identificador do pacote em Search. O exemplo fictício de prática usa `test-sink`.
 
-Um plugin corre numa caixa de areia com memória e tempo fixos. As permissões dizem o que pode fazer: `tabular` pode ler o ficheiro que recebe e escrever pacientes, amostras e observações FHIR, mais nada.
+![Pesquise pelo identificador do pacote.](marketplace-guide-search.png)
 
-## Exemplo 2: instalá-lo
+### 4. Escolher um tipo se for útil
 
-![Abrir o menu, selecionar Instalar, ler as capacidades e aprovar.](marketplace-install.mp4)
+Use **All types** para limitar a lista a plugins, modelos de formulário, relatórios ou pacotes de conteúdo.
 
-1. Na página **tabular**, abra **⋯** e selecione **Instalar**.
-2. **Rever e aprovar: tabular** lista a versão e as **Capacidades solicitadas**. Leia-as.
-3. Selecione **Aprovar e instalar**.
+![Filtre por tipo quando precisar de um plugin, formulário, relatório ou pacote de conteúdo.](marketplace-guide-filter.png)
 
-**Resultado esperado:** o separador mostra **Instalados (1)**, e **tabular** aparece lá como **Ativo**.
+### 5. Verificar o cartão
 
-![tabular instalado e Ativo.](marketplace-installed.png)
+Leia o identificador, a versão, o editor e o registo. Abra o cartão do pacote certo.
 
-A aprovação vale para as capacidades da versão escolhida. Escolher outra versão volta a fazer a verificação.
+![Leia o identificador, a versão, o editor e o registo do pacote.](marketplace-guide-card.png)
 
-## Exemplo 3: removê-lo
+**Resultado esperado:** abre o detalhe do pacote. A abertura obtém a informação necessária às verificações de assinatura, permissões e compatibilidade.
 
-![Abrir o plugin instalado, escolher Remover e confirmar.](marketplace-remove.mp4)
+## Ler o pacote antes de instalar
 
-1. Em **Instalados**, selecione **tabular**. Abra **⋯**. Oferece **Desativar**, **Remover** e **Voltar**.
-2. Selecione **Remover**, e outra vez **Remover** em **Remover tabular?**. Isto desinstala o artefacto desta instalação.
+A verificação de assinatura confirma se o ficheiro corresponde à chave do editor. Decida se confia nesse editor e nas ações do pacote.
 
-**Resultado esperado:** **Instalados (0)**.
+### 1. Verificar a assinatura
 
-**Desativar** mantém um plugin instalado mas impede-o de carregar. **Rollback**, quando há uma versão mais antiga instalada, volta a ativá-la.
+Leia **Verified** ou a falha de verificação. Um cartão remoto ainda não aberto pode mostrar Unverified até os detalhes carregarem.
 
-## Registos
+![Abrir os detalhes verifica a assinatura do editor.](marketplace-guide-signature.png)
 
-![O separador Registos: Default registry, Remoto (HTTP), no GitHub.](marketplace-registry-list.png)
+### 2. Ler a descrição
 
-1. Abra o separador **Registos**. **Default registry** é um registo **Remoto (HTTP)** em `https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/marketplace/main`.
-2. Para adicionar um, abra o menu **⋯** da página e selecione **Adicionar registo**. Preencha **Nome**, **Tipo** e **Localização (URL ou diretório)**, e escolha **Guardar** no menu **⋯** do painel. Feche o painel sem guardar para desistir.
+Leia o que o pacote faz e a configuração necessária. Este pacote de treino não tem um destino real.
 
-![O painel Adicionar registo.](marketplace-add-registry.png)
+![Leia a descrição do pacote antes de instalar.](marketplace-guide-readme.png)
 
-Um registo pode ser um endereço web ou uma pasta no servidor. Um laboratório sem Internet pode apontar um registo de pasta para uma cópia do marketplace.
+### 3. Ler permissões e requisitos
 
-## Compreender as permissões
+Verifique o editor, a versão selecionada, as permissões e a compatibilidade. Loading permissions ou Permissions unavailable não significa que não pede permissões. Espere pelos detalhes confirmados.
 
-**A carregar permissões** significa que os detalhes estão a ser obtidos. A instalação permanece desativada.
+![Leia a versão selecionada, as permissões e a compatibilidade.](marketplace-guide-permissions.png)
 
-**Permissões indisponíveis** significa que não foi possível determinar as permissões. Não significa que o pacote não solicita permissões. Saia dos detalhes, verifique a disponibilidade do registo e volte a abrir o pacote.
+**Resultado esperado:** Install fica disponível apenas quando a versão selecionada passa as verificações exigidas. Selecionar outra versão reinicia as verificações.
 
-**Nenhuma permissão especial solicitada** aparece apenas quando os detalhes carregados confirmam uma lista vazia. Para um pacote já instalado sem referência ao registo, as permissões vêm do registo local desse pacote.
+## Aprovar e instalar um pacote
 
-Escolher outra versão inicia novamente esta verificação. A aprovação da instalação usa as permissões da versão selecionada. Não concede permissões antes da sua confirmação.
+Faça esta tarefa apenas depois de rever o pacote selecionado e as capacidades.
 
-## Gerir pacotes e registos
+### 1. Escolher Install
 
-Em **Instalados**, use o menu do pacote para as ações disponíveis, incluindo ativação, desativação e remoção.
+Abra os pontos do detalhe do pacote e selecione **Install**.
 
-Em **Registos**, abra o menu e escolha **Adicionar registo**. Preencha o nome, o tipo e a localização. Guarde e verifique a linha criada. Pode editar ou desativar o registo na lista.
+![Escolha Install após rever os detalhes.](marketplace-guide-install.png)
 
-![Lista e formulário dos registos](marketplace-registries.png)
+### 2. Rever a aprovação
 
-## Pacotes de conteúdo
+Verifique a versão e **Requested capabilities**. Um pacote de conteúdo mostra as etapas incluídas em alternativa.
 
-Um pacote de conteúdo é um conjunto assinado de dados de referência. Instala, por esta ordem, sistemas de códigos, conjuntos de valores, um registo de unidades, a correspondência de ligações e consultas personalizadas. Um pacote não declara capacidades.
+![Reveja a versão e as capacidades pedidas antes de aprovar.](marketplace-guide-consent.png)
 
-Em **Explorar**, filtre por **Pacote de conteúdo**. Os detalhes de um pacote listam os seus passos com as contagens. A confirmação da instalação mostra a mesma lista. É necessária a permissão para gerir o Marketplace, como nos plugins.
+### 3. Aprovar esta instalação
 
-A instalação verifica primeiro cada passo. Um pacote sem assinatura de editor é recusado. Verifica a assinatura e a chave do editor, o hash do ficheiro e a lista de passos. Verifica também que cada consulta é só de leitura (SELECT), que o ficheiro do registo é pré-visualizado sem erros e que o registo não está desativado. Se uma verificação falhar, nada é escrito.
+Selecione **Approve & install** para avançar. Cancel fecha a aprovação sem instalar.
 
-A primeira instalação de um editor fixa a sua chave. Um pacote posterior assinado com outra chave é recusado.
+![Approve & install autoriza apenas esta instalação revista.](marketplace-guide-approve.png)
 
-Depois, a instalação aplica os passos por ordem. Se um passo falhar, os passos anteriores ficam escritos. O pacote mostra **Falha no passo N** com o erro no cartão e nos detalhes. Escolha **Instalar novamente** no menu `⋯` para o concluir.
+### 4. Verificar Installed
 
-Instalar duas vezes é seguro:
+Use os pontos do detalhe e Back, depois escolha **Installed**. Verifique o identificador instalado e o estado Active.
 
-- Os sistemas de códigos e os conjuntos de valores são substituídos pelo URL.
-- A origem do registo é reutilizada e as suas linhas são atualizadas pelo código.
-- A correspondência de ligações corre outra vez.
-- As consultas são substituídas pelo nome. Uma consulta editada por um administrador é substituída quando o pacote é instalado de novo.
+![Installed lista o plugin guardado com o estado ativo.](marketplace-guide-installed.png)
 
-As linhas que faltam no registo de um pacote mais recente são assinaladas. Nunca são retiradas.
+**Resultado esperado:** o pacote está instalado nesta instância OpenLDR. A instalação não configura todas as dependências externas nem prova que o plugin importa os seus dados.
 
-Um passo de registo pode listar colunas extra. Os seus valores vão para os `extras` de cada unidade, com o nome da coluna em minúsculas. As consultas personalizadas leem-nos na tabela `facility_registry` do armazém. Qualquer outra coluna que o registo não conheça continua a fazer recusar o pacote. Uma versão mais antiga do CE recusa um pacote que liste colunas extra, e não escreve nada.
+## Desativar ou ativar um plugin instalado
 
-Um pacote pode associar códigos de teste do laboratório a testes do catálogo (**Correspondências de testes**). Indica o código LOINC de cada código, e o CE associa-o ao teste do catálogo ligado a esse LOINC. Um código que o pacote não consegue resolver é ignorado e listado: nenhum teste do catálogo tem esse LOINC, ou dois têm. Um código já associado aqui é mantido. A simulação na linha de comandos (`openldr market install <dir> --dry-run`) lista o que associaria, manteria e ignoraria.
+Desativar mantém os ficheiros e o registo instalado. Impede o carregamento do plugin.
 
-Escolha **Desanexar** para esquecer o registo de instalação. Tudo o que o pacote escreveu fica. Não existe desinstalação.
+### 1. Escolher Disable
 
-Na linha de comandos, `openldr market install <bundle-dir> --dry-run` executa as verificações e mostra os passos, com quantos códigos cada passo de correspondência de ligações ligaria. Não escreve nada.
+Em Installed, abra o plugin. Abra os pontos e selecione **Disable**.
 
-## Na linha de comandos
+![Disable mantém o plugin instalado, mas impede o carregamento.](marketplace-guide-disable.png)
 
-A CLI instala a partir de uma pasta de bundle no servidor, não a partir de um registo.
+### 2. Ativar novamente quando adequado
 
-```bash
-./openldr market list
-./openldr market verify <bundle-dir>
-./openldr market install <bundle-dir> --dry-run
-./openldr market disable tabular
-./openldr market remove tabular
+Depois de desativar, recarregue a página e reabra o plugin em Installed. Abra os pontos e selecione **Enable**. Isto atualiza o estado do menu.
+
+![Enable permite voltar a carregar o plugin instalado.](marketplace-guide-enable.png)
+
+**Resultado esperado:** o plugin instalado pode voltar a carregar quando ativado. Isto não altera as definições de ligações externas.
+
+## Remover um plugin instalado
+
+Verifique os workflows e as importações dependentes antes de remover um plugin.
+
+### 1. Escolher Remove
+
+Abra os pontos do detalhe do plugin instalado e selecione **Remove**.
+
+![Remove desinstala este plugin.](marketplace-guide-remove.png)
+
+### 2. Confirmar o identificador do plugin
+
+Na confirmação, escolha **Remove** para desinstalar ou Cancel para manter. A captura de prática remove test-sink.
+
+![Confirme o identificador antes de remover o plugin.](marketplace-guide-remove-confirm.png)
+
+**Resultado esperado:** o plugin removido já não está instalado. O cartão do registo pode continuar a aparecer em Browse.
+
+## Adicionar um registo
+
+Use o URL do registo ou a pasta do servidor fornecidos pela organização. Uma pasta de registo local contém diretórios de pacotes. Tem de estar acessível ao servidor OpenLDR.
+
+### 1. Abrir Registries
+
+Escolha o separador **Registries**. Verifique as origens existentes antes de criar um duplicado.
+
+![Registries lista as origens dos pacotes.](marketplace-guide-registries.png)
+
+### 2. Escolher Add registry
+
+Abra os pontos da barra de separadores e selecione **Add registry**.
+
+![Escolha Add registry nos pontos da barra de separadores.](marketplace-guide-add-registry.png)
+
+### 3. Dar nome à origem
+
+Introduza um **Name** útil. O exemplo usa Example local registry.
+
+![Use um nome que identifique o dono do registo.](marketplace-guide-registry-name.png)
+
+### 4. Escolher o tipo
+
+Escolha **Local directory** para uma pasta no servidor da API ou **Remote (HTTP)** para um registo web.
+
+![Um registo local é uma pasta no servidor OpenLDR.](marketplace-guide-registry-type.png)
+
+### 5. Introduzir a localização
+
+Preencha **Location** com a pasta do servidor ou o URL base do registo. A imagem usa uma pasta de prática isolada.
+
+![Introduza a pasta visível para o servidor da API, não a do portátil.](marketplace-guide-registry-location.png)
+
+### 6. Guardar a origem
+
+Abra os pontos do painel e selecione **Save**.
+
+![Save adiciona o registo.](marketplace-guide-registry-save.png)
+
+**Resultado esperado:** o registo ativado aparece na lista. Os pacotes disponíveis aparecem em Browse. Uma pasta do portátil não fica automaticamente visível para um servidor ou contentor.
+
+![O registo local aparece na lista e está ativado.](marketplace-guide-registry-saved.png)
+
+## Alterar um registo
+
+Um registo desativado deixa de fornecer pacotes disponíveis. Não desinstala os pacotes já instalados.
+
+### 1. Escolher Edit
+
+Abra os pontos da linha do registo e selecione **Edit**.
+
+![Edit altera o nome, o tipo, a localização ou a ativação de um registo.](marketplace-guide-registry-edit.png)
+
+### 2. Verificar as definições e Enabled
+
+Atualize o nome, o tipo, a localização ou o estado Enabled. Guarde pelos pontos do painel. Feche sem Save para descartar alterações.
+
+![Verifique a localização guardada e Enabled antes de alterar um registo.](marketplace-guide-registry-settings.png)
+
+## Rever pacotes num telemóvel
+
+Os mesmos separadores e ações estão disponíveis no telemóvel.
+
+### 1. Ler um cartão de pacote
+
+Pesquise em Browse e abra o cartão certo. Os cartões ficam empilhados verticalmente.
+
+![Os cartões de Browse ficam empilhados na largura do telemóvel.](marketplace-guide-phone.png)
+
+### 2. Rever a versão e as permissões
+
+Leia os detalhes acima da descrição e desça para as restantes secções.
+
+![A versão e as permissões aparecem antes da descrição no telemóvel.](marketplace-guide-phone-details.png)
+
+## Pacotes de conteúdo e outros tipos de pacote
+
+Um pacote de conteúdo aplica as etapas declaradas de dados de referência por ordem. Reveja a lista e as contagens antes de instalar. Pode atualizar sistemas de códigos, conjuntos de valores, unidades, associações e consultas com nome. Uma nova tentativa pode substituir uma consulta alterada localmente.
+
+Se um pacote falhar durante a aplicação, as etapas anteriores podem ficar guardadas. Leia Failed at step N e o erro, corrija a causa e escolha Install novamente. Um pacote recusa assinaturas inválidas e verificações prévias com falha antes de escrever.
+
+**Detach** esquece o registo de um pacote ou modelo de formulário instalado, mantendo os dados criados. Não é uma desinstalação. Os plugins oferecem Remove. Uma versão antiga de plugin instalada pode oferecer Rollback. Estas opções dependem do tipo selecionado e das versões instaladas.
+
+Um pacote cujos detalhes não carregam mantém a instalação desativada. Verifique a disponibilidade do registo antes de repetir. O teste documentado exercitou o percurso de plugin. Não aplicou pacotes de conteúdo nem reverteu uma versão antiga de plugin.
+
+## Usar um pacote local pela CLI
+
+Siga [Começar aqui](/docs/start-here) para configurar a CLI. Em `openldr_ce`, a instalação pela CLI lê um diretório de pacote no servidor. Não consulta a lista de registos do Studio. Verifique e simule antes de aplicar um pacote aprovado.
+
+```shell
+pnpm openldr market list
+pnpm openldr market verify <bundle-directory>
+pnpm openldr market install <bundle-directory> --dry-run
+pnpm openldr market install <bundle-directory>
+pnpm openldr market disable <plugin-id>
+pnpm openldr market remove <plugin-id>
 ```
 
-`verify` verifica o manifesto, o ficheiro e a chave do editor de um bundle. `install --dry-run` corre todas as verificações sem escrever nada. `update` só instala um pacote de conteúdo se o bundle for mais recente do que o instalado. `rollback <id> <version>` volta a ativar uma versão mais antiga de um plugin.
+## Prática opcional com um destino de treino local
 
-## Num telemóvel
+Use registos e pacotes aprovados no trabalho normal. O [manifesto de prática](https://openldr.online/docs-samples/user-guide/marketplace/manifest.json) opcional pertence a um pacote de treino assinado. Não tem dados clínicos e não envia nada para um destino real.
 
-O Marketplace funciona num telemóvel. Os cartões empilham-se numa coluna. Na página de um artefacto, os detalhes, permissões e requisitos vêm primeiro, por cima da descrição.
+Numa cópia do código numa instalação temporária, `pnpm build:test-sink` e `pnpm make:docs-marketplace-bundle` criam o pacote de treino do repositório. Use a pasta gerada nesse servidor como registo local. As raízes locais contêm diretamente os diretórios dos pacotes. O formato do índice HTTP é diferente.
+
+As imagens usam uma pasta de prática gerada separada. Não trate a chave do editor de teste como uma decisão de confiança para produção.
 
 ## Resolução de problemas
 
-- **Explorar está vazio.** O registo está inacessível ou desativado. Veja **Registos**, e se o servidor chega ao endereço do registo.
-- **O cartão continua Não verificado.** Abra-o. A assinatura é verificada quando os detalhes carregam.
-- **As permissões mostram Permissões indisponíveis.** Não foi possível ler os detalhes. Isso não quer dizer que o artefacto não precise de permissões. Instalar continua desativado.
-- **A instalação falha.** Veja a compatibilidade, as capacidades e a disponibilidade do registo.
-- **Um artefacto instalado não aparece noutro sítio.** Confirme que está ativo e que essa parte da aplicação o suporta.
+**Browse está vazio.** Limpe Search e o filtro de tipo. Verifique os registos ativados e o acesso da API à pasta ou URL. Use os pontos da barra de separadores e Refresh após alterar origens.
+
+**Falta um pacote local.** Aponte o registo para o diretório cujos filhos imediatos são diretórios de pacotes legíveis, cada um com manifesto e conteúdo.
+
+**Permissions unavailable.** Não foi possível obter os detalhes do pacote. Isto não prova uma lista de permissões vazia.
+
+**A aprovação continua aberta após um erro.** Leia a notificação. Corrija os requisitos indicados de armazenamento, compatibilidade, assinatura ou outros antes de repetir.
+
+**Um plugin está instalado, mas falta noutro local.** Confirme que está ativado e declara o importador, a página ou a capacidade esperada. Para cartões e painéis, veja [Cartões e painéis de plugins](/docs/plugin-sites).
 
 ## Guias relacionados
 
-- [Definições](/docs/settings)
-- [Conectores](/docs/connectors)
-- [Formulários](/docs/forms)
-- [Unidades](/docs/facilities)
+[Conectores](/docs/connectors) explica os destinos dos plugins. [Formulários](/docs/forms) explica a edição de formulários. [Cartões e painéis de plugins](/docs/plugin-sites) explica os locais opcionais dos plugins.

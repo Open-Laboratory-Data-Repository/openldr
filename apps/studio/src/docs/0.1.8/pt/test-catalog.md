@@ -1,261 +1,527 @@
-# Catálogo de exames
+# Catálogo de testes
 
-O **catálogo de exames** é a lista nacional de exames. Cada exame tem um código, um nome, uma categoria, os tipos de amostra que aceita e, quando o tem, um código LOINC. Um exame sem código LOINC mostra **Sem LOINC**.
+Mantenha uma lista partilhada de testes, escolha os oferecidos neste laboratório e ligue os códigos recebidos das origens. Um teste do catálogo e um campo de resultado são diferentes. Um teste pode produzir vários campos de resultado.
 
-A configuração do catálogo de testes é opcional. O OpenLDR pode receber e processar dados antes desta configuração. Recomendamos vivamente que a faça durante a utilização do sistema, para relacionar testes de diferentes fontes. As opções de testes do formulário Lab order usam o catálogo configurado.
+**Esta configuração é opcional.** O OpenLDR pode receber e processar dados laboratoriais antes de a configurar. Recomendamos configurá-la durante o uso. O formulário Lab order oferece os testes ativados neste laboratório.
 
-O catálogo tem três funções. Decide que exames o formulário **Lab order** oferece. Deixa os relatórios contar um exame da mesma forma, seja qual for o nome que cada sistema de laboratório lhe dá. E guarda os parâmetros de resultado e os intervalos de referência de cada exame.
+Use os seus códigos de testes, nomes, amostras e ficheiros. As capturas usam exemplos fictícios. Não precisa de dados de exemplo da documentação. Os [ficheiros opcionais de prática](#pratica-opcional-com-dados-ficticios) estão no fim.
 
-Uma instalação nova não traz exames. Este guia carrega uma pequena lista de exemplo, ativa alguns exames e associa-lhes os dados de exemplo da documentação. Leva cerca de 15 minutos. Selecione uma imagem ou um clip para o ampliar.
+A leitura exige **Browse terminology**. As alterações exigem **Manage terminology**. Se o catálogo vier do central, este laboratório pode alterar a disponibilidade, as amostras e os nomes locais. Não pode alterar as definições partilhadas.
 
-![O catálogo depois da importação de exemplo: oito exames com código, categoria, tipos de amostra, código LOINC e se este laboratório os faz.](test-catalog-list.png)
+As capturas usam uma instalação que detém o catálogo. Os exemplos de campos também usam um pequeno dicionário fictício de resultados. Os números dos intervalos de referência servem apenas para documentação. Use intervalos e significados de códigos aprovados para os testes reais.
 
-## Quem pode fazer o quê
+## Adicionar um teste ao catálogo
 
-| Capacidade | O que permite |
-| --- | --- |
-| **Browse terminology** | Abrir **Catálogo de exames** na barra lateral e lê-lo |
-| **Manage terminology** | Adicionar, editar, importar, ativar e desativar, retirar e associar códigos |
+Use para um teste novo quando esta instalação detém o catálogo. Pesquise um teste existente antes de adicionar outro código.
 
-## Antes de começar
+### 1. Abrir Test catalog
 
-Os exemplos usam dois ficheiros de exemplo. Ambos são dados inventados, para uma instalação de teste.
+Selecione **Test catalog** no menu principal à esquerda.
 
-1. **Os dados de exemplo da documentação**, para os Exemplos 3 e 4. Veja [Painéis, Carregar os dados de exemplo](/docs/dashboard#carregar-os-dados-de-exemplo). Têm 60 pedidos em cinco exames.
-2. **A lista de exames de exemplo**, um CSV de oito exames. Transfira-a de `https://openldr.online/docs-samples/openldr-sample-test-catalog.csv`. Numa cópia do código-fonte, é `apps/web/public/docs-samples/openldr-sample-test-catalog.csv`.
+![Test catalog está no menu principal à esquerda.](test-catalog-guide-open-page.png)
 
-```csv
-code,name,short_name,loinc,category,specimen_types
-FBC,Full blood count,FBC,58410-2,Haematology,Blood
-MAL-RDT,Malaria rapid test,Malaria RDT,70569-9,Parasitology,Blood
-HIV-VL,HIV viral load,Viral load,20447-9,Molecular,Blood
-GLU,Blood glucose,Glucose,2345-7,Chemistry,Blood
-CREAT,Creatinine,,2160-0,Chemistry,Blood
-UA,Urinalysis,Urine dipstick,24356-8,Chemistry,Urine
-TB-XPERT,TB GeneXpert MTB/RIF,GeneXpert,,Molecular,Sputum
-CSF-CULT,CSF culture,,,Microbiology,CSF
+### 2. Abrir as ações de Tests
+
+Selecione **Tests** e abra os pontos junto à pesquisa e aos controlos da tabela.
+
+![Tests contém o catálogo disponível nesta instalação.](test-catalog-guide-tests-tab.png)
+
+![Abra o menu de pontos da página Tests.](test-catalog-guide-page-actions-step-2.png)
+
+### 3. Escolher Add test
+
+Selecione **Add test**. Abre o painel do teste.
+
+![Escolha Add test para introduzir um teste à mão.](test-catalog-guide-add-menu.png)
+
+### 4. Introduzir o código
+
+Introduza o código estável do catálogo. O exemplo fictício usa `EXAMPLE-ALPHA`. Deixe vazio apenas se o código LOINC deve tornar-se o código. Um código guardado não pode ser alterado.
+
+![Use o código estável do catálogo. O exemplo usa EXAMPLE-ALPHA.](test-catalog-guide-test-code.png)
+
+### 5. Introduzir o nome
+
+Introduza o nome a apresentar. Um nome curto é opcional. O exemplo usa `Example panel Alpha` e `Example Alpha`.
+
+![Introduza o nome do teste a apresentar.](test-catalog-guide-test-name.png)
+
+![Um nome curto é opcional.](test-catalog-guide-test-short-name.png)
+
+### 6. Escolher a categoria
+
+Selecione a categoria adequada na lista configurada. As categorias vêm de Terminology.
+
+![Escolha uma categoria na lista configurada.](test-catalog-guide-category-option.png)
+
+### 7. Escolher as amostras aceites
+
+Marque os tipos de amostra aceites pelo teste. Use as escolhas configuradas para o teste real.
+
+![Marque os tipos de amostra aceites pelo teste.](test-catalog-guide-specimen.png)
+
+## Terminar e guardar o teste
+
+Continue no painel aberto. Pode configurar este laboratório e os campos de resultado depois de guardar a definição partilhada.
+
+### 1. Verificar o campo LOINC
+
+Introduza um código LOINC confirmado se o tiver, ou deixe vazio. Quando LOINC estiver carregado, pesquise e selecione um termo. Aqui não está carregado, pelo que apenas verifica o formato dos códigos introduzidos.
+
+![LOINC é opcional. Sem o dicionário, a instalação verifica apenas o formato dos códigos introduzidos.](test-catalog-guide-loinc.png)
+
+### 2. Abrir as ações do painel
+
+Selecione os pontos no painel do teste, abaixo do título.
+
+![O painel do teste tem o seu próprio menu de pontos.](test-catalog-guide-sheet-actions.png)
+
+### 3. Escolher Save
+
+Selecione **Save**. Os testes novos também usam Save.
+
+![Save cria o teste. Pode configurar este laboratório depois.](test-catalog-guide-save-menu.png)
+
+**Resultado esperado:** o painel fecha e o teste aparece em Tests. Começa Off neste laboratório, salvo se o ativou no painel.
+
+![O teste aparece em Tests. Começa Off neste laboratório.](test-catalog-guide-created.png)
+
+## Disponibilizar um teste neste laboratório
+
+Ative os testes que este laboratório realiza. Isto altera a disponibilidade local usada pelo formulário Lab order.
+
+### 1. Abrir as ações da linha do teste
+
+Selecione os pontos à direita da linha do teste.
+
+![Use os pontos da linha do teste para a disponibilidade local.](test-catalog-guide-row-actions.png)
+
+### 2. Escolher Switch on at this lab
+
+Selecione **Switch on at this lab**. A mesma ação passa a Switch off at this lab num teste ativado.
+
+![Switch on at this lab disponibiliza o teste aqui.](test-catalog-guide-enable-menu.png)
+
+**Resultado esperado:** On at this lab mostra On. Os testes importados não ficam ativados automaticamente.
+
+![A coluna de disponibilidade local mostra agora On.](test-catalog-guide-enabled.png)
+
+## Definir o nome e as amostras deste laboratório
+
+Use definições locais quando este laboratório apresenta outro nome ou aceita menos amostras. Um laboratório que recebe o catálogo do central também pode alterar estas definições.
+
+### 1. Escolher Edit
+
+Abra os pontos da linha e selecione **Edit**. O código guardado aparece sem campo editável.
+
+![Edit abre o catálogo e as definições locais.](test-catalog-guide-edit-menu.png)
+
+![Um teste existente mantém o código. Corrija o nome e os outros campos editáveis.](test-catalog-guide-fixed-code.png)
+
+### 2. Verificar a disponibilidade local
+
+Em **This lab**, use **On at this lab** para escolher se este laboratório oferece o teste.
+
+![As definições This lab controlam se a instalação oferece o teste.](test-catalog-guide-local-enabled.png)
+
+### 3. Verificar as amostras locais
+
+Mantenha os tipos aceites neste laboratório. As escolhas locais podem restringir a lista do catálogo. Manter todas as amostras segue a lista do catálogo.
+
+![Este laboratório pode restringir as amostras do catálogo.](test-catalog-guide-local-specimen.png)
+
+### 4. Introduzir um nome local se necessário
+
+Introduza o nome local no campo correspondente, ou deixe vazio para usar o nome do catálogo. O exemplo usa `Alpha at this lab`.
+
+![Um nome local altera a apresentação do teste neste laboratório.](test-catalog-guide-local-name.png)
+
+### 5. Guardar as definições locais
+
+Abra os pontos do painel e selecione **Save**.
+
+![Save guarda as definições locais com o teste existente.](test-catalog-guide-local-save.png)
+
+**Resultado esperado:** as definições do laboratório ficam guardadas sem alterar o código do teste.
+
+## Encontrar e exportar testes
+
+Pesquise antes de criar outro teste. Também pode exportar testes ativos do catálogo para revisão ou importação posterior.
+
+### 1. Pesquisar por código ou nome
+
+Use **Search code or name**. A pesquisa também encontra nomes curtos e locais. O exemplo encontra o teste pelo nome local.
+
+![A pesquisa encontra um teste pelo nome do catálogo ou local.](test-catalog-guide-search.png)
+
+### 2. Ler a linha correspondente
+
+Verifique o código e o nome do catálogo antes de editar. O teste mantém o nome do catálogo mesmo quando o nome local corresponde à pesquisa.
+
+![O teste correspondente continua visível pelo nome do catálogo.](test-catalog-guide-search-result.png)
+
+### 3. Escolher Export CSV quando precisa de ficheiro
+
+Limpe a pesquisa se já não precisar dela. Abra os pontos de Tests e selecione **Export CSV** para descarregar testes ativos. Um laboratório gerido pelo central também pode exportar.
+
+![Export CSV descarrega testes ativos do catálogo num formato importável.](test-catalog-guide-export.png)
+
+**Resultado esperado:** o navegador descarrega um CSV com as colunas aceites pelo assistente. A exportação contém testes ativos do catálogo, não apenas uma linha visível.
+
+## Escolher e associar o ficheiro de testes
+
+Importe quando tiver uma lista CSV ou Excel .xlsx. Os testes correspondem por código. A importação não retira testes ausentes do ficheiro nem altera definições locais.
+
+### 1. Escolher Import
+
+Em Tests, abra os pontos da página e selecione **Import**.
+
+![Abra o menu de pontos da página Tests.](test-catalog-guide-page-actions-step-1.png)
+
+![Import abre o assistente de revisão do ficheiro.](test-catalog-guide-import-menu.png)
+
+### 2. Escolher o ficheiro
+
+Selecione a área de ficheiro e escolha o seu CSV ou XLSX. O assistente lê o ficheiro e abre **Step 2 of 4: Columns**.
+
+![Escolha o seu CSV ou XLSX. Nada é escrito antes de Apply.](test-catalog-guide-import-file.png)
+
+### 3. Verificar a coluna Name
+
+Verifique cada coluna sugerida. Name é obrigatório. Corrija um campo pelo seletor junto ao nome.
+
+![Verifique as associações sugeridas de colunas. Name é obrigatório.](test-catalog-guide-import-columns.png)
+
+### 4. Verificar colunas ausentes e vazias
+
+**Not in the file** mantém um campo existente. Uma célula vazia numa coluna selecionada limpa esse campo. Associe uma coluna vazia apenas se for essa a intenção.
+
+![Not in the file mantém o campo existente. Uma célula vazia numa coluna associada limpa-o.](test-catalog-guide-import-missing-column.png)
+
+### 5. Continuar para Values
+
+Abra os pontos do painel de importação e selecione **Next**.
+
+![Next está nos pontos do painel de importação.](test-catalog-guide-import-next-actions.png)
+
+![Next verifica os valores de categoria e amostra.](test-catalog-guide-import-next.png)
+
+## Resolver valores e rever a importação
+
+Values lista textos de categoria ou amostra sem correspondência numa escolha configurada. Decida o significado de cada texto antes de aplicar o ficheiro.
+
+### 1. Encontrar valores desconhecidos
+
+Leia o texto e a contagem de linhas afetadas. Um valor deixado **Not chosen** provoca a recusa da linha. Este exemplo tem uma categoria desconhecida.
+
+![Um texto de categoria desconhecido exige uma decisão antes de importar a linha.](test-catalog-guide-import-unknown.png)
+
+### 2. Escolher a categoria certa
+
+Selecione uma categoria existente com o mesmo significado. Escolha **Add as a new category** apenas se pretender uma nova categoria.
+
+![Escolha uma categoria existente, ou Add as a new category quando o significado é novo.](test-catalog-guide-import-new-category.png)
+
+### 3. Verificar o código de uma nova categoria
+
+Ao adicionar uma categoria, verifique ou altere o código gerado. Este exemplo adiciona uma categoria fictícia. Resolva também as amostras desconhecidas pelas respetivas escolhas.
+
+![Verifique o código sugerido antes de adicionar a categoria.](test-catalog-guide-import-category-code.png)
+
+### 4. Continuar para Review
+
+Abra os pontos do painel e selecione **Next**.
+
+![Next calcula as contagens de revisão com as suas decisões de valores.](test-catalog-guide-import-values-next.png)
+
+### 5. Ler as contagens e os avisos
+
+Verifique New, Changed, Unchanged e Refused, as razões de recusa e Categories to add. Use Back nos pontos para corrigir as decisões do ficheiro.
+
+![Leia as contagens de linhas novas, alteradas, inalteradas e recusadas e as categorias a adicionar.](test-catalog-guide-import-review.png)
+
+### 6. Escolher Apply
+
+Quando a revisão corresponde à intenção, abra os pontos do painel e selecione **Apply**. Nada é escrito antes desta ação.
+
+![Apply escreve apenas depois de rever a importação.](test-catalog-guide-import-apply.png)
+
+**Resultado esperado:** o painel fecha e os testes importados aparecem. Começam Off neste laboratório. Importar novamente o mesmo ficheiro indica linhas inalteradas, sem duplicados.
+
+![Os testes importados aparecem em Tests e começam Off neste laboratório.](test-catalog-guide-import-result.png)
+
+![O ficheiro igual é reconhecido como inalterado, sem criar testes duplicados.](test-catalog-guide-repeat-review.png)
+
+## Escolher os campos de resultado de um teste
+
+Faça esta tarefa quando as pessoas vão introduzir resultados por este teste. As escolhas vêm do dicionário instalado. Se faltarem, importe primeiro o dicionário do sistema. [Terminologia](/docs/terminology) explica as listas de códigos e [Começar aqui](/docs/start-here) explica a CLI. A prática opcional inclui um dicionário fictício.
+
+### 1. Abrir o teste e escolher os campos de resultado
+
+Escolha Edit no menu da linha do teste. Marque os campos produzidos pelo teste nos seus parâmetros de resultado.
+
+![Edit abre o catálogo e as definições locais.](test-catalog-guide-edit-menu.png)
+
+![Marque os campos produzidos pelo teste. As escolhas vêm do dicionário de resultados.](test-catalog-guide-parameter-choice.png)
+
+### 2. Escolher cada tipo de resultado
+
+Escolha **Numeric**, **Coded** ou **Text** para cada campo selecionado. Um campo codificado também precisa do conjunto de valores configurado. O exemplo usa Numeric.
+
+![Escolha Numeric, Coded ou Text para o campo de resultado.](test-catalog-guide-parameter-type.png)
+
+### 3. Abrir as ações do campo numérico
+
+Num campo numérico que precisa de intervalo de referência, selecione os pontos junto ao seletor do tipo.
+
+![Os campos numéricos têm as suas próprias ações de intervalo.](test-catalog-guide-parameter-actions.png)
+
+### 4. Escolher Add range
+
+Selecione **Add range**. Aparece um formulário de intervalo de referência abaixo do campo de resultado.
+
+![Add range cria um intervalo de referência para este campo.](test-catalog-guide-add-range.png)
+
+## Definir o intervalo de referência e guardar
+
+Use os limites aprovados para o teste, método e população. O intervalo e os números fictícios do exemplo não devem ser usados como intervalos clínicos.
+
+### 1. Dar nome ao intervalo
+
+Introduza um nome que identifique o intervalo. O exemplo usa `Example band only`.
+
+![Dê nome ao intervalo. Este intervalo fictício serve apenas para documentação.](test-catalog-guide-range-name.png)
+
+### 2. Introduzir os limites aprovados
+
+Introduza os limites inferior e superior do teste real. Limites vazios ficam abertos. Os valores 1 e 10 da captura servem apenas para documentação.
+
+![Use os limites aprovados para o método real. Estes números são fictícios.](test-catalog-guide-range-bounds.png)
+
+### 3. Introduzir a unidade
+
+Defina a unidade usada pelo intervalo. Use o mesmo significado e escala do resultado real.
+
+![Defina a unidade deste intervalo de referência.](test-catalog-guide-range-unit.png)
+
+### 4. Verificar restrições de sexo e idade
+
+Defina os limites de sexo ou idade aplicáveis. Um intervalo sem restrições não deve tê-los.
+
+![Os limites de sexo e idade restringem a aplicação do intervalo. Deixe abertos apenas num intervalo sem restrições.](test-catalog-guide-range-context.png)
+
+### 5. Guardar o teste
+
+Abra os pontos do painel do teste e selecione **Save**.
+
+![Save guarda os campos de resultado e os intervalos selecionados.](test-catalog-guide-parameter-save.png)
+
+**Resultado esperado:** os campos, os tipos de resultado e os intervalos selecionados ficam guardados com o teste.
+
+## Ligar um código de teste recebido ao catálogo
+
+Faça esta tarefa depois de chegarem os dados laboratoriais habituais. Se Observed estiver vazio, crie o catálogo e volte mais tarde. Ativar um teste localmente e associar um código recebido são ações separadas.
+
+### 1. Abrir Observed
+
+Selecione **Observed** no topo. Tests lista os códigos recebidos com pedidos.
+
+![Observed lista códigos de testes e resultados recebidos das origens.](test-catalog-guide-observed-tab.png)
+
+![Cada código da origem mostra a associação atual ao catálogo.](test-catalog-guide-observed-test-row.png)
+
+### 2. Escolher Map to catalog test
+
+Abra os pontos da linha do código recebido e selecione **Map to catalog test**.
+
+![Abra os pontos da linha do código da origem.](test-catalog-guide-observed-row-actions.png)
+
+![Map to catalog test abre o seletor de destino.](test-catalog-guide-map-test-menu.png)
+
+### 3. Abrir o seletor de destino
+
+Selecione **Choose a catalog test**.
+
+![Choose a catalog test é o seletor de destino.](test-catalog-guide-map-picker.png)
+
+### 4. Pesquisar no catálogo
+
+Em **Search catalog tests**, pesquise o teste que este código da origem realmente representa.
+
+![Pesquise o teste do catálogo com o significado real deste código da origem.](test-catalog-guide-map-search.png)
+
+### 5. Selecionar o teste certo
+
+Escolha o teste correspondente. Verifique o código e o nome.
+
+![Selecione o teste correspondente do catálogo.](test-catalog-guide-map-target.png)
+
+### 6. Guardar a associação
+
+Abra os pontos do painel de associação e selecione **Save**.
+
+![O painel de associação tem o seu próprio menu de pontos.](test-catalog-guide-map-actions.png)
+
+![Save guarda a associação usada pelos relatórios.](test-catalog-guide-map-save.png)
+
+**Resultado esperado:** o código recebido mostra o seu Catalog test. Os relatórios podem contar o código da origem através desta identidade do catálogo.
+
+![O código da origem mostra agora o teste do catálogo.](test-catalog-guide-mapped-test.png)
+
+## Fazer corresponder códigos de resultados ao dicionário
+
+Os códigos de resultado identificam resultados individuais. São diferentes dos códigos de teste. A correspondência exata é útil quando a origem e o dicionário usam os mesmos códigos. As associações existentes e os códigos ambíguos ficam iguais.
+
+### 1. Escolher Results em Observed
+
+Selecione **Results** para ver códigos de resultado recebidos.
+
+![Results muda Observed de códigos de teste para códigos de resultado.](test-catalog-guide-results-toggle.png)
+
+![Os códigos de resultado são separados dos códigos de teste.](test-catalog-guide-result-code-row.png)
+
+### 2. Escolher Map matching codes
+
+Abra os pontos de Observed e selecione **Map matching codes**.
+
+![Abra os pontos de Observed para associar códigos de resultado.](test-catalog-guide-observed-actions.png)
+
+![Map matching codes verifica correspondências exatas com o dicionário de resultados.](test-catalog-guide-match-menu.png)
+
+### 3. Escolher o sistema laboratorial
+
+Escolha o sistema de origem cujos códigos pretende comparar. Se só existir um, fica selecionado automaticamente.
+
+![Escolha o sistema laboratorial cujos códigos de resultado pretende comparar.](test-catalog-guide-match-system.png)
+
+### 4. Ler as correspondências propostas
+
+Verifique cada código, nome de destino e contagem de resultados. Nomes iguais não substituem a verificação do significado real dos códigos.
+
+![Leia as correspondências exatas propostas antes de aplicar.](test-catalog-guide-match-preview.png)
+
+### 5. Abrir Matching actions
+
+Selecione os pontos no painel de correspondências.
+
+![Abra Matching actions depois de verificar a lista.](test-catalog-guide-match-actions.png)
+
+### 6. Aplicar as correspondências
+
+Selecione **Map these codes**. Para códigos diferentes, use Map to result field na linha do código recebido.
+
+![Map these codes aplica as correspondências propostas.](test-catalog-guide-match-apply.png)
+
+**Resultado esperado:** o código associado indica o seu Result field. Se a página indicar uma cópia do armazém desatualizada, os pontos oferecem Rebuild warehouse copy.
+
+![O código de resultado recebido indica agora o campo de resultado.](test-catalog-guide-matched-result.png)
+
+![Rebuild warehouse copy repete a publicação das associações quando a página indica uma cópia desatualizada.](test-catalog-guide-rebuild-menu.png)
+
+## Ligar um campo de resultado a LOINC
+
+Use um código confirmado para o significado do campo real. O exemplo fictício apenas demonstra o editor. A entrada LOINC ilustrativa não recomenda um código para o seu campo. Um laboratório que recebe o dicionário do central não pode alterar estas ligações.
+
+### 1. Abrir Result fields
+
+Selecione **Result fields**. Encontre o código do dicionário e verifique o papel e as unidades.
+
+![Result fields lista campos do dicionário de resultados instalado.](test-catalog-guide-result-fields-tab.png)
+
+![Result fields mostra o código, o papel, as unidades e a ligação LOINC do dicionário.](test-catalog-guide-result-field-row.png)
+
+### 2. Escolher Link LOINC
+
+Abra os pontos da linha do campo e selecione **Link LOINC**.
+
+![Abra os pontos da linha do campo de resultado.](test-catalog-guide-result-field-actions.png)
+
+![Link LOINC abre o editor da ligação do campo.](test-catalog-guide-loinc-link-menu.png)
+
+### 3. Introduzir ou selecionar o LOINC confirmado
+
+Com LOINC carregado, pesquise e selecione. Caso contrário, introduza o código confirmado. Esta instalação verifica apenas o formato do código introduzido. Não prova o significado clínico.
+
+![Introduza o LOINC confirmado do campo real. Sem LOINC carregado, apenas verifica o formato do código introduzido.](test-catalog-guide-loinc-input.png)
+
+### 4. Guardar a ligação
+
+Abra os pontos da ligação LOINC e selecione **Save**.
+
+![Use os pontos da ligação LOINC para guardar.](test-catalog-guide-loinc-actions.png)
+
+![Save guarda a ligação. Verifique o significado na sua terminologia antes de usar.](test-catalog-guide-loinc-save.png)
+
+**Resultado esperado:** a linha do campo mostra o código LOINC. Export CSV no menu Result fields descarrega as ligações.
+
+![A linha do campo mostra agora o código LOINC guardado.](test-catalog-guide-loinc-result.png)
+
+![Export CSV descarrega as ligações do dicionário para revisão ou edição.](test-catalog-guide-result-export.png)
+
+## Usar Test catalog num telemóvel
+
+Os mesmos separadores e ações continuam disponíveis no telemóvel. As tabelas largas podem deslocar-se horizontalmente.
+
+### 1. Escolher o separador
+
+Use Tests, Result fields ou Observed no topo da página.
+
+![Tests, Result fields e Observed continuam no topo no telemóvel.](test-catalog-guide-phone-tests.png)
+
+### 2. Abrir as ações relevantes
+
+Em Tests, os pontos da página ficam junto à pesquisa e aos controlos da tabela. Cada linha mantém o seu menu.
+
+![Os pontos de Tests ficam junto à pesquisa e aos controlos da tabela.](test-catalog-guide-phone-actions.png)
+
+### 3. Escolher códigos de resultado recebidos
+
+Em Observed, escolha Results para códigos de resultado recebidos em vez de códigos de teste.
+
+![Use Results para trabalhar com códigos de resultado recebidos no telemóvel.](test-catalog-guide-phone-results.png)
+
+## Prática opcional com dados fictícios
+
+Cada tarefa anterior pode usar os seus dados. Use estes ficheiros apenas numa instalação de teste. Um teste pode ser retirado, mas não eliminado. Não importe testes fictícios para um catálogo em uso real.
+
+- [Descarregar um CSV com dois testes](https://openldr.online/docs-samples/user-guide/test-catalog/example-tests.csv) para a tarefa de importação.
+- [Descarregar um dicionário de resultados com um campo](https://openldr.online/docs-samples/user-guide/test-catalog/example-result-fields.json) para as tarefas de campos de resultado.
+- [Descarregar quatro recursos laboratoriais fictícios](https://openldr.online/docs-samples/user-guide/test-catalog/example-lab-data.json) para preencher Observed.
+
+Para seguir as imagens exatamente, adicione primeiro EXAMPLE-ALPHA à mão. O CSV sozinho cria Beta e Gamma. Use os seus nomes correspondentes se não usar os ficheiros de prática.
+
+Para o dicionário e o lote opcionais, siga primeiro [Começar aqui](/docs/start-here). Coloque os ficheiros descarregados na pasta `data` da instalação. Exemplo numa cópia de desenvolvimento:
+
+```shell
+cd ~/Downloads/openldr_ce
+pnpm openldr terminology import parameters data/example-result-fields.json
+pnpm openldr ingest data/example-lab-data.json
 ```
 
-> **Use uma instalação de teste.** Um exame pode ser retirado, nunca apagado. Os exames importados ficam no catálogo.
+Numa instalação Linux ou macOS, use `./openldr` em vez de `pnpm openldr`. No Windows, use `.\openldr.ps1` na pasta da instalação, como `C:\openldr_ce`. Substitua a pasta de exemplo pela real. Começar aqui mostra os passos de cada plataforma.
 
-## Exemplo 1: importar uma lista de exames
+## Antes de alterar dados partilhados do catálogo
 
-![Escolher o ficheiro, verificar as colunas, adicionar Parasitology como nova categoria e chegar à revisão.](test-catalog-import.mp4)
+Um catálogo recebido do central tem definições partilhadas de leitura. A disponibilidade, as escolhas de amostras e os nomes locais continuam a ser definições deste laboratório.
 
-1. Abra **Catálogo de exames**. O separador **Testes** está vazio.
-2. Abra o menu **⋯** da página e selecione **Importar**.
-3. Largue o CSV de exemplo no painel, ou clique para o escolher. O painel passa a **Passo 2 de 4: Colunas**.
-4. Verifique a coluna de cada campo. Todos os cabeçalhos do exemplo correspondem a um campo, não há nada a mudar. Abra o menu **⋯** do painel e selecione **Seguinte**.
-5. **Passo 3 de 4: Valores** lista o texto que não correspondeu a nada. Aqui é a categoria **"Parasitology" (1 linha)**. Defina-a como **Adicionar como nova categoria**. Selecione **Seguinte**.
-6. **Passo 4 de 4: Revisão** mostra os totais.
+A importação aceita até 5 000 linhas e 5 MB. A importação Excel lê a primeira folha. Os testes correspondem por código. Um ficheiro não retira testes ausentes nem altera definições locais.
 
-**Resultado esperado:** **Novos 8**, **Alterados 0**, **Sem alteração 0**, **Recusados 0**, e **Categorias a adicionar: PARASITOLOGY (Parasitology)**. Uma nota diz que o LOINC não está carregado aqui, por isso só o formato dos códigos LOINC foi verificado.
-
-![A revisão: 8 exames novos e uma categoria a adicionar.](test-catalog-review.png)
-
-7. Abra o menu **⋯** do painel e selecione **Aplicar**. Aparece **8 adicionados, 0 alterados.**, e os oito exames. Cada um mostra **Desativado** em **Ativado aqui**.
-
-Se tivesse deixado Parasitology em **Sem escolha**, a revisão mostraria 7 novos e 1 recusado, com a linha 3, `MAL-RDT`, e o motivo. Nada é escrito antes de **Aplicar**, por isso pode **Voltar** e corrigir.
-
-Importe o mesmo ficheiro outra vez e a revisão mostra **Sem alteração 8**. Os exames correspondem pelo código.
-
-## Exemplo 2: ativar exames neste laboratório
-
-O formulário Lab order só oferece os exames ativados aqui. Ative os cinco exames dos dados de exemplo.
-
-![Abrir o menu da linha Full blood count e selecionar Ativar neste laboratório.](test-catalog-switch-on.mp4)
-
-1. Na linha **Full blood count**, abra **⋯** e selecione **Ativar neste laboratório**. Aparece **FBC está ativado neste laboratório.**, e a linha mostra **Ativado**.
-2. Faça o mesmo em **Malaria rapid test**, **HIV viral load**, **Blood glucose** e **Creatinine**.
-
-**Resultado esperado:** cinco exames mostram **Ativado**. Urinalysis, TB GeneXpert MTB/RIF e CSF culture ficam **Desativado**. O campo **Tests** do Lab order lista agora os cinco. Veja [Formulários](/docs/forms).
-
-Na linha de comandos: `./openldr test-catalog enable FBC`.
-
-## Exemplo 3: associar os códigos de pedido do laboratório
-
-Cada sistema de laboratório dá aos exames os seus próprios nomes. Os dados de exemplo pedem os exames pelo código LOINC, por exemplo `58410-2` para um hemograma. Associe cada código ao exame do catálogo que ele quer dizer.
-
-![O separador Observados: cinco códigos dos dados de exemplo, com o número de pedidos, todos sem associação.](test-catalog-observed.png)
-
-1. Abra o separador **Observados**. Lista os cinco códigos do armazém, com a descrição e o número de pedidos: `58410-2` 18, `70569-9` 16, `20447-9` 11, `2345-7` 9, `2160-0` 6.
-2. Na linha `58410-2`, abra **⋯** e selecione **Associar a um teste do catálogo**.
-3. Selecione **Escolher um teste do catálogo**, escreva `Full blood count` e escolha **Full blood count (FBC, 58410-2)**.
-4. Abra o menu **⋯** do painel e selecione **Guardar**. Aparece **58410-2 corresponde agora a Full blood count**.
-5. Associe os outros quatro códigos da mesma forma.
-
-![Associar 58410-2 a Full blood count.](test-catalog-map.mp4)
-
-**Resultado esperado:** cada linha mostra o seu exame em **Teste do catálogo**, com o código do exame e o código LOINC por baixo.
-
-![Os cinco códigos associados.](test-catalog-mapped.png)
-
-## Exemplo 4: contar pedidos por exame do catálogo
-
-As associações são copiadas para a tabela `test_map` do armazém. Um relatório junta-a para contar os pedidos por exame do catálogo, seja qual for o nome que cada laboratório deu ao exame. Abra **Consulta**, escolha **Target Warehouse (Postgres)** e execute:
-
-```sql
-select tm.catalog_name, count(*)
-from lab_requests lr
-join test_map tm on tm.level = 'test'
-  and tm.source_system = lr.panel_system
-  and tm.source_code = lr.panel_code
-group by tm.catalog_name
-order by 2 desc
-```
-
-**Resultado esperado:** Full blood count 18, Malaria rapid test 16, HIV viral load 11, Blood glucose 9, Creatinine 6. São 60 pedidos. Veja [Consultas personalizadas](/docs/query) para a guardar para um relatório.
-
-## Quem altera o quê
-
-Uma instalação que não recebeu o catálogo do nível central é dona dele. Aí pode adicionar exames, editá-los, retirá-los e repô-los. Um laboratório independente é o seu próprio nível central.
-
-Um laboratório que recebe o catálogo do nível central não pode alterar os seus exames. A página indica-o acima da tabela. O laboratório pode sempre ativar ou desativar exames, restringir as suas amostras e definir um nome local. A sincronização nunca envia essas definições de volta.
-
-## Encontrar exames
-
-A pesquisa abrange o código, o nome, o nome curto e o nome local. Use **Filtrar** para a categoria, o LOINC, **Ativado aqui** e o estado. Os exames retirados ficam ocultos, exceto se filtrar por eles.
-
-## Adicionar e editar um exame
-
-1. Escolha **Adicionar exame** no menu ⋯, ou **Editar** no menu ⋯ de uma linha.
-2. Introduza o código. Deixe-o vazio para usar o código LOINC. Um código não muda depois de guardado.
-3. Introduza o nome, e um nome curto se quiser.
-4. Escolha uma categoria e marque os tipos de amostra que o exame aceita.
-5. Introduza o código LOINC. Quando o LOINC está carregado aqui, pesquisa-o. Caso contrário escreve-o, e só o formato é verificado.
-6. Em **Este laboratório**, ative o exame, desmarque as amostras que este laboratório não aceita e defina um nome local.
-7. Escolha **Guardar** no menu ⋯ no topo do painel.
-
-Os tipos de amostra vêm da lista de tipos de amostra do CE. As categorias vêm de **Test categories** na página Terminologia.
-
-## Ações numa linha
-
-O menu ⋯ de cada linha ativa ou desativa o exame neste laboratório. Quando esta instalação é dona do catálogo, também retira ou repõe o exame. Retirar é reversível, por isso não pede confirmação.
-
-Na linha de comandos: `openldr test-catalog enable`, `disable`, `retire` ou `restore`, seguido do código.
-
-## Importar uma lista de exames
-
-Quando esta instalação é dona do catálogo, escolha **Importar** no menu ⋯. O painel tem quatro passos. Voltar, Seguinte, Aplicar e Fechar estão no seu menu ⋯. Nada é escrito antes de **Aplicar**.
-
-1. **Ficheiro.** Arraste um ficheiro CSV ou Excel (.xlsx), ou clique para escolher um. O CE lê a primeira folha de um ficheiro Excel. Um ficheiro tem no máximo 5000 exames e 5 MB.
-2. **Colunas.** O CE associa os cabeçalhos aos campos. Verifique cada um. O nome é obrigatório. Um campo definido como **Não está no ficheiro** não muda nos exames que já estão no catálogo. Uma célula vazia numa coluna escolhida apaga esse campo.
-3. **Valores.** Os textos de categoria e de amostra são comparados com as listas pelo código ou pelo nome, sem contar maiúsculas nem espaços. Uma célula de amostra pode ter várias, separadas por `;`. Escolha o que significa cada texto sem correspondência. Pode adicionar uma categoria: o código parte do texto, e pode alterá-lo. Uma linha com texto sem escolha é recusada.
-4. **Revisão.** O CE mostra quantos exames são novos, alterados, sem alteração e recusados, cada recusa com a linha e o motivo, e as categorias que vai adicionar. Escolha **Aplicar** para escrever tudo de uma vez.
-
-Os exames são comparados pelo código, por isso importar o mesmo ficheiro duas vezes não muda nada. Um exame que não está no ficheiro não é retirado. Uma importação nunca muda o estado de um exame nem as definições deste laboratório. Quando o LOINC não está carregado aqui, só o formato dos códigos LOINC é verificado, e a revisão indica-o.
-
-## Exportar o catálogo
-
-Escolha **Exportar CSV** no menu ⋯. Qualquer instalação pode exportar, incluindo um laboratório que recebe o catálogo do nível central. O ficheiro tem os exames ativos nas colunas que uma importação lê: `code`, `name`, `short_name`, `loinc`, `category` e `specimen_types`. Edite-o numa folha de cálculo e importe-o de novo. Um valor que começa por `=` ou `@` recebe um `'` no início, para que uma folha de cálculo não o execute como fórmula.
-
-Na linha de comandos: `openldr test-catalog import <ficheiro>` mostra o que mudaria, e `--apply` escreve-o. `openldr test-catalog export` escreve o CSV.
-
-Na linha de comandos, o texto que não correspondeu a nada responde-se com `--value-map`, um ficheiro JSON. Para a lista de exemplo:
-
-```json
-{"categories":[{"text":"Parasitology","kind":"new","code":"PARASITOLOGY","display":"Parasitology"}],"specimens":[]}
-```
-
-```bash
-./openldr test-catalog import data/openldr-sample-test-catalog.csv --value-map data/values.json --apply
-```
-
-## O pedido de exames
-
-O campo **Tests** do pedido de exames lista os exames deste laboratório: os exames do catálogo ativados aqui, com o nome local quando existe. Um exame retirado sai da lista. Ative exames antes de qualquer pedido: o campo é obrigatório, e uma lista vazia não deixa passar nenhum pedido.
-
-Cada exame tem a sua própria amostra. Abra a linha de um exame e escolha entre as amostras que esse exame aceita, pela lista mais curta deste laboratório quando a definiu. O pedido já não tem um campo de amostra separado.
-
-Um pedido enviado indica primeiro o código LOINC de cada exame, quando o tem, e depois o código do catálogo. Os relatórios que leem o primeiro código de um pedido continuam a encontrar LOINC. Um exame sem código LOINC é enviado com o código do catálogo.
-
-Uma instalação cujo pedido de exames foi alterado no editor de formulários mantém o seu próprio campo Tests. Para usar esta lista, escolha o conjunto de valores `urn:openldr:valueset:lab-tests` para esse campo no editor. Na linha de comandos, `openldr terminology expand urn:openldr:valueset:lab-tests` mostra a lista que o campo Tests oferece.
-
-
-## Parâmetros de resultado
-
-Um exame pode nomear os parâmetros de resultado que produz: hemoglobina, contagem de CD4, leitura de um TDR de malária. Os parâmetros vêm do dicionário de resultados desta instalação, por isso nada se escreve à mão. Marque um no painel do exame e indique se o resultado é um número, um código de uma lista, ou texto livre.
-
-Um parâmetro numérico pode ter intervalos de referência. Cada intervalo tem um limite inferior, um superior, uma unidade, e um nome opcional, por exemplo Mulheres do planalto. Pode também nomear um sexo e uma faixa etária. O menu ⋯ da linha de um intervalo move-o para cima, para baixo ou remove-o, e o menu ⋯ do parâmetro acrescenta um. A ordem decide qual o intervalo que começa selecionado na bancada. Dois intervalos do mesmo parâmetro não podem ter o mesmo nome. Um exame sem parâmetros continua a funcionar: o painel pede apenas uma amostra.
-
-Na linha de comandos, `openldr test-catalog params <code>` mostra os parâmetros de um exame, e `--set <ficheiro>` substitui-os a partir de um ficheiro JSON.
-
-## Associar códigos de teste do laboratório
-
-Cada sistema de laboratório dá nomes aos seus testes à sua maneira. O DISA chama à carga viral `HIVVL`, `POCVR` ou `POHVL`. Associe cada um desses códigos ao teste do catálogo que significa, e os relatórios podem contar o teste do catálogo seja qual for o nome dado pelo laboratório.
-
-Abra o separador **Observados**. Lista todos os códigos de teste do armazém, com a descrição, o número de pedidos e a data em que foram vistos pela última vez. Um código associado antes de chegarem dados aparece com 0 pedidos. Filtre por **Sem correspondência**, **Com correspondência** ou **Ambíguo**.
-
-Para associar um código, abra o menu ⋯ da sua linha e escolha **Associar a um teste do catálogo**. Escolha o teste e depois **Guardar** no menu ⋯ do painel. **Remover correspondência**, no mesmo menu, retira-a.
-
-Os códigos são comparados como a base de dados do armazém compara texto. No Postgres a comparação é exata: `HIVVL` e `HIVVL ` (com um espaço no fim) são dois códigos. No MSSQL e no MySQL com as definições por omissão, maiúsculas e minúsculas contam como iguais, e o MSSQL ignora também os espaços no fim. No MSSQL e no MySQL, duas correspondências cujos códigos diferem apenas na capitalização (`HIVVL` e `hivvl`) entram em conflito em `test_map`, e cada reconstrução falha até uma delas ser removida. Associe só uma delas.
-
-Um código é **Ambíguo** quando tem duas correspondências com o catálogo, por exemplo uma feita na página Terminologia e outra feita aqui. Os relatórios deixam-no de fora até o associar de novo. Quando o central associou um código, é a correspondência do central que os relatórios usam, e a do laboratório para esse código é ignorada.
-
-Um laboratório não pode alterar uma correspondência enviada pelo central. A sua linha indica **Do central**.
-
-### Associar vários códigos de uma vez
-
-**Exportar CSV**, no menu ⋯ do separador, escreve todos os códigos observados. Preencha `catalog_code`, ou `loinc` quando só conhece o código LOINC, e depois **Importar CSV**. A importação mostra as linhas novas, alteradas, inalteradas e recusadas antes de escrever o que quer que seja. Uma linha com ambas as colunas vazias fica como está. Uma linha é recusada quando o armazém só tem esse código com espaços à volta, porque o leitor de ficheiros apara as células. Associe esse código no separador Observados ou com `openldr test-catalog map set`. Num laboratório, uma linha cujo código o central associou é recusada, a não ser que peça a correspondência que o central já tem.
-
-### Relatórios
-
-As correspondências são copiadas para a tabela do armazém `test_map`. Um relatório junta-a assim:
-
-```sql
-select tm.catalog_name, count(*)
-from lab_requests lr
-join test_map tm on tm.level = 'test'
-  and tm.source_system = lr.panel_system
-  and tm.source_code = lr.panel_code
-where tm.loinc = '25836-8'
-group by tm.catalog_name
-```
-
-A cópia atualiza-se quando uma correspondência ou um teste do catálogo muda, e no arranque. Se uma atualização falhar, o separador di-lo. Escolha **Reconstruir a cópia do armazém** no seu menu ⋯.
-
-## Associar códigos de resultado do laboratório
-
-Um exame dá vários resultados, e cada sistema de laboratório também os nomeia à sua maneira. Os resultados de carga viral do DISA chegam como `HIVVL`, `HIVVC`, `POCVR` e outros. Associe cada código de resultado ao campo de resultado que significa, e um relatório pode escolher o resultado pelo que ele é.
-
-Os campos de resultado vêm do dicionário de resultados do site. Importe um com `openldr terminology import parameters <ficheiro>`. O separador **Campos de resultado** lista cada campo com a sua função, unidades e código LOINC. Para ligar um campo ao LOINC, abra o menu ⋯ da sua linha, escolha **Ligar LOINC**, escolha ou escreva o código e depois **Guardar** no menu ⋯ do painel. **Exportar CSV** e **Importar CSV**, no menu ⋯ do separador, ligam vários campos de uma vez, com as colunas `code` e `loinc`. Um `loinc` vazio deixa a ligação como está. Um laboratório que recebe o dicionário do central não pode alterar as ligações.
-
-No separador **Observados**, escolha **Resultados** para listar os códigos de resultado do armazém, com o número de resultados. Associe um código no menu ⋯ da sua linha com **Associar a um campo de resultado**. Num site DISA, a maioria dos códigos de resultado é igual aos códigos do dicionário. **Associar códigos iguais**, no menu ⋯ do separador, associa-os todos de uma vez. Escolha o sistema do laboratório, verifique a lista e depois escolha **Associar estes códigos**. Só são associados códigos sem correspondência. Um código que o central associou, ou um código **Ambíguo**, fica como está.
-
-O CSV dos resultados tem as colunas `system, code, description, results, parameter_code, loinc`. Preencha `parameter_code`, ou `loinc` quando só conhece esse.
-
-Os resultados registados no CE não precisam de correspondência. Já trazem os códigos do dicionário, e a cópia do armazém associa cada campo a si próprio. O mesmo vale para os pedidos feitos no CE: cada teste do catálogo é associado a si próprio.
-
-Um relatório que conta cópias de carga viral entre laboratórios junta `test_map` assim:
-
-```sql
-select count(*)
-from lab_results l
-join test_map tm on tm.level = 'result'
-  and tm.source_system = l.observation_system
-  and tm.source_code = l.observation_code
-where tm.loinc = '20447-9'
-```
-
-Um pacote de conteúdo pode trazer correspondências de resultados com um passo `result-mappings`. Cada entrada indica um código do laboratório e um código LOINC, e a instalação associa o código ao único campo de resultado ligado a esse código LOINC. Um código já associado aqui é mantido.
-
-## Num telemóvel
-
-O catálogo funciona num telemóvel. A tabela é mais larga do que o ecrã: deslize-a para o lado para chegar ao menu **⋯** de cada linha, no fim da linha. O menu **⋯** da página fica ao lado da pesquisa. O painel de importação ocupa o ecrã.
+Retirar um teste oculta-o da lista ativa predefinida. Pode ser restaurado. Os testes do catálogo não podem ser eliminados. Use o filtro Status para encontrar testes retirados.
 
 ## Resolução de problemas
 
-- **A importação recusa uma linha.** A revisão indica a linha e o motivo. Em geral, uma categoria ou amostra ficou em **Sem escolha**. Volte a **Valores** com **Voltar** e escolha.
-- **Falta um exame no Lab order.** Está **Desativado** neste laboratório, ou retirado. Ative-o.
-- **O campo Tests do Lab order está vazio.** Nenhum exame está ativado. Um Lab order não pode ser enviado sem exame.
-- **Um código está Ambíguo.** Tem duas associações ao catálogo. Os relatórios deixam-no de fora até o associar outra vez.
-- **Um relatório conta 0 para um exame.** O código do laboratório não está associado. Veja o separador **Observados** com o filtro dos códigos sem associação.
-- **Não consigo editar um exame.** Esta instalação recebe o catálogo do central. Pode na mesma ativar ou desativar exames, restringir amostras e definir um nome local.
-- **O separador Observados diz que a cópia do armazém está desatualizada.** Escolha **Reconstruir a cópia do armazém** no menu **⋯** do separador.
+**Add test ou Import não aparece.** Verifique se o catálogo vem do central e se a conta pode gerir terminologia. Leia a mensagem de propriedade acima da tabela.
+
+**Falta um teste novo em Lab order.** Verifique On at this lab. Criar ou importar um teste não o ativa automaticamente.
+
+**A importação recusa linhas.** Leia a razão de cada linha em Review. Volte a Values para categorias ou amostras sem escolha. Verifique Name e o código ou LOINC que fornece a identidade.
+
+**Não aparecem parâmetros de resultado.** A instalação não tem campos utilizáveis no dicionário. Carregue primeiro o dicionário do sistema. O dicionário de prática é apenas um exemplo.
+
+**Um código continua sem associação.** Verifique se selecionou Tests ou Results. Associar um nível não associa o outro.
+
+**A página indica uma cópia do armazém desatualizada.** Abra as ações de Observed e escolha Rebuild warehouse copy. A página indica falha se não conseguir reconstruir.
 
 ## Guias relacionados
 
-- [Formulários](/docs/forms)
-- [Terminologia](/docs/terminology)
-- [Consultas personalizadas](/docs/query)
-- [Relatórios](/docs/reports)
+[Terminologia](/docs/terminology) explica as listas de códigos configuradas. [Unidades](/docs/facilities) explica códigos de unidades. [Começar aqui](/docs/start-here) explica a CLI instalada e de desenvolvimento.

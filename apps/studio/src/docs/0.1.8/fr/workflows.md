@@ -1,291 +1,368 @@
-# Flux de travail
+# Workflows
 
-Un flux de travail est une chaîne d'étapes qui tourne seule. Il peut recevoir des données en HTTP, les vérifier, les enregistrer, interroger une base, remodeler des lignes, construire un tableur et l'envoyer par e-mail. Vous le construisez sur un canevas en faisant glisser des étapes, les **nœuds**, et en les reliant par des lignes. Aucun programme à écrire.
+Créez un workflow lorsque vous devez recevoir, vérifier, transformer, stocker ou livrer des données dans OpenLDR. Un nœud est une étape. Les lignes relient la sortie d'un nœud à l'entrée d'un autre.
 
-Ce guide prend environ 40 minutes. Vous préparez le flux **Ingest** fourni pour recevoir des données en HTTP, vous lui envoyez un enregistrement, vous lisez l'exécution, puis vous construisez un petit flux à vous. Sélectionnez une image ou un clip pour l'agrandir. L'écran des flux de travail est presque entièrement en anglais, donc ce guide écrit les libellés en anglais.
+Utilisez vos propres enregistrements et requêtes de rapport. Aucun jeu de données de documentation n'est nécessaire. Les images utilisent une installation de test distincte. Des fichiers fictifs facultatifs sont proposés à la fin.
 
-![La liste des flux sur une nouvelle installation : Ingest et On Ingest Persisted → Log.](workflows-tour.png)
+**View workflows** ouvre les définitions et exécutions. **Edit workflows** les crée et les modifie. **Run workflows** lance les exécutions manuelles. **Manage workflow secrets** modifie les identifiants webhook.
 
-## Qui peut faire quoi
+Le workflow fourni **Ingest** traite aussi les soumissions Forms. Gardez-le activé. Le modifier affecte chaque émetteur utilisant son webhook. Remplacez un secret seulement lorsque vous êtes prêt à mettre ces émetteurs à jour.
 
-Les noms des autorisations s'affichent en anglais.
+## Trouver un workflow
 
-| Autorisation | Ce qu'elle permet |
-| --- | --- |
-| View workflows | Ouvrir **Flux de travail**, voir les définitions et leurs exécutions. |
-| Edit workflows | Créer, modifier, importer et supprimer des flux. |
-| Run workflows | Lancer une exécution à la main. |
-| Manage workflow secrets | Régler des secrets chiffrés, comme un secret de webhook. |
+Ouvrez une définition existante avant de l'inspecter ou de la modifier.
 
-Lab Admin et Lab Manager les ont par défaut.
+### 1. Ouvrir Workflows
 
-## Ce que contient une nouvelle installation
+Sélectionnez **Workflows** dans le menu principal.
 
-| Flux | Ce qu'il fait |
-| --- | --- |
-| **Ingest** | Reçoit les données envoyées à `/api/workflows/hooks/ingest`. Un nœud **Switch** regarde leur forme. Un Bundle FHIR, ou une liste de ressources FHIR, est découpé en un élément par ressource. Un simple objet de réponses de formulaire est vérifié avec le formulaire **Lab order**. Les deux branches finissent dans **Persist store**, qui enregistre les données. La saisie à la main dans **Formulaires** passe aussi par ce flux, gardez-le donc activé. |
-| **On Ingest Persisted → Log** | S'exécute chaque fois qu'Ingest enregistre quelque chose, et écrit une ligne de journal. Un point de départ pour vos propres réactions aux nouvelles données. |
+![Ouvrez Workflows depuis le menu principal.](workflows-guide-open-page.png)
 
-Ce sont des **flux système**. Enregistrer une modification demande d'abord une confirmation, car un Ingest cassé arrête l'enregistrement des données. **Reset to default**, dans le menu de sa ligne, remet la version d'origine.
+### 2. Trouver le workflow
 
-## Les idées de base
+Utilisez **Search workflows** pour filtrer les noms. Effacez la recherche pour retrouver toute la liste.
 
-- **Nœuds et lignes.** Chaque nœud fait une étape. Les données passent le long des lignes sous forme d'une liste d'**éléments**. Chaque élément est un enregistrement avec un objet `json` et, parfois, des fichiers joints.
-- **Déclencheurs.** Chaque flux commence par un nœud déclencheur : à la main, planifié, webhook, chargement de données, événement, ou écoute.
-- **Configure Node.** Sélectionnez un nœud, puis son engrenage, pour le régler dans le panneau de droite. Le panneau a les onglets **Config**, **Input** et **Output**.
-- **Jeux de données.** Un flux peut enregistrer son résultat comme jeu de données nommé. D'autres flux, tableaux de bord et rapports peuvent le lire ensuite. C'est ainsi qu'un flux lourd « préparer les données » passe la main à un flux léger « les livrer ».
+![La recherche filtre les noms des workflows.](workflows-guide-search.png)
 
-## Exemple 1 : préparer le webhook Ingest
+### 3. Ouvrir sa ligne
 
-Une nouvelle installation génère un secret pour le webhook Ingest, mais personne ne peut lire un secret enregistré. Pour envoyer des données, remplacez-le et copiez le nouveau avant d'enregistrer.
+Sélectionnez le nom du workflow. Cet exemple ouvre le workflow fourni **Ingest**.
 
-![Ouvrir Ingest, ouvrir son déclencheur, remplacer le secret et enregistrer.](workflows-ingest-secret.mp4)
+![Ouvrez le workflow fourni Ingest.](workflows-guide-ingest-row.png)
 
-1. Ouvrez **Flux de travail** et sélectionnez **Ingest**. Le canevas s'ouvre.
-2. Sélectionnez **Fit View**, le carré en bas à gauche du canevas, pour voir les six nœuds.
-3. Sélectionnez le premier nœud, **Ingest received**, puis l'engrenage au-dessus. **Configure Node** s'ouvre à droite.
-4. Sous **Secret**, sélectionnez **Remplacer le secret**. Un nouveau secret apparaît dans la zone.
-5. Copiez-le maintenant. Vous ne pourrez plus le voir après l'enregistrement.
-6. Sélectionnez **Save** en haut. Ingest est un flux système, une question s'affiche donc : **Save changes to a system workflow?** Sélectionnez **Save anyway**.
+### 4. Ajuster le canevas
 
-![Configure Node du déclencheur webhook : chemin, URL, nouveau secret et en-tête à envoyer.](workflows-ingest-panel.png)
+Sélectionnez **Fit View** en bas à gauche. Utilisez plus et moins pour zoomer. Pan déplace le canevas. Select trace une zone de sélection.
 
-**Résultat attendu :** le message **Workflow saved**. Le panneau montre l'**URL** complète et l'en-tête à envoyer : `X-Webhook-Token: <votre secret>`. Chaque instance de l'API prend le nouveau secret tout de suite. Aucun redémarrage n'est nécessaire.
+![Fit View affiche les nœuds dans le canevas.](workflows-guide-fit.png)
 
-## Exemple 2 : envoyer un enregistrement
+## Définir le secret webhook d'Ingest
 
-Envoyez un patient de l'exemple de la documentation. Il est déjà dans les données d'exemple, avec le même identifiant, donc il met ce patient à jour et aucun compte ne change.
+Effectuez cette tâche lorsqu'un émetteur autorisé a besoin d'un identifiant à copier. Un secret enregistré ne peut pas être révélé. Coordonnez d'abord son remplacement avec les émetteurs.
 
-1. Téléchargez le fichier d'exemple si ce n'est pas déjà fait. Voir [Charger les données d'exemple](/docs/dashboard#charger-les-donnees-d-exemple).
-2. Sortez le premier patient dans son propre Bundle :
+### 1. Sélectionner Ingest received
 
-```bash
-jq '{resourceType:"Bundle",type:"transaction",entry:[.entry[]|select(.resource.id=="sample-pat-0001")]}' \
-  data/openldr-sample-lab-data.json > one-patient.json
-```
+Sélectionnez le premier nœud, **Ingest received**.
 
-3. Envoyez-le, avec le secret copié :
+![Sélectionnez le déclencheur webhook Ingest received.](workflows-guide-trigger.png)
 
-```bash
+### 2. Ouvrir ses paramètres
+
+Sélectionnez l'engrenage **Configure** au-dessus du nœud sélectionné.
+
+![Configure ouvre les paramètres du nœud sélectionné.](workflows-guide-configure.png)
+
+### 3. Générer un nouveau secret
+
+Sous **Secret**, sélectionnez **Replace secret**. Une valeur non enregistrée propose plutôt **Regenerate**.
+
+![Replace secret génère une valeur à copier avant l'enregistrement.](workflows-guide-replace-secret.png)
+
+### 4. Copier la nouvelle valeur
+
+Copiez le nouveau secret et gardez-le avec les identifiants de l'émetteur. URL et Header indiquent où et comment l'envoyer.
+
+![Copiez le nouveau secret avant l'enregistrement. La valeur enregistrée ne peut pas être révélée.](workflows-guide-copy-secret.png)
+
+### 5. Enregistrer le workflow
+
+Sélectionnez **Save** dans la barre d'outils.
+
+![Save enregistre le workflow et son nouveau secret.](workflows-guide-save.png)
+
+### 6. Confirmer la modification système
+
+Lisez l'avertissement du workflow système, puis sélectionnez **Save anyway** si vous souhaitez cette modification.
+
+![Les workflows système exigent une confirmation explicite Save anyway.](workflows-guide-confirm-save.png)
+
+**Résultat attendu :** le message Workflow saved confirme l'écriture. Les émetteurs doivent utiliser le nouveau secret enregistré.
+
+![Le message Workflow saved confirme cette écriture.](workflows-guide-saved.png)
+
+## Lire une exécution et son reçu webhook
+
+Effectuez cette tâche après un envoi de données. Vous pouvez aussi consulter les exécutions existantes sans nouvel envoi. L'exemple est une vraie exécution webhook contenant un patient fictif.
+
+### 1. Ouvrir History
+
+Dans le canevas, sélectionnez **History**.
+
+![History liste les exécutions réelles et les reçus webhook acceptés.](workflows-guide-history.png)
+
+### 2. Choisir l'exécution
+
+Dans **Runs**, sélectionnez la ligne correspondant à la source et à l'heure recherchées.
+
+![Sélectionnez l'exécution webhook terminée.](workflows-guide-run-row.png)
+
+### 3. Lire le résultat
+
+Vérifiez Completed ou Failed, puis le statut de chaque nœud. Dans cet exemple Bundle, Form Validate est ignoré, car la branche FHIR a traité l'entrée.
+
+![L'exécution terminée montre la branche ayant traité ce Bundle.](workflows-guide-run-result.png)
+
+### 4. Choisir un nœud
+
+Sélectionnez une ligne de nœud pour voir ses données reçues et produites. L'exemple sélectionne **Persist store**.
+
+![Sélectionnez l'exécution d'un nœud pour consulter ses données.](workflows-guide-run-node.png)
+
+### 5. Inspecter sa sortie
+
+Sélectionnez **Output**. Utilisez **Result** ou **Logs** pour les autres détails enregistrés. La réussite d'un nœud de stockage ne prouve pas qu'un destinataire en aval a lu les données.
+
+![Output contient les données transmises par le nœud sélectionné.](workflows-guide-run-output.png)
+
+### 6. Inspecter la requête acceptée
+
+Sélectionnez **Webhook receipts**. Rapprochez l'identifiant de requête et le statut de la réponse à l'émetteur. Un reçu en attente ou en cours n'est pas une exécution terminée.
+
+![Webhook receipts montre la requête acceptée et son statut final.](workflows-guide-receipts.png)
+
+**Résultat attendu :** vous distinguez la requête webhook acceptée de l'exécution du workflow et des résultats de ses nœuds.
+
+## Construire un workflow de comptage de l'entrepôt
+
+Utilisez ce petit workflow en lecture seule pour apprendre le canevas. Il compte les demandes déjà dans l'entrepôt. Zéro est un résultat valide. Aucun jeu de données ni connecteur de base n'est nécessaire.
+
+### 1. Ouvrir Workflow actions
+
+Revenez à la liste Workflows et ouvrez les points **Workflow actions**.
+
+![Ouvrez Workflow actions pour créer ou importer.](workflows-guide-list-actions.png)
+
+### 2. Choisir New
+
+Sélectionnez **New**.
+
+![New ouvre un canevas vide.](workflows-guide-new.png)
+
+### 3. Nommer le workflow
+
+Définissez un nom utile dans **Workflow name**. L'exemple utilise `Warehouse row count`.
+
+![Nommez le workflow avant de l'enregistrer.](workflows-guide-name.png)
+
+### 4. Trouver Manual Trigger
+
+Dans Node library, recherchez `Manual Trigger`.
+
+![Recherchez Manual Trigger dans Node library.](workflows-guide-find-manual.png)
+
+### 5. Ajouter le déclencheur
+
+Glissez **Manual Trigger** sur une zone vide du canevas.
+
+![Glissez Manual Trigger sur le canevas.](workflows-guide-manual-card.png)
+
+### 6. Ajouter SQL Query
+
+Recherchez `SQL Query` et glissez-le à côté du déclencheur. Effacez ensuite la recherche de la bibliothèque.
+
+![Glissez SQL Query à droite du déclencheur.](workflows-guide-sql-card.png)
+
+### 7. Relier les nœuds
+
+Glissez le point à droite de Manual Trigger vers celui à gauche de SQL Query. Vérifiez qu'une ligne les relie.
+
+![Reliez la sortie droite du déclencheur à l'entrée gauche de SQL Query.](workflows-guide-connect.png)
+
+## Configurer et exécuter le comptage
+
+Continuez avec les deux nœuds reliés. Cette requête en lecture seule compte les demandes déjà présentes dans l'entrepôt. Votre nombre peut différer de l'exemple.
+
+### 1. Saisir la requête
+
+Sélectionnez SQL Query, puis son engrenage Configure. Dans **SQL (SELECT only)**, saisissez `SELECT COUNT(*) AS requests FROM lab_requests`. Cette requête lit le schéma de rapport.
+
+![Utilisez une requête en lecture seule sur le schéma de rapport.](workflows-guide-sql.png)
+
+### 2. Enregistrer la définition
+
+Sélectionnez **Save**.
+
+![Save crée le workflow nommé.](workflows-guide-save-new.png)
+
+### 3. Préparer l'exécution
+
+Sélectionnez **Run**. Le déclencheur manuel attend votre prochaine action.
+
+![Run prépare le déclencheur manuel.](workflows-guide-run.png)
+
+### 4. Lancer le déclencheur
+
+Sélectionnez le bouton de lecture **Click to run** sur Manual Trigger.
+
+![Sélectionnez le bouton de lecture du déclencheur manuel pour lancer l'exécution.](workflows-guide-fire-trigger.png)
+
+### 5. Lire le nombre
+
+Après Completed, ouvrez SQL Query et sélectionnez **Output**. Lisez la valeur `requests`. Votre nombre peut différer de l'image.
+
+![La sortie contient le nombre actuel de demandes, qui peut être nul.](workflows-guide-sql-output.png)
+
+**Résultat attendu :** l'exécution termine en deux étapes et produit un élément contenant le nombre actuel de demandes.
+
+![Une exécution réussie se termine par Completed.](workflows-guide-completed.png)
+
+## Exporter une définition de workflow
+
+Conservez ainsi une copie portable d'une définition. Les définitions exportées peuvent contenir de la configuration. Examinez-les avant de les partager.
+
+### 1. Ouvrir les actions de la ligne
+
+Revenez à la liste et ouvrez les points de la ligne du workflow.
+
+![Chaque ligne de workflow a son propre menu d'actions.](workflows-guide-row-actions.png)
+
+### 2. Choisir Export
+
+Sélectionnez **Export**. Le navigateur télécharge un fichier `.workflow.json`. Le menu d'actions de la liste propose Import pour ce format.
+
+![Export télécharge la définition du workflow en JSON.](workflows-guide-export.png)
+
+**Résultat attendu :** vous avez une copie JSON de la définition. Export n'exécute pas le workflow.
+
+## Créer une copie distincte
+
+Utilisez Duplicate avant d'expérimenter avec un workflow personnalisé enregistré. La copie a sa propre définition.
+
+### 1. Ouvrir les actions de la ligne
+
+Ouvrez les points à côté du workflow à copier.
+
+![Chaque ligne de workflow a son propre menu d'actions.](workflows-guide-row-actions.png)
+
+### 2. Choisir Duplicate
+
+Sélectionnez **Duplicate**. Une nouvelle ligne se termine par **(copy)**. Ouvrez-la avant de modifier.
+
+![Duplicate crée une copie distincte du workflow.](workflows-guide-duplicate.png)
+
+**Résultat attendu :** l'original et la copie apparaissent séparément.
+
+![La copie distincte a sa propre ligne.](workflows-guide-duplicate-result.png)
+
+## Retirer un workflow personnalisé
+
+Effectuez cette tâche seulement si la définition est devenue inutile. Delete retire définitivement le workflow personnalisé sélectionné. L'exemple retire la copie temporaire.
+
+### 1. Choisir Delete
+
+Ouvrez les points de la ligne du workflow personnalisé et sélectionnez **Delete**.
+
+![Delete est disponible pour les workflows personnalisés.](workflows-guide-delete.png)
+
+### 2. Confirmer le workflow nommé
+
+Lisez le nom dans la confirmation. Sélectionnez **Delete** uniquement pour la définition à retirer.
+
+![Confirmez uniquement la copie de workflow personnalisé à retirer.](workflows-guide-delete-confirm.png)
+
+**Résultat attendu :** la copie disparaît et l'original reste présent.
+
+![Le workflow original reste présent après la suppression de sa copie.](workflows-guide-delete-result.png)
+
+## Importer une définition exportée
+
+Ajoutez ainsi un workflow depuis un fichier JSON exporté. Vérifiez la configuration avant d'exécuter une définition importée.
+
+### 1. Ouvrir Workflow actions
+
+Ouvrez les points au-dessus de la liste des workflows.
+
+![Ouvrez Workflow actions pour créer ou importer.](workflows-guide-list-actions.png)
+
+### 2. Choisir Import et un fichier
+
+Sélectionnez **Import**, puis le fichier `.workflow.json` exporté dans le sélecteur de fichiers.
+
+![Import lit une définition précédemment exportée.](workflows-guide-import.png)
+
+**Résultat attendu :** le workflow personnalisé importé apparaît dans la liste. Import ne l'exécute pas.
+
+![Import ajoute une autre définition personnalisée sans l'exécuter.](workflows-guide-import-result.png)
+
+## Trouver les workflows sur un téléphone
+
+Utilisez la liste des workflows sur un téléphone. Construisez et configurez les workflows du canevas sur un écran plus grand.
+
+### 1. Rechercher dans la liste
+
+Utilisez **Search workflows** pour trouver la définition enregistrée.
+
+![Recherchez les workflows sur un téléphone.](workflows-guide-phone-search.png)
+
+### 2. Ouvrir le workflow
+
+Sélectionnez son nom. Utilisez History pour ses exécutions. Un grand écran convient mieux à l'édition du canevas.
+
+![Ouvrez un workflow existant depuis sa ligne.](workflows-guide-phone-open.png)
+
+## Envoyer votre propre contenu webhook
+
+Utilisez l'URL des paramètres webhook. Utilisez HTTPS hors d'une installation de test locale. Envoyez le secret enregistré uniquement dans `X-Webhook-Token`. Utilisez une entrée acceptée par le workflow, comme un Bundle FHIR pour Ingest.
+
+Depuis le dossier d'installation, placez le contenu approuvé dans `data/your-payload.json`. Remplacez l'hôte et le secret ci-dessous. Lisez [Commencer ici](/docs/start-here) pour les emplacements des commandes installées et de développement.
+
+```shell
 curl -X POST https://your-host/api/workflows/hooks/ingest \
   -H "Content-Type: application/json" \
-  -H "X-Webhook-Token: <votre secret>" \
-  -d @one-patient.json
+  -H "X-Webhook-Token: YOUR_SECRET" \
+  -H "Idempotency-Key: sender-request-123" \
+  -d @data/your-payload.json
 ```
 
-**Résultat attendu :** une réponse comme `{"ok":true,"runId":"...","correlationId":"..."}`. Un secret faux ou absent renvoie `401`. Un mauvais chemin renvoie `404`.
+Une réponse terminée contient `ok`, `runId` et `correlationId`. Une réponse 202 signifie accepté, avec un identifiant de requête et une URL de suivi. Consultez cette URL avec le jeton actuel. Respectez Retry-After. Réutilisez la même clé d'idempotence et une entrée identique pour une nouvelle tentative. Une entrée différente avec la même clé retourne 409.
 
-Envoyez toujours en HTTPS, pour que le secret ne circule pas en clair. Traitez-le comme un mot de passe.
+## Fichiers fictifs facultatifs d'exercice
 
-## Exemple 3 : lire l'exécution
+Utilisez-les uniquement sur une installation de test. [Téléchargez un Bundle avec un patient fictif](https://openldr.online/docs-samples/user-guide/workflows/example-patient.json) pour pratiquer le webhook. Enregistrez-le dans `data/your-payload.json` du dossier d'installation, par exemple `~/Downloads/openldr_ce` ou `C:\openldr_ce`. Utilisez la commande précédente avec votre hôte et jeton de test.
 
-![Ouvrir History et choisir l'exécution.](workflows-history.mp4)
+[Téléchargez le workflow de comptage à deux nœuds](https://openldr.online/docs-samples/user-guide/workflows/warehouse-row-count.workflow.json). Importez-le par Workflow actions si vous voulez une référence après votre propre construction. Aucun fichier n'est nécessaire au fonctionnement normal.
 
-1. Sur le canevas d'Ingest, sélectionnez **History**.
-2. L'onglet **Runs** liste chaque exécution. Sélectionnez la plus récente.
+## Choisir d'autres nœuds
 
-![Une exécution : type, statut et durée de chaque nœud, et les données transmises.](workflows-run-detail.png)
+Node library regroupe déclencheurs, bases de données, communication, fichiers et transformations. Recherchez par nom du nœud. Une entrée grise Coming soon ne peut pas s'exécuter.
 
-**Résultat attendu :** **Completed**, lancée par **webhook**. Chaque nœud affiche **success**, sauf **form-validate-1**, qui affiche **skipped** : un Bundle prend la branche FHIR, pas celle des formulaires. Sélectionnez un nœud pour voir son **Output**, son **Result** et ses **Logs** en dessous.
+Utilisez Postgres, MySQL ou Microsoft SQL avec un connecteur correspondant activé. SQL Query lit directement le schéma de rapport. Load Dataset lit les lignes enregistrées d'un workflow. Materialize Dataset remplace les lignes sous un nom de jeu de données.
 
-L'onglet **Webhook receipts** liste chaque requête acceptée par le webhook, avec son statut. Voir [Requêtes webhook durables](#requetes-webhook-durables).
+Utilisez Edit Fields, Filter, Switch, Pivot ou Merge pour transformer les éléments. La plupart des réglages textuels lisent l'élément entrant avec `{{ $json.fieldName }}`. Adaptez les noms des champs à l'entrée réellement inspectée.
 
-Le même enregistrement apparaît maintenant dans [Activité](/docs/activity).
+Les étapes de fichier et de livraison nécessitent leur propre configuration. [Rapports planifiés](/docs/report-pipeline) décrit les jeux de données et modèles Excel. Configurez un connecteur de messagerie approuvé avant d'ajouter une livraison.
 
-## Exemple 4 : construire un flux
+## Traiter les requêtes webhook interrompues
 
-Construisez un flux qui compte les demandes de chaque examen dans l'entrepôt.
+History montre les reçus séparément des exécutions. Le travail en attente peut reprendre après redémarrage. Désactiver, supprimer ou modifier un workflow peut annuler ce travail. Interrupted signifie que le résultat est inconnu.
 
-![Créer un flux : un Manual Trigger et un nœud Postgres, reliés, réglés, enregistrés et exécutés.](workflows-build.mp4)
+OpenLDR ne rejoue pas automatiquement le travail commencé. Vérifiez l'arrêt du premier traitement et rapprochez les effets externes avant d'utiliser une nouvelle clé de requête. Une connexion en échec ne prouve pas qu'aucun traitement n'a eu lieu. Les reçus restent après suppression du workflow.
 
-1. Dans la liste des flux, ouvrez le menu en haut à droite et sélectionnez **New**.
-2. Remplacez **Untitled Workflow** par `Orders by test`.
-3. Dans la **Node library** à gauche, ouvrez **Core** et faites glisser **Manual Trigger** sur le canevas.
-4. Ouvrez **Databases** et faites glisser **Postgres** à sa droite.
-5. Faites glisser du point à droite de **Manual Trigger** jusqu'au point à gauche de **Postgres**. Une ligne les relie.
-6. Sélectionnez **Postgres**, puis son engrenage. Choisissez le connecteur **Target Warehouse (Postgres)**. Dans la zone SQL, tapez :
+Utilisez `./openldr` dans votre dossier installé sous Linux ou macOS, `.\openldr.ps1` sous Windows, ou `pnpm openldr` dans une copie de développement. Lancez la commande depuis votre dossier `openldr_ce`. [Start here](/docs/start-here) explique le lanceur et les chemins.
 
-```sql
-SELECT panel_desc AS test, COUNT(*) AS orders
-FROM lab_requests
-GROUP BY panel_desc
-ORDER BY orders DESC
+```shell
+./openldr workflows receipts list WORKFLOW_ID --limit 25 --offset 0 --json
+./openldr workflows receipts show REQUEST_ID --json
 ```
 
-7. Sélectionnez **Save**.
-8. Sélectionnez **Run**. La barre du bas affiche **Waiting for trigger**. Sélectionnez le badge lecture sur **Manual Trigger** pour démarrer.
+## Restaurer un workflow fourni
 
-**Résultat attendu :** la barre du bas affiche **Completed** et **2 steps**. Ouvrez **Postgres**, puis **Output** : cinq éléments, Full blood count 18 en premier.
+Les workflows système proposent **Reset to default** plutôt que Delete. La réinitialisation abandonne le graphe personnalisé et exige une confirmation. Exportez d'abord la définition actuelle si vous devez la conserver.
 
-![La sortie du nœud Postgres : un élément par ligne.](workflows-build-output.png)
+La réinitialisation conserve normalement le secret webhook existant. Si l'avertissement dit qu'il n'a pas pu être conservé, définissez un nouveau secret et mettez tous les émetteurs à jour. Ce guide n'a réinitialisé aucun workflow opérationnel.
 
-Depuis Postgres, les comptes et les moyennes arrivent comme des nombres, par exemple `18`. Depuis MySQL, un décimal comme une moyenne arrive encore comme du texte, par exemple `"18.5"`. Convertissez-le avant qu'un nœud fasse des sommes avec.
+## Résolution des problèmes
 
-Pour terminer ce guide, supprimez le flux : dans la liste, ouvrez le menu de sa ligne et sélectionnez **Delete**.
+**Run attend sans démarrer.** Sélectionnez le bouton de lecture du déclencheur après Run.
 
-## La liste des flux
+**Un secret est rejeté.** Vérifiez la valeur enregistrée et le chemin actuel. Remplacer un secret exige Save et, pour Ingest, Save anyway. Un secret enregistré ne peut pas être révélé.
 
-- **New** et **Import** sont dans le menu en haut à droite. **Import** lit un fichier créé par **Export**.
-- Chaque ligne a **Open**, **Duplicate**, **Export**, et soit **Delete**, soit, pour un flux système, **Reset to default**.
-- **Search workflows** filtre par nom.
+**Un nœud échoue.** Inspectez son entrée, sa configuration et ses journaux dans History. Vérifiez le connecteur requis et les noms des champs entrants.
 
-## Se déplacer sur le canevas
+**La saisie de formulaire indique un pipeline indisponible.** Vérifiez que le workflow fourni Ingest est activé. N'effacez ni ne supprimez ses nœuds pour diagnostiquer un émetteur.
 
-Utilisez les commandes en bas à gauche du canevas :
-
-- **+** zoome et **−** dézoome.
-- **Fit View**, en dessous, montre tous les nœuds.
-
-L'icône de main en haut à gauche est le mode **Pan** : faites glisser une zone vide pour déplacer la vue. L'icône de pointeur est le mode **Select** : faites glisser pour sélectionner des nœuds dans un cadre. En mode **Select**, le bouton du milieu ou le bouton droit de la souris déplace la vue.
-
-La mini-carte en bas à droite permet aussi de se déplacer et de zoomer. Si vous perdez vos nœuds, utilisez **Fit View** avant d'en déplacer un. Ces commandes changent la vue, pas les positions enregistrées.
-
-Les boutons du haut : **Clear** vide le canevas, **Datasets** liste les jeux de données enregistrés, **History** ouvre les exécutions, **Save** enregistre, **Run** prépare une exécution.
-
-## Valeurs de l'élément entrant
-
-La plupart des champs texte acceptent des modèles qui lisent l'élément en cours : SQL, destinataire, objet et corps d'e-mail, noms de fichiers.
-
-- `{{ $json.fieldName }}` est un champ de l'élément entrant.
-- Dans un nœud SQL : `... where registered >= '{{ $json.periodStart }}'`, où un nœud **Edit Fields** plus tôt a réglé `periodStart`.
-
-## Référence des nœuds
-
-La **Node library** range les nœuds par usage : **Core**, **Communication**, **Developer Tools**, **Databases**, **Files & Storage** et **Data Transformation**. Tapez dans **Search nodes** pour en trouver un.
-
-### Déclencheurs
-
-- **Manual Trigger**, **Schedule**, **Webhook**, **On Data Ingest**. Démarrent à la demande, selon un planning cron, depuis un appel HTTP, ou quand un lot est chargé.
-- **Event Trigger**. Démarre quand un événement se produit, par exemple des données enregistrées.
-- **Postgres Trigger** et **Email Trigger**. Démarrent sur un `NOTIFY` Postgres, ou à l'arrivée d'un e-mail par un connecteur IMAP.
-
-### Faire entrer des données
-
-- **Postgres**, **MySQL**, **Microsoft SQL**. Exécutent du SQL par un connecteur de base de données et produisent un élément par ligne. Le connecteur fixe le dialecte. Utilisez `{{ $json.x }}` pour y mettre des valeurs. Gardez des `SELECT` simples et faites le remodelage dans des nœuds, pour que le même flux marche sur une autre base.
-- **SQL Query**. Exécute un seul `SELECT` sur le schéma de reporting, en lecture seule, avec le même délai et la même limite de lignes que le SQL des tableaux de bord. Il n'a pas besoin de **SQL brut pour les tableaux de bord**.
-- **Load Dataset**. Lit un jeu de données enregistré plus tôt.
-- **HTTP Request** et **FHIR Query**. Vont chercher dans une API ou dans le magasin FHIR.
-
-### Remodeler les données
-
-- **Edit Fields**. Ajoute ou calcule des champs sur chaque élément, comme `periodStart` et `periodEnd`.
-- **Pivot**. Transforme des lignes longues en colonnes larges. Choisissez les clés de **group-by**, la **pivot column** dont les valeurs deviennent des noms de colonnes, la **value column**, et une liste fixe de colonnes de sortie. Exemple : un antibiotique par ligne devient une colonne par antibiotique. Les conflits se combinent par `max`, `min`, `first` ou `last`.
-- **Merge**. Combine des branches entrantes. *Append* les empile, *Combine* fusionne un objet, *Choose Branch* en choisit une, et **Combine by key** joint deux branches sur des champs communs, à gauche ou interne. La première branche reliée est le côté gauche.
-- **If**, **Switch**, **Filter**. Bifurquent ou retirent des éléments selon une condition.
-- **Aggregate**, **Summarize**, **Sort**, **Limit**, **Remove Duplicates**, **Rename Keys**, **Split Out**, **Date & Time**. Les opérations courantes sur des tableaux.
-- **Unwrap FHIR Bundle**. Un élément par ressource d'un Bundle.
-
-### Fichiers et sorties
-
-- **Excel Template**. Remplit un modèle `.xlsx` à vos couleurs avec les lignes et le renvoie comme fichier. Chargez le modèle avec le bouton du nœud, réglez la **Start cell** comme `A2`, les **Columns** dans l'ordre, une **Auto-filter header cell** facultative comme `A1`, et un mot de passe facultatif. Les valeurs sont placées par position, comme dans un rapport fait à la main.
-- **Export File**, **Spreadsheet File**, **Convert to File**. CSV, XLSX ou PDF simples à partir des éléments, sans modèle.
-- **Materialize Dataset**. Enregistre les éléments comme jeu de données nommé.
-- **Read/Write File**. Accès aux fichiers du serveur, dans un bac à sable, quand il est activé.
-
-### Communication
-
-- **Send Email (SMTP)**, **Gmail**, **Outlook**. Envoient par un connecteur e-mail. Réglez **To**, **Cc** facultatif, **Subject**, **Body**, **Body format**, et l'**Attachment field**, par exemple le champ `file` d'un nœud Excel Template.
-
-### Contrôle du déroulement
-
-- **Wait**, **Execute Workflow**, **Loop Over Items**, **Stop and Error**, **No Operation**. Mettre en pause, appeler un autre flux, répéter, ou échouer exprès.
-
-### Saisie des données
-
-- **Form Validate**. Vérifie des éléments avec un formulaire et les transforme en ressources FHIR.
-- **Persist Store**. Enregistre des ressources FHIR et déclenche `data.persisted`.
-
-## Rapports planifiés
-
-L'usage le plus courant au laboratoire est « interroger une base selon un planning, remplir un modèle, l'envoyer par e-mail ». Il a son propre guide : [Rapports planifiés avec les flux de travail](/docs/report-pipeline).
-
-## Webhooks sur plusieurs instances de l'API
-
-Enregistrez un changement de chemin ou de secret avant d'envoyer des requêtes avec la nouvelle valeur. Chaque instance de l'API lit le chemin et le secret actuels dans la base partagée. Aucun redémarrage n'est nécessaire. Les requêtes authentifiées avant l'enregistrement peuvent finir.
-
-Envoyez le secret seulement dans l'en-tête `x-webhook-token`.
-
-| Réponse | Sens |
-| --- | --- |
-| 404 | Ancien chemin après un changement, ou flux désactivé ou supprimé |
-| 401 | Secret ancien ou illisible |
-| 503 | Deux déclencheurs activés partagent un chemin, donc rien ne s'exécute. Aussi une erreur de lecture de la base. Les instances ne se rabattent jamais sur des identifiants en cache. |
-
-Chaque déclencheur activé a besoin de son propre chemin, y compris dans un même flux.
-
-Arrêtez chaque ancienne instance de l'API et chaque ancien écrivain de flux avant de lancer la migration 096 avec `openldr db migrate`. Démarrez ensuite les instances à jour. Les anciens écrivains ne savent pas tenir le nouvel index des chemins. Cette mise à jour demande un arrêt. Ne mélangez pas les versions pendant que des écritures arrivent. Toutes les instances doivent utiliser la même base et la même clé de chiffrement.
-
-## Requêtes webhook durables
-
-OpenLDR enregistre un reçu et un événement d'envoi dans une seule transaction de base avant d'accepter un webhook. Si cela n'atteint pas la base, la requête échoue sans reçu. Une erreur ou une connexion perdue ne prouve pas que rien n'a tourné. Réessayez avec la même clé d'idempotence et les mêmes données.
-
-Envoyez un en-tête `Idempotency-Key` facultatif pour chaque requête logique. Dans un même flux, la même clé et les mêmes données réutilisent le premier reçu. Des données différentes avec la même clé renvoient 409. Les données comprennent le corps, la requête, les en-têtes transmis et le contenu binaire. Les en-têtes d'authentification et de transport ne comptent pas. Sans clé, chaque POST est une nouvelle requête, et les nouvelles tentatives peuvent répéter leurs effets.
-
-OpenLDR attend jusqu'à 10 secondes après l'acceptation :
-
-- Un travail fini renvoie 200 avec les champs habituels. Une répétition d'une requête finie renvoie aussi 200, même avec `Prefer: respond-async`.
-- Un échec enregistré renvoie un 500 simple avec `requestId`, sans l'erreur brute.
-- Les reçus interrompus et annulés renvoient 409.
-- Un travail en file ou en cours renvoie 202 avec `accepted: true`, `requestId`, `status` et `statusUrl`. `Location` et `Retry-After` donnent l'adresse et l'intervalle d'interrogation. 202 veut dire accepté, pas fini.
-- `Prefer: respond-async` saute l'attente. Se déconnecter n'annule pas un travail accepté.
-
-### Exemple pour l'expéditeur
-
-Une réponse 200 finie peut être `{"ok":true,"runId":"run-id","correlationId":"correlation-id"}`. Les clés comptent de 1 à 200 caractères ASCII imprimables, sans espaces.
-
-Envoyez `POST /api/workflows/hooks/example` avec les en-têtes `x-webhook-token: CURRENT_SECRET`, `Idempotency-Key: sender-request-123` et `Prefer: respond-async`. Réessayez avec la même clé et les mêmes données.
-
-Un corps 202 en attente :
-
-```json
-{"accepted":true,"requestId":"request-id","status":"queued","statusUrl":"/api/workflows/hooks/example?requestId=request-id"}
-```
-
-Interrogez-le avec `GET /api/workflows/hooks/example?requestId=request-id` et le `x-webhook-token` actuel. Respectez `Retry-After`. L'interrogation ne renvoie que `requestId`, `status` et `runId`, jamais de données ni d'erreurs brutes. L'identifiant de requête seul ne donne aucun accès. Un secret remplacé cesse de marcher tout de suite. Un chemin renommé ou supprimé peut couper l'expéditeur, mais les opérateurs peuvent encore retrouver les reçus par flux et par identifiant de requête.
-
-### Inspecter et reprendre
-
-L'onglet **Webhook receipts** de **History** montre les requêtes en file, en cours, finies, échouées, interrompues et annulées. Les routes de l'API sont `GET /api/workflows/:id/receipts?limit=25&offset=0` et `GET /api/workflows/:id/receipts/:requestId`.
-
-```bash
-openldr workflows receipts list WORKFLOW_ID --limit 25 --offset 0 --json
-openldr workflows receipts show REQUEST_ID --json
-```
-
-Les limites vont de 1 à 100. Les décalages commencent à zéro. La ligne de commande et l'API utilisent le même service de reçus. Aucune ne rejoue une requête.
-
-Un travail en file peut reprendre après un redémarrage. Un flux désactivé, supprimé ou modifié avant de tourner annule le travail en file. `interrupted` veut dire que l'issue est inconnue. OpenLDR ne rejoue jamais seul un travail commencé. Vérifiez que le premier processus s'est arrêté, et corrigez les effets extérieurs, avant d'envoyer une requête avec une nouvelle clé. Les effets extérieurs ne sont pas annulés.
-
-Les reçus et les enregistrements d'idempotence survivent à la suppression d'un flux. Rien n'expire ni ne les nettoie, donc le stockage grandit. La migration 097 ajoute le stockage des reçus. Mettez à jour de la même façon : arrêtez les anciennes instances et les anciens écrivains, lancez `openldr db migrate`, puis démarrez les nouvelles. La compatibilité du client CDR avec ces réponses n'a pas été vérifiée dans son code source.
-
-## Sur un téléphone
-
-La liste des flux marche sur un téléphone. Le canevas demande un ordinateur : construisez et modifiez les flux sur un écran plus grand.
-
-![La liste des flux sur un téléphone.](workflows-phone.png)
-
-## Dépannage
-
-- **Le webhook répond 401.** Le secret est faux ou ancien. Un secret enregistré ne se lit pas, donc remplacez-le, copiez le nouveau et enregistrez. Voir [Exemple 1](#exemple-1-preparer-le-webhook-ingest).
-- **Save sur Ingest semble ne rien faire.** Cherchez la question **Save changes to a system workflow?** et sélectionnez **Save anyway**.
-- **Un nœud ne peut pas tourner.** Ouvrez-le et remplissez chaque champ obligatoire. Un nœud de base de données ou d'e-mail demande un connecteur.
-- **Un connecteur manque dans un nœud.** Vérifiez que le connecteur existe, est activé, et correspond au type du nœud. Voir [Connecteurs](/docs/connectors).
-- **Run ne fait rien.** **Run** ne fait que préparer le flux. Sélectionnez le badge lecture sur le déclencheur.
-- **Un jeu de données est vide.** Exécutez le flux qui le construit avant celui qui le lit.
-- **Un e-mail est arrivé sans la pièce jointe.** Réglez l'**Attachment field** du nœud Send Email sur le champ de fichier créé plus tôt, en général `file`.
-- **Une exécution échoue après une branche.** Vérifiez la condition de la branche, et le nœud juste avant l'échec.
-- **La saisie de formulaire échoue avec « capture pipeline unavailable ».** Ingest est désactivé. Le serveur le réactive au démarrage. Si vous l'avez désactivé exprès, la saisie de formulaire ne peut pas marcher.
-
-## Conseils
-
-- Découpez un travail lourd en deux flux reliés par un jeu de données. L'un enregistre les données préparées selon un planning. Un plus léger les charge, les met en forme et les envoie. La requête source reste rapide.
-- Gardez des requêtes de base en `SELECT` simples. Faites les pivots et les jointures dans les nœuds **Pivot** et **Merge**, pour qu'un flux construit pour une base tourne sur une autre en changeant le connecteur.
-- Lisez **History** avant de modifier un flux qui échoue, pour savoir si le problème vient des données, du réglage ou de la destination.
+**Une livraison annonce une réussite.** Vérifiez séparément le système destinataire. L'achèvement d'un nœud ne prouve pas qu'une personne a reçu ou lu le résultat.
 
 ## Guides associés
 
-- [Activité](/docs/activity)
-- [Rapports planifiés avec les flux de travail](/docs/report-pipeline)
-- [Connecteurs](/docs/connectors)
-- [Rapports](/docs/reports)
-- [Audit](/docs/audit)
+[Activité](/docs/activity) suit le parcours du contenu. [Rapports planifiés](/docs/report-pipeline) construit les données enregistrées et les classeurs de sortie. [Connecteurs](/docs/connectors) configure les systèmes externes.

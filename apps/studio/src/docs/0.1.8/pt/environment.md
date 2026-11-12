@@ -1,263 +1,173 @@
 # Variáveis de ambiente
 
-O OpenLDR é configurado por variáveis de ambiente lidas no arranque. Numa instalação
-Docker, ficam no ficheiro `.env` ao lado de `docker-compose.yml` (o ficheiro gerado pelo
-instalador). Altere um valor e recrie a stack para o aplicar:
+O OpenLDR lê as variáveis de ambiente quando o servidor inicia. Numa instalação Docker, edite o `.env` privado junto do ficheiro Compose e recrie os serviços afetados.
 
-```
-docker compose up -d
-```
+Use Settings para valores com controlos na aplicação. Connectors guarda as credenciais dos destinos. Marketplace gere os registos após o primeiro arranque. Distributed sync guarda a configuração da ligação em Settings. Estas definições guardadas não exigem editar o ficheiro de ambiente.
 
-A maioria dos operadores nunca edita estes valores à mão. O instalador escreve valores
-por omissão adequados e gera todos os segredos. Esta página é uma referência para os
-valores que importam além de uma instalação num único anfitrião: um domínio público, uma
-base de dados externa, ou o SQL Server como armazém analítico.
+Precisa de acesso ao servidor e do projeto Compose, ficheiro de ambiente e ficheiros complementares exatos da instalação. Mantenha essas opções. As imagens de terminal ilustram comandos a adaptar. Não mostram o seu servidor nem comprovam uma alteração da instalação.
 
-> Os segredos (`*_PASSWORD`, `*_SECRET_*`, `SECRETS_ENCRYPTION_KEY`) são gerados na
-> primeira instalação. Nunca os partilhe nem os coloque no controlo de versões. Alterar
-> `SECRETS_ENCRYPTION_KEY` depois de existirem conectores torna ilegíveis as credenciais
-> guardadas. Considere esta chave definitiva quando a stack estiver em produção.
+Preserve `SECRETS_ENCRYPTION_KEY`. Substituí-la após guardar credenciais torna-as ilegíveis. Mantenha palavras-passe, chaves de assinatura, certificados privados e cópias de segurança fora das capturas e do controlo de versões.
 
-## Execução
+## Identificar a instalação em execução
 
-| Variável | Omissão | Finalidade |
+Verifique a aplicação antes de escolher um ficheiro de configuração. Um repositório de desenvolvimento e uma instalação Compose usam comandos de arranque diferentes.
+
+### 1. Abrir General
+
+Abra **Settings** e depois **General**.
+
+![Abra Settings e depois General.](environment-guide-general.png)
+
+### 2. Ler About
+
+Anote Version e Environment da aplicação em execução. Esta página identifica a aplicação sem expor o ficheiro de ambiente privado.
+
+![About identifica a versão e o ambiente da aplicação em execução.](environment-guide-about.png)
+
+### 3. Encontrar a pasta Compose
+
+No servidor, abra a pasta com o ficheiro Compose e o .env desta instalação. O caminho ilustrado `~/openldr_ce` é um exemplo. Use a pasta real da instalação.
+
+![Ilustração. Trabalhe na pasta do projeto Compose instalado.](environment-guide-folder.png)
+
+**Resultado esperado:** sabe qual a instalação em execução e os ficheiros de configuração afetados.
+
+## Alterar um valor de arranque
+
+Acorde a paragem necessária para o valor escolhido. Use um editor privado e preserve as credenciais existentes.
+
+### 1. Guardar uma cópia da configuração
+
+Guarde uma cópia privada do .env atual antes de o editar. Mantenha-a com a cópia de segurança da instalação e restrinja o acesso.
+
+![Ilustração. Guarde uma cópia privada da configuração antes de editar.](environment-guide-backup.png)
+
+### 2. Editar apenas o valor pretendido
+
+Altere o valor escolhido. A ilustração usa LOG_LEVEL. Não substitua o ficheiro completo pelo exemplo.
+
+![Ilustração. Altere apenas o valor de ambiente pretendido.](environment-guide-edit.png)
+
+### 3. Validar a configuração Compose
+
+Execute `docker compose config --quiet` com as opções habituais de projeto, env-file e ficheiros complementares. Exija o código de saída 0. Evite imprimir a configuração expandida em registos partilhados.
+
+![Ilustração. Valide a configuração Compose sem imprimir segredos.](environment-guide-validate.png)
+
+### 4. Recriar os serviços afetados
+
+Use `docker compose up -d` nos serviços afetados. Um reinício mantém o ambiente do contentor existente. Alterações da origem pública ou identidade podem afetar vários serviços.
+
+![Ilustração. Recrie os serviços afetados para aplicar as definições de arranque.](environment-guide-apply.png)
+
+### 5. Verificar o resultado
+
+Confira os contentores, a saúde da aplicação, os registos e o comportamento alterado. Uma API saudável não prova que funcionam as bases externas, os retornos de autenticação ou os destinos de ficheiros.
+
+![Ilustração. Confira o estado dos serviços e a saúde da aplicação.](environment-guide-health.png)
+
+**Resultado esperado:** o novo processo lê o valor pretendido. Preserve a configuração anterior até verificar o comportamento.
+
+## Execução e endereço da instalação
+
+O analisador da aplicação e o instalador têm predefinições diferentes. O analisador usa development para NODE_ENV. Uma instalação deve definir production explicitamente. Os valores exclusivos do Compose configuram a gateway e as etiquetas das imagens.
+
+| Variável | Predefinição ou origem | Significado |
 | --- | --- | --- |
-| `NODE_ENV` | `production` | Modo de execução. Mantenha `production` numa instalação. |
-| `PORT` | `3000` | Porta interna da API atrás do gateway. |
-| `LOG_LEVEL` | `info` | Nível de detalhe dos registos (`debug`, `info`, `warn`, `error`). |
-| `OPENLDR_VERSION` | `latest` | Etiqueta da imagem que a stack descarrega e executa. |
-| `TRUST_PROXY` | não definido | Quantos proxies à frente da API são de confiança para o IP do cliente. Use `1` atrás do gateway incluído, para que a auditoria mostre o endereço real do cliente. Defina-o apenas quando um proxy de confiança estiver mesmo à frente da API. Caso contrário, um cliente pode falsificar o próprio IP. |
+| `NODE_ENV` | Analisador: development | Defina production nos serviços instalados. |
+| `PORT` | 3000 | Porta de escuta interna da API. |
+| `LOG_LEVEL` | info | Nível dos registos do servidor. |
+| `TRUST_PROXY` | Não definido | Proxies de confiança para atribuir o IP do cliente. Use apenas a cadeia real de proxies de confiança. |
+| `OPENLDR_VERSION` | Etiqueta da imagem instalada | Fixe a versão aprovada para as atualizações. |
+| `SERVER_NAME`, `PUBLIC_ORIGIN` | Valores da instalação | Nome público do servidor e origem externa completa. |
+| `GATEWAY_HTTP_PORT`, `GATEWAY_HTTPS_PORT` | 80, 443 | Portas publicadas da gateway. |
+| `TLS_MODE`, `LETSENCRYPT_EMAIL` | Valores do instalador | Modo do certificado da gateway e contacto do certificado. |
+| `MIGRATE_ON_START`, `SEED_ON_START` | Analisador: false, false | Migrações no arranque e carga opcional de exemplos. A atualização usa um passo de migração separado. |
 
-## Endereço público e TLS
+## Bases de dados e armazenamento de objetos
 
-Estes valores definem o URL que os utilizadores alcançam e a forma como o gateway termina
-o HTTPS. `SERVER_NAME` é o nome de anfitrião público. `PUBLIC_ORIGIN` é a origem completa
-usada em ligações e redirecionamentos OIDC.
+A base interna usa sempre Postgres. Escolha o motor do armazém através de TARGET_STORE_ADAPTER. Estas variáveis configuram o próprio armazém. As ligações adicionais de relatórios e origens pertencem a Connectors.
 
-| Variável | Omissão | Finalidade |
+| Variável | Predefinição ou origem | Significado |
 | --- | --- | --- |
-| `SERVER_NAME` | `localhost` | Nome de anfitrião ou domínio público da instalação. |
-| `PUBLIC_ORIGIN` | `https://localhost` | Origem externa completa (`https://seu.dominio`). |
-| `GATEWAY_HTTP_PORT` | `80` | Porta do anfitrião onde o gateway serve HTTP. |
-| `GATEWAY_HTTPS_PORT` | `443` | Porta do anfitrião onde o gateway serve HTTPS. |
-| `TLS_MODE` | `self-signed` | `self-signed` ou um certificado reconhecido (Let's Encrypt). |
-| `LETSENCRYPT_EMAIL` | não definido | Email de contacto usado ao emitir um certificado reconhecido. |
+| `INTERNAL_DATABASE_URL` | Obrigatório | Base da aplicação, incluindo contas, auditoria e recursos canónicos. |
+| `TARGET_STORE_ADAPTER` | pg | Motor do armazém: pg, mssql ou mysql. |
+| `TARGET_DATABASE_URL` | Obrigatório para pg | Ligação ao armazém Postgres. |
+| `MSSQL_HOST`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD` | Obrigatórios para mssql | Ligação ao armazém SQL Server. |
+| `MSSQL_PORT` | 1433 | Porta do armazém SQL Server. |
+| `MSSQL_ENCRYPT`, `MSSQL_TRUST_SERVER_CERT` | false, true | Opções de transporte do armazém. Confira os requisitos reais do certificado do servidor. |
+| `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | Obrigatórios para mysql | Ligação ao armazém MySQL ou MariaDB. |
+| `MYSQL_PORT` | 3306 | Porta do armazém MySQL. |
+| `MYSQL_SSL`, `MYSQL_SSL_REJECT_UNAUTHORIZED` | false, false | Opções de TLS e verificação de certificados do armazém. |
+| `BLOB_ADAPTER` | minio | Seletor do adaptador S3. Também suporta o serviço Garage incluído. |
+| `S3_ENDPOINT`, `S3_BUCKET` | Obrigatórios | Endereço do serviço de objetos e bucket. |
+| `S3_REGION`, `S3_FORCE_PATH_STYLE` | us-east-1, true | Região S3 e endereçamento por caminho. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Credenciais privadas | Acesso ao armazenamento de objetos. O Garage exige o formato de chave suportado. |
+| `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` | Gerados pelo instalador | Segredos do serviço Garage. Preserve-os com a configuração. |
+| `EVENTING_ADAPTER` | pg | Implementação do armazenamento de eventos da aplicação. |
 
-## Base de dados
+## Autenticação e segredos
 
-O OpenLDR usa sempre uma base de dados Postgres interna para a aplicação. O armazém
-destino (analítico) pode ser Postgres, SQL Server ou MySQL/MariaDB, escolhido com
-`TARGET_STORE_ADAPTER`. `TARGET_DATABASE_URL` aplica-se a um destino Postgres. SQL Server e
-MySQL usam as suas próprias variáveis, descritas mais abaixo.
+Consulte [Fornecedores de autenticação](/docs/auth-providers) antes de alterar um emissor. A base da aplicação está ligada ao seu espaço de identidade. O OIDC genérico não administra utilizadores Keycloak ou clientes de sincronização.
 
-| Variável | Finalidade |
-| --- | --- |
-| `INTERNAL_DATABASE_URL` | Base de dados da aplicação (utilizadores, formulários, workflows, auditoria). Sempre Postgres. |
-| `TARGET_DATABASE_URL` | Armazém analítico onde os pipelines escrevem, quando `TARGET_STORE_ADAPTER=pg`. |
-| `POSTGRES_PASSWORD` | Palavra-passe do contentor Postgres incluído. |
-
-## Adaptadores
-
-Os adaptadores escolhem a implementação de cada subsistema. Os valores por omissão
-correspondem aos contentores incluídos. Altere-os apenas para usar infraestrutura externa.
-
-| Variável | Omissão | Finalidade |
+| Variável | Predefinição ou origem | Significado |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | `keycloak` | Modo de início de sessão: `keycloak` ou `oidc`. Consulte [Fornecedores de autenticação](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Armazenamento de objetos para carregamentos e artefactos. `minio` seleciona o adaptador S3, que também funciona com o Garage. |
-| `EVENTING_ADAPTER` | `pg` | Armazém de eventos usado pelos acionadores de workflow. |
-| `TARGET_STORE_ADAPTER` | `pg` | Motor do armazém analítico: `pg`, `mssql` ou `mysql`. |
+| `AUTH_ADAPTER` | keycloak | Autenticação keycloak ou oidc genérico. |
+| `IDENTITY_ADMIN_ADAPTER` | Depende de AUTH_ADAPTER | keycloak ou none. O oidc genérico exige none. |
+| `OIDC_ISSUER_URL` | Obrigatório | Emissor esperado dos tokens. Preserve-o num espaço de identidade existente. |
+| `OIDC_WEB_CLIENT_ID` | openldr-web | Identificador do cliente público do navegador. |
+| `OIDC_AUDIENCE` | Opcional | Audiência exigida do token de acesso à API quando configurada. |
+| `OIDC_SCOPES` | openid profile email | Âmbitos pedidos pelo navegador. Deve incluir openid. |
+| `OIDC_RESOURCE` | Opcional | Indicador de recurso do fornecedor quando necessário. |
+| `OIDC_INTERNAL_JWKS_URL` | Opcional | Endereço explícito das chaves de assinatura no servidor. O emissor esperado não muda. |
+| `OIDC_INTERNAL_ISSUER_URL` | Opcional | Endereço do realm Keycloak no servidor. O OIDC genérico não deriva os endereços deste valor. |
+| `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Valores privados da instalação | Conta de serviço para administrar o fornecedor. |
+| `TLS_CERT_PATH` | Opcional | Certificado público do servidor disponível na descarga do certificado central. |
+| `SECRETS_ENCRYPTION_KEY` | Base64, 32 bytes descodificados | Chave de encriptação das credenciais guardadas. Preserve o valor existente. |
+| `AUTH_DEV_BYPASS` | false | Desvio explícito da autenticação em desenvolvimento. Em produção recusa true. |
+| `AUTH_DEV_USERNAME`, `AUTH_DEV_ROLES` | dev-admin, lab_admin | Autor para o desvio de desenvolvimento explicitamente ativado. |
 
-Um destino de relatórios externo já não se escolhe aqui por adaptador. Crie antes um
-conector em **Definições > Conectores**. O plugin de destino é determinado a partir desse
-conector.
+## Limites de workflows, plugins e importações
 
-## Armazenamento de objetos (S3)
+Ative as capacidades do anfitrião apenas para utilizadores e instalações que precisem delas. WORKFLOW_CODE_ENABLED permite JavaScript com acesso ao anfitrião. Não é um ambiente isolado de segurança. Os limites SQL dos painéis, os recetores de workflow e a publicação de conjuntos de dados têm controlos em Settings.
 
-O serviço `storage` incluído executa o Garage, um servidor compatível com S3. Aponte estas
-variáveis para qualquer endpoint S3 para usar outro.
-
-| Variável | Omissão | Finalidade |
+| Variável | Predefinição do analisador | Significado |
 | --- | --- | --- |
-| `S3_ENDPOINT` | `http://storage:3900` | URL do endpoint S3. |
-| `S3_REGION` | `us-east-1` | Região S3. |
-| `S3_ACCESS_KEY_ID` | gerada | Chave de acesso. |
-| `S3_SECRET_ACCESS_KEY` | gerada | Chave secreta. |
-| `S3_BUCKET` | `openldr` | Bucket que guarda carregamentos e artefactos. |
-| `S3_FORCE_PATH_STYLE` | `true` | Endereçamento por caminho (exigido pelo armazenamento incluído). |
-| `GARAGE_RPC_SECRET` | gerada | Segredo interno do Garage, 64 carateres hexadecimais. |
-| `GARAGE_ADMIN_TOKEN` | gerada | Token da API de administração do Garage, 64 carateres hexadecimais. |
+| `WORKFLOW_CODE_ENABLED` | false | Permite executar o nó Code com acesso ao anfitrião. |
+| `WORKFLOW_CODE_TIMEOUT_MS`, `WORKFLOW_CODE_MEMORY_MB` | 5000, 128 | Limites de tempo e memória do nó Code. |
+| `WORKFLOW_HTTP_ALLOWLIST` | Vazio | Nomes de servidor permitidos para pedidos HTTP dos workflows. |
+| `WORKFLOW_FILE_MAX_BYTES` | 52428800 | Limite de ficheiro enviado ao workflow ou webhook. |
+| `WORKFLOW_LOOP_MAX_ITEMS` | 100000 | Máximo de elementos acumulados na saída de um ciclo. |
+| `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, vazio | Acesso a ficheiros do anfitrião e pasta raiz obrigatória. |
+| `WORKFLOW_EMAIL_POLL_MIN_SECONDS`, `WORKFLOW_EMAIL_MAX_PER_POLL` | 30, 50 | Intervalo mínimo dos acionadores de email e limite de mensagens por consulta. |
+| `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | 67108864 | Tamanho máximo de envio do registo de unidades. Aumentá-lo também exige memória suficiente para o processamento. |
+| `TERMINOLOGY_WORK_DIR` | Opcional | Pasta de descarga e extração de terminologia. |
+| `PLUGIN_UI_ENABLED`, `PLUGIN_EGRESS_ENABLED` | true, true | Interruptores gerais das páginas e do intermediário de plugins, e do acesso à rede. |
+| `PLUGIN_DATA_MAX_DOC_BYTES` | 8388608 | Tamanho máximo de documento do intermediário. |
+| `PLUGIN_CRASH_LOG_DIR` | .openldr/crash | Pasta persistente dos marcadores de falha dos plugins. |
+| `CRASH_LOOP_THRESHOLD`, `CRASH_LOOP_WINDOW_SEC` | 5, 60 | Número de falhas e janela de medição. |
+| `CRASH_LOOP_BACKOFF_MS`, `CRASH_LOOP_BACKOFF_CAP_MS` | 2000, 60000 | Espera inicial e máxima entre repetições após falhas. |
 
-O Garage só aceita um identificador de chave de acesso formado por `GK` seguido de 24
-carateres hexadecimais, e um segredo hexadecimal de 64 carateres. O instalador gera ambos.
+## Configuração do Marketplace e da sincronização
 
-## Autenticação (Keycloak / OIDC)
+MARKETPLACE_REGISTRY_URL ou MARKETPLACE_REGISTRY_DIR inicia o primeiro registo apenas quando nenhum existe. Depois, use Marketplace, Registries. A publicação exige o token, o repositório e a pasta local de preparação em conjunto.
 
-O Keycloak é o modo por omissão. O OIDC genérico usa descoberta e tokens de acesso JWT.
-Consulte [Fornecedores de autenticação](/docs/auth-providers) para a configuração, os
-limites de administração e a proteção do emissor.
+OPENLDR_SITE_ID fornece um identificador de site alternativo quando não existe Site ID guardado. As definições de sincronização guardadas têm prioridade. SYNC_ALLOW_INSECURE_TRANSPORT é false por predefinição. Use HTTPS para um central em serviço.
 
-| Variável | Finalidade |
-| --- | --- |
-| `IDENTITY_ADMIN_ADAPTER` | `keycloak` ou `none`. Por omissão, `keycloak` com Keycloak e `none` com OIDC genérico. |
-| `OIDC_ISSUER_URL` | URL público do emissor. Mantenha o valor existente numa atualização. Uma alteração posterior impede o arranque. |
-| `OIDC_INTERNAL_ISSUER_URL` | URL interno base do realm, apenas para Keycloak. O OIDC genérico ignora este valor. |
-| `OIDC_INTERNAL_JWKS_URL` | Substitui o endereço interno das chaves de assinatura. Não altera o emissor esperado. |
-| `OIDC_AUDIENCE` | Audiência esperada do token. |
-| `OIDC_WEB_CLIENT_ID` | ID do cliente público com que o Studio se autentica. |
-| `OIDC_SCOPES` | Scopes pedidos pelo Studio. Usa `openid profile email` por omissão. Tem de incluir `openid`. |
-| `OIDC_RESOURCE` | URL de recurso a pedir, para fornecedores que o exigem para emitir o token de acesso API. |
-| `TLS_CERT_PATH` | Caminho do certificado TLS público deste servidor (PEM). Quando definido, a página Sites permite descarregá-lo, para que um laboratório remoto confie num servidor central autoassinado. O instalador define-o por si. |
-| `KC_HOSTNAME` | URL público base anunciado pelo Keycloak. |
-| `KEYCLOAK_ADMIN` | Nome de utilizador do administrador do Keycloak. |
-| `KEYCLOAK_ADMIN_PASSWORD` | Palavra-passe do administrador do Keycloak (gerada). |
-| `KEYCLOAK_ADMIN_CLIENT_ID` | ID do cliente usado nas chamadas à API de administração. |
-| `KEYCLOAK_ADMIN_CLIENT_SECRET` | Segredo do cliente usado nas chamadas à API de administração. |
-
-## Definições apenas para desenvolvimento
-
-Estas variáveis existem para o desenvolvimento local e os testes automáticos. Nunca as
-defina numa instalação.
-
-`AUTH_DEV_BYPASS` **desliga a autenticação**. Qualquer pedido à API sem token é tratado
-como vindo de um administrador de desenvolvimento. Fica desligada até a definir, e o
-servidor recusa arrancar com ela ligada em `NODE_ENV=production`. Quando está ligada, o
-Studio mostra uma faixa de autenticação ignorada e o servidor regista um aviso no arranque.
-
-| Variável | Omissão | Finalidade |
+| Variável | Predefinição ou origem | Significado |
 | --- | --- | --- |
-| `AUTH_DEV_BYPASS` | `false` | Tratar pedidos à API sem autenticação como vindos de um administrador de desenvolvimento. |
-| `AUTH_DEV_USERNAME` | `dev-admin` | Nome de utilizador do ator de desenvolvimento injetado. |
-| `AUTH_DEV_ROLES` | `lab_admin` | Funções atribuídas ao ator de desenvolvimento injetado. |
-| `MARKETPLACE_DEV_ALLOW_UNSIGNED` | `false` | Instalar pacotes do Marketplace sem assinatura. |
+| `MARKETPLACE_REGISTRY_URL`, `MARKETPLACE_REGISTRY_DIR` | Origem inicial | Registo remoto ou pasta local de pacotes usada na primeira configuração. |
+| `MARKETPLACE_LOCAL_REGISTRY_ROOT` | Vazio | Raiz permitida opcional para pastas de registos locais. |
+| `MARKETPLACE_PUBLISH_TOKEN`, `MARKETPLACE_PUBLISH_REPO` | Configuração privada | Credenciais e destino da publicação no GitHub. |
+| `MARKETPLACE_PUBLISH_BRANCH` | main | Ramo de destino das propostas de publicação. |
+| `MARKETPLACE_DEV_ALLOW_UNSIGNED` | false | Permissão de pacotes sem assinatura apenas em desenvolvimento. |
 
-## Segredos
+## Resolução de problemas
 
-| Variável | Finalidade |
-| --- | --- |
-| `SECRETS_ENCRYPTION_KEY` | Chave de 32 bytes em base64 que cifra as credenciais dos conectores em repouso. Gere-a com `openssl rand -base64 32`. |
+**Um valor de arranque não mudou.** Reinicie os processos afetados após alterar o ambiente. No Docker, recrie os serviços afetados porque um reinício mantém o ambiente do contentor.
 
-## Primeiro arranque
-
-| Variável | Omissão | Finalidade |
-| --- | --- | --- |
-| `MIGRATE_ON_START` | `true` | Executar as migrações da base de dados quando a API arranca. |
-| `SEED_ON_START` | `true` | Carregar os formulários, workflows e terminologias por omissão no primeiro arranque. |
-
-## Importações de terminologia
-
-| Variável | Omissão | Finalidade |
-| --- | --- | --- |
-| `TERMINOLOGY_WORK_DIR` | pasta temporária do sistema | Pasta onde uma versão de terminologia carregada é descomprimida durante a importação. Uma versão completa do SNOMED CT precisa de espaço para o zip e para os ficheiros descomprimidos ao mesmo tempo. Aponte-a para um disco maior quando a pasta temporária do contentor for pequena. |
-
-## Armazém destino SQL Server
-
-Defina apenas quando `TARGET_STORE_ADAPTER=mssql`. Inicie o perfil SQL Server com
-`docker compose --profile mssql up -d`.
-
-| Variável | Finalidade |
-| --- | --- |
-| `MSSQL_HOST` | Anfitrião do SQL Server. |
-| `MSSQL_PORT` | Porta do SQL Server (por omissão `1433`). |
-| `MSSQL_DATABASE` | Nome da base de dados destino. |
-| `MSSQL_USER` | Início de sessão. |
-| `MSSQL_PASSWORD` | Palavra-passe. |
-| `MSSQL_ENCRYPT` | `true`/`false`: cifrar a ligação. |
-| `MSSQL_TRUST_SERVER_CERT` | `true`/`false`: confiar num certificado de servidor autoassinado. |
-
-## Armazém destino MySQL / MariaDB
-
-Defina apenas quando `TARGET_STORE_ADAPTER=mysql`. Funciona com MySQL 8.4+ e MariaDB 11.4+.
-
-| Variável | Finalidade |
-| --- | --- |
-| `MYSQL_HOST` | Anfitrião MySQL/MariaDB. |
-| `MYSQL_PORT` | Porta do servidor (por omissão `3306`). |
-| `MYSQL_DATABASE` | Nome da base de dados destino. |
-| `MYSQL_USER` | Início de sessão. |
-| `MYSQL_PASSWORD` | Palavra-passe. |
-| `MYSQL_SSL` | `true`/`false`: ligar por TLS. |
-| `MYSQL_SSL_REJECT_UNAUTHORIZED` | `true`/`false`: recusar um certificado de servidor não reconhecido. |
-
-## Workflows
-
-Consulte [Workflows](/docs/workflows) para os nós controlados por estas definições.
-
-> `WORKFLOW_CODE_ENABLED` permite aos autores de workflows executar JavaScript com os
-> mesmos acessos do servidor: os seus ficheiros, rede, ambiente e segredos. O executor de
-> código não é uma sandbox. Ligue-o apenas se confiar em todas as pessoas que podem editar
-> workflows.
-
-| Variável | Omissão | Finalidade |
-| --- | --- | --- |
-| `WORKFLOW_CODE_ENABLED` | `false` | Permitir a execução de nós Code. Desligado, um nó Code recusa executar. |
-| `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Tempo máximo de uma execução de nó Code, em milissegundos. |
-| `WORKFLOW_CODE_MEMORY_MB` | `128` | Memória máxima de uma execução de nó Code, em MB. |
-| `WORKFLOW_HTTP_ALLOWLIST` | vazio | Nomes de anfitrião, separados por vírgulas, que o nó HTTP Request pode chamar. Vazio, todos os anfitriões são recusados. |
-| `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 MB) | Tamanho máximo de um ficheiro enviado a uma execução de workflow ou de um corpo de webhook. |
-| `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Número máximo de itens que um nó de ciclo pode recolher. |
-| `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Permitir que o nó Read/Write File aceda a ficheiros do servidor. |
-| `WORKFLOW_FILE_ACCESS_ROOT` | vazio | A única pasta a que o nó Read/Write File está limitado. Enquanto estiver vazia, o nó falha. |
-| `WORKFLOW_EMAIL_POLL_MIN_SECONDS` | `30` | Intervalo mínimo de consulta de um acionador de email, em segundos. |
-| `WORKFLOW_EMAIL_MAX_PER_POLL` | `50` | Número máximo de mensagens não lidas tratadas por consulta. |
-
-## Importação do registo de estabelecimentos
-
-| Variável | Omissão | Finalidade |
-| --- | --- | --- |
-| `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | `67108864` (64 MB) | Tamanho máximo de um ficheiro de registo de estabelecimentos a carregar. Um envio maior é interrompido a meio da transferência. 64 MB equivalem a cerca de 20 vezes um registo nacional de 13 000 linhas. Valores acima de cerca de 512 MB não funcionam. |
-
-## Plugins
-
-| Variável | Omissão | Finalidade |
-| --- | --- | --- |
-| `PLUGIN_UI_ENABLED` | `true` | Mostrar os ecrãs dos plugins. Com `false`, não aparece nenhum menu nem ecrã de plugin. |
-| `PLUGIN_EGRESS_ENABLED` | `true` | Permitir que os plugins acedam à rede. Com `false`, todas as chamadas de rede de um plugin são recusadas, sejam quais forem as suas permissões. |
-| `PLUGIN_DATA_MAX_DOC_BYTES` | `8388608` (8 MB) | Tamanho máximo de um documento que um plugin pode guardar ou enviar numa chamada. |
-| `PLUGIN_CRASH_LOG_DIR` | `.openldr/crash` | Pasta dos registos de falhas dos plugins. O arranque seguinte copia-os para o registo de auditoria. |
-
-## Proteção contra ciclos de falhas
-
-Se o servidor falhar `CRASH_LOOP_THRESHOLD` vezes em `CRASH_LOOP_WINDOW_SEC` segundos, o
-arranque seguinte escreve uma entrada de auditoria `system.crash_loop` e espera antes de
-terminar. A espera aumenta a cada reinício, o que abranda um ciclo de reinícios em vez de
-o deixar girar.
-
-| Variável | Omissão | Finalidade |
-| --- | --- | --- |
-| `CRASH_LOOP_THRESHOLD` | `5` | Falhas dentro da janela antes de a proteção atuar. |
-| `CRASH_LOOP_WINDOW_SEC` | `60` | Duração da janela, em segundos. |
-| `CRASH_LOOP_BACKOFF_MS` | `2000` | Primeira espera antes de terminar, em milissegundos. |
-| `CRASH_LOOP_BACKOFF_CAP_MS` | `60000` | Espera mais longa, em milissegundos. |
-
-## Marketplace
-
-As duas variáveis de registo apenas criam o primeiro registo, num primeiro arranque sem
-nenhum. Depois disso, faça a gestão na vista **Registos** de **Definições > Marketplace**.
-Consulte [Marketplace](/docs/marketplace).
-
-| Variável | Omissão | Finalidade |
-| --- | --- | --- |
-| `MARKETPLACE_REGISTRY_URL` | registo incluído | Registo remoto criado no primeiro arranque quando não existe nenhum registo. |
-| `MARKETPLACE_REGISTRY_DIR` | não definido | Pasta de registo local criada no primeiro arranque quando `MARKETPLACE_REGISTRY_URL` não está definido. A publicação também prepara aqui os pacotes. |
-| `MARKETPLACE_LOCAL_REGISTRY_ROOT` | vazio | Quando definido, um registo local adicionado nas Definições tem de ser uma pasta dentro desta. |
-| `MARKETPLACE_PUBLISH_TOKEN` | não definido | Token do GitHub com permissão de escrita no repositório de publicação. Mantenha-o secreto. |
-| `MARKETPLACE_PUBLISH_REPO` | não definido | Repositório que recebe os pull requests de publicação, no formato `owner/repo`. |
-| `MARKETPLACE_PUBLISH_BRANCH` | `main` | Ramo de destino dos pull requests de publicação. |
-
-A publicação só fica ativa quando `MARKETPLACE_PUBLISH_TOKEN`, `MARKETPLACE_PUBLISH_REPO` e
-`MARKETPLACE_REGISTRY_DIR` estão todos definidos.
-
-## Sincronização distribuída
-
-Consulte [Sincronização distribuída](/docs/sync) para inscrever um laboratório.
-
-| Variável | Omissão | Finalidade |
-| --- | --- | --- |
-| `OPENLDR_SITE_ID` | não definido | ID de site gravado nos registos que este servidor escreve, usado quando o ID de site do separador **Configurações** da sincronização está vazio. O valor guardado prevalece. |
-| `SYNC_ALLOW_INSECURE_TRANSPORT` | `false` | Permitir a sincronização com um servidor central por `http://` simples. A sincronização envia um segredo de cliente e dados relacionados com doentes. Use-o apenas numa rede local de confiança, durante a configuração. `localhost` funciona sem ele. |
+**Um comando da CLI falha.** Siga [Começar aqui](/docs/start-here) para configurar a CLI instalada ou de desenvolvimento.
 
 ## Guias relacionados
 
-- [Definições](/docs/settings)
-- [Conectores](/docs/connectors)
+[Definições](/docs/settings), [Conectores](/docs/connectors), [Sincronização distribuída](/docs/sync), [Fornecedores de autenticação](/docs/auth-providers) e [Atualizações planeadas](/docs/upgrading).

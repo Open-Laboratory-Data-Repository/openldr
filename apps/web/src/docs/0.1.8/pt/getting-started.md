@@ -40,7 +40,7 @@ O OpenLDR pode receber e processar dados antes de configurar as unidades de saú
 
 Abra **Documentação** no Studio e siga **Configurar o seu sistema**, começando por Terminologia. Os guias da aplicação explicam cada tarefa.
 
-O guia Facilities no Studio explica a introdução manual, as importações, o histórico e as ligações entre códigos. Pode usar os seus próprios dados. Os ficheiros de prática são opcionais.
+A documentação do Studio inclui tarefas ilustradas para Terminology, Facilities, Test catalog, Patients, Forms e Workflows. Siga os guias dos painéis e relatórios no trabalho diário, ou os guias das definições para gerir a instalação. Cada tarefa explica o objetivo e mostra os controlos a utilizar. Use os seus próprios dados; os ficheiros de prática são opcionais.
 
 ## 3. Próximos passos
 

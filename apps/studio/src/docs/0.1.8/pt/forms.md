@@ -1,269 +1,577 @@
 # Formulários
 
-Os **formulários** são os ecrãs para introduzir dados à mão: um pedido de exames na receção, um registo de paciente, uma unidade. Cada formulário constrói-se no **Construtor de Formulários** a partir de campos, e cada campo pode corresponder a um elemento FHIR, para que o que se escreve se torne um registo a sério. Um formulário passa de **Rascunho** a **Publicado** e depois a **Arquivado**, para poder ser desenhado com segurança antes de alguém o usar.
+Forms permite ao pessoal introduzir dados em formulários publicados. Os autores usam o construtor para escolher campos, pré-visualizar e publicar versões.
 
-Uma instalação nova traz quatro formulários publicados: **Lab order**, **Patient**, **Users** e **Facility**. Este guia faz um pedido de exames com o formulário incluído, e depois constrói e publica um formulário seu. Leva cerca de 15 minutos. Selecione uma imagem ou um clip para o ampliar.
+Use os seus pacientes, testes ativos do catálogo e um formulário aprovado. As imagens mostram registos fictícios e Example request form numa instalação de teste isolada. Não precisa de ficheiros de exemplo da documentação.
 
-O Construtor de Formulários aparece no idioma do studio. Os nomes dos campos do Lab order incluído, como **Tests** ou **Priority**, ficam em inglês. Este guia cita-os tal como aparecem.
+Use forms permite ler definições. Submit forms permite recolher dados. Edit forms permite alterar o desenho e Publish forms publicá-lo. Para escrever dados, o formulário também precisa de uma configuração de envio válida e de um workflow ativo para os dados recebidos.
 
-![Formulários: os quatro formulários incluídos, com tipo FHIR, número de campos, versão e estado.](forms-tour.png)
+Os formulários Draft e Archived continuam a abrir com View/Run. Submit está desativado até ao estado Published. Preview no construtor permite experimentar o desenho sem guardar uma resposta.
 
-## Quem pode fazer o quê
+Os números de versão nas imagens são exemplos. Cada publicação guarda um instantâneo e recebe o número seguinte. Os seus números dependem do histórico de publicação. Leia [Começar aqui](/docs/start-here) para a instalação e a CLI.
 
-| Capacidade | O que permite |
-| --- | --- |
-| **Use forms** | Abrir os formulários e ler a sua definição |
-| **Submit forms** | Preencher um formulário com **View/Run** e enviá-lo. Enviar escreve dados clínicos |
-| **Edit forms** | Criar e alterar formulários no construtor, e exportá-los |
-| **Publish forms** | Publicar uma versão nova |
+## Escolher o paciente, teste e amostra de um pedido
 
-## Antes de começar
+Use esta tarefa para registar um pedido pretendido no formulário publicado Lab order. Use o paciente e os testes adequados ao pedido.
 
-O Exemplo 1 precisa de três coisas na instalação:
+### 1. Abrir Forms
 
-1. **Os dados de exemplo da documentação**, pelos seus pacientes. Veja [Painéis, Carregar os dados de exemplo](/docs/dashboard#carregar-os-dados-de-exemplo).
-2. **Exames ativados neste laboratório.** O campo **Tests** do Lab order só lista esses. Siga primeiro [Catálogo de exames, Exemplos 1 e 2](/docs/test-catalog#exemplo-2-ativar-exames-neste-laboratorio).
-3. **O fluxo Ingest ativo.** Está ativo numa instalação nova. Um formulário enviado passa por ele. Veja [Fluxos de trabalho](/docs/workflows).
+Selecione **Forms** no menu principal.
 
-> **Use uma instalação de teste.** Enviar um formulário escreve um pedido real, que não pode ser apagado. Depois do Exemplo 1, os dados de exemplo têm 61 pedidos, e não 60.
+![Forms está no menu principal à esquerda.](forms-guide-open-page.png)
 
-## Exemplo 1: fazer um pedido de exames
+### 2. Abrir Lab order
 
-![Abrir o Lab order, escolher o paciente, o exame, a amostra e a prioridade.](forms-lab-order.mp4)
+Abra os pontos da linha **Lab order** e selecione **View/Run**.
 
-1. Abra **Formulários**. Na linha **Lab order**, abra **⋯** e selecione **View/Run**.
-2. Em **Patient**, escreva `Chausiku` e escolha **Demo Chausiku**, nascido em 1994-05-14. Os nomes aparecem com o apelido primeiro.
-3. Em **Tests**, escreva `Full` e escolha **Full blood count**. Aparece uma linha em **Results**: **FBC Full blood count**, **Tipo de amostra não definido**.
-4. Selecione essa linha. No painel, defina o tipo de amostra como **Blood** e feche o painel. A linha mostra **Blood**.
-5. Defina **Priority** como **Routine**.
+![Use os pontos da linha Lab order para abrir a página de recolha.](forms-guide-order-row-actions.png)
 
-![O pedido pronto a enviar.](forms-lab-order-filled.png)
+![View/Run abre o formulário publicado para introduzir dados.](forms-guide-order-run.png)
 
-6. Abra o menu **⋯** da página e selecione **Submit**.
+### 3. Pesquisar o paciente
 
-![Enviar a partir do menu da página. Aparece Response captured.](forms-lab-order-submit.mp4)
+Em **Patient**, pesquise pelo nome ou identificador do paciente.
 
-**Resultado esperado:** uma faixa verde **Response captured** no topo. O pedido passa pelo fluxo Ingest até ao armazém, com o código de exame `58410-2` e a prioridade `routine`. Em [Pacientes](/docs/patients), Chausiku Demo tem agora cinco pedidos.
+![Pesquise o paciente real pelo nome ou identificador.](forms-guide-order-patient-search.png)
 
-O formulário continua preenchido depois de enviar. Não envie outra vez, a não ser que queira um segundo pedido.
+### 4. Selecionar o paciente
 
-**Referring Facility** pesquisa no seu registo de unidades, por nome ou por código. Uma unidade aparece assim que está em [Unidades](/docs/facilities). **Requesting Clinician** recebe um nome escrito. O pedido guarda os dois, que chegam assim com ele ao armazém.
+Confira o registo correspondente e selecione o paciente correto.
 
-## Exemplo 2: construir um formulário a partir de um pacote inicial
+![Selecione o paciente correto nos resultados.](forms-guide-order-patient-choice.png)
 
-Construa um formulário mais curto para pedidos de carga viral a partir do pacote Lab order, pré-visualize-o e publique-o.
+### 5. Pesquisar o teste
 
-![Dar nome ao formulário, escolher R4 e ServiceRequest, manter cinco campos do pacote e adicioná-los.](forms-build.mp4)
+Em **Tests**, pesquise o teste pedido no catálogo. A lista usa testes ativos neste laboratório.
 
-1. Em **Formulários**, abra o menu **⋯** da página e selecione **Novo**. Abre-se o **Construtor de Formulários**.
-2. Em **Nome do formulário**, escreva `Quick viral load request`.
-3. Defina **Versão FHIR** como **R4 (a mais comum)**.
-4. Defina **Tipo de recurso** como **ServiceRequest**. Escreva para filtrar a lista longa. O **Pacote Lab order** abre sozinho, com **9 de 9 selecionados**. Cada entrada diz porque está lá.
-5. Desmarque **Requesting Clinician**, **Clinical Notes**, **Referring Facility** e **Order rejection**.
-6. Abra o menu **⋯** do pacote e selecione **Adicionar 5 campos**.
+![Tests lista os testes do catálogo ativos neste laboratório.](forms-guide-order-test-search.png)
 
-**Resultado esperado:** o construtor lista **5 campos (5 ativos)**: Patient, Tests, Results, Priority, e Reference Number em `identifier`. A **Biblioteca** à direita lista as entradas do pacote que deixou de fora, e todos os outros elementos de ServiceRequest, prontos a adicionar com um clique. Uma nota diz que o envio está configurado.
+### 6. Escolher o teste
 
-![O construtor com cinco campos, e a Biblioteca ao lado.](forms-builder.png)
+Selecione o teste pedido. Repita apenas quando o pedido precisar de outro teste.
 
-### Pré-visualizar
+![Escolha o teste do catálogo pedido para este paciente.](forms-guide-order-test-choice.png)
 
-![Abrir Preview a partir do menu do construtor e preenchê-lo com valores de exemplo.](forms-preview.mp4)
+### 7. Abrir os detalhes
 
-1. Abra **Ações do construtor**, o **⋯** no canto superior direito, e selecione **Pré-visualizar**. O formulário abre num painel, exatamente como um utilizador o vê.
-2. Abra o menu **⋯** do painel e selecione **Preencher exemplo**. Cada campo recebe um valor de exemplo. **Repor**, no mesmo menu, limpa-os.
+Em **Results**, selecione a linha do teste escolhido para abrir os detalhes.
 
-![A pré-visualização com valores de exemplo.](forms-preview-filled.png)
+![Abra a linha do teste em Results para completar a amostra e os detalhes do resultado.](forms-guide-order-test-details.png)
 
-A pré-visualização nunca envia nada.
+### 8. Escolher a amostra
 
-### Publicar
+Selecione o tipo de amostra registado para este teste na lista configurada.
 
-![Publicar a partir do menu do construtor.](forms-publish.mp4)
+![Selecione o tipo de amostra usado neste teste.](forms-guide-order-specimen.png)
 
-1. Feche a pré-visualização. Abra **Ações do construtor** e selecione **Publicar**. Publish guarda primeiro o formulário, por isso não há um passo de guardar à parte.
+**Resultado esperado:** os detalhes do teste contêm a amostra escolhida. O pedido ainda não foi enviado.
 
-**Resultado esperado:** uma mensagem confirma, e o ponto de estado ao lado do nome fica verde com **v1**. Em **Formulários**, **Quick viral load request** aparece como **Publicado**, com **5** campos.
+## Rever e enviar o pedido de laboratório
 
-![O formulário novo na lista, Published.](forms-list-published.png)
+Continue após escolher o paciente, testes e detalhes da amostra. Preencha os outros campos obrigatórios antes de enviar.
 
-Para o retirar, abra o menu **⋯** da linha e selecione **Eliminar**.
+### 1. Fechar os detalhes do teste
 
-## O ciclo de vida
+Selecione **Close** no canto superior direito do painel de detalhes.
 
-- **Guardar rascunho**, em **Ações do construtor**, guarda sem publicar nada.
-- **Publicar** guarda o formulário que está no ecrã e depois publica-o.
-- **Comparar** mostra as alterações entre duas versões.
-- **Versões** lista cada versão publicada, a mais recente primeiro, com a data. Fica desativado enquanto o formulário nunca tiver sido guardado.
-- **Repor**, nas ações de uma versão, repõe-na. Substitui o formulário em edição, e um formulário publicado volta logo a rascunho. Sai de View/Run até ser publicado outra vez. Undo no construtor só muda o ecrã: guarde para o escrever.
-- Desmarcar um campo na lista desativa-o: não aparece, não é validado e não recolhe resposta. Fica no formulário para ser reativado.
-- O menu de cada linha da lista duplica, compara, publica, arquiva, exporta (também como pacote do marketplace) ou elimina o formulário.
-- **Rótulo da versão** é uma legenda livre. O número da versão é dado ao publicar e aparece ao lado do estado.
+![Close regressa ao pedido com a amostra escolhida.](forms-guide-order-details-close.png)
 
-## Condições de envio
-
-A publicação permite a partilha e os editores integrados. Não garante envios por View/Run. A captura suporta ServiceRequest e campos de resposta ativos com Extração em Observation e pelo menos um código. Um formulário de texto personalizado sem extração não pode ser enviado. Os modelos Patient e Facility continuam disponíveis nos seus editores próprios.
+### 2. Escolher a prioridade
 
-O editor e a página de captura indicam esta capacidade antes da introdução de dados. Para uma observação, abra o campo, selecione um código de terminologia em Códigos e marque Extração em Observation em Mapeamento. Ative o campo, guarde e publique. Preencha pelo menos um campo de extração: um campo vazio ou oculto não produz uma Observation.
+Escolha a **Priority** registada. A imagem usa **Routine**.
 
-Esta verificação cobre a configuração. As respostas obrigatórias, as referências e o fluxo de ingestão ativo ainda precisam de passar na validação.
+![Escolha a prioridade deste pedido. O exemplo usa Routine.](forms-guide-order-priority.png)
 
-## Estrutura da lista de campos
+### 3. Rever o pedido e abrir as ações
 
-- **Qual entrada de uma lista um campo preenche.** Um campo ligado a uma entrada de uma lista FHIR mostra uma segunda linha sob o seu caminho, por exemplo `system = urn:x`. Dois campos em `Location.identifier.value` diferem apenas por esta linha.
-- **Posições de uma mesma lista.** Os campos que partilham uma lista e têm um discriminador e um campo de valor ficam sob um cabeçalho. O cabeçalho mostra o nome da lista, o seu caminho e quantas posições tem. A lista deduz o cabeçalho dos campos, por isso não pode ser arrastado nem eliminado.
-- **Os formulários fornecidos.** O formulário Patient agrupa o nome próprio e o apelido sob `Patient.name`, e o telefone sob `Patient.telecom`. O formulário Users agrupa o nome próprio e o apelido sob `Practitioner.name`, e o e-mail sob `Practitioner.telecom`. O formulário Facility coloca o seu código sob `Location.identifier`, e o formulário Lab order coloca o seu número de referência sob `ServiceRequest.identifier`. Uma instalação cujo operador editou um destes formulários mantém os seus próprios campos.
-- **Grupos dentro de grupos.** Defina o **Grupo** de um grupo para o colocar dentro de outro grupo, a qualquer profundidade. O seletor nunca oferece o próprio grupo nem o que já está dentro dele.
-- **O ícone de repetição.** Um campo que aceita mais de uma resposta, ou um grupo que contém várias entradas, mostra um ícone de repetição. Um grupo contém uma só entrada quando está ligado a um elemento único, como `Location.address`, ou quando **Máx. de itens** é 1. A exportação Questionnaire marca esse grupo como não repetível.
-- A introdução de dados ainda mostra cada grupo uma vez. Adicionar entradas a um grupo durante a introdução de dados chega numa versão posterior.
+Confira o paciente, testes e amostras e abra os pontos no canto superior direito.
 
-## Editar um campo
+![Reveja o pedido e abra o menu de pontos.](forms-guide-order-submit-actions.png)
 
-- **Qual entrada de uma lista.** Em Mapeamento, marque **Elemento de lista (discriminador)**. Cada condição é um elemento, um operador e um valor, por exemplo `system` `equals` `urn:x`. Os operadores são `equals`, `not equals` e `starts with`. Com duas ou mais condições, escolha **Todas** quando todas têm de se cumprir, ou **Alguma** quando basta uma. **Campo de valor** indica o elemento que guarda a resposta, normalmente `value`.
-- O discriminador é usado pelas verificações do formulário e pela exportação Questionnaire. A introdução de dados ainda não o usa, com uma exceção: quando um pedido Lab order é submetido, o seu número de referência leva o `system` que o seu discriminador indica.
-- **Outra posição.** Sob a última posição de uma lista, **+ Adicionar posição com nome** acrescenta uma cópia com o mesmo caminho, o mesmo campo de valor e o mesmo tipo, e valores de discriminador em branco. A propriedade API, os códigos e as traduções ficam em branco.
-- **Partes de um grupo.** O editor de um grupo lista as suas partes depois de Mapeamento. Clique numa parte para a editar. As alterações do grupo ainda não guardadas são guardadas primeiro. **+ Adicionar parte** acrescenta um campo dentro do grupo, sem caminho FHIR.
-- **Campos reference.** Um campo referência tem um bloco **Configuração da referência** depois de Geral. **Destino** é `Patient` ou um sistema de códigos ativo. **Pesquisável** é guardado e exportado, mas a introdução de dados ainda não o usa. **Depende de** é usado num só caso: um campo que depende de um campo Tests ligado à lista de exames deste laboratório só oferece as amostras aceites pelos exames escolhidos. O pedido de exames entregue já não o usa: cada exame tem a sua própria amostra (ver Catálogo de exames). Qualquer outra definição **Depende de** é guardada mas não usada.
-- **Campos bloqueados.** Um campo bloqueado não pode ser desativado nem eliminado a partir da lista. Pode ainda mudar o rótulo, a ordem e a tradução.
-- **Formulários de inquérito.** Quando o Tipo de recurso do formulário é `Questionnaire`, o editor esconde Caminho FHIR, Propriedade da API e o discriminador. Extração em Observation e as outras definições mantêm-se.
+### 4. Enviar o pedido pretendido
 
-## Opções e ValueSets
+Selecione **Submit** uma vez. Aguarde o resultado. Não envie novamente apenas para confirmar o sucesso.
 
-- Um campo lista ou lista múltipla pode tirar as opções de um ValueSet. No bloco Opções, pesquise um ValueSet e escolha-o. Os códigos dele são copiados para as opções, e o campo guarda uma ligação ao ValueSet com uma força. Uma força required impede que a introdução de dados aceite outros valores.
-- **Desligar**, no menu ⋯ do bloco Opções, retira a ligação e mantém as opções. **Guardar como novo conjunto de valores** transforma opções escritas num ValueSet reutilizável; só aparece se puder gerir a terminologia.
-- Por baixo do Caminho FHIR, **ligado:** indica o ValueSet a que o próprio FHIR liga esse elemento, e com que força. **Carregar da terminologia**, no menu ⋯ do bloco Opções, preenche as opções a partir desse ValueSet.
-- Escolher um caminho que o FHIR liga como required ou extensible, num campo sem ValueSet, faz a ligação por si e torna-o uma lista. As ligações preferred e example ficam à sua escolha, tal como um campo que já indica uma fonte de referência.
-- Um campo de referência escolhe o ValueSet no bloco Reference Configuration. Pesquisa o ValueSet em direto, por isso nada é copiado.
-- Todas as instalações têm os 672 ValueSets padrão do FHIR. Os formulários de inquérito não têm elementos ligados, por isso não mostram a linha **ligado:**.
+![Submit escreve uma resposta do formulário. Use-o uma vez para este pedido pretendido.](forms-guide-order-submit.png)
 
-## Códigos sugeridos
+**Resultado esperado:** **Response captured.** confirma a resposta guardada. As respostas ficam no ecrã. Outro Submit é outra escrita. Use-o apenas para um envio pretendido.
 
-- Num campo com Caminho FHIR, o bloco Códigos mostra **Códigos sugeridos** por cima da pesquisa de termos.
-- Um código **Ligação** vem do ValueSet do campo, ou do ValueSet a que o FHIR liga o elemento. **Os seus formulários · N** significa que N outros formulários põem esse código no mesmo caminho.
-- Clique numa linha para pôr o código no campo.
-- **não está na sua terminologia** marca um código que o CE não tem. Adicioná-lo também o adiciona à sua terminologia, e o painel indica-o, com **Anular**. O Undo retira-o da sua terminologia; o código fica no campo.
-- Só um utilizador que possa gerir a terminologia pode adicionar esse código. Os outros autores veem-no a cinzento.
-- Um código de um sistema de codificação que o CE não tem é recusado. Adicione primeiro o sistema na página Terminology.
-- Uma lista vazia significa que a sua terminologia está incompleta, não que nenhum código exista. Pesquise abaixo, ou adicione códigos na página Terminology.
-- Quando um ValueSet tem muitos códigos, o painel mostra 50 que nenhum formulário usa, e indica quantos mais existem.
+![Response captured confirma a resposta enviada. Envie novamente apenas para outro pedido pretendido.](forms-guide-order-result.png)
 
-## Pacotes iniciais
+## Começar o desenho de um formulário de pedido
 
-- Um pacote inicial é uma lista de campos pronta para um Tipo de recurso, tirada dos formulários que o OpenLDR traz: Location (Facility), Practitioner (Users), Patient e ServiceRequest (Lab order).
-- Quando escolhe um Tipo de recurso num formulário vazio, o pacote abre sozinho num painel lateral. Num formulário que já tem campos, escolha **Começar a partir de um pacote** no menu ⋯.
-- Cada entrada diz porque está lá. Desmarque o que não recolhe e depois escolha **Adicionar N campos** no menu ⋯ do painel. O acréscimo desfaz-se de uma só vez.
-- Uma entrada bloqueada fica marcada, porque a página que o formulário alimenta não consegue guardar um registo sem ela.
-- As entradas que já estão no formulário não aparecem no painel.
-- As entradas codificadas tiram as opções da lista do próprio FHIR. O pacote Lab order deixa de fora **Ward / Department**, porque os códigos dele são locais; acrescente-o a partir de **Biblioteca** e dê-lhe opções.
-- Os formulários de inquérito e os formulários sem Tipo de recurso não têm pacote.
+Use esta tarefa quando um formulário existente não recolhe a informação necessária ao workflow. O construtor escolhe uma versão do formato de dados de saúde FHIR e um tipo de recurso.
 
-## O painel Biblioteca
+### 1. Escolher New
 
-- O painel à direita lista os elementos FHIR do Tipo de recurso do formulário que nenhum campo usa ainda. Clique num elemento para o acrescentar como campo; o editor dele abre.
-- Acima dos elementos, **Deixados fora do pacote** lista as entradas do pacote que o formulário não tem, pela ordem do pacote. Clique numa para a acrescentar.
-- Um campo acrescentado assim recebe o nome e o tipo do elemento. Um elemento codificado passa a ser uma lista, com opções quando o elemento lista os seus códigos. As datas chegam como campos de texto; mude o tipo no editor.
-- Um elemento que pertence a um grupo já presente no formulário entra nesse grupo.
-- A pesquisa filtra por nome e por caminho. A lista desce dois níveis, por exemplo `Location.address.city`.
-- Um formulário de inquérito não tem **Biblioteca**.
-- Quando o editor tem menos de 980 pixels de largura, **Formulário** e **Biblioteca** passam a ser separadores. Acrescentar a partir de **Biblioteca** volta a **Formulário**. Recolher a barra lateral pode mostrar de novo os dois painéis.
+Em Forms, abra os pontos no canto superior direito e selecione **New**.
 
-## Trabalhar com vários campos
+![O menu de pontos de Forms contém New.](forms-guide-page-actions.png)
 
-- Clique num campo para abrir o editor dele. Shift-clique seleciona todos os campos entre o último clicado e este. Ctrl-clique (Cmd-clique num Mac) acrescenta ou retira um campo. Nenhum dos dois abre o editor.
-- Ctrl+A (Cmd+A) seleciona todos os campos que a lista mostra. Escape limpa a seleção.
-- Com dois ou mais selecionados, o cabeçalho da lista mostra quantos são, e o menu ⋯ dele move-os para uma secção, ativa-os ou desativa-os, ou elimina-os. A eliminação pede confirmação. Cada ação desfaz-se de uma só vez.
-- **Ativar ou desativar** desativa todos quando pelo menos metade está ativa, e ativa todos no caso contrário. Ignora os campos bloqueados, tal como **Eliminar**.
-- Quando nenhuma caixa ou menu tem o foco: j e k (ou as setas) descem e sobem na lista, Enter abre o campo, Espaço ativa-o ou desativa-o, d elimina-o e Ctrl+D duplica-o. Com dois ou mais selecionados, Espaço e d atuam sobre todos. Ctrl+F leva o cursor para a pesquisa de campos.
-- Um telemóvel não tem teclas Shift nem Ctrl, por isso num telemóvel seleciona um campo de cada vez.
+![New abre Form Builder.](forms-guide-new-menu.png)
 
-## Secções
+### 2. Dar nome ao formulário
 
-- Arraste um campo pela pega. Enquanto arrasta, um painel no topo da lista mostra **(sem secção)** e cada secção, com o número de campos. Largue o campo numa delas para o mover para lá. O painel só aparece quando o formulário tem secções.
-- Na lista Secções, o menu ⋯ de cada secção tem **Editar visibilidade**, **Subir**, **Descer** e **Eliminar**.
-- **Editar visibilidade** abre o mesmo editor de regras de um campo. Só os campos ativos podem ser usados numa condição. A introdução de dados esconde a secção enquanto a regra não se cumpre.
-- Um campo ou secção com uma regra de visibilidade mostra um ícone de ramificação.
+Introduza um nome que descreva a tarefa. O exemplo usa `Example request form`.
 
-## Exemplo: enviar um pedido de laboratório
+![Dê nome ao formulário segundo a tarefa que vai servir.](forms-guide-builder-name.png)
 
-Use uma instalação de teste com um paciente existente, terminologia LOINC carregada e o fluxo de ingestão ativo. Precisa de permissão para editar e publicar formulários e enviar respostas.
+### 3. Escolher a versão FHIR
 
-1. Em Forms, abra o menu ⋯ da página e escolha New. Dê ao formulário o nome Exemplo de pedido.
-2. Selecione R4, o tipo ServiceRequest e a página de destino Forms. Abra o editor.
-3. Adicione um campo referência ativo e obrigatório, com o rótulo Patient. Em **Configuração da referência**, defina Destino como Patient. Em Mapeamento, defina Caminho FHIR como ServiceRequest.subject.
-4. Adicione um campo referência ativo e obrigatório, com o rótulo Tests. Em **Configuração da referência**, defina Destino como o sistema LOINC instalado, http://loinc.org, e Caminho FHIR como ServiceRequest.code. Selecione códigos na terminologia, sem inventar códigos.
-5. Guarde cada campo no respetivo menu ⋯. Confirme a mensagem de configuração. Extração em Observation não é necessário neste formulário ServiceRequest.
-6. No menu ⋯ do editor, escolha Publish. Resolva eventuais erros. A publicação também guarda o esquema atual.
-7. Volte a Forms e escolha View/Run no menu ⋯ do formulário. Selecione um paciente existente e um teste carregado nas listas.
-8. Escolha Submit em Form actions. Aguarde Response captured. A resposta e o ServiceRequest derivado passam pelo fluxo de ingestão.
-9. Verifique a execução do fluxo e o pedido guardado antes de repetir o envio. Se houver armazenamento parcial, inspecione primeiro a execução: uma repetição pode criar duplicados.
+Abra **FHIR Version** e escolha a versão exigida pelos registos. O exemplo seleciona **R4 (most common)**.
 
-Se uma lista estiver vazia, verifique a fonte e a terminologia carregada. Ative um fluxo desativado antes de repetir. As mensagens de campos obrigatórios usam o rótulo visível.
+![Escolha a versão FHIR dos recursos de destino. Este exemplo usa R4.](forms-guide-builder-fhir-version.png)
 
+### 4. Escolher o tipo de recurso
 
-## Escolher exames no pedido de exames
+Abra **Resource Type**, encontre **ServiceRequest** e selecione-o para este exemplo de pedido.
 
-Escreva pelo menos dois caracteres do código ou do nome de um exame no campo Tests para o procurar. Se não conhece nenhum dos dois, abra o menu ⋯ ao lado do rótulo Tests e escolha **Ver todos os exames**. O painel lista todo o catálogo página a página, com uma pesquisa e um filtro por categoria.
+![Selecione ServiceRequest para construir um formulário de pedido.](forms-guide-builder-resource.png)
 
-Escolha um exame para o juntar aos que já estão escolhidos. Um exame que este laboratório não faz aparece marcado **Não oferecido aqui** e não pode ser escolhido, porque o pedido seria recusado no envio. Quem pode gerir o catálogo ativa-o na página Catálogo de exames.
+**Resultado esperado:** o pacote inicial disponível abre para escolher os campos.
 
-Uma instalação sem catálogo carregado não tem nada para ver, e o painel diz isso. Os exames vêm da página Catálogo de exames, onde um laboratório importa a sua lista. O OpenLDR não traz exames.
+## Escolher campos do pacote inicial e guardar um rascunho
 
-## Resultados no pedido de exames
+Mantenha no pacote inicial os campos necessários. Este exemplo mantém Patient, Tests, Results, Priority e Reference Number. O seu workflow pode precisar de mais campos.
 
-Cada exame escolhido num pedido recebe uma linha por baixo do campo Tests. A linha mostra o código e o nome do exame, e se a amostra está definida. Abrir uma linha mostra a escolha da amostra, o intervalo de referência que corresponde a este doente, e um campo por parâmetro de resultado.
+### 1. Desmarcar Requesting Clinician neste exemplo
 
-Um valor fora do intervalo é assinalado ao lado do campo. Nunca é recusado: quem decide é a bancada.
+Desmarque **Requesting Clinician** quando este formulário de exemplo não o recolhe.
 
-Cada resultado numérico tem um seletor de intervalo por baixo do campo, que lista cada intervalo pelo nome, ou, quando não tem nome, por quem é. Começa no intervalo que corresponde ao doente. Escolher um intervalo que não corresponde mostra um aviso e continua permitido. O sinal segue o intervalo escolhido. Se os intervalos do exame mudaram depois de o painel ter sido aberto, o envio do pedido é recusado. Reabra o exame e escolha um intervalo novamente.
+![Desmarque Requesting Clinician se o formulário de exemplo não precisar dele.](forms-guide-pack-clinician.png)
 
-Um exame pode ser recusado no menu da sua linha, com um motivo de uma lista. Um exame recusado fica registado com o motivo, mas o motivo não chega aos relatórios. No seu pedido, o exame aparece como uma linha de resultado sem valor.
+### 2. Desmarcar Clinical Notes neste exemplo
 
-O pedido inteiro pode ser recusado no menu da página, com **Recusar o pedido**. Escolha um motivo da lista. Se os motivos não puderem ser lidos, o painel diz isso e não é possível recusar. Nada tenta de novo sozinho, por isso feche o painel e abra-o outra vez. Depois de recusado, uma linha por baixo do cabeçalho mostra o motivo, e cada linha de exame mostra "Pedido recusado" e fica fechada à escrita. Os valores já escritos ficam no ecrã mas não são gravados. **Anular a recusa**, no mesmo menu, volta a abrir as linhas.
+Desmarque **Clinical Notes**. Mantenha-o no seu formulário se o workflow precisar dele.
 
-Um pedido recusado fica marcado como recusado, com o código e o texto do motivo. O motivo chega ao registo do laboratório (o código e o motivo de recusa no pedido), por isso um relatório pode contá-lo. O código de recusa do pedido fica no mesmo lugar que os códigos de recusa que chegam do sistema do laboratório, por isso um relatório que agrupa por código vê os dois tipos. Nenhum resultado é escrito para um pedido recusado.
+![Desmarque Clinical Notes se o formulário de exemplo não precisar dele.](forms-guide-pack-notes.png)
 
-Cada resultado escrito fica ligado ao seu pedido, para que os relatórios possam juntar um resultado ao pedido de onde veio.
+### 3. Desmarcar Referring Facility neste exemplo
 
-Um pedido enviado escreve um registo de resultado por valor escrito. Os resultados são escritos junto com o pedido, de uma só vez. Ainda não há forma de reabrir um pedido enviado para os adicionar mais tarde.
+Desmarque **Referring Facility** para o exemplo de cinco campos.
 
-## Validação dos caminhos FHIR
+![Desmarque Referring Facility se o formulário de exemplo não precisar dele.](forms-guide-pack-facility.png)
 
-Quando um formulário corresponde a um tipo de recurso FHIR, o construtor verifica o caminho FHIR de cada campo na lista de elementos. Um distintivo vermelho é um erro que bloqueia a publicação. Um amarelo é um aviso que não bloqueia, mas deve ser revisto. O construtor só verifica nove tipos de recurso comuns. Os outros tipos não têm distintivos, porque os caminhos não são verificados.
+### 4. Desmarcar Order rejection neste exemplo
 
-- **unknown-fhir-path (erro).** O caminho não é um elemento deste tipo de recurso. Normalmente um erro de escrita: verifique a ortografia e a profundidade.
-- **facility-admin-order (erro).** Os níveis administrativos da unidade estão ligados às partes de morada FHIR pela ordem errada. FHIR Address tem quatro níveis, o registo seis. Zone é o nível sem lugar: limpe o caminho FHIR do campo Zone e deixe-o sem correspondência. Um formulário Facility guardado por uma migração antiga pode ainda ligar Zone a `address.district`. Nenhuma migração o corrige: limpe esse caminho à mão.
-- **fhir-path-cardinality (aviso).** O caminho passa por um elemento que se repete sem discriminador. Junte um discriminador FHIR ao campo para escolher a ocorrência.
-- **fhir-path-type-mismatch (aviso).** Um campo simples está ligado a um elemento FHIR estruturado que um só valor não preenche. Mude o tipo de campo, ou ligue um caminho mais específico.
+Desmarque **Order rejection** neste exemplo.
 
-## Na linha de comandos
+![Desmarque Order rejection se o formulário de exemplo não precisar dele.](forms-guide-pack-rejection.png)
 
-- `openldr forms lint` dá as mesmas verificações sem o studio. Passe um id de formulário para verificar só um, e `--json` para saída estruturada. O comando sai com erro quando existe algum erro.
-- `openldr forms versions <id>` lista as versões publicadas de um formulário, a mais recente primeiro.
-- `openldr forms restore <id> <versão> --force` repõe uma versão publicada sobre o rascunho atual. Recusa sem `--force`.
+### 5. Verificar a seleção restante
+
+Confira que **Patient**, **Tests**, **Results**, **Priority** e **Reference Number** continuam selecionados. O pacote ilustrado indica **5 of 9 selected**.
+
+![Mantenha os campos necessários. Este exemplo mantém Patient, Tests, Results, Priority e Reference Number.](forms-guide-pack-choices.png)
+
+![Cinco campos continuam selecionados neste exemplo.](forms-guide-pack-selected-count.png)
+
+### 6. Acrescentar os campos
+
+Abra os pontos do pacote e selecione **Add 5 fields**.
+
+![O pacote inicial tem o próprio menu de pontos.](forms-guide-pack-actions.png)
+
+![Acrescente os cinco campos escolhidos ao novo formulário.](forms-guide-pack-add.png)
+
+### 7. Guardar o rascunho
+
+Abra os pontos do construtor no canto superior direito e selecione **Save draft**.
+
+![Abra Builder actions para pré-visualizar e guardar.](forms-guide-builder-actions-step-7.png)
+
+![Save draft guarda o desenho atual sem o publicar.](forms-guide-draft-save.png)
+
+**Resultado esperado:** a definição fica guardada como Draft. Guardar o desenho não envia respostas nem o publica.
+
+![O construtor lista os campos acrescentados do pacote.](forms-guide-builder-fields.png)
+
+## Alterar o texto do campo de referência
+
+Use esta tarefa para usar termos reconhecidos pelo pessoal. O exemplo muda Reference Number para Requisition reference.
+
+### 1. Abrir o editor do campo
+
+Selecione Edit no campo **Reference Number** do construtor.
+
+![Abra Reference Number para alterar o nome visível.](forms-guide-field-open.png)
+
+### 2. Alterar Display Label
+
+Em **Display Label**, introduza `Requisition reference`.
+
+![Display Label altera o texto visto pela pessoa que introduz dados.](forms-guide-field-label.png)
+
+### 3. Introduzir uma indicação
+
+Em **Placeholder**, introduza `Enter the requisition number`. Esta indicação aparece no campo vazio.
+
+![Placeholder fornece uma indicação curta num campo vazio.](forms-guide-field-placeholder.png)
+
+### 4. Verificar Required
+
+Mantenha **Required** desligado quando a resposta for opcional. Ative-o apenas quando o workflow exigir uma resposta.
+
+![Required torna a resposta obrigatória. Deixe-o desligado num campo opcional.](forms-guide-field-required.png)
+
+### 5. Verificar Enabled
+
+Mantenha **Enabled** ativo para mostrar o campo e recolher uma resposta.
+
+![Enabled controla a apresentação do campo e a recolha de uma resposta.](forms-guide-field-enabled.png)
+
+### 6. Aplicar a alteração do campo
+
+Abra os pontos do editor do campo e selecione **Save**. A alteração aplica-se ao desenho atual do construtor.
+
+![Field actions contém Save e Cancel.](forms-guide-field-actions.png)
+
+![Save aplica as alterações do campo ao desenho atual.](forms-guide-field-save.png)
+
+**Resultado esperado:** a lista mostra Requisition reference. Use Save draft ou Publish do construtor para guardar o formulário alterado.
+
+![A lista de campos usa o novo nome visível.](forms-guide-field-updated.png)
+
+## Experimentar o desenho sem recolher dados
+
+Use Preview para consultar o desenho atual antes de publicar. As respostas de exemplo não se tornam respostas enviadas.
+
+### 1. Abrir Preview
+
+Abra os pontos do construtor e selecione **Preview**.
+
+![Abra Builder actions para pré-visualizar e guardar.](forms-guide-builder-actions-step-1.png)
+
+![Preview abre o desenho atual sem enviar dados.](forms-guide-preview-menu.png)
+
+### 2. Abrir Preview actions
+
+Selecione os pontos no cabeçalho do painel Preview.
+
+![Preview actions contém Fill example e Reset.](forms-guide-preview-actions.png)
+
+### 3. Preencher respostas de exemplo
+
+Selecione **Fill example**.
+
+![Fill example fornece respostas de demonstração sem guardar uma resposta.](forms-guide-preview-fill.png)
+
+### 4. Ler a pré-visualização
+
+Confira o texto, os campos e as respostas de exemplo. O exemplo mostra o campo Requisition reference.
+
+![Preview mostra o formulário com respostas de exemplo.](forms-guide-preview-filled.png)
+
+### 5. Limpar as respostas de exemplo
+
+Abra novamente Preview actions e selecione **Reset**.
+
+![Reset limpa as respostas de demonstração.](forms-guide-preview-reset.png)
+
+### 6. Fechar Preview
+
+Selecione **Close** no canto superior direito para regressar ao construtor.
+
+![Close regressa ao construtor.](forms-guide-preview-close.png)
+
+**Resultado esperado:** regressa ao mesmo desenho. Fill example e Reset não enviaram respostas nem guardaram a definição.
+
+## Guardar e publicar o desenho revisto
+
+Use esta tarefa quando o desenho estiver pronto. Publicar guarda o desenho atual e cria um instantâneo numerado.
+
+### 1. Guardar o rascunho editado
+
+Abra os pontos do construtor e selecione **Save draft**.
+
+![Save draft guarda o desenho atualizado sem o publicar.](forms-guide-draft-save-edited.png)
+
+### 2. Publicar o desenho
+
+Abra novamente os pontos do construtor e selecione **Publish**.
+
+![Publish guarda o desenho e cria uma versão publicada.](forms-guide-publish-menu.png)
+
+### 3. Ler a versão publicada
+
+Confira o estado publicado e o número de instantâneo gerado no cabeçalho. Não pode escrever esse número.
+
+![O cabeçalho mostra o estado publicado e o número de versão.](forms-guide-published-version.png)
+
+**Resultado esperado:** a lista Forms indica Published. O envio continua a exigir respostas válidas e um workflow de recolha configurado.
+
+![O novo formulário aparece como Published na lista.](forms-guide-published-row.png)
+
+## Comparar uma indicação alterada com uma versão publicada
+
+Use esta tarefa antes de publicar uma alteração posterior. O exemplo muda apenas a indicação do campo de referência. O nome visível já corresponde à versão publicada.
+
+### 1. Alterar a indicação
+
+Abra o editor de Requisition reference. Altere **Placeholder** para `Enter the reference from the paper form` e use os pontos do campo para Save.
+
+![Faça a alteração a comparar. O exemplo muda a indicação do campo.](forms-guide-version-draft-change.png)
+
+### 2. Abrir Compare
+
+Abra os pontos do construtor e selecione **Compare**.
+
+![Compare lê as diferenças entre versões e o rascunho atual.](forms-guide-compare-menu.png)
+
+### 3. Escolher a versão à esquerda
+
+Abra o seletor esquerdo e escolha o instantâneo publicado a comparar. O exemplo seleciona **v1**.
+
+![Escolha a versão publicada do lado From.](forms-guide-compare-from.png)
+
+![Selecione a versão de referência para comparar.](forms-guide-compare-from-version.png)
+
+### 4. Verificar a versão à direita
+
+Mantenha **Current draft** no seletor direito para comparar o desenho atual do construtor. Também pode escolher outra versão publicada.
+
+![O lado To pode ser Current draft ou outra versão publicada.](forms-guide-compare-to.png)
+
+### 5. Ler a diferença indicada
+
+O exemplo indica uma propriedade de campo alterada, **Field reference-number · placeholder**. Não indica alteração do nome visível.
+
+![Leia as diferenças antes de decidir publicar ou restaurar.](forms-guide-compare-result.png)
+
+### 6. Fechar Compare com Escape
+
+Prima Escape para regressar ao construtor. Fechar Compare não guarda nem publica o desenho alterado.
+
+![Escape regressa ao construtor sem alterar uma versão guardada.](forms-guide-compare-close.png)
+
+**Resultado esperado:** reviu a diferença mantendo a edição atual no construtor.
+
+## Guardar e publicar uma alteração posterior
+
+Use esta tarefa após comparar uma alteração com uma versão publicada.
+
+### 1. Guardar o rascunho alterado
+
+Abra os pontos do construtor e selecione **Save draft**.
+
+![Guarde a alteração revista em rascunho antes de publicar.](forms-guide-changed-save-draft.png)
+
+### 2. Verificar o estado Draft
+
+Se o conteúdo guardado diferir do publicado, o formulário passa a **Draft**. View/Run continua a abri-lo, mas Submit fica desativado até publicar.
+
+![Alterar o conteúdo publicado guardado devolve o formulário a Draft.](forms-guide-changed-draft-status.png)
+
+### 3. Publicar a alteração revista
+
+Abra os pontos do construtor e selecione **Publish** quando a alteração estiver pronta.
+
+![Publique o rascunho alterado revisto para criar a versão seguinte.](forms-guide-changed-publish.png)
+
+**Resultado esperado:** o formulário passa a Published com o número seguinte. Guardar sem alterações não transforma, por si só, um formulário Published em Draft.
+
+## Restaurar o conteúdo de um instantâneo publicado
+
+Use esta tarefa quando um desenho publicado anterior contiver o conteúdo pretendido. Restaurar substitui o formulário editável por esse instantâneo.
+
+### 1. Abrir Versions
+
+Abra os pontos do construtor e selecione **Versions**.
+
+![Versions abre os instantâneos publicados, mais recentes primeiro.](forms-guide-versions-menu.png)
+
+### 2. Encontrar o instantâneo
+
+Leia o número, o nome e a data de publicação. As versões mais recentes aparecem primeiro. A lista tem paginação quando necessário.
+
+![Leia o número de versão, o nome e a data de publicação.](forms-guide-versions-list.png)
+
+### 3. Abrir as ações da versão
+
+Selecione os pontos do instantâneo a restaurar. A imagem usa a versão 1.
+
+![Cada versão publicada tem o próprio menu de pontos.](forms-guide-version-row-actions.png)
+
+### 4. Escolher Restore
+
+Selecione **Restore**.
+
+![Restore substitui o formulário editável pelo instantâneo escolhido.](forms-guide-restore-menu.png)
+
+### 5. Confirmar o instantâneo
+
+Leia a confirmação e selecione **Restore** para substituir o desenho atual. Cancel mantém o desenho.
+
+![Reveja a versão escolhida. Restaurar conteúdo diferente devolve a Draft e desativa o envio até publicar.](forms-guide-restore-confirm.png)
+
+### 6. Verificar o estado resultante
+
+A restauração ilustrada altera o conteúdo publicado e o formulário passa a **Draft**. Restaurar conteúdo idêntico pode manter um formulário Published em Published.
+
+![O formulário restaurado é Draft. Publique-o novamente apenas após revisão.](forms-guide-restore-result.png)
+
+**Resultado esperado:** o construtor contém o conteúdo restaurado. Um Draft restaurado continua visível com View/Run, com Submit desativado até publicar.
+
+## Publicar conteúdo restaurado revisto
+
+Use esta tarefa após confirmar que o Draft restaurado é o desenho que o pessoal deve usar.
+
+### 1. Publicar o formulário restaurado
+
+Abra os pontos do construtor e selecione **Publish**.
+
+![Publish volta a disponibilizar o formulário restaurado revisto.](forms-guide-republish-menu.png)
+
+### 2. Verificar o novo número do instantâneo
+
+Leia a versão publicada no cabeçalho. Publicar novamente cria o instantâneo seguinte sem reutilizar o número restaurado.
+
+![O formulário restaurado revisto volta a ser publicado com o número seguinte.](forms-guide-republished-version.png)
+
+**Resultado esperado:** o desenho restaurado volta a Published. A instalação de exemplo tem instantâneos 1 a 4. Os números são ilustrativos.
+
+## Exportar a definição do formulário
+
+Use esta tarefa para obter um ficheiro JSON FHIR Questionnaire. A exportação contém a definição, não as respostas enviadas.
+
+### 1. Abrir as ações da linha do formulário
+
+Regresse a Forms e abra os pontos do formulário a exportar.
+
+![O menu da linha contém ações de ciclo de vida e exportação.](forms-guide-list-actions.png)
+
+### 2. Escolher Export
+
+Selecione **Export**. O navegador descarrega o ficheiro JSON Questionnaire.
+
+![Export descarrega o formulário como ficheiro JSON Questionnaire.](forms-guide-export-menu.png)
+
+**Resultado esperado:** o ficheiro contém a definição do formulário. Export não envia nem altera o formulário.
+
+## Criar um rascunho separado e consultar o estado de envio
+
+Use Duplicate para adaptar um formulário existente mantendo a definição original.
+
+### 1. Escolher Duplicate
+
+Nos pontos da linha do formulário original, selecione **Duplicate**.
+
+![Duplicate cria um rascunho separado para adaptar um formulário existente.](forms-guide-duplicate-menu.png)
+
+### 2. Verificar a cópia separada
+
+Encontre a nova cópia em Forms. Começa como **Draft**. O original mantém-se.
+
+![Duplicate cria um Draft separado mantendo o original.](forms-guide-duplicate-result.png)
+
+### 3. Abrir View/Run no Draft
+
+Abra os pontos da cópia e selecione **View/Run**. A página avisa que o envio está desativado até publicar.
+
+![Pode abrir um Draft para consulta, mas o envio fica desativado até publicar.](forms-guide-draft-run-warning.png)
+
+### 4. Verificar Submit
+
+Abra os pontos da página. **Submit** está desativado neste formulário não publicado.
+
+![Submit está desativado neste formulário não publicado.](forms-guide-draft-submit-disabled.png)
+
+**Resultado esperado:** a cópia continua um Draft separado. Abrir View/Run não publica nem envia respostas.
+
+## Arquivar ou eliminar uma cópia sem uso
+
+Archive mantém a definição e impede o uso para envios. Delete elimina definitivamente a definição escolhida. As imagens retiram apenas a cópia de demonstração separada.
+
+### 1. Regressar a Forms
+
+Selecione **Forms** no menu principal. Encontre a cópia a retirar.
+
+![Forms está no menu principal à esquerda.](forms-guide-open-page.png)
+
+### 2. Arquivar a cópia
+
+Abra os pontos da linha e selecione **Archive**.
+
+![Archive impede o uso normal para envios mantendo a definição.](forms-guide-archive-menu.png)
+
+### 3. Verificar Archived
+
+A cópia mantém-se na lista de gestão com o estado **Archived**. Deixa de ser Published para envio.
+
+![O formulário arquivado mantém-se na lista com o estado.](forms-guide-archive-result.png)
+
+### 4. Escolher Delete para uma remoção pretendida
+
+Para remover definitivamente, abra os pontos da mesma cópia e selecione **Delete**. Confira que escolheu a cópia e não o original.
+
+![Delete elimina definitivamente a definição escolhida. Esta é apenas a cópia de demonstração prevista.](forms-guide-delete-menu.png)
+
+### 5. Confirmar o formulário indicado
+
+Leia o nome na confirmação. Selecione **Delete** para remover ou Cancel para manter.
+
+![Leia o nome antes de confirmar. Cancel mantém o formulário.](forms-guide-delete-confirm.png)
+
+**Resultado esperado:** a cópia eliminada desaparece de Forms. O exemplo manteve o formulário original.
+
+## Consultar formulários e pré-visualizações num telemóvel
+
+Use as mesmas ações da lista e do construtor no telemóvel. Uma tabela larga pode deslocar-se horizontalmente.
+
+### 1. Encontrar o formulário
+
+Use **Search forms** na lista à largura do telemóvel.
+
+![Forms está disponível num telemóvel. Colunas largas podem deslocar-se horizontalmente.](forms-guide-phone-list.png)
+
+### 2. Abrir Builder actions
+
+Abra o formulário no construtor e selecione os pontos no canto superior direito.
+
+![Builder actions continua disponível num telemóvel.](forms-guide-phone-builder-actions.png)
+
+### 3. Escolher Preview
+
+Selecione **Preview** no menu do construtor.
+
+![Abra Preview no mesmo menu do construtor.](forms-guide-phone-preview-menu.png)
+
+### 4. Consultar a pré-visualização no telemóvel
+
+Leia a pré-visualização e desloque os campos. Preview actions continua nos pontos do cabeçalho.
+
+![Preview abre sobre o construtor à largura do telemóvel.](forms-guide-phone-preview.png)
+
+**Resultado esperado:** o desenho continua disponível para consulta à largura do telemóvel.
 
 ## Limites
 
-- **Um Lab order editado mantém o Referring Facility antigo.** A atualização só altera o Lab order incluído se ninguém o tiver editado. Numa cópia editada, Referring Facility continua a ser uma caixa de texto, e o pedido não o guarda. Para corrigir, abra o campo. Defina **Tipo de campo** como `referência`: aparece o bloco **Configuração da referência**. Nele, defina **Destino** como `urn:openldr:cs:facility-registry`. Defina **Caminho FHIR** como `ServiceRequest.requester`. Marque **Elemento de lista (discriminador)** e faça corresponder `type` igual a `Organization`. Depois dê o mesmo caminho a **Requesting Clinician**, com `type` igual a `Practitioner`.
-- **A introdução de dados mostra cada grupo uma vez.** Juntar entradas a um grupo durante a introdução ainda não é possível.
-- **Um pedido enviado não se edita.** Os resultados escrevem-se com o pedido, de uma só vez.
+Este percurso recolhe um pedido e uma escolha de amostra. Não demonstra a introdução de valores de resultados laboratoriais nem a rejeição de um pedido.
 
-## Num telemóvel
+Save do editor de campo aplica uma edição local do construtor. Save draft do construtor guarda a definição. Publish guarda o desenho e cria uma versão. As ações de Preview não fazem nenhuma destas escritas.
 
-Os formulários funcionam num telemóvel. **View/Run** põe cada rótulo por cima da sua caixa. A pré-visualização do construtor abre também num painel. Um telemóvel não tem teclas Shift nem Ctrl, por isso no construtor seleciona-se um campo de cada vez. Abaixo de 980 píxeis de largura, **Formulário** e **Biblioteca** passam a separadores.
+Guardar ou restaurar conteúdo diferente pode devolver um formulário Published a Draft. Conteúdo idêntico não força essa alteração. View/Run continua disponível, mas o envio exige Published.
 
 ## Resolução de problemas
 
-- **O campo Tests do Lab order está vazio.** Nenhum exame está ativado neste laboratório. Veja [Catálogo de exames](/docs/test-catalog).
-- **A pesquisa de pacientes não encontra ninguém.** Precisa de parte do nome, de um identificador ou de um telefone. Sem **View patient identifiers**, só encontra um identificador exato. Veja [Pacientes](/docs/patients).
-- **O envio falha.** Leia a mensagem. Um campo obrigatório está vazio, ou o fluxo Ingest está desligado.
-- **O envio parece não fazer nada.** Cada ação confirma-se com uma mensagem. Sem mensagem, a ação não correu.
-- **Publish não está disponível.** Complete os metadados obrigatórios ou corrija um campo mal configurado.
-- **Um campo desativado continua a aparecer.** Confirme que a caixa está desmarcada e guarde.
+**Não há paciente correspondente.** Confira a pesquisa e se o fluxo habitual forneceu esse paciente. Use Patients para consultar o registo recebido.
+
+**Falta um teste.** Confira se existe em Test catalog e está ativo neste laboratório.
+
+**Submit está desativado.** Confira o estado e a mensagem de preparação para envio. Publique um Draft revisto e confira a configuração de recolha.
+
+**Submit indica respostas inválidas.** Leia os erros dos campos e corrija valores obrigatórios ou inválidos antes de repetir. Uma mensagem Response captured com sucesso não precisa de um segundo envio.
+
+**Restore deixa Draft.** Reveja o conteúdo restaurado e use Publish quando o envio voltar a ser necessário.
 
 ## Guias relacionados
 
-- [Catálogo de exames](/docs/test-catalog)
-- [Pacientes](/docs/patients)
-- [Terminologia](/docs/terminology)
-- [Fluxos de trabalho](/docs/workflows)
-- [Marketplace](/docs/marketplace)
+Leia [Pacientes](/docs/patients) para registos recebidos e [Catálogo de testes](/docs/test-catalog) para testes ativos. Leia [Workflows](/docs/workflows) para o workflow de recolha e [Começar aqui](/docs/start-here) para instalação e CLI.
+
+## Prática opcional
+
+Use uma instalação de teste com pacientes fictícios e testes ativos no laboratório. As tarefas de recolha usam os seus registos recebidos. Não precisa de ficheiros de exemplo.
+
+Para praticar o desenho, use um nome separado e o exemplo ServiceRequest de cinco campos. Experimente Preview, Save draft, Publish, Compare e Versions. Duplique a definição antes de praticar Archive ou Delete.
+
+Envie um Lab order de teste apenas quando pretender escrever esse pedido. O exemplo documentado enviou uma resposta. As capturas seguintes não enviaram outra resposta.

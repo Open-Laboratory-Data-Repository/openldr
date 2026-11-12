@@ -1,97 +1,193 @@
 # Rôles
 
-Un **rôle** est un ensemble nommé de **capacités**. Une capacité est une autorisation précise, comme **Run reports** ou **Edit workflows**. Chaque personne reçoit un rôle, et le serveur vérifie ses capacités avant chaque page et chaque action.
+Un rôle regroupe des capacités, les permissions pour des actions précises. Attribuez les rôles dans Users. Le panneau Users attribue un seul rôle par personne.
 
-La connexion est gérée par le fournisseur d'identité, en général Keycloak. Les rôles, non. Chaque rôle, capacité et attribution vit dans la base d'OpenLDR, donc le contrôle d'accès marche de la même façon quel que soit le fournisseur d'identité.
+Utilisez vos propres noms de rôles et besoins d'accès. Les images montrent un rôle temporaire Documentation reader dans une installation de test isolée. Aucune donnée d'entraînement n'est requise.
 
-Ce guide prend environ 10 minutes. Sélectionnez une image ou un clip pour l'agrandir. Les noms des rôles fournis et des capacités s'affichent en anglais.
+View roles permet de consulter les rôles. Manage roles permet de les créer, modifier, supprimer ou attribuer. Ouvrir Users exige aussi View users. Créer ou modifier les identités exige Manage users. Administrator est verrouillé. Les autres rôles système sont modifiables mais ne peuvent pas être supprimés.
 
-![Paramètres, Rôles : les cinq rôles fournis.](roles-tour.png)
+Pour l'installation et la CLI, lisez [Commencer ici](/docs/start-here). Ce guide couvre la page Roles.
 
-## Qui peut faire quoi
+## Inspecter un rôle avant de modifier les accès
 
-Il faut **Manage roles** pour créer, modifier ou supprimer des rôles. **View roles** permet de les ouvrir et de lire leurs capacités. L'administrateur a les deux.
+Vérifiez ainsi les actions autorisées par un rôle existant.
 
-## Les rôles fournis
+### 1. Ouvrir Settings et Roles
 
-| Rôle | À quoi il sert |
-| --- | --- |
-| Administrator | Toutes les capacités. **Verrouillé** : il ne peut être ni modifié ni supprimé, pour que quelqu'un puisse toujours rétablir l'accès. |
-| Lab Manager | Tableaux de bord, rapports, formulaires, flux de travail, terminologie et requêtes. Ni utilisateurs ni paramètres. |
-| Data Analyst | Voir les tableaux de bord, exécuter et exporter les rapports, utiliser les requêtes. Rien à modifier. |
-| System Auditor | Lecture seule sur les grands domaines, plus le journal d'audit. |
-| Lab Technician | Saisie à la paillasse : ouvrir et envoyer des formulaires, rien d'autre. |
+Ouvrez votre menu utilisateur en bas à gauche, choisissez **Settings**, puis **Roles**.
 
-Les capacités des rôles fournis, sauf Administrator, peuvent être changées. Un rôle ne peut pas être supprimé tant que des personnes l'ont.
+![Ouvrez votre menu utilisateur en bas à gauche.](roles-guide-open-user-menu.png)
 
-Les capacités sont regroupées par domaine : Dashboards, Reports, Forms, Workflows, Query, Users, Facilities, Patients, Roles, Terminology, Marketplace, Connectors, Sync, Settings, Observability et Audit.
+![Choisissez Settings dans votre menu utilisateur.](roles-guide-settings-menu.png)
 
-## Exemple 1 : créer un rôle en lecture seule
+![Sélectionnez Roles dans la liste des sections de Settings.](roles-guide-roles-page.png)
 
-Créez un rôle pour une personne qui ne fait que lire les tableaux de bord et exécuter des rapports.
+### 2. Ouvrir le rôle
 
-![Créer Dashboard viewer avec trois capacités.](roles-create.mp4)
+Sélectionnez la ligne d'un rôle. Lisez son nom, sa description et les capacités sélectionnées. Faites défiler le panneau pour lire chaque permission.
 
-1. Ouvrez **Paramètres**, puis **Rôles**.
-2. Ouvrez le menu à trois points en haut à droite et sélectionnez **Créer un rôle**.
-3. Dans **Nom**, tapez `Dashboard viewer`. **Identifiant** se remplit seul. Vous pouvez le changer avant d'enregistrer, il est fixé ensuite.
-4. Dans **Description**, écrivez à quoi sert le rôle, par exemple `Reads dashboards and runs reports. Changes nothing.`
-5. Sous **Capacités**, activez **View dashboards**, **View reports** et **Run reports**. Le compteur au-dessus de la liste montre combien sont actives.
-6. Ouvrez le menu à trois points de la fiche et sélectionnez **Créer**.
+![Lisez le nom, la description et les capacités sélectionnées du rôle.](roles-guide-inspect-role.png)
 
-**Résultat attendu :** un message de réussite, et le rôle dans la liste avec **0 membres**.
+### 3. Vérifier le verrouillage
 
-Pour donner ce rôle à quelqu'un, voir [Utilisateurs et rôles, exemple 1](/docs/users#exemple-1-donner-un-role-a-quelqu-un).
+Le rôle intégré Administrator affiche un avertissement et des champs en lecture seule. Sélectionnez **Close** en haut à droite après consultation.
 
-Pour changer un rôle plus tard, ouvrez le menu de sa ligne et sélectionnez **Modifier**. **Supprimer** retire un rôle sans membres. Changer un rôle partagé le change pour tous ceux qui l'ont.
+![Administrator est verrouillé. Ses capacités ne peuvent pas être modifiées.](roles-guide-locked-role.png)
 
-## Comment les capacités arrivent sur une installation existante
+**Résultat attendu :** lire un rôle ne modifie pas ses permissions.
 
-Les nouvelles versions ajoutent des capacités. Les rôles vivent dans la base, donc un rôle créé par une ancienne version ne connaît pas seul une capacité plus récente. OpenLDR règle cela à chaque démarrage :
+## Créer un rôle avec des permissions précises
 
-- **Administrator** reçoit toujours la liste complète au redémarrage suivant. Il est verrouillé et veut dire « toutes les capacités », il n'y a donc rien à préserver.
-- **Les autres rôles fournis** reçoivent une nouvelle capacité seulement la première fois qu'elle existe. Ensuite, OpenLDR ne la redonne jamais. Si vous retirez une capacité à Lab Manager, elle reste retirée après les redémarrages et les mises à jour.
-- **Les rôles que vous avez créés ne sont jamais modifiés.** Accordez-leur vous-même une nouvelle capacité.
+Utilisez cette tâche si les rôles existants ne correspondent pas aux besoins du personnel. Définissez les actions nécessaires avant de sélectionner les capacités.
 
-Une capacité accordée ainsi est notée dans le journal d'audit comme `role.capability.backfill`.
+### 1. Ouvrir les actions de la page
 
-Pour comparer votre installation aux définitions fournies :
+Sélectionnez les points au-dessus de la table Roles.
 
-```bash
-./openldr roles doctor
-```
+![Ouvrez le menu de points de Roles.](roles-guide-create-actions.png)
 
-Il liste, pour chaque rôle fourni, les capacités détenues, celles que vous avez retirées exprès et celles encore en attente, plus les clés de capacité laissées par une fonction retirée.
+### 2. Choisir Create role
 
-## En ligne de commande
+Sélectionnez **Create role**.
 
-```bash
-./openldr roles list
-./openldr roles show <slug>
-./openldr roles create <name>
-./openldr roles grant <slug> <capability>
-./openldr roles revoke <slug> <capability>
-./openldr roles delete <slug>
-./openldr user assign-role <subject> <slug>
-```
+![Choisissez Create role.](roles-guide-create-menu.png)
 
-`roles create` accepte aussi `--slug`, `--desc`, et `--caps` avec des capacités séparées par des virgules. Par exemple, le rôle de l'exemple 1 :
+### 3. Saisir le nom
 
-```bash
-./openldr roles create "Dashboard viewer" --slug dashboard_viewer \
-  --desc "Reads dashboards and runs reports. Changes nothing." \
-  --caps dashboards.view,reports.view,reports.run
-```
+Utilisez un nom reconnu par votre équipe. L'exemple utilise `Documentation reader`.
+
+![Saisissez un nom décrivant ce rôle.](roles-guide-name.png)
+
+### 4. Vérifier le slug
+
+**Slug** est l'identifiant du rôle. Le nom le remplit automatiquement jusqu'à votre première modification. Choisissez-le avec soin car il ne peut plus changer après création.
+
+![Vérifiez l'identifiant. Il devient accessible en lecture seule après création.](roles-guide-slug.png)
+
+### 5. Décrire le rôle
+
+Indiquez son objectif dans **Description**. Les autres administrateurs sauront ainsi à qui l'attribuer.
+
+![Décrivez qui doit utiliser ce rôle.](roles-guide-description.png)
+
+### 6. Sélectionner les capacités
+
+Activez chaque permission nécessaire. Lisez la description près de chaque interrupteur. L'exemple sélectionne **View dashboards**.
+
+![Choisissez chaque permission nécessaire. L'exemple autorise la consultation des tableaux de bord.](roles-guide-capability.png)
+
+### 7. Ouvrir les actions du panneau
+
+Sélectionnez les points en haut du panneau Create role.
+
+![Ouvrez le menu de points du panneau de rôle.](roles-guide-sheet-actions.png)
+
+### 8. Créer le rôle
+
+Sélectionnez **Create**.
+
+![Choisissez Create pour enregistrer le rôle.](roles-guide-create-save.png)
+
+**Résultat attendu :** le panneau se ferme et le rôle apparaît dans la liste. Le créer ne l'attribue à personne. Utilisez Users pour l'attribuer.
+
+![Le rôle créé apparaît avec sa description et son nombre de membres.](roles-guide-created-result.png)
+
+## Modifier la description ou les permissions d'un rôle
+
+Utilisez cette tâche lorsque les responsabilités des titulaires changent. Vérifiez qui possède ce rôle avant de modifier les accès.
+
+### 1. Trouver le rôle
+
+Saisissez son nom dans **Search roles**. L'exemple recherche `Documentation`.
+
+![Utilisez Search roles pour trouver un rôle par son nom.](roles-guide-search.png)
+
+### 2. Ouvrir les actions de la ligne
+
+Sélectionnez les points de la ligne correspondante.
+
+![Ouvrez les points du rôle correspondant.](roles-guide-row-actions.png)
+
+### 3. Choisir Edit
+
+Sélectionnez **Edit**. Sélectionner la ligne ouvre le même panneau.
+
+![Choisissez Edit pour modifier sa description ou ses permissions.](roles-guide-edit-menu.png)
+
+### 4. Mettre à jour la description
+
+Modifiez **Description** si l'objectif a changé. Vous pouvez aussi modifier Name. Slug reste en lecture seule.
+
+![Mettez à jour la description. Le slug reste en lecture seule.](roles-guide-edit-description.png)
+
+### 5. Ajuster les permissions
+
+Activez ou désactivez les capacités. L'exemple ajoute **View reports**.
+
+![Activez ou désactivez les capacités individuelles.](roles-guide-edit-capability.png)
+
+### 6. Enregistrer le rôle
+
+Ouvrez les points du panneau et sélectionnez **Save**.
+
+![Choisissez Save pour conserver les modifications.](roles-guide-edit-save.png)
+
+**Résultat attendu :** la liste affiche la description enregistrée. Les utilisateurs de ce rôle reçoivent ses permissions.
+
+![La description mise à jour apparaît sur la ligne du rôle.](roles-guide-edited-result.png)
+
+## Supprimer un rôle personnalisé
+
+Utilisez cette tâche seulement pour retirer les permissions accordées par ce rôle. Les rôles système ne peuvent pas être supprimés.
+
+### 1. Choisir Delete
+
+Trouvez le rôle, ouvrez les points de sa ligne et sélectionnez **Delete**.
+
+![Delete est disponible pour un rôle personnalisé.](roles-guide-delete-menu.png)
+
+### 2. Confirmer le rôle et les effets
+
+Lisez la confirmation. Les membres perdent les capacités accordées par ce rôle. Sélectionnez **Delete** pour confirmer ou **Cancel** pour le conserver.
+
+![Vérifiez le nom du rôle et l'effet sur ses membres avant confirmation.](roles-guide-delete-confirm.png)
+
+**Résultat attendu :** le rôle disparaît. La suppression est irréversible. Vérifiez les utilisateurs concernés après suppression.
+
+![Le rôle supprimé n'apparaît plus dans la recherche.](roles-guide-deleted-result.png)
+
+## Consulter les rôles sur téléphone
+
+Utilisez la même page Roles sur téléphone. Les colonnes larges peuvent nécessiter un défilement horizontal.
+
+### 1. Rechercher le rôle
+
+Saisissez son nom dans **Search roles**.
+
+![Recherchez les rôles sur téléphone. La table défile horizontalement.](roles-guide-phone-search.png)
+
+### 2. Ouvrir ses paramètres
+
+Sélectionnez la ligne du rôle. Faites défiler le panneau pour lire sa description et ses capacités. Sélectionnez **Close** en haut à droite pour revenir.
+
+![Le panneau de rôle utilise la largeur du téléphone. Faites défiler pour consulter ses capacités.](roles-guide-phone-sheet.png)
+
+## Exercice facultatif
+
+Dans une installation de test, créez le rôle `Documentation reader`. Sélectionnez uniquement View dashboards. Ajoutez View reports avec la tâche de modification, puis supprimez le rôle d'exercice. Ne l'attribuez pas au personnel réel.
+
+## Avant de modifier les accès
+
+Administrator est verrouillé. Les autres rôles système sont modifiables mais ne peuvent pas être supprimés. Un slug enregistré ne peut pas changer.
+
+Créer un rôle ne l'attribue à personne. Les attributions se gèrent dans Users. Vérifiez les personnes concernées avant de modifier ou supprimer un rôle attribué.
 
 ## Dépannage
 
-- **Les capacités d'un rôle ne peuvent pas être changées.** C'est Administrator, qui est verrouillé, ou il vous manque **Manage roles**. Vous pouvez quand même l'ouvrir pour lire ses capacités.
-- **Un rôle ne peut pas être supprimé.** C'est un rôle fourni verrouillé, ou des personnes l'ont encore. Donnez-leur d'abord un autre rôle.
-- **Quelqu'un garde son ancien accès après un changement de rôle.** Demandez-lui de se déconnecter puis de se reconnecter, ou attendez que sa session se renouvelle.
-- **Un nouveau compte ne peut rien faire.** Il n'a pas encore de rôle. Un compte sans rôle n'a aucune capacité.
+**Le rôle est en lecture seule.** Vérifiez s'il s'agit du rôle Administrator verrouillé et si votre compte possède Manage roles.
+
+**Un nouveau rôle ne change aucun accès.** Créer le rôle enregistre seulement ses permissions. Utilisez Users pour l'attribuer à la personne voulue.
 
 ## Guides associés
 
-- [Utilisateurs et rôles](/docs/users)
-- [Audit](/docs/audit)
-- [Paramètres](/docs/settings)
+[Commencer ici](/docs/start-here) explique la CLI installée et de développement. Users explique l'attribution des rôles.

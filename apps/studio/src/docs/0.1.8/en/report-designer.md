@@ -1,181 +1,391 @@
 # Report Designer
 
-**Report Designer** is a drag-and-drop page designer for printable reports. You place a letterhead, titles, tables, charts and panels on an A4 or Letter page, bind each table to a saved [Custom Query](/docs/query), and publish the result as a report in the [Reports](/docs/reports) library.
+Use Report Designer to arrange printable elements, bind them to saved Custom Queries and create reports for the library. A design controls the page. A query supplies rows. Template parameters define the filters people enter when running a report.
 
-A fresh install ships ten designs, one for each built-in report. This guide reads how one of them is built, then builds a new design and publishes it as a report. It takes about 15 minutes. Select any picture or clip to enlarge it.
+Start with your own saved query and intended page layout. No documentation sample data is required. The pictures use a zero-request reporting query in a separate test installation. Optional practice is at the end.
 
-![Test Volume Over Time open in the designer, with its table selected and the Data tab showing the bound query.](report-designer-tour.png)
+You need **Edit report templates** to create, edit and publish designs. **View reports** opens the library, and **Run reports** executes its entries.
 
-## Who can do what
+Publishing a design revision and creating a library report are separate actions. Save the new design before either action.
 
-| Permission | What it allows |
-| --- | --- |
-| **View reports** | See the Reports library |
-| **Run reports** | Run and preview a report |
-| **Edit report templates** | Open Report Designer, create and change designs, publish them, and create library reports |
+## Inspect an existing report design
 
-The designer's menus and panel names are in English only.
+Use this to understand the connection between an existing table, its query and the filters the report exposes.
 
-## Before you start
+### 1. Open Report Designer
 
-Example 2 needs the docs sample data. See [Dashboards, Load the sample data](/docs/dashboard#load-the-sample-data).
+Select Report Designer in the main menu.
 
-## Example 1: read how a built-in report is made
+![Open Report Designer to inspect and build report layouts.](report-designer-guide-open-page.png)
 
-![Opening Test Volume Over Time, selecting its table and the Data tab.](report-designer-explore.mp4)
+### 2. Choose a template
 
-1. Open **Report Designer**. The **Templates** list on the left shows the ten designs, with paper size and orientation.
-2. Select **Test Volume Over Time**. The header shows **Saved** and **PUBLISHED**.
-3. On the page, select the table, labelled **Data**, with columns Month, Test and Count.
-4. Open the **Data** tab on the right.
+Select an existing entry in Templates. The example opens Test Volume Over Time.
 
-**Expected result:** **Bind query** reads **Test volume by month**, a saved Custom Query. The **Columns** list has three ticked columns. Under **Parameters**, `dateRange` is labelled **Date range**: that is the filter the report asks for when it runs.
+![Select an existing design from Templates.](report-designer-guide-existing-template.png)
 
-So a report is three parts: a design (this page), the query that fills its tables, and the filters that pass values into the query.
+### 3. Select its table
 
-## Example 2: build a design and publish it as a report
+Select the table element on the printable page.
 
-Build a one-table report of patients by age band.
+![Select the table element on the page.](report-designer-guide-existing-table.png)
 
-### Build the design
+### 4. Read its Data settings
 
-![New template, naming it, inserting a table, binding it to Patient demographics by age band, ticking the columns and showing the data.](report-designer-build.mp4)
+Select Data in the right inspector. Check Bind query and the template Parameters below it.
 
-1. Open the **⋯** menu at the top of the canvas and select **New template**.
-2. Click the name box, **Untitled template**, and type `Patients by age band (sample)`.
-3. Open **⋯**, select **Insert**, then **Table**. A table drops onto the page.
-4. With the table selected, open the **Data** tab. Set **Bind query** to **Patient demographics by age band**.
-5. Select **Load columns**. Five columns appear: band, total, male, female, other. Tick all five.
-6. Select **Load pages** above the canvas, then **Show data** in the header.
+![Data shows the query binding and template parameters.](report-designer-guide-existing-data-tab.png)
 
-**Expected result:** the table fills with real rows: 5-14 with 3 patients, 15-24 with 4, 25-49 with 14, 50+ with 4. That is 25 patients: the 24 in the docs sample, and **Sample Seed**, which every install creates.
+![The bound query supplies table rows; template parameters define run filters.](report-designer-guide-existing-binding.png)
 
-![The table bound and filled with the sample's patients.](report-designer-bound.png)
+## Create a separate table design
 
-**Show data** shows only the rows the first page holds, so the canvas never promises more than the PDF prints.
+Use a new design for your report rather than changing a shared built-in definition.
 
-### Save, publish, and add it to Reports
+### 1. Choose New template
 
-![Saving the design and publishing a revision.](report-designer-publish.mp4)
+Open More actions above the canvas and select New template. The empty designer also offers New template.
 
-1. Open **⋯** and select **Save**. The header reads **Saved**.
-2. Open **⋯** and select **Publish revision**. The header reads **PUBLISHED**. This does not add anything to Reports.
-3. Open **⋯** and select **Create report from this design**. The **New report** sheet opens.
+![More actions contains template operations.](report-designer-guide-actions.png)
 
-![Naming the report, choosing Operational, and creating it.](report-designer-create-report.mp4)
+![New template starts a separate design.](report-designer-guide-new-template.png)
 
-4. In **Name**, type `Patients by age band (sample)`.
-5. Open **Category** and select **Operational**. **Template** and **Primary query** are filled in already, from the design and its table.
-6. Open the sheet's **Actions** menu and select **Create report**.
+### 2. Name the design
 
-### Run it
+Enter a clear Report name, such as Request summary design.
 
-![Running the new report from the Reports library.](report-designer-run.mp4)
+![Set Report name to the value your report needs.](report-designer-guide-design-name.png)
 
-1. Open **Reports**. **Patients by age band (sample)** is listed under **Operational**.
-2. Select it, open **Actions**, select **Parameters**, then **Run**. It has no filters, so nothing needs filling.
+### 3. Insert a table
 
-**Expected result:** the document shows the five columns and four rows from step 6 of Build the design.
+Open More actions, point at Insert and select Table.
 
-![The report's document.](report-designer-report.png)
+![Insert lists printable element types.](report-designer-guide-insert.png)
 
-To remove the example, delete the report from its menu in Reports, then the design with **⋯ → Delete** in the designer.
+![Table adds a data table to this design.](report-designer-guide-insert-table.png)
 
-## What the designer can do
+### 4. Select the table
 
-You can create a template, place and arrange Text, Table, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid, and Chart elements on A4 or Letter pages, bind elements to a Custom Query and choose their columns, control how blocks flow across pages, add filter parameters, preview the template with live data, export it to PDF or Excel, and publish it as a report.
+The inserted Table is selected. Drag it to the intended position and use its resize handles when you need another size. The example keeps its initial position.
 
-### Before you build your own
+![The new table is selected for configuration.](report-designer-guide-new-table.png)
 
-- You need **Edit report templates**. The Lab Admin and Lab Manager roles have it.
-- Write and save the query that will supply the report's data first. See [Custom Queries](/docs/query). You can also do this later and come back to bind it.
-- Know the layout you want: single page or multi-page, and which columns the table should show.
+## Choose the table query
 
-## Step by step
+Use a saved query that returns the intended columns. When that query has parameters, define matching template defaults before loading columns.
 
-1. Open **Report Designer** from the main navigation.
-2. Choose **New template** from the **⋯** menu, or select an existing template in the left explorer to keep working on it.
-3. Set the template's name in the field at the top of the canvas.
-4. Use **⋯ → Insert** to drop an element onto the page: Text, Table, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid, or Chart. Drag to reposition and use the resize handles to size it. A selected element shows its name in a tag above its box.
-5. Select the **Table** element and open its **Data** tab. Choose **Bind query** to pick a Custom Query, then **Load columns** and tick which columns appear on the report. Reorder and relabel them as needed. **Sort by column** orders the rows before drawing; turn on **First data row is the header** when the query emits its column labels as its first row (it needs Sort by set). **Transpose** in the Properties tab flips a wide table so its columns become rows.
-6. For a **Cell grid**, bind the query in the **Data** tab and set the label column, cell columns, palette steps, and trailing columns in the **Properties** tab.
-7. For a **Chart**, bind the query in the **Data** tab, then pick the chart type (bar, line, or donut), the label column, and the value columns in the **Properties** tab. Charts print as sharp vector shapes; a bound chart also exports its rows to Excel.
-8. Still in the **Data** tab, use **Add parameter** to define the filters the report will expose (Text, Select, or Date range). Give each one a clear label. These become the filters shown when the report runs. Match a parameter's **Key** to a bound query's parameter **Variable ID** so the filter value flows into the query when the report runs.
-9. Choose **Preview** to render the template to PDF using live data.
-10. Select **Save**. The save status next to the template name shows Saved, Saving, or Unsaved changes; the designer also autosaves as you work.
-11. Use **⋯ → Export → PDF** or **Excel** to download the current template's output directly.
-12. Follow the publishing steps below to publish a revision and create a report in the library.
+### 1. Open Data
 
-## Publish a revision and create a report
+With the table selected, select Data in the inspector.
 
-These are separate actions in the designer's **⋯** menu.
+![Open Data for the selected custom table.](report-designer-guide-new-data-tab.png)
 
-| Action | Result |
-| --- | --- |
-| **Publish revision** | Publishes a version of the saved template. It does not create a Reports library entry. |
-| **Create report from this design** | Opens a sheet to create a library report linked to a template and primary query. It does not publish a template revision. |
+### 2. Bind the saved query
 
-1. Save the template and wait for **Saved**. Both actions require the template to have been saved at least once.
-2. Choose **⋯ → Publish revision**. Check the confirmation naming the template and its published status. Open **⋯ → Versions** to inspect the published revision.
-3. Choose **⋯ → Create report from this design**.
-4. Enter the report's **Name** and choose its **Category**. Add an optional **Description**. Confirm the **Template** and **Primary query**. The query may be preselected from the first bound table; check it before creating the report.
-5. Open the sheet's **⋯** menu and choose **Create report**. Name, Category, Template, and Primary query must all be set. The confirmation names the new report, which may differ from the template name.
-6. Open [Reports](/docs/reports) and select the new report under its category. Open **⋯ → Parameters**, complete required filters, and choose **Run**. Check Document and Spreadsheet.
+Open Bind query and choose your Custom Query. The example uses Request count for reporting, with two required Text query parameters named from and to.
 
-For example, start with a saved query that returns two columns. Bind a table to that query, save the template, and publish its revision. Create a report with a distinct name and that query as Primary query. Verify that the report appears under the chosen category and runs with the expected columns.
+![Choose your saved Custom Query.](report-designer-guide-bind-query.png)
 
-Publishing a later template revision does not require creating another library report for the same design. Use Create report from this design when you intend to add a new library entry.
+## Define the report filter and preview defaults
 
-### Expected result
+For Reports, the current date-range filter passes flat from and to values. The example query declares those as two required Text parameters. The template provides one Date range control. A workbench query declaring one daterange parameter currently fails when bound directly to Reports.
 
-The saved template appears in the left explorer. Publish revision records a template version. Create report from this design adds the named entry to the [Reports](/docs/reports) library. Its primary query supplies the Spreadsheet rows; the template provides the Document layout.
+### 1. Add a template parameter
 
-### Designer troubleshooting
+Select Add parameter below the binding settings.
 
-- **A publishing action asks you to save first:** save the template and wait for Saved before retrying.
-- **The template is published but absent from Reports:** publishing a revision does not create a library entry. Use Create report from this design.
-- **Create report is disabled:** fill Name, Category, Template, and Primary query, then use the sheet's menu.
-- **No columns to choose from:** pick a query in **Bind query**, then select **Load columns**.
-- **Preview fails to render:** check that the bound query and its parameters are valid, then try again.
-- **Nothing to export:** the template has no table elements yet.
-- **A table's rows run onto extra pages:** this is expected. Tables paginate automatically across multiple pages when the data doesn't fit on one.
+![Add parameter defines a filter exposed by this template.](report-designer-guide-add-parameter.png)
 
-## More you can do
+### 2. Match the query key
 
-- The strip above the canvas shows how many physical pages the design prints as. Choose **Load pages** to run the bound queries and get a real count. The count is a snapshot, and the strip says when the design has been edited past it. An overflowing table also gets a dashed line on the canvas where its first page ends.
-- **Show data** in the header fills bound tables, grids and charts with the rows the page strip already loaded, so you can size a box against real content. It shows only the rows the first page actually holds, which is the whole point: the canvas should never promise more than the PDF prints. Load pages first; the toggle is disabled until there is data.
-- The **Flow** section in the Properties tab controls how blocks behave when a table or grid runs onto extra pages: **Place below** pins an element under another and moves it up when the block above finishes early, **Gap after** sets the space between them, **First page only** stops a summary band from repeating on continuation pages, **Show with** ties a heading to its table so the two appear and disappear together, and **Fill to bottom of box** lets a cell grid grow to its declared bottom edge.
-- A bound table's Data tab can add a **Totals row** (type a label, tick the columns to sum) and a text element can show `{{sum(elementName.columnKey)}}`. A per-column **rule** ("When ≥ 10 → Critical") highlights values without touching SQL; a status column from the query always wins over a rule.
-- Tick **Trend** on a bound column to draw its value as a miniature line inside the cell. The query supplies the numbers as one delimited string, for example `12,14,11,18`. Anything that is not two or more clean numbers prints as text instead, and Excel always exports the raw string rather than a picture.
-- **⋯ → Versions** lists every published version of the design with who published it and when. **Restore** loads one back into the working copy as an ordinary edit: it lands as a single undo step, autosave persists it, and it does not publish. Preview it, undo it, or publish it deliberately.
-- The **Print language** picker at the top of the Properties tab switches the content field between the design's own text and one language's translation. With a language picked, the box holds that language's text and shows the authored text as its placeholder, so an empty box means "prints as authored". Preview and Download render the language you are editing. A report printed from [Reports](/docs/reports) uses your current studio language, and `openldr report run <id> --format pdf --lang fr` does the same headless. Only text you typed is translated; query results, laboratory details and barcode values never are.
-- The **built-in reports already ship with French and Portuguese**, so a French session prints them in French with nothing to author. Dates follow the print language too (`2 sept. 2026`, `2 set. 2026`); the day always comes before the month, in every language. Susceptibility codes (R, I, S) are never translated, because they are the same codes everywhere.
-- A key/value panel that is **not** bound to a query (the scope panel on every built-in report) lists its pairs under **Pair translations** while a language is picked. Each half gets its own field with the authored text as the placeholder. A value holding `{{param.from}}` or `{{date}}` can be translated too, tokens and all, so French can read "du {{param.from}} au {{param.to}}". A bound panel has no pairs to translate here: its labels are column labels, translated in the Data tab.
-- A **draft** design prints a diagonal DRAFT stamp on every page; publishing removes it.
-- The **Letterhead** element is the shared identity band (logo, name, address, contact, rule). Its layout is defined once, so every design that uses it updates together; the values come from Settings, Laboratory.
-- Turn on **Page numbers** in the page settings to add a footer to every page.
-- A template can span several pages. Add and arrange elements independently on each one.
-- In the **Layers** tab, the eye hides an element (it leaves the canvas and the PDF; the block below a hidden element moves up), the lock keeps it selectable but immovable, and rows reorder by drag or the raise and lower buttons.
-- Select two or more elements and choose **⋯ → Group selection** to name them as one group. Clicking any member then selects the whole group; hold **Alt** to reach a single element inside it. The **Layers** tab shows each group as a header row with its own eye and lock, which apply on top of each element's own: locking a group never unlocks an element you locked by itself. **Ungroup** removes the group and leaves the elements alone.
-- **Ctrl+D** duplicates the selected elements, **Ctrl+C** and **Ctrl+V** copy and paste them. Clones arrive slightly offset, selected, and never locked.
-- Use **⋯ → Duplicate** to branch a new template from an existing layout, and **⋯ → Delete** to remove one you no longer need.
-- From [Reports](/docs/reports), managers can jump straight back into a published report's template with **Edit template**.
-- Use **Undo/Redo** and the zoom controls while arranging elements precisely.
+Set a unique template Key, such as period. This date-range control supplies the from and to values used by the reporting query.
 
-## On a phone
+![Set Key param1 to the value your report needs.](report-designer-guide-parameter-key.png)
 
-The designer is built for a large screen. On a phone, use it to read a design, not to build one. Reports made from a design run and print on a phone like any other report.
+### 3. Choose the visible label
+
+Set Label to what people should see, such as Period.
+
+![Set Label period to the value your report needs.](report-designer-guide-parameter-label.png)
+
+### 4. Match the parameter type
+
+Set Type to Date range. The reporting query itself uses two Text parameters named from and to.
+
+![Choose Date range to match the query parameter.](report-designer-guide-parameter-type.png)
+
+### 5. Set the default start
+
+Enter the default first included date. The example uses 2026-01-01.
+
+![Set From period to the value your report needs.](report-designer-guide-parameter-from.png)
+
+### 6. Set the default end
+
+Enter the default last included date. The example uses 2027-01-01. The reporting query includes the full end day, matching the report calendar and scheduler. These are preview defaults; report users can choose other values.
+
+![Set To period to the value your report needs.](report-designer-guide-parameter-to.png)
+
+## Choose and preview the printed column
+
+Load columns uses the template defaults to run the bound query. The count query returns a requests column even when the warehouse contains no requests.
+
+### 1. Load the query columns
+
+Select Load columns. Read an error if the query or parameter defaults are invalid.
+
+![Load columns runs the query using the template defaults.](report-designer-guide-load-columns.png)
+
+### 2. Include the column
+
+Tick requests to include it in the table. Choose the actual output columns needed by your own report.
+
+![Include the requests column in the printed table.](report-designer-guide-include-column.png)
+
+### 3. Set its printed label
+
+Enter a readable column label, such as Requests. This changes the printed label, not the query field.
+
+![Set Label for column requests to the value your report needs.](report-designer-guide-column-label.png)
+
+### 4. Load the page data
+
+Select Load pages above the canvas. It runs the bound data and calculates a physical page count.
+
+![Load pages fetches rows and calculates the printed page count.](report-designer-guide-load-pages.png)
+
+### 5. Show loaded data
+
+Select Show data. Reload pages after edits when the count is stale.
+
+![Show data fills the canvas using the loaded rows.](report-designer-guide-show-data.png)
+
+**Expected result:** The table shows the real count. This installation prints one Requests column containing zero.
+
+![The printed column contains the live count, including zero.](report-designer-guide-bound-result.png)
+
+## Save and inspect the PDF
+
+Save a new design explicitly. Then check the actual rendered page before publishing it.
+
+### 1. Save the design
+
+Open More actions and select Save. Wait for Saved. After the first save, later edits also autosave.
+
+![Save persists the new design before publication.](report-designer-guide-save.png)
+
+### 2. Open Preview
+
+Open More actions and select Preview.
+
+![Preview renders the current working design as a PDF.](report-designer-guide-preview.png)
+
+### 3. Check and download the rendered page
+
+Read the PDF preview and use Download when you need a local copy. Close the preview to return to editing.
+
+![The preview shows actual query output in the printable design.](report-designer-guide-preview-result.png)
+
+![Download saves the rendered PDF.](report-designer-guide-preview-download.png)
+
+**Expected result:** The preview renders the current working design with query data. A draft design carries a DRAFT stamp.
+
+## Publish a saved revision
+
+Publish after checking the saved design. A revision records the published state; it does not add a Reports library entry.
+
+### 1. Publish the revision
+
+Open More actions and select Publish revision. Save first if the designer asks.
+
+![Publish revision snapshots the saved design. It does not create a library report.](report-designer-guide-publish.png)
+
+### 2. Check the published status
+
+Check the Published status beside the design name.
+
+![Published confirms the design revision.](report-designer-guide-published.png)
+
+**Expected result:** The saved design has a published revision.
+
+## Inspect published versions
+
+Use this to identify the saved revision before considering a restore.
+
+### 1. Open Versions
+
+Open More actions and select Versions.
+
+![Versions lists published snapshots.](report-designer-guide-versions.png)
+
+### 2. Read the revision row
+
+Check its version, publication time and publisher. Restore loads that snapshot into the working copy as an edit. It does not publish another revision. Close the sheet if no restore is needed.
+
+![Read the revision, publication time and publisher before restoring.](report-designer-guide-version-row.png)
+
+## Create the report library entry
+
+Use this after the design and query are ready. The library report can have a different name from its design.
+
+### 1. Choose Create report from this design
+
+Open More actions and select Create report from this design.
+
+![Create report from this design creates a separate library entry.](report-designer-guide-create-report.png)
+
+### 2. Name the report
+
+Enter the library Name. The example uses Request summary report.
+
+![Choose the library report name.](report-designer-guide-report-name.png)
+
+### 3. Choose its category
+
+Open Category and choose the category where people should find it, such as Operational.
+
+![Choose the category where people should find the report.](report-designer-guide-report-category.png)
+
+### 4. Check the linked definitions
+
+Confirm Template and Primary query. The template controls Document layout; the primary query supplies Spreadsheet rows.
+
+![Check the template selected for this report.](report-designer-guide-report-template.png)
+
+![Check the primary query that will supply spreadsheet rows.](report-designer-guide-report-query.png)
+
+### 5. Create the library entry
+
+Open the sheet's Actions dots and select Create report.
+
+![The New report sheet has its own Actions dots.](report-designer-guide-report-actions.png)
+
+![Create report adds the named library entry.](report-designer-guide-report-create.png)
+
+**Expected result:** The named entry is available under its category in Reports. Open its Parameters and run it there. [Reports](/docs/reports) covers that workflow.
+
+## Export directly from the designer
+
+Use these exports when you need output from the current design without opening its library report.
+
+### 1. Export PDF
+
+Open More actions, point at Export and select PDF.
+
+![Export PDF downloads the current design output.](report-designer-guide-export-pdf.png)
+
+### 2. Export Excel
+
+Open More actions, point at Export and select Excel. Bound table rows become workbook data.
+
+![Export Excel downloads the bound table rows.](report-designer-guide-export-excel.png)
+
+**Expected result:** The browser downloads the rendered PDF or workbook.
+
+## Control element visibility and locking
+
+Layers provides direct controls for selected elements. Hiding affects output. Locking prevents movement.
+
+### 1. Open Layers
+
+Select Layers in the inspector.
+
+![Layers selects elements and controls visibility, locking and order.](report-designer-guide-layers.png)
+
+### 2. Hide an element when intended
+
+Use Hide Table, the eye control, for the selected table. Hidden elements do not appear in the canvas or PDF.
+
+![Use the eye to hide an element deliberately.](report-designer-guide-hide-layer.png)
+
+### 3. Show it again
+
+Use Show Table to restore it.
+
+![Use Show Table to restore the hidden element.](report-designer-guide-show-layer.png)
+
+### 4. Lock its position
+
+Use Lock Table to prevent movement while keeping it selectable.
+
+![Lock keeps the element selectable while preventing movement.](report-designer-guide-lock-layer.png)
+
+### 5. Unlock it again
+
+Use Unlock Table when you intend to move it. The example leaves the table visible and unlocked.
+
+![Unlock Table allows movement again.](report-designer-guide-unlock-layer.png)
+
+## Inspect an existing design on a phone
+
+Use a large screen for building page layouts. On a phone, find and inspect an existing template, or run its report in Reports.
+
+### 1. Expand the Explorer
+
+Select Expand explorer on its narrow rail.
+
+![Use the Explorer rail to find an existing template on a phone.](report-designer-guide-phone-explorer.png)
+
+### 2. Choose the existing template
+
+Select its name, then collapse the Explorer when you need canvas space.
+
+![Choose the existing design. Use a larger screen to edit it.](report-designer-guide-phone-template.png)
+
+### 3. Open its actions
+
+Use More actions to inspect the available operations. Make layout edits on a larger screen.
+
+![Use More actions to inspect an existing design.](report-designer-guide-phone-actions.png)
+
+## Choose page elements and layout tools
+
+Insert also offers Text, Letterhead, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid and Chart. Select an element to edit its Properties. The one-table task above does not require those extra elements.
+
+Properties controls paper size, orientation and page numbers when no element is selected. It also controls element position, dimensions and appearance. Undo and Redo step through edits; zoom changes only your view.
+
+For a Chart or Cell grid, bind a query in Data and choose the corresponding label, value or cell columns in Properties. Check the rendered output with your own rows.
+
+Flow settings can place one element below another or control repeated content on continuation pages. Load pages after changing layout to check the physical page count. Show data displays only rows that fit the canvas page.
+
+## Keep report text and query fields separate
+
+A printed column label can differ from the query field name. Use the Data tab label fields for the visible wording. Keep binding keys matched to actual query output.
+
+The Print language selector in Properties edits one language's report text. Empty translations fall back to authored text. Query output itself is not translated by changing the design language.
+
+A Letterhead uses laboratory identity configured in Settings. It can give several designs the same logo, name and contact band.
+
+## Manage designs carefully
+
+More actions includes Duplicate and Delete. Duplicate starts a separate design for a variation. Delete permanently removes a design after confirmation; check linked reports first.
+
+Versions Restore changes the working copy and can be undone. Preview the restored design before publishing deliberately. Publishing another revision does not require another library report for the same design.
+
+Create report from this design adds a separate library entry. It does not replace Publish revision. A published design absent from Reports still needs the library-creation step.
+
+## Optional practice reference
+
+[Download the optional reporting count query](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Import it through Query if you want a reference. It uses required Text parameters named from and to, which match Reports' current date-range input. It needs no patient sample data. Use your own approved query for normal reporting.
+
+[Download the published example PDF](https://openldr.online/docs-samples/user-guide/report-designer/published-summary.pdf) or [its exported workbook](https://openldr.online/docs-samples/user-guide/report-designer/summary-design.xlsx) to compare the one-column result. These files contain only a zero count.
 
 ## Troubleshooting
 
-- **No columns to choose from.** Pick a query in **Bind query**, then select **Load columns**.
-- **The canvas table is empty with Show data on.** Tick at least one column, then select **Load pages** again. A query with a required filter needs a default value in its parameter.
-- **The design is published but not in Reports.** Publishing a revision does not create a library entry. Use **Create report from this design**.
-- **Create report is greyed out.** Fill Name, Category, Template and Primary query.
+**No columns appear.** Choose Bind query, configure needed template defaults and select Load columns.
+
+**The canvas remains empty.** Include at least one bound column, then Load pages and Show data. Read query errors before changing the layout.
+
+**The save status shows an error.** Resolve it before publishing. A new template needs an explicit first Save.
+
+**Create report is unavailable.** Save the design, then fill Name, Category, Template and Primary query in the New report sheet.
+
+**Preview and output differ from expected rows.** Match template keys to query parameter identifiers and check the defaults and SQL date boundaries. The reporting example includes both calendar endpoints.
+
+**A table prints across several pages.** Data can continue beyond the first page. Load pages and inspect the PDF to check the actual count.
+
+**Reports says required parameter: period.** A Custom Query declaring one daterange parameter works in Query but currently receives no nested range from Reports. Use the reporting pattern of two Text query parameters named from and to, referenced by the SQL. Do not assume a successful designer preview proves a library run.
 
 ## Related guides
 
-- [Reports](/docs/reports)
-- [Custom Queries](/docs/query)
-- [Laboratory](/docs/laboratory)
-- [Connectors](/docs/connectors)
+[Query](/docs/query) creates saved data queries. [Reports](/docs/reports) runs library entries and schedules output. [Laboratory](/docs/laboratory) configures shared identity values.

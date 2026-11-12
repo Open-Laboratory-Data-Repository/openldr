@@ -1,129 +1,143 @@
 # Setup checks
 
-**Setup checks** shows what this install still needs before it is ready for real use, and opens the page that fixes each item. It is the first place to look after installing, and after any change to the server.
+Setup checks reviews the services and settings this installation needs. Use it after installation or configuration changes, then follow the advice beside each warning or failure.
 
-This guide takes about 5 minutes. Select any picture or clip to enlarge it.
+You need View settings. Changing a linked setting may need another permission. These checks use the same list as `openldr doctor`. Read [Start here](/docs/start-here) for command-line setup.
 
-![Setup checks on a fresh test install: three warnings, for sign-in, the laboratory name and the time zone.](setup-checks-tour.png)
+Use your own installation results. The pictures show an isolated development installation with deliberate missing configuration. No sample data is required.
 
-## Who can do what
+## Read the current readiness report
 
-You need **View settings**. Lab administrators have it. Fixing an item needs the permission of the page that fixes it, for example **Edit general settings** for the Laboratory page.
+Use this before treating an installation as ready for staff. The checks run when the page opens.
 
-## Open the checks
+### 1. Open Settings and Setup checks
 
-Open **Settings**, then **Setup checks**, second in the list. CE runs the checks when the page opens. To run them again, open the **⋯** menu and choose **Run again**.
+Open your user menu at the bottom left, choose **Settings**, then select **Setup checks**.
 
-Each check shows one status:
+![Open your user menu at the bottom left.](setup-checks-guide-user-menu.png)
 
-| Status | Meaning |
-| --- | --- |
-| Passed | Nothing to do. |
-| Warning | CE works, but something is not set the way a real lab needs. |
-| Failed | Something is broken or unsafe. Fix it before real use. |
-| Skipped | The check does not apply to this install. |
+![Choose Settings.](setup-checks-guide-settings-menu.png)
 
-A warning or a failure says what to change. Where a settings page fixes it, a link such as **Open Laboratory** opens that page. The top of the page counts the warnings and failures, or says **All checks passed.**
+![Select Setup checks in Settings.](setup-checks-guide-setup-page.png)
 
-## Example 1: read the checks on a fresh install
+### 2. Read the summary
 
-1. Open **Settings**, then **Setup checks**.
+Read the number of failed checks and warnings. If neither exists, the summary says All checks passed.
 
-**Expected result** on a fresh test install with `AUTH_DEV_BYPASS` on: **3 warnings**.
+![Read the counts of failed checks and warnings.](setup-checks-guide-summary.png)
 
-| Check | Status | Why |
-| --- | --- | --- |
-| Services | Passed | |
-| Sign-in | Warning | Sign-in is switched off (`AUTH_DEV_BYPASS`). Anyone who can reach this server is treated as an administrator. |
-| Secrets key | Passed | |
-| Laboratory name | Warning | The name is empty or still the shipped default. |
-| Time zone | Warning | No time zone is set. |
-| Connectors | Passed, 1 of 1 | The seeded warehouse connector answers. |
-| Sync with central | Skipped | Sync is off. |
+### 3. Read failed checks first
 
-On a production install, the Sign-in item is **Failed**, not a warning.
+Read the service detail and suggested next action. This test installation reports a blob-storage service failure. Follow the advice for your own result.
 
-## Example 2: fix two warnings
+![Read the detail and next action beside a failed check.](setup-checks-guide-failed-service.png)
 
-![Opening Laboratory from the check, setting the name and time zone, saving, and running the checks again.](setup-checks-fix.mp4)
+### 4. Read the warnings
 
-1. Under **Laboratory name**, select **Open Laboratory**.
-2. In **Laboratory name**, type your lab's name, for example `Sample Central Laboratory`.
-3. In **Time zone**, type your zone, for example `Africa/Dar_es_Salaam`.
-4. Open the page's **Actions** menu and select **Save**.
-5. Go back to **Setup checks**, open **⋯** and select **Run again**.
+A warning needs review even when the service is available. The example warns that Laboratory name still uses the shipped default.
 
-**Expected result:** **1 warning**. Laboratory name and Time zone now read **Passed** and show what is set. Only Sign-in is left, which stays a warning on a test install.
+![Read each warning before deciding whether the installation is ready.](setup-checks-guide-warning.png)
 
-![The checks after the fix: one warning left.](setup-checks-after.png)
+### 5. Check skipped items
 
-See [Laboratory](/docs/laboratory) for the name, logo and time zone.
+**Skipped** means the check did not apply. It does not mean that an unused feature has been configured.
 
-## The checks
+![Skipped means the check did not apply, not that its configuration passed.](setup-checks-guide-skipped.png)
 
-| Check | What it looks at | If it is not met |
-| --- | --- | --- |
-| Services | Sign-in, file storage, eventing and the warehouse answer. | CE cannot serve or store data. Run `openldr health` on the server to see which service is down. |
-| Sign-in | Sign-in is switched on. | With `AUTH_DEV_BYPASS` on, anyone who reaches the server is an administrator. This fails on a production install and warns elsewhere. |
-| Secrets key | `SECRETS_ENCRYPTION_KEY` is set. | A connector that holds a password cannot be saved or read. |
-| Laboratory name | The name is set, and is not the shipped default. | Reports print the product name as the issuing laboratory. |
-| Time zone | A time zone is set. | The monthly transmission report counts days in UTC, so evening arrivals land on the wrong day. |
-| Connectors | Every enabled host connector answers. | Imports and queries on that connector fail. The check names the connector. |
-| Sync with central | Sync has a central URL and a site id, and its last cycle worked. | Results do not reach central. |
+**Expected result:** You know which checks need attention and which advice applies to this installation.
 
-Three checks can show Skipped:
+## Follow a warning and check the correction
 
-- **Time zone** on a SQL Server warehouse. The setting takes IANA zone names, which SQL Server cannot use. Leave it empty and type the Windows zone name into each report run.
-- **Connectors** when no host connector is enabled.
-- **Sync with central** when sync is off.
+Use a linked setting page to correct a problem. This example corrects a laboratory name and missing time zone on PostgreSQL.
 
-## What the checks do not show
+### 1. Open the linked page
 
-A check shows a name or a count, never an error message. Error messages can hold server names and user names. For the detail of a failed connector, open **Settings**, **Connectors** and choose **Diagnose** on it. See [SQL Server connections and diagnosis](/docs/connector-diagnose).
+Select **Open Laboratory** beside the Laboratory name warning.
 
-Each run is written to the audit log with the names of the checks that failed or warned.
+![Follow the check link to the setting that needs attention.](setup-checks-guide-open-laboratory.png)
 
-## From the command line
+### 2. Enter the laboratory name
 
-A headless server prints the same list:
+Enter your actual issuing laboratory name. The picture uses `Documentation laboratory` in a test installation.
 
-```bash
-openldr doctor
-```
+![Enter your actual laboratory name. This example uses a fictional test name.](setup-checks-guide-correct-name.png)
 
-On the fresh test install of Example 1 it prints:
+### 3. Set the time zone when applicable
 
-```text
-PASS  Services
-WARN  Sign-in
-      Sign-in is switched off (AUTH_DEV_BYPASS). Anyone who can reach this server is treated as an administrator. Turn it off before real use.
-PASS  Secrets key
-WARN  Laboratory name
-      The laboratory name is empty or still the shipped default. Reports print it as the issuing laboratory. Set it in Settings, Laboratory.
-WARN  Time zone
-      No time zone is set. The monthly transmission report then counts days in UTC, which moves evening arrivals to the wrong day. Set it in Settings, Laboratory.
-PASS  Connectors: 1 of 1
-SKIP  Sync with central
+For PostgreSQL or MySQL, enter your named local time zone. The example uses `Africa/Dar_es_Salaam`. On SQL Server, follow the page advice and supply the Windows zone in each report run instead.
 
-3 warnings.
-```
+![Use a named local time zone on PostgreSQL or MySQL.](setup-checks-guide-correct-zone.png)
 
-Add `--json` for machine-readable output. The command exits with code 1 when a check failed. Warnings do not change the exit code, so this example exits with 0.
+### 4. Save the correction
 
-## On a phone
+Open the Laboratory page dots and select **Save**.
 
-The page works on a phone. Each check's message wraps under its name, and the status sits beside the name.
+![Open the Laboratory dots menu.](setup-checks-guide-laboratory-actions.png)
+
+![Choose Save to keep the corrected settings.](setup-checks-guide-laboratory-save.png)
+
+### 5. Return to Setup checks
+
+Select **Setup checks** in Settings. Opening it runs the checks again.
+
+![Laboratory name and Time zone now show Passed.](setup-checks-guide-corrected-result.png)
+
+**Expected result:** The corrected Laboratory name and Time zone checks show Passed. Other warnings or failures still need attention.
+
+## Run the checks again
+
+Use this after configuration changes or after a service recovers.
+
+### 1. Open the page actions
+
+Select the dots at the top right of Setup checks.
+
+![Open the Setup checks dots menu.](setup-checks-guide-setup-actions.png)
+
+### 2. Choose Run again
+
+Select **Run again**. Wait for the checks to finish.
+
+![Choose Run again after making a correction.](setup-checks-guide-run-again.png)
+
+**Expected result:** The new summary shows the current result. Read the remaining failed checks and warnings.
+
+![Read the new summary and address any remaining failed checks or warnings.](setup-checks-guide-rerun-result.png)
+
+## Read setup checks on a phone
+
+Use the same page on a phone. Each check includes its status and advice.
+
+### 1. Read the summary
+
+Open Setup checks and read the summary at the top.
+
+![Read the summary at the top on a phone.](setup-checks-guide-phone-summary.png)
+
+### 2. Scroll through the checks
+
+Read each check detail and any link or next action.
+
+![Scroll through each check to read its detail and guidance.](setup-checks-guide-phone-check.png)
+
+## Optional practice
+
+No practice records are required. In a test installation, correct a genuine laboratory-name or time-zone warning, save it, then run the checks again. Do not introduce a service failure for this exercise.
+
+## Limits
+
+The report describes the checks at the time they ran. All checks passed does not prove every report, feed or staff workflow. Some repairs need server configuration outside Studio.
 
 ## Troubleshooting
 
-- **Services failed.** Run `openldr health` on the server to see which service is down.
-- **Connectors failed.** The check names the connector. Run **Diagnose** on it.
-- **Sync with central failed.** The last cycle failed. **Settings**, **Distributed sync**, **Activity** shows why. See [Distributed Sync](/docs/sync).
-- **A check says it could not run.** The server log has the reason.
+**The checks could not run.** Check the API connection and server log, then try Run again.
+
+**Services failed.** Follow the displayed health-command advice and inspect the named service.
+
+**Sign-in warns that it is switched off.** Turn off the development authentication bypass in server configuration before real use.
+
+**A linked page is unavailable.** Ask an administrator with permission to edit that setting.
 
 ## Related guides
 
-- [Settings](/docs/settings)
-- [Laboratory](/docs/laboratory)
-- [Connectors](/docs/connectors)
-- [SQL Server connections and diagnosis](/docs/connector-diagnose)
+Read [Laboratory](/docs/laboratory) for issuing-lab details. Read [Connectors](/docs/connectors) for connection tests. Read [Start here](/docs/start-here) for installation and command-line setup.

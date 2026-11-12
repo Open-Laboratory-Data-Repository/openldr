@@ -1,144 +1,391 @@
-# Designer de relatórios
+# Editor de relatórios
 
-O **Designer de relatórios** (Report Designer) é uma ferramenta de paginação por arrastar e largar para relatórios imprimíveis. Coloca um cabeçalho, títulos, tabelas, gráficos e painéis numa página A4 ou Letter, liga cada tabela a uma [consulta personalizada](/docs/query) guardada, e publica o resultado como relatório na biblioteca de [Relatórios](/docs/reports).
+Use Report Designer para organizar elementos imprimíveis, ligá-los a Custom Queries guardadas e criar relatórios para a biblioteca. Um desenho controla a página. Uma consulta fornece linhas. Os parâmetros do modelo definem os filtros introduzidos ao executar um relatório.
 
-Uma instalação nova traz dez modelos, um por relatório incluído. Este guia lê como um deles está construído, e depois constrói um modelo novo e publica-o como relatório. Leva cerca de 15 minutos. Selecione uma imagem ou um clip para o ampliar.
+Comece pela consulta guardada e pela disposição de página pretendida. Não precisa de dados de exemplo da documentação. As imagens usam uma consulta de relatório com zero pedidos numa instalação de teste separada. A prática opcional está no fim.
 
-Os menus e painéis do designer estão em inglês no ecrã, por isso este guia mantém os rótulos em inglês.
+Precisa de **Edit report templates** para criar, editar e publicar desenhos. **View reports** abre a biblioteca e **Run reports** executa as entradas.
 
-![Test Volume Over Time aberto no designer, com a tabela selecionada e o separador Data a mostrar a consulta ligada.](report-designer-tour.png)
+Publicar uma revisão do desenho e criar um relatório de biblioteca são ações separadas. Guarde o novo desenho antes de qualquer uma.
 
-## Quem pode fazer o quê
+## Inspecionar um desenho de relatório existente
 
-| Capacidade | O que permite |
-| --- | --- |
-| **View reports** | Ver a biblioteca de Relatórios |
-| **Run reports** | Executar e pré-visualizar um relatório |
-| **Edit report templates** | Abrir o designer, criar e alterar modelos, publicá-los, e criar relatórios na biblioteca |
+Compreenda assim a ligação entre uma tabela existente, a consulta e os filtros expostos pelo relatório.
 
-## Antes de começar
+### 1. Abrir Report Designer
 
-O Exemplo 2 precisa dos dados de exemplo da documentação. Veja [Painéis, Carregar os dados de exemplo](/docs/dashboard#carregar-os-dados-de-exemplo).
+Selecione Report Designer no menu principal.
 
-## Exemplo 1: ler como está feito um relatório incluído
+![Abra Report Designer para inspecionar e criar disposições de relatório.](report-designer-guide-open-page.png)
 
-![Abrir Test Volume Over Time, selecionar a tabela e o separador Data.](report-designer-explore.mp4)
+### 2. Escolher um modelo
 
-1. Abra **Designer de relatórios**. A lista **Templates** à esquerda mostra os dez modelos, com o formato e a orientação.
-2. Selecione **Test Volume Over Time**. O cabeçalho mostra **Saved** e **PUBLISHED**.
-3. Na página, selecione a tabela, chamada **Data**, com as colunas Month, Test e Count.
-4. Abra o separador **Data** à direita.
+Selecione uma entrada existente em Templates. O exemplo abre Test Volume Over Time.
 
-**Resultado esperado:** **Bind query** mostra **Test volume by month**, uma consulta personalizada guardada. A lista **Columns** tem três colunas marcadas. Em **Parameters**, `dateRange` tem o rótulo **Date range**: é o filtro que o relatório pede ao executar.
+![Selecione um desenho existente em Templates.](report-designer-guide-existing-template.png)
 
-Um relatório tem portanto três partes: um modelo (esta página), a consulta que enche as tabelas, e os filtros que passam valores à consulta.
+### 3. Selecionar a tabela
 
-## Exemplo 2: construir um modelo e publicá-lo como relatório
+Selecione o elemento de tabela na página imprimível.
 
-Construa um relatório de uma só tabela: pacientes por faixa etária.
+![Selecione o elemento de tabela na página.](report-designer-guide-existing-table.png)
 
-### Construir o modelo
+### 4. Ler as definições Data
 
-![New template, dar-lhe nome, inserir uma tabela, ligá-la a Patient demographics by age band, marcar as colunas e mostrar os dados.](report-designer-build.mp4)
+Selecione Data no inspetor à direita. Verifique Bind query e os Parameters do modelo abaixo.
 
-1. Abra o menu **⋯** no topo da tela e selecione **New template**.
-2. Clique na caixa do nome, **Untitled template**, e escreva `Patients by age band (sample)`.
-3. Abra **⋯**, selecione **Insert** e depois **Table**. Uma tabela aparece na página.
-4. Com a tabela selecionada, abra o separador **Data**. Defina **Bind query** como **Patient demographics by age band**.
-5. Selecione **Load columns**. Aparecem cinco colunas: band, total, male, female, other. Marque as cinco.
-6. Selecione **Load pages** por cima da tela, e depois **Show data** no cabeçalho.
+![Data mostra a ligação da consulta e os parâmetros do modelo.](report-designer-guide-existing-data-tab.png)
 
-**Resultado esperado:** a tabela enche-se com linhas reais: 5-14 com 3 pacientes, 15-24 com 4, 25-49 com 14, 50+ com 4. São 25 pacientes: os 24 dos dados de exemplo, e **Sample Seed**, que todas as instalações criam.
+![A consulta ligada fornece as linhas. Os parâmetros do modelo definem filtros de execução.](report-designer-guide-existing-binding.png)
 
-![A tabela ligada e cheia com os pacientes do exemplo.](report-designer-bound.png)
+## Criar um desenho de tabela separado
 
-**Show data** só mostra as linhas que cabem na primeira página, para que a tela nunca prometa mais do que o PDF imprime.
+Use um desenho novo para o relatório em vez de alterar uma definição integrada partilhada.
 
-### Guardar, publicar e juntar aos Relatórios
+### 1. Escolher New template
 
-![Guardar o modelo e publicar uma revisão.](report-designer-publish.mp4)
+Abra More actions acima do quadro e selecione New template. O editor vazio também oferece New template.
 
-1. Abra **⋯** e selecione **Save**. O cabeçalho mostra **Saved**.
-2. Abra **⋯** e selecione **Publish revision**. O cabeçalho mostra **PUBLISHED**. Nada é juntado aos Relatórios.
-3. Abra **⋯** e selecione **Create report from this design**. Abre-se o painel **New report**.
+![More actions contém as operações dos modelos.](report-designer-guide-actions.png)
 
-![Dar nome ao relatório, escolher Operational e criá-lo.](report-designer-create-report.mp4)
+![New template inicia um desenho separado.](report-designer-guide-new-template.png)
 
-4. Em **Name**, escreva `Patients by age band (sample)`.
-5. Abra **Category** e selecione **Operational**. **Template** e **Primary query** já estão preenchidos, a partir do modelo e da sua tabela.
-6. Abra o menu **Actions** do painel e selecione **Create report**.
+### 2. Dar nome ao desenho
 
-### Executá-lo
+Introduza um Report name claro, como Request summary design.
 
-![Executar o relatório novo a partir da biblioteca de Relatórios.](report-designer-run.mp4)
+![Defina Report name conforme o relatório precisa.](report-designer-guide-design-name.png)
 
-1. Abra **Relatórios**. **Patients by age band (sample)** aparece em **Operational**.
-2. Selecione-o, abra o menu de três pontos, selecione **Parâmetros** e depois **Executar**. Não tem filtros, não há nada a preencher.
+### 3. Inserir uma tabela
 
-**Resultado esperado:** o documento mostra as cinco colunas e as quatro linhas do passo 6.
+Abra More actions, aponte para Insert e selecione Table.
 
-![O documento do relatório.](report-designer-report.png)
+![Insert lista os tipos de elementos imprimíveis.](report-designer-guide-insert.png)
 
-Para retirar o exemplo, exclua o relatório no seu menu em Relatórios, e depois o modelo com **⋯ → Delete** no designer.
+![Table adiciona uma tabela de dados ao desenho.](report-designer-guide-insert-table.png)
 
-## Duas ações distintas
+### 4. Selecionar a tabela
 
-| Ação do menu ⋯ | Resultado |
-| --- | --- |
-| **Publish revision** | Publica uma versão do modelo guardado. Não cria um relatório na biblioteca. |
-| **Create report from this design** | Abre o painel de criação de um relatório ligado ao modelo e a uma consulta principal. Não publica uma revisão do modelo. |
+A Table inserida fica selecionada. Arraste para a posição pretendida e use as pegas para mudar o tamanho. O exemplo mantém a posição inicial.
 
-As duas exigem um modelo já guardado. O nome do relatório pode ser diferente do do modelo. Publicar uma revisão posterior do mesmo modelo não exige criar outro relatório: use a ação de criação só para juntar uma entrada à biblioteca.
+![A nova tabela está selecionada para configurar.](report-designer-guide-new-table.png)
 
-Uma revisão publicada pertence ao modelo. A consulta principal fornece as linhas da folha de cálculo, o modelo define a paginação do documento.
+## Escolher a consulta da tabela
 
-## Os elementos
+Use uma consulta guardada que devolva as colunas pretendidas. Se tiver parâmetros, defina valores predefinidos correspondentes no modelo antes de carregar as colunas.
 
-**⋯ → Insert** oferece: Text, Table, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date/time, Cell grid, Chart e Letterhead. Arraste um elemento para o mover e use as pegas para o redimensionar. Um elemento selecionado mostra o nome numa etiqueta por cima.
+### 1. Abrir Data
 
-- **Table.** No separador **Data**: **Bind query**, **Load columns**, e depois marque, reordene e mude o nome das colunas. **Sort by column** ordena as linhas antes de desenhar. **First data row is the header** serve quando a consulta devolve os rótulos na primeira linha (precisa também de Sort by). **Transpose**, em Properties, vira uma tabela larga.
-- **Cell grid.** Ligue a consulta em **Data**, e depois defina a coluna de rótulo, as colunas de células, os degraus de cor e as colunas finais em **Properties**.
-- **Chart.** Ligue a consulta em **Data**, e depois escolha o tipo (bar, line ou donut), a coluna de rótulo e as colunas de valores em **Properties**. Os gráficos imprimem-se como formas vetoriais nítidas, e um gráfico ligado também exporta as linhas para Excel.
-- **Parâmetros.** Em **Data**, **Add parameter** define os filtros do relatório (Text, Select ou Date range). A **Key** de um parâmetro tem de coincidir com o **Variable ID** do parâmetro da consulta, para o valor passar para a consulta.
-- **Letterhead.** A faixa de identidade partilhada (logótipo, nome, morada, contacto, linha). A paginação é definida uma vez, por isso todos os modelos que a usam mudam juntos. Os valores vêm de Definições, Laboratório. Veja [Laboratório](/docs/laboratory).
+Com a tabela selecionada, selecione Data no inspetor.
 
-## Mais possibilidades
+![Abra Data para a tabela personalizada selecionada.](report-designer-guide-new-data-tab.png)
 
-- **Preview** gera o modelo em PDF com dados reais. **Export → PDF** ou **Excel** transfere a saída diretamente.
-- O estado ao lado do nome mostra Saved, Saving ou Unsaved changes. O designer também guarda sozinho.
-- A faixa por cima da tela diz quantas páginas o modelo imprime. **Load pages** executa as consultas ligadas para uma contagem real. A contagem é um instantâneo, e a faixa diz quando o modelo mudou desde então. Uma tabela que transborda recebe uma linha tracejada onde acaba a primeira página.
-- A secção **Flow** de Properties controla os blocos quando uma tabela ou grelha passa para outras páginas: **Place below**, **Gap after**, **First page only**, **Show with** e **Fill to bottom of box**.
-- Uma tabela ligada pode ter uma **linha de totais** (um rótulo, e as colunas a somar), e um texto pode mostrar `{{sum(elementName.columnKey)}}`. Uma **regra** por coluna ("When ≥ 10 → Critical") destaca valores sem mexer no SQL. Uma coluna de estado vinda da consulta ganha sempre a uma regra.
-- **Trend** numa coluna ligada desenha o valor como uma pequena linha na célula. A consulta dá os números numa só cadeia delimitada, por exemplo `12,14,11,18`. O que não for pelo menos dois números limpos imprime-se como texto, e o Excel exporta sempre a cadeia em bruto.
-- **⋯ → Versions** lista cada versão publicada, com autor e data. **Restore** volta a pôr uma versão na cópia de trabalho como uma edição normal: um só passo de anular, guardado sozinho, sem publicar.
-- A escolha **Print language** no topo de Properties alterna o texto entre o texto do modelo e a tradução de uma língua. Uma caixa vazia quer dizer "imprime como escrito". Um relatório impresso em [Relatórios](/docs/reports) usa a língua do studio, e `openldr report run <id> --format pdf --lang fr` faz o mesmo sem interface. Só o texto escrito é traduzido: nunca os resultados das consultas, os dados do laboratório nem os códigos de barras.
-- Os **relatórios incluídos já vêm em francês e português**. As datas seguem a língua de impressão (`2 sept. 2026`, `2 set. 2026`), sempre com o dia antes do mês. Os códigos de sensibilidade (R, I, S) nunca são traduzidos.
-- Um painel chave/valor **não** ligado a uma consulta lista os pares em **Pair translations** quando uma língua está escolhida. Um valor com `{{param.from}}` ou `{{date}}` também pode ser traduzido, com os marcadores.
-- Um modelo em **rascunho** imprime um carimbo DRAFT na diagonal em cada página. Publicar retira-o.
-- **Page numbers**, nas definições da página, junta um rodapé numerado. Um modelo pode ter várias páginas.
-- No separador **Layers**, o olho esconde um elemento (sai da tela e do PDF, e o bloco por baixo sobe), o cadeado bloqueia-o, e as linhas reordenam-se a arrastar.
-- Selecione vários elementos e escolha **⋯ → Group selection** para lhes dar nome como grupo. **Alt** chega a um elemento sozinho dentro do grupo. **Ungroup** retira o grupo.
-- **Ctrl+D** duplica, **Ctrl+C** e **Ctrl+V** copiam e colam. **⋯ → Duplicate** cria um modelo a partir de outro, **⋯ → Delete** elimina um.
-- Em [Relatórios](/docs/reports), os gestores voltam ao modelo de um relatório publicado com **Editar modelo**.
+### 2. Ligar a consulta guardada
 
-## Num telemóvel
+Abra Bind query e escolha a Custom Query. O exemplo usa Request count for reporting, com dois parâmetros de consulta Text obrigatórios chamados from e to.
 
-O designer é feito para um ecrã grande. Num telemóvel, use-o para ler um modelo, não para o construir. Os relatórios feitos a partir de um modelo executam-se e imprimem-se num telemóvel como os outros.
+![Escolha a Custom Query guardada.](report-designer-guide-bind-query.png)
+
+## Definir o filtro do relatório e os valores de pré-visualização
+
+Em Reports, o filtro atual de intervalo de datas passa valores simples from e to. A consulta de exemplo declara-os como dois parâmetros Text obrigatórios. O modelo fornece um controlo Date range. Uma consulta do editor com um único parâmetro daterange falha atualmente quando ligada diretamente a Reports.
+
+### 1. Adicionar um parâmetro de modelo
+
+Selecione Add parameter abaixo das definições de ligação.
+
+![Add parameter define um filtro exposto pelo modelo.](report-designer-guide-add-parameter.png)
+
+### 2. Fazer corresponder a chave da consulta
+
+Defina uma Key única, como period. Este controlo de intervalo fornece os valores from e to usados pela consulta de relatório.
+
+![Defina Key param1 conforme o relatório precisa.](report-designer-guide-parameter-key.png)
+
+### 3. Escolher o nome visível
+
+Defina Label com o texto a apresentar, como Period.
+
+![Defina Label period conforme o relatório precisa.](report-designer-guide-parameter-label.png)
+
+### 4. Fazer corresponder o tipo de parâmetro
+
+Defina Type como Date range. A própria consulta usa dois parâmetros Text chamados from e to.
+
+![Escolha Date range para o parâmetro da consulta.](report-designer-guide-parameter-type.png)
+
+### 5. Definir o início predefinido
+
+Introduza a primeira data incluída por predefinição. O exemplo usa 2026-01-01.
+
+![Defina From period conforme o relatório precisa.](report-designer-guide-parameter-from.png)
+
+### 6. Definir o fim predefinido
+
+Introduza a última data incluída por predefinição. O exemplo usa 2027-01-01. A consulta inclui todo o último dia, como o calendário e o agendador do relatório. São valores de pré-visualização. Os utilizadores podem escolher outros.
+
+![Defina To period conforme o relatório precisa.](report-designer-guide-parameter-to.png)
+
+## Escolher e pré-visualizar a coluna impressa
+
+Load columns usa os valores predefinidos do modelo para executar a consulta ligada. A consulta de contagem devolve uma coluna requests mesmo sem pedidos no armazém.
+
+### 1. Carregar as colunas da consulta
+
+Selecione Load columns. Leia o erro se a consulta ou os valores predefinidos forem inválidos.
+
+![Load columns executa a consulta com os valores predefinidos do modelo.](report-designer-guide-load-columns.png)
+
+### 2. Incluir a coluna
+
+Marque requests para incluir na tabela. Escolha as colunas de saída reais necessárias ao relatório.
+
+![Inclua a coluna requests na tabela impressa.](report-designer-guide-include-column.png)
+
+### 3. Definir o nome impresso
+
+Introduza um nome legível, como Requests. Altera o nome impresso, não o campo da consulta.
+
+![Defina Label da coluna requests conforme o relatório precisa.](report-designer-guide-column-label.png)
+
+### 4. Carregar os dados das páginas
+
+Selecione Load pages acima do quadro. Executa os dados ligados e calcula a contagem física de páginas.
+
+![Load pages obtém linhas e calcula o número de páginas impressas.](report-designer-guide-load-pages.png)
+
+### 5. Mostrar os dados carregados
+
+Selecione Show data. Recarregue as páginas após editar se a contagem estiver desatualizada.
+
+![Show data preenche o quadro com as linhas carregadas.](report-designer-guide-show-data.png)
+
+**Resultado esperado:** a tabela mostra a contagem real. Esta instalação imprime uma coluna Requests com zero.
+
+![A coluna impressa contém a contagem atual, incluindo zero.](report-designer-guide-bound-result.png)
+
+## Guardar e inspecionar o PDF
+
+Guarde explicitamente um desenho novo. Depois verifique a página realmente produzida antes de publicar.
+
+### 1. Guardar o desenho
+
+Abra More actions e selecione Save. Espere por Saved. Após guardar a primeira vez, as alterações seguintes também são guardadas automaticamente.
+
+![Save guarda o novo desenho antes da publicação.](report-designer-guide-save.png)
+
+### 2. Abrir Preview
+
+Abra More actions e selecione Preview.
+
+![Preview produz o desenho atual de trabalho em PDF.](report-designer-guide-preview.png)
+
+### 3. Verificar e descarregar a página produzida
+
+Leia a pré-visualização PDF e use Download para uma cópia local. Feche a pré-visualização para voltar à edição.
+
+![A pré-visualização mostra a saída real da consulta no desenho imprimível.](report-designer-guide-preview-result.png)
+
+![Download guarda o PDF produzido.](report-designer-guide-preview-download.png)
+
+**Resultado esperado:** a pré-visualização produz o desenho atual com os dados da consulta. Um desenho em rascunho tem a marca DRAFT.
+
+## Publicar uma revisão guardada
+
+Publique após verificar o desenho guardado. Uma revisão regista o estado publicado. Não acrescenta uma entrada à biblioteca Reports.
+
+### 1. Publicar a revisão
+
+Abra More actions e selecione Publish revision. Guarde primeiro se o editor pedir.
+
+![Publish revision regista o desenho guardado sem criar um relatório de biblioteca.](report-designer-guide-publish.png)
+
+### 2. Verificar o estado publicado
+
+Verifique Published junto ao nome do desenho.
+
+![Published confirma a revisão do desenho.](report-designer-guide-published.png)
+
+**Resultado esperado:** o desenho guardado tem uma revisão publicada.
+
+## Inspecionar versões publicadas
+
+Identifique assim a revisão guardada antes de considerar um restauro.
+
+### 1. Abrir Versions
+
+Abra More actions e selecione Versions.
+
+![Versions lista os estados publicados.](report-designer-guide-versions.png)
+
+### 2. Ler a linha da revisão
+
+Verifique a versão, a hora de publicação e o autor. Restore carrega esse estado na cópia de trabalho como alteração. Não publica outra revisão. Feche o painel se não precisar de restaurar.
+
+![Leia a revisão, a hora e o autor antes de restaurar.](report-designer-guide-version-row.png)
+
+## Criar a entrada de biblioteca do relatório
+
+Faça esta tarefa quando o desenho e a consulta estiverem preparados. O relatório da biblioteca pode ter um nome diferente do desenho.
+
+### 1. Escolher Create report from this design
+
+Abra More actions e selecione Create report from this design.
+
+![Create report from this design cria uma entrada de biblioteca separada.](report-designer-guide-create-report.png)
+
+### 2. Dar nome ao relatório
+
+Introduza o Name da biblioteca. O exemplo usa Request summary report.
+
+![Escolha o nome do relatório na biblioteca.](report-designer-guide-report-name.png)
+
+### 3. Escolher a categoria
+
+Abra Category e escolha onde as pessoas devem encontrar o relatório, como Operational.
+
+![Escolha a categoria onde as pessoas devem encontrar o relatório.](report-designer-guide-report-category.png)
+
+### 4. Verificar as definições ligadas
+
+Confirme Template e Primary query. O modelo controla a disposição Document. A consulta principal fornece as linhas Spreadsheet.
+
+![Verifique o modelo selecionado para o relatório.](report-designer-guide-report-template.png)
+
+![Verifique a consulta principal que fornece as linhas da folha de cálculo.](report-designer-guide-report-query.png)
+
+### 5. Criar a entrada de biblioteca
+
+Abra os pontos Actions do painel e selecione Create report.
+
+![O painel New report tem os seus próprios pontos Actions.](report-designer-guide-report-actions.png)
+
+![Create report adiciona a entrada com nome à biblioteca.](report-designer-guide-report-create.png)
+
+**Resultado esperado:** a entrada está disponível na categoria em Reports. Abra os Parameters e execute aí. [Relatórios](/docs/reports) explica esse processo.
+
+## Exportar diretamente do editor
+
+Use estas exportações para obter saída do desenho atual sem abrir o relatório da biblioteca.
+
+### 1. Exportar PDF
+
+Abra More actions, aponte para Export e selecione PDF.
+
+![Export PDF descarrega a saída do desenho atual.](report-designer-guide-export-pdf.png)
+
+### 2. Exportar Excel
+
+Abra More actions, aponte para Export e selecione Excel. As linhas ligadas tornam-se dados do livro.
+
+![Export Excel descarrega as linhas ligadas da tabela.](report-designer-guide-export-excel.png)
+
+**Resultado esperado:** o navegador descarrega o PDF produzido ou o livro.
+
+## Controlar a visibilidade e o bloqueio dos elementos
+
+Layers fornece controlos diretos para os elementos selecionados. Ocultar afeta a saída. Bloquear impede o movimento.
+
+### 1. Abrir Layers
+
+Selecione Layers no inspetor.
+
+![Layers seleciona elementos e controla a visibilidade, o bloqueio e a ordem.](report-designer-guide-layers.png)
+
+### 2. Ocultar um elemento quando pretendido
+
+Use Hide Table, o controlo do olho, na tabela selecionada. Os elementos ocultos não aparecem no quadro nem no PDF.
+
+![Use o olho para ocultar um elemento de propósito.](report-designer-guide-hide-layer.png)
+
+### 3. Mostrar novamente
+
+Use Show Table para repor.
+
+![Use Show Table para repor o elemento oculto.](report-designer-guide-show-layer.png)
+
+### 4. Bloquear a posição
+
+Use Lock Table para impedir o movimento mantendo o elemento selecionável.
+
+![Lock mantém o elemento selecionável e impede o movimento.](report-designer-guide-lock-layer.png)
+
+### 5. Desbloquear novamente
+
+Use Unlock Table quando quiser mover. O exemplo deixa a tabela visível e desbloqueada.
+
+![Unlock Table permite mover novamente.](report-designer-guide-unlock-layer.png)
+
+## Inspecionar um desenho existente num telemóvel
+
+Use um ecrã grande para criar disposições de página. No telemóvel, encontre e inspecione um modelo existente ou execute o relatório em Reports.
+
+### 1. Expandir Explorer
+
+Selecione Expand explorer na barra estreita.
+
+![Use a barra Explorer para encontrar um modelo existente no telemóvel.](report-designer-guide-phone-explorer.png)
+
+### 2. Escolher o modelo existente
+
+Selecione o nome e recolha Explorer quando precisar de espaço no quadro.
+
+![Escolha o desenho existente. Use um ecrã maior para editar.](report-designer-guide-phone-template.png)
+
+### 3. Abrir as ações
+
+Use More actions para inspecionar as operações disponíveis. Altere a disposição num ecrã maior.
+
+![Use More actions para inspecionar um desenho existente.](report-designer-guide-phone-actions.png)
+
+## Escolher elementos de página e ferramentas de disposição
+
+Insert também oferece Text, Letterhead, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid e Chart. Selecione um elemento para editar as Properties. A tarefa de uma tabela não exige estes elementos adicionais.
+
+Properties controla o papel, a orientação e os números de página quando nenhum elemento está selecionado. Também controla posição, dimensões e aspeto dos elementos. Undo e Redo percorrem as alterações. O zoom só altera a vista.
+
+Para Chart ou Cell grid, ligue uma consulta em Data e escolha as colunas correspondentes de nome, valor ou célula em Properties. Verifique a saída produzida com as suas linhas.
+
+As definições Flow podem colocar um elemento abaixo de outro ou controlar conteúdo repetido nas páginas seguintes. Use Load pages após mudar a disposição para verificar o número físico de páginas. Show data apresenta apenas as linhas que cabem na página do quadro.
+
+## Separar o texto do relatório dos campos da consulta
+
+O nome impresso de uma coluna pode diferir do nome do campo da consulta. Use os campos de nome em Data para o texto visível. Mantenha as chaves de ligação alinhadas com a saída real da consulta.
+
+O seletor Print language em Properties edita o texto de relatório de uma língua. As traduções vazias usam o texto original. Mudar a língua do desenho não traduz a saída da consulta.
+
+Um Letterhead usa a identidade do laboratório configurada em Settings. Pode dar a vários desenhos o mesmo logótipo, nome e contactos.
+
+## Gerir desenhos com cuidado
+
+More actions inclui Duplicate e Delete. Duplicate inicia um desenho separado para uma variante. Delete remove permanentemente após confirmação. Verifique primeiro os relatórios ligados.
+
+Restore em Versions altera a cópia de trabalho e pode ser anulado. Pré-visualize o desenho restaurado antes de o publicar de propósito. Publicar outra revisão não exige outro relatório de biblioteca para o mesmo desenho.
+
+Create report from this design acrescenta uma entrada de biblioteca separada. Não substitui Publish revision. Um desenho publicado ausente de Reports ainda precisa da criação da entrada.
+
+## Referência opcional de prática
+
+[Descarregue a consulta opcional de contagem para relatórios](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Importe por Query se quiser uma referência. Usa parâmetros Text obrigatórios from e to, correspondentes ao intervalo de datas atual de Reports. Não exige dados de pacientes. Use uma consulta aprovada para os relatórios normais.
+
+[Descarregue o PDF de exemplo publicado](https://openldr.online/docs-samples/user-guide/report-designer/published-summary.pdf) ou [o livro exportado](https://openldr.online/docs-samples/user-guide/report-designer/summary-design.xlsx) para comparar o resultado de uma coluna. Estes ficheiros contêm apenas uma contagem zero.
 
 ## Resolução de problemas
 
-- **Não há colunas para escolher.** Escolha uma consulta em **Bind query** e selecione **Load columns**.
-- **A tabela da tela fica vazia com Show data.** Marque pelo menos uma coluna e volte a **Load pages**. Uma consulta com um filtro obrigatório precisa de um valor por omissão no parâmetro.
-- **O modelo está publicado mas não aparece nos Relatórios.** Publicar uma revisão não cria uma entrada. Use **Create report from this design**.
-- **Create report está desativado.** Preencha Name, Category, Template e Primary query.
-- **Publicar pede para guardar primeiro.** Guarde e espere por **Saved**.
-- **A pré-visualização não aparece.** Confirme que a consulta ligada e os parâmetros são válidos.
-- **Nada para exportar.** O modelo ainda não tem tabelas.
-- **As linhas de uma tabela passam para outras páginas.** É normal: as tabelas repartem-se por várias páginas quando os dados não cabem numa.
+**Não aparecem colunas.** Escolha Bind query, configure os valores predefinidos necessários e selecione Load columns.
+
+**O quadro continua vazio.** Inclua pelo menos uma coluna ligada, depois Load pages e Show data. Leia os erros da consulta antes de mudar a disposição.
+
+**O estado de gravação mostra um erro.** Resolva-o antes de publicar. Um modelo novo exige um primeiro Save explícito.
+
+**Create report está indisponível.** Guarde o desenho e preencha Name, Category, Template e Primary query no painel New report.
+
+**A pré-visualização e a saída diferem das linhas esperadas.** Alinhe as chaves do modelo com os identificadores dos parâmetros da consulta. Verifique os valores predefinidos e os limites de datas SQL. O exemplo inclui os dois dias extremos do calendário.
+
+**Uma tabela imprime em várias páginas.** Os dados podem continuar depois da primeira página. Use Load pages e consulte o PDF para verificar a contagem real.
+
+**Reports indica required parameter: period.** Uma Custom Query com um parâmetro daterange funciona em Query, mas atualmente não recebe um intervalo aninhado de Reports. Use dois parâmetros Text chamados from e to, referidos pelo SQL. Uma pré-visualização bem-sucedida não prova uma execução na biblioteca.
 
 ## Guias relacionados
 
-- [Relatórios](/docs/reports)
-- [Consultas personalizadas](/docs/query)
-- [Laboratório](/docs/laboratory)
-- [Conectores](/docs/connectors)
+[Consulta](/docs/query) cria consultas guardadas. [Relatórios](/docs/reports) executa entradas da biblioteca e agenda saídas. [Laboratório](/docs/laboratory) configura a identidade partilhada.

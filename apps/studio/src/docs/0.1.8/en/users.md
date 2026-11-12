@@ -1,116 +1,271 @@
-# Users and Roles
+# Users
 
-**Users** lists who can sign in, their status, and their role. Administrators use it to add people, give each one a role, and turn access on and off.
+Use Users to find accounts, update their profiles, assign a role and control access. Roles define the permissions an account receives. The Users sheet selects one role per person.
 
-Sign-in itself is handled by the identity provider, usually Keycloak. OpenLDR decides what a signed-in person can do, through their role. Roles are covered in [Roles](/docs/roles).
+Use your own staff accounts and approved access decisions. The pictures use a fictional account in an isolated test installation. No sample data is required.
 
-This guide takes about 15 minutes. Select any picture to enlarge it.
+View users allows the directory. Manage users allows account creation, profile changes and enabling or disabling access. Manage roles allows role assignment. Reset passwords and Force logout allow their respective security actions.
 
-![Users: the accounts from the identity provider, with search, status and columns.](users-tour.png)
+Creating accounts, editing provider profiles, resetting passwords and ending provider sessions require a configured identity administrator. When it is unavailable, the page tells you to contact your identity provider administrator. OpenLDR role and account-access controls remain available.
 
-## Who can do what
+For installation and command-line setup, read [Start here](/docs/start-here). To define role permissions, read [Roles](/docs/roles).
 
-| Permission | What it lets you do |
-| --- | --- |
-| View users | Open **Users** and see accounts. |
-| Manage users | Create, edit, enable and disable accounts. |
-| Reset passwords | Reset a password or send a reset email. |
-| Force logout | End all of a person's active sessions. |
-| Manage roles | Needed as well to save a role on a user. |
+## Create an operator account
 
-Administrator has all of these.
+Use this when a person needs their own sign-in. Check the required role before creating the account.
 
-## The list
+### 1. Open Users
 
-1. Open **Users**. It starts with active accounts.
-2. Type in **Search username, name or email**. Search covers the whole directory, not just the page you see.
-3. **Status** switches between **Active**, disabled, and all accounts.
-4. **Columns** chooses what the list shows.
+Select **Users** in the main menu.
 
-The list is in the identity provider's order. Each page holds at most 100 accounts. The footer shows the range on screen without a total, such as **1–2 (total unknown)**, because the provider does not give one. Use **Next** for more. Column filters and sorting are not available, because the provider does not support them. Accounts added or removed while you page can shift the pages.
+![Select Users in the main menu.](users-guide-open-users.png)
 
-The dots menu at the top right has **New user** and **Refresh**.
+### 2. Choose New user
 
-## Example 1: give someone a role
+Open the page dots above the directory and select **New user**. If it is unavailable, contact your identity provider administrator.
 
-![A user's row menu: Edit, Disable, Reset password, Send reset email, Force sign-out.](users-row-menu.png)
+![Open the Users page dots menu.](users-guide-page-actions.png)
 
-1. On the person's row, open the dots menu, **Actions for** their username.
-2. Select **Edit**. The **Edit user** sheet opens.
+![Choose New user.](users-guide-new-user.png)
 
-![The Edit user sheet: role, first name, last name and email.](users-edit-sheet.png)
+### 3. Enter the username
 
-3. Wait for **Role** to load, then choose one role. Each person has one role. Choosing another replaces it.
-4. Change **First name**, **Last name** or **Email** if needed.
-5. Open the sheet's dots menu and save.
-6. Check for the success message. Open the person again to see the saved role.
+Enter the person's sign-in username. The example uses `documentation.operator`.
 
-If the sheet shows a role-assignment error, it stays open. Fix the error before you treat the change as done.
+![Enter the account username.](users-guide-username.png)
 
-Pick the role with the fewest capabilities that still lets the person do their work. If no role fits, make one first. See [Roles, Example 1](/docs/roles#example-1-make-a-read-only-role).
+### 4. Choose an initial password
 
-## Example 2: add a person
+Enter an initial **Password**, or leave it blank and arrange activation through your identity provider. An initial password requires a change at the next sign-in. Share account credentials through your approved process.
 
-1. Open the dots menu at the top right and select **New user**.
-2. Fill in the username, name and email.
-3. Choose a role.
-4. Save, and check for the success message.
+![Enter an initial password, or leave it blank and arrange activation through your provider.](users-guide-password.png)
 
-A new account with no role can do nothing. Always give it a role.
+### 5. Confirm the password
 
-## Disable or enable access
+If you entered a password, enter it again in **Confirm password**.
 
-Open the person's row menu and select **Disable**, or **Enable** on a disabled account.
+![Enter the same initial password again.](users-guide-confirm-password.png)
 
-- Disabling writes a local block in OpenLDR first, then updates the identity provider.
-- The person's next request returns `403 account disabled`, even with a token issued before. A screen already open in their browser can stay visible.
-- Accounts that never signed in get the local block too.
-- Enabling updates the provider first, then lifts the local block.
-- If either step fails, the action reports an error. A failed disable can leave the provider enabled while OpenLDR still blocks access. A failed enable can leave the provider enabled while the local block stays. Fix the connection and repeat the same action.
-- If another status change for that account is still running, the reply is `409`. Wait and retry. This also applies when Studio and the CLI change the same account at once.
+### 6. Choose the role
 
-The audit log records `user.status` for success and `user.status.failed` for failures.
+Select the role that grants the actions this person needs. New accounts default to **Lab Technician**.
 
-## Passwords and sessions
+![Choose the role that matches this person. The example uses Lab Technician.](users-guide-choose-role.png)
 
-- **Reset password** sets a new password for the person.
-- **Send reset email** emails them a reset link.
-- **Force sign-out** ends all their sessions at once.
+### 7. Complete the profile
 
-These depend on the identity provider. They can be missing for accounts it does not let OpenLDR manage.
+Fill the fields in your published Users form. The pictured form asks for first name, last name and email. Your form may contain different fields. A published form is optional for account creation.
 
-## On a phone
+![Complete the published Users form. This test form asks for name and email.](users-guide-profile.png)
 
-The user list works on a phone.
+### 8. Create the account
 
-![Users on a phone.](users-phone.png)
+Open the sheet dots and select **Create**. If role assignment fails after saving the account, choose a valid role and retry in the same sheet.
 
-## From the command line
+![Open the New user sheet dots.](users-guide-sheet-actions.png)
 
-```bash
-./openldr users list
-./openldr user deactivate <local-id>
-./openldr user activate <local-id>
-./openldr user directory-list --offset 100 --limit 25 --search Ada --enabled true --json
-```
+![Choose Create to save the account and role.](users-guide-create-user.png)
 
-- `users list` lists local accounts and their local ids.
-- `deactivate` and `activate` update both systems for a linked account, using its provider subject. An account made only in OpenLDR changes locally. The audit log names the actor `cli`.
-- `directory-list` reads the provider directory. Its JSON has `rows`, `offset`, `limit`, `total: null` and `hasMore`. Add `limit` to `offset` while `hasMore` is true. Leave out `--enabled` for both statuses.
+**Expected result:** The sheet closes and the new account appears Active in the directory.
 
-When provider administration is not set up, the list shows local accounts. Local search matches username, display name and email anywhere in the text, and results are in username and id order.
+![The account appears Active with its name and email.](users-guide-created-result.png)
+
+## Edit a profile or assign another role
+
+Use this when staff details or responsibilities change. Changing the role changes the permissions the person receives.
+
+### 1. Find the account
+
+Search by username, name or email. Search applies to the whole directory.
+
+![Search across the whole directory by username, name or email.](users-guide-search-user.png)
+
+### 2. Open its actions
+
+Select the dots for the correct account.
+
+![Open the dots for the correct user.](users-guide-row-actions.png)
+
+### 3. Choose Edit
+
+Select **Edit**. Selecting the row opens the same sheet. With identity administration unavailable, this menu reads **Edit role**.
+
+![Choose Edit to open the profile and role.](users-guide-edit-user.png)
+
+### 4. Update the profile
+
+Edit the fields provided by your Users form. Username cannot be changed here.
+
+![Update the profile fields your Users form provides.](users-guide-edit-profile.png)
+
+### 5. Choose the role
+
+Open **Role** and select the required role. The example chooses **System Auditor**.
+
+![Choose another role. The example changes to System Auditor.](users-guide-change-role.png)
+
+### 6. Save the account
+
+Open the sheet dots and select **Save**.
+
+![Choose Save in the sheet dots menu.](users-guide-save-user.png)
+
+**Expected result:** The sheet closes and the directory shows the saved profile. Reopen the account to inspect its saved role.
+
+![The saved profile appears in the Users table.](users-guide-edited-result.png)
+
+## Disable account access
+
+Use this when someone should no longer sign in. You cannot disable your own account through its row menu.
+
+### 1. Choose Disable
+
+Find the account. Open its row dots and select **Disable**.
+
+![Choose Disable for the correct user.](users-guide-disable-menu.png)
+
+### 2. Confirm the account
+
+Check the username in the confirmation. Select **Disable** to continue.
+
+![Confirm the account name before selecting Disable.](users-guide-disable-confirm.png)
+
+### 3. Open Status
+
+Disabled accounts disappear from the default Active list. Open **Status**.
+
+![Use Status to find a disabled account.](users-guide-status-filter.png)
+
+### 4. Choose Disabled
+
+Select **Disabled**.
+
+![Choose Disabled.](users-guide-disabled-option.png)
+
+**Expected result:** The account appears with Disabled status. Disabling access keeps the account and profile.
+
+![The account appears with Disabled status.](users-guide-disabled-result.png)
+
+## Restore account access
+
+Use this when a disabled person should be able to sign in again.
+
+### 1. Choose Enable
+
+Find the account using Status set to Disabled or All statuses. Open its row dots and select **Enable**.
+
+![Choose Enable to restore account access.](users-guide-enable-menu.png)
+
+### 2. Confirm the account
+
+Check the username, then select **Enable**.
+
+![Check the account, then confirm Enable.](users-guide-enable-confirm.png)
+
+### 3. Return to Active
+
+Open **Status** and choose **Active**.
+
+![Choose Active to find the enabled account.](users-guide-active-option.png)
+
+**Expected result:** The account returns to the Active list.
+
+![The account returns to the Active list.](users-guide-enabled-result.png)
+
+## Reset a password
+
+Use this when an account needs a replacement password. This requires identity administration and Reset passwords.
+
+### 1. Open Reset password
+
+Find the account. Open its row dots and select **Reset password**.
+
+![Choose Reset password for the correct account.](users-guide-reset-menu.png)
+
+### 2. Enter a new password
+
+Enter **New password**. **Generate** creates a password and fills both fields. The eye reveals it and Copy copies it.
+
+![Enter a new password. Generate can fill both password fields.](users-guide-reset-new-password.png)
+
+### 3. Confirm the new password
+
+Enter the same password in **Confirm password**. Generate has already filled this for you.
+
+![Enter the same new password again.](users-guide-reset-confirm-password.png)
+
+### 4. Choose whether it is temporary
+
+Keep **Require password change at next sign-in** selected for a temporary password. Clear it only when the person should use this password directly.
+
+![Keep Require password change on for a temporary password, or turn it off when appropriate.](users-guide-reset-change.png)
+
+### 5. Reset the password
+
+Select **Reset password**. Share the password securely using your approved process.
+
+![Select Reset password after checking the password-change choice.](users-guide-reset-submit.png)
+
+**Expected result:** The page confirms the password reset. With the default temporary option, the person must change it at their next sign-in.
+
+![The page confirms that the password was reset.](users-guide-reset-result.png)
+
+## End a user's provider sessions
+
+Use this when existing provider sessions should end. This requires identity administration and Force logout.
+
+### 1. Choose Force sign-out
+
+Find the account. Open its row dots and select **Force sign-out**. You cannot use this action on yourself here.
+
+![Choose Force sign-out to end this user's provider sessions.](users-guide-logout-menu.png)
+
+### 2. Confirm the account
+
+Check the username and select **Force sign-out**.
+
+![Confirm Force sign-out for the correct account.](users-guide-logout-confirm.png)
+
+**Expected result:** The page confirms that all sessions were signed out. This action does not disable the account.
+
+![The page confirms that all sessions were signed out.](users-guide-logout-result.png)
+
+## Use Users on a phone
+
+Use the same directory and account sheet on a phone. Wide columns can require horizontal scrolling.
+
+### 1. Find the account
+
+Search by username, name or email.
+
+![Search for an account on a phone.](users-guide-phone-search.png)
+
+### 2. Open the account
+
+Select its row. Scroll the User sheet to read its profile and role. Select **Close** at the top right to return.
+
+![The User sheet uses the phone width. Scroll to read profile fields.](users-guide-phone-profile.png)
+
+## Send a reset email when mail is configured
+
+The account row dots also offer **Send reset email**. It asks the identity provider to send the account a reset link. Check the email address and your provider's outgoing mail configuration first. The documented test did not send email.
+
+## Optional practice
+
+Use a test installation and a fictional operator. Follow the account tasks using your own test username and example.invalid email address. Do not test disable, password reset or force sign-out on another person's account without approval.
+
+## Limits
+
+Users has no delete-account action. Disable access when an account should stop signing in. The fields below Role depend on your published Users form. OpenLDR cannot configure outgoing provider email here.
 
 ## Troubleshooting
 
-- **Permission denied.** The person's role lacks the capability the page or action needs.
-- **A page is missing from someone's menu.** Their role does not include it.
-- **Reset actions are missing.** The account may be controlled by the identity provider.
-- **A disabled person can still see an old screen.** Already-loaded content stays. Their next request is blocked.
-- **Someone still has old access after a role change.** Ask them to sign out and in again, or wait for their session to refresh.
-- **A new account can do nothing.** It has no role yet.
+**New user or password actions are missing.** Read the notice above the directory. Ask your identity provider administrator to configure account administration.
+
+**The account disappears after a status change.** Change Status to Active, Disabled or All statuses to find it again.
+
+**The account saved but role assignment failed.** Keep the sheet open, choose a valid role, then save again. Do not remove the last person able to manage roles.
 
 ## Related guides
 
-- [Roles](/docs/roles)
-- [Audit](/docs/audit)
-- [Settings](/docs/settings)
+Read [Roles](/docs/roles) to define permissions. Read [Start here](/docs/start-here) for installation and command-line setup.

@@ -1,165 +1,218 @@
 # Synchronisation distribuée
 
-La **synchronisation distribuée** relie plusieurs laboratoires à un serveur OpenLDR **central**, sur des liaisons lentes ou intermittentes. Chaque laboratoire fait tourner une installation OpenLDR CE complète, travaille hors ligne et se met à jour dès qu'une connexion est là.
+Distributed sync relie une installation de laboratoire à une installation centrale OpenLDR. Le laboratoire envoie ses dossiers cliniques. Le central fournit la configuration et la terminologie partagées que le laboratoire lit.
 
-- **Vers le haut, du laboratoire au central.** Les données que possède le laboratoire : patients, demandes, résultats, prélèvements et comptes rendus. Le central en garde une copie en lecture seule qu'il ne modifie jamais. Le laboratoire reste la source de vérité.
-- **Vers le bas, du central au laboratoire.** La configuration que possède le central : formulaires, tableaux de bord, définitions de rapports et paramètres autorisés, plus la terminologie (systèmes de codes et correspondances). Les laboratoires les utilisent en lecture seule.
-- **Marquage du site.** Chaque enregistrement porte le `site_id` du laboratoire qui l'a créé. Le central classe et dédoublonne par ce champ, donc deux laboratoires ne se télescopent jamais, même avec les mêmes identifiants locaux.
+Vous avez besoin de **View sync** pour lire les états et événements. **Manage sync** permet la configuration, la gestion des sites et les décisions sur les divergences. Le central inscrit les laboratoires dans Settings, Sites. Le laboratoire configure sa liaison dans Settings, Distributed sync.
 
-Comptez 30 minutes, avec deux installations : un central et un laboratoire. Les images viennent d'une seule installation, synchronisation désactivée : elles montrent les pages, pas une liaison réelle. Sélectionnez une image ou un clip pour l'agrandir.
+Pour une liaison réelle, obtenez l'identifiant du site, l'URL centrale, l'émetteur OIDC, l'identifiant client et le secret à usage unique lors de l'inscription centrale. Celle-ci exige l'administration des clients Keycloak. Gardez ces valeurs privées et utilisez HTTPS.
 
-![La page Synchronisation distribuée d'un laboratoire, sur l'onglet Paramètres.](sync-settings-tab.png)
+Les images montrent les véritables paramètres et un central local délibérément indisponible. Les exemples vérifient la configuration et l'inspection des échecs. Ils ne montrent pas de transfert réussi et n'inventent pas d'identifiants d'inscription. Aucun fichier d'exemple n'est requis.
 
-## Qui peut faire quoi
+## Vérifier la disponibilité de l'inscription centrale
 
-| Capacité | Ce qu'elle permet |
-| --- | --- |
-| **View sync** | Voir l'état de la synchronisation et l'onglet Activité |
-| **Manage sync** | Configurer la synchronisation, inscrire et gérer les sites, résoudre les divergences |
+L'administrateur central doit inscrire le laboratoire avant que son opérateur configure une liaison réelle.
 
-Les deux pages sont dans **Paramètres** : **Sites** sur le central, **Synchronisation distribuée** sur un laboratoire.
+### 1. Ouvrir Sites sur le central
 
-## Avant de commencer
+Ouvrez **Settings**, puis **Sites**.
 
-- Le **central** inscrit les laboratoires et garde la copie. Les **laboratoires** se connectent au central et envoient leurs propres données.
-- L'inscription crée des clients Keycloak, donc le realm Keycloak du central doit donner au compte de service d'administration les rôles `manage-clients` et `view-clients`. L'export de realm livré avec OpenLDR les contient. Un conteneur Keycloak démarré pour la première fois **avant** l'arrivée de la synchronisation doit réimporter son realm, ou recevoir ces deux rôles à la main. Sinon, la création du client échoue.
-- Utilisez HTTPS pour l'URL du central en production. Le secret client circule une fois à l'inscription, et les jetons du laboratoire à chaque synchronisation.
-- Le laboratoire joint le central **de serveur à serveur, en HTTPS**. Si le central a un certificat autosigné, ce qui est le cas par défaut de l'installeur, le laboratoire doit recevoir le certificat public du central. Passer l'avertissement dans un navigateur ne suffit **pas** : le serveur du laboratoire vérifie le certificat lui-même. Voir l'[Exemple 2](#exemple-2-faire-confiance-au-certificat-du-central-sur-le-laboratoire).
+![Le central gère les laboratoires inscrits dans Settings, Sites.](sync-guide-sites.png)
 
-## Exemple 1 : inscrire un laboratoire sur le central
+### 2. Vérifier l'administration du fournisseur
 
-L'inscription crée un client Keycloak confidentiel, `sync-<siteId>`, avec un mappeur de jeton `site_id`. Elle génère le secret du client et ajoute une ligne à la liste des sites. Le secret n'est affiché **qu'une fois** et ne peut plus jamais être relu. S'il est perdu, renouvelez-le.
+L'inscription exige l'administration des clients Keycloak. Cette installation isolée indique qu'elle est indisponible et ne peut donc pas émettre de véritable secret client. Configurez le service d'identité central avant une mise en service réelle.
 
-![La page Sites du central et son menu : Inscrire un site, Télécharger le certificat central, Actualiser.](sync-sites-menu.mp4)
+![Cette installation isolée ne dispose pas de l'administration des clients du fournisseur. L'inscription est indisponible.](sync-guide-admin-unavailable.png)
 
-1. Sur le central, ouvrez **Paramètres**, puis **Sites**.
-2. Ouvrez le menu **⋯** de la page et sélectionnez **Inscrire un site**. Remplissez :
+**Résultat attendu :** un central configuré propose Enroll site. L'exemple s'arrête avant l'inscription car l'administration des clients est indisponible.
 
-   | Champ | Notes |
-   | --- | --- |
-   | Site ID | Un identifiant stable du laboratoire, par exemple `lab-site-01`. Minuscules, chiffres et tirets, 1 à 63 caractères, sans tiret au début. C'est aussi l'id du client Keycloak et la clé de la liste des sites. |
-   | Name | Un libellé lisible, facultatif. |
-   | Central URL | L'adresse publique par laquelle le laboratoire joindra le central, par exemple `https://central.example.org`. Obligatoire. |
+## Saisir les valeurs d'inscription au laboratoire
 
-   ![La fenêtre Inscrire un site, avec Site ID, Name et Central URL.](sync-enroll-site.png)
+Utilisez les valeurs fournies par l'administrateur central. Les valeurs des captures désignent seulement un service de test local inexistant.
 
-3. Sélectionnez **Inscrire**. Une fenêtre unique montre ce dont le laboratoire a besoin : **client id**, **client secret**, **OIDC issuer** et **central URL**. Copiez chacun avec son bouton et transmettez-les au laboratoire avant de fermer. Le secret ne sera plus affiché. La même fenêtre propose **Télécharger le certificat central**, pour prendre le certificat dans la même étape.
+### 1. Ouvrir Distributed sync
 
-**Résultat attendu :** le site est listé avec un badge **active**. Le menu de sa ligne propose **Renouveler le secret**, qui émet un nouveau secret, et **Révoquer**, qui supprime le client et marque la ligne révoquée.
+Au laboratoire, ouvrez **Settings**, puis **Distributed sync**.
 
-### Télécharger le certificat du central
+![Le laboratoire configure sa liaison dans Settings, Distributed sync.](sync-guide-open.png)
 
-Si le laboratoire doit faire confiance à un central autosigné, donnez-lui le certificat public du central. Sélectionnez **Télécharger le certificat central** dans le menu **⋯** de la page Sites, ou dans la fenêtre d'inscription, pour enregistrer `central-certificate.pem`. Il vient de `GET /api/settings/sync/central-certificate`, réservé aux administrateurs. C'est le certificat TLS public du central, pas un secret. Il faut que `TLS_CERT_PATH` pointe vers le certificat du central. L'installeur le règle et monte le certificat pour vous.
+### 2. Choisir Settings
 
-### En ligne de commande, sur le central
+Restez sur l'onglet **Settings**.
 
-```bash
-openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org
-openldr sync list
-openldr sync rotate lab-site-01
-openldr sync revoke lab-site-01
+![Restez sur Settings pour configurer le laboratoire.](sync-guide-settings.png)
+
+### 3. Vérifier Enable sync
+
+Gardez **Enable sync** désactivé pendant la saisie. Activez-le lorsque les valeurs sont prêtes. Désactivé, il laisse les deux traitements en attente.
+
+![Enable sync contrôle l'exécution des traitements d'envoi et de réception.](sync-guide-enabled.png)
+
+### 4. Choisir Direction
+
+Utilisez Push to central pour les seules données du laboratoire, Pull from central pour la seule configuration partagée, ou **Bidirectional** pour les deux.
+
+![Choisissez Push to central, Pull from central ou Bidirectional.](sync-guide-direction.png)
+
+### 5. Saisir Central URL
+
+Utilisez l'adresse publique HTTPS fournie à l'inscription. L'image utilise une adresse locale HTTP absente et ne représente pas une configuration de production.
+
+![Utilisez l'adresse centrale accessible fournie à l'inscription. Cette image utilise une adresse de test locale absente.](sync-guide-central.png)
+
+### 6. Saisir Site ID
+
+Utilisez l'identifiant stable attribué par le central. N'inventez pas un autre identifiant pour un client inscrit.
+
+![Utilisez l'identifiant exact du site inscrit.](sync-guide-site.png)
+
+## Saisir les identifiants du site et enregistrer
+
+Continuez dans l'onglet Sync Settings. Utilisez les identifiants fournis pour ce laboratoire par le central. Laissez un secret existant vide uniquement pour le conserver.
+
+### 1. Saisir l'émetteur et l'identifiant client
+
+Copiez exactement **OIDC issuer URL** et **Client ID** depuis l'inscription centrale.
+
+![Utilisez l'émetteur OIDC et l'identifiant client fournis par le central.](sync-guide-issuer.png)
+
+### 2. Saisir le secret à usage unique
+
+Remplissez **Client secret**. Le champ est masqué et accessible uniquement en écriture. La capture contient une valeur fictive qui ne peut pas authentifier.
+
+![Saisissez le secret à usage unique. Il reste masqué. Cette valeur fictive est inutilisable.](sync-guide-secret.png)
+
+### 3. Définir l'intervalle
+
+Choisissez **Sync interval (minutes)** entre 1 et 1440. La valeur par défaut est 15.
+
+![Choisissez un intervalle de synchronisation entre 1 et 1440 minutes.](sync-guide-interval.png)
+
+### 4. Ouvrir les actions de l'onglet
+
+Activez Enable sync quand tout est prêt, puis ouvrez les points de la barre d'onglets.
+
+![Les points de la barre d'onglets contiennent Save.](sync-guide-actions.png)
+
+### 5. Enregistrer la configuration
+
+Sélectionnez **Save**. Les modifications démarrent, arrêtent ou reconfigurent immédiatement les traitements, sans redémarrer l'API.
+
+![Save applique la configuration sans redémarrer l'API.](sync-guide-save.png)
+
+**Résultat attendu :** une liaison valide peut s'authentifier et transférer les données. Une notification d'enregistrement prouve l'acceptation des paramètres, pas l'accès au central.
+
+## Lire l'activité réelle de synchronisation
+
+Utilisez Activity pour établir si la liaison enregistrée fonctionne réellement.
+
+### 1. Ouvrir Activity
+
+Sélectionnez l'onglet **Activity**. Lisez les états d'envoi et de réception, Pending push, Last checked et Last success.
+
+![Activity montre l'état actuel des traitements et les événements.](sync-guide-activity.png)
+
+### 2. Demander un cycle
+
+Ouvrez les points de l'onglet et choisissez **Sync now** pour demander un cycle immédiat. Aucun cycle ne démarre si la synchronisation est désactivée.
+
+![Sync now demande un cycle immédiat.](sync-guide-now.png)
+
+### 3. Lire la ligne d'événement
+
+Lisez l'événement, la direction, le nombre d'enregistrements et le détail. Cet exemple enregistre un véritable échec car son central local n'existe pas.
+
+![Le central local absent produit un véritable événement d'échec, pas une liaison réussie.](sync-guide-failed-row.png)
+
+### 4. Ouvrir l'événement
+
+Sélectionnez sa ligne pour ouvrir le panneau **Sync event**.
+
+![Ouvrez un événement pour lire son erreur complète et ses métadonnées.](sync-guide-detail.png)
+
+### 5. Lire l'erreur complète
+
+Lisez l'erreur et les métadonnées. Corrigez le problème précis de connexion, d'identité ou de données avant de réessayer.
+
+![Lisez l'échec réseau réel avant de modifier les paramètres.](sync-guide-error.png)
+
+**Résultat attendu :** une liaison réussie affiche des événements réussis, des curseurs qui avancent et une file en attente qui diminue. L'exemple prouve uniquement la visibilité des échecs.
+
+## Arrêter la synchronisation et modifier sans risque
+
+Utilisez l'interrupteur général pour suspendre les deux traitements sans supprimer les valeurs de connexion enregistrées.
+
+### 1. Enregistrer avec Enable sync désactivé
+
+Fermez l'événement, revenez dans Settings, désactivez Enable sync, puis ouvrez les points et choisissez Save.
+
+![Enregistrer avec Enable sync désactivé arrête les deux traitements.](sync-guide-disable-save.png)
+
+### 2. Conserver le secret enregistré pendant les modifications
+
+Rouvrez ou rechargez Settings. Le secret reste vide avec l'indication qu'un secret est enregistré. Laissez-le vide pour le conserver en modifiant les autres champs.
+
+![Un secret enregistré reste vide pendant les modifications des autres champs.](sync-guide-secret-kept.png)
+
+**Résultat attendu :** les deux traitements s'arrêtent. La liaison de test fictive reste désactivée après la démonstration.
+
+## Utiliser les paramètres de synchronisation sur téléphone
+
+Le formulaire défile verticalement à la largeur d'un téléphone. Les tables d'événements larges défilent dans leur propre zone.
+
+### 1. Lire les champs de connexion
+
+Ouvrez Distributed sync, Settings et faites défiler jusqu'au champ voulu.
+
+![Les champs de paramètres s'empilent à la largeur d'un téléphone.](sync-guide-phone-settings.png)
+
+### 2. Consulter Activity
+
+Utilisez Activity pour l'état actuel et les événements. Ouvrez une ligne pour lire tous ses détails.
+
+![Activity reste disponible sur téléphone.](sync-guide-phone-activity.png)
+
+## Valeurs fournies par l'inscription centrale
+
+Sur un central disposant de l'administration des clients Keycloak, ouvrez Sites, ses points, puis Enroll site. Fournissez un Site ID stable en minuscules, un Name facultatif et la Central URL publique. L'inscription crée un client nommé sync-<siteId> et son association de jeton site_id.
+
+Le résultat affiche l'identifiant client, le secret client, l'émetteur OIDC et l'URL centrale. Copiez le secret en privé avant de fermer. Il n'apparaît qu'une fois. Un secret perdu exige Rotate secret sur la ligne du site et une mise à jour au laboratoire. Revoke supprime le client et marque le site révoqué.
+
+Le compte de service central doit avoir manage-clients et view-clients dans le realm Keycloak. Ces opérations n'ont pas été testées dans l'installation isolée. Son administration des identités est volontairement désactivée.
+
+## Faire confiance au TLS central sur le serveur du laboratoire
+
+Accepter un certificat autosigné dans le navigateur ne le rend pas fiable pour le serveur du laboratoire. Téléchargez le certificat public central depuis les points de Sites ou le résultat d'inscription, puis transférez-le au laboratoire par votre canal d'administration habituel.
+
+Montez-le en lecture seule dans le conteneur API du laboratoire et définissez NODE_EXTRA_CA_CERTS avec ce chemin interne. Recréez l'API après modification de son environnement. Le certificat doit correspondre au nom d'hôte ou à l'IP centrale, y compris son Subject Alternative Name. Gardez la validation normale des certificats.
+
+Utilisez une adresse centrale HTTPS fiable en production. Une adresse HTTP localhost sert uniquement aux tests isolés comme l'exemple illustré. Aucun téléchargement de certificat ni changement de confiance TLS n'a été testé ici.
+
+## Utiliser la CLI
+
+Suivez [Commencer ici](/docs/start-here) pour configurer la CLI. Depuis `openldr_ce`, le central utilise sync enroll, list, rotate et revoke. Ces identifiants sont de véritables secrets. N'affichez pas leurs sorties dans des journaux partagés ou des captures.
+
+Au laboratoire, settings sync show masque le secret enregistré. Définissez un champ à la fois avec settings sync set. Sync status et sync now inspectent ou demandent un traitement réel.
+
+```shell
+pnpm openldr settings sync show
+pnpm openldr sync status
+pnpm openldr sync now
+pnpm openldr settings sync set enabled false
 ```
-
-`sync enroll` affiche une fois le client id, le client secret, le site id, l'URL du central et l'émetteur OIDC, avec un avertissement : le secret ne sera plus affiché. `--central-url` est obligatoire. `sync list` montre les sites inscrits et leur état, jamais de secret. `sync rotate` affiche une fois un nouveau secret. `sync revoke` supprime le client et marque la ligne révoquée, et peut être relancé sans risque. Ajoutez `--json` à chacune pour une sortie lisible par machine.
-
-## Exemple 2 : faire confiance au certificat du central sur le laboratoire
-
-Passez cette étape si le central a un certificat auquel le laboratoire fait déjà confiance, par exemple Let's Encrypt pour un vrai domaine. Elle est nécessaire quand le central utilise un certificat **autosigné** : le cas par défaut de l'installeur, et le cas habituel d'un central sur un réseau local ou une adresse IP.
-
-**Pourquoi.** Le processus de synchronisation du laboratoire ouvre une connexion HTTPS vers le central pour obtenir un jeton et envoyer ou recevoir des données. Node.js, qui fait tourner le serveur du laboratoire, vérifie le certificat du central avec son propre magasin de confiance et refuse ce qu'il ne connaît pas, quoi qu'en dise le navigateur. La synchronisation échoue donc tant que le laboratoire ne fait pas confiance au certificat.
-
-1. Copiez `central-certificate.pem` sur le laboratoire, par exemple dans `config/nginx/certs/central/fullchain.pem` à côté du fichier compose.
-2. Montez-le en lecture seule dans le conteneur `api` du laboratoire, et réglez `NODE_EXTRA_CA_CERTS` sur son chemin dans le conteneur. Dans le `docker-compose.yml` du laboratoire, sous le service `api` :
-
-   ```yaml
-   volumes:
-     - ./config/nginx/certs/central/fullchain.pem:/etc/ssl/central-ca.pem:ro
-   ```
-
-   et dans le `.env` du laboratoire :
-
-   ```bash
-   NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
-   ```
-
-3. Recréez l'API du laboratoire : `docker compose up -d api`.
-
-**Le certificat doit correspondre à l'adresse du central.** TLS vérifie aussi que le certificat a été émis pour l'adresse que joint le laboratoire. Si le laboratoire joint le central par une adresse IP, comme `https://10.0.0.5`, le certificat du central doit porter cette IP comme **IP Subject Alternative Name**. Un certificat qui ne la liste que comme nom DNS est refusé avec `ERR_TLS_CERT_ALTNAME_INVALID`. Créez au besoin un certificat avec une IP SAN :
-
-```bash
-openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
-  -keyout config/nginx/certs/privkey.pem -out config/nginx/certs/fullchain.pem \
-  -subj "/CN=10.0.0.5" -addext "subjectAltName=IP:10.0.0.5,DNS:localhost,IP:127.0.0.1"
-```
-
-Redémarrez ensuite la passerelle du central avec `docker compose restart gateway`, téléchargez de nouveau le certificat, et refaites les étapes ci-dessus sur le laboratoire.
-
-## Exemple 3 : connecter le laboratoire au central
-
-L'opérateur du laboratoire prend les cinq valeurs de l'inscription (client id, client secret, site id, URL du central et émetteur OIDC) et les saisit sur la page **Synchronisation distribuée** du laboratoire.
-
-1. Sur le laboratoire, ouvrez **Paramètres**, puis **Synchronisation distribuée**. Elle a deux onglets : **Paramètres**, la configuration, et **Activité**, l'état en direct et les événements récents. Restez sur **Paramètres**.
-2. Remplissez les champs :
-
-   | Champ | Notes |
-   | --- | --- |
-   | Activer la synchronisation | L'interrupteur principal. Désactivé, les deux processus restent en sommeil. |
-   | Sens | **Envoyer vers le central** envoie seulement les données du laboratoire. **Récupérer depuis le central** reçoit seulement la configuration et la terminologie. **Bidirectionnelle** fait les deux. |
-   | URL du central | L'adresse du central donnée à l'inscription, par exemple `https://central.example.org`. |
-   | Identifiant du site | Le site id de ce laboratoire, par exemple `lab-site-01`. |
-   | URL de l'émetteur OIDC | L'émetteur du realm donné à l'inscription, par exemple `https://central.example.org/auth/realms/openldr`. |
-   | Identifiant client | Le client créé, `sync-<siteId>`. |
-   | Secret client | Le secret unique de l'inscription. En écriture seule et masqué. Laissez-le vide quand vous modifiez d'autres champs, pour garder la valeur enregistrée. |
-   | Intervalle de synchronisation (minutes) | La fréquence, de 1 à 1440. 15 par défaut. |
-
-3. Sélectionnez **Enregistrer**. Avec la synchronisation activée, l'URL du central, le site id, l'émetteur OIDC et l'identifiant client sont obligatoires. L'enregistrement prend effet tout de suite : activer ou désactiver, changer de sens ou modifier un champ démarre, arrête ou reconfigure les processus en direct, **sans redémarrage**.
-
-### Suivre la synchronisation
-
-![Ouvrir l'onglet Activité.](sync-activity.mp4)
-
-Ouvrez l'onglet **Activité**. Une bande d'état, rafraîchie toutes les quelques secondes, montre :
-
-- Un badge **on** ou **off** pour l'ensemble.
-- Une ligne d'envoi et une ligne de réception, chacune `running` ou `idle`, avec la dernière séquence et l'heure de la dernière synchronisation. Un sens que le mode exclut affiche **non démarré**.
-- **Envois en attente** : le nombre de changements locaux qui attendent de monter.
-- **Dernière vérification** et **Dernier succès**.
-
-En dessous, le tableau **Activité récente** liste chaque événement, le plus récent d'abord : sens, événement (`synced`, `failed`, `quarantined` ou `diverged`), nombre d'enregistrements, détail et heure. Sélectionnez une ligne pour l'erreur et les métadonnées complètes. **Synchroniser maintenant** lance un passage tout de suite au lieu d'attendre l'intervalle. Il indique si un passage a démarré, et ne fait rien tant que la synchronisation est désactivée.
-
-![L'onglet Activité sur une installation sans synchronisation : non démarré, 0 envoi en attente, jamais vérifié, aucune activité.](sync-activity-tab.png)
-
-**Résultat attendu** avec une liaison réelle : le central liste le laboratoire **active** dans Sites. Sur le laboratoire, **Activité** montre l'ensemble actif, avec les lignes d'envoi et de réception qui avancent et **Envois en attente** qui baisse vers zéro. La copie du central reçoit les enregistrements du laboratoire, marqués de son site id. Le laboratoire reçoit les formulaires, tableaux de bord, rapports et la terminologie du central.
-
-### En ligne de commande, sur le laboratoire
-
-```bash
-openldr settings sync show
-openldr settings sync set mode bidirectional
-openldr sync status
-openldr sync now
-```
-
-`settings sync set <field> <value>` écrit un champ : `enabled`, `mode`, `centralUrl`, `siteId`, `oidcIssuer`, `clientId`, `clientSecret` ou `intervalMinutes`. `sync status` affiche les processus en direct, les curseurs et l'arriéré. `sync now` lance un passage, et échoue si la synchronisation est désactivée.
-
-## Sur un téléphone
-
-Les deux pages fonctionnent sur un téléphone. Le tableau d'activité défile sur le côté pour atteindre le détail de chaque événement.
 
 ## Dépannage
 
-- **La synchronisation reste éteinte, ou rien ne se passe.** Vérifiez que la synchronisation est activée et que le sens est le bon. Vérifiez l'URL du central, le site id, l'émetteur OIDC et l'identifiant client. Un secret laissé vide garde l'ancienne valeur, donc un mauvais secret demande un nouveau collage.
-- **`503` « identity provider admin client is not configured » à l'inscription, sur le central.** L'API n'a pas d'identifiants du compte de service d'administration Keycloak. Réglez `KEYCLOAK_ADMIN_CLIENT_ID` et `KEYCLOAK_ADMIN_CLIENT_SECRET` dans le `.env` du central et recréez l'API. Le journal d'audit reste vide, car l'inscription écrit son entrée seulement après la création du client.
-- **`403` à l'inscription, sur le central.** Le compte de service d'administration n'a pas `manage-clients` et `view-clients`. Réimportez le realm du central, ou ajoutez ces deux rôles à la main, puis réessayez.
-- **L'inscription échoue avec `fetch failed: connect ECONNREFUSED 127.0.0.1:443`, sur le central.** L'API tente de joindre Keycloak par l'adresse publique, qui dans le conteneur est l'API elle-même. Réglez `OIDC_INTERNAL_ISSUER_URL` sur le realm interne, par exemple `http://keycloak:8080/auth/realms/openldr`, pour que les appels serveur passent par l'adresse interne. Recréez l'API.
-- **La synchronisation du laboratoire échoue avec `self-signed certificate`.** Le laboratoire ne fait pas confiance au certificat du central. Voir l'[Exemple 2](#exemple-2-faire-confiance-au-certificat-du-central-sur-le-laboratoire).
-- **La synchronisation échoue avec `ERR_TLS_CERT_ALTNAME_INVALID`.** Le certificat est accepté mais ne liste pas l'adresse que joint le laboratoire. Créez le certificat du central avec une IP Subject Alternative Name pour cette adresse, téléchargez-le de nouveau et réinstallez-le sur le laboratoire.
-- **Secret client perdu.** Il est irrécupérable, par conception. Utilisez **Renouveler le secret** sur le site, depuis le menu de sa ligne dans Sites ou avec `openldr sync rotate <siteId>`, et collez le nouveau secret dans l'onglet Paramètres du laboratoire.
-- **Jetons du laboratoire refusés par le central.** Le site a été révoqué, ou l'identifiant client ou l'émetteur OIDC du laboratoire ne correspond pas à ce que le central a créé. Vérifiez que le site est actif avec `openldr sync list`, et que l'émetteur pointe vers le realm du central.
-- **Un laboratoire révoqué doit revenir.** Inscrivez de nouveau le même site id sur le central. La ligne se réactive et un nouveau secret est émis.
+**L'inscription est indisponible.** Vérifiez les capacités d'administration Keycloak du central et les rôles de son compte de service. OIDC générique ne crée pas de clients de synchronisation.
+
+**L'authentification échoue.** Faites correspondre l'identifiant du site, l'émetteur, l'identifiant client et le secret actuel à l'inscription centrale. Renouvelez un secret perdu, puis mettez à jour le laboratoire.
+
+**Erreur de certificat.** Vérifiez la confiance sur le serveur API du laboratoire et la correspondance des adresses du certificat. L'exception du navigateur ne configure pas le serveur.
+
+**Activity contient des événements failed, quarantined ou diverged.** Ouvrez l'événement et lisez sa raison complète. Tous les échecs ne sont pas des problèmes réseau. Résolvez la condition signalée avant de répéter les modifications.
+
+**Pending push reste élevé.** Lisez Last success et les échecs récents. Sync now demande un cycle sans prouver sa réussite.
 
 ## Guides associés
 
-- [Paramètres](/docs/settings)
-- [Utilisateurs et rôles](/docs/users)
-- [Variables d'environnement](/docs/environment)
+[Fournisseurs d'authentification](/docs/auth-providers), [Variables d'environnement](/docs/environment) et [Paramètres](/docs/settings).

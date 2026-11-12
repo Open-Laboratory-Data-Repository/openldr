@@ -40,7 +40,7 @@ OpenLDR peut recevoir et traiter les données avant la configuration des établi
 
 Ouvrez **Documentation** dans Studio et suivez **Configurer votre système**, en commençant par Terminologie. Les guides intégrés expliquent chaque tâche.
 
-Le guide Facilities dans Studio explique la saisie manuelle, les imports, l'historique et les liens entre codes. Vous pouvez utiliser vos propres données. Les fichiers de pratique sont facultatifs.
+La documentation de Studio présente des tâches illustrées pour Terminology, Facilities, Test catalog, Patients, Forms et Workflows. Suivez les guides des tableaux de bord et des rapports pour le travail quotidien, ou ceux des paramètres pour gérer l'installation. Chaque tâche explique son objectif et montre les commandes à utiliser. Utilisez vos propres données ; les fichiers de pratique sont facultatifs.
 
 ## 3. Étapes suivantes
 

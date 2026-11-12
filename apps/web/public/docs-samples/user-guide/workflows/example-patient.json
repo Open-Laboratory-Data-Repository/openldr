@@ -1,0 +1,22 @@
+{
+  "resourceType": "Bundle",
+  "type": "transaction",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "docs-workflow-patient",
+        "active": true,
+        "name": [
+          {
+            "family": "Documentation",
+            "given": [
+              "Workflow"
+            ]
+          }
+        ],
+        "gender": "unknown"
+      }
+    }
+  ]
+}

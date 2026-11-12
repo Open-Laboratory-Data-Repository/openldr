@@ -1,267 +1,173 @@
 # Variables d'environnement
 
-OpenLDR se configure par des variables d'environnement lues au démarrage. Dans un
-déploiement Docker, elles se trouvent dans le fichier `.env` placé à côté de
-`docker-compose.yml` (le fichier généré par l'installateur). Modifiez une valeur, puis
-recréez la pile pour l'appliquer :
+OpenLDR lit les variables d'environnement au démarrage du serveur. Dans une installation Docker, modifiez le fichier privé `.env` près du fichier Compose, puis recréez les services concernés.
 
-```
-docker compose up -d
-```
+Utilisez Settings pour les valeurs disposant de commandes dans l'application. Connectors conserve les identifiants des destinations. Marketplace gère les registres après leur premier démarrage. Distributed sync conserve sa configuration dans Settings. Ces paramètres enregistrés ne nécessitent aucune modification du fichier d'environnement.
 
-La plupart des opérateurs ne modifient jamais ces valeurs à la main. L'installateur écrit
-des valeurs par défaut adaptées et génère tous les secrets. Cette page sert de référence
-pour les valeurs utiles au-delà d'une installation sur un seul hôte : un domaine public,
-une base de données externe, ou SQL Server comme entrepôt analytique.
+Vous devez accéder au serveur et connaître le projet Compose, le fichier d'environnement et les fichiers complémentaires exacts. Gardez les mêmes options. Les images de terminal ci-dessous illustrent des commandes à adapter. Elles ne montrent pas votre serveur et ne prouvent aucune modification du déploiement.
 
-> Les secrets (`*_PASSWORD`, `*_SECRET_*`, `SECRETS_ENCRYPTION_KEY`) sont générés à la
-> première installation. Ne les partagez jamais et ne les versionnez jamais. Changer
-> `SECRETS_ENCRYPTION_KEY` après la création de connecteurs rend leurs identifiants
-> enregistrés illisibles. Considérez cette clé comme définitive une fois la pile en service.
+Conservez `SECRETS_ENCRYPTION_KEY`. La remplacer après l'enregistrement d'identifiants les rend illisibles. Excluez les mots de passe, clés de signature, certificats privés et sauvegardes des captures et du contrôle de versions.
 
-## Exécution
+## Identifier l'installation en cours
 
-| Variable | Défaut | Rôle |
+Vérifiez l'application avant de choisir un fichier de configuration. Un dépôt source et un déploiement Compose installé utilisent des commandes de démarrage différentes.
+
+### 1. Ouvrir General
+
+Ouvrez **Settings**, puis **General**.
+
+![Ouvrez Settings, puis General.](environment-guide-general.png)
+
+### 2. Lire About
+
+Notez Version et Environment de l'application en cours. Cette page identifie l'application sans exposer son fichier d'environnement privé.
+
+![About identifie la version et l'environnement de l'application en cours.](environment-guide-about.png)
+
+### 3. Trouver son répertoire Compose
+
+Sur le serveur, ouvrez le répertoire contenant le fichier Compose et le .env de cette installation. Le chemin illustré `~/openldr_ce` est un exemple. Utilisez votre véritable répertoire de déploiement.
+
+![Illustration. Travaillez dans le répertoire du projet Compose installé.](environment-guide-folder.png)
+
+**Résultat attendu :** vous connaissez le déploiement actif et les fichiers de configuration concernés.
+
+## Changer une valeur de démarrage
+
+Convenez de l'interruption nécessaire pour cette valeur. Utilisez un éditeur privé et conservez les identifiants existants.
+
+### 1. Sauvegarder la configuration
+
+Sauvegardez le .env actuel en privé avant de le modifier. Conservez-le avec la sauvegarde du déploiement et limitez son accès.
+
+![Illustration. Sauvegardez la configuration en privé avant modification.](environment-guide-backup.png)
+
+### 2. Modifier uniquement la valeur voulue
+
+Changez la valeur sélectionnée. L'illustration utilise LOG_LEVEL. Ne remplacez pas votre fichier complet par cet exemple.
+
+![Illustration. Modifiez uniquement la valeur d'environnement voulue.](environment-guide-edit.png)
+
+### 3. Valider la configuration Compose
+
+Exécutez `docker compose config --quiet` avec les options habituelles de projet, env-file et fichiers complémentaires. Exigez un code de sortie 0. N'affichez pas la configuration développée dans des journaux partagés.
+
+![Illustration. Validez la configuration Compose sans afficher de secrets.](environment-guide-validate.png)
+
+### 4. Recréer les services concernés
+
+Utilisez `docker compose up -d` pour les services concernés. Un simple redémarrage conserve l'environnement d'un conteneur existant. Changer l'origine publique ou l'identité peut affecter plusieurs services.
+
+![Illustration. Recréez les services concernés pour appliquer les paramètres de démarrage.](environment-guide-apply.png)
+
+### 5. Vérifier le résultat
+
+Vérifiez les conteneurs, la santé de l'application, les journaux et le comportement modifié. Une API saine ne prouve pas le fonctionnement des bases externes, des retours de connexion ou des destinations de fichiers.
+
+![Illustration. Vérifiez l'état des services et la santé de l'application.](environment-guide-health.png)
+
+**Résultat attendu :** le nouveau processus lit la valeur voulue. Conservez l'ancienne configuration jusqu'à la vérification du comportement.
+
+## Exécution et adresse de déploiement
+
+L'analyseur de l'application et l'installateur ont des valeurs par défaut différentes. L'analyseur utilise development pour NODE_ENV. Une installation déployée doit utiliser explicitement production. Les valeurs propres à Compose configurent la passerelle et les étiquettes d'images.
+
+| Variable | Valeur par défaut ou source | Signification |
 | --- | --- | --- |
-| `NODE_ENV` | `production` | Mode d'exécution. Gardez `production` pour un déploiement. |
-| `PORT` | `3000` | Port interne de l'API derrière la passerelle. |
-| `LOG_LEVEL` | `info` | Niveau de détail des journaux (`debug`, `info`, `warn`, `error`). |
-| `OPENLDR_VERSION` | `latest` | Étiquette d'image que la pile télécharge et exécute. |
-| `TRUST_PROXY` | non défini | Nombre de proxys devant l'API auxquels se fier pour l'adresse IP du client. Mettez `1` derrière la passerelle fournie, pour que le journal d'audit montre la vraie adresse du client. Ne le définissez que si un proxy de confiance se trouve vraiment devant l'API. Sinon, un client peut falsifier sa propre adresse IP. |
+| `NODE_ENV` | Analyseur : development | Utilisez production pour les services déployés. |
+| `PORT` | 3000 | Port d'écoute interne de l'API. |
+| `LOG_LEVEL` | info | Niveau des journaux du serveur. |
+| `TRUST_PROXY` | Non défini | Proxys de confiance pour attribuer l'IP du client. Utilisez uniquement la chaîne de proxys réellement fiable. |
+| `OPENLDR_VERSION` | Étiquette d'image du déploiement | Fixez la version approuvée pour les mises à niveau. |
+| `SERVER_NAME`, `PUBLIC_ORIGIN` | Valeurs du déploiement | Nom d'hôte public et origine externe complète. |
+| `GATEWAY_HTTP_PORT`, `GATEWAY_HTTPS_PORT` | 80, 443 | Ports publiés de la passerelle. |
+| `TLS_MODE`, `LETSENCRYPT_EMAIL` | Valeurs de l'installateur | Mode de certificat de la passerelle et contact du certificat. |
+| `MIGRATE_ON_START`, `SEED_ON_START` | Analyseur : false, false | Migrations au démarrage et chargement facultatif d'exemples. La mise à niveau utilise une étape de migration distincte. |
 
-## Adresse publique et TLS
+## Bases de données et stockage objet
 
-Ces valeurs fixent l'URL que les utilisateurs atteignent et la façon dont la passerelle
-termine HTTPS. `SERVER_NAME` est le nom d'hôte public. `PUBLIC_ORIGIN` est l'origine
-complète utilisée pour les liens et les redirections OIDC.
+La base interne utilise toujours Postgres. Choisissez le moteur d'entrepôt avec TARGET_STORE_ADAPTER. Ces variables configurent l'entrepôt lui-même. Les connexions supplémentaires de rapports et de sources se configurent dans Connectors.
 
-| Variable | Défaut | Rôle |
+| Variable | Valeur par défaut ou source | Signification |
 | --- | --- | --- |
-| `SERVER_NAME` | `localhost` | Nom d'hôte ou domaine public du déploiement. |
-| `PUBLIC_ORIGIN` | `https://localhost` | Origine externe complète (`https://votre.domaine`). |
-| `GATEWAY_HTTP_PORT` | `80` | Port de l'hôte sur lequel la passerelle sert HTTP. |
-| `GATEWAY_HTTPS_PORT` | `443` | Port de l'hôte sur lequel la passerelle sert HTTPS. |
-| `TLS_MODE` | `self-signed` | `self-signed` ou un certificat reconnu (Let's Encrypt). |
-| `LETSENCRYPT_EMAIL` | non défini | Adresse de contact utilisée pour émettre un certificat reconnu. |
+| `INTERNAL_DATABASE_URL` | Obligatoire | Base de l'application, comprenant comptes, audit et ressources canoniques. |
+| `TARGET_STORE_ADAPTER` | pg | Moteur d'entrepôt : pg, mssql ou mysql. |
+| `TARGET_DATABASE_URL` | Obligatoire pour pg | Connexion à l'entrepôt Postgres. |
+| `MSSQL_HOST`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD` | Obligatoires pour mssql | Connexion à l'entrepôt SQL Server. |
+| `MSSQL_PORT` | 1433 | Port de l'entrepôt SQL Server. |
+| `MSSQL_ENCRYPT`, `MSSQL_TRUST_SERVER_CERT` | false, true | Options de transport de l'entrepôt. Vérifiez les exigences du certificat serveur réel. |
+| `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | Obligatoires pour mysql | Connexion à l'entrepôt MySQL ou MariaDB. |
+| `MYSQL_PORT` | 3306 | Port de l'entrepôt MySQL. |
+| `MYSQL_SSL`, `MYSQL_SSL_REJECT_UNAUTHORIZED` | false, false | Options TLS et de vérification des certificats de l'entrepôt. |
+| `BLOB_ADAPTER` | minio | Sélecteur d'adaptateur S3. Prend aussi en charge le service Garage fourni. |
+| `S3_ENDPOINT`, `S3_BUCKET` | Obligatoires | Adresse du service objet et compartiment. |
+| `S3_REGION`, `S3_FORCE_PATH_STYLE` | us-east-1, true | Région S3 et adressage par chemin. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Identifiants privés | Accès au stockage objet. Garage exige son format de clé pris en charge. |
+| `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` | Générés par l'installateur | Secrets du service Garage. Conservez-les avec sa configuration. |
+| `EVENTING_ADAPTER` | pg | Implémentation du stockage des événements de l'application. |
 
-## Base de données
+## Authentification et secrets
 
-OpenLDR utilise toujours une base Postgres interne pour l'application. L'entrepôt cible
-(analytique) peut être Postgres, SQL Server ou MySQL/MariaDB, selon
-`TARGET_STORE_ADAPTER`. `TARGET_DATABASE_URL` s'applique à une cible Postgres. SQL Server et
-MySQL ont leurs propres variables, décrites plus bas.
+Consultez [Fournisseurs d'authentification](/docs/auth-providers) avant de changer d'émetteur. La base de l'application est liée à son espace d'identité. OIDC générique n'administre ni les utilisateurs Keycloak ni les clients de synchronisation.
 
-| Variable | Rôle |
-| --- | --- |
-| `INTERNAL_DATABASE_URL` | Base de l'application (utilisateurs, formulaires, workflows, audit). Toujours Postgres. |
-| `TARGET_DATABASE_URL` | Entrepôt analytique alimenté par les pipelines, quand `TARGET_STORE_ADAPTER=pg`. |
-| `POSTGRES_PASSWORD` | Mot de passe du conteneur Postgres fourni. |
-
-## Adaptateurs
-
-Les adaptateurs choisissent l'implémentation de chaque sous-système. Les valeurs par
-défaut correspondent aux conteneurs fournis. Ne les changez que pour utiliser une
-infrastructure externe.
-
-| Variable | Défaut | Rôle |
+| Variable | Valeur par défaut ou source | Signification |
 | --- | --- | --- |
-| `AUTH_ADAPTER` | `keycloak` | Mode de connexion : `keycloak` ou `oidc`. Voir [Fournisseurs d'authentification](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Stockage objet des téléversements et des artefacts. `minio` sélectionne l'adaptateur S3, qui fonctionne aussi avec Garage. |
-| `EVENTING_ADAPTER` | `pg` | Magasin d'événements utilisé par les déclencheurs de workflow. |
-| `TARGET_STORE_ADAPTER` | `pg` | Moteur de l'entrepôt analytique : `pg`, `mssql` ou `mysql`. |
+| `AUTH_ADAPTER` | keycloak | Connexion keycloak ou oidc générique. |
+| `IDENTITY_ADMIN_ADAPTER` | Dépend de AUTH_ADAPTER | keycloak ou none. L'oidc générique exige none. |
+| `OIDC_ISSUER_URL` | Obligatoire | Émetteur attendu des jetons. Conservez-le pour un espace d'identité existant. |
+| `OIDC_WEB_CLIENT_ID` | openldr-web | Identifiant du client public du navigateur. |
+| `OIDC_AUDIENCE` | Facultatif | Audience exigée du jeton d'accès API si configurée. |
+| `OIDC_SCOPES` | openid profile email | Portées demandées par le navigateur. Doit inclure openid. |
+| `OIDC_RESOURCE` | Facultatif | Indicateur de ressource du fournisseur si nécessaire. |
+| `OIDC_INTERNAL_JWKS_URL` | Facultatif | Adresse explicite des clés de signature côté serveur. L'émetteur attendu ne change pas. |
+| `OIDC_INTERNAL_ISSUER_URL` | Facultatif | Adresse du realm Keycloak côté serveur. OIDC générique n'en déduit pas les adresses. |
+| `KEYCLOAK_ADMIN_CLIENT_ID`, `KEYCLOAK_ADMIN_CLIENT_SECRET` | Valeurs privées du déploiement | Compte de service pour administrer le fournisseur. |
+| `TLS_CERT_PATH` | Facultatif | Certificat public du serveur proposé au téléchargement du certificat central. |
+| `SECRETS_ENCRYPTION_KEY` | Base64, 32 octets décodés | Clé de chiffrement des identifiants enregistrés. Conservez la valeur existante. |
+| `AUTH_DEV_BYPASS` | false | Contournement explicite de l'authentification en développement. Production refuse true. |
+| `AUTH_DEV_USERNAME`, `AUTH_DEV_ROLES` | dev-admin, lab_admin | Acteur du contournement de développement explicitement activé. |
 
-Une cible de rapport externe ne se choisit plus ici par un adaptateur. Créez plutôt un
-connecteur dans **Paramètres > Connecteurs**. Le plugin de destination est déterminé à
-partir de ce connecteur.
+## Limites des workflows, plugins et importations
 
-## Stockage objet (S3)
+Activez les capacités de l'hôte uniquement pour les utilisateurs et installations qui en ont besoin. WORKFLOW_CODE_ENABLED permet d'exécuter du JavaScript avec accès à l'hôte. Ce n'est pas un environnement isolé de sécurité. Les limites SQL des tableaux de bord, les écouteurs de workflow et la publication de jeux de données ont des commandes dans Settings.
 
-Le service `storage` fourni exécute Garage, un serveur compatible S3. Pointez ces variables
-vers n'importe quel point d'accès S3 pour en utiliser un autre.
-
-| Variable | Défaut | Rôle |
+| Variable | Valeur par défaut de l'analyseur | Signification |
 | --- | --- | --- |
-| `S3_ENDPOINT` | `http://storage:3900` | URL du point d'accès S3. |
-| `S3_REGION` | `us-east-1` | Région S3. |
-| `S3_ACCESS_KEY_ID` | générée | Clé d'accès. |
-| `S3_SECRET_ACCESS_KEY` | générée | Clé secrète. |
-| `S3_BUCKET` | `openldr` | Bucket qui contient les téléversements et les artefacts. |
-| `S3_FORCE_PATH_STYLE` | `true` | Adressage par chemin (requis par le stockage fourni). |
-| `GARAGE_RPC_SECRET` | générée | Secret interne de Garage, 64 caractères hexadécimaux. |
-| `GARAGE_ADMIN_TOKEN` | générée | Jeton de l'API d'administration de Garage, 64 caractères hexadécimaux. |
+| `WORKFLOW_CODE_ENABLED` | false | Autorise l'exécution du nœud Code avec accès à l'hôte. |
+| `WORKFLOW_CODE_TIMEOUT_MS`, `WORKFLOW_CODE_MEMORY_MB` | 5000, 128 | Limites de temps et de mémoire du nœud Code. |
+| `WORKFLOW_HTTP_ALLOWLIST` | Vide | Noms d'hôte autorisés pour les requêtes HTTP des workflows. |
+| `WORKFLOW_FILE_MAX_BYTES` | 52428800 | Limite de fichier envoyé au workflow ou au webhook. |
+| `WORKFLOW_LOOP_MAX_ITEMS` | 100000 | Nombre maximal d'éléments accumulés en sortie de boucle. |
+| `WORKFLOW_FILE_ACCESS_ENABLED`, `WORKFLOW_FILE_ACCESS_ROOT` | false, vide | Accès aux fichiers de l'hôte et répertoire racine obligatoire. |
+| `WORKFLOW_EMAIL_POLL_MIN_SECONDS`, `WORKFLOW_EMAIL_MAX_PER_POLL` | 30, 50 | Intervalle minimal des déclencheurs de courriel et limite de messages par interrogation. |
+| `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | 67108864 | Taille maximale d'envoi d'un registre d'établissements. L'augmenter exige aussi assez de mémoire pour le traitement. |
+| `TERMINOLOGY_WORK_DIR` | Facultatif | Répertoire de téléchargement et d'extraction de terminologie. |
+| `PLUGIN_UI_ENABLED`, `PLUGIN_EGRESS_ENABLED` | true, true | Interrupteurs généraux des pages et de l'intermédiaire des plugins, et de leur accès réseau. |
+| `PLUGIN_DATA_MAX_DOC_BYTES` | 8388608 | Taille maximale d'un document de l'intermédiaire. |
+| `PLUGIN_CRASH_LOG_DIR` | .openldr/crash | Répertoire persistant des marqueurs de plantage des plugins. |
+| `CRASH_LOOP_THRESHOLD`, `CRASH_LOOP_WINDOW_SEC` | 5, 60 | Nombre de plantages et fenêtre de mesure. |
+| `CRASH_LOOP_BACKOFF_MS`, `CRASH_LOOP_BACKOFF_CAP_MS` | 2000, 60000 | Délais initial et maximal entre reprises après plantage. |
 
-Garage n'accepte qu'un identifiant de clé d'accès formé de `GK` suivi de 24 caractères
-hexadécimaux, et un secret hexadécimal de 64 caractères. L'installateur génère les deux.
+## Configuration de Marketplace et de la synchronisation
 
-## Authentification (Keycloak / OIDC)
+MARKETPLACE_REGISTRY_URL ou MARKETPLACE_REGISTRY_DIR initialise le premier registre seulement si aucun n'existe. Ensuite, utilisez Marketplace, Registries. La publication exige ensemble le jeton, le dépôt et le répertoire local de préparation.
 
-Keycloak est le mode par défaut. OIDC générique utilise la découverte et des jetons
-d'accès JWT. Voir [Fournisseurs d'authentification](/docs/auth-providers) pour la mise en
-place, les limites d'administration et la protection de l'émetteur.
+OPENLDR_SITE_ID fournit un identifiant de site de secours si aucun Site ID n'est enregistré. Les paramètres de synchronisation enregistrés ont priorité. SYNC_ALLOW_INSECURE_TRANSPORT vaut false par défaut. Utilisez HTTPS pour un central actif.
 
-| Variable | Rôle |
-| --- | --- |
-| `IDENTITY_ADMIN_ADAPTER` | `keycloak` ou `none`. Vaut `keycloak` par défaut avec Keycloak, `none` avec OIDC générique. |
-| `OIDC_ISSUER_URL` | URL publique de l'émetteur. Gardez la valeur existante lors d'une mise à jour. Un changement ultérieur bloque le démarrage. |
-| `OIDC_INTERNAL_ISSUER_URL` | URL interne de base du realm, pour Keycloak uniquement. OIDC générique ignore cette valeur. |
-| `OIDC_INTERNAL_JWKS_URL` | Remplace l'adresse interne des clés de signature. Ne change pas l'émetteur attendu. |
-| `OIDC_AUDIENCE` | Audience attendue du jeton. |
-| `OIDC_WEB_CLIENT_ID` | Identifiant du client public avec lequel Studio s'authentifie. |
-| `OIDC_SCOPES` | Scopes demandés par Studio. Vaut `openid profile email` par défaut. Doit inclure `openid`. |
-| `OIDC_RESOURCE` | URL de ressource à demander, pour les fournisseurs qui en exigent une pour émettre le jeton d'accès API. |
-| `TLS_CERT_PATH` | Chemin du certificat TLS public de ce serveur (PEM). S'il est défini, la page Sites propose de le télécharger, pour qu'un laboratoire distant puisse faire confiance à un serveur central auto-signé. L'installateur le définit pour vous. |
-| `KC_HOSTNAME` | URL publique de base annoncée par Keycloak. |
-| `KEYCLOAK_ADMIN` | Nom d'utilisateur de l'administrateur Keycloak. |
-| `KEYCLOAK_ADMIN_PASSWORD` | Mot de passe de l'administrateur Keycloak (généré). |
-| `KEYCLOAK_ADMIN_CLIENT_ID` | Identifiant du client utilisé pour les appels à l'API d'administration. |
-| `KEYCLOAK_ADMIN_CLIENT_SECRET` | Secret du client utilisé pour les appels à l'API d'administration. |
-
-## Réglages réservés au développement
-
-Ces variables servent au développement local et aux tests automatisés. Ne les définissez
-jamais dans un déploiement.
-
-`AUTH_DEV_BYPASS` **désactive l'authentification**. Toute requête API sans jeton est
-traitée comme venant d'un administrateur de développement. Elle reste désactivée tant que
-vous ne la définissez pas, et le serveur refuse de démarrer si elle est active avec
-`NODE_ENV=production`. Quand elle est active, Studio affiche un bandeau de contournement
-de l'authentification et le serveur écrit un avertissement au démarrage.
-
-| Variable | Défaut | Rôle |
+| Variable | Valeur par défaut ou source | Signification |
 | --- | --- | --- |
-| `AUTH_DEV_BYPASS` | `false` | Traiter les requêtes API non authentifiées comme venant d'un administrateur de développement. |
-| `AUTH_DEV_USERNAME` | `dev-admin` | Nom d'utilisateur de l'acteur de développement injecté. |
-| `AUTH_DEV_ROLES` | `lab_admin` | Rôles attribués à l'acteur de développement injecté. |
-| `MARKETPLACE_DEV_ALLOW_UNSIGNED` | `false` | Installer des paquets du Marketplace qui ne portent aucune signature. |
+| `MARKETPLACE_REGISTRY_URL`, `MARKETPLACE_REGISTRY_DIR` | Source initiale | Registre distant ou répertoire local de paquets utilisé au premier démarrage. |
+| `MARKETPLACE_LOCAL_REGISTRY_ROOT` | Vide | Racine autorisée facultative pour les répertoires de registres locaux. |
+| `MARKETPLACE_PUBLISH_TOKEN`, `MARKETPLACE_PUBLISH_REPO` | Configuration privée | Identifiants et destination de publication GitHub. |
+| `MARKETPLACE_PUBLISH_BRANCH` | main | Branche cible des propositions de publication. |
+| `MARKETPLACE_DEV_ALLOW_UNSIGNED` | false | Autorisation de paquets non signés limitée au développement. |
 
-## Secrets
+## Dépannage
 
-| Variable | Rôle |
-| --- | --- |
-| `SECRETS_ENCRYPTION_KEY` | Clé de 32 octets en base64 qui chiffre les identifiants des connecteurs au repos. Générez-la avec `openssl rand -base64 32`. |
+**Une valeur de démarrage n'a pas changé.** Redémarrez les processus concernés après modification de leur environnement. Avec Docker, recréez les services concernés car un redémarrage conserve l'environnement du conteneur.
 
-## Premier démarrage
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `MIGRATE_ON_START` | `true` | Appliquer les migrations de base de données au démarrage de l'API. |
-| `SEED_ON_START` | `true` | Charger les formulaires, workflows et terminologies par défaut au premier démarrage. |
-
-## Imports de terminologie
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `TERMINOLOGY_WORK_DIR` | dossier temporaire du système | Dossier où une version de terminologie téléversée est décompressée pendant l'import. Une version complète de SNOMED CT a besoin de place pour le zip et les fichiers décompressés en même temps. Pointez-le vers un disque plus grand quand le dossier temporaire du conteneur est petit. |
-
-## Entrepôt cible SQL Server
-
-À définir seulement quand `TARGET_STORE_ADAPTER=mssql`. Démarrez le profil SQL Server avec
-`docker compose --profile mssql up -d`.
-
-| Variable | Rôle |
-| --- | --- |
-| `MSSQL_HOST` | Hôte SQL Server. |
-| `MSSQL_PORT` | Port SQL Server (par défaut `1433`). |
-| `MSSQL_DATABASE` | Nom de la base cible. |
-| `MSSQL_USER` | Identifiant de connexion. |
-| `MSSQL_PASSWORD` | Mot de passe. |
-| `MSSQL_ENCRYPT` | `true`/`false` : chiffrer la connexion. |
-| `MSSQL_TRUST_SERVER_CERT` | `true`/`false` : faire confiance à un certificat serveur auto-signé. |
-
-## Entrepôt cible MySQL / MariaDB
-
-À définir seulement quand `TARGET_STORE_ADAPTER=mysql`. Fonctionne avec MySQL 8.4+ et
-MariaDB 11.4+.
-
-| Variable | Rôle |
-| --- | --- |
-| `MYSQL_HOST` | Hôte MySQL/MariaDB. |
-| `MYSQL_PORT` | Port du serveur (par défaut `3306`). |
-| `MYSQL_DATABASE` | Nom de la base cible. |
-| `MYSQL_USER` | Identifiant de connexion. |
-| `MYSQL_PASSWORD` | Mot de passe. |
-| `MYSQL_SSL` | `true`/`false` : se connecter en TLS. |
-| `MYSQL_SSL_REJECT_UNAUTHORIZED` | `true`/`false` : refuser un certificat serveur non reconnu. |
-
-## Workflows
-
-Voir [Workflows](/docs/workflows) pour les nœuds concernés par ces réglages.
-
-> `WORKFLOW_CODE_ENABLED` permet aux auteurs de workflows d'exécuter du JavaScript avec
-> les mêmes accès que le serveur : ses fichiers, son réseau, son environnement et ses
-> secrets. L'exécuteur de code n'est pas un bac à sable. Ne l'activez que si vous faites
-> confiance à toutes les personnes qui peuvent modifier des workflows.
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `WORKFLOW_CODE_ENABLED` | `false` | Autoriser l'exécution des nœuds Code. Désactivé, un nœud Code refuse de s'exécuter. |
-| `WORKFLOW_CODE_TIMEOUT_MS` | `5000` | Durée maximale d'une exécution de nœud Code, en millisecondes. |
-| `WORKFLOW_CODE_MEMORY_MB` | `128` | Mémoire maximale d'une exécution de nœud Code, en Mo. |
-| `WORKFLOW_HTTP_ALLOWLIST` | vide | Noms d'hôte, séparés par des virgules, que le nœud HTTP Request peut appeler. Vide, tous les hôtes sont refusés. |
-| `WORKFLOW_FILE_MAX_BYTES` | `52428800` (50 Mo) | Taille maximale d'un fichier envoyé à une exécution de workflow ou d'un corps de webhook. |
-| `WORKFLOW_LOOP_MAX_ITEMS` | `100000` | Nombre maximal d'éléments qu'un nœud de boucle peut collecter. |
-| `WORKFLOW_FILE_ACCESS_ENABLED` | `false` | Autoriser le nœud Read/Write File à accéder aux fichiers du serveur. |
-| `WORKFLOW_FILE_ACCESS_ROOT` | vide | Le seul dossier auquel le nœud Read/Write File est limité. Tant qu'il est vide, le nœud échoue. |
-| `WORKFLOW_EMAIL_POLL_MIN_SECONDS` | `30` | Intervalle minimal de relève d'un déclencheur e-mail, en secondes. |
-| `WORKFLOW_EMAIL_MAX_PER_POLL` | `50` | Nombre maximal de messages non lus traités par relève. |
-
-## Import du registre des établissements
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `FACILITY_IMPORT_MAX_UPLOAD_BYTES` | `67108864` (64 Mo) | Taille maximale d'un fichier de registre des établissements à téléverser. Un envoi plus gros est interrompu en cours de transfert. 64 Mo représentent environ 20 fois un registre national de 13 000 lignes. Une valeur au-delà d'environ 512 Mo ne peut pas fonctionner. |
-
-## Plugins
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `PLUGIN_UI_ENABLED` | `true` | Afficher les écrans des plugins. Avec `false`, aucun menu ni écran de plugin n'apparaît. |
-| `PLUGIN_EGRESS_ENABLED` | `true` | Autoriser les plugins à accéder au réseau. Avec `false`, tout appel réseau d'un plugin est refusé, quelles que soient ses permissions. |
-| `PLUGIN_DATA_MAX_DOC_BYTES` | `8388608` (8 Mo) | Taille maximale d'un document qu'un plugin peut enregistrer ou envoyer en un appel. |
-| `PLUGIN_CRASH_LOG_DIR` | `.openldr/crash` | Dossier des traces de plantage des plugins. Le démarrage suivant les copie dans le journal d'audit. |
-
-## Protection contre les boucles de plantage
-
-Si le serveur plante `CRASH_LOOP_THRESHOLD` fois en `CRASH_LOOP_WINDOW_SEC` secondes, le
-démarrage suivant écrit une entrée d'audit `system.crash_loop` et attend avant de
-s'arrêter. L'attente s'allonge à chaque redémarrage, ce qui ralentit une boucle de
-redémarrage au lieu de la laisser tourner.
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `CRASH_LOOP_THRESHOLD` | `5` | Nombre de plantages dans la fenêtre avant que la protection s'active. |
-| `CRASH_LOOP_WINDOW_SEC` | `60` | Durée de la fenêtre, en secondes. |
-| `CRASH_LOOP_BACKOFF_MS` | `2000` | Première attente avant l'arrêt, en millisecondes. |
-| `CRASH_LOOP_BACKOFF_CAP_MS` | `60000` | Attente la plus longue, en millisecondes. |
-
-## Marketplace
-
-Les deux variables de registre ne créent que le premier registre, au premier démarrage
-quand il n'en existe aucun. Ensuite, gérez-les dans la vue **Registres** de
-**Paramètres > Marketplace**. Voir [Marketplace](/docs/marketplace).
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `MARKETPLACE_REGISTRY_URL` | registre fourni | Registre distant créé au premier démarrage quand aucun registre n'existe. |
-| `MARKETPLACE_REGISTRY_DIR` | non défini | Dossier de registre local créé au premier démarrage quand `MARKETPLACE_REGISTRY_URL` n'est pas défini. La publication y prépare aussi les paquets. |
-| `MARKETPLACE_LOCAL_REGISTRY_ROOT` | vide | S'il est défini, un registre local ajouté dans les Paramètres doit être un dossier situé à l'intérieur de celui-ci. |
-| `MARKETPLACE_PUBLISH_TOKEN` | non défini | Jeton GitHub avec droit d'écriture sur le dépôt de publication. Gardez-le secret. |
-| `MARKETPLACE_PUBLISH_REPO` | non défini | Dépôt qui reçoit les pull requests de publication, sous la forme `owner/repo`. |
-| `MARKETPLACE_PUBLISH_BRANCH` | `main` | Branche visée par les pull requests de publication. |
-
-La publication n'est active que si `MARKETPLACE_PUBLISH_TOKEN`, `MARKETPLACE_PUBLISH_REPO`
-et `MARKETPLACE_REGISTRY_DIR` sont tous définis.
-
-## Synchronisation distribuée
-
-Voir [Synchronisation distribuée](/docs/sync) pour inscrire un laboratoire.
-
-| Variable | Défaut | Rôle |
-| --- | --- | --- |
-| `OPENLDR_SITE_ID` | non défini | Identifiant de site apposé sur les enregistrements écrits par ce serveur, utilisé quand l'identifiant de site de l'onglet **Paramètres** de la synchronisation est vide. La valeur enregistrée l'emporte. |
-| `SYNC_ALLOW_INSECURE_TRANSPORT` | `false` | Autoriser la synchronisation vers un serveur central en `http://` simple. La synchronisation envoie un secret client et des données liées aux patients. Ne l'utilisez que sur un réseau local de confiance, pendant la mise en place. `localhost` fonctionne sans elle. |
+**Une commande CLI échoue.** Suivez [Commencer ici](/docs/start-here) pour configurer la CLI installée ou de développement.
 
 ## Guides associés
 
-- [Paramètres](/docs/settings)
-- [Connecteurs](/docs/connectors)
+[Paramètres](/docs/settings), [Connecteurs](/docs/connectors), [Synchronisation distribuée](/docs/sync), [Fournisseurs d'authentification](/docs/auth-providers) et [Mises à niveau planifiées](/docs/upgrading).

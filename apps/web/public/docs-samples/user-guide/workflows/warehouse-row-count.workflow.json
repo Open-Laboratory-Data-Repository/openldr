@@ -1,0 +1,48 @@
+{
+  "name": "Warehouse row count",
+  "description": null,
+  "definition": {
+    "nodes": [
+      {
+        "id": "trigger-1794491416474",
+        "type": "trigger",
+        "position": {
+          "x": 150,
+          "y": 165
+        },
+        "data": {
+          "label": "Manual Trigger",
+          "config": {},
+          "iconName": "Play",
+          "templateId": "manual-trigger",
+          "triggerType": "manual"
+        }
+      },
+      {
+        "id": "action-1794491416905",
+        "type": "action",
+        "position": {
+          "x": 225,
+          "y": 135
+        },
+        "data": {
+          "label": "SQL Query",
+          "action": "sql-query",
+          "config": {
+            "sql": "SELECT COUNT(*) AS requests FROM lab_requests"
+          },
+          "iconName": "Database",
+          "templateId": "sql-query"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "xy-edge__trigger-1794491416474-action-1794491416905",
+        "source": "trigger-1794491416474",
+        "target": "action-1794491416905"
+      }
+    ]
+  },
+  "enabled": true
+}

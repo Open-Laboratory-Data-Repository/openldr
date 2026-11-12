@@ -1,136 +1,167 @@
-# Ligar ao SQL Server e diagnosticar uma ligação
+# Diagnosticar ligações
 
-O CE consegue ligar-se a uma **instância com nome** do SQL Server e com uma **conta Windows**, como muitos sistemas de laboratório precisam. Quando uma ligação a uma base de dados falha, **Diagnosticar** verifica-a passo a passo e diz que passo falhou e o que mudar.
+Use Diagnose quando um conector de anfitrião guardado não consegue ligar. Verifica as definições, o nome do servidor, a porta, a autenticação e a versão do servidor, por ordem.
 
-Leva cerca de 10 minutos. Selecione uma imagem ou um clip para o ampliar.
+Precisa de **Manage connectors**. O diagnóstico parte do servidor OpenLDR com as credenciais guardadas. Abre uma ligação de teste sem importar dados.
 
-## Quem pode fazer o quê
+Use a sua ligação guardada. As imagens mostram uma ligação Postgres real e isolada e uma instância SQL Server ausente de propósito. Um exemplo de falha não prova uma autenticação SQL Server válida.
 
-Precisa de **Manage connectors**. Os administradores do laboratório têm-na.
+## Diagnosticar uma ligação guardada
 
-## Antes de começar
+Comece por uma ligação que já usa, ou pelo conector do armazém numa instalação nova.
 
-- Saiba o nome do servidor, e o da instância se houver. O SQL Server Management Studio mostra-os como `SERVER\INSTANCE`.
-- Saiba se a conta é um início de sessão SQL ou uma conta Windows.
+### 1. Abrir Connectors
 
-## Exemplo 1: diagnosticar uma ligação que funciona
+Abra **Settings** e depois **Connectors**.
 
-![Escolher Diagnosticar em Target Warehouse (Postgres). Todos os passos passam.](connector-diagnose-ok.mp4)
+![Abra Settings e depois Connectors.](connector-diagnose-guide-open.png)
 
-1. Abra **Definições** e depois **Conectores**.
-2. Na linha **Target Warehouse (Postgres)**, abra **⋯** e selecione **Diagnosticar**.
+### 2. Escolher Diagnose
 
-**Resultado esperado:** **Todas as verificações passaram.** Cada passo mostra o que encontrou: o endereço, o nome resolvido para `127.0.0.1`, a porta aberta, o início de sessão e a versão do servidor.
+Abra os pontos da linha do conector de anfitrião e selecione **Diagnose**. As verificações começam quando o painel abre.
 
-![O diagnóstico do conector do armazém.](connector-diagnose-passed.png)
+![Escolha Diagnose na linha de um conector de anfitrião.](connector-diagnose-guide-diagnose.png)
 
-Nesta instalação de teste, o passo **Definições** mostra um aviso: o host é `localhost`. Quando o CE corre em Docker, `localhost` é o próprio contentor do CE, não a máquina que corre a base de dados. Use o nome ou o endereço IP do servidor.
+### 3. Ler o resultado das definições
 
-## Exemplo 2: uma instância com nome que não responde
+Leia o estado e a mensagem de cada passo. Um aviso dá orientação sem parar as verificações seguintes.
 
-Junte um conector para uma base v1 numa instância com nome, e veja o diagnóstico encontrar o passo avariado.
+![Leia o estado real de cada passo do diagnóstico.](connector-diagnose-guide-passed.png)
 
-![Adicionar um conector Microsoft SQL com localhost\SQLEXPRESS como host.](connector-diagnose-add.mp4)
+### 4. Ler os resultados da ligação
 
-1. Em **Conectores**, abra o menu **⋯** da página e selecione **Adicionar conector**.
-2. Defina **Categoria** como **Anfitrião** e **Tipo de base de dados** como **Microsoft SQL**.
-3. Preencha o formulário:
+Verifique **Port**, **Login** e **Server version**. O exemplo Postgres local passa todas as verificações.
 
-   | Campo | Valor de exemplo |
-   | --- | --- |
-   | Nome | `v1 database (example)` |
-   | Host | `localhost\SQLEXPRESS` |
-   | Base de dados | `OpenLDRData` |
-   | Utilizador | `v1_reader` |
-   | Palavra-passe | a palavra-passe da conta |
+![Port, Login e Server version confirmam a ligação testada.](connector-diagnose-guide-login.png)
 
-   ![O formulário Microsoft SQL.](connector-diagnose-form.png)
+### 5. Repetir quando necessário
 
-4. Abra o menu **⋯** do painel e selecione **Guardar**.
-5. Na linha nova, abra **⋯** e selecione **Diagnosticar**.
+Abra os pontos do painel de diagnóstico e selecione **Run again**. Usa as definições atualmente guardadas.
 
-![Diagnosticar o conector novo. Para em SQL Server Browser.](connector-diagnose-browser.mp4)
+![Run again repete as verificações com as definições guardadas.](connector-diagnose-guide-again.png)
 
-**Resultado esperado:** **A verificação falhou no passo: SQL Server Browser.** O nome do servidor passou. SQL Server Browser mostra **no reply from SQL Server Browser within 3000 ms**, com a correção: arrancar o serviço SQL Server Browser, abrir UDP 1434 na firewall, ou limpar o nome da instância e indicar a porta TCP fixa. Porta, Início de sessão e Versão do servidor não foram tentados.
+**Resultado esperado:** uma execução bem-sucedida termina com All checks passed. Prova a ligação testada. Não prova uma consulta específica de relatório, o esquema de origem ou uma permissão da conta.
 
-![O diagnóstico, parado em SQL Server Browser.](connector-diagnose-failed.png)
+## Introduzir as definições SQL Server
 
-A caixa Host mantém `localhost\SQLEXPRESS` tal como foi escrito. O CE separa-o em servidor e instância quando se liga, e é por isso que o passo SQL Server Browser correu. Corrija a instância ou a firewall e escolha **Executar de novo** no menu **⋯** do diagnóstico.
+Pergunte ao operador da base de dados se tem uma instância com nome, uma porta TCP fixa, uma conta SQL ou uma conta de domínio Windows. Crie a ligação fictícia apenas se quiser um exemplo isolado de falha.
 
-Para retirar o exemplo, abra o menu **⋯** da linha e selecione **Remover**.
+### 1. Adicionar um conector de anfitrião
 
-## O formulário SQL Server
+Feche o diagnóstico. Abra os pontos de Connectors e escolha **Add connector**. Introduza um nome útil e defina Category como **Host**.
 
-| Campo | O que escrever |
-| --- | --- |
-| Host | O nome ou o endereço IP do servidor. Também pode escrever `SERVER\INSTANCE`. O CE separa-o por si. |
-| Nome da instância | A parte depois da barra invertida, por exemplo `SQLEXPRESS`. Deixe vazio para a instância predefinida. |
-| Porta | Normalmente `1433`. O CE ignora a porta quando há nome de instância, porque o SQL Server Browser indica a porta da instância. |
-| Base de dados | O nome da base de dados. |
-| Domínio Windows | Deixe vazio para um início de sessão SQL. Preencha para uma conta Windows, por exemplo `LAB`. |
-| Utilizador | O início de sessão SQL, ou o nome de utilizador Windows sem o domínio. |
-| Palavra-passe | A palavra-passe. Fica guardada encriptada. |
-| Encriptar | Ligado por predefinição. Desligue-o para um SQL Server antigo (2008 ou 2012) que só oferece TLS antigo. |
-| Confiar no certificado do servidor | Ligue-o para um servidor da rede do laboratório que usa o seu próprio certificado. |
+![Escolha Add connector para uma ligação SQL Server.](connector-diagnose-guide-add.png)
 
-Quando o CE corre em Docker, `localhost` é o contentor do CE, não o seu servidor. Use o nome ou o endereço IP do servidor.
+### 2. Escolher Microsoft SQL
 
-## Os passos de um diagnóstico
+Defina **Database type** como **Microsoft SQL**.
 
-O CE corre-os por ordem e para na primeira falha. Os passos seguintes aparecem como ignorados.
+![Escolha Microsoft SQL.](connector-diagnose-guide-sql-type.png)
 
-| Passo | O que verifica |
-| --- | --- |
-| Definições | Há um host e a porta é um número válido. |
-| Nome do servidor | O nome resolve para um endereço a partir do servidor CE. |
-| SQL Server Browser | Só para uma instância com nome. O SQL Server Browser, na porta UDP 1434, lista a instância e a sua porta TCP. |
-| Porta | A porta TCP responde. |
-| Início de sessão | O CE consegue iniciar sessão e abrir a base de dados. |
-| Versão do servidor | O CE consegue correr uma consulta, e mostra a versão do servidor. |
+### 3. Introduzir o servidor e a instância
 
-Cada passo que falha diz o que mudar.
+Introduza **Host**. Um valor colado `SERVER\INSTANCE` divide-se entre Host e Instance name quando sai do campo. Use uma Port fixa apenas quando Instance name está vazio.
+
+![O servidor e a instância colados ficam em campos separados.](connector-diagnose-guide-split.png)
+
+### 4. Introduzir a base de dados e a conta
+
+Preencha **Database**, **User** e **Password**. Para uma conta Windows, preencha Windows domain e use o nome de utilizador sem domínio. Deixe o domínio vazio para uma conta SQL.
+
+![Introduza a base e a conta. Windows domain aplica-se apenas a contas Windows.](connector-diagnose-guide-login-fields.png)
+
+### 5. Verificar a encriptação
+
+**Encrypt** começa ligado. Siga os requisitos de encriptação e certificado do operador do servidor. Trust server certificate aceita um certificado sem a validação habitual.
+
+![Encrypt começa ligado. Adapte a encriptação e o certificado ao servidor.](connector-diagnose-guide-encryption.png)
+
+### 6. Guardar o conector
+
+Abra os pontos do painel e escolha **Save**.
+
+![Save guarda as definições antes do diagnóstico.](connector-diagnose-guide-save.png)
+
+**Resultado esperado:** pode agora diagnosticar o conector guardado. O exemplo indica de propósito uma instância inexistente.
+
+## Ler e corrigir um diagnóstico com falha
+
+O diagnóstico para na primeira verificação com falha. Os passos seguintes ficam ignorados, sem resultado.
+
+### 1. Diagnosticar a linha guardada
+
+Abra os pontos da linha e escolha **Diagnose**.
+
+![Escolha Diagnose na instância com nome guardada.](connector-diagnose-guide-bad-diagnose.png)
+
+### 2. Ler a primeira falha
+
+Leia o passo com falha e a mensagem de correção. Este exemplo não recebe resposta do SQL Server Browser para a instância ausente.
+
+![Esta instância ausente de propósito falha no SQL Server Browser.](connector-diagnose-guide-browser-failure.png)
+
+### 3. Verificar os passos ignorados
+
+Aqui Port, Login e Server version não foram tentados. Uma autenticação ignorada não significa que a palavra-passe foi aceite.
+
+![Os passos seguintes ficam ignorados após a primeira falha.](connector-diagnose-guide-skipped.png)
+
+### 4. Corrigir as definições guardadas
+
+Feche o diagnóstico, abra os pontos da linha e escolha **Edit**. Verifique Host e Instance name. Se o operador fornecer uma porta TCP fixa, limpe Instance name e introduza essa porta. Guarde a alteração e volte a diagnosticar.
+
+![Verifique o servidor e a instância. Em alternativa, limpe Instance name e introduza a porta TCP fixa real.](connector-diagnose-guide-correction.png)
+
+**Resultado esperado:** siga o passo que falhou. A correção pode exigir alterações do serviço, da firewall ou da resolução de nomes fora do OpenLDR. A instância ausente não foi reparada.
+
+## Ler o diagnóstico num telemóvel
+
+O mesmo menu de linha abre o diagnóstico na largura do telemóvel.
+
+### 1. Ler as mensagens das verificações
+
+Abra Diagnose e desloque dentro do painel para ler cada resultado. As mensagens passam para a linha seguinte abaixo do nome do passo.
+
+![O painel do telemóvel adapta cada mensagem à largura disponível.](connector-diagnose-guide-phone.png)
+
+## Significado das verificações
+
+**Settings.** Existe um anfitrião e a porta é válida. O aviso localhost lembra que os contentores Docker têm o seu próprio endereço de retorno local.
+
+**Server name.** O servidor OpenLDR resolve o nome para um endereço. Uma resolução bem-sucedida não prova que a porta da base responde.
+
+**SQL Server Browser.** Numa instância SQL Server com nome, UDP 1434 indica a porta TCP. Peça ao operador para iniciar Browser e permitir UDP. Em alternativa, use a porta TCP fixa real sem nome de instância.
+
+**Port.** Abre uma ligação TCP. Um serviço incorreto também pode responder nessa porta.
+
+**Login.** A conta guardada abre a base de dados. Se falhar, verifique o utilizador, a palavra-passe, o domínio e o acesso à base.
+
+**Server version.** O servidor responde a uma pequena consulta. Isto ainda não prova que existem as tabelas e colunas exigidas pelo importador.
+
+## Executar a mesma verificação pela CLI
+
+Siga [Começar aqui](/docs/start-here) para configurar a CLI. Em `openldr_ce`, liste os conectores para obter o identificador. Diagnose termina com código 1 quando um passo falha. Adicione `--json` para resultados estruturados.
+
+```shell
+pnpm openldr connectors list
+pnpm openldr connectors diagnose <id>
+pnpm openldr connectors diagnose <id> --json
+```
+
+## Prática opcional e limites
+
+Não precisa de dados de exemplo. Teste primeiro o conector do armazém existente. Um conector Microsoft SQL temporário com uma instância inexistente pode demonstrar a falha de Browser. Depois remova-o pelos pontos da linha e pela confirmação.
+
+As verificações documentadas testaram uma ligação Postgres real com sucesso e uma expiração UDP real para uma instância com nome ausente. Não testaram autenticação Windows, uma instância SQL Server com nome funcional, substituição de certificados ou um servidor TLS antigo.
 
 ## Resolução de problemas
 
-- **O nome do servidor não resolve.** Use o endereço IP, ou junte o nome ao DNS ou ao ficheiro hosts do servidor CE.
-- **Porta: sem resposta.** Uma firewall bloqueia a porta. Abra-a no servidor da base de dados, ou na rede entre as duas máquinas.
-- **Porta: nada escuta.** O TCP/IP está desligado, ou a porta está errada. Ative o TCP/IP no SQL Server Configuration Manager.
-- **SQL Server Browser: sem resposta.** Arranque o serviço SQL Server Browser e abra UDP 1434. Ou limpe o nome da instância e indique a porta TCP fixa da instância.
-- **O SQL Server Browser respondeu, mas a instância não aparece.** Confirme o nome da instância e ative o TCP/IP para ela.
-- **Início de sessão recusado.** Confirme o utilizador e a palavra-passe. O SQL Server pode só aceitar contas Windows. Nesse caso preencha o domínio Windows.
-- **A base de dados não abre.** O início de sessão funcionou, mas a base não existe ou o utilizador não a pode abrir. Confirme o nome e o acesso.
-- **Certificado não confiável.** Ligue **Confiar no certificado do servidor**.
-- **TLS antigo recusado.** Desligue **Encriptar**, ou atualize o SQL Server.
+**A primeira verificação falha.** Leia-a antes dos resultados ignorados. Corrija as definições guardadas em Edit e execute Diagnose novamente.
 
-## Na linha de comandos
+**Browser expira numa instância SQL Server com nome.** Verifique os nomes do servidor e da instância e o acesso ao SQL Server Browser. Os passos seguintes ficam ignorados até a descoberta ter sucesso.
 
-Corra as mesmas verificações num servidor sem interface:
-
-```bash
-openldr connectors diagnose <connector-id>
-```
-
-Para o conector do armazém do Exemplo 1, mostra:
-
-```text
-WARN  config   localhost:5433
-      When CE runs in Docker, localhost is the CE container itself. Use the server name or IP address of the machine that runs the database.
-PASS  dns      localhost resolved to 127.0.0.1
-PASS  tcp      port 5433 is open
-PASS  login
-PASS  version  PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
-
-All checks passed.
-```
-
-Junte `--json` para saída legível por máquina. O comando sai com o código 1 quando um passo falha. O id vem de `GET /api/connectors`.
-
-## Num telemóvel
-
-O diagnóstico cobre quase todo o ecrã de um telemóvel, e a mensagem de cada passo passa para baixo dele. A tabela de conectores é mais larga do que o ecrã: deslize-a para o lado para chegar ao menu **⋯** de cada linha.
+**Todas as verificações passam, mas o importador falha.** O diagnóstico verifica a ligação e a resposta do servidor. Não prova que a conta consegue ler cada tabela de origem necessária.
 
 ## Guias relacionados
 
-- [Conectores](/docs/connectors)
-- [Verificações de instalação](/docs/setup-checks)
-- [Importar do OpenLDR v1](/docs/v1-import)
+[Conectores](/docs/connectors) explica a criação, os testes e a alteração de segredos. [Importar do OpenLDR v1](/docs/v1-import) usa um conector de base de dados.

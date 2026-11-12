@@ -1,232 +1,474 @@
 # Relatórios
 
-Um relatório é uma página imprimível de números do laboratório que pode voltar a executar sempre que precisar. Cada um junta duas partes. Um modelo do **Designer de relatórios** define o aspeto. Uma **consulta personalizada** vai buscar os dados. Executa um relatório com um intervalo de datas e outros filtros, lê-o como documento ou como folha de cálculo, transfere-o e agenda-o para correr sozinho.
+Use Reports para executar uma entrada da biblioteca com filtros, ler Document ou Spreadsheet, exportar resultados e consultar o histórico. Um agendamento guarda um ficheiro para um período. Não o envia por email.
 
-Este guia leva cerca de 30 minutos. Usa os dados de exemplo da documentação, por isso carregue-os primeiro. Selecione uma imagem ou um clip para o ampliar. Os nomes dos relatórios e dos seus filtros estão em inglês, porque vêm dos modelos.
+Comece com um relatório adequado aos dados recebidos. Não precisa de dados de exemplo. As imagens usam Request summary report criado em Report Designer. O armazém de teste tem zero pedidos. A consulta devolve uma linha com zero.
 
-![Um relatório depois de executado. 1 Pesquisa na biblioteca. 2 Menu de ações do relatório. 3 Vista Documento. 4 Vista Folha de cálculo. 5 Transferir.](reports-tour.png)
+Precisa de **View reports** para abrir a biblioteca, **Run reports** para executar entradas e **Export reports** para descarregar resultados. **Edit report templates** permite gerir agendamentos, Edit template e ações de gestão dos relatórios.
 
-1. **Pesquisa.** Filtra a lista de relatórios pelo nome. Os relatórios estão agrupados por categoria.
-2. **Ações.** O menu de três pontos do relatório escolhido: **Atualizar**, **Parâmetros**, **Histórico**, **Agendamentos** e, para gestores, **Editar modelo**, **Despublicar** e **Eliminar relatório**.
-3. **Documento.** O PDF imprimível.
-4. **Folha de cálculo.** As mesmas linhas numa tabela que pode filtrar, ordenar e exportar.
-5. **Transferir.** Guarda o PDF.
+Para acrescentar um relatório à biblioteca, guarde um desenho e use Create report from this design em [Editor de relatórios](/docs/report-designer). Publish revision, por si só, não cria uma entrada.
 
-## Quem pode fazer o quê
+## Encontrar e abrir um relatório
 
-Os nomes das permissões aparecem em inglês.
+Use o nome e a categoria para escolher a entrada pretendida antes de definir filtros.
 
-| Permissão | O que permite |
+### 1. Abrir Reports
+
+Selecione Reports no menu principal.
+
+![Abra Reports no menu principal.](reports-guide-open-page.png)
+
+### 2. Pesquisar na biblioteca
+
+Introduza parte do nome em Search reports. Limpe a pesquisa para repor toda a biblioteca.
+
+![Pesquise na biblioteca pelo nome do relatório.](reports-guide-search.png)
+
+### 3. Selecionar o relatório
+
+Selecione o nome sob a categoria. O exemplo é Request summary report em Operational.
+
+![Selecione o relatório sob a categoria.](reports-guide-select-report.png)
+
+### 4. Abrir as ações
+
+Selecione Actions junto do título do relatório escolhido.
+
+![O relatório escolhido tem o próprio menu Actions.](reports-guide-report-actions.png)
+
+## Escolher filtros e executar o relatório
+
+Escolha datas e outros filtros adequados à pergunta. A consulta do exemplo inclui ambas as datas de calendário selecionadas.
+
+### 1. Abrir Parameters
+
+Escolha Parameters no menu Actions do relatório.
+
+![Parameters abre os filtros do relatório.](reports-guide-first-parameters.png)
+
+### 2. Abrir o período
+
+Selecione o controlo Period. Outros relatórios podem chamar-lhe Date range ou usar filtros diferentes.
+
+![Abra o controlo de datas para o período do relatório.](reports-guide-first-period.png)
+
+### 3. Escolher as datas do relatório
+
+Escolha uma predefinição, como This year, ou use os seletores de mês, ano e o calendário. Preencha outros filtros obrigatórios.
+
+![Escolha uma predefinição ou as suas datas.](reports-guide-first-preset.png)
+
+### 4. Executar o relatório
+
+Selecione Run no painel dos parâmetros. Aguarde o resultado completo.
+
+![Run executa o relatório com os filtros escolhidos.](reports-guide-first-run.png)
+
+**Resultado esperado:** Document apresenta o relatório com os valores escolhidos. O zero deste exemplo é um resultado válido.
+
+![Document apresenta a execução escolhida em PDF.](reports-guide-document.png)
+
+## Descarregar o documento e a folha de cálculo
+
+Use Document para a apresentação imprimível e Spreadsheet para as linhas exatas. Os nomes podem diferir porque o desenho pode mudar os nomes das colunas impressas.
+
+### 1. Descarregar o PDF
+
+Em Document, use Download para guardar o PDF. As setas de página e o zoom alteram a vista.
+
+![Download guarda o PDF desta execução.](reports-guide-pdf-download.png)
+
+### 2. Abrir Spreadsheet
+
+Selecione Spreadsheet acima do resultado.
+
+![Spreadsheet mostra as linhas da consulta numa tabela.](reports-guide-spreadsheet-tab.png)
+
+### 3. Verificar os valores das linhas
+
+Leia os nomes das colunas e as células antes de exportar. O exemplo mostra requests igual a zero.
+
+![Leia a contagem real na linha da folha de cálculo.](reports-guide-spreadsheet-result.png)
+
+### 4. Exportar CSV para obter o resultado da consulta
+
+Selecione Export CSV. A consulta volta a executar com os parâmetros do resultado mostrado. Os filtros e a ordenação de Spreadsheet não se aplicam ao CSV. Alterações da origem após a execução podem afetar o ficheiro.
+
+![Export CSV executa a consulta com os parâmetros da execução atual.](reports-guide-export-csv.png)
+
+### 5. Exportar as linhas filtradas em XLSX
+
+Selecione Export XLSX. Usa o resultado carregado com os filtros e a ordenação de Spreadsheet em todas as páginas. Inclui todas as colunas, mesmo as ocultas no ecrã.
+
+![Export XLSX descarrega os filtros e a ordenação atuais da folha de cálculo.](reports-guide-export-xlsx.png)
+
+**Resultado esperado:** o navegador descarrega o formato escolhido. Escolha a exportação cujo tratamento das linhas serve a tarefa.
+
+## Filtrar e organizar linhas de Spreadsheet
+
+Estes controlos alteram a vista carregada de Spreadsheet. Não alteram a definição do relatório nem a apresentação Document.
+
+### 1. Acrescentar um filtro
+
+Selecione Filter e depois Add filter.
+
+![Add filter cria uma regra da folha de cálculo.](reports-guide-filter-add.png)
+
+### 2. Escolher a coluna
+
+Selecione a coluna a filtrar. O exemplo tem uma coluna requests.
+
+![Escolha a coluna do resultado a filtrar.](reports-guide-filter-column.png)
+
+### 3. Definir o valor da regra
+
+Escolha um operador e introduza o valor. O exemplo usa Equals e 0.
+
+![Introduza um valor adequado à coluna do resultado.](reports-guide-filter-value.png)
+
+### 4. Aplicar a regra
+
+Selecione Apply para atualizar as linhas mostradas.
+
+![Apply altera as linhas mostradas em Spreadsheet.](reports-guide-filter-apply.png)
+
+### 5. Acrescentar uma ordenação
+
+Selecione Sort, depois Add sort e escolha uma coluna do resultado.
+
+![Escolha Add sort para ordenar as linhas carregadas.](reports-guide-sort-add.png)
+
+### 6. Escolher a direção
+
+Use Asc ou Desc e selecione Apply. Este exemplo tem uma linha, pelo que a ordem não muda visivelmente.
+
+![Asc ordena dos valores menores para os maiores. Selecione-o para mudar a direção.](reports-guide-sort-order.png)
+
+### 7. Escolher as colunas visíveis
+
+Abra Columns e use as caixas de seleção. A última coluna visível não pode ser ocultada. Feche o menu quando terminar.
+
+![Columns altera os campos visíveis na página.](reports-guide-columns.png)
+
+![Marque os campos necessários. A última coluna visível não pode ser ocultada.](reports-guide-column-options.png)
+
+### 8. Repor ou usar as páginas
+
+Reset limpa as regras e alterações de colunas. Use Rows per page e as setas quando o resultado ocupar várias páginas.
+
+![Reset limpa filtros, ordenação e alterações de colunas.](reports-guide-reset-table.png)
+
+![Use o tamanho de página e as setas quando houver mais linhas.](reports-guide-pagination.png)
+
+## Atualizar um resultado apresentado
+
+Use esta tarefa após mudanças nos dados para repetir a mesma pergunta.
+
+### 1. Escolher Refresh
+
+Abra o menu Actions do relatório e escolha Refresh. Usa os valores do resultado apresentado, mesmo com uma edição de parâmetros por terminar.
+
+![Refresh volta a executar com os valores do resultado apresentado.](reports-guide-refresh.png)
+
+**Resultado esperado:** a consulta executa novamente. A nova contagem pode ser igual à anterior.
+
+## Consultar o histórico de execuções interativas
+
+Use o histórico para identificar quando um relatório foi executado ou descarregado e os parâmetros dessa execução.
+
+### 1. Abrir Run History
+
+Abra Actions e escolha Run History.
+
+![Run History lista execuções interativas e tentativas agendadas guardadas.](reports-guide-history.png)
+
+### 2. Ler Activity
+
+Confira formato, número de linhas, utilizador e hora. Preview é uma execução interativa. pdf, csv e xlsx identificam descargas.
+
+![Leia formato, número de linhas, utilizador e hora de cada execução interativa.](reports-guide-history-rows.png)
+
+### 3. Repor uma escolha anterior de parâmetros
+
+Selecione uma linha Activity para repor os parâmetros nos controlos. Abra Parameters e Run para um novo resultado. Selecionar o histórico não reproduz o resultado guardado.
+
+![Selecionar uma linha de atividade repõe os parâmetros sem reproduzir o resultado antigo.](reports-guide-history-apply.png)
+
+## Criar um agendamento de relatório
+
+Um agendamento guarda um resultado para um período. Não tem campo de destinatário. Confira o ficheiro gerado antes de depender das execuções automáticas.
+
+### 1. Abrir Schedules
+
+Abra Actions e escolha Schedules.
+
+![Schedules gere os resultados automáticos deste relatório.](reports-guide-schedules.png)
+
+### 2. Escolher New Schedule
+
+Selecione New Schedule no painel de agendamentos.
+
+![New Schedule abre as definições do agendamento.](reports-guide-new-schedule.png)
+
+### 3. Escolher a frequência
+
+Defina Frequency. O exemplo escolhe Weekly.
+
+![Escolha a frequência do agendamento.](reports-guide-weekly.png)
+
+### 4. Escolher o dia
+
+Para Weekly, escolha Day of week. O exemplo usa Mon. Monthly oferece os dias 1 a 28.
+
+![Escolha o dia da semana para o agendamento semanal.](reports-guide-weekday.png)
+
+### 5. Escolher o formato de saída
+
+Defina Output format como CSV, XLSX ou PDF. O exemplo usa PDF.
+
+![Escolha o formato do ficheiro guardado.](reports-guide-schedule-format.png)
+
+### 6. Guardar o agendamento
+
+Abra os pontos Actions do editor e escolha Save. O período é calculado na execução, em vez de ser guardado como datas fixas.
+
+![O editor do agendamento tem o próprio menu Actions.](reports-guide-schedule-actions.png)
+
+![Save guarda o agendamento.](reports-guide-schedule-save-step-6.png)
+
+**Resultado esperado:** a lista mostra frequência, formato, interruptor de ativação e próxima execução.
+
+![O agendamento guardado mostra frequência, formato e próxima execução.](reports-guide-schedule-saved.png)
+
+## Executar agora e descarregar o resultado guardado
+
+Run now permite verificar um novo agendamento. Uma mensagem de fila não prova sucesso. Consulte Scheduled Runs para o resultado.
+
+### 1. Colocar a execução em fila
+
+Mantenha o agendamento ativo e selecione Run now. Um agendamento desligado não executa, mesmo que mostre uma mensagem de fila.
+
+![Run now coloca uma execução imediata em fila. Confira o resultado em Scheduled Runs.](reports-guide-schedule-run.png)
+
+### 2. Abrir Scheduled Runs
+
+Feche Schedules. Abra Actions, Run History e o separador Scheduled Runs. Reabra o painel se o resultado ainda não chegou.
+
+![Scheduled Runs separa resultados agendados guardados da atividade interativa.](reports-guide-scheduled-tab.png)
+
+### 3. Ler o estado e o período
+
+Confira OK ou Failed e o período registado. Uma tentativa falhada não tem ficheiro de saída.
+
+![Confira OK e o período registado antes de descarregar.](reports-guide-scheduled-result.png)
+
+### 4. Descarregar o resultado com sucesso
+
+Selecione Download numa execução guardada com sucesso.
+
+![Download obtém o resultado guardado com sucesso.](reports-guide-scheduled-download.png)
+
+**Resultado esperado:** o PDF descarregado é o resultado agendado guardado. Não substitui o resultado apresentado na página do relatório.
+
+## Desativar, alterar ou remover um agendamento
+
+Use os controlos da linha correta. A verificação desliga e remove o agendamento descartável após conferir o ficheiro guardado.
+
+### 1. Desativar as execuções automáticas
+
+Abra Schedules e desligue o interruptor da linha. Uma data Next apresentada não se sobrepõe ao interruptor desligado.
+
+![Desligue o interruptor para parar futuras execuções automáticas.](reports-guide-schedule-toggle.png)
+
+### 2. Editar o agendamento guardado
+
+Selecione Edit na linha.
+
+![Edit altera a frequência, os filtros ou o formato guardados.](reports-guide-schedule-edit.png)
+
+### 3. Guardar as alterações pretendidas
+
+Altere as definições necessárias e use Actions e Save nesse editor. O exemplo muda o formato do agendamento desligado para XLSX.
+
+![Este exemplo desligado muda o formato futuro para XLSX.](reports-guide-schedule-edit-format.png)
+
+![Save guarda o agendamento.](reports-guide-schedule-save-step-3.png)
+
+### 4. Remover um agendamento sem uso
+
+Selecione Delete na linha correta.
+
+![Delete remove apenas o agendamento selecionado.](reports-guide-schedule-delete.png)
+
+### 5. Confirmar a remoção
+
+Leia a confirmação e selecione Delete se pretender remover esse agendamento.
+
+![Confirme a remoção quando o agendamento deixar de ser necessário.](reports-guide-schedule-delete-confirm.png)
+
+**Resultado esperado:** o agendamento escolhido desaparece. A verificação não deixa agendamentos ativos ou guardados para o relatório.
+
+## Manter um relatório fácil de encontrar
+
+Os favoritos organizam a biblioteca neste navegador. Não alteram os dados dos relatórios.
+
+### 1. Fixar o relatório
+
+Aponte para a linha do relatório e selecione a estrela. Também aparece em Pinned.
+
+![Fixe o relatório para o manter perto do topo da biblioteca deste navegador.](reports-guide-pin.png)
+
+### 2. Retirar o favorito
+
+Selecione novamente a estrela preenchida para deixar de o fixar.
+
+![Selecione novamente a estrela preenchida para retirar o favorito.](reports-guide-unpin.png)
+
+## Abrir o desenho associado
+
+Use esta tarefa quando um responsável autorizado precisar de alterar a apresentação ou os filtros do modelo.
+
+### 1. Escolher Edit template
+
+Abra Actions e selecione Edit template.
+
+![Edit template abre o desenho associado em Report Designer.](reports-guide-edit-template.png)
+
+### 2. Verificar o nome do desenho
+
+Confirme que Report Designer abriu o desenho associado pretendido antes de editar.
+
+![O modelo associado abre para um responsável autorizado.](reports-guide-edit-template-result.png)
+
+## Verificar uma tentativa de Unpublish
+
+Unpublish destina-se a ocultar uma entrada mantendo o desenho. Nesta verificação, uma entrada personalizada nova devolveu Action failed e permaneceu publicada. Esta falha atual está documentada aqui e não foi corrigida.
+
+### 1. Escolher Unpublish apenas para a entrada pretendida
+
+Abra Actions do relatório e selecione Unpublish para o ocultar. A entrada ilustrada é conteúdo de teste descartável.
+
+![Unpublish tenta retirar o relatório da biblioteca.](reports-guide-unpublish.png)
+
+### 2. Verificar o resultado real
+
+Se aparecer Action failed, a entrada não foi retirada da publicação. Guarde o nome ou identificador e comunique o problema. Não trate a remoção como bem-sucedida.
+
+![Os relatórios personalizados novos podem atualmente mostrar Action failed em vez de saírem da publicação.](reports-guide-unpublish-failed.png)
+
+**Resultado esperado:** o caso verificado de entrada nova falhou com HTTP 400 e permaneceu publicado. Outras ações de gestão não comprovam o sucesso de Unpublish.
+
+## Eliminar um relatório sem uso da biblioteca
+
+Delete elimina definitivamente a definição selecionada. Confira se a equipa já não precisa dela. O exemplo remove uma entrada descartável e mantém o relatório principal e o desenho.
+
+### 1. Escolher Delete report
+
+Abra Actions do relatório sem uso e selecione Delete report.
+
+![Delete report elimina definitivamente a entrada selecionada.](reports-guide-delete-report.png)
+
+### 2. Confirmar a ação indicada
+
+Leia a confirmação e escolha Delete report apenas para a remoção pretendida.
+
+![Confirme apenas a entrada que pretende remover.](reports-guide-delete-report-confirm.png)
+
+**Resultado esperado:** a entrada desaparece da biblioteca. O desenho associado continua disponível em Report Designer.
+
+## Executar um relatório existente num telemóvel
+
+A biblioteca começa recolhida numa barra estreita. Use-a para escolher o relatório e depois dê mais espaço ao resultado.
+
+### 1. Expandir a biblioteca
+
+Selecione Expand library na barra estreita.
+
+![Expanda a barra da biblioteca num telemóvel.](reports-guide-phone-library.png)
+
+### 2. Encontrar e escolher o relatório
+
+Pesquise pelo nome e selecione-o. Recolha a biblioteca depois.
+
+![Pesquise e abra o relatório.](reports-guide-phone-select.png)
+
+### 3. Escolher as datas
+
+Abra Actions e Parameters. Abra o período e escolha uma predefinição ou datas. No telemóvel, as predefinições mudam de linha acima de um único mês.
+
+![As predefinições mudam de linha acima do calendário de um mês no telemóvel.](reports-guide-phone-dates.png)
+
+### 4. Executar com os valores selecionados
+
+Selecione Run no painel dos parâmetros.
+
+![Run continua disponível no painel dos parâmetros do relatório.](reports-guide-phone-run.png)
+
+### 5. Ler Spreadsheet
+
+Após terminar, selecione Spreadsheet e consulte os valores. Tabelas largas podem deslocar-se horizontalmente.
+
+![Spreadsheet mostra o mesmo resultado completo num telemóvel.](reports-guide-phone-result.png)
+
+## Compreender a hora e os períodos dos agendamentos
+
+Os agendamentos executam às 06:00 UTC. O editor não tem definição separada de hora ou fuso. Next e Last usam o fuso do navegador. O filtro de fuso do relatório controla o agrupamento dos dados, não o relógio do agendamento.
+
+Um novo agendamento Daily começa amanhã. Weekly usa o próximo dia escolhido, nunca hoje. Monthly usa o dia escolhido do próximo mês. Quarterly usa o primeiro dia do próximo trimestre civil.
+
+| Frequência | Período na execução |
 | --- | --- |
-| View reports | Abrir **Relatórios** e ver a biblioteca. |
-| Run reports | Executar um relatório e ver o resultado. |
-| Export reports | Transferir o PDF, o CSV ou o XLSX, e os ficheiros guardados dos agendamentos. |
-| Edit report templates | Criar, alterar e eliminar agendamentos. Usar **Editar modelo**, **Despublicar** e **Eliminar relatório**. |
+| Daily | O dia UTC anterior. |
+| Weekly | Os sete dias UTC anteriores, até ontem. |
+| Monthly | O mês civil anterior em UTC. |
+| Quarterly | O trimestre civil anterior em UTC. |
 
-Os relatórios novos não se criam nesta página. Um gestor de laboratório constrói um modelo no [Designer de relatórios](/docs/report-designer) e publica-o. Depois aparece na biblioteca.
+Run now usa o mesmo período calculado. Não reutiliza as datas escolhidas na página do relatório. A consulta deve incluir o dia final completo. A execução semanal verificada cobriu 5 a 11 de novembro de 2026.
 
-## Antes de começar
+## Compreender filtros e dados dos relatórios
 
-Os exemplos precisam dos dados de exemplo da documentação. Se **Total Orders** no painel de exemplo mostrar 0, carregue-os primeiro. Veja [Carregar os dados de exemplo](/docs/dashboard#carregar-os-dados-de-exemplo).
+Os filtros vêm dos parâmetros do modelo. Altere-os em Report Designer. A consulta principal fornece as linhas de Spreadsheet. As associações dos elementos fornecem Document. Um relatório pode ter várias tabelas associadas enquanto Spreadsheet mostra a consulta principal.
 
-Uma instalação nova traz dez relatórios em quatro categorias:
+A página Reports atual fornece filtros de datas como valores simples from e to. Uma Custom Query que declare um parâmetro daterange aninhado falha quando associada diretamente aqui. O padrão existente usa dois parâmetros Text chamados from e to e um controlo Date range no modelo. Consulte Report Designer.
 
-| Categoria | Relatórios | Funciona com o exemplo |
-| --- | --- | --- |
-| AMR / Surveillance | AMR Cumulative Antibiogram, AMR First-Isolate Resistance Summary, AMR Resistance Rate, AMR Resistance by Facility | Com o exemplo de microbiologia. Veja abaixo. |
-| Operational | Clinical Microbiology Report, LIS Stakeholders Update, Specimen Turnaround Time, Test Volume Over Time | Turnaround e Test Volume, sim |
-| Quality | Patient Demographics | Sim |
-| Regulatory | AMR GLASS RIS (stratified) | Com o exemplo de microbiologia. Veja abaixo. |
+Os relatórios exigem dados recebidos diferentes. Um relatório de amostras, organismos ou suscetibilidade não os pode inventar a partir de uma contagem de pedidos. Um resultado vazio pode ser correto para os filtros ou dados disponíveis.
 
-Os relatórios AMR e de microbiologia leem organismos e resultados de antibiograma. O exemplo principal não os tem. Um segundo exemplo tem 48 culturas inventadas, de setembro a outubro de 2026, para os experimentar:
+Nos relatórios integrados, Facility costuma significar o laboratório que testa. Leia a ajuda do filtro e a consulta antes de assumir agrupamento pela clínica que enviou o pedido.
 
-```bash
-cd ~/Downloads/openldr_ce
-curl -L -o data/openldr-sample-microbiology.json https://openldr.online/docs-samples/openldr-sample-microbiology.json
-./openldr ingest data/openldr-sample-microbiology.json
+## Executar um relatório pela CLI
+
+Use `./openldr` na pasta instalada em Linux ou macOS, `.\openldr.ps1` em Windows, ou `pnpm openldr` numa cópia de desenvolvimento. Execute o comando na sua pasta `openldr_ce`. [Start here](/docs/start-here) explica o lançador e os caminhos.
+
+```shell
+./openldr report list
+./openldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --json
+./openldr report run REPORT_ID --param from=2026-01-01 --param to=2026-11-12 --format pdf --out data/report.pdf
 ```
 
-Numa cópia das fontes, o ficheiro já está no repositório:
+Substitua REPORT_ID pela entrada listada no primeiro comando. Substitua as datas e os caminhos de saída pelos valores pretendidos. A execução JSON verificada pela CLI devolveu uma linha com requests igual a zero.
 
-```bash
-pnpm openldr ingest apps/web/public/docs-samples/openldr-sample-microbiology.json
-```
+## Resultados opcionais de verificação
 
-Um bom carregamento termina com `batch <id>: done (455 resources)`. Junta-se ao exemplo principal e não muda nenhum dos seus números.
+O uso normal precisa dos seus relatórios e dados recebidos. Não exige um pacote de documentação. Para criar o mesmo relatório pequeno, use a consulta opcional em [Editor de relatórios](/docs/report-designer#referencia-opcional-de-pratica).
 
-**Resultado esperado:** **AMR Resistance Rate** de `2026-09-01` a `2026-10-31` lista 10 antibióticos. Ciprofloxacin mostra 48 testados, 13 resistentes, 4 intermédios, 31 sensíveis, 27,1% de resistência. Vancomycin mostra 11 testados, nenhum resistente. Para a página de um isolado, execute **Clinical Microbiology Report** com o número `MIC-0001`.
-
-Os seus próprios dados enchem estes relatórios quando o seu sistema de laboratório envia microbiologia, por exemplo através de uma exportação WHONET. Veja [Load and push data](https://openldr.online/#/docs/load-data) no site.
-
-## Exemplo 1: executar um relatório
-
-Conte os exames pedidos em cada mês de setembro e outubro de 2026.
-
-![Escolher Test Volume Over Time, definir o intervalo de datas e executá-lo.](reports-run.mp4)
-
-1. Abra **Relatórios**.
-2. Na biblioteca, em **Operational**, selecione **Test Volume Over Time**. A página diz **Execute o relatório para ver os resultados.**
-3. Abra o menu de três pontos e selecione **Parâmetros**. Um painel lateral lista os filtros do relatório. Uma estrela marca um filtro obrigatório.
-4. Selecione **Date range**. Volte a setembro de 2026. Selecione 1 de setembro e depois 31 de outubro.
-5. Deixe **Facility** em **Todos**.
-6. Selecione **Executar**. O painel fecha e o relatório corre.
-
-**Resultado esperado:** **Total tests** mostra 60. O documento tem dez linhas, uma por exame e por mês. Em outubro: Blood glucose 3, Creatinine 5, Full blood count 8, HIV viral load 8, Malaria rapid test 8.
-
-Os filtros vêm dos parâmetros do modelo. Para juntar, tirar ou mudar o nome de um, altere o modelo no [Designer de relatórios](/docs/report-designer), não esta página. Um relatório lembra-se dos últimos valores usados, neste navegador.
-
-## Ler o resultado
-
-A vista de documento tem setas de página, zoom e **Transferir**. **Transferir** guarda o PDF e regista uma execução `pdf` no histórico.
-
-Selecione **Folha de cálculo** para ver as mesmas linhas numa tabela.
-
-![A vista Folha de cálculo, com Filtrar, Ordenar, Colunas e as duas exportações.](reports-spreadsheet.png)
-
-- **Filtrar.** Escolha uma coluna, um operador e um valor, depois **Aplicar**. Tire uma etiqueta de filtro para limpar uma regra, ou use **Limpar tudo**.
-- **Ordenar.** Muda a ordem.
-- **Colunas.** Esconde e mostra colunas.
-- **Exportar CSV** e **Exportar XLSX.** Transferem as linhas para outras ferramentas.
-
-Use a folha de cálculo quando precisar dos valores exatos, ou para levar as linhas para outra ferramenta.
-
-### O que quer dizer "Facility" nos relatórios incluídos
-
-O filtro **Facility** e as colunas de unidade dos relatórios incluídos querem dizer o **laboratório que fez o exame**. Não agrupam pela clínica que enviou a amostra. Numa instalação nova a lista está vazia até carregar um registo de unidades. Veja [Unidades](/docs/facilities).
-
-## Histórico
-
-Abra o menu de três pontos e selecione **Histórico**.
-
-![O histórico. Atividade lista cada execução, com o formato, as linhas, o utilizador e a hora.](reports-history.png)
-
-- **Atividade** lista as execuções feitas à mão. `preview` é uma execução nesta página. `pdf`, `csv` e `xlsx` são transferências.
-- **Execuções agendadas** lista as tentativas dos agendamentos, o estado e o ficheiro guardado. **Transferir**, junto a uma execução bem-sucedida, obtém o seu CSV, XLSX ou PDF.
-
-Use o histórico para comparar execuções e para ver se um resultado mudou depois de chegarem dados novos. Para saber quem mudou definições ou agendamentos, veja [Auditoria](/docs/audit).
-
-## Exemplo 2: tempo de resposta das amostras
-
-Veja quanto tempo cada exame leva, da amostra recebida ao relatório emitido.
-
-![Specimen Turnaround Time para setembro e outubro de 2026.](reports-turnaround.png)
-
-1. Na biblioteca, selecione **Specimen Turnaround Time**.
-2. Abra o menu de três pontos e depois **Parâmetros**. Defina **Date range** de 1 de setembro a 31 de outubro de 2026.
-3. Selecione **Executar**.
-
-**Resultado esperado:** **Reports** mostra 39 e **Avg hours** mostra 19.0. Creatinine tem em média 15.0 horas, Malaria rapid test 17.1, Full blood count 20.5, Blood glucose 20.7 e HIV viral load 21.9.
-
-Cada relatório é contado desde a sua própria amostra: da receção dessa amostra até à emissão do relatório. Um relatório sem amostra ligada fica de fora.
-
-## Exemplo 3: agendar um relatório
-
-Ponha o Test Volume a correr todas as segundas-feiras e a guardar um PDF.
-
-![Abrir Agendamentos, criar um agendamento semanal em PDF e salvá-lo.](reports-schedule.mp4)
-
-1. Selecione **Test Volume Over Time**. Abra o menu de três pontos e selecione **Agendamentos**. A sua função precisa de **Edit report templates**.
-2. Selecione **Novo agendamento**.
-3. Defina **Frequência** como **Semanal**. Defina **Dia da semana** como **Mon**. Os dias aparecem em inglês.
-4. Defina **Formato de saída** como **PDF**. Deixe **Facility** em **Todos**.
-5. Abra o menu de três pontos do agendamento e selecione **Guardar**. Aparece a mensagem **Agendamento guardado.**
-
-**Resultado esperado:** a lista mostra o agendamento semanal de segunda-feira, uma etiqueta **PDF**, um interruptor ligado e a **Próxima** execução.
-
-![O agendamento guardado, com o interruptor, Executar, Editar e Eliminar.](reports-schedules.png)
-
-Cada linha de agendamento tem um interruptor para o ligar e desligar, um botão de reprodução, **Executar**, um lápis para **Editar** e um caixote para **Eliminar**.
-
-### Frequência, hora e intervalo de datas
-
-- **Diário**, **Semanal**, **Mensal** ou **Trimestral**. Semanal pede um dia da semana. Mensal oferece os dias 1 a 28.
-- Todos os agendamentos correm às 06:00 UTC. Não pode escolher outra hora nem outro fuso horário.
-- **Próxima** e **Última** aparecem no fuso horário do seu navegador.
-- O filtro **Time zone** de um relatório define como os dados são contados, não quando o agendamento corre.
-- Um agendamento novo começa com os filtros atuais da página, exceto o intervalo de datas.
-
-O intervalo de datas não fica guardado. O agendador calcula-o quando a execução começa, incluindo com **Executar**:
-
-| Frequência | Próxima data ao guardar | Intervalo de datas |
-| --- | --- | --- |
-| Diário | Amanhã | O dia UTC anterior |
-| Semanal | O próximo dia escolhido, nunca hoje | Os sete dias UTC anteriores, até ontem |
-| Mensal | O dia escolhido no mês seguinte | O mês civil anterior em UTC |
-| Trimestral | O primeiro dia do trimestre seguinte | O trimestre civil anterior em UTC |
-
-Um agendamento desligado pode continuar a mostrar **Próxima**. Essa data não quer dizer que vai correr. Veja o interruptor. **Última** pode ser uma tentativa falhada. Veja o estado no histórico.
-
-### Executar agora e transferir o ficheiro
-
-1. Ligue o agendamento e depois selecione **Executar**, o botão de reprodução.
-2. Uma mensagem diz que a execução foi posta na fila. Isso não quer dizer que correu bem. Um agendamento desligado mostra a mesma mensagem e não faz nada.
-3. Abra o menu de três pontos, **Histórico**, **Execuções agendadas**. As execuções automáticas e as lançadas à mão aparecem aqui quando terminam.
-4. Selecione **Transferir** junto a uma execução bem-sucedida. Precisa de **Export reports**.
-5. Se a execução não aparecer, feche e volte a abrir **Execuções agendadas**. A lista não se atualiza sozinha.
-
-Uma execução falhada não tem ficheiro. Num computador, aponte para o estado **Falhou** para ler o erro. Corrija os filtros do agendamento e tente de novo. Uma execução agendada nunca substitui o que a página do relatório mostra.
-
-## Gerir um relatório
-
-Com **Edit report templates**, o menu de três pontos do relatório tem também:
-
-- **Editar modelo.** Abre o modelo no [Designer de relatórios](/docs/report-designer).
-- **Despublicar.** Tira o relatório da biblioteca e mantém o modelo.
-- **Eliminar relatório.** Remove-o, depois de confirmar.
-
-## Num telemóvel
-
-Num telemóvel, a biblioteca começa dobrada numa faixa estreita à esquerda. Selecione o botão de painel no topo da faixa para a abrir. Os nomes longos aparecem cortados na lista. O nome completo aparece quando escolhe o relatório. Volte a dobrar a biblioteca para dar o ecrã todo ao relatório.
-
-![A biblioteca de relatórios aberta num telemóvel.](reports-phone.png)
-
-## Limites
-
-Cada consulta de relatório guardada devolve no máximo 1 000 linhas. Exatamente 1 000 é aceite. Se alguma consulta por trás de um PDF passar disso, o PDF inteiro é recusado. As exportações CSV e XLSX também recusam. Restrinja o intervalo de datas ou outros filtros e execute de novo. Um `LIMIT` escrito no SQL guardado é mantido de propósito.
-
-Uma execução agendada acima do limite regista uma falha e não guarda ficheiro. A linha de comandos mostra o erro antes de escrever a exportação. Os ficheiros já guardados não voltam a ser gerados.
-
-## O LIS Stakeholders Update
-
-Este relatório mostra, por laboratório, se chegaram dados ao OpenLDR em cada dia útil de um mês.
-
-- As datas ficam no cabeçalho das colunas, o dia por cima do mês, e repetem-se em cada página.
-- Uma célula preenchida quer dizer que chegaram dados nesse dia. Uma vazia quer dizer que não chegou nada.
-- Os fins de semana ficam de fora. Não se aplica nenhum calendário de feriados, por isso um feriado conta como dia útil.
-- Os dias são contados no fuso horário definido em **Definições**, **Laboratório**, **Time zone**. O filtro **Time zone** da execução começa por essa definição e pode mudá-lo. Uma execução agendada ou pela linha de comandos não lê a definição. Dê-lhe o fuso diretamente.
-- **HVL/EID panel codes** recebe os códigos que o seu programa conta como carga viral ou diagnóstico precoce, em cada execução. O resto vai para a grelha Other.
-- Um laboratório que não enviou nada nesse mês não aparece na grelha.
-- A vista **Folha de cálculo** e o CSV são o resultado bruto da consulta. A primeira linha traz as datas das colunas, não um laboratório, e incluem a coluna de ordenação que a página esconde. Salte essa primeira linha quando levar o ficheiro para outra ferramenta.
-
-## O Clinical Microbiology Report
-
-Este relatório recebe o **número de laboratório** como Request ID: o número do pedido e da etiqueta da amostra, tal como o sistema o envia, por exemplo `TZDISATDS0013538`.
-
-Um sistema de laboratório divide muitas vezes um resultado de microbiologia em vários pedidos com o mesmo número. A cultura que cresceu é um pedido, o antibiograma outro. O relatório lê todos os pedidos com esse número e imprime um isolado com as suas sensibilidades numa página. Uma amostra com mais de um organismo é recusada, não juntada, porque dois antibiogramas sob um só nome de organismo pareceriam um só isolado. Um único identificador de pedido também funciona.
+As descargas reais são [o PDF interativo](https://openldr.online/docs-samples/user-guide/reports/request-summary.pdf), [CSV](https://openldr.online/docs-samples/user-guide/reports/request-summary.csv), [XLSX](https://openldr.online/docs-samples/user-guide/reports/request-summary.xlsx) e [o PDF agendado guardado](https://openldr.online/docs-samples/user-guide/reports/scheduled-request-summary.pdf). Contêm apenas uma contagem de pedidos igual a zero.
 
 ## Resolução de problemas
 
-- **Executar está desativado.** Falta um filtro obrigatório. Abra **Parâmetros** e preencha todos os filtros marcados com estrela. A maioria dos relatórios pede um intervalo de datas.
-- **"date range not selected", ou uma mensagem com o nome de um parâmetro.** O relatório correu sem um valor de que precisa. Defina-o em **Parâmetros** e execute de novo. A mensagem diz qual é o parâmetro.
-- **O resultado está vazio.** Alargue o intervalo de datas, limpe os filtros opcionais ou confirme que os dados estão carregados. Os relatórios AMR ficam vazios sem dados de microbiologia. Carregue o exemplo de microbiologia para confirmar que funcionam.
-- **"no data for this report request" no Clinical Microbiology Report.** Esse número não tem microbiologia. Um pedido de bioquímica ou serologia não tem organismo. O relatório recusa em vez de imprimir uma página vazia, porque um relatório de microbiologia sem organismo parece uma cultura negativa. Veja primeiro os painéis do pedido em **Consulta**.
-- **Um relatório de microbiologia mostra um organismo sem sensibilidades.** Normalmente é um resultado verdadeiro. A cultura cresceu e não se fez antibiograma.
-- **Todos os relatórios de microbiologia têm a tabela de sensibilidades vazia.** Veja primeiro em **Terminologia** o conjunto de valores de interpretação do antibiograma. O relatório escolhe as sensibilidades desse conjunto. Se nunca foi carregado nesta instalação, todas as tabelas ficam vazias, como culturas sem antibiograma. Uma tabela vazia é um resultado. Todas vazias é um problema de instalação.
-- **Um antibiograma mostra uma coluna `(unmapped)`.** São resultados que o relatório não conseguiu ligar a um antibiótico, muitas vezes uma linha de resumo, um resultado para dois fármacos, ou um resultado de microscopia registado como S, I ou R. Aparecem para que a contagem se veja. Um número grande é um problema de qualidade dos dados a levar a quem configura o analisador.
-- **Falta um relatório em Specimen Turnaround Time.** Não tem amostra ligada, ou foi emitido antes de a amostra ser recebida. Nenhum dos casos dá um tempo de resposta.
-- **Permissão negada.** A sua função pode ver relatórios, mas não gerir agendamentos, editar modelos, nem despublicar ou eliminar.
-- **Uma execução anterior falhou.** Abra **Histórico**, leia o erro, mude os filtros e execute de novo.
-- **Falta um relatório que esperava.** Pode estar despublicado ou ainda não ter sido criado. Veja o [Designer de relatórios](/docs/report-designer).
-- **O LIS Stakeholders Update não tem dados num dia em que um laboratório enviou.** Veja primeiro **Definições**, **Laboratório**, **Time zone**, ou o filtro **Time zone** da execução. Os dias são contados nesse fuso. Um fuso UTC numa instalação adiantada em relação a UTC pode passar uma chegada ao fim da tarde para o dia anterior.
-- **Num armazém SQL Server, a definição Time zone não se pode usar.** Essa definição só aceita nomes de fuso IANA, e o SQL Server pede nomes do Windows. No SQL Server, deixe a definição vazia e escreva o nome do Windows no filtro **Time zone** de cada execução. A definição funciona no PostgreSQL e no MySQL ou MariaDB.
-- **A execução é recusada com uma mensagem sobre o filtro Time zone.** O filtro recebeu um desvio com sinal, como `+3`, `+03:00` ou `Etc/GMT+3`. Isto é recusado de propósito. A base de dados lê o sinal ao contrário, por isso `+3` quer dizer três horas atrás de UTC, e a grelha ficaria desviada o dobro sem nada na página o mostrar. Escreva um fuso com nome, como `Africa/Maputo`, ou o nome do Windows no SQL Server. Um nome que o armazém não conhece não é recusado aqui. O armazém indica-o claramente.
-- **Falta um laboratório no LIS Stakeholders Update.** Não enviou nada nesse mês. Se faltarem todos, veja primeiro o ponto seguinte.
-- **Faltam todos os laboratórios num armazém MySQL ou MariaDB.** As tabelas de fusos horários do servidor provavelmente não estão carregadas. Enquanto ninguém correr `mysql_tzinfo_to_sql` nesse servidor, todos os dias ficam vazios. A grelha desenha as datas sem nenhuma linha, como um mês em que nada chegou. Peça ao administrador do armazém para carregar essas tabelas. O PostgreSQL e o SQL Server não são afetados.
-- **A grelha HVL/EID está vazia mas a Other não.** Os códigos em **HVL/EID panel codes** não coincidem com o que este laboratório envia. O filtro é obrigatório, por isso não estava vazio. Abra **Consulta**, encontre um pedido que sabe ser de carga viral ou diagnóstico precoce e leia o seu código de painel. É essa grafia exata, com pontuação e maiúsculas, que o filtro precisa.
+**A biblioteca está vazia.** Limpe a pesquisa e confira View reports. Publicar um desenho, por si só, não cria uma entrada.
+
+**Run está indisponível.** Preencha os filtros obrigatórios e confira Run reports. Uma consulta pode exigir valores que o modelo não marcou como obrigatórios.
+
+**Um relatório não devolve linhas.** Confira o período, a unidade e os registos de origem necessários. Um ficheiro de exemplo não é requisito para relatórios reais.
+
+**Um relatório personalizado indica required parameter: period.** Confira a forma dos parâmetros de datas descrita acima. Uma pré-visualização bem-sucedida no editor não comprova uma execução em Reports.
+
+**Falta uma execução agendada.** Confira o interruptor de ativação, feche e reabra Scheduled Runs. Uma mensagem de fila, por si só, não comprova execução.
+
+**Uma execução agendada indica Failed.** Num computador, aponte para o estado para ler o erro guardado. Corrija as definições reais e repita Run now.
+
+**Unpublish indica Action failed.** O relatório novo verificado falhou e permaneceu publicado. Comunique o identificador. Este guia não afirma que a operação teve sucesso.
 
 ## Guias relacionados
 
-- [Designer de relatórios](/docs/report-designer)
-- [Consultas personalizadas](/docs/query)
-- [Painéis](/docs/dashboard)
-- [Auditoria](/docs/audit)
+[Editor de relatórios](/docs/report-designer) define a apresentação e cria entradas na biblioteca. [Consultas](/docs/query) define os dados. [Relatórios agendados com workflows](/docs/report-pipeline) cobre workflows de livros personalizados e email.

@@ -1,271 +1,248 @@
 # Connecteurs
 
-Un **connecteur** est une connexion enregistrée vers un autre système : une base de données, un serveur de messagerie, un serveur de fichiers, ou une destination fournie par une extension installée. Les nœuds de workflow, les requêtes personnalisées et les rapports utilisent un connecteur **par son nom**. Aucun d'eux ne stocke de mot de passe. Le serveur le fournit au moment de l'exécution.
+Enregistrez une connexion une fois, puis choisissez-la dans les workflows, Custom Queries et les rapports. Un connecteur conserve les paramètres et les identifiants chiffrés.
 
-Comptez 15 minutes. Sélectionnez une image ou un clip pour l'agrandir.
+Vous avez besoin de **Manage connectors**. Utilisez votre base ou votre compte de service. Les captures utilisent un compte fictif de rapports en lecture seule sur une base Postgres isolée.
 
-![Paramètres, Connecteurs sur une installation neuve : un connecteur, Target Warehouse (Postgres).](connectors-tour.png)
+Une nouvelle installation crée un connecteur d'entrepôt pour le moteur configuré. Les captures utilisent **Target Warehouse (Postgres)**. Les requêtes et rapports intégrés utilisent ce connecteur. Vérifiez leurs dépendances avant de le modifier.
 
-## Qui peut faire quoi
+L'hôte et le port doivent être accessibles depuis le serveur OpenLDR. Dans Docker, `localhost` désigne le conteneur lui-même. Utilisez le nom du service de base et son port interne si les deux services partagent un réseau Docker.
 
-Une seule capacité couvre cette page : **Manage connectors**. Sans elle, Connecteurs n'apparaît pas dans les Paramètres. Le rôle intégré **Administrator** l'a.
+Créer un connecteur n'importe aucune fiche et n'exécute aucun workflow. La [pratique facultative](#pratique-facultative) se trouve à la fin.
 
-## Ce qu'a une installation neuve
+## Choisir le type de connexion
 
-Un connecteur, **Target Warehouse (Postgres)**. Il pointe vers l'entrepôt du laboratoire, la base où OpenLDR écrit les données de laboratoire. Les rapports intégrés et les requêtes personnalisées lisent par lui. Ne le supprimez pas.
+Utilisez les paramètres et le compte préparés pour le service à joindre. Choisissez le type avant de remplir ses champs.
 
-La liste montre pour chaque connecteur son **Nom**, son **Type**, l'**Hôte autorisé du plugin** et un interrupteur **Activé**. **Hôte autorisé du plugin** est le seul hôte réseau qu'un connecteur d'extension peut joindre. Ce n'est pas l'adresse de connexion enregistrée, et les connecteurs hôtes le laissent vide. Ouvrez **Modifier** pour voir l'adresse d'un connecteur hôte.
+### 1. Ouvrir le menu utilisateur
 
-## Exemple 1 : tester le connecteur de l'entrepôt
+Sélectionnez votre menu de compte en bas de la barre principale.
 
-![Ouvrir le menu de la ligne Target Warehouse et sélectionner Tester. Connexion réussie s'affiche.](connectors-test.mp4)
+![Ouvrir le menu utilisateur en bas à gauche.](connectors-guide-open-user-menu.png)
 
-1. Ouvrez **Paramètres**, puis **Connecteurs**.
-2. Sur la ligne **Target Warehouse (Postgres)**, ouvrez le menu **⋯** et sélectionnez **Tester**.
+### 2. Ouvrir Settings
 
-**Résultat attendu :** **Connexion réussie** sous le menu de la ligne. Le test part du serveur OpenLDR, pas de votre navigateur. Il prouve donc que le serveur joint la base.
+Choisissez **Settings** dans le menu du compte.
 
-Chaque test est écrit dans l'[Audit](/docs/audit) sous `connector.test`, avec son résultat.
+![Choisir Settings dans le menu utilisateur.](connectors-guide-settings-menu.png)
 
-## Exemple 2 : ajouter un connecteur en lecture seule pour les rapports
+### 3. Ouvrir Connectors
 
-Un rapport ou une requête personnalisée doit lire les données, pas les changer, et a rarement besoin du nom des patients. Donnez-lui un compte de base de données qui ne lit que les tables utiles. Même une requête fausse ne peut alors ni changer les données, ni lire le nom d'un patient.
+Sélectionnez **Connectors** dans Settings.
 
-Cet exemple crée un compte qui lit les demandes, les résultats, les échantillons, les comptes rendus et les établissements, mais pas les patients.
+![Ouvrir Settings puis Connectors.](connectors-guide-open.png)
 
-### Créer le compte de base de données
+### 4. Ouvrir les actions de la page
 
-Sur le serveur, avec l'utilisateur qui fait tourner OpenLDR, lancez ceci depuis le dossier d'installation. Remplacez le mot de passe par le vôtre.
+Sélectionnez les points au-dessus du tableau.
 
-```bash
-docker compose -f docker-compose.prod.yml exec -T postgres psql -U openldr -d openldr_target <<'SQL'
-CREATE ROLE report_reader LOGIN PASSWORD 'choose-a-strong-password';
-GRANT CONNECT ON DATABASE openldr_target TO report_reader;
-GRANT USAGE ON SCHEMA public TO report_reader;
-GRANT SELECT ON lab_requests, lab_results, specimens, diagnostic_reports, facilities TO report_reader;
-SQL
+![Le menu à points de la page contient Add connector.](connectors-guide-actions.png)
+
+### 5. Choisir Add connector
+
+Sélectionnez **Add connector**.
+
+![Choisir Add connector.](connectors-guide-add.png)
+
+### 6. Nommer la connexion
+
+Saisissez un nom reconnaissable dans le sélecteur. L'exemple utilise `Example reporting database`. Ne mettez aucun mot de passe dans le nom.
+
+![Utiliser un nom qui identifie la base et son usage.](connectors-guide-name.png)
+
+### 7. Choisir Host
+
+Définissez **Category** sur **Host** pour une connexion intégrée de base, de messagerie ou de fichiers.
+
+![Choisir Host pour les connexions intégrées de base, de messagerie ou de fichiers.](connectors-guide-host-option.png)
+
+### 8. Choisir le type de service
+
+Définissez **Database type** sur le service réel. L'exemple utilise **Postgres**. La liste contient aussi les services de messagerie et de fichiers.
+
+![Choisir le vrai type de service. L'exemple utilise Postgres.](connectors-guide-type.png)
+
+## Saisir les détails et enregistrer
+
+Continuez dans le panneau ouvert. Les champs dépendent du type choisi. Cet exemple utilise Postgres.
+
+### 1. Saisir l'adresse de la base
+
+Remplissez **Host**, **Port** et **Database**. L'adresse montrée appartient à cette installation de test. Utilisez l'adresse de votre serveur.
+
+![Saisir l'hôte, le port et la base accessibles depuis le serveur OpenLDR.](connectors-guide-address.png)
+
+### 2. Saisir le compte
+
+Remplissez **User** et **Password** avec le compte de base. Un test de connexion n'établit pas quelles tables ce compte peut lire.
+
+![Utiliser un compte autorisé à lire les données nécessaires.](connectors-guide-account.png)
+
+### 3. Vérifier le chiffrement du transport
+
+Réglez **Use SSL** selon les exigences de la base. L'exemple local le désactive. Les autres types ont leurs propres paramètres de transport.
+
+![Régler Use SSL selon la base. L'exemple isolé n'utilise pas SSL.](connectors-guide-ssl.png)
+
+### 4. Ouvrir les actions du panneau
+
+Sélectionnez les points dans l'en-tête du panneau.
+
+![Ouvrir le menu à points du panneau du connecteur.](connectors-guide-sheet-actions.png)
+
+### 5. Enregistrer le connecteur
+
+Sélectionnez **Save**.
+
+![Save conserve le connecteur et les identifiants chiffrés.](connectors-guide-save.png)
+
+**Résultat attendu :** le connecteur apparaît dans la liste, activé. Allowed plugin host limite le réseau des plugins. Cette colonne n'indique pas l'adresse enregistrée de la base.
+
+![La ligne montre le nom, le type, l'hôte autorisé aux plugins et l'état activé.](connectors-guide-created.png)
+
+## Tester la connexion enregistrée
+
+Effectuez un test après la création ou un changement d'identifiants.
+
+### 1. Choisir Test
+
+Ouvrez les points de la ligne et choisissez **Test**.
+
+![Test connection vérifie les identifiants enregistrés.](connectors-guide-test.png)
+
+### 2. Lire le résultat
+
+Attendez **Connection OK** ou un échec sous le menu de ligne. Une connexion réussie ne prouve pas la réussite d'une requête ou d'un envoi de courriel.
+
+![Connection OK confirme que ce serveur peut se connecter avec le compte enregistré.](connectors-guide-test-result.png)
+
+**Résultat attendu :** le serveur OpenLDR teste les identifiants enregistrés. Les résultats apparaissent dans Audit.
+
+## Modifier les paramètres ou les identifiants
+
+Modifiez directement les paramètres ordinaires. Les mots de passe restent vides après l'enregistrement. Laissez un mot de passe vide pour le conserver.
+
+### 1. Ouvrir Edit
+
+Sur la bonne ligne, ouvrez les points et choisissez **Edit**.
+
+![Edit ouvre les paramètres ordinaires enregistrés.](connectors-guide-edit.png)
+
+### 2. Vérifier les champs enregistrés
+
+Vérifiez l'hôte, le port, la base et l'utilisateur. Un mot de passe défini montre une indication dans le champ. Saisissez-en un seulement pour le remplacer.
+
+![Les champs ordinaires sont visibles. Le mot de passe enregistré reste vide.](connectors-guide-stored.png)
+
+### 3. Enregistrer les changements
+
+Ouvrez les points du panneau et choisissez **Save**. L'exemple garde le mot de passe vide pour le conserver. Testez ensuite le connecteur.
+
+![Enregistrer avec le mot de passe vide conserve celui déjà stocké.](connectors-guide-save-kept.png)
+
+**Résultat attendu :** le même connecteur reste accessible à ses utilisateurs existants. Leur prochaine exécution utilise les nouveaux paramètres.
+
+## Rechercher et désactiver temporairement une connexion
+
+Désactivez un connecteur pour suspendre son utilisation sans supprimer les paramètres enregistrés.
+
+### 1. Rechercher dans la liste
+
+Recherchez par nom, type ou hôte autorisé aux plugins.
+
+![La recherche trouve le nom, le type et l'hôte du connecteur.](connectors-guide-search.png)
+
+### 2. Désactiver Enabled
+
+Désactivez **Enabled** sur la bonne ligne. Les requêtes et workflows qui en dépendent peuvent échouer pendant sa désactivation.
+
+![Enabled peut empêcher temporairement l'utilisation du connecteur.](connectors-guide-toggle.png)
+
+### 3. Vérifier l'interrupteur
+
+Un interrupteur éteint indique la désactivation. Réactivez-le quand le connecteur peut être utilisé.
+
+![Un interrupteur éteint indique un connecteur désactivé.](connectors-guide-disabled.png)
+
+**Résultat attendu :** la désactivation conserve le connecteur et ses identifiants. Elle ne retire pas les dépendances.
+
+## Supprimer une connexion inutile
+
+Vérifiez les workflows, requêtes et rapports dépendants avant toute suppression. Ne retirez pas le connecteur d'entrepôt pour simplement vider la liste.
+
+### 1. Choisir Remove
+
+Ouvrez les points de la ligne et choisissez **Remove**.
+
+![Remove supprime le connecteur et ses identifiants enregistrés.](connectors-guide-remove.png)
+
+### 2. Vérifier la confirmation
+
+Vérifiez le nom. Choisissez **Remove** pour supprimer ou **Cancel** pour conserver. La capture conserve l'exemple pour les tâches suivantes.
+
+![Vérifier le nom du connecteur avant de confirmer la suppression.](connectors-guide-remove-confirm.png)
+
+**Résultat attendu :** confirmer Remove supprime le connecteur et ses identifiants. Toute référence restante échoue jusqu'à sa reconfiguration.
+
+## Utiliser Connectors sur téléphone
+
+La colonne Host est masquée sur téléphone. Ouvrez Edit pour lire l'adresse de connexion.
+
+### 1. Trouver la ligne
+
+Utilisez la recherche, puis les points de la ligne ou Enabled.
+
+![Sur téléphone, le nom, le type, l'interrupteur et les points tiennent dans la largeur.](connectors-guide-phone-list.png)
+
+### 2. Lire ou modifier les paramètres
+
+Choisissez **Edit** dans les points de la ligne. Le panneau remplit l'écran. Faites-le défiler pour les formulaires longs.
+
+![Le panneau d'édition remplit l'écran du téléphone.](connectors-guide-phone-edit.png)
+
+## Choisir le bon type
+
+**Bases SQL.** Postgres, MySQL / MariaDB et Microsoft SQL ont des paramètres distincts. Le connecteur choisi détermine le dialecte des requêtes. Pour les instances SQL Server et les comptes de domaine Windows, consultez [Diagnostiquer les connexions](/docs/connector-diagnose).
+
+**Autres services hôtes.** MongoDB, Redis, SMTP Email, IMAP Email, Gmail, Microsoft Outlook et SFTP affichent leurs champs spécifiques. Utilisez les identifiants fournis par votre opérateur. Gmail et Outlook exigent une application déjà enregistrée et un jeton de renouvellement. SMTP utilise le compte d'envoi et les paramètres du relais.
+
+**Destinations de plugin.** Choisissez **Plugin** dans Category, un plugin de sortie installé, puis remplissez ensemble Base URL, Username et Password. En modification, laissez les trois vides pour les conserver ou remplacez les trois. Installez un plugin de sortie dans [Marché](/docs/marketplace) si la liste est vide.
+
+Un nœud propose les connecteurs actifs du type requis. Un connecteur absent peut être désactivé ou d'un autre type. Ne mettez pas les mots de passe dans les noms de workflow ou le texte SQL.
+
+## Utiliser la ligne de commande
+
+Consultez [Commencer ici](/docs/start-here) pour configurer la CLI. Depuis `openldr_ce`, utilisez les commandes suivantes. Prenez l'identifiant dans la liste. Les commandes d'ajout, de consultation, de modification, de test et de suppression prennent en charge les connecteurs Host. Les destinations de plugin passent par Studio.
+
+Un fichier d'ajout contient `name`, `type` et `config`. Un fichier de modification contient seulement les champs à changer. Les champs omis restent conservés. Les secrets vides gardent les valeurs existantes. Protégez les fichiers d'identifiants et supprimez-les après usage.
+
+```shell
+pnpm openldr connectors list
+pnpm openldr connectors inspect <id>
+pnpm openldr connectors add --file new-connector.json
+pnpm openldr connectors update <id> --file connector-patch.json
+pnpm openldr connectors test <id>
+pnpm openldr connectors remove <id> --force
 ```
 
-### Ajouter le connecteur
+## Pratique facultative
 
-![Ajouter Warehouse (read only) : Hôte, Postgres, l'adresse, la base, l'utilisateur et le mot de passe, puis Enregistrer et Tester.](connectors-add.mp4)
+Ces tâches utilisent votre compte de service. Pour une installation de test, demandez à l'opérateur de créer une petite table et un rôle en lecture seule. Les captures utilisent deux lignes fictives dans `guide_orders` et `guide_reader`.
 
-1. Sur **Connecteurs**, ouvrez le menu **⋯** de la page et sélectionnez **Ajouter un connecteur**.
-2. Dans **Nom**, tapez `Warehouse (read only)`. C'est le nom choisi dans les nœuds de workflow et les requêtes.
-3. Réglez **Catégorie** sur **Hôte**. Gardez **Extension** pour les destinations fournies par une extension installée.
-4. Réglez **Type de base de données** sur **Postgres**.
-5. Remplissez la connexion :
+Ne copiez pas l'adresse ni le mot de passe des captures dans une vraie connexion. Accordez au compte de rapports SELECT seulement sur les tables approuvées. Vérifiez les requêtes autorisées et refusées dans votre base. Le test illustré vérifie la connexion Postgres locale. Il ne teste ni l'envoi de courriel, ni l'autorisation cloud, ni le transfert de fichiers.
 
-   | Champ | Valeur |
-   | --- | --- |
-   | Hôte | `postgres` |
-   | Port | `5432` |
-   | Base de données | `openldr_target` |
-   | Utilisateur | `report_reader` |
-   | Mot de passe | le mot de passe choisi |
+## Résolution de problèmes
 
-6. Ouvrez le menu **⋯** du formulaire et sélectionnez **Enregistrer**. **Enregistré Warehouse (read only)** s'affiche, avec la nouvelle ligne. Elle est activée au départ.
-7. Sur sa ligne, ouvrez **⋯** et sélectionnez **Tester**.
+**Connexion refusée ou délai dépassé.** Vérifiez l'adresse depuis le serveur OpenLDR et le pare-feu de la base. Ouvrez les points de la ligne, puis Diagnose pour les connexions Host.
 
-**Résultat attendu :** **Connexion réussie**.
+**Échec d'authentification.** Vérifiez le compte et la base. Remplacez le mot de passe dans Edit et testez à nouveau.
 
-Le clip vient d'une installation de développement, où la base est à `localhost` port `5433`. Sur une installation standard, le serveur la joint à `postgres` port `5432`, comme dans le tableau.
+**Erreur SSL ou de certificat.** Demandez à l'opérateur les paramètres de transport requis. SQL Server affiche Encrypt et Trust server certificate.
 
-### Voir ce qu'il peut lire, et ce qu'il ne peut pas lire
+**Le test réussit mais une requête échoue.** Lisez l'erreur ou l'exécution du workflow. Le compte peut manquer d'accès, le SQL utiliser un autre dialecte ou la requête dépasser son délai. Les requêtes des connecteurs SQL ont une limite de 30 secondes.
 
-![Une requête sur Warehouse (read only) : 60 demandes, puis la table patients refusée.](connectors-readonly-query.mp4)
-
-1. Ouvrez **Requête** et ouvrez un nouvel onglet. Voir [Requêtes personnalisées, Exemple 2](/docs/query#exemple-2-ecrire-une-requete).
-2. Choisissez le connecteur **Warehouse (read only)**.
-3. Tapez `SELECT COUNT(*) AS orders FROM lab_requests` et sélectionnez **Exécuter**.
-4. Remplacez-le par `SELECT COUNT(*) AS patients FROM patients` et sélectionnez **Exécuter**.
-
-**Résultat attendu :** la première requête renvoie **60**, les demandes de l'exemple. La seconde échoue. Une marque rouge s'affiche à gauche du connecteur. Pointez-la pour lire **permission denied for table patients**. Le tableau en dessous garde le dernier résultat réussi, donc regardez la marque, pas le tableau. Le compte ne peut pas lire le nom des patients, quelle que soit la requête écrite.
-
-![Le message de la marque rouge : permission denied for table patients.](connectors-readonly-denied.png)
-
-C'est la façon de garder des colonnes privées sur les chemins des connecteurs. L'[Exposition des données](/docs/data-exposure) ne couvre pas les connecteurs.
-
-## Exemple 3 : changer un mot de passe
-
-Quand le mot de passe d'une base change, mettez à jour le connecteur. Ici, le mot de passe de `report_reader` change d'abord. Le connecteur cesse donc de fonctionner jusqu'à sa mise à jour.
-
-1. Changez le mot de passe dans la base :
-
-   ```bash
-   docker compose -f docker-compose.prod.yml exec -T postgres psql -U openldr -d openldr_target \
-     -c "ALTER ROLE report_reader PASSWORD 'the-new-password'"
-   ```
-
-2. Testez de nouveau **Warehouse (read only)**. Il échoue avec **Échec du test : password authentication failed for user "report_reader"**, car le connecteur garde l'ancien mot de passe.
-
-![Le test qui échoue après le changement de mot de passe.](connectors-test-failed.png)
-
-![Modifier le connecteur, taper le nouveau mot de passe, enregistrer et tester de nouveau.](connectors-rotate.mp4)
-
-3. Sur sa ligne, ouvrez **⋯** et sélectionnez **Modifier**. **Mot de passe** est vide et affiche **••• défini (laisser vide pour conserver)**. L'ancien mot de passe n'est jamais affiché.
-4. Tapez le nouveau mot de passe dans **Mot de passe**. Laissez les autres champs tels quels.
-5. Ouvrez le menu **⋯** du formulaire et sélectionnez **Enregistrer**.
-6. Testez de nouveau.
-
-**Résultat attendu :** **Connexion réussie**. Les workflows, requêtes et rapports qui utilisent le connecteur prennent le nouveau mot de passe à leur prochaine exécution. Rien d'autre à changer.
-
-## Comment les workflows utilisent les connecteurs
-
-Un nœud de workflow **Postgres**, **MySQL** ou **Microsoft SQL**, ou un nœud **Send Email**, affiche une liste de connecteurs, pas de champs de mot de passe. La liste est filtrée par type :
-
-- Un nœud **Postgres** ne liste que les connecteurs Postgres.
-- Un nœud **Send Email (SMTP)** ne liste que les connecteurs SMTP.
-
-Créez donc le connecteur d'abord, puis ouvrez le nœud et choisissez-le. Si un connecteur manque dans la liste d'un nœud, il n'a pas le bon type ou il est désactivé.
-
-**Le type du connecteur fixe le dialecte SQL.** Le libellé du nœud n'est qu'un libellé. Le dialecte vient du connecteur attaché. Choisissez donc un connecteur dont le type correspond à votre vraie base.
-
-Voir [Workflows](/docs/workflows) pour un exemple complet avec le connecteur de l'entrepôt.
-
-## Sécurité
-
-- Les mots de passe et jetons sont chiffrés au repos avec la clé de chiffrement du serveur. Après l'enregistrement, ils ne sont plus jamais affichés.
-- Pour changer un secret, modifiez le connecteur, tapez le nouveau, enregistrez et testez, comme dans l'Exemple 3. Laissez un secret vide pour garder celui enregistré.
-- Coupez **Activé** pour empêcher toute utilisation d'un connecteur, sans le supprimer.
-- **Supprimer**, dans le menu de la ligne, efface le connecteur et ses secrets. Tout ce qui le visait échoue jusqu'à ce que vous le redirigiez.
-- Donnez à chaque connecteur un compte de base de données avec les seuls droits utiles, comme dans l'Exemple 2.
-- Ne mettez jamais de secret dans un nom, une note, une capture d'écran ou un libellé de workflow.
-- Gardez un connecteur par destination réelle. Le modifier ou le désactiver a alors un seul effet clair.
-
-## Les adresses sont vues depuis le serveur
-
-L'hôte et le port doivent être joignables **depuis le serveur OpenLDR**, pas depuis votre ordinateur.
-
-- Dans une installation standard, OpenLDR tourne dans Docker Compose. Utilisez le nom du service et son port interne, par exemple `postgres` et `5432`.
-- Si OpenLDR tourne directement sur une machine, utilisez l'adresse et le port publié que vous utiliseriez sur cette machine, par exemple `localhost` et `5433`.
-
-## Types de connecteurs
-
-Réglez **Catégorie** sur **Hôte** pour ceux-ci. La liste **Type de base de données** contient aussi les services de messagerie et de fichiers, malgré son nom.
-
-| Type | Utilisé par | Champs |
-| --- | --- | --- |
-| Postgres | Nœud Postgres, requêtes personnalisées, rapports | Hôte, Port (5432), Base de données, Utilisateur, Mot de passe, Utiliser SSL |
-| MySQL / MariaDB | Nœud MySQL, requêtes personnalisées, rapports | Hôte, Port (3306), Base de données, Utilisateur, Mot de passe, Utiliser SSL |
-| Microsoft SQL | Nœud Microsoft SQL, requêtes personnalisées, rapports | Hôte, Port (1433), Base de données, Utilisateur, Mot de passe, Chiffrer, Faire confiance au certificat serveur |
-| MongoDB | Nœud MongoDB | Détails de connexion et base de données |
-| Redis | Nœud Redis | Hôte, Port, Mot de passe, Index de base de données |
-| SMTP Email | Nœud Send Email | Hôte, Port, Utilisateur, Mot de passe, Utiliser TLS |
-| IMAP Email | Nœud Email Trigger | Hôte, Port, Utilisateur, Mot de passe, Utiliser TLS |
-| Gmail, Microsoft Outlook | Nœud Send Email | ID client, Secret client, Jeton de rafraîchissement, et Locataire pour Outlook |
-| SFTP | Nœuds de transfert de fichiers | Hôte, Port, Utilisateur, Mot de passe |
-
-Pour Microsoft SQL, activez **Chiffrer** pour exiger TLS. N'activez **Faire confiance au certificat serveur** que pour un certificat autosigné sur une installation de test.
-
-Réglez **Catégorie** sur **Extension** pour une destination fournie par une extension de sortie installée, comme un envoi vers DHIS2. Choisissez l'extension sous **Extension de sortie**, puis remplissez **URL de base**, **Nom d'utilisateur** et **Mot de passe**. Si la liste dit qu'aucune extension de sortie n'est installée, installez-en une depuis le [Marketplace](/docs/marketplace).
-
-## Connecteurs de messagerie
-
-Utilisez **SMTP Email** pour le nœud **Send Email**. Il fonctionne avec tout fournisseur SMTP, y compris Gmail avec un mot de passe d'application, Outlook et Office 365, et les relais comme smtp2go ou Mailtrap.
-
-N'utilisez **Gmail** ou **Microsoft Outlook** que si vous avez déjà une application Google Cloud ou Microsoft Entra avec un ID client, un secret client et un jeton de rafraîchissement. C'est plus de travail que ce dont la plupart des laboratoires ont besoin. Pour Gmail, SMTP est plus simple.
-
-| Champ | Valeur |
-| --- | --- |
-| Hôte | Le serveur de messagerie, par exemple `smtp.gmail.com` |
-| Port | `587` avec **Utiliser TLS** désactivé (STARTTLS), ou `465` avec **Utiliser TLS** activé |
-| Utilisateur | Le compte d'envoi. C'est aussi l'adresse de l'expéditeur |
-| Mot de passe | Le mot de passe du compte, ou un mot de passe d'application pour Gmail |
-
-Le destinataire se règle plus tard, dans le champ **To** du nœud Send Email.
-
-### Envoyer depuis Gmail avec un mot de passe d'application
-
-Une fois la validation en deux étapes activée, Gmail refuse votre mot de passe normal en SMTP avec `534-5.7.9 Application-specific password required`. Utilisez plutôt un **mot de passe d'application** : un mot de passe de 16 caractères que Gmail crée pour une seule application. Il évite la deuxième étape pour cette application seulement, protège votre vrai mot de passe, et peut être révoqué à tout moment.
-
-1. Activez la **validation en deux étapes** sur `myaccount.google.com`, dans Sécurité. Les mots de passe d'application en ont besoin.
-2. Allez sur `myaccount.google.com/apppasswords`, donnez-lui un nom, par exemple `OpenLDR`, et sélectionnez **Créer**. Copiez le code de 16 caractères, affiché comme `abcd efgh ijkl mnop`.
-3. Ajoutez un connecteur avec **Catégorie** **Hôte** et **Type de base de données** **SMTP Email** :
-
-   | Champ | Valeur |
-   | --- | --- |
-   | Hôte | `smtp.gmail.com` |
-   | Port | `587` |
-   | Utilisateur | `you@gmail.com` |
-   | Mot de passe | le mot de passe d'application de 16 caractères |
-   | Utiliser TLS | Désactivé |
-
-4. Enregistrez, testez, et choisissez ce connecteur dans le nœud Send Email.
-
-Si la page des mots de passe d'application dit qu'ils ne sont pas disponibles, la validation en deux étapes n'est pas complètement activée, ou un administrateur Google Workspace les a désactivés. Utilisez un relais comme **Mailtrap** pour les tests, ou **smtp2go**.
-
-| Fournisseur | Hôte | Port | Utiliser TLS |
-| --- | --- | --- | --- |
-| Gmail | `smtp.gmail.com` | 587 | Désactivé, avec un mot de passe d'application |
-| Outlook / Office 365 | `smtp.office365.com` | 587 | Désactivé |
-| smtp2go | `mail.smtp2go.com` | 2525 ou 587 | Désactivé |
-| Mailtrap (tests) | `sandbox.smtp.mailtrap.io` | 587 | Désactivé |
-
-## En ligne de commande
-
-La ligne de commande peut lister, ajouter, lire, changer, tester et supprimer un connecteur de base de données. Les connecteurs de plugin, comme DHIS2, s'ajoutent et se testent dans le studio.
-
-```bash
-./openldr connectors list
-./openldr connectors add --file new.json
-./openldr connectors inspect <id>
-./openldr connectors update <id> --file patch.json
-./openldr connectors test <id>
-./openldr connectors remove <id> --force
-```
-
-- `list` affiche l'id, le type ou le plugin, le nom de chaque connecteur, et s'il est activé. Ajoutez `--json` pour du JSON. Il n'affiche aucun paramètre.
-- `add` lit `{"name", "type", "config"}` et affiche le nouvel id. Exemple : `{"name":"Reports DB","type":"postgres","config":{"host":"db.internal","port":"5432","database":"lab","user":"reader","password":"..."}}`. Seuls les champs propres au type sont acceptés, comme dans le studio.
-- `test` ouvre une connexion de test avec les identifiants enregistrés. Il affiche `Connection OK` ou l'erreur, et se termine avec le code 1 en cas d'échec.
-- `remove` refuse sans `--force`. Tout ce qui utilise le connecteur cesse de fonctionner.
-- `inspect` affiche du JSON avec la `config` ordinaire et un `secretsSet` vrai ou faux pour chaque secret. Il n'affiche jamais de secret.
-- `update` prend un correctif JSON. Les champs absents restent tels qu'enregistrés, et un secret vide garde celui enregistré. Exemple : `{"config":{"host":"db.internal","port":"5432"}}`. Un simple renommage : `{"name":"Lab database"}`.
-- La sortie et les enregistrements d'audit ne contiennent jamais de valeur de secret. Protégez tout fichier qui contient un nouveau secret, et supprimez-le ensuite.
-
-L'id du connecteur figure dans `openldr connectors list`.
-
-## Modifier les paramètres enregistrés
-
-**Modifier** montre les champs ordinaires enregistrés d'un connecteur hôte : hôte, port, base de données et utilisateur quand le type les a. Un secret déjà défini reste vide. Laissez-le vide pour le garder, même si vous changez l'hôte. Les URL, les champs inconnus et les paramètres d'extension ne sont pas affichés.
-
-Pour un connecteur d'extension, saisissez **URL de base**, **Nom d'utilisateur** et **Mot de passe** ensemble, ou laissez les trois vides pour garder les valeurs enregistrées.
-
-## Délai des requêtes
-
-Les requêtes des connecteurs PostgreSQL, MySQL et Microsoft SQL ont une limite de 30 secondes. Une requête lente échoue au lieu de faire attendre un workflow ou un rapport sans fin. La connexion a sa propre limite de 30 secondes. Le formulaire du connecteur n'a pas de champ de délai.
-
-- PostgreSQL et Microsoft SQL annulent la requête en cours.
-- MySQL ouvre une seconde connexion avec le même compte pour arrêter la requête. Cela peut prendre une seconde de plus, et le compte doit pouvoir ouvrir une autre connexion et terminer ses propres sessions.
-
-Si une requête atteint la limite, réduisez sa période ou ses filtres et vérifiez son plan dans la base. Si l'erreur dit `server cancellation failed`, OpenLDR a fermé sa propre connexion sans pouvoir confirmer que la base a arrêté la requête. Demandez à l'opérateur de la base de vérifier les requêtes actives.
-
-## Arrêt du serveur
-
-Sur SIGTERM ou SIGINT, l'API cesse d'accepter des requêtes et d'interroger la file. Elle attend les requêtes actives, le lot de file réservé et le cycle de projection en cours, puis ferme ses bases. Un second signal ne lance pas un second arrêt.
-
-Un gestionnaire qui ne rend jamais la main peut faire attendre l'arrêt sans fin. Laissez assez de temps aux importations en cours avant que le gestionnaire de services force l'arrêt. Après l'arrêt du worker, les vidages manuels restent possibles jusqu'à la fermeture du contexte.
-
-## Sur un téléphone
-
-Sur un téléphone, le tableau des connecteurs est plus large que l'écran. Faites-le défiler sur le côté pour atteindre le menu **⋯** de chaque ligne, au bout de la ligne. Le formulaire **Ajouter un connecteur** remplit l'écran, avec les libellés à gauche de chaque champ.
-
-## Dépannage
-
-- **`534-5.7.9 Application-specific password required` (Gmail).** Utilisez un mot de passe d'application, pas votre mot de passe de connexion.
-- **Identifiants invalides, ou échec d'authentification.** L'utilisateur ou le mot de passe est faux. Modifiez le connecteur et retapez le secret.
-- **Connexion refusée, ou délai dépassé.** L'hôte ou le port est faux, ou le serveur ne le joint pas. Comparez le nom du service Docker et `localhost`.
-- **Erreur TLS ou SSL.** Réglez **Utiliser SSL**, **Utiliser TLS** ou **Chiffrer** comme le demande le serveur. Pour SMTP, 587 veut dire **Utiliser TLS** désactivé et 465 activé.
-- **permission denied for table.** Le compte de base de données n'a pas de droits sur cette table. C'est peut-être voulu, comme dans l'Exemple 2.
-- **Une requête échoue mais l'ancien résultat reste affiché.** La page Requête garde le dernier résultat réussi. La marque rouge à gauche du connecteur contient l'erreur. Pointez-la pour la lire.
-- **Un connecteur manque dans la liste d'un nœud.** Son type ne correspond pas au nœud, ou il est désactivé.
-- **Le test réussit mais un workflow échoue.** Ouvrez l'onglet des exécutions du workflow et lisez l'erreur du nœud. Voir [Workflows, Exemple 3](/docs/workflows#exemple-3-lire-l-execution). La requête ou ses droits sont la cause habituelle.
+**D'anciens résultats restent visibles.** Vérifiez l'erreur près du sélecteur de connecteur. Un ancien tableau ne prouve pas que la dernière exécution a réussi.
 
 ## Guides associés
 
-- [Workflows](/docs/workflows)
-- [Requêtes personnalisées](/docs/query)
-- [Exposition des données](/docs/data-exposure)
-- [Rapports planifiés](/docs/report-pipeline)
-- [Marketplace](/docs/marketplace)
-- [Paramètres](/docs/settings)
+[Diagnostiquer les connexions](/docs/connector-diagnose) explique les vérifications. [Commencer ici](/docs/start-here) explique la CLI. Workflows et Custom Queries utilisent les connecteurs enregistrés.

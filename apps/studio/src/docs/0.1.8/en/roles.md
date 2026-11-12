@@ -1,97 +1,193 @@
 # Roles
 
-A **role** is a named set of **capabilities**. A capability is one narrow permission, such as **Run reports** or **Edit workflows**. Each person gets one role, and the server checks the role's capabilities before every page and every action.
+A role groups capabilities, which are permissions for specific actions. Assign roles to people in Users. The Users sheet assigns one role per person.
 
-Sign-in is handled by the identity provider, usually Keycloak. Roles are not. Every role, capability and assignment lives in the OpenLDR database, so access control works the same whatever identity provider is connected.
+Use your own role names and access requirements. The pictures show a temporary Documentation reader role in an isolated test installation. No practice data is required.
 
-This guide takes about 10 minutes. Select any picture or clip to enlarge it.
+You need View roles to inspect roles, and Manage roles to create, change, delete or assign them. Opening Users also requires View users. Creating or editing identity details requires Manage users. Administrator is locked. Other system roles can be edited, but cannot be deleted.
 
-![Settings, Roles: the five built-in roles.](roles-tour.png)
+For installation and command-line setup, read [Start here](/docs/start-here). This guide covers the Roles page.
 
-## Who can do what
+## Inspect a role before changing access
 
-You need **Manage roles** to create, change or delete roles. **View roles** lets you open them and read their capabilities. Administrator has both.
+Use this to check which actions an existing role grants.
 
-## The built-in roles
+### 1. Open Settings and Roles
 
-| Role | What it is for |
-| --- | --- |
-| Administrator | Every capability. **Locked**: it cannot be changed or deleted, so someone can always recover access. |
-| Lab Manager | Dashboards, reports, forms, workflows, terminology and the query workbench. No users or settings. |
-| Data Analyst | View dashboards, run and export reports, use the query workbench. Nothing to change. |
-| System Auditor | Read-only across the main areas, plus the audit log. |
-| Lab Technician | Bench data entry: open and submit forms only. |
+Open your user menu at the bottom left, choose **Settings**, then select **Roles**.
 
-Built-in roles other than Administrator can have their capabilities changed. A role cannot be deleted while people still have it.
+![Open your user menu at the bottom left.](roles-guide-open-user-menu.png)
 
-Capabilities are grouped by area: Dashboards, Reports, Forms, Workflows, Query, Users, Facilities, Patients, Roles, Terminology, Marketplace, Connectors, Sync, Settings, Observability and Audit.
+![Choose Settings in your user menu.](roles-guide-settings-menu.png)
 
-## Example 1: make a read-only role
+![Select Roles in the Settings section list.](roles-guide-roles-page.png)
 
-Make a role for someone who only reads dashboards and runs reports.
+### 2. Open the role
 
-![Creating Dashboard viewer with three capabilities.](roles-create.mp4)
+Select a role row. Read its name, description and selected capabilities. Scroll the sheet to read each permission.
 
-1. Open **Settings**, then **Roles**.
-2. Open the dots menu at the top right and select **Create role**.
-3. In **Name**, type `Dashboard viewer`. **Slug** fills itself. You can change it before saving, and it is fixed after.
-4. In **Description**, type what the role is for, such as `Reads dashboards and runs reports. Changes nothing.`
-5. Under **Capabilities**, turn on **View dashboards**, **View reports** and **Run reports**. The counter above the list shows how many are on.
-6. Open the sheet's dots menu and select **Create**.
+![Read the role name, description and selected capabilities.](roles-guide-inspect-role.png)
 
-**Expected result:** a **Saved Dashboard viewer** message, and the role in the list with **0 members**.
+### 3. Check whether it is locked
 
-To give the role to someone, see [Users and Roles, Example 1](/docs/users#example-1-give-someone-a-role).
+The built-in Administrator displays a warning and read-only fields. Select **Close** at the top right when finished.
 
-To change a role later, open its row menu and select **Edit**. **Delete** removes a role with no members. Changing a shared role changes it for everyone who has it.
+![Administrator is locked. Its capabilities cannot be changed.](roles-guide-locked-role.png)
 
-## How capabilities reach an existing install
+**Expected result:** Reading a role does not change its permissions.
 
-New versions add capabilities. Roles live in the database, so a role made by an older version does not know a newer capability on its own. OpenLDR sorts this out at every start:
+## Create a role with selected permissions
 
-- **Administrator** always gets the full list after the next restart. It is locked and means "every capability", so there is nothing to preserve.
-- **The other built-in roles** get a new capability only the first time it exists. After that, OpenLDR never grants it again. If you remove a capability from Lab Manager, it stays removed across restarts and upgrades.
-- **Roles you made are never changed.** Grant a new capability to them yourself.
+Use this when existing roles do not match the access your staff need. Decide the required actions before selecting capabilities.
 
-A capability granted this way is recorded in the audit log as `role.capability.backfill`.
+### 1. Open the page actions
 
-To compare your install with the built-in definitions:
+Select the dots above the Roles table.
 
-```bash
-./openldr roles doctor
-```
+![Open the Roles dots menu.](roles-guide-create-actions.png)
 
-It lists, per built-in role, the capabilities held, those you removed on purpose, and those still pending, plus capability keys left by a retired feature.
+### 2. Choose Create role
 
-## From the command line
+Select **Create role**.
 
-```bash
-./openldr roles list
-./openldr roles show <slug>
-./openldr roles create <name>
-./openldr roles grant <slug> <capability>
-./openldr roles revoke <slug> <capability>
-./openldr roles delete <slug>
-./openldr user assign-role <subject> <slug>
-```
+![Choose Create role.](roles-guide-create-menu.png)
 
-`roles create` also takes `--slug`, `--desc`, and `--caps` with capabilities separated by commas. For example, the role from Example 1:
+### 3. Enter the name
 
-```bash
-./openldr roles create "Dashboard viewer" --slug dashboard_viewer \
-  --desc "Reads dashboards and runs reports. Changes nothing." \
-  --caps dashboards.view,reports.view,reports.run
-```
+Use a name your team recognises. The example uses `Documentation reader`.
+
+![Enter a name describing this role.](roles-guide-name.png)
+
+### 4. Check the slug
+
+The **Slug** is the role identifier. The name fills it automatically until you edit it. Choose it carefully because you cannot change it after creation.
+
+![Check the identifier. It becomes read-only after creation.](roles-guide-slug.png)
+
+### 5. Describe the role
+
+Enter its purpose in **Description**. This helps other administrators understand who should receive it.
+
+![Describe who should use this role.](roles-guide-description.png)
+
+### 6. Select the capabilities
+
+Turn on each permission the role needs. Read the description beside each switch. The example selects **View dashboards**.
+
+![Choose each permission the role needs. The example allows viewing dashboards.](roles-guide-capability.png)
+
+### 7. Open the sheet actions
+
+Select the dots at the top of the Create role sheet.
+
+![Open the role sheet dots menu.](roles-guide-sheet-actions.png)
+
+### 8. Create the role
+
+Select **Create**.
+
+![Choose Create to save the role.](roles-guide-create-save.png)
+
+**Expected result:** The sheet closes and the role appears in the list. Creating a role does not assign it to anyone. Use Users to assign it.
+
+![The created role appears with its description and member count.](roles-guide-created-result.png)
+
+## Change a role description or permissions
+
+Use this when the responsibilities of people holding a role change. Check who holds it before changing access.
+
+### 1. Find the role
+
+Enter its name in **Search roles**. The example searches `Documentation`.
+
+![Use Search roles to find a role by name.](roles-guide-search.png)
+
+### 2. Open the row actions
+
+Select the dots on the matching role row.
+
+![Open the dots on the matching role.](roles-guide-row-actions.png)
+
+### 3. Choose Edit
+
+Select **Edit**. Selecting the row opens the same sheet.
+
+![Choose Edit to change its description or permissions.](roles-guide-edit-menu.png)
+
+### 4. Update its description
+
+Change **Description** if its purpose has changed. You may also change Name. Slug stays read-only.
+
+![Update the description. The slug stays read-only.](roles-guide-edit-description.png)
+
+### 5. Adjust individual permissions
+
+Turn capabilities on or off. The example adds **View reports**.
+
+![Enable or disable individual capabilities.](roles-guide-edit-capability.png)
+
+### 6. Save the role
+
+Open the sheet dots and select **Save**.
+
+![Choose Save to keep the changes.](roles-guide-edit-save.png)
+
+**Expected result:** The list shows the saved description. Users assigned this role receive its permissions.
+
+![The updated description appears in the role row.](roles-guide-edited-result.png)
+
+## Delete a custom role
+
+Use this only when people should lose the permissions this role grants. System roles cannot be deleted.
+
+### 1. Choose Delete
+
+Find the role and open its row dots. Select **Delete**.
+
+![Delete is available for a custom role.](roles-guide-delete-menu.png)
+
+### 2. Confirm the role and effect
+
+Read the confirmation. Members lose the capabilities granted by this role. Select **Delete** to confirm, or **Cancel** to keep it.
+
+![Check the role name and the effect on its members before confirming.](roles-guide-delete-confirm.png)
+
+**Expected result:** The role disappears. Deletion cannot be undone. Check affected users after removing a role.
+
+![The deleted role no longer matches the search.](roles-guide-deleted-result.png)
+
+## Inspect roles on a phone
+
+Use the same Roles page on a phone. Wide table columns can require horizontal scrolling.
+
+### 1. Search for the role
+
+Enter its name in **Search roles**.
+
+![Search roles on a phone. The table can scroll horizontally.](roles-guide-phone-search.png)
+
+### 2. Open its settings
+
+Select the role row. Scroll the sheet to read its description and capabilities. Select **Close** at the top right to return.
+
+![The role sheet uses the phone width. Scroll to inspect its capabilities.](roles-guide-phone-sheet.png)
+
+## Optional practice
+
+In a test installation, follow Create a role using `Documentation reader`. Select only View dashboards. Add View reports in the edit task, then delete the practice role when finished. Do not assign the practice role to real staff.
+
+## Before changing access
+
+Administrator is locked. Other system roles can be edited but cannot be deleted. A saved slug cannot be changed.
+
+Creating a role does not assign it to anyone. Role assignments are managed on Users. Check the people affected before changing or deleting an assigned role.
 
 ## Troubleshooting
 
-- **A role's capabilities cannot be changed.** It is Administrator, which is locked, or you lack **Manage roles**. You can still open it to read its capabilities.
-- **A role cannot be deleted.** It is a locked built-in role, or people still have it. Give them another role first.
-- **Someone still has old access after a role change.** Ask them to sign out and in again, or wait for their session to refresh.
-- **A new account can do nothing.** It has no role yet. An account with no role has no capabilities.
+**The role is read-only.** Check whether you opened the locked Administrator role and whether your account has Manage roles.
+
+**A new role does not change anyone's access.** Creating the role only stores its permissions. Use Users to assign the role to the intended person.
 
 ## Related guides
 
-- [Users and Roles](/docs/users)
-- [Audit](/docs/audit)
-- [Settings](/docs/settings)
+[Start here](/docs/start-here) explains the installed and development CLI. Users covers assigning roles to people.

@@ -95,3 +95,17 @@ No agent edits published app code or pushes. This replaces native-only execution
 - Root retains Forms on API3006, Studio5186, PostgreSQL15439.
 
 Capture PNGs and manifests now use flush-to-disk and atomic replacement. Once-only operation proofs use durableJson.
+
+## Publication approved
+
+The operator approved publishing all remaining reviewed guides on main.
+Use a worktree for isolation, merge and push, then explain the observed app bugs.
+The published Markdown becomes the editing source. Keep original evidence as an archive.
+
+- [x] Create codex/publish-user-guides in a managed worktree and verify the baseline.
+- [x] Copy the approved native images, framing and optional downloads into production paths.
+- [ ] Publish the 27 guides in English, French and Portuguese.
+- [ ] Verify translated links, code examples, native assets and the actual Studio viewer.
+- [ ] Run docs tests, typechecks and builds.
+- [ ] Merge main, generate its changelog, push and compare remote HEAD.
+- [ ] Explain reproduced bugs and source-backed wording inconsistencies without changing app behavior.

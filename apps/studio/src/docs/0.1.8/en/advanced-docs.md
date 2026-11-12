@@ -1,74 +1,123 @@
-# Deployment & developer docs
+# Deployment and developer docs
 
-This in-app manual covers tasks you perform inside the app as a signed-in user.
-Deployment, configuration, and developer topics live on the **OpenLDR website**, in its
-Docs section:
+Use the in-app manual for tasks inside Studio. Use deployment and developer documentation for installation, server configuration, source development and CLI operation.
 
-- **Requirements & Install** — what you need and the one-line installer (including a
-  public domain with a trusted Let's Encrypt certificate).
-- **Environment variables** — every value in the deployment's `.env`.
-- **Windows Server (WSL2)** — deploying on Windows Server via WSL2.
-- **Development** — running OpenLDR from source with hot reload.
-- **Command-line interface (CLI)** — the `openldr` operator command line (database,
-  terminology, ingest, plugins, reports, users, marketplace).
-  - **`openldr db reproject --force`** rebuilds the entire warehouse read model from the
-    canonical FHIR store, including the `ingest_events` arrival ledger. It refuses without
-    `--force` because it rewrites every projected row.
-  - **`openldr terminology reproject` is deprecated** and does exactly the same thing. It
-    always did — despite its name it never rebuilt only `terminology_codes`. Use
-    `db reproject`.
-  - **`ingest_events` is the record of when data reached OpenLDR.** One row per arrival of
-    each clinical resource, keyed on resource and version, rebuilt from the canonical
-    store. The `created_at` column on `lab_requests`, `specimens` and the other projected
-    tables is **not** an arrival time: it records when the projection first wrote that row,
-    it holds exactly one timestamp however many times the resource is later corrected, and
-    it is reset for any row that has to be re-inserted. Anything asking "when did this
-    reach us" must read `ingest_events`.
+This page helps you find and save that material. It does not add a deployment editor to Studio or run maintenance commands. No sample data is required.
 
-You'll find all of these on the project website and in the source repository:
-<https://github.com/Open-Laboratory-Data-Repository/openldr>.
+## Find deployment and developer guidance
 
-## Request facts and request attributes
+Search the app manual when you need installation, CLI or server references.
 
-Each lab request carries, where the source sends them: the OBR set, analysis time, point of care,
-request type, who registered and tested it, the requesting doctor, age at the request, clinical
-information, analyser, and rejection code and reason. Each report carries its section and who
-authorised it.
+### 1. Open Docs
 
-Rarer facts are rows in `lab_request_attributes`, one row per request and attribute. The attribute
-codes are the `urn:openldr:cs:request-attribute` coding system. Load it once with:
+Select **Docs** in the main menu.
 
-    openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json
+![Open Docs from the main menu.](advanced-docs-guide-docs.png)
 
-Run this from a source checkout of the OpenLDR CE repository, where the file lives at that path.
-Without the import, attribute rows are still stored. Only the code display names are missing.
+### 2. Search for the topic
 
-A fact the source does not send stays empty. Nothing is filled in.
+Enter `Deployment` in Search documentation. You can also search a more specific topic.
 
-A numeric result outside the lab's reporting range arrives as the limit with a comparator, for
-example `< 20`. `lab_results.numeric_comparator` holds `<`, `<=`, `>=` or `>`, and is empty for an
-ordinary number. `numeric_value` holds the limit in that case.
+![Search documentation by title or topic.](advanced-docs-guide-search.png)
 
-Each result carries its FHIR status in `lab_results.status`. A test rejected at result entry is stored as a row with status `cancelled`, no value, and the reason in `data_absent_code` and `data_absent_reason`, for example `HAEM` and `Haemolysed`. To count results, add `(l.status is null or l.status <> 'cancelled')` to the query. To count rejected tests, use `l.status = 'cancelled'`. Qualify `status` with the lab_results alias, because lab_requests, specimens and diagnostic_reports also have a `status` column; an older query that joins them and uses a bare `status` needs qualifying. An install upgraded from an earlier version has no status on the rows it already held. Run `openldr db reproject --force` once after upgrading to fill them in.
+### 3. Open the matching guide
 
-`clinical_info` is hidden from the dashboard builder by default, because it can hold free text or
-a pseudonymous patient id. Unhide it in Settings, then Data Exposure. The `lab_request_attributes`
-table is not in the dashboard builder at all. Read it with custom queries.
+Choose **Deployment & developer docs**.
+
+![Choose Deployment & Developer Docs from the results.](advanced-docs-guide-guide-link.png)
+
+### 4. Choose the kind of instructions you need
+
+Read the guide. Installation, environment variables, Windows Server, development and the CLI are separate topics.
+
+![Read the deployment and developer documentation entry.](advanced-docs-guide-guide.png)
+
+### 5. Follow the project reference
+
+Use the project website or the source-repository link. The source repository includes the deployment files and CLI. Check instructions against the release you run.
+
+![Use the project website or source-repository link for deployment and development material.](advanced-docs-guide-repository.png)
+
+**Expected result:** You can choose the correct documentation without treating the in-app manual as a server administration console.
+
+## Save instructions before downtime
+
+Save any upgrade or recovery instructions outside Studio before stopping the services that provide this manual.
+
+### 1. Open Download documentation
+
+Select the download button at the top of the guide.
+
+![Download a guide before taking Studio offline.](advanced-docs-guide-download.png)
+
+### 2. Choose This page
+
+Select **This page**. Choose All docs instead when you need the complete manual.
+
+![Choose This page for this guide only.](advanced-docs-guide-this-page.png)
+
+### 3. Choose a file format
+
+Select Markdown, PDF or Word. The tested example downloads **Markdown (.md)**. Keep the file where you can read it while Studio is offline.
+
+![Choose Markdown, PDF or Word.](advanced-docs-guide-format.png)
+
+**Expected result:** The browser downloads a standalone copy of the selected scope. A documentation export is not a database or file backup.
+
+## Read the guide on a phone
+
+The app manual adapts to phone width.
+
+### 1. Read the selected topic
+
+Open the guide and scroll the reading pane. Use the header controls for navigation and download.
+
+![Read the guide at phone width.](advanced-docs-guide-phone.png)
+
+## Which guide to use
+
+| Task | Guide |
+| --- | --- |
+| Install OpenLDR or choose server requirements | Website Requirements and Install. |
+| Set domains, certificates or external stores | [Environment variables](/docs/environment) and the deployment documentation. |
+| Run OpenLDR from source | Website Development, then the source checkout instructions for that release. |
+| Use operator commands | [Start here](/docs/start-here) and CLI documentation. |
+| Change identity provider or issuer address | [Authentication providers](/docs/auth-providers). |
+| Upgrade an existing deployment | [Planned upgrades](/docs/upgrading). |
+| Configure Studio behavior | [Settings](/docs/settings). |
+
+## Read model and source facts
+
+The canonical FHIR store preserves clinical resources. The warehouse projects them into tables for queries and reports. Source facts remain empty when the source does not supply them.
+
+Common request facts have typed columns in lab_requests. Additional request attributes use lab_request_attributes with the request-attribute coding system. They are rows, not country-specific columns. Read these attributes through Custom Queries.
+
+The terminology file `packages/terminology/codesystems/openldr-request-attribute.json` supplies display names. Import it from a source checkout with `pnpm openldr terminology import resource packages/terminology/codesystems/openldr-request-attribute.json` when your deployment needs those labels. Attribute data can exist without the display-name dictionary.
+
+A result reported as below or above a limit stores that numeric limit in numeric_value and its comparison in numeric_comparator. Result status and data-absent fields describe cancelled or unavailable results. Qualify status with the correct table alias when a query joins tables that also have status columns.
+
+Free-text clinical_info is hidden from the dashboard builder by default. Review Data exposure before making it available. Connector SQL has its own database-account permissions.
+
+## Arrival time and warehouse rebuilds
+
+Use ingest_events when a report asks when a clinical resource reached OpenLDR. Projected table created_at values describe projection writes. They do not represent every arrival of corrected resource versions.
+
+`pnpm openldr db reproject --force` rebuilds the warehouse from canonical resources, including the arrival ledger. It rewrites projected rows and refuses without --force. Plan its cost and timing before using it on a large deployment. The older terminology reproject command is deprecated and performs the same full rebuild.
+
+After a transient projection failure, durable retries reread the current canonical resource. A cycle retries up to 100 queued resources and continues new changes. Repeated failures wait longer, up to five minutes. A recovered dependency can clear the retry without operator action. A deliberate full rebuild remains a separate maintenance operation.
+
+## Tested limits
+
+The screenshots come from the real app manual. Markdown export was downloaded and inspected. External installation, Windows Server setup, source build instructions and destructive maintenance commands were not run by the documentation navigation checks.
+
+For deployment changes, follow the actual release documentation and verify the affected services. A link in Studio does not prove an external procedure has been tested on your server.
+
+## Troubleshooting
+
+**A guide does not appear in search.** Check the current documentation language and version, then search for its title or topic.
+
+**The download contains the wrong guide.** Open the intended guide and choose This page in Download documentation.
 
 ## Related guides
 
-- [Start Here](/docs/start-here)
-- [Settings](/docs/settings)
-
-## Projection retries
-
-The projection worker saves failed resource writes and arrival-ledger writes for automatic retry.
-Retries survive a restart and reread the current canonical resource, including deletions.
-A cycle retries at most 100 queued resources, then handles new changes.
-Repeated failures wait 1, 2, 4 seconds and so on, up to five minutes.
-Retries continue until successful; a failing resource does not hold later valid changes.
-A new change to that resource can trigger an attempt before the delay expires.
-If saving a retry fails, the worker leaves its cursor unchanged.
-Successful projection clears the retry. Ancillary capture-hook errors are logged without scheduling retries.
-No operator action is required after a temporary outage clears.
-For a deliberate full rebuild, use `openldr db reproject --force`.
+[Start here](/docs/start-here), [Environment variables](/docs/environment), [Authentication providers](/docs/auth-providers) and [Planned upgrades](/docs/upgrading).

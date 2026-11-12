@@ -1,114 +1,183 @@
-# Data exposure
+# Data Exposure
 
-**Settings → Data Exposure** decides which extra table columns the dashboard **Builder** may offer when someone joins another table, for example the patient's sex or the specimen's collection site. Hide a column here and it disappears from the Builder for everyone.
+Data Exposure controls which additional table columns the dashboard builder offers. Administrators use it to hide columns or approve their availability. You need Manage data exposure.
 
-It does not cover everything. Read [What it does not cover](#what-it-does-not-cover) before you rely on it to keep a column private.
+This policy covers additional table columns in the dashboard builder. Built-in dimensions, raw SQL and connector-backed reports are outside it. Hiding a column here does not erase its data or remove database access.
 
-This guide takes about 10 minutes. Select any picture or clip to enlarge it.
+The PII badge means personally identifiable information. Showing one of these columns requires an extra confirmation, then Save.
 
-![Data Exposure: the Patient table, each column with its PII badge and a Shown or Hidden switch.](data-exposure-tour.png)
+Use your own approved column policy. The pictures use an isolated test installation and restore the demonstrated columns afterward. No sample records are required.
 
-## Who can do what
+## Hide an additional dashboard column
 
-One permission covers this page: **Manage data exposure**. Without it, the page is not listed in Settings.
+Use this when an additional column should no longer be offered in the dashboard builder.
 
-## What the page shows
+### 1. Open Settings and Data Exposure
 
-The page lists seven tables. Each row is one column, with a switch: on is **Shown**, off is **Hidden**.
+Open your user menu at the bottom left, choose **Settings**, then select **Data Exposure**.
 
-| Table | Columns | Hidden on a fresh install | Marked PII |
-| --- | --- | --- | --- |
-| Patient | 18 | 13 | 8: names, date of birth, national id, phone, email, patient GUID, match key |
-| Specimen | 13 | 7 | none |
-| Request | 30 | 8 | `clinical_info` |
-| Facility | 12 | 3 | none |
-| Report | 20 | 5 | none |
-| Facility Map | 16 | 2 | none |
-| Test Map | 9 | 1 | none |
+![Open your user menu at the bottom left.](data-exposure-guide-user-menu.png)
 
-**PII** means personally identifiable information. A red **PII** badge marks those columns. They start hidden.
+![Choose Settings.](data-exposure-guide-settings-menu.png)
 
-## Example 1: hide a column
+![Select Data Exposure in Settings.](data-exposure-guide-exposure-page.png)
 
-Hide the patient's `sex` column, then put it back.
+### 2. Find the table group
 
-![Switching off sex on the Patient table and saving from the Data Exposure menu.](data-exposure-hide.mp4)
+Find the table containing the column. The example uses **Patient**. Match both the table and column name.
 
-1. Open **Settings**, then **Data Exposure**.
-2. Under **Patient**, find `sex`. It reads **Shown**.
-3. Switch it off. It now reads **Hidden**. **Unsaved changes** appears.
-4. Open the page's **⋯** menu and select **Save**. **Column policy saved** appears.
+![Find the correct table group before changing a column.](data-exposure-guide-table-group.png)
 
-**Expected result:** `sex` stays **Hidden** after you reload the page.
+### 3. Check the current state
 
-Changes stay on your screen only until you select **Save**. **Discard** in the same menu throws away unsaved changes and reloads the saved ones. If **Save** reports an error, do not assume any change was kept. Reload and check.
+Read **Shown** or **Hidden** beside the switch. The example starts with `managing_organization` Shown.
 
-To put it back, switch `sex` on and select **Save** again.
+![Shown means the additional table column is offered in the dashboard builder.](data-exposure-guide-shown-column.png)
 
-## Example 2: see the column vanish from the Builder
+### 4. Turn the column off
 
-Do this while `sex` is still hidden from Example 1.
+Turn off its switch. The draft now says **Hidden**.
 
-1. Open **Dashboards** and edit any widget, or add one. See [Dashboards, Example 1](/docs/dashboard#example-1-make-an-orders-by-test-widget).
-2. In the Builder, select **Join data**. Set the table to **Patient**.
-3. Look at the Patient columns it offers.
+![Turn off the switch to mark the additional column Hidden.](data-exposure-guide-hide-column.png)
 
-**Expected result:** the list offers `managing_organization`, `active`, `source_system` and `created_at`. `sex` is gone. Show it again, save, and reopen the widget editor: `sex` is offered again.
+### 5. Check the unsaved indicator
 
-A widget saved earlier with `sex` stops running once you hide it. The server refuses its query, because the column is no longer allowed.
+**Unsaved changes** means the draft has not yet changed the stored policy.
 
-## Showing a PII column
+![Unsaved changes means the policy has not yet been applied.](data-exposure-guide-unsaved.png)
 
-Switching on a column with a **PII** badge asks first: **Un-hide** *name*? Select **Un-hide** only when that column is really needed in the Builder. Then select **Save**.
+### 6. Save the policy
 
-## What it does not cover
+Open the page dots at the top right and select **Save**.
 
-This page checks the extra columns the Builder offers through **Join data**. It checks them when the column is picked, when the query runs, and when the query is turned into SQL. It is not a filter on every field OpenLDR returns.
+![Open the Data Exposure page dots.](data-exposure-guide-page-actions.png)
 
-It does **not** apply to:
+![Choose Save to apply the column policy.](data-exposure-guide-save-hidden.png)
 
-- **Built-in Builder fields.** Fields each data model offers by default stay available.
-- **SQL widgets.** Raw SQL reads whatever the database account can read.
-- **A Builder query turned into SQL.** Once converted, it no longer follows later changes on this page.
-- **Custom Queries, the reports bound to them, Report Designer data and the workflow database nodes.** They all run SQL through [Connectors](/docs/connectors). They ignore this page, even when the connector points at the OpenLDR database.
+**Expected result:** The indicator clears. The saved column remains Hidden after reopening the page and is absent from additional builder columns.
 
-To keep a column private on those paths, limit the database account instead. Give each connector's account, and the account behind SQL widgets, access only to approved tables, columns or views. Read-only checks and row limits do not hide a column.
+![The saved column remains Hidden after reopening the page.](data-exposure-guide-hidden-result.png)
 
-Hiding a column does not remove data already stored, or files already exported.
+## Discard unsaved policy changes
 
-## Check the right path
+Use this when you want to keep the saved policy after changing a switch.
 
-- Test with data that is not sensitive.
-- A saved **Hidden** proves only that the choice was saved. Check the Builder separately, as in Example 2.
-- Check SQL widgets and connector-backed reports separately. For a connector, run a query as its account against an approved view and against a forbidden column.
-- Check the finished report before you share it.
+### 1. Review the draft change
 
-## From the command line
+Check which switch you changed. The example has turned the hidden column back on without saving.
 
-```bash
-./openldr data-exposure list
-./openldr data-exposure hide patients sex
-./openldr data-exposure show patients sex
-```
+![Change a switch only to draft a new policy. This example has not been saved.](data-exposure-guide-discard-draft.png)
 
-`hide` and `show` take a table name and one or more column names. A running server picks up a command-line change only after its next save on this page, or a restart. Restart the api container to apply it at once.
+### 2. Choose Discard
 
-## On a phone
+Open the page dots and select **Discard**.
 
-The page works on a phone. Each row keeps its column name on the left and its switch on the right. Open **Data Exposure** from the row of Settings pages across the top. It is the last one, so swipe the row sideways.
+![Discard reloads the saved policy and removes draft changes.](data-exposure-guide-discard-menu.png)
+
+**Expected result:** The page reloads the saved policy. The unsaved switch change disappears.
+
+![The column returns to its saved Hidden state.](data-exposure-guide-discard-result.png)
+
+## Approve showing a personally identifying column
+
+Use this only after deciding that dashboard users should be able to use this additional column. The pictures use a test installation.
+
+### 1. Check the PII label
+
+Find the correct table and column. The example is `surname` in Patient, marked **PII** and Hidden.
+
+![PII identifies columns containing personally identifiable information.](data-exposure-guide-pii-hidden.png)
+
+### 2. Read and confirm the warning
+
+Turn the switch on. Read the warning, then select **Un-hide** to approve the draft. Select Cancel to leave it hidden.
+
+![Read the exposure warning before choosing Un-hide.](data-exposure-guide-pii-confirm.png)
+
+### 3. Review the draft state
+
+The column now says **Shown**. The policy still has unsaved changes.
+
+![Confirming marks the column Shown in the draft. Save still applies it.](data-exposure-guide-pii-draft.png)
+
+### 4. Save the approval
+
+Open the page dots and select **Save**.
+
+![Choose Save to apply the column policy.](data-exposure-guide-save-pii.png)
+
+**Expected result:** The saved column is available among additional dashboard-builder columns.
+
+![The saved personally identifying column is now Shown.](data-exposure-guide-pii-result.png)
+
+## Hide a personally identifying column again
+
+Use this when an approved identifying column should no longer be offered.
+
+### 1. Turn the column off
+
+Find the column and turn off its switch. The example hides `surname` again.
+
+![Turn the personally identifying column off again when it should be hidden.](data-exposure-guide-rehide-pii.png)
+
+### 2. Save the new policy
+
+Open the page dots and select **Save**.
+
+![Choose Save to apply the column policy.](data-exposure-guide-save-rehide.png)
+
+**Expected result:** The column is Hidden in the saved policy. No identifying data was deleted.
+
+## Show a column without a PII warning
+
+Use this when a non-PII additional column should be available again.
+
+### 1. Turn the column on
+
+Find the correct column and turn on its switch. The example restores `managing_organization`.
+
+![Turn on a non-PII column when it should be available again.](data-exposure-guide-show-normal.png)
+
+### 2. Save the policy
+
+Open the page dots and select **Save**.
+
+![Choose Save to apply the column policy.](data-exposure-guide-restore-column.png)
+
+**Expected result:** The saved column is available among additional dashboard-builder columns again.
+
+## Review the policy on a phone
+
+Use the same table groups and switches on a phone. Scroll vertically through the groups.
+
+### 1. Find the table group
+
+Find the correct group before changing a column.
+
+![Scroll through table groups on a phone.](data-exposure-guide-phone-group.png)
+
+### 2. Read the column and state
+
+Check its name, any PII badge, and Shown or Hidden state before changing the switch. Save changes through the page dots.
+
+![Read the column name, PII label and Shown or Hidden state before changing it.](data-exposure-guide-phone-column.png)
+
+## Optional practice
+
+Use a test installation. Hide a non-PII column, save, then restore it. Try Discard with an unsaved switch change. Only practise PII approval with fictional data and restore the intended policy afterward.
+
+## Limits
+
+This is not a database security boundary or a data-deletion tool. Built-in dimensions, raw SQL and connector-backed reports are outside this policy. Column changes remain drafts until Save.
 
 ## Troubleshooting
 
-- **A column I hid still shows in the Builder.** Close and reopen the widget editor. If you changed it from the command line, restart the api container.
-- **A dashboard widget now fails.** It uses a column you hid. Show the column again or change the widget.
-- **A report still shows a hidden column.** The report runs through a connector, which this page does not cover. Limit the connector's database account.
-- **Save fails.** Reload the page to see what was kept, then try again.
-- **The page is missing from Settings.** You need **Manage data exposure**.
+**The policy did not change.** Check Unsaved changes, then choose Save in the page dots.
+
+**Discard is unavailable.** No unsaved switch change exists.
+
+**A hidden field remains available elsewhere.** Check whether it is a built-in dimension, raw SQL field or connector-backed report field, which this policy does not govern.
 
 ## Related guides
 
-- [Settings](/docs/settings)
-- [Dashboards](/docs/dashboard)
-- [Custom Queries](/docs/query)
-- [Connectors](/docs/connectors)
-- [Reports](/docs/reports)
+Read [Dashboards](/docs/dashboard) for building widgets and [Roles](/docs/roles) for permissions. Read [Start here](/docs/start-here) for command-line setup.

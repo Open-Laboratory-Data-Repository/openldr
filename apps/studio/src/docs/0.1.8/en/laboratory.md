@@ -1,132 +1,149 @@
 # Laboratory
 
-**Settings → Laboratory** sets who your laboratory is: the name, address, contact and logo printed as the letterhead on every report. It also sets the default facility register for new facilities and the laboratory time zone.
+Laboratory stores the issuing laboratory name, address, contact details and logo used by report templates. It also sets the default facility register and the local time zone.
 
-This guide takes about 10 minutes. Select any picture or clip to enlarge it.
+Use your real laboratory details and approved logo. The pictures show a fictional laboratory in a test installation. No practice data is required. You need View settings to open the page and Edit general settings to save it.
 
-## Who can do what
+The issuing laboratory is the organisation producing reports. Facilities are the organisations sending work. Choosing a default register here does not create or import facilities.
 
-| Permission | What it allows |
-| --- | --- |
-| **View settings** | Open the Laboratory page |
-| **Edit general settings** | Save changes to it |
+## Save your laboratory details
 
-Anyone who can view reports sees the letterhead on them.
+Use this after installation or when the issuing laboratory details change.
 
-## Example 1: set the letterhead
+### 1. Open Settings and Laboratory
 
-![Typing the laboratory name, address, contact and time zone, then saving from the dots menu.](laboratory-identity.mp4)
+Open your user menu at the bottom left, choose **Settings**, then select **Laboratory**.
 
-1. Open **Settings**, then **Laboratory**.
-2. In **Laboratory name**, type `Sample Central Laboratory`.
-3. In **Address**, type `1 Sample Road, Sample City`. Press Enter for a new line.
-4. In **Contact**, type `lab@example.org`. A phone number or an accreditation line works too.
-5. In **Time zone**, type `Africa/Dar_es_Salaam`. Use your own zone in a real install.
-6. Open the page's **⋯** menu and select **Save**. A **Saved.** message appears.
-7. Reload the page and check the values are still there.
+![Open your user menu at the bottom left.](laboratory-guide-user-menu.png)
 
-Nothing saves until you select **Save**. That includes a new logo and a cleared one. If **Save** reports an error, keep the page open, correct the value, and save again.
+![Choose Settings.](laboratory-guide-settings-menu.png)
 
-### The logo
+![Select Laboratory in Settings.](laboratory-guide-laboratory-page.png)
 
-1. Select **Choose file…** and pick a PNG, JPEG or WebP image under 256 KB. A preview appears beside the button.
-2. Select **Save** in the **⋯** menu.
+### 2. Enter the laboratory name
 
-**Clear** removes the logo. Save to keep that change. The logo must be an uploaded image file, not a web address, because a linked image does not print in the PDF. It is read on every report, which is why the size is capped.
+Enter your issuing laboratory name in **Laboratory name**. The example uses `Documentation laboratory`.
 
-## Example 2: see the letterhead on a report
+![Enter your issuing laboratory name.](laboratory-guide-name.png)
 
-This example needs the docs sample data. See [Dashboards, Load the sample data](/docs/dashboard#load-the-sample-data).
+### 3. Enter the address
 
-1. Open **Reports** and select **Test Volume Over Time**.
-2. Open **Actions**, select **Parameters**, and set the date range to 1 September 2026 to 31 October 2026.
-3. Select **Run**.
+Enter the address for your letterhead in **Address**. It can contain more than one line.
 
-**Expected result:** the report opens with your letterhead at the top: the logo, **Sample Central Laboratory**, the address and the contact. Under it are the title, the reporting period and a table of 10 rows, one per test per month.
+![Enter the address your report templates should print.](laboratory-guide-address.png)
 
-![The letterhead at the top of Test Volume Over Time: logo, name, address and contact.](laboratory-letterhead.png)
+### 4. Enter the contact details
 
-| Month | Test | Count |
-| --- | --- | --- |
-| 2026-09 | Full blood count | 10 |
-| 2026-09 | Malaria rapid test | 8 |
-| 2026-10 | HIV viral load | 8 |
+Enter your approved contact details in **Contact**. The picture uses an example.invalid email address.
 
-Those are 3 of the 10 rows. Together the rows add up to 60, the number of orders in the sample.
+![Enter the contact information for the issuing laboratory.](laboratory-guide-contact.png)
 
-**Download** saves a PDF with the same letterhead. CSV and XLSX outputs hold the data only. See [Reports, Example 1](/docs/reports#example-1-run-a-report) for the full steps.
+### 5. Choose the facility register
 
-### The letterhead in your own templates
+In **Facility register**, select an existing registered source. If the needed source is absent, register it through Facilities first. This choice supplies the default register for the Facility form.
 
-A report template can place any part of the letterhead by name. The page lists the four names under its title:
+![Choose an existing register. Register a source through Facilities if the needed one is absent.](laboratory-guide-register.png)
 
-| Name | Prints |
-| --- | --- |
-| `{{lab.name}}` | Laboratory name |
-| `{{lab.address}}` | Address |
-| `{{lab.contact}}` | Contact |
-| `{{lab.logo}}` | Logo |
+### 6. Set the time zone when applicable
 
-See [Report Designer](/docs/report-designer) to build a template.
+For PostgreSQL or MySQL, enter a named time zone such as `Africa/Dar_es_Salaam`. Read the help below the field. SQL Server requires a Windows time-zone name in each report run instead, so leave this setting empty there.
 
-## Choose a facility register
+![Enter your named time zone on PostgreSQL or MySQL. Read the SQL Server exception below.](laboratory-guide-timezone.png)
 
-**Facility register** lists the active sources registered in [Facilities](/docs/facilities). The one you choose becomes the starting **System** when someone creates a facility by hand.
+### 7. Save the details
 
-Choose the register that owns your facility codes. Its system address keeps those codes apart from another register's codes.
+Open the page dots at the top right and select **Save**.
 
-Saving this choice does not import facilities. It does not rename, move or change the codes of facilities you already have.
+![Open the Laboratory page dots menu.](laboratory-guide-page-actions.png)
 
-If the register you want is missing:
+![Choose Save to keep the laboratory settings.](laboratory-guide-save-identity.png)
 
-1. Open [Facilities](/docs/facilities), start **Import facilities**, and register the source there.
-2. Come back to Laboratory and reload the page.
-3. Select it in **Facility register** and save.
+**Expected result:** The saved details remain when you reopen Laboratory.
 
-An empty list can also mean the sources failed to load. Check Facilities before you assume none exist.
+![The saved laboratory identity remains after reopening the page.](laboratory-guide-identity-result.png)
 
-## Time zone
+## Remove an old logo
 
-The time zone decides which day a result falls on in a report. A result at 01:00 in Dar es Salaam is still the previous day in UTC.
+Use this when the current logo should no longer appear in templates that use the laboratory logo.
 
-- Type a named zone, such as `Africa/Dar_es_Salaam`. Fixed offsets are refused. `+03:00` is refused. `Etc/GMT+3` is refused too, because it means UTC−3, the opposite of how it reads.
-- It sets the starting value of a report's own **Time zone** filter. You can still change it for one run.
-- A scheduled run or a command-line run does not read it. Give the zone to the schedule or the command directly. See [Reports](/docs/reports).
-- It does not set the hour schedules run at.
-- **SQL Server warehouse:** leave it empty. SQL Server takes Windows zone names, which this field refuses. Type the Windows zone into the **Time zone** filter on each report run instead.
+### 1. Clear the draft logo
 
-## From the command line
+Select **Clear** beside Logo. This changes the draft only.
 
-`openldr settings lab` reads and writes the same values as the page.
+![Clear removes the current logo from the draft.](laboratory-guide-clear-logo.png)
 
-```bash
-./openldr settings lab show
-./openldr settings lab set --name "Sample Central Laboratory" --timezone Africa/Dar_es_Salaam
-./openldr settings lab set --logo-file ./logo.png
-```
+### 2. Save the removal
 
-- `--address` takes `\n` for a line break.
-- An empty value clears a field, for example `--timezone ""`.
-- `--logo-file` takes a PNG, JPEG or WebP file under the same 256 KB limit.
+Open the page dots and select **Save**.
 
-The facility register is set on the page only.
+![Choose Save to keep the laboratory settings.](laboratory-guide-save-clear-logo.png)
 
-## On a phone
+**Expected result:** The saved laboratory settings no longer contain a logo.
 
-The page works on a phone. Labels stay to the left of their boxes, and the boxes narrow to fit. **Choose file…** opens the phone's own file picker, so a logo can come from photos or files.
+## Upload the laboratory logo
+
+Use a PNG or JPEG file up to 256 KB. Transparent PNG is useful for a letterhead logo.
+
+### 1. Choose the image
+
+Select **Choose file…** beside Logo and select your approved local image.
+
+![Choose file opens an image file selection.](laboratory-guide-choose-logo.png)
+
+### 2. Check the preview
+
+Confirm that the expected image appears beside Logo. The picture reuses the test installation's shipped mark.
+
+![The chosen PNG appears in the preview before saving.](laboratory-guide-logo-preview.png)
+
+### 3. Save the logo
+
+Open the page dots and select **Save**.
+
+![Choose Save to keep the laboratory settings.](laboratory-guide-save-logo.png)
+
+**Expected result:** The logo remains after reopening Laboratory. A report template must use the laboratory tokens to display these values.
+
+![The saved logo remains after reopening Laboratory.](laboratory-guide-logo-result.png)
+
+## Change laboratory details on a phone
+
+Use the same fields on a phone. The page scrolls vertically.
+
+### 1. Edit the identity fields
+
+Enter the laboratory name and other fields within the phone-width form.
+
+![Laboratory fields fit the phone width.](laboratory-guide-phone-name.png)
+
+### 2. Scroll to Logo
+
+Scroll down to the logo preview and Choose file control. Save changes through the page dots.
+
+![Scroll to Logo. The preview and controls remain available.](laboratory-guide-phone-logo.png)
+
+## Use the details in report templates
+
+Report templates can use `{{lab.name}}`, `{{lab.address}}`, `{{lab.contact}}` and `{{lab.logo}}`. The page prints these token names below its description. Use Report Designer to place them in a template. Saving Laboratory does not edit a template.
+
+## Optional practice
+
+In a test installation, save a fictional laboratory name and example.invalid contact address. Reuse an approved test PNG or JPEG for the upload exercise. Restore your intended settings afterward.
+
+## Limits
+
+The logo accepts PNG and JPEG, up to 256 KB. SVG, WebP and image web addresses are not accepted. The register picker lists existing sources; it cannot register one.
 
 ## Troubleshooting
 
-- **My changes are gone after a reload.** They were not saved. Use **Save** in the **⋯** menu and wait for **Saved.**
-- **The time zone will not save.** Use a named zone such as `Africa/Dar_es_Salaam`, not an offset.
-- **The logo is refused.** It must be PNG, JPEG or WebP and under 256 KB.
-- **The report still shows the old name.** Run the report again. A result already shown or exported keeps the letterhead it was made with.
-- **The facility register list is empty.** Register a source in Facilities, then reload this page.
-- **Save says it could not save the laboratory identity.** Check the message under the field first. If there is none, your role may lack **Edit general settings**.
+**The register list is empty.** Open Facilities and register the source before returning here.
+
+**The time zone is refused.** Use a named zone, not a fixed offset. Follow the SQL Server exception shown below the field.
+
+**The logo is refused.** Check its format and size. Choose a PNG or JPEG no larger than 256 KB.
+
+**A report does not show the saved details.** Check whether its template uses the laboratory tokens.
 
 ## Related guides
 
-- [Settings](/docs/settings)
-- [Reports](/docs/reports)
-- [Report Designer](/docs/report-designer)
-- [Facilities](/docs/facilities)
+Read [Facilities](/docs/facilities) to register a source. Read [Setup checks](/docs/setup-checks) to review readiness. Read [Start here](/docs/start-here) for command-line setup.
