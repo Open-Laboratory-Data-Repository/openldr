@@ -65,6 +65,25 @@ describe('runStorageCopy', () => {
     expect(out).toContain('1 source object is missing on the target: do not switch yet');
   });
 
+  it('refuses under file storage and calls nothing', async () => {
+    const copy = vi.fn();
+    const audit = vi.fn();
+    const chunks: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation(((c: string | Uint8Array) => {
+      chunks.push(String(c));
+      return true;
+    }) as never);
+    try {
+      const code = await runStorageCopy(full, { copy, audit, config: () => ({ BLOB_ADAPTER: 'fs', BLOB_DIR: '/tmp/x' }) as never });
+      expect(code).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(chunks.join('')).toBe('storage copy works between two S3 buckets. This install stores files in a folder.\n');
+    expect(copy).not.toHaveBeenCalled();
+    expect(audit).not.toHaveBeenCalled();
+  });
+
   it('exits 0 and shows the extra objects line when the target holds more than the source', async () => {
     const { code, out } = await captureStdout(() =>
       runStorageCopy({ ...full, json: false }, { copy: vi.fn(async () => report(true, 3)), targetConfig: target, audit: vi.fn() }));

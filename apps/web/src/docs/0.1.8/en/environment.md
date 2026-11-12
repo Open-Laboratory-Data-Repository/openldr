@@ -117,7 +117,8 @@ bundled containers. Change them only when pointing at external infrastructure.
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `AUTH_ADAPTER` | `keycloak` | Sign-in mode: `local`, `keycloak` or `oidc`. See [Authentication providers](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. `minio` selects the S3 adapter, which also works with Garage. |
+| `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. `minio` selects the S3 adapter, which also works with Garage. `fs` keeps the files in a folder on this machine, named by `BLOB_DIR`. |
+| `BLOB_DIR` | unset | Folder that holds the stored files. Required when `BLOB_ADAPTER` is `fs`. |
 | `EVENTING_ADAPTER` | `pg` | Event store used by workflow triggers. |
 | `TARGET_STORE_ADAPTER` | `pg` | Analytics warehouse engine: `pg`, `mssql`, or `mysql`. |
 

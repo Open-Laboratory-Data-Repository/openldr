@@ -99,10 +99,11 @@ A base interna usa sempre Postgres. Escolha o motor do armazém através de TARG
 | `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | Obrigatórios para mysql | Ligação ao armazém MySQL ou MariaDB. |
 | `MYSQL_PORT` | 3306 | Porta do armazém MySQL. |
 | `MYSQL_SSL`, `MYSQL_SSL_REJECT_UNAUTHORIZED` | false, false | Opções de TLS e verificação de certificados do armazém. |
-| `BLOB_ADAPTER` | minio | Seletor do adaptador S3. Também suporta o serviço Garage incluído. |
-| `S3_ENDPOINT`, `S3_BUCKET` | Obrigatórios | Endereço do serviço de objetos e bucket. |
+| `BLOB_ADAPTER` | minio | Armazenamento de ficheiros: minio ou fs. minio usa um serviço S3, como o Garage incluído. fs guarda os ficheiros na pasta indicada por `BLOB_DIR`. |
+| `BLOB_DIR` | Obrigatório para fs | Pasta que guarda os ficheiros armazenados. |
+| `S3_ENDPOINT`, `S3_BUCKET` | Obrigatórios para minio | Endereço do serviço de objetos e bucket. |
 | `S3_REGION`, `S3_FORCE_PATH_STYLE` | us-east-1, true | Região S3 e endereçamento por caminho. |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Credenciais privadas | Acesso ao armazenamento de objetos. O Garage exige o formato de chave suportado. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Credenciais privadas, obrigatórias para minio | Acesso ao armazenamento de objetos. O Garage exige o formato de chave suportado. |
 | `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` | Gerados pelo instalador | Segredos do serviço Garage. Preserve-os com a configuração. |
 | `EVENTING_ADAPTER` | pg | Implementação do armazenamento de eventos da aplicação. |
 

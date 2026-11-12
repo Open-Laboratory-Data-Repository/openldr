@@ -143,6 +143,26 @@ describe('local sign-in config', () => {
   });
 });
 
+describe('storage config', () => {
+  const parse = (env: Record<string, unknown>) => ConfigSchema.parse(env);
+
+  it('keeps minio as the default and still requires the S3 settings', () => {
+    expect(parse(base).BLOB_ADAPTER).toBe('minio');
+    const { S3_ENDPOINT: _drop, ...rest } = base;
+    expect(() => parse(rest)).toThrow(/S3_ENDPOINT/);
+  });
+  it('accepts file storage with a folder and no S3 settings', () => {
+    const { S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET, ...rest } = base;
+    expect(parse({ ...rest, BLOB_ADAPTER: 'fs', BLOB_DIR: '/tmp/x' }).BLOB_DIR).toBe('/tmp/x');
+  });
+  it('refuses file storage with no folder', () => {
+    expect(() => parse({ ...base, BLOB_ADAPTER: 'fs' })).toThrow(/BLOB_DIR/);
+  });
+  it('refuses an empty folder name', () => {
+    expect(() => parse({ ...base, BLOB_ADAPTER: 'fs', BLOB_DIR: '' })).toThrow(/BLOB_DIR/);
+  });
+});
+
 describe('the public development secrets key', () => {
   const MESSAGE = 'SECRETS_ENCRYPTION_KEY is the public development key from .env.example. Generate a new one for a real install.';
 

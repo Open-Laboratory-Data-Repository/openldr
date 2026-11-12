@@ -1,5 +1,4 @@
 import { Kysely } from 'kysely';
-import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { createEventBus } from '@openldr/adapter-event-bus';
 import type { Config } from '@openldr/config';
 import { createLogger } from '@openldr/core';
@@ -32,6 +31,7 @@ import { createAuditStore, safeRecord } from '@openldr/audit';
 import { createPluginRegistry } from './plugin-registry';
 import type { EventingPort } from '@openldr/ports';
 import { selectTargetStore } from './target-store';
+import { createBlobFromConfig } from './s3-config';
 
 export interface IngestContext {
   accept(input: AcceptInput): Promise<{ batchId: string; blobKey: string }>;
@@ -51,14 +51,7 @@ export async function createIngestContext(cfg: Config): Promise<IngestContext> {
   const internal = createInternalDb(cfg.INTERNAL_DATABASE_URL);
   const { store: externalStore, engine } = selectTargetStore(cfg);
   const externalDb = externalStore.db as unknown as Kysely<ExternalSchema>;
-  const blob = createS3Bucket({
-    endpoint: cfg.S3_ENDPOINT,
-    region: cfg.S3_REGION,
-    accessKeyId: cfg.S3_ACCESS_KEY_ID,
-    secretAccessKey: cfg.S3_SECRET_ACCESS_KEY,
-    bucket: cfg.S3_BUCKET,
-    forcePathStyle: cfg.S3_FORCE_PATH_STYLE,
-  });
+  const blob = createBlobFromConfig(cfg);
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
 
   const fhirStore = createFhirStore(internal.db);

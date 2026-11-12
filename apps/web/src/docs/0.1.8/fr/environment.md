@@ -110,7 +110,8 @@ Les adaptateurs choisissent l'implémentation de chaque sous-système. Les valeu
 | Variable | Par défaut | Rôle |
 | --- | --- | --- |
 | `AUTH_ADAPTER` | `keycloak` | Mode de connexion : `local`, `keycloak` ou `oidc`. Voir [Fournisseurs d'authentification](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Stockage d'objets pour les fichiers envoyés et les artefacts. `minio` choisit l'adaptateur S3, qui fonctionne aussi avec Garage. |
+| `BLOB_ADAPTER` | `minio` | Stockage d'objets pour les fichiers envoyés et les artefacts. `minio` choisit l'adaptateur S3, qui fonctionne aussi avec Garage. `fs` range les fichiers dans un dossier de cette machine, indiqué par `BLOB_DIR`. |
+| `BLOB_DIR` | non défini | Dossier qui contient les fichiers stockés. Obligatoire quand `BLOB_ADAPTER` vaut `fs`. |
 | `EVENTING_ADAPTER` | `pg` | Magasin d'événements utilisé par les déclencheurs de flux de travail. |
 | `TARGET_STORE_ADAPTER` | `pg` | Moteur de l'entrepôt analytique : `pg`, `mssql` ou `mysql`. |
 

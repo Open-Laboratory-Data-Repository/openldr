@@ -99,10 +99,11 @@ The internal database always uses Postgres. Select the warehouse engine through 
 | `MYSQL_HOST`, `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD` | Required for mysql | MySQL or MariaDB warehouse connection. |
 | `MYSQL_PORT` | 3306 | MySQL warehouse port. |
 | `MYSQL_SSL`, `MYSQL_SSL_REJECT_UNAUTHORIZED` | false, false | Warehouse TLS and certificate verification options. |
-| `BLOB_ADAPTER` | minio | S3 adapter selector. It also supports the bundled Garage service. |
-| `S3_ENDPOINT`, `S3_BUCKET` | Required | Object service endpoint and bucket. |
+| `BLOB_ADAPTER` | minio | File storage: minio or fs. minio uses an S3 service, including the bundled Garage service. fs keeps files in the folder named by `BLOB_DIR`. |
+| `BLOB_DIR` | Required for fs | Folder that holds the stored files. |
+| `S3_ENDPOINT`, `S3_BUCKET` | Required for minio | Object service endpoint and bucket. |
 | `S3_REGION`, `S3_FORCE_PATH_STYLE` | us-east-1, true | S3 region and path addressing. |
-| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Private credentials | Object-storage access. Garage requires its supported key format. |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | Private credentials, required for minio | Object-storage access. Garage requires its supported key format. |
 | `GARAGE_RPC_SECRET`, `GARAGE_ADMIN_TOKEN` | Installer-generated | Garage service secrets. Preserve them with its configuration. |
 | `EVENTING_ADAPTER` | pg | Application event-store implementation. |
 

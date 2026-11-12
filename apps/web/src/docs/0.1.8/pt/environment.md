@@ -118,7 +118,8 @@ correspondem aos contentores incluídos. Altere-os apenas para usar infraestrutu
 | Variável | Omissão | Finalidade |
 | --- | --- | --- |
 | `AUTH_ADAPTER` | `keycloak` | Modo de início de sessão: `local`, `keycloak` ou `oidc`. Consulte [Fornecedores de autenticação](/docs/auth-providers). |
-| `BLOB_ADAPTER` | `minio` | Armazenamento de objetos para ficheiros carregados e artefactos. `minio` seleciona o adaptador S3, que também funciona com o Garage. |
+| `BLOB_ADAPTER` | `minio` | Armazenamento de objetos para ficheiros carregados e artefactos. `minio` seleciona o adaptador S3, que também funciona com o Garage. `fs` guarda os ficheiros numa pasta desta máquina, indicada por `BLOB_DIR`. |
+| `BLOB_DIR` | não definido | Pasta que guarda os ficheiros armazenados. Obrigatório quando `BLOB_ADAPTER` é `fs`. |
 | `EVENTING_ADAPTER` | `pg` | Armazém de eventos usado pelos gatilhos dos fluxos de trabalho. |
 | `TARGET_STORE_ADAPTER` | `pg` | Motor do armazém analítico: `pg`, `mssql` ou `mysql`. |
 

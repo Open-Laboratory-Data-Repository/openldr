@@ -6,8 +6,7 @@ import { Kysely, sql } from 'kysely';
 import { createAuth, createLocalAuth, LOCAL_ISSUER, type LocalSignIn } from '@openldr/adapter-auth';
 import { bindAuthIssuer } from './auth-issuer-binding';
 import { createEventBus } from '@openldr/adapter-event-bus';
-import { createS3Bucket } from '@openldr/adapter-s3-bucket';
-import { toS3BucketConfig } from './s3-config';
+import { createBlobFromConfig } from './s3-config';
 import { requireOidcIssuer, type Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { codeSystemProjection } from './code-system-projection';
@@ -683,7 +682,7 @@ export async function createAppContext(cfg: Config, opts: AppContextOptions = {}
     await internal.close();
     throw error;
   }
-  const blob = createS3Bucket(toS3BucketConfig(cfg));
+  const blob = createBlobFromConfig(cfg);
   const eventing = createEventBus({ url: cfg.INTERNAL_DATABASE_URL });
   const selectedTarget = selectTargetStore(cfg);
   const { store, engine } = selectedTarget;
