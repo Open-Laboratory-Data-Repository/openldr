@@ -1,0 +1,23 @@
+{
+  "pages": 3,
+  "results": [
+    {
+      "locale": "en",
+      "title": "Deployment & developer docs",
+      "deploymentLink": true,
+      "sourceLink": true
+    },
+    {
+      "locale": "fr",
+      "title": "Documentation de déploiement et de développement",
+      "deploymentLink": true,
+      "sourceLink": true
+    },
+    {
+      "locale": "pt",
+      "title": "Documentação de instalação e desenvolvimento",
+      "deploymentLink": true,
+      "sourceLink": true
+    }
+  ]
+}

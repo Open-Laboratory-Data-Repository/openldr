@@ -1,4 +1,4 @@
-# Deployment and developer docs
+# Deployment & developer docs
 
 Use the in-app manual for tasks inside Studio. Use deployment and developer documentation for installation, server configuration, source development and CLI operation.
 
@@ -34,7 +34,7 @@ Read the guide. Installation, environment variables, Windows Server, development
 
 ### 5. Follow the project reference
 
-Use the project website or the source-repository link. The source repository includes the deployment files and CLI. Check instructions against the release you run.
+Use the [OpenLDR website](https://openldr.online/docs) or the [source repository](https://github.com/Open-Laboratory-Data-Repository/openldr). The source repository includes the deployment files and CLI. Check instructions against the release you run.
 
 ![Use the project website or source-repository link for deployment and development material.](advanced-docs-guide-repository.png)
 

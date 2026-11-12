@@ -34,7 +34,7 @@ Leia o guia. A instalação, as variáveis de ambiente, o Windows Server, o dese
 
 ### 5. Seguir a referência do projeto
 
-Use o site do projeto ou o link do repositório de código-fonte. O repositório contém os ficheiros de instalação e a CLI. Confira as instruções para a versão utilizada.
+Use o [site OpenLDR](https://openldr.online/docs) ou o [repositório de código-fonte](https://github.com/Open-Laboratory-Data-Repository/openldr). O repositório contém os ficheiros de instalação e a CLI. Confira as instruções para a versão utilizada.
 
 ![Use o site do projeto ou o repositório de código-fonte para os documentos de instalação e desenvolvimento.](advanced-docs-guide-repository.png)
 

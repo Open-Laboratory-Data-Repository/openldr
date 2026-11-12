@@ -104,8 +104,8 @@ The published Markdown becomes the editing source. Keep original evidence as an 
 
 - [x] Create codex/publish-user-guides in a managed worktree and verify the baseline.
 - [x] Copy the approved native images, framing and optional downloads into production paths.
-- [ ] Publish the 27 guides in English, French and Portuguese.
-- [ ] Verify translated links, code examples, native assets and the actual Studio viewer.
-- [ ] Run docs tests, typechecks and builds.
+- [x] Publish the 27 guides in English, French and Portuguese.
+- [x] Verify translated links, code examples, native assets and the actual Studio viewer.
+- [x] Run docs tests, typechecks and builds.
 - [ ] Merge main, generate its changelog, push and compare remote HEAD.
 - [ ] Explain reproduced bugs and source-backed wording inconsistencies without changing app behavior.

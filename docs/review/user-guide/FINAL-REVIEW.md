@@ -1,3 +1,5 @@
+Publication update: all 27 remaining guides are approved for main. See [PUBLICATION.md](PUBLICATION.md) for the publication record. The review status below is historical.
+
 8 suspected content gaps: 2 confirmed, 6 refuted. One confirmed gap is corrected; one is the approved Dashboard baseline.
 
 | ID | Finding | Verdict | Proof | Cost |

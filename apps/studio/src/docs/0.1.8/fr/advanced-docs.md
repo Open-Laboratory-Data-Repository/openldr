@@ -34,7 +34,7 @@ Lisez le guide. L'installation, les variables d'environnement, Windows Server, l
 
 ### 5. Suivre la référence du projet
 
-Utilisez le site du projet ou le lien du dépôt source. Le dépôt contient les fichiers de déploiement et la CLI. Vérifiez que les instructions correspondent à votre version.
+Utilisez le [site OpenLDR](https://openldr.online/docs) ou le [dépôt source](https://github.com/Open-Laboratory-Data-Repository/openldr). Le dépôt contient les fichiers de déploiement et la CLI. Vérifiez que les instructions correspondent à votre version.
 
 ![Utilisez le site du projet ou le dépôt source pour les documents de déploiement et de développement.](advanced-docs-guide-repository.png)
 
