@@ -1,0 +1,530 @@
+// Starts, stops and recovers the Postgres 16 that ships with the standalone install.
+//
+// The binaries come from the `embedded-postgres` platform packages. This file runs them itself
+// and does not use the package's EmbeddedPostgres class, because importing that class:
+// - registers an exit hook (the `exit-hook` package) that installs its own SIGINT and SIGTERM
+//   handlers and calls process.exit, which would fight the launcher's own shutdown order;
+// - writes the superuser password to a file in the temp folder with the default file mode;
+// - logs through console.log, and reports a failed start with no reason.
+// So nothing here imports `embedded-postgres` itself. It is only resolved, to find the
+// platform package next to it.
+
+import { spawn, type ChildProcess } from 'node:child_process';
+import {
+  closeSync,
+  existsSync,
+  fstatSync,
+  mkdirSync,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { createRequire } from 'node:module';
+import { createServer, type AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import pg from 'pg';
+
+export interface PostgresSettings {
+  port: number;
+  superPassword: string;
+  appPassword: string;
+}
+
+export const APP_ROLE = 'openldr_app';
+export const INTERNAL_DB = 'openldr';
+export const TARGET_DB = 'openldr_target';
+
+export interface RunningPostgres {
+  pid: number;
+  internalUrl: string; // postgres://openldr_app:<appPassword>@127.0.0.1:<port>/openldr
+  targetUrl: string;
+  /** Fast shutdown. Resolves when the process has gone. */
+  stop(): Promise<void>;
+  /** Tells Postgres to shut down without waiting. Safe in a process exit handler. */
+  stopSync(): void;
+}
+
+const SUPERUSER = 'postgres';
+const HOST = '127.0.0.1';
+/** How long a start may take before it is given up. Crash recovery after a power cut counts. */
+const START_TIMEOUT_MS = 120_000;
+const IS_WINDOWS = process.platform === 'win32';
+
+// ---------------------------------------------------------------------------------------------
+// Binaries
+
+interface Binaries {
+  postgres: string;
+  initdb: string;
+  pg_ctl: string;
+}
+
+// One package per OS and CPU, as listed in embedded-postgres's optionalDependencies.
+// Only linux-x64 is tested. Every other entry is unproven.
+const PLATFORM_PACKAGES: Record<string, string> = {
+  'darwin-arm64': '@embedded-postgres/darwin-arm64',
+  'darwin-x64': '@embedded-postgres/darwin-x64',
+  'linux-arm': '@embedded-postgres/linux-arm',
+  'linux-arm64': '@embedded-postgres/linux-arm64',
+  'linux-ia32': '@embedded-postgres/linux-ia32',
+  'linux-ppc64': '@embedded-postgres/linux-ppc64',
+  'linux-x64': '@embedded-postgres/linux-x64',
+  'win32-x64': '@embedded-postgres/windows-x64',
+};
+
+let binaries: Promise<Binaries> | undefined;
+
+function loadBinaries(): Promise<Binaries> {
+  binaries ??= (async () => {
+    const name = PLATFORM_PACKAGES[`${process.platform}-${process.arch}`];
+    if (!name) throw new Error(`The bundled Postgres has no build for ${process.platform} ${process.arch}.`);
+    // pnpm links the platform package next to embedded-postgres, not next to this app, so it is
+    // resolved from embedded-postgres's own folder. resolve() finds a path and runs nothing.
+    let entry: string;
+    try {
+      const fromPackage = createRequire(createRequire(import.meta.url).resolve('embedded-postgres'));
+      entry = fromPackage.resolve(name);
+    } catch {
+      throw new Error(`The Postgres binaries for this computer (${name}) are not installed.`);
+    }
+    // The platform package's entry only exports three paths.
+    const mod = (await import(pathToFileURL(entry).href)) as Binaries;
+    return { postgres: mod.postgres, initdb: mod.initdb, pg_ctl: mod.pg_ctl };
+  })().catch((err: unknown) => {
+    binaries = undefined;
+    throw err;
+  });
+  return binaries;
+}
+
+function childEnv(): NodeJS.ProcessEnv {
+  // English messages, so a failure to bind can be recognised in the log.
+  return { ...process.env, LC_ALL: 'C', LC_MESSAGES: 'C' };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Small helpers
+
+/** The two URLs the server and the CLI use, built from the settings alone. */
+export function postgresUrls(settings: PostgresSettings): { internalUrl: string; targetUrl: string } {
+  const auth = `${APP_ROLE}:${encodeURIComponent(settings.appPassword)}`;
+  const base = `postgres://${auth}@${HOST}:${settings.port}`;
+  return { internalUrl: `${base}/${INTERNAL_DB}`, targetUrl: `${base}/${TARGET_DB}` };
+}
+
+/** Removes both passwords, plain and URL-encoded, from a message before it is shown. */
+function scrub(message: string, settings: PostgresSettings): string {
+  let out = message;
+  for (const secret of [settings.superPassword, settings.appPassword]) {
+    if (!secret) continue;
+    for (const form of new Set([secret, encodeURIComponent(secret)])) out = out.split(form).join('[hidden]');
+  }
+  return out;
+}
+
+function errorCode(err: unknown): string | undefined {
+  return typeof err === 'object' && err !== null && 'code' in err ? String((err as { code: unknown }).code) : undefined;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+function samePath(a: string, b: string): boolean {
+  try {
+    const ra = realpathSync.native(a);
+    const rb = realpathSync.native(b);
+    // Windows paths are case-insensitive. Unproven.
+    return IS_WINDOWS ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
+  } catch {
+    return false;
+  }
+}
+
+/** `alive`, `gone` (ESRCH), or `foreign` (EPERM: the process belongs to another user). */
+function liveness(pid: number): 'alive' | 'gone' | 'foreign' {
+  try {
+    process.kill(pid, 0);
+    return 'alive';
+  } catch (err) {
+    const code = errorCode(err);
+    if (code === 'ESRCH') return 'gone';
+    if (code === 'EPERM') return 'foreign';
+    throw err;
+  }
+}
+
+async function waitForPidToGo(pid: number, ms: number): Promise<boolean> {
+  const end = Date.now() + ms;
+  for (;;) {
+    if (liveness(pid) !== 'alive') return true;
+    if (Date.now() >= end) return false;
+    await sleep(100);
+  }
+}
+
+function superClient(settings: PostgresSettings): pg.Client {
+  const client = new pg.Client({
+    host: HOST,
+    port: settings.port,
+    user: SUPERUSER,
+    password: settings.superPassword,
+    database: 'postgres',
+    ssl: false,
+    connectionTimeoutMillis: 5000,
+  });
+  // A server that shuts down under an open client emits 'error'. Unhandled, it ends the process.
+  client.on('error', () => {});
+  return client;
+}
+
+function portIsFree(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once('error', () => resolve(false));
+    server.listen({ port, host: HOST, exclusive: true }, () => server.close(() => resolve(true)));
+  });
+}
+
+function portTakenMessage(port: number): string {
+  return (
+    `Port ${port} on ${HOST} is in use by another program. ` +
+    `This install's database always uses port ${port}. Free that port, then start again.`
+  );
+}
+
+/** True when Postgres's own log says it could not bind its port. */
+export function isBindFailure(logText: string): boolean {
+  return /could not bind IPv[46] address|could not create any TCP\/IP sockets|Address already in use/.test(logText);
+}
+
+// ---------------------------------------------------------------------------------------------
+// postmaster.pid and leftovers
+
+export function readPostmasterPid(clusterDir: string): { pid: number; dataDir: string } | null {
+  let text: string;
+  try {
+    text = readFileSync(join(clusterDir, 'postmaster.pid'), 'utf8');
+  } catch (err) {
+    const code = errorCode(err);
+    if (code === 'ENOENT' || code === 'ENOTDIR') return null;
+    throw err;
+  }
+  const lines = text.split(/\r?\n/);
+  const pidText = (lines[0] ?? '').trim();
+  const dataDir = lines[1] ?? '';
+  if (!/^\d+$/.test(pidText) || dataDir.trim() === '') return null;
+  const pid = Number(pidText);
+  if (!Number.isSafeInteger(pid) || pid <= 0) return null;
+  return { pid, dataDir };
+}
+
+/**
+ * True only when a Postgres answers on 127.0.0.1:<port>, accepts this install's superuser
+ * password, and reports `clusterDir` as its data folder. Retries while it is starting up.
+ */
+async function servesCluster(
+  clusterDir: string,
+  settings: PostgresSettings,
+  deadline: number,
+  stillAlive: () => boolean,
+): Promise<boolean> {
+  for (;;) {
+    const client = superClient(settings);
+    try {
+      await client.connect();
+      const res = await client.query<{ data_directory: string }>('show data_directory');
+      return samePath(res.rows[0]?.data_directory ?? '', clusterDir);
+    } catch (err) {
+      // 57P03: "the database system is starting up". Anything else means it is not ours.
+      if (errorCode(err) !== '57P03' || Date.now() >= deadline || !stillAlive()) return false;
+    } finally {
+      await client.end().catch(() => {});
+    }
+    await sleep(200);
+  }
+}
+
+function sendLeftoverFastShutdown(pid: number, clusterDir: string, pgCtl: string | undefined): void {
+  if (IS_WINDOWS) {
+    // Windows has no SIGINT for a console-less process. pg_ctl sends Postgres's own fast
+    // shutdown request. Unproven: only Linux is tested.
+    spawn(pgCtl ?? 'pg_ctl', ['stop', '-m', 'fast', '-W', '-D', clusterDir], {
+      stdio: 'ignore',
+      windowsHide: true,
+      env: childEnv(),
+    }).on('error', () => {});
+    return;
+  }
+  // SIGINT is Postgres's fast shutdown. Linux tested; macOS unproven.
+  process.kill(pid, 'SIGINT');
+}
+
+export async function stopLeftoverPostgres(opts: {
+  clusterDir: string;
+  settings: PostgresSettings;
+  waitMs?: number;
+}): Promise<'none' | 'stale' | 'stopped'> {
+  const { clusterDir, settings } = opts;
+  const waitMs = opts.waitMs ?? 30_000;
+
+  const info = readPostmasterPid(clusterDir);
+  if (!info) return 'none';
+  if (!samePath(info.dataDir, clusterDir)) return 'stale';
+  // `foreign` is a process of another user: not ours. `gone` is a pid file left by a crash.
+  if (liveness(info.pid) !== 'alive') return 'stale';
+
+  // A process ID alone proves nothing: after a reboot it can belong to any program. Prove over
+  // SQL that this install's Postgres is the one running before sending any signal.
+  const ours = await servesCluster(clusterDir, settings, Date.now() + waitMs, () => liveness(info.pid) === 'alive');
+  if (!ours) return 'stale';
+
+  const pgCtl = IS_WINDOWS ? (await loadBinaries()).pg_ctl : undefined;
+  sendLeftoverFastShutdown(info.pid, clusterDir, pgCtl);
+  if (await waitForPidToGo(info.pid, waitMs)) return 'stopped';
+  throw new Error(`The leftover Postgres in ${clusterDir} did not stop within ${Math.round(waitMs / 1000)} seconds.`);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Ports
+
+export async function findFreePort(preferred: number): Promise<number> {
+  if (!Number.isInteger(preferred) || preferred < 1 || preferred > 65535) {
+    throw new Error(`Not a port number: ${preferred}`);
+  }
+  if (await portIsFree(preferred)) return preferred;
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', reject);
+    server.listen({ port: 0, host: HOST }, () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Start
+
+function runToExit(cmd: string, args: string[], logFd: number): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { stdio: ['ignore', logFd, logFd], env: childEnv(), windowsHide: true });
+    child.once('error', reject);
+    child.once('exit', (code) => resolve(code));
+  });
+}
+
+async function runInitdb(bins: Binaries, clusterDir: string, logFile: string, logFd: number, superPassword: string): Promise<void> {
+  // The password goes to initdb through a file, never the command line, where other users of
+  // this computer can read it with `ps`. The file sits in a fresh owner-only folder.
+  const pwDir = mkdtempSync(join(tmpdir(), 'openldr-initdb-'));
+  try {
+    const pwFile = join(pwDir, 'pw');
+    writeFileSync(pwFile, `${superPassword}\n`, { mode: 0o600 });
+    const code = await runToExit(
+      bins.initdb,
+      [
+        `--pgdata=${clusterDir}`,
+        '--encoding=UTF8',
+        '--locale=C',
+        // Password logins for every connection type. initdb's default is `trust`.
+        '--auth=scram-sha-256',
+        `--username=${SUPERUSER}`,
+        `--pwfile=${pwFile}`,
+      ],
+      logFd,
+    );
+    if (code !== 0) throw new Error(`initdb failed with exit code ${code}. See ${logFile}.`);
+  } finally {
+    rmSync(pwDir, { recursive: true, force: true });
+  }
+}
+
+const ident = (name: string) => `"${name.replace(/"/g, '""')}"`;
+
+/** Creates the ordinary role and both databases when they are missing. Safe to repeat. */
+async function prepareDatabases(settings: PostgresSettings): Promise<void> {
+  const client = superClient(settings);
+  await client.connect();
+  try {
+    // Postgres logs the text of a failed statement by default. The role statement carries the
+    // password, so this session logs no statement text at all.
+    await client.query('set log_min_error_statement = panic');
+    await client.query("set log_statement = 'none'");
+    await client.query('set log_min_duration_statement = -1');
+
+    const role = await client.query('select 1 from pg_roles where rolname = $1', [APP_ROLE]);
+    if (role.rowCount === 0) {
+      await client.query(
+        `create role ${ident(APP_ROLE)} with login nosuperuser nocreatedb nocreaterole noreplication nobypassrls ` +
+          `password ${client.escapeLiteral(settings.appPassword)}`,
+      );
+    }
+    for (const db of [INTERNAL_DB, TARGET_DB]) {
+      const found = await client.query('select 1 from pg_database where datname = $1', [db]);
+      if (found.rowCount === 0) await client.query(`create database ${ident(db)} owner ${ident(APP_ROLE)}`);
+      await client.query(`revoke connect on database ${ident(db)} from public`);
+    }
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+/** The log text Postgres wrote since `fromByte`. */
+function logSince(logFile: string, fromByte: number): string {
+  try {
+    return readFileSync(logFile).subarray(fromByte).toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+function summarise(logText: string): string {
+  const lines = logText.split(/\r?\n/).filter((l) => /\b(FATAL|PANIC|ERROR):/.test(l));
+  return lines.slice(-3).join(' | ');
+}
+
+export async function startPostgres(opts: {
+  clusterDir: string;
+  logFile: string;
+  settings: PostgresSettings;
+}): Promise<RunningPostgres> {
+  const { clusterDir, logFile, settings } = opts;
+  const { port } = settings;
+
+  // This check leaves a gap before Postgres binds. Postgres's own failure to bind is turned
+  // into the same message below.
+  if (!(await portIsFree(port))) throw new Error(portTakenMessage(port));
+
+  const bins = await loadBinaries();
+  mkdirSync(dirname(logFile), { recursive: true, mode: 0o700 });
+  const logFd = openSync(logFile, 'a', 0o600);
+  let child: ChildProcess;
+  let logStart: number;
+  let exited = false;
+  let exitCode: number | null = null;
+  let exit!: Promise<void>;
+  try {
+    if (!existsSync(join(clusterDir, 'PG_VERSION'))) {
+      mkdirSync(clusterDir, { recursive: true, mode: 0o700 });
+      await runInitdb(bins, clusterDir, logFile, logFd, settings.superPassword);
+    }
+    logStart = fstatSync(logFd).size;
+    child = spawn(
+      bins.postgres,
+      [
+        '-D',
+        clusterDir,
+        '-p',
+        String(port),
+        '-c',
+        `listen_addresses=${HOST}`,
+        // No Unix socket: the only way in is 127.0.0.1 on the chosen port.
+        '-c',
+        'unix_socket_directories=',
+        '-c',
+        'timezone=UTC',
+        '-c',
+        'log_timezone=UTC',
+      ],
+      {
+        stdio: ['ignore', logFd, logFd],
+        env: childEnv(),
+        // Its own session on Linux and macOS, so Ctrl+C in the terminal reaches the launcher
+        // only. The launcher then stops the server first and Postgres last. macOS unproven.
+        detached: !IS_WINDOWS,
+        windowsHide: true,
+      },
+    );
+    const started = child;
+    exit = new Promise<void>((resolve) => {
+      started.once('exit', (code) => {
+        exited = true;
+        exitCode = code;
+        resolve();
+      });
+    });
+    await new Promise<void>((resolve, reject) => {
+      started.once('spawn', resolve);
+      started.once('error', reject);
+    });
+    started.on('error', () => {});
+  } catch (err) {
+    throw new Error(scrub(`Postgres could not start: ${errorMessage(err)}`, settings));
+  } finally {
+    closeSync(logFd);
+  }
+
+  const pid = child.pid!;
+
+  const sendFastShutdown = () => {
+    if (exited) return;
+    if (IS_WINDOWS) {
+      // pg_ctl kill sends Postgres's own interrupt to the process ID from this child's handle.
+      // Unproven: only Linux is tested.
+      spawn(bins.pg_ctl, ['kill', 'INT', String(pid)], { stdio: 'ignore', windowsHide: true, env: childEnv() }).on(
+        'error',
+        () => {},
+      );
+      return;
+    }
+    // SIGINT is Postgres's fast shutdown. Linux tested; macOS unproven.
+    child.kill('SIGINT');
+  };
+  const stop = async () => {
+    sendFastShutdown();
+    await exit;
+  };
+  const stopSync = () => sendFastShutdown();
+
+  try {
+    const deadline = Date.now() + START_TIMEOUT_MS;
+    for (;;) {
+      if (exited) {
+        const log = logSince(logFile, logStart);
+        if (isBindFailure(log)) throw new Error(portTakenMessage(port));
+        const why = summarise(log);
+        throw new Error(`Postgres stopped during start with exit code ${exitCode}.${why ? ` ${why}.` : ''} See ${logFile}.`);
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(`Postgres did not accept connections within ${START_TIMEOUT_MS / 1000} seconds. See ${logFile}.`);
+      }
+      const client = superClient(settings);
+      let failure: unknown;
+      try {
+        await client.connect();
+        const res = await client.query<{ data_directory: string }>('show data_directory');
+        if (!samePath(res.rows[0]?.data_directory ?? '', clusterDir)) {
+          throw new Error(`A different Postgres answered on port ${port}.`);
+        }
+        break;
+      } catch (err) {
+        failure = err;
+      } finally {
+        await client.end().catch(() => {});
+      }
+      const code = errorCode(failure);
+      const retry = code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === '57P03';
+      if (!retry) {
+        // Give a Postgres that failed to bind a moment to exit, so the port message wins.
+        await Promise.race([exit, sleep(1000)]);
+        if (!exited) throw failure;
+        continue;
+      }
+      await sleep(100);
+    }
+    await prepareDatabases(settings);
+  } catch (err) {
+    await stop().catch(() => {});
+    throw new Error(scrub(errorMessage(err), settings));
+  }
+
+  return { pid, ...postgresUrls(settings), stop, stopSync };
+}
