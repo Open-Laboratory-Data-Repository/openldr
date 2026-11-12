@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "2989b730",
+          "type": "fix",
+          "scope": "docs",
+          "title": "Preserve screenshot focus when expanding images"
+        },
+        {
           "hash": "342fc9f7",
           "type": "fix",
           "scope": "studio",

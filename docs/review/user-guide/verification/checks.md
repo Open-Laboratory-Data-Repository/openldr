@@ -77,3 +77,12 @@ The app retained the focus effect after using Zoom in.
 Both expanded views fit a 375 by 812 viewport without page overflow.
 See focused-lightbox.json and the matching-expanded screenshots.
 Original full captures remain unchanged on disk.
+
+## Merged main
+
+The merge in 13511e2b preserved the newer main changes without conflicts.
+On the merged code, `pnpm --filter @openldr/studio test src/docs` reported 92 tests passed.
+`pnpm --filter @openldr/studio typecheck` exited 0.
+`pnpm --filter @openldr/studio build` reported built in 10.71s and exited 0.
+`pnpm make:changelog` reported 3074 entries across 88 days.
+These checks cover documentation behavior and compilation. They do not retest unrelated application features.

@@ -110,4 +110,4 @@ The operator authorized merging and pushing this review on 2026-11-12. No deploy
 
 See verification/checks.md for commands, outputs, and limits.
 The browser checked all three guide languages and all three CLI platform choices.
-This review is being merged to main at the operator's request. Regenerate the release changelog after merging. No deployment was requested.
+This review was merged to main at the operator's request in 13511e2b. The release changelog was regenerated after merging. No deployment was requested.
