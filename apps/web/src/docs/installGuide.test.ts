@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INSTALL_COMMANDS, installMarkdown, installScene } from './installGuide';
 import { docPage } from './content';
+import { hasWebFocus } from './WebFocusedScreenshot';
 
 describe('Install guide', () => {
   for (const locale of ['en', 'fr', 'pt'] as const) {
@@ -15,13 +16,16 @@ describe('Install guide', () => {
         expect(markdown).toContain(INSTALL_COMMANDS[platform].run);
         if (platform === 'windows') expect(markdown).not.toContain('~/Downloads/openldr_ce');
         const steps = markdown.split(/(?=^#{2,3} )/m).filter(section => /^### \d+\./.test(section));
-        expect(steps.length).toBe(28);
-        expect(markdown).not.toContain('/docs-images/install/sign-in.png');
-        expect(markdown).not.toContain('/docs-images/install/password.png');
+        expect(steps.length).toBe(34);
+        const signIn = markdown.split(/^## /m).find(section => section.includes('/docs-images/operator/install-login-open.png'))!;
+        expect(signIn.match(/^### /gm)).toHaveLength(6);
+        expect(signIn).toContain('labadmin');
+        expect(signIn).toContain('App sign-in');
+        expect(signIn).toContain('Submit');
         for (const step of steps) {
           expect(step).toMatch(/!\[[^\]]+\]\(/);
-          const image = step.match(/\]\((guide:install-[a-z-]+)\)/)?.[1];
-          expect(installScene(image ?? '')).not.toBeNull();
+          const image = step.match(/!\[[^\]]*\]\(([^)]+)\)/)?.[1] ?? '';
+          expect(installScene(image) !== null || hasWebFocus(image)).toBe(true);
         }
         for (const variant of ['remote', 'mssql-demo', 'mssql-existing', 'mysql-demo', 'mysql-existing'] as const) {
           expect(markdown).toContain(INSTALL_COMMANDS[platform][variant]);

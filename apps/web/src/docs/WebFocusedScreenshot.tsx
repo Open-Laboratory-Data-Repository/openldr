@@ -2,9 +2,10 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Lightbox } from '@/components/Lightbox';
+import { useWebsiteTheme } from '@/components/useWebsiteTheme';
 import focus from './web-guide-focus.json';
 interface Rect { x: number; y: number; width: number; height: number }
-interface Focus { crop: Rect; targets: Rect[]; step?: number; source?: { width: number; height: number }; markerAfter?: boolean; markerPlacement?: 'after' | 'before' | 'inside' | null; markerPlacements?: Array<'after' | 'before' | 'inside'> }
+interface Focus { crop: Rect; targets: Rect[]; step?: number; source?: { width: number; height: number }; image?: string; lightImage?: string; markerAfter?: boolean; markerPlacement?: 'after' | 'before' | 'inside' | null; markerPlacements?: Array<'after' | 'before' | 'inside'> }
 
 
 const FOCUS = focus as Record<string, Focus>;
@@ -45,14 +46,17 @@ function FocusedScreenshotFrame({ src, url, alt }: { src: string; url: string; a
 }
 
 export function WebFocusedScreenshot({ src, alt }: { src: string; alt: string }) {
+  const theme = useWebsiteTheme();
+  const entry = FOCUS[src.split('/').pop()!];
+  const url = (theme === 'light' ? entry.lightImage : undefined) ?? entry.image ?? src;
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const close = () => { setOpen(false); trigger.current?.focus(); };
   return <span className="web-focused-picture my-6 block">
     <Button ref={trigger} variant="ghost" className="block h-auto w-full overflow-hidden rounded-md border border-border p-0" aria-label={alt} onClick={() => setOpen(true)}>
-      <FocusedScreenshotFrame src={src} url={src} alt={alt} />
+      <FocusedScreenshotFrame src={src} url={url} alt={alt} />
     </Button>
     <span className="mt-1 block text-xs text-muted-foreground">{alt}</span>
-    {open ? createPortal(<Lightbox label={alt} itemNoun="image" onClose={close}><span className="mx-auto block max-w-full" style={{width:'min(1100px, calc(100vw - 4rem), calc((100dvh - 10rem) * 1.6))'}}><FocusedScreenshotFrame src={src} url={src} alt={alt}/></span></Lightbox>, document.body) : null}
+    {open ? createPortal(<Lightbox label={alt} itemNoun="image" onClose={close}><span className="mx-auto block max-w-full" style={{width:'min(1100px, calc(100vw - 4rem), calc((100dvh - 10rem) * 1.6))'}}><FocusedScreenshotFrame src={src} url={url} alt={alt}/></span></Lightbox>, document.body) : null}
   </span>;
 }

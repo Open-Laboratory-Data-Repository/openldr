@@ -18,7 +18,7 @@ Sem administração do fornecedor, gira contas, palavras-passe e sessões no for
 
 ## Configurar um fornecedor genérico
 
-Use uma instalação nova sem identidades ligadas a outro emissor. Keycloak continua o padrão. OIDC genérico exige descoberta e tokens JWT assinados; tokens opacos não são suportados. Não certifica fornecedores externos. Capturas do primeiro início de sessão continuam adiadas.
+Use uma instalação nova sem identidades ligadas a outro emissor. Keycloak continua o padrão. OIDC genérico exige descoberta e tokens JWT assinados; tokens opacos não são suportados. Não certifica fornecedores externos. As capturas do primeiro início de sessão Keycloak estão em [Instalar](/docs/install).
 
 ### 1. Registar o cliente navegador no fornecedor
 

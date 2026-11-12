@@ -1,6 +1,6 @@
 # Installation
 
-Installez OpenLDR sur l'hôte choisi. Le parcours de connexion reste différé jusqu'à la capture d'une installation neuve. Ce parcours utilise la base analytique PostgreSQL fournie et une adresse locale. Les données d'exemple ne sont pas nécessaires.
+Installez OpenLDR sur l'hôte choisi. Ce parcours utilise la base analytique PostgreSQL fournie et une adresse locale. Les données d'exemple ne sont pas nécessaires.
 
 <!-- install-platform -->
 
@@ -98,6 +98,50 @@ Le fichier caché `.env` contient des paramètres et mots de passe générés. C
 ![Illustration du gestionnaire de fichiers avec le dossier d'exemple et les fichiers générés.](guide:install-folder)
 
 **Résultat attendu :** Les services sont prêts, vous avez les identifiants Studio et vous retrouvez les fichiers d'installation.
+
+## Se connecter et ouvrir les guides
+
+Utilisez les identifiants **App sign-in** affichés par votre installateur. Cette tâche remplace le mot de passe temporaire du nouveau compte `labadmin`, puis ouvre les guides intégrés. Les données de démonstration sont facultatives. Si vous avez déjà changé ce mot de passe, utilisez votre mot de passe actuel et ignorez les étapes de changement.
+
+### 1. Ouvrir Studio à l'adresse de votre installation
+
+Ouvrez l'adresse affichée après **OpenLDR is ready**. Sur un autre ordinateur ou téléphone, utilisez le nom d'hôte configuré à l'installation. `localhost` désigne toujours l'appareil qui ouvre le navigateur. Si le site public apparaît, sélectionnez **Studio**.
+
+La configuration locale utilise un certificat auto-signé. Vérifiez l'adresse de votre propre installation avant de passer un avertissement de certificat. Les boutons varient selon le navigateur ; l'image ci-dessous montre la page de connexion après cette vérification.
+
+![La page de connexion OpenLDR après ouverture de Studio.](/docs-images/operator/install-login-open.png)
+
+### 2. Saisir les identifiants de l'application
+
+Saisissez `labadmin` dans **Username or email**. Dans **Password**, saisissez le mot de passe généré sur la ligne **App sign-in** de l'installateur. Le mot de passe administrateur Keycloak sert à gérer l'authentification. La capture utilise un compte jetable ; utilisez votre propre mot de passe généré.
+
+![Saisissez labadmin et votre mot de passe App sign-in dans ces deux champs.](/docs-images/operator/install-login-credentials.png)
+
+### 3. Sélectionner Sign In
+
+Sélectionnez **Sign In** sous le champ du mot de passe. Un nouveau compte `labadmin` ouvre **Update password**, car son premier mot de passe est temporaire.
+
+![Sign In se trouve sous le champ du mot de passe.](/docs-images/operator/install-login-submit.png)
+
+### 4. Choisir et confirmer un nouveau mot de passe
+
+Saisissez un nouveau mot de passe privé dans **New Password**. Répétez-le dans **Confirm password**. Respectez les exigences affichées par votre installation. La capture contient un exemple masqué, pas un mot de passe à réutiliser.
+
+![Saisissez le même nouveau mot de passe dans les deux champs.](/docs-images/operator/install-password-fields.png)
+
+### 5. Valider le changement de mot de passe
+
+Sélectionnez **Submit** sous les champs. Si une erreur apparaît, corrigez les champs et recommencez. Après un changement réussi, la connexion revient à Studio. Utilisez votre nouveau mot de passe aux connexions suivantes.
+
+![Submit enregistre le nouveau mot de passe et poursuit la connexion.](/docs-images/operator/install-password-submit.png)
+
+### 6. Ouvrir la documentation dans Studio
+
+Une fois Studio ouvert, sélectionnez **Docs** dans le menu principal à gauche. Sur un téléphone, ouvrez d'abord le menu principal. Lisez **Start here**, puis le guide de votre prochaine tâche. Ces captures montrent les libellés anglais.
+
+![Docs se trouve dans le menu principal. Start here apparaît dans la documentation.](/docs-images/operator/install-open-docs.png)
+
+**Résultat attendu :** Le mot de passe temporaire est remplacé, Studio est ouvert et les guides intégrés sont accessibles. Sans données de démonstration, certaines pages peuvent être vides. Cela n'empêche pas d'ouvrir la documentation.
 
 ## Vérifier une installation encore en cours de démarrage
 
@@ -236,7 +280,7 @@ Remplacez le nom d'exemple par celui du certificat. Le poste doit faire confianc
 
 ![Terminal illustré: Vérifier le certificat depuis le poste client.](guide:install-certificate-check)
 
-**Résultat attendu :** L'adresse configurée répond en HTTPS avec votre certificat. La connexion Studio reste différée jusqu'au parcours sur installation neuve.
+**Résultat attendu :** L'adresse configurée répond en HTTPS avec votre certificat. Continuez avec **Se connecter et ouvrir les guides** ci-dessus.
 
 ## Choisir une base analytique
 

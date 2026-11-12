@@ -18,7 +18,7 @@ Without provider administration, manage accounts, passwords and provider session
 
 ## Configure a generic provider
 
-Use a fresh deployment with no identities bound to another issuer. Keycloak remains the default. Generic OIDC needs discovery and signed JWT access tokens; opaque tokens are unsupported. These steps do not certify any external provider. First sign-in screenshots remain deferred to the fresh install.
+Use a fresh deployment with no identities bound to another issuer. Keycloak remains the default. Generic OIDC needs discovery and signed JWT access tokens; opaque tokens are unsupported. These steps do not certify any external provider. The default Keycloak first-sign-in screenshots are in [Install](/docs/install).
 
 ### 1. Register the browser client at your provider
 

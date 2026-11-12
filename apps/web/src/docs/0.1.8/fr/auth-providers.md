@@ -18,7 +18,7 @@ Sans administration du fournisseur, gérez les comptes, mots de passe et session
 
 ## Configurer un fournisseur générique
 
-Utilisez une installation neuve sans identités liées à un autre émetteur. Keycloak reste le défaut. OIDC générique exige découverte et jetons JWT signés ; les jetons opaques sont refusés. Ce guide ne certifie aucun fournisseur externe. Les captures de première connexion restent différées.
+Utilisez une installation neuve sans identités liées à un autre émetteur. Keycloak reste le défaut. OIDC générique exige découverte et jetons JWT signés ; les jetons opaques sont refusés. Ce guide ne certifie aucun fournisseur externe. Les captures de première connexion Keycloak sont dans [Installation](/docs/install).
 
 ### 1. Enregistrer le client navigateur chez le fournisseur
 

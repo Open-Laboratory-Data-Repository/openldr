@@ -1,6 +1,6 @@
 # Install
 
-Install OpenLDR on your chosen host. The sign-in walkthrough is deferred until we capture a fresh installation. This walkthrough uses the bundled PostgreSQL analytics database and a local address. You do not need to load sample data.
+Install OpenLDR on your chosen host. This walkthrough uses the bundled PostgreSQL analytics database and a local address. You do not need to load sample data.
 
 <!-- install-platform -->
 
@@ -98,6 +98,50 @@ The hidden `.env` file contains generated settings and passwords. Keep it with t
 ![Illustrated file browser showing the example installation folder and generated files.](guide:install-folder)
 
 **Expected result:** Services are ready, you have the Studio credentials, and you can find the installation files.
+
+## Sign in and open the user guides
+
+Use the **App sign-in** credentials printed by your installer. This task changes the temporary password for your new `labadmin` account, then opens the in-app guides. You do not need sample data. If you already changed this account's password, use your current password and skip the password-change steps.
+
+### 1. Open Studio at your installation address
+
+Open the address printed after **OpenLDR is ready**. For another computer or phone, use the hostname configured during installation. `localhost` always means the device opening the browser. If the landing page opens first, select **Studio**.
+
+The default local setup uses a self-signed certificate. Check that you opened your own installation before proceeding past a browser certificate warning. Browser warning controls differ; the picture below shows the sign-in page after that check.
+
+![The OpenLDR sign-in page after opening Studio.](/docs-images/operator/install-login-open.png)
+
+### 2. Enter the app username and temporary password
+
+Enter `labadmin` in **Username or email**. In **Password**, enter the generated password from your installer's **App sign-in** line. The separate Keycloak admin password is for managing authentication. The screenshot uses a disposable example account; copy your own generated password, not the masked example.
+
+![Enter labadmin and your generated App sign-in password in these two fields.](/docs-images/operator/install-login-credentials.png)
+
+### 3. Select Sign In
+
+Select **Sign In** below the password field. A newly installed `labadmin` account opens **Update password** because its first password is temporary.
+
+![Sign In is below the password field.](/docs-images/operator/install-login-submit.png)
+
+### 4. Choose and confirm a new password
+
+Enter a new private password in **New Password**. Enter the same value in **Confirm password**. Follow any password requirements shown by your installation. The screenshot contains a masked example, not a password to reuse.
+
+![Enter the same new password in both fields on Update password.](/docs-images/operator/install-password-fields.png)
+
+### 5. Submit the password change
+
+Select **Submit** below the password fields. If the page shows an error, correct the fields and submit again. After a successful change, the sign-in flow returns to Studio. Use your new password for later sign-ins.
+
+![Submit saves the new password and continues sign-in.](/docs-images/operator/install-password-submit.png)
+
+### 6. Open Docs in Studio
+
+Once Studio opens, select **Docs** in the main menu on the left. On a phone, open the main menu first. Read **Start here**, then follow the guide for your next task.
+
+![Docs is in Studio's main menu. Start here opens in the documentation area.](/docs-images/operator/install-open-docs.png)
+
+**Expected result:** Your temporary password has been replaced, Studio is open, and you can read the in-app guides. An installation without sample records may have empty data pages. That does not prevent you from opening Docs.
 
 ## Check an installation that is still starting
 
@@ -236,7 +280,7 @@ Replace the example hostname with the one on your certificate. Use this from a c
 
 ![Illustrated terminal: Check the certificate from the client computer.](guide:install-certificate-check)
 
-**Expected result:** The configured address responds over HTTPS with your certificate. Studio sign-in remains deferred until the fresh-install walkthrough.
+**Expected result:** The configured address responds over HTTPS with your certificate. Continue with **Sign in and open the user guides** above.
 
 ## Choose an analytics database
 

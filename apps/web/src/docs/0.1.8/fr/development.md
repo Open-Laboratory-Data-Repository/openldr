@@ -118,7 +118,7 @@ L'API utilise normalement `http://localhost:3000`. Le serveur affiche un avertis
 
 ### 2. Démarrer Studio
 
-Ouvrez `http://localhost:5173/studio/`. Studio transmet les requêtes `/api` au port 3000. Le mode de développement ouvre l'application sans connexion et affiche un bandeau. Les captures de première connexion attendent une installation neuve.
+Ouvrez `http://localhost:5173/studio/`. Studio transmet les requêtes `/api` au port 3000. Le mode de développement ouvre l'application sans connexion et affiche un bandeau. Pour une connexion normale, voir le [guide illustré d'installation](/docs/install).
 
 ```sh
 {{operator:dev-studio}}

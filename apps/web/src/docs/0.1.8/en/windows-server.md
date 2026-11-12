@@ -2,7 +2,7 @@
 
 Prepare a Linux environment on Windows Server, then install OpenLDR inside it. OpenLDR's packaged images target Linux AMD64. Docker Desktop is not supported on Windows Server.
 
-Choose **one** path below. If you already have an Ubuntu Linux VM with working Docker, skip to [Install OpenLDR inside Linux](#install-openldr-inside-linux). Sample data is optional. Studio sign-in will be covered after the fresh-install walkthrough is captured.
+Choose **one** path below. If you already have an Ubuntu Linux VM with working Docker, skip to [Install OpenLDR inside Linux](#install-openldr-inside-linux). Sample data is optional. Follow the illustrated sign-in task in [Install](/docs/install).
 
 | Your host | Path to use |
 | --- | --- |
@@ -301,7 +301,7 @@ Replace the example hostname, then run:
 
 `--seedless` leaves out starter dashboards and demo data. Omit that option if you want them on this new installation. Your own data does not depend on sample data.
 
-Keep the generated credentials private. A public domain with a trusted certificate needs the separate certificate task in [Install](/docs/install), including inbound port 80. Sign-in steps remain deferred until the fresh-install capture.
+Keep the generated credentials private. A public domain with a trusted certificate needs the separate certificate task in [Install](/docs/install), including inbound port 80. Continue with the illustrated [sign-in task](/docs/install).
 
 ![Command illustration for installing OpenLDR in the example Linux folder with a chosen hostname.](guide:server-install-run)
 

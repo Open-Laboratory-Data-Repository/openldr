@@ -31,7 +31,7 @@ O endereço ilustrado é o predefinido numa instalação local. Para aceder a pa
 
 ## Primeiro início de sessão
 
-O percurso ilustrado do primeiro início de sessão fica adiado até à captura numa instalação nova. Conserve as credenciais **App sign-in** geradas para essa tarefa. Consulte [Instalar](/docs/install) para o endereço configurado e os certificados.
+Use as credenciais **App sign-in** geradas. Siga a tarefa ilustrada [Iniciar sessão e abrir os guias](/docs/install). Mostra a palavra-passe temporária, a alteração e o menu de documentação.
 
 ## Continuar na aplicação
 

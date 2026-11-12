@@ -118,7 +118,7 @@ A API usa normalmente `http://localhost:3000`. O servidor mostra um aviso quando
 
 ### 2. Iniciar o Studio
 
-Abra `http://localhost:5173/studio/`. O Studio encaminha os pedidos `/api` para a porta 3000. O modo de desenvolvimento abre a aplicação sem início de sessão e mostra um aviso. As capturas do primeiro início de sessão aguardam uma instalação nova.
+Abra `http://localhost:5173/studio/`. O Studio encaminha os pedidos `/api` para a porta 3000. O modo de desenvolvimento abre a aplicação sem início de sessão e mostra um aviso. Para o início de sessão normal, veja o [guia ilustrado de instalação](/docs/install).
 
 ```sh
 {{operator:dev-studio}}

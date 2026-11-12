@@ -31,7 +31,7 @@ The illustrated address is the default for a local installation. If you need acc
 
 ## First sign-in
 
-The illustrated first-sign-in walkthrough is deferred until it can be captured on a fresh installation. Keep the generated **App sign-in** credentials for that task. See [Install](/docs/install) for the configured address and certificate setup.
+Use your generated **App sign-in** credentials. Follow the illustrated [Sign in and open the user guides](/docs/install) task in Install. It shows the temporary password, password change and Docs menu.
 
 ## Continue in the app
 

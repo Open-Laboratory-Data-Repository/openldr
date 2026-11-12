@@ -2,7 +2,7 @@
 
 Préparez un environnement Linux sur Windows Server, puis installez OpenLDR à l'intérieur. Les images fournies ciblent Linux AMD64. Docker Desktop ne prend pas en charge Windows Server.
 
-Choisissez un seul parcours. Avec une VM Ubuntu et Docker déjà prêts, passez à **Installer OpenLDR dans Linux**. Les données d'exemple sont facultatives. La connexion à Studio reste différée jusqu'à la capture d'une installation neuve.
+Choisissez un seul parcours. Avec une VM Ubuntu et Docker déjà prêts, passez à **Installer OpenLDR dans Linux**. Les données d'exemple sont facultatives. Consultez le [parcours de connexion illustré](/docs/install).
 
 | Votre serveur | Parcours |
 | --- | --- |
@@ -269,7 +269,7 @@ Le fichier est enregistré dans `~/Downloads/openldr-install.sh`, dans Ubuntu. N
 {{server:install-run}}
 ```
 
-Remplacez le nom d'exemple. `--seedless` exclut tableaux de bord et données de démonstration. Omettez cette option si vous les souhaitez sur cette installation neuve. Vos données ne dépendent pas des exemples. Gardez les identifiants privés. Un certificat public nécessite la tâche séparée dans [Installation](/docs/install), avec le port 80 accessible. La connexion reste différée jusqu'à la capture d'une installation neuve.
+Remplacez le nom d'exemple. `--seedless` exclut tableaux de bord et données de démonstration. Omettez cette option si vous les souhaitez sur cette installation neuve. Vos données ne dépendent pas des exemples. Gardez les identifiants privés. Un certificat public nécessite la tâche séparée dans [Installation](/docs/install), avec le port 80 accessible. Consultez le [parcours de connexion illustré](/docs/install).
 
 ![Illustration de commande: Installer avec l'adresse accessible aux utilisateurs.](guide:server-install-run)
 

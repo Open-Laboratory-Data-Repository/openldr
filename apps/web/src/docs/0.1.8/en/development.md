@@ -118,7 +118,7 @@ The default API address is `http://localhost:3000`. The server prints a warning 
 
 ### 2. Start Studio
 
-Open `http://localhost:5173/studio/`. Studio forwards `/api` requests to port 3000. With development bypass enabled, it opens without sign-in and shows a warning banner. First sign-in screenshots remain deferred to a fresh installation.
+Open `http://localhost:5173/studio/`. Studio forwards `/api` requests to port 3000. With development bypass enabled, it opens without sign-in and shows a warning banner. For normal sign-in, see the illustrated [Install guide](/docs/install).
 
 ```sh
 {{operator:dev-studio}}

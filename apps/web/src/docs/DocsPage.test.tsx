@@ -15,6 +15,25 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('keeps the restored sign-in crop and theme identical when enlarged', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    renderDocs('/docs/install');
+    const trigger = screen.getByRole('button', { name: 'Enter labadmin and your generated App sign-in password in these two fields.' });
+    expect(within(trigger).getByRole('img')).toHaveAttribute('src', '/docs-images/install/credentials.png');
+    fireEvent.click(trigger);
+    const enlarged = screen.getByRole('dialog');
+    expect(within(enlarged).getByRole('img')).toHaveAttribute('src', '/docs-images/install/credentials.png');
+    const clips = (element: HTMLElement) => [...element.querySelectorAll('img')].map(image => image.style.clipPath);
+    expect(clips(enlarged)).toEqual(clips(trigger));
+    document.documentElement.dataset.theme = 'light';
+    await waitFor(() => {
+      expect(within(trigger).getByRole('img')).toHaveAttribute('src', '/docs-images/install/credentials-light.png');
+      expect(within(enlarged).getByRole('img')).toHaveAttribute('src', '/docs-images/install/credentials-light.png');
+    });
+    fireEvent.keyDown(document, { key: 'Escape' });
+    delete document.documentElement.dataset.theme;
+  });
+
   it('follows the section reached by page scrolling', async () => {
     renderDocs('/docs/requirements');
     const headings = [...document.querySelectorAll<HTMLElement>('.doc-markdown h2')];

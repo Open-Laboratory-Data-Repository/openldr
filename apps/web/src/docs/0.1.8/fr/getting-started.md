@@ -31,7 +31,7 @@ L'adresse illustrée est celle d'une installation locale par défaut. Pour un ac
 
 ## Première connexion
 
-Le parcours illustré de première connexion attend une capture sur une installation neuve. Conservez les identifiants **App sign-in** générés pour cette étape. Consultez [Installation](/docs/install) pour l'adresse configurée et les certificats.
+Utilisez vos identifiants **App sign-in** générés. Suivez la tâche illustrée [Se connecter et ouvrir les guides](/docs/install). Elle montre le mot de passe temporaire, son changement et le menu de documentation.
 
 ## Continuer dans l'application
 

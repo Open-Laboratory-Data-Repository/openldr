@@ -1,6 +1,6 @@
 # Instalar
 
-Instale o OpenLDR no anfitrião escolhido. O percurso de início de sessão fica adiado até à captura de uma instalação nova. Este percurso usa a base analítica PostgreSQL incluída e um endereço local. Não precisa de carregar dados de exemplo.
+Instale o OpenLDR no anfitrião escolhido. Este percurso usa a base analítica PostgreSQL incluída e um endereço local. Não precisa de carregar dados de exemplo.
 
 <!-- install-platform -->
 
@@ -98,6 +98,50 @@ O ficheiro oculto `.env` contém definições e palavras-passe geradas. Guarde-o
 ![Ilustração do gestor de ficheiros com a pasta de exemplo e os ficheiros gerados.](guide:install-folder)
 
 **Resultado esperado:** Os serviços estão prontos, tem as credenciais do Studio e encontra os ficheiros da instalação.
+
+## Iniciar sessão e abrir os guias
+
+Use as credenciais **App sign-in** apresentadas pelo instalador. Esta tarefa substitui a palavra-passe temporária da conta nova `labadmin` e abre os guias da aplicação. Não precisa de dados de exemplo. Se já alterou essa palavra-passe, use a atual e ignore os passos de alteração.
+
+### 1. Abrir o Studio no endereço da instalação
+
+Abra o endereço apresentado após **OpenLDR is ready**. Noutro computador ou telefone, use o nome de anfitrião configurado na instalação. `localhost` refere-se sempre ao dispositivo que abre o navegador. Se abrir o site público, selecione **Studio**.
+
+A configuração local usa um certificado autoassinado. Confirme o endereço da sua instalação antes de ultrapassar um aviso de certificado. Os controlos variam entre navegadores; a imagem abaixo mostra a página de início de sessão após essa verificação.
+
+![A página de início de sessão OpenLDR após abrir o Studio.](/docs-images/operator/install-login-open.png)
+
+### 2. Introduzir as credenciais da aplicação
+
+Escreva `labadmin` em **Username or email**. Em **Password**, introduza a palavra-passe gerada na linha **App sign-in** do instalador. A palavra-passe de administrador Keycloak serve para gerir a autenticação. A captura usa uma conta descartável; use a sua própria palavra-passe gerada.
+
+![Introduza labadmin e a sua palavra-passe App sign-in nestes dois campos.](/docs-images/operator/install-login-credentials.png)
+
+### 3. Selecionar Sign In
+
+Selecione **Sign In** abaixo do campo da palavra-passe. Uma conta `labadmin` nova abre **Update password**, pois a primeira palavra-passe é temporária.
+
+![Sign In fica abaixo do campo da palavra-passe.](/docs-images/operator/install-login-submit.png)
+
+### 4. Escolher e confirmar uma palavra-passe nova
+
+Introduza uma palavra-passe privada nova em **New Password**. Repita-a em **Confirm password**. Siga os requisitos apresentados pela instalação. A captura contém um exemplo oculto, não uma palavra-passe para reutilizar.
+
+![Introduza a mesma palavra-passe nova nos dois campos.](/docs-images/operator/install-password-fields.png)
+
+### 5. Submeter a alteração da palavra-passe
+
+Selecione **Submit** abaixo dos campos. Se surgir um erro, corrija os campos e tente novamente. Após uma alteração bem-sucedida, o início de sessão regressa ao Studio. Use a palavra-passe nova nos próximos inícios de sessão.
+
+![Submit guarda a palavra-passe nova e continua o início de sessão.](/docs-images/operator/install-password-submit.png)
+
+### 6. Abrir a documentação no Studio
+
+Quando o Studio abrir, selecione **Docs** no menu principal à esquerda. Num telefone, abra primeiro o menu principal. Leia **Start here** e siga o guia da próxima tarefa. Estas capturas mostram os nomes em inglês.
+
+![Docs fica no menu principal. Start here aparece na documentação.](/docs-images/operator/install-open-docs.png)
+
+**Resultado esperado:** A palavra-passe temporária foi substituída, o Studio está aberto e os guias da aplicação estão acessíveis. Sem dados de exemplo, algumas páginas podem estar vazias. Isso não impede a abertura da documentação.
 
 ## Verificar uma instalação ainda a iniciar
 
@@ -236,7 +280,7 @@ Substitua o nome de exemplo pelo do certificado. O cliente deve confiar no emiss
 
 ![Terminal ilustrado: Verificar o certificado no computador cliente.](guide:install-certificate-check)
 
-**Resultado esperado:** O endereço configurado responde por HTTPS com o seu certificado. O início de sessão Studio fica adiado até ao percurso de instalação nova.
+**Resultado esperado:** O endereço configurado responde por HTTPS com o seu certificado. Continue em **Iniciar sessão e abrir os guias** acima.
 
 ## Escolher uma base analítica
 
