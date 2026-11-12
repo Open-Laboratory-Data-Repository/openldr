@@ -112,6 +112,44 @@ describe('LocalAuthStore', () => {
     expect(cred.failedCount).toBe(0);
   });
 
+  it('replacePassword writes and returns true when the expected hash matches', async () => {
+    const { id } = await store.createUser({ username: 'ada' });
+    await store.setPassword(id, 'h1', true);
+    const before = (await store.getCredential(id))!.passwordChangedAt;
+    expect(await store.replacePassword(id, 'h1', 'h2', false)).toBe(true);
+    const cred = (await store.getCredential(id))!;
+    expect(cred.passwordHash).toBe('h2');
+    expect(cred.mustChange).toBe(false);
+    expect(cred.passwordChangedAt.getTime()).toBeGreaterThanOrEqual(before.getTime());
+  });
+
+  it('replacePassword returns false and changes nothing when the expected hash differs', async () => {
+    const { id } = await store.createUser({ username: 'ada' });
+    await store.setPassword(id, 'admin-hash', true);
+    const before = (await store.getCredential(id))!;
+    expect(await store.replacePassword(id, 'old-hash', 'user-hash', false)).toBe(false);
+    expect(await store.getCredential(id)).toEqual(before);
+  });
+
+  it('replacePassword returns false for a user with no credential row and inserts nothing', async () => {
+    const { id } = await store.createUser({ username: 'ada' });
+    expect(await store.replacePassword(id, 'h1', 'h2', false)).toBe(false);
+    expect(await store.getCredential(id)).toBeNull();
+  });
+
+  it('replacePassword clears a lock', async () => {
+    const { id } = await store.createUser({ username: 'ada' });
+    await store.setPassword(id, 'h1', false);
+    const now = new Date('2026-01-01T00:00:00Z');
+    await store.recordFailure(id, now, 2, 300_000);
+    expect((await store.recordFailure(id, now, 2, 300_000)).lockedUntil).not.toBeNull();
+    await store.recordFailure(id, now, 2, 300_000);
+    expect(await store.replacePassword(id, 'h1', 'h2', false)).toBe(true);
+    const cred = (await store.getCredential(id))!;
+    expect(cred.lockedUntil).toBeNull();
+    expect(cred.failedCount).toBe(0);
+  });
+
   it('setNames then getNames round-trips', async () => {
     const { id } = await store.createUser({ username: 'ada' });
     await store.setPassword(id, 'h', false);

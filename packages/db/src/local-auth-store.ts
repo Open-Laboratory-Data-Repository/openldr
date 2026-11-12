@@ -101,6 +101,22 @@ export function createLocalAuthStore(db: Kysely<InternalSchema>): LocalAuthStore
         .execute();
     },
 
+    // One UPDATE, so a reset that lands between a caller's read and this write is never overwritten.
+    async replacePassword(userId, expectedPasswordHash, passwordHash, mustChange) {
+      const res = await db.updateTable('local_credentials')
+        .set({
+          password_hash: passwordHash,
+          must_change: mustChange,
+          failed_count: 0,
+          locked_until: null,
+          password_changed_at: sql`now()`,
+        })
+        .where('user_id', '=', userId)
+        .where('password_hash', '=', expectedPasswordHash)
+        .executeTakeFirst();
+      return Number(res.numUpdatedRows) > 0;
+    },
+
     async setNames(userId, firstName, lastName) {
       await db.updateTable('users')
         .set({ first_name: firstName, last_name: lastName, updated_at: new Date() })

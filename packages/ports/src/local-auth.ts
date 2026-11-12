@@ -15,6 +15,11 @@ export interface LocalAuthStore {
   getCredential(userId: string): Promise<LocalCredential | null>;
   /** Upsert. Clears failed_count and locked_until. Sets password_changed_at to now. */
   setPassword(userId: string, passwordHash: string, mustChange: boolean): Promise<void>;
+  /**
+   * Compare-and-set. Writes only when the stored hash still equals `expectedPasswordHash`, and
+   * then does what `setPassword` does. True when it wrote a row. Never inserts.
+   */
+  replacePassword(userId: string, expectedPasswordHash: string, passwordHash: string, mustChange: boolean): Promise<boolean>;
   /** Writes users.first_name and users.last_name. Works with or without a credential row. */
   setNames(userId: string, firstName: string | null, lastName: string | null): Promise<void>;
   /** Both null when the user does not exist. */

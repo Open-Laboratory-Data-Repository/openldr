@@ -138,9 +138,10 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
     return { accessToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS, mustChangePassword };
   }
 
+  /** `sessionId` is returned beside the grant so a caller can undo the session. */
   async function openSession(
     user: SignInUser, mustChangePassword: boolean, ip: string | null, userAgent: string | null, now: Date,
-  ): Promise<NewSession> {
+  ): Promise<{ opened: NewSession; sessionId: string }> {
     const secret = randomBytes(SECRET_BYTES).toString('base64url');
     const session = await store.createSession({
       userId: user.id,
@@ -150,7 +151,10 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       userAgent,
     });
     const g = await grant(user, session.id, mustChangePassword, now);
-    return { ...g, cookieValue: `${session.id}.${secret}`, cookieExpiresAt: session.expiresAt, userId: user.id };
+    return {
+      opened: { ...g, cookieValue: `${session.id}.${secret}`, cookieExpiresAt: session.expiresAt, userId: user.id },
+      sessionId: session.id,
+    };
   }
 
   /** The session the cookie names, when the secret matches. Liveness is not checked here. */
@@ -200,7 +204,14 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       if (!user) return { ok: false, reason: 'invalid', userId };
       if (!(await isAllowed(user))) return { ok: false, reason: 'disabled', userId };
       await store.clearFailures(userId);
-      return { ok: true, ...(await openSession(user, credential.mustChange, input.ip, input.userAgent, now)) };
+      const { opened, sessionId } = await openSession(user, credential.mustChange, input.ip, input.userAgent, now);
+      // A reset after the re-check above deletes sessions before this one existed. Reading
+      // again now means a reset either shows here or lands later and deletes this session.
+      if ((await store.getCredential(userId))?.passwordHash !== credential.passwordHash) {
+        await store.deleteSession(sessionId);
+        return { ok: false, reason: 'invalid', userId };
+      }
+      return { ok: true, ...opened };
     },
 
     async refresh(cookieValue) {
@@ -242,7 +253,9 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       if (passwordChanged) return 'wrong_current';
       const rule = checkPasswordRules(input.newPassword, user.username);
       if (rule !== 'ok') return rule;
-      await store.setPassword(input.userId, await hasher.hash(input.newPassword), false);
+      const newHash = await hasher.hash(input.newPassword);
+      // Compare-and-set against the hash that was verified. A reset during the new hash wins.
+      if (!(await store.replacePassword(input.userId, credential.passwordHash, newHash, false))) return 'wrong_current';
       await store.deleteSessionsForUser(input.userId, input.sessionId);
       return 'ok';
     },
@@ -276,7 +289,7 @@ export function createLocalSignIn(deps: LocalSignInDeps): LocalSignIn {
       await store.setPassword(id, passwordHash, false);
       const user = await users.get(id);
       if (!user) throw new Error('the first admin was created but cannot be read back');
-      return { ok: true, ...(await openSession(user, false, input.ip, input.userAgent, now)) };
+      return { ok: true, ...(await openSession(user, false, input.ip, input.userAgent, now)).opened };
     },
 
     async sessionIsLive(sessionId, userId) {

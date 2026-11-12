@@ -80,6 +80,16 @@ export function makeFakes(start: Date = new Date('2026-01-01T00:00:00Z')): {
       });
     },
 
+    // No await between the compare and the write, matching the real single UPDATE.
+    async replacePassword(userId, expectedPasswordHash, passwordHash, mustChange) {
+      const c = credentials.get(userId);
+      if (!c || c.passwordHash !== expectedPasswordHash) return false;
+      credentials.set(userId, {
+        userId, passwordHash, mustChange, failedCount: 0, lockedUntil: null, passwordChangedAt: clock.now(),
+      });
+      return true;
+    },
+
     async setNames(userId, firstName, lastName) {
       const row = userRows.get(userId);
       if (row) Object.assign(row, { firstName, lastName });

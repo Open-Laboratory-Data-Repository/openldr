@@ -262,17 +262,17 @@ describe('password and sessions', () => {
   });
 
   /**
-   * An adapter whose hasher stops on Ada's current password once `arm()` is called, until
-   * `release()`. `started` resolves when that hash begins.
+   * An adapter whose hasher stops on `gatedPassword` once `arm()` is called, until `release()`.
+   * `started` resolves when that hash begins.
    */
-  async function gatedAuth() {
+  async function gatedAuth(gatedPassword = GOOD) {
     let armed = false;
     let hashStarted!: () => void;
     const started = new Promise<void>((r) => { hashStarted = r; });
     let release!: () => void;
     const released = new Promise<void>((r) => { release = r; });
     const gatedScrypt: ScryptFn = async (password, salt, keylen, opts) => {
-      if (armed && password === GOOD) {
+      if (armed && password === gatedPassword) {
         hashStarted();
         await released;
       }
@@ -312,6 +312,38 @@ describe('password and sessions', () => {
     expect(await hasher.verify(NEW, credential.passwordHash)).toBe(true);
     expect(await hasher.verify('user chosen pw 1', credential.passwordHash)).toBe(false);
     expect(credential.mustChange).toBe(true);
+    expect(await store.deleteSessionsForUser(adaId)).toBe(0);
+  });
+
+  it('refuses a password change when an admin reset lands while the new password hashes', async () => {
+    const chosen = 'user chosen pw 1';
+    const gated = await gatedAuth(chosen);
+    const s = await login(gated.signIn);
+    const sessionId = s.cookieValue.split('.')[0]!;
+    gated.arm();
+    const pending = gated.signIn.changePassword({ userId: adaId, sessionId, currentPassword: GOOD, newPassword: chosen });
+    await gated.started;
+    await gated.auth.resetPassword(adaId, NEW, true);
+    gated.release();
+
+    expect(await pending).toBe('wrong_current');
+    const credential = (await store.getCredential(adaId))!;
+    expect(await hasher.verify(NEW, credential.passwordHash)).toBe(true);
+    expect(credential.mustChange).toBe(true);
+    expect(await store.deleteSessionsForUser(adaId)).toBe(0);
+  });
+
+  it('fails a sign-in when an admin reset lands as its session is created', async () => {
+    const createSession = store.createSession;
+    store.createSession = async (input) => {
+      store.createSession = createSession;
+      await auth.resetPassword(adaId, NEW, false);
+      return createSession(input);
+    };
+
+    const r = await signIn.login({ identifier: 'ada', password: GOOD, ip: null, userAgent: null });
+
+    expect(r).toMatchObject({ ok: false, reason: 'invalid', userId: adaId });
     expect(await store.deleteSessionsForUser(adaId)).toBe(0);
   });
 
