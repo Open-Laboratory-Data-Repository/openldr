@@ -1,0 +1,12 @@
+{
+  "source": {
+    "id": "form-sample-order",
+    "name": "Lab order"
+  },
+  "draft": {
+    "id": "form-b45f5ecd-6f68-4a95-bd47-453423f4440c",
+    "name": "Lab order copy",
+    "status": "draft"
+  },
+  "reason": "Fictional draft for View/Run inspection. No answers submitted."
+}

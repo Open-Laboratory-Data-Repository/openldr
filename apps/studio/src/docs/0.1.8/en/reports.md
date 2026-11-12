@@ -340,23 +340,23 @@ Confirm that Report Designer opened the intended linked design before editing it
 
 ![The linked template opens for an authorised manager.](reports-guide-edit-template-result.png)
 
-## Check an Unpublish attempt
+## Unpublish a library report
 
-Unpublish is intended to hide an entry while keeping its design. In this review, a newly created custom entry returned Action failed and stayed published. This current failure is documented here; it was not repaired.
+Use Unpublish to hide a library entry while keeping its design. The report changes to Draft.
 
-### 1. Choose Unpublish only for the intended entry
+### 1. Choose Unpublish
 
-Open that report's Actions and select Unpublish when you intend to hide it. The pictured entry is disposable test content.
+Open the intended report's **Actions** menu and select **Unpublish**.
 
-![Unpublish attempts to remove the report from the library.](reports-guide-unpublish.png)
+![Choose Unpublish for the report you want to hide.](reports-guide-unpublish.png)
 
-### 2. Check the actual outcome
+### 2. Confirm the report left the library
 
-If Action failed appears, the entry has not been unpublished. Keep its name or identifier and report the problem. Do not treat this as a successful removal.
+Check the **Report unpublished** message and the library list. The report should no longer appear.
 
-![New custom reports currently can show Action failed instead of unpublishing.](reports-guide-unpublish-failed.png)
+![Report unpublished confirms the action succeeded.](reports-guide-unpublish-success.png)
 
-**Expected result:** The reviewed new-entry case failed with HTTP 400 and remained published. Other report-management actions do not establish that Unpublish succeeded.
+**Expected result:** the report is Draft and no longer appears in the library. Its design remains available in Report Designer.
 
 ## Delete an unneeded library report
 
@@ -429,7 +429,7 @@ Run now uses that same computed window. It does not reuse the report page's chos
 
 Filters come from the design's template parameters. Change them in Report Designer. The primary query supplies Spreadsheet rows; the design's element bindings supply Document content. A report can therefore contain several bound tables while Spreadsheet shows its primary query.
 
-The current Reports page supplies date filters as flat from and to values. A workbench Custom Query declaring one nested daterange parameter fails when bound directly here. The existing reporting pattern uses two Text query parameters named from and to, with one Date range control on the template. See Report Designer.
+Reports supplies the selected dates to Date range query parameters, including `period`. Existing queries with Text parameters named `from` and `to` remain supported. Expose the dates through a Date range template parameter in Report Designer.
 
 Different reports require different received data. A report needing specimens, organisms or susceptibility results cannot invent them from an unrelated order count. An empty result can be correct for the chosen filters or available source data.
 
@@ -461,13 +461,11 @@ The real review downloads are [the interactive PDF](https://openldr.online/docs-
 
 **A report returns no rows.** Check the date window, facility choice and the source records that report needs. A sample file is not a prerequisite for real reporting.
 
-**A custom report says required parameter: period.** Check the date-parameter shape described above. A successful designer preview does not prove a Reports run.
+**A custom report says required parameter: period.** Set both dates in Parameters and run again. Check that the design exposes a Date range filter and that the query declares its required parameters.
 
 **A scheduled run is missing.** Check the enabled switch, then close and reopen Scheduled Runs. A queued message alone is not proof of execution.
 
 **A scheduled run is Failed.** On a computer, point at its status to read the recorded error. Correct the actual settings and try Run now again.
-
-**Unpublish says Action failed.** The reviewed newly created report failed this action and stayed published. Report its identifier. This guide does not claim that operation succeeded.
 
 ## Related guides
 

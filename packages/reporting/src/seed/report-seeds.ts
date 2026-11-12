@@ -250,14 +250,9 @@ order by 2`,
     id: 'q-amr-resistance',
     name: 'AMR resistance rate',
     connectorId: '',
-    // NOTE on param shape: `ctx.reporting.run(id, rawParams)` forwards `rawParams` (the flat
-    // `{from,to,facility}` filter bag the Reports page/route builds) straight through to
-    // `runStoredQuery` → `substituteParams(sql, query.params, values)` with NO reshaping. So
-    // these `CustomQueryParam`s must read `values.from`/`values.to`/`values.facility` directly
-    // (two plain `text` params, NOT one `daterange` param — a `daterange` param reads
-    // `values[p.id]` as a nested `{from,to}` object, which only the Query-workbench's
-    // `RunParamsSheet` builds; the Reports page never does). Verified empirically against
-    // `packages/dashboards/src/custom-query-run.ts`'s `substituteParams`.
+    // These seeded queries retain their existing flat Text parameters.
+    // Bootstrap's runReportStoredQuery also binds flat report dates to declared Date ranges.
+    // The Query workbench still supplies each query's declared parameter shape directly.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },

@@ -1,0 +1,24 @@
+{
+  "reports-guide-unpublish-success.png": {
+    "crop": {
+      "x": 761.640625,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 940,
+        "y": 739.5,
+        "width": 123.28125,
+        "height": 19.5
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  }
+}

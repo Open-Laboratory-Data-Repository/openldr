@@ -440,7 +440,7 @@ Escolha um Variable ID único e não vazio por parâmetro. Os pontos da linha pe
 
 Um valor opcional vazio torna-se uma cadeia vazia. O SQL tem de a tratar explicitamente quando significa ausência de filtro. Required não cria uma predefinição. Um relatório usa parâmetros do modelo. Faça corresponder a chave à definição da consulta.
 
-A página Reports atual passa os filtros de datas como valores simples from e to. Uma Custom Query com um parâmetro daterange funciona aqui, mas atualmente falha quando associada diretamente a Reports. Para relatórios, use dois parâmetros Text chamados from e to, referidos por {{ param.from }} e {{ param.to }}. Report Designer pode expô-los num único controlo Date range.
+Uma consulta guardada com um parâmetro Date range, como `period`, também pode ser executada em Reports. Acrescente um parâmetro de modelo Date range em Report Designer. Reports fornece as datas escolhidas à consulta. As consultas existentes com parâmetros Text chamados `from` e `to` continuam compatíveis.
 
 ## Remover ou reagrupar definições
 

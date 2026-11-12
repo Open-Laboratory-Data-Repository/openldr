@@ -1,0 +1,102 @@
+{
+  "apiBase": "http://127.0.0.1:3010/api",
+  "studioBase": "http://127.0.0.1:5190/studio",
+  "capturedAt": "2026-11-12T15:42:43.379Z",
+  "deviceScaleFactor": 4,
+  "languages": {
+    "en": {
+      "logo": {
+        "toast": "Logo must be a PNG or JPEG image.",
+        "accept": "image/png,image/jpeg",
+        "savedValuesUnchanged": true
+      },
+      "role": {
+        "renderedDescription": "Hide additional table columns in the dashboard builder. Built-in dimensions, raw SQL, and connector-backed reports are outside this policy.",
+        "serverDescription": "Hide additional table columns in the dashboard builder. Built-in dimensions, raw SQL, and connector-backed reports are outside this policy.",
+        "blankUnsavedSheet": true
+      },
+      "draft": {
+        "viewRunOpened": true,
+        "submitDisabled": true,
+        "banner": "This form is not published. Submission is disabled until it is published.",
+        "capturePageActionsRemainEnglish": true
+      },
+      "readiness": {
+        "renderedDescription": "Submission is configured. View/Run opens drafts and archived forms too. Submitting requires publication and valid answers. For Observation extraction, answer at least one extraction field. The ingest workflow must also be enabled.",
+        "source": "forms-runtime/SubmissionReadiness.tsx"
+      },
+      "restore": {
+        "renderedDescription": "This overwrites the form you are editing. Changing a published form makes it a draft. Publish it again to submit responses. Undo puts your previous draft back on screen. Save it to keep that.",
+        "confirmed": false
+      }
+    },
+    "fr": {
+      "logo": {
+        "toast": "Le logo doit être une image PNG ou JPEG.",
+        "accept": "image/png,image/jpeg",
+        "savedValuesUnchanged": true
+      },
+      "role": {
+        "renderedDescription": "Masquez les colonnes supplémentaires du constructeur de tableaux de bord. Les dimensions prédéfinies, le SQL brut et les rapports sur connecteurs restent hors de cette politique.",
+        "serverDescription": "Hide additional table columns in the dashboard builder. Built-in dimensions, raw SQL, and connector-backed reports are outside this policy.",
+        "blankUnsavedSheet": true
+      },
+      "draft": {
+        "viewRunOpened": true,
+        "submitDisabled": true,
+        "banner": "This form is not published. Submission is disabled until it is published.",
+        "capturePageActionsRemainEnglish": true
+      },
+      "readiness": {
+        "renderedDescription": "La soumission est configurée. View/Run ouvre aussi les brouillons et les formulaires archivés. Soumettre exige la publication et des réponses valides. Pour extraire une Observation, renseignez au moins un champ d'extraction. Le workflow d'ingestion doit aussi être actif.",
+        "source": "forms-runtime/SubmissionReadiness.tsx"
+      },
+      "restore": {
+        "renderedDescription": "Cela écrase le formulaire en cours de modification. Modifier un formulaire publié le remet en brouillon. Publiez-le à nouveau pour soumettre des réponses. Annuler remet votre brouillon précédent à l'écran. Enregistrez-le pour le garder.",
+        "confirmed": false
+      }
+    },
+    "pt": {
+      "logo": {
+        "toast": "O logótipo tem de ser uma imagem PNG ou JPEG.",
+        "accept": "image/png,image/jpeg",
+        "savedValuesUnchanged": true
+      },
+      "role": {
+        "renderedDescription": "Oculte colunas adicionais no construtor de painéis. As dimensões predefinidas, o SQL direto e os relatórios com conectores ficam fora desta política.",
+        "serverDescription": "Hide additional table columns in the dashboard builder. Built-in dimensions, raw SQL, and connector-backed reports are outside this policy.",
+        "blankUnsavedSheet": true
+      },
+      "draft": {
+        "viewRunOpened": true,
+        "submitDisabled": true,
+        "banner": "This form is not published. Submission is disabled until it is published.",
+        "capturePageActionsRemainEnglish": true
+      },
+      "readiness": {
+        "renderedDescription": "O envio está configurado. View/Run também abre rascunhos e formulários arquivados. O envio exige publicação e respostas válidas. Para extrair uma Observation, preencha pelo menos um campo de extração. O fluxo de ingestão também deve estar ativo.",
+        "source": "forms-runtime/SubmissionReadiness.tsx"
+      },
+      "restore": {
+        "renderedDescription": "Isto substitui o formulário que está a editar. Alterar um formulário publicado torna-o um rascunho. Publique-o de novo para enviar respostas. Anular volta a mostrar o rascunho anterior. Guarde-o para o manter.",
+        "confirmed": false
+      }
+    }
+  },
+  "blockedMutations": [],
+  "limits": [],
+  "fixture": {
+    "source": "form-sample-order",
+    "draft": "form-b45f5ecd-6f68-4a95-bd47-453423f4440c",
+    "status": "draft",
+    "sourceVersions": 1
+  },
+  "savedState": {
+    "rolesUnchanged": true,
+    "labIdentityUnchanged": true,
+    "sourceFormUnchanged": true,
+    "ownedCopyRemainsDraft": true,
+    "browserMutationRequests": 0
+  },
+  "preferencesRestored": true
+}

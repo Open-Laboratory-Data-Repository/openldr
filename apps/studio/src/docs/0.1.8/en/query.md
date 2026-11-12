@@ -440,7 +440,7 @@ Choose a unique nonempty Variable ID for each parameter. The parameter row dots 
 
 A blank optional value becomes an empty string. SQL must explicitly handle that empty value when it means no filter. Required does not invent a default. A report uses template parameters, so match its parameter key to the saved query definition.
 
-The current Reports page passes date filters as flat from and to values. A Custom Query declaring one daterange parameter works in this workbench but currently fails when bound directly to Reports. For reporting, use two Text query parameters named from and to, referenced by {{ param.from }} and {{ param.to }}. Report Designer can expose them through one Date range control.
+A saved query with a Date range parameter, such as `period`, can also run in Reports. Add a Date range template parameter in Report Designer. Reports supplies the selected dates to the query. Existing queries with Text parameters named `from` and `to` remain supported.
 
 ## Remove or regroup definitions
 

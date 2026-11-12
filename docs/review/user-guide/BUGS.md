@@ -1,3 +1,6 @@
+The seven confirmed findings below were repaired on 2026-11-12. See [repair validation](BUGFIX-VALIDATION.md).
+This document preserves the original review and its failure evidence. Its workarounds describe the earlier version.
+
 10 findings: 7 confirmed, 3 refuted. No app bug repair is included in the guide publication.
 
 | ID | Finding | Verdict | Proof | Cost |

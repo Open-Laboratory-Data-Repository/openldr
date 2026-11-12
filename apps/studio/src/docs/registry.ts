@@ -860,6 +860,7 @@ export const DOC_GUIDES: DocGuide[] = [
       'reports-guide-edit-template-result.png',
       'reports-guide-unpublish.png',
       'reports-guide-unpublish-failed.png',
+      'reports-guide-unpublish-success.png',
       'reports-guide-delete-report.png',
       'reports-guide-delete-report-confirm.png',
       'reports-guide-phone-library.png',

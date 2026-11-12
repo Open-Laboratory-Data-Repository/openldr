@@ -110,7 +110,7 @@ On Installed, open the plugin. Open its dots and select **Disable**.
 
 ### 2. Enable it again when appropriate
 
-After disabling, reload the page and reopen the plugin from Installed. Open its dots and select **Enable**. This refreshes the current menu state.
+After disabling, open the same detail dots and select **Enable**. The action updates after each successful change; you can keep the details open.
 
 ![Enable permits the installed plugin to load again.](marketplace-guide-enable.png)
 

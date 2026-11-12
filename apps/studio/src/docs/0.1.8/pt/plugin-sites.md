@@ -6,7 +6,7 @@ Só vê o cartão e o painel quando pode aceder ao plugin. As restrições por p
 
 Os administradores com acesso à gestão do mercado podem ocultar um cartão ou painel para todo o laboratório. A página do plugin e as outras funções permanecem ativas.
 
-Use um plugin já instalado pela sua organização. As capturas usam o Reference Plugin opcional numa instalação de teste. O tema claro mantém este exemplo legível. Não são necessários dados clínicos de exemplo.
+Use um plugin já instalado pela sua organização. As capturas usam o Reference Plugin opcional numa instalação de teste. A versão atual do exemplo acompanha o tema claro ou escuro da aplicação. Não são necessários dados clínicos de exemplo.
 
 ## Ler um cartão de plugin
 
@@ -172,7 +172,7 @@ A captura indica Drawn in: widget ou Drawn in: panel conforme o local. A nota de
 
 **Falta o cartão.** Verifique Dashboard card em Places, o estado ativo do plugin e o acesso do seu papel.
 
-**O exemplo de referência é difícil de ler.** Use o tema claro. O texto escuro do exemplo é fixo.
+**O exemplo de referência mantém as cores antigas.** Compile e reinstale o exemplo a partir da sua cópia atual e recarregue o Studio. Os pacotes instalados mantêm o HTML incluído no pacote.
 
 ## Guias relacionados
 

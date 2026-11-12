@@ -49,6 +49,7 @@ describe('reportDefsApi', () => {
         ok: true, status: 200,
         json: async (): Promise<unknown> => ({
           id: 'r1', name: 'AMR', description: '', category: 'amr', designId: 'd1', primaryQueryId: 'q1', status: 'published',
+          summaryMetrics: null, chart: null, paramOptions: null,
         }),
       })
       .mockResolvedValueOnce({ ok: true, status: 200, json: async (): Promise<unknown> => ({}) });
@@ -59,6 +60,8 @@ describe('reportDefsApi', () => {
     const [url, init] = authFetch.mock.calls[1] as [string, RequestInit];
     expect(url).toBe('/api/report-defs/r1');
     expect(init?.method).toBe('PUT');
-    expect(JSON.parse(init?.body as string)).toEqual(expect.objectContaining({ id: 'r1', status: 'draft' }));
+    expect(JSON.parse(init?.body as string)).toEqual(expect.objectContaining({
+      id: 'r1', status: 'draft', summaryMetrics: null, chart: null, paramOptions: null,
+    }));
   });
 });

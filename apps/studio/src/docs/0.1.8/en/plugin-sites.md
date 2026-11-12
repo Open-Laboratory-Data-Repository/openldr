@@ -6,7 +6,7 @@ You see a plugin card and panel only when you may see that plugin. A plugin rest
 
 Administrators with marketplace management access can switch a card or panel off for everyone in the lab. The plugin page and other work remain enabled.
 
-Use a plugin your organisation already installed. The pictures use the optional Reference Plugin on a test installation. Light theme keeps this sample plugin readable. No clinical sample data is needed.
+Use a plugin your organisation already installed. The pictures use the optional Reference Plugin on a test installation. The current reference sample follows the app's light or dark theme. No clinical sample data is needed.
 
 ## Read a plugin dashboard card
 
@@ -172,7 +172,7 @@ The picture reads Drawn in: widget or Drawn in: panel according to its location.
 
 **The card is missing.** Check Dashboard card in Places, the plugin enabled state and your role access.
 
-**The reference sample is hard to read.** Use light theme. The sample has fixed dark text.
+**The reference sample still uses old colors.** Rebuild and reinstall the sample from your current checkout, then reload Studio. Installed packages keep their packaged HTML.
 
 ## Related guides
 

@@ -94,31 +94,51 @@ function useActiveHeading(pane: RefObject<HTMLDivElement | null>, entries: TocEn
 
 /** The right-hand "On this page" list. Only on wide screens; narrow ones get the toolbar menu. */
 function OnThisPage({ entries, active }: { entries: TocEntry[]; active: string | null }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const keepActiveVisible = () => {
+      if (!list.clientHeight) return;
+      const link = list.querySelector<HTMLAnchorElement>('[aria-current="location"]');
+      if (!link) return;
+      const bounds = list.getBoundingClientRect();
+      const item = link.getBoundingClientRect();
+      if (item.top < bounds.top) list.scrollTop -= bounds.top - item.top;
+      else if (item.bottom > bounds.bottom) list.scrollTop += item.bottom - bounds.bottom;
+    };
+    keepActiveVisible();
+    const observer = new ResizeObserver(keepActiveVisible);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [active]);
   return (
-    <nav aria-label="On this page" className="sticky top-0 hidden max-h-[calc(100dvh-8rem)] w-56 shrink-0 self-start overflow-y-auto xl:block">
-      <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+    <nav aria-label="On this page" className="sticky top-0 hidden max-h-[calc(100dvh-9rem)] w-56 shrink-0 self-start xl:flex xl:flex-col">
+      <div className="shrink-0 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/60">
         On this page
       </div>
-      {entries.map((entry) => (
-        <a
-          key={entry.id}
-          href={`#${entry.id}`}
-          aria-current={entry.id === active ? 'location' : undefined}
-          onClick={(event) => {
-            event.preventDefault();
-            goToHeading(entry.id);
-          }}
-          className={`block border-l-2 py-1 text-xs no-underline transition-colors ${
-            entry.level === 3 ? 'pl-6 pr-3' : 'px-3'
-          } ${
-            entry.id === active
-              ? 'border-primary text-primary'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          {entry.text}
-        </a>
-      ))}
+      <div ref={listRef} className="min-h-0 overflow-y-auto">
+        {entries.map((entry) => (
+          <a
+            key={entry.id}
+            href={`#${entry.id}`}
+            aria-current={entry.id === active ? 'location' : undefined}
+            onClick={(event) => {
+              event.preventDefault();
+              goToHeading(entry.id);
+            }}
+            className={`block border-l-2 py-1 text-xs no-underline transition-colors ${
+              entry.level === 3 ? 'pl-6 pr-3' : 'px-3'
+            } ${
+              entry.id === active
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {entry.text}
+          </a>
+        ))}
+      </div>
     </nav>
   );
 }
@@ -204,7 +224,7 @@ export function Docs() {
     const frame = requestAnimationFrame(() => goToHeading(decodeURIComponent(hash.slice(1))));
     return () => cancelAnimationFrame(frame);
   }, [activeSlug, hash]);
-  const toc = useMemo(() => (section ? extractToc(section.content) : []), [section?.content]);
+  const toc = useMemo(() => (section ? extractToc(section.content).filter((entry) => entry.level === 2) : []), [section?.content]);
   const showToc = wantsToc(toc);
   const activeHeading = useActiveHeading(contentRef, showToc ? toc : []);
   const navSections = useMemo(() => {

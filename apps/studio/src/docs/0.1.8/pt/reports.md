@@ -340,23 +340,23 @@ Confirme que Report Designer abriu o desenho associado pretendido antes de edita
 
 ![O modelo associado abre para um responsável autorizado.](reports-guide-edit-template-result.png)
 
-## Verificar uma tentativa de Unpublish
+## Retirar um relatório da publicação
 
-Unpublish destina-se a ocultar uma entrada mantendo o desenho. Nesta verificação, uma entrada personalizada nova devolveu Action failed e permaneceu publicada. Esta falha atual está documentada aqui e não foi corrigida.
+Use Unpublish para ocultar uma entrada da biblioteca mantendo o desenho. O relatório passa a Draft.
 
-### 1. Escolher Unpublish apenas para a entrada pretendida
+### 1. Escolher Unpublish
 
-Abra Actions do relatório e selecione Unpublish para o ocultar. A entrada ilustrada é conteúdo de teste descartável.
+Abra o menu **Actions** do relatório pretendido e selecione **Unpublish**.
 
-![Unpublish tenta retirar o relatório da biblioteca.](reports-guide-unpublish.png)
+![Escolha Unpublish para o relatório que pretende ocultar.](reports-guide-unpublish.png)
 
-### 2. Verificar o resultado real
+### 2. Confirmar a saída da biblioteca
 
-Se aparecer Action failed, a entrada não foi retirada da publicação. Guarde o nome ou identificador e comunique o problema. Não trate a remoção como bem-sucedida.
+Confira a mensagem **Report unpublished** e a lista da biblioteca. O relatório já não deve aparecer.
 
-![Os relatórios personalizados novos podem atualmente mostrar Action failed em vez de saírem da publicação.](reports-guide-unpublish-failed.png)
+![Report unpublished confirma o sucesso da ação.](reports-guide-unpublish-success.png)
 
-**Resultado esperado:** o caso verificado de entrada nova falhou com HTTP 400 e permaneceu publicado. Outras ações de gestão não comprovam o sucesso de Unpublish.
+**Resultado esperado:** o relatório está em Draft e já não aparece na biblioteca. O desenho continua disponível em Report Designer.
 
 ## Eliminar um relatório sem uso da biblioteca
 
@@ -429,7 +429,7 @@ Run now usa o mesmo período calculado. Não reutiliza as datas escolhidas na p�
 
 Os filtros vêm dos parâmetros do modelo. Altere-os em Report Designer. A consulta principal fornece as linhas de Spreadsheet. As associações dos elementos fornecem Document. Um relatório pode ter várias tabelas associadas enquanto Spreadsheet mostra a consulta principal.
 
-A página Reports atual fornece filtros de datas como valores simples from e to. Uma Custom Query que declare um parâmetro daterange aninhado falha quando associada diretamente aqui. O padrão existente usa dois parâmetros Text chamados from e to e um controlo Date range no modelo. Consulte Report Designer.
+Reports fornece as datas escolhidas aos parâmetros de consulta Date range, incluindo `period`. As consultas existentes com parâmetros Text chamados `from` e `to` continuam compatíveis. Apresente as datas com um parâmetro de modelo Date range em Report Designer.
 
 Os relatórios exigem dados recebidos diferentes. Um relatório de amostras, organismos ou suscetibilidade não os pode inventar a partir de uma contagem de pedidos. Um resultado vazio pode ser correto para os filtros ou dados disponíveis.
 
@@ -461,13 +461,11 @@ As descargas reais são [o PDF interativo](https://openldr.online/docs-samples/u
 
 **Um relatório não devolve linhas.** Confira o período, a unidade e os registos de origem necessários. Um ficheiro de exemplo não é requisito para relatórios reais.
 
-**Um relatório personalizado indica required parameter: period.** Confira a forma dos parâmetros de datas descrita acima. Uma pré-visualização bem-sucedida no editor não comprova uma execução em Reports.
+**Um relatório personalizado indica required parameter: period.** Defina ambas as datas em Parameters e execute novamente. Confira se o desenho apresenta um filtro Date range e se a consulta declara os parâmetros obrigatórios.
 
 **Falta uma execução agendada.** Confira o interruptor de ativação, feche e reabra Scheduled Runs. Uma mensagem de fila, por si só, não comprova execução.
 
 **Uma execução agendada indica Failed.** Num computador, aponte para o estado para ler o erro guardado. Corrija as definições reais e repita Run now.
-
-**Unpublish indica Action failed.** O relatório novo verificado falhou e permaneceu publicado. Comunique o identificador. Este guia não afirma que a operação teve sucesso.
 
 ## Guias relacionados
 

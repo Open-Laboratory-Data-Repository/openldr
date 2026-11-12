@@ -50,7 +50,7 @@ function mockDetail() {
 async function openDetailMenu(): Promise<void> {
   const trigger = await screen.findByTestId('detail-menu');
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  if (!screen.queryByTestId('detail-install') && !screen.queryByTestId('detail-publish')) {
+  if (!screen.queryByRole('menu')) {
     fireEvent.keyDown(trigger, { key: 'Enter' });
   }
 }
@@ -129,6 +129,49 @@ describe('Marketplace', () => {
     (api.listInstalledArtifacts as any).mockResolvedValue([]);
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
     expect(await screen.findByText(/No marketplace registry configured/i)).toBeTruthy();
+  });
+
+  it('keeps the selected installed version while refreshed flags change', async () => {
+    let enabled = true;
+    vi.mocked(api.listAvailableArtifacts).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    vi.mocked(api.listInstalledArtifacts).mockImplementation(async () => [
+      { id: 'versioned-plugin', version: '2.0.0', type: 'plugin', active: true, enabled, capabilities: [], legacy: false, publisher: null, approvedBy: null },
+      { id: 'versioned-plugin', version: '1.0.0', type: 'plugin', active: false, enabled, capabilities: [], legacy: false, publisher: null, approvedBy: null },
+    ]);
+    vi.mocked(api.setArtifactEnabled).mockImplementation(async (_id, value) => { enabled = value; });
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Installed \(2\)/ }), { button: 0 });
+    fireEvent.click((await screen.findAllByTestId('card-versioned-plugin'))[1]);
+    expect(await screen.findByText(/v1\.0\.0/)).toBeInTheDocument();
+    await openDetailMenu();
+    expect(await screen.findByRole('menuitem', { name: 'Roll back' })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Disable' }));
+    await waitFor(() => expect(api.listInstalledArtifacts).toHaveBeenCalledTimes(2));
+    await openDetailMenu();
+    expect(await screen.findByRole('menuitem', { name: 'Enable' })).toBeInTheDocument();
+    expect(screen.getByText(/v1\.0\.0/)).toBeInTheDocument();
+  });
+
+  it.each(['Browse', 'Installed'] as const)('updates detail actions after toggling from %s without reopening', async (tab) => {
+    let enabled = true;
+    const installed = () => [{ id: 'whonet-sqlite', version: '1.0.0', active: true, enabled, approvedBy: 'admin', type: 'plugin', publisher: null, capabilities: [], legacy: false }];
+    vi.mocked(api.listAvailableArtifacts).mockResolvedValue(oneBundle as any);
+    vi.mocked(api.listInstalledArtifacts).mockImplementation(async () => installed() as any);
+    vi.mocked(api.setArtifactEnabled).mockImplementation(async (_id, value) => { enabled = value; });
+    mockDetail();
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    if (tab === 'Installed') fireEvent.mouseDown(await screen.findByRole('tab', { name: /Installed \(1\)/ }), { button: 0 });
+    fireEvent.click(await screen.findByTestId(tab === 'Browse' ? 'card-whonet-narrow' : 'card-whonet-sqlite'));
+    await openDetailMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Disable' }));
+    await waitFor(() => expect(api.listInstalledArtifacts).toHaveBeenCalledTimes(2));
+    await openDetailMenu();
+    const enable = await screen.findByRole('menuitem', { name: 'Enable' }, { timeout: 1000 });
+    fireEvent.click(enable);
+    await waitFor(() => expect(api.setArtifactEnabled).toHaveBeenLastCalledWith('whonet-sqlite', true));
+    await waitFor(() => expect(api.listInstalledArtifacts).toHaveBeenCalledTimes(3));
+    await openDetailMenu();
+    expect(await screen.findByRole('menuitem', { name: 'Disable' }, { timeout: 1000 })).toBeInTheDocument();
   });
 
   it('installed tab lists installed artifacts and toggles enabled from detail', async () => {

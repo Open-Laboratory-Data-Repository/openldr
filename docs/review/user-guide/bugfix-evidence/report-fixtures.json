@@ -1,0 +1,78 @@
+{
+  "query": {
+    "id": "cq_09e00ac9",
+    "name": "Fictional date range review query",
+    "connectorId": "232d5c85-32a3-4e03-8c44-8bd8c2be76f5",
+    "sql": "select {{param.from}}::text as start_date, {{param.to}}::text as end_date",
+    "params": [
+      {
+        "id": "period",
+        "type": "daterange",
+        "label": "Period",
+        "required": true
+      }
+    ],
+    "groupId": null
+  },
+  "design": {
+    "id": "d-bugfix-date-range",
+    "name": "Fictional date range design",
+    "paper": "A4",
+    "orientation": "portrait",
+    "pages": [
+      {
+        "id": "p-bugfix",
+        "elements": [
+          {
+            "id": "table-bugfix",
+            "kind": "table",
+            "name": "Date values",
+            "rect": {
+              "x": 20,
+              "y": 30,
+              "w": 540,
+              "h": 110
+            },
+            "dataSource": {
+              "kind": "custom-query",
+              "queryId": "cq_09e00ac9"
+            },
+            "boundColumns": [
+              {
+                "key": "start_date",
+                "label": "Start date"
+              },
+              {
+                "key": "end_date",
+                "label": "End date"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "parameters": [
+      {
+        "key": "period",
+        "label": "Period",
+        "type": "daterange",
+        "required": true
+      }
+    ],
+    "status": "draft",
+    "createdAt": "Thu Nov 12 2026 18:34:18 GMT+0300 (East Africa Time)",
+    "updatedAt": "Thu Nov 12 2026 18:34:18 GMT+0300 (East Africa Time)"
+  },
+  "report": {
+    "id": "r-bugfix-date-range",
+    "name": "Fictional date range review",
+    "description": "Fictional dates only. No clinical rows.",
+    "category": "operational",
+    "designId": "d-bugfix-date-range",
+    "primaryQueryId": "cq_09e00ac9",
+    "summaryMetrics": null,
+    "chart": null,
+    "paramOptions": null,
+    "status": "published"
+  }
+}

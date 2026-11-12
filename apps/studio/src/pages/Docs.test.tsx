@@ -50,7 +50,7 @@ const registry = vi.hoisted(() => {
         : guide.slug === 'workflows'
           ? '# Workflows\n\nCreate workflow procedures for training.'
         : guide.slug === 'audit'
-          ? '# Audit\n\n## First part\n\nOne.\n\n## Second part\n\nTwo.\n\n## Third part\n\nThree.'
+          ? '# Audit\n\n## First part\n\n### 1. Open the list\n\nOne.\n\n## Second part\n\n### 1. Inspect the row\n\nTwo.\n\n## Third part\n\n### 1. Finish the task\n\nThree.'
         : `# ${guide.title}\n\nStep-by-step content for ${guide.title}.`,
     localeUsed: 'en',
   }));
@@ -160,6 +160,44 @@ describe('DocsLayout', () => {
     } finally {
       Element.prototype.scrollIntoView = original;
     }
+  });
+
+  it('lists task headings while retaining numbered steps in the article and links', async () => {
+    renderAt('/docs/audit');
+    const list = screen.getByRole('navigation', { name: 'On this page' });
+    expect(within(list).getAllByRole('link').map((link) => link.textContent)).toEqual(['First part', 'Second part', 'Third part']);
+    expect(screen.getByRole('heading', { level: 3, name: '1. Open the list' })).toHaveAttribute('id', '1-open-the-list');
+    const trigger = screen.getByRole('button', { name: 'On this page' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(within(await screen.findByRole('menu')).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['First part', 'Second part', 'Third part']);
+  });
+
+  it('keeps the active task visible without scrolling the article to its heading', async () => {
+    renderAt('/docs/audit');
+    const list = screen.getByRole('navigation', { name: 'On this page' });
+    const first = within(list).getByRole('link', { name: 'First part' });
+    const third = within(list).getByRole('link', { name: 'Third part' });
+    const scroller = first.parentElement!;
+    const pane = screen.getByRole('heading', { level: 1, name: 'Audit' }).closest('.overflow-y-auto')!;
+    const rect = (top: number, bottom: number) => ({ top, bottom, left: 0, right: 200, x: 0, y: top, width: 200, height: bottom-top, toJSON: () => ({}) });
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, value: 100 });
+    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => rect(0, 100));
+    vi.spyOn(first, 'getBoundingClientRect').mockImplementation(() => rect(0, 20));
+    vi.spyOn(third, 'getBoundingClientRect').mockImplementation(() => rect(160, 180));
+    vi.spyOn(pane, 'getBoundingClientRect').mockImplementation(() => rect(0, 500));
+    const secondHeading = screen.getByRole('heading', { level: 2, name: 'Second part' });
+    const thirdHeading = screen.getByRole('heading', { level: 2, name: 'Third part' });
+    vi.spyOn(secondHeading, 'getBoundingClientRect').mockImplementation(() => rect(400, 420));
+    const thirdRect = vi.spyOn(thirdHeading, 'getBoundingClientRect').mockImplementation(() => rect(500, 520));
+    fireEvent.scroll(pane);
+    await waitFor(() => expect(first).toHaveAttribute('aria-current', 'location'));
+    (pane as HTMLElement).scrollTop = 222;
+    thirdRect.mockImplementation(() => rect(10, 30));
+    fireEvent.scroll(pane);
+    await waitFor(() => expect(third).toHaveAttribute('aria-current', 'location'));
+    expect(scroller.scrollTop).toBe(80);
+    expect(pane.scrollTop).toBe(222);
   });
 
   it('exposes a download menu in the toolbar', () => {

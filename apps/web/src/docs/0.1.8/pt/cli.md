@@ -226,6 +226,8 @@ Executar um relatório:
 ./openldr report run <id> --format pdf --lang fr --out rapport.pdf
 ```
 
+Para um relatório com um filtro Date range, forneça ambas as datas com `--param from=2026-01-01 --param to=2026-11-12`. O serviço de relatórios associa estes valores ao intervalo declarado pela consulta guardada. Escolha as datas do seu relatório.
+
 `--lang` imprime as traduções guardadas no desenho, incluindo as datas. Os relatórios
 incluídos trazem francês e português, por isso isto funciona com eles sem configuração. O
 texto sem tradução para essa língua sai como foi escrito, e os dados nunca são traduzidos.

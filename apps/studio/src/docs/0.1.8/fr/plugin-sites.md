@@ -6,7 +6,7 @@ La carte et le panneau sont visibles seulement si vous avez accès au plugin. Le
 
 Les administrateurs disposant de la gestion du marché peuvent masquer une carte ou un panneau pour tout le laboratoire. La page du plugin et ses autres fonctions restent actives.
 
-Utilisez un plugin déjà installé par votre organisation. Les captures utilisent Reference Plugin, facultatif, dans une installation de test. Le thème clair rend cet exemple lisible. Aucune donnée clinique d'exemple n'est nécessaire.
+Utilisez un plugin déjà installé par votre organisation. Les captures utilisent Reference Plugin, facultatif, dans une installation de test. La version actuelle de cet exemple suit le thème clair ou sombre de l'application. Aucune donnée clinique d'exemple n'est nécessaire.
 
 ## Lire une carte de plugin
 
@@ -172,7 +172,7 @@ La capture indique Drawn in: widget ou Drawn in: panel selon l'emplacement. Sa n
 
 **La carte manque.** Vérifiez Dashboard card dans Places, l'activation du plugin et les accès de votre rôle.
 
-**L'exemple de référence est difficile à lire.** Utilisez le thème clair. Son texte sombre est fixe.
+**L'exemple de référence conserve ses anciennes couleurs.** Recompilez et réinstallez l'exemple depuis votre copie actuelle, puis rechargez Studio. Les paquets installés conservent leur HTML empaqueté.
 
 ## Guides associés
 

@@ -2,7 +2,7 @@
 
 Use Report Designer para organizar elementos imprimíveis, ligá-los a Custom Queries guardadas e criar relatórios para a biblioteca. Um desenho controla a página. Uma consulta fornece linhas. Os parâmetros do modelo definem os filtros introduzidos ao executar um relatório.
 
-Comece pela consulta guardada e pela disposição de página pretendida. Não precisa de dados de exemplo da documentação. As imagens usam uma consulta de relatório com zero pedidos numa instalação de teste separada. A prática opcional está no fim.
+Comece pela consulta guardada e pela disposição de página pretendida. Não precisa de dados de exemplo da documentação. As imagens usam uma consulta com zero pedidos e parâmetros Text chamados `from` e `to`. Também pode usar um parâmetro de consulta Date range. A prática opcional está no fim.
 
 Precisa de **Edit report templates** para criar, editar e publicar desenhos. **View reports** abre a biblioteca e **Run reports** executa as entradas.
 
@@ -88,7 +88,7 @@ Abra Bind query e escolha a Custom Query. O exemplo usa Request count for report
 
 ## Definir o filtro do relatório e os valores de pré-visualização
 
-Em Reports, o filtro atual de intervalo de datas passa valores simples from e to. A consulta de exemplo declara-os como dois parâmetros Text obrigatórios. O modelo fornece um controlo Date range. Uma consulta do editor com um único parâmetro daterange falha atualmente quando ligada diretamente a Reports.
+Reports aceita uma consulta guardada com um parâmetro Date range, como `period`. A consulta ilustrada usa dois parâmetros Text obrigatórios chamados `from` e `to`. As duas formas usam um único controlo Date range no modelo.
 
 ### 1. Adicionar um parâmetro de modelo
 
@@ -110,7 +110,7 @@ Defina Label com o texto a apresentar, como Period.
 
 ### 4. Fazer corresponder o tipo de parâmetro
 
-Defina Type como Date range. A própria consulta usa dois parâmetros Text chamados from e to.
+Defina Type como Date range. A consulta ilustrada usa dois parâmetros Text chamados `from` e `to`.
 
 ![Escolha Date range para o parâmetro da consulta.](report-designer-guide-parameter-type.png)
 
@@ -366,7 +366,7 @@ Create report from this design acrescenta uma entrada de biblioteca separada. N�
 
 ## Referência opcional de prática
 
-[Descarregue a consulta opcional de contagem para relatórios](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Importe por Query se quiser uma referência. Usa parâmetros Text obrigatórios from e to, correspondentes ao intervalo de datas atual de Reports. Não exige dados de pacientes. Use uma consulta aprovada para os relatórios normais.
+[Descarregue a consulta opcional de contagem para relatórios](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Importe por Query se quiser uma referência. Os parâmetros Text obrigatórios `from` e `to` continuam válidos para relatórios com um controlo Date range. Não exige dados de pacientes. Use uma consulta aprovada para os relatórios normais.
 
 [Descarregue o PDF de exemplo publicado](https://openldr.online/docs-samples/user-guide/report-designer/published-summary.pdf) ou [o livro exportado](https://openldr.online/docs-samples/user-guide/report-designer/summary-design.xlsx) para comparar o resultado de uma coluna. Estes ficheiros contêm apenas uma contagem zero.
 
@@ -384,7 +384,7 @@ Create report from this design acrescenta uma entrada de biblioteca separada. N�
 
 **Uma tabela imprime em várias páginas.** Os dados podem continuar depois da primeira página. Use Load pages e consulte o PDF para verificar a contagem real.
 
-**Reports indica required parameter: period.** Uma Custom Query com um parâmetro daterange funciona em Query, mas atualmente não recebe um intervalo aninhado de Reports. Use dois parâmetros Text chamados from e to, referidos pelo SQL. Uma pré-visualização bem-sucedida não prova uma execução na biblioteca.
+**Reports indica required parameter: period.** Defina ambas as datas em Parameters e execute novamente. Confira se o desenho apresenta um filtro Date range e se a consulta declara os parâmetros obrigatórios.
 
 ## Guias relacionados
 

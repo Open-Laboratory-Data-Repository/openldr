@@ -2,7 +2,7 @@
 
 Utilisez Report Designer pour disposer les éléments imprimables, les lier à des Custom Queries enregistrées et créer des rapports pour la bibliothèque. Une conception contrôle la page. Une requête fournit les lignes. Les paramètres du modèle définissent les filtres saisis lors de l'exécution.
 
-Commencez avec votre requête enregistrée et votre mise en page prévue. Aucun jeu de données de documentation n'est nécessaire. Les images utilisent une requête retournant zéro demande sur une installation de test distincte. L'exercice facultatif est à la fin.
+Commencez avec votre requête enregistrée et votre mise en page prévue. Aucun jeu de données de documentation n'est nécessaire. Les images utilisent une requête retournant zéro demande avec des paramètres Text nommés `from` et `to`. Un paramètre de requête Date range est aussi accepté. L'exercice facultatif est à la fin.
 
 Vous devez avoir **Edit report templates** pour créer, modifier et publier les conceptions. **View reports** ouvre la bibliothèque et **Run reports** exécute ses entrées.
 
@@ -88,7 +88,7 @@ Ouvrez Bind query et choisissez votre Custom Query. L'exemple utilise Request co
 
 ## Définir le filtre de rapport et les valeurs d'aperçu
 
-Dans Reports, le filtre de plage de dates actuel transmet les valeurs simples from et to. La requête d'exemple les déclare comme deux paramètres Text obligatoires. Le modèle fournit un seul contrôle Date range. Une requête de l'atelier déclarant un seul paramètre daterange échoue actuellement lorsqu'elle est liée directement à Reports.
+Reports accepte une requête enregistrée avec un paramètre Date range, comme `period`. La requête illustrée utilise deux paramètres Text obligatoires nommés `from` et `to`. Les deux formes utilisent une seule commande Date range sur le modèle.
 
 ### 1. Ajouter un paramètre de modèle
 
@@ -110,7 +110,7 @@ Définissez Label avec le texte à afficher, comme Period.
 
 ### 4. Faire correspondre le type du paramètre
 
-Réglez Type sur Date range. La requête de rapport utilise elle-même deux paramètres Text nommés from et to.
+Réglez Type sur Date range. La requête illustrée utilise deux paramètres Text nommés `from` et `to`.
 
 ![Choisissez Date range pour le paramètre de requête.](report-designer-guide-parameter-type.png)
 
@@ -366,7 +366,7 @@ Create report from this design ajoute une entrée de bibliothèque distincte. Il
 
 ## Référence facultative d'exercice
 
-[Téléchargez la requête facultative de comptage pour rapports](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Importez-la par Query pour une référence. Elle utilise deux paramètres Text obligatoires nommés from et to, adaptés à l'entrée actuelle de plage de dates de Reports. Aucun exemple patient n'est requis. Utilisez votre requête approuvée pour les rapports habituels.
+[Téléchargez la requête facultative de comptage pour rapports](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Importez-la par Query pour une référence. Ses paramètres Text obligatoires nommés `from` et `to` restent valides pour les rapports utilisant une commande Date range. Aucun exemple patient n'est requis. Utilisez votre requête approuvée pour les rapports habituels.
 
 [Téléchargez le PDF d'exemple publié](https://openldr.online/docs-samples/user-guide/report-designer/published-summary.pdf) ou [son classeur exporté](https://openldr.online/docs-samples/user-guide/report-designer/summary-design.xlsx) pour comparer le résultat à une colonne. Ces fichiers contiennent uniquement un comptage nul.
 
@@ -384,7 +384,7 @@ Create report from this design ajoute une entrée de bibliothèque distincte. Il
 
 **Un tableau s'imprime sur plusieurs pages.** Les données peuvent dépasser la première page. Utilisez Load pages et consultez le PDF pour vérifier le nombre réel.
 
-**Reports indique required parameter: period.** Une Custom Query déclarant un seul paramètre daterange fonctionne dans Query, mais ne reçoit actuellement aucune plage imbriquée de Reports. Utilisez deux paramètres Text nommés from et to, référencés dans le SQL. Un aperçu réussi ne prouve pas l'exécution depuis la bibliothèque.
+**Reports indique required parameter: period.** Définissez les deux dates dans Parameters et relancez le rapport. Vérifiez que le modèle expose un filtre Date range et que la requête déclare ses paramètres obligatoires.
 
 ## Guides associés
 

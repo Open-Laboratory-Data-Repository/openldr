@@ -1,0 +1,41 @@
+{
+  "dateRanges": [
+    {
+      "id": "from",
+      "status": 200,
+      "rows": [
+        {
+          "start_date": "2026-02-03",
+          "end_date": "2026-04-05"
+        }
+      ]
+    },
+    {
+      "id": "to",
+      "status": 200,
+      "rows": [
+        {
+          "start_date": "2026-02-03",
+          "end_date": "2026-04-05"
+        }
+      ]
+    }
+  ],
+  "logo": {
+    "status": 400,
+    "error": {
+      "error": "invalid lab identity",
+      "details": [
+        {
+          "key": "lab.logo",
+          "reason": "unsupported-image-type"
+        }
+      ]
+    },
+    "mimeTypes": [
+      "image/png",
+      "image/jpeg"
+    ],
+    "identityUnchanged": true
+  }
+}

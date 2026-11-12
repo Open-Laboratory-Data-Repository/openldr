@@ -1,3 +1,11 @@
+## Latest checkpoint, 2026-11-12
+
+The seven approved app repairs and task-only contents menu are recorded in [repair validation](BUGFIX-VALIDATION.md).
+Updated published guides are the editing source. Do not regenerate them from the archived preview drafts.
+The test app uses Studio 5190 and API 3010 with separate review databases and bucket.
+Those running services and private credentials are not carried by Git.
+No normal database was reset. The backup described below remains private.
+
 # Continue the user guide review
 
 These files preserve the documentation review if the desktop loses power.

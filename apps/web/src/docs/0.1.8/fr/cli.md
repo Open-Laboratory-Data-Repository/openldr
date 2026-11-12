@@ -188,6 +188,8 @@ Lancer un rapport :
 ./openldr report run <id> --format pdf --lang fr --out rapport.pdf
 ```
 
+Pour un rapport avec un filtre Date range, fournissez les deux dates avec `--param from=2026-01-01 --param to=2026-11-12`. Le service de rapports associe ces valeurs à la plage de dates déclarée par la requête enregistrée. Choisissez les dates de votre rapport.
+
 `--lang` imprime les traductions enregistrées dans la conception du rapport, y compris les dates. Les rapports intégrés sont fournis avec le français et le portugais, donc cela fonctionne pour eux sans configuration. Un texte sans traduction dans cette langue s'imprime tel qu'il a été écrit, et les données ne sont jamais traduites.
 
 Inscrire un laboratoire sur le serveur central, puis y connecter un laboratoire :

@@ -25,6 +25,29 @@ describe('ReportDefSchema', () => {
     expect(parsed.chart).toEqual({ type: 'bar', x: 'a', y: 'b' });
   });
 
+  it('normalizes null persisted metadata to omitted optional values', () => {
+    const parsed = ReportDefSchema.parse({
+      id: 'r1', name: 'n', description: '', category: 'operational',
+      designId: 'd1', primaryQueryId: 'q1', status: 'published',
+      summaryMetrics: null, chart: null, paramOptions: null,
+    });
+    expect(parsed.status).toBe('published');
+    expect(parsed.summaryMetrics).toBeUndefined();
+    expect(parsed.chart).toBeUndefined();
+    expect(parsed.paramOptions).toBeUndefined();
+  });
+
+  it.each([
+    { summaryMetrics: 'invalid' },
+    { chart: { type: 'unknown' } },
+    { paramOptions: { facility: 123 } },
+  ])('rejects invalid optional metadata: %j', (metadata) => {
+    expect(ReportDefSchema.safeParse({
+      id: 'r1', name: 'n', description: '', category: 'operational',
+      designId: 'd1', primaryQueryId: 'q1', ...metadata,
+    }).success).toBe(false);
+  });
+
   it('accepts any non-empty category id (category is now a free-form reference into the global category list)', () => {
     const parsed = ReportDefSchema.parse({
       id: 'r1', name: 'n', description: '', category: 'nope', designId: 'd', primaryQueryId: 'q',

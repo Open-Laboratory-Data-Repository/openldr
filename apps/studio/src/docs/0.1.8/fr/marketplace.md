@@ -110,7 +110,7 @@ Dans Installed, ouvrez le plugin. Ouvrez ses points et sélectionnez **Disable**
 
 ### 2. Le réactiver si nécessaire
 
-Après désactivation, rechargez la page et rouvrez le plugin depuis Installed. Ouvrez ses points et sélectionnez **Enable**. Cela actualise l'état du menu.
+Après désactivation, ouvrez les mêmes points du panneau et sélectionnez **Enable**. L'action est actualisée après chaque modification réussie ; le panneau peut rester ouvert.
 
 ![Enable autorise à nouveau le chargement du plugin installé.](marketplace-guide-enable.png)
 

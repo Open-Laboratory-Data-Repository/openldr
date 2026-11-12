@@ -440,7 +440,7 @@ Choisissez un Variable ID unique et non vide par paramètre. Les points de sa li
 
 Une valeur facultative vide devient une chaîne vide. Le SQL doit la traiter explicitement si elle signifie aucun filtre. Required ne crée pas de valeur par défaut. Un rapport utilise les paramètres du modèle. Faites correspondre leur clé à la définition de requête.
 
-La page Reports actuelle transmet les filtres de dates sous forme de valeurs plates from et to. Une Custom Query déclarant un paramètre daterange fonctionne ici mais échoue actuellement en liaison directe avec Reports. Pour les rapports, utilisez deux paramètres Text nommés from et to, référencés par {{ param.from }} et {{ param.to }}. Report Designer peut les présenter avec une seule commande Date range.
+Une requête enregistrée avec un paramètre Date range, comme `period`, peut aussi être exécutée dans Reports. Ajoutez un paramètre de modèle Date range dans Report Designer. Reports transmet les dates choisies à la requête. Les requêtes existantes avec des paramètres Text nommés `from` et `to` restent compatibles.
 
 ## Supprimer ou regrouper les définitions
 

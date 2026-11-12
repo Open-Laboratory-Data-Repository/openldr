@@ -216,6 +216,8 @@ Run a report:
 ./openldr report run <id> --format pdf --lang fr --out rapport.pdf
 ```
 
+For a report with a Date range filter, pass both dates with `--param from=2026-01-01 --param to=2026-11-12`. The reporting service binds these values to the saved query's declared date range. Choose dates for your own report.
+
 `--lang` prints the translations stored on the design, including the dates. The built-in reports
 ship with French and Portuguese, so this works on them with no setup. Text with no translation for
 that language prints as authored, and data is never translated.

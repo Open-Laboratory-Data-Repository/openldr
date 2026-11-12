@@ -340,23 +340,23 @@ Confirmez que Report Designer a ouvert le bon modèle lié avant modification.
 
 ![Le modèle lié s'ouvre pour un responsable autorisé.](reports-guide-edit-template-result.png)
 
-## Vérifier une tentative Unpublish
+## Dépublier un rapport de la bibliothèque
 
-Unpublish vise à masquer une entrée en conservant son modèle. Lors de cette vérification, une nouvelle entrée personnalisée a renvoyé Action failed et est restée publiée. Cet échec actuel est documenté ici et n'a pas été corrigé.
+Utilisez Unpublish pour masquer une entrée de bibliothèque en conservant son modèle. Le rapport passe à Draft.
 
-### 1. Choisir Unpublish uniquement pour l'entrée voulue
+### 1. Choisir Unpublish
 
-Ouvrez Actions du rapport et sélectionnez Unpublish pour le masquer. L'entrée illustrée est du contenu de test jetable.
+Ouvrez le menu **Actions** du rapport voulu et sélectionnez **Unpublish**.
 
-![Unpublish tente de retirer le rapport de la bibliothèque.](reports-guide-unpublish.png)
+![Choisissez Unpublish pour le rapport à masquer.](reports-guide-unpublish.png)
 
-### 2. Vérifier l'issue réelle
+### 2. Confirmer le retrait de la bibliothèque
 
-Si Action failed apparaît, l'entrée n'a pas été dépubliée. Conservez son nom ou identifiant et signalez le problème. Ne considérez pas la suppression comme réussie.
+Vérifiez le message **Report unpublished** et la liste de la bibliothèque. Le rapport ne doit plus apparaître.
 
-![Les nouveaux rapports personnalisés peuvent actuellement afficher Action failed au lieu d'être dépubliés.](reports-guide-unpublish-failed.png)
+![Report unpublished confirme la réussite de l'action.](reports-guide-unpublish-success.png)
 
-**Résultat attendu :** le cas vérifié de nouvelle entrée a échoué avec HTTP 400 et est resté publié. Les autres actions de gestion ne prouvent pas la réussite d'Unpublish.
+**Résultat attendu :** le rapport est Draft et ne figure plus dans la bibliothèque. Son modèle reste disponible dans Report Designer.
 
 ## Supprimer un rapport inutile de la bibliothèque
 
@@ -429,7 +429,7 @@ Run now utilise cette même période calculée. Il ne reprend pas les dates choi
 
 Les filtres viennent des paramètres du modèle. Modifiez-les dans Report Designer. La requête principale fournit les lignes Spreadsheet. Les liaisons des éléments du modèle fournissent Document. Un rapport peut donc avoir plusieurs tables liées alors que Spreadsheet montre sa requête principale.
 
-La page Reports actuelle fournit les filtres de dates comme valeurs plates from et to. Une Custom Query déclarant un paramètre daterange imbriqué échoue en liaison directe ici. Le modèle existant utilise deux paramètres Text nommés from et to et une commande Date range sur le modèle. Consultez Report Designer.
+Reports transmet les dates choisies aux paramètres de requête Date range, dont `period`. Les requêtes existantes avec des paramètres Text nommés `from` et `to` restent compatibles. Présentez les dates avec un paramètre de modèle Date range dans Report Designer.
 
 Les rapports nécessitent des données reçues différentes. Un rapport de prélèvements, d'organismes ou de sensibilités ne peut pas les inventer à partir d'un comptage de demandes. Un résultat vide peut être correct selon les filtres ou les données disponibles.
 
@@ -461,13 +461,11 @@ Les téléchargements réels sont [le PDF interactif](https://openldr.online/doc
 
 **Un rapport ne renvoie aucune ligne.** Vérifiez la période, l'établissement et les données source nécessaires. Un fichier d'exemple n'est pas requis pour les rapports réels.
 
-**Un rapport personnalisé indique required parameter: period.** Vérifiez la forme des paramètres de dates décrite ci-dessus. Un aperçu réussi dans l'éditeur ne prouve pas une exécution Reports.
+**Un rapport personnalisé indique required parameter: period.** Définissez les deux dates dans Parameters et relancez le rapport. Vérifiez que le modèle expose un filtre Date range et que la requête déclare ses paramètres obligatoires.
 
 **Une exécution planifiée manque.** Vérifiez l'interrupteur d'activation, puis fermez et rouvrez Scheduled Runs. Un message de mise en file seul ne prouve aucune exécution.
 
 **Une exécution planifiée indique Failed.** Sur ordinateur, pointez son état pour lire l'erreur enregistrée. Corrigez les paramètres concernés et réessayez Run now.
-
-**Unpublish indique Action failed.** Le nouveau rapport vérifié a échoué et est resté publié. Signalez son identifiant. Ce guide ne prétend pas que l'opération a réussi.
 
 ## Guides associés
 

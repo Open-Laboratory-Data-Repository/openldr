@@ -2,7 +2,7 @@
 
 Use Report Designer to arrange printable elements, bind them to saved Custom Queries and create reports for the library. A design controls the page. A query supplies rows. Template parameters define the filters people enter when running a report.
 
-Start with your own saved query and intended page layout. No documentation sample data is required. The pictures use a zero-request reporting query in a separate test installation. Optional practice is at the end.
+Start with your own saved query and intended page layout. No documentation sample data is required. The pictures use a zero-request query with Text parameters named `from` and `to`. A Date range query parameter is also supported. Optional practice is at the end.
 
 You need **Edit report templates** to create, edit and publish designs. **View reports** opens the library, and **Run reports** executes its entries.
 
@@ -88,7 +88,7 @@ Open Bind query and choose your Custom Query. The example uses Request count for
 
 ## Define the report filter and preview defaults
 
-For Reports, the current date-range filter passes flat from and to values. The example query declares those as two required Text parameters. The template provides one Date range control. A workbench query declaring one daterange parameter currently fails when bound directly to Reports.
+Reports accepts a saved query with a Date range parameter, such as `period`. The pictured query uses two required Text parameters named `from` and `to`. Both use one Date range control on the template.
 
 ### 1. Add a template parameter
 
@@ -110,7 +110,7 @@ Set Label to what people should see, such as Period.
 
 ### 4. Match the parameter type
 
-Set Type to Date range. The reporting query itself uses two Text parameters named from and to.
+Set Type to Date range. The pictured query uses two Text parameters named `from` and `to`.
 
 ![Choose Date range to match the query parameter.](report-designer-guide-parameter-type.png)
 
@@ -366,7 +366,7 @@ Create report from this design adds a separate library entry. It does not replac
 
 ## Optional practice reference
 
-[Download the optional reporting count query](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Import it through Query if you want a reference. It uses required Text parameters named from and to, which match Reports' current date-range input. It needs no patient sample data. Use your own approved query for normal reporting.
+[Download the optional reporting count query](https://openldr.online/docs-samples/user-guide/report-designer/report-count-query.json). Import it through Query if you want a reference. Its required Text parameters named `from` and `to` remain valid for reports using a Date range control. It needs no patient sample data. Use your own approved query for normal reporting.
 
 [Download the published example PDF](https://openldr.online/docs-samples/user-guide/report-designer/published-summary.pdf) or [its exported workbook](https://openldr.online/docs-samples/user-guide/report-designer/summary-design.xlsx) to compare the one-column result. These files contain only a zero count.
 
@@ -384,7 +384,7 @@ Create report from this design adds a separate library entry. It does not replac
 
 **A table prints across several pages.** Data can continue beyond the first page. Load pages and inspect the PDF to check the actual count.
 
-**Reports says required parameter: period.** A Custom Query declaring one daterange parameter works in Query but currently receives no nested range from Reports. Use the reporting pattern of two Text query parameters named from and to, referenced by the SQL. Do not assume a successful designer preview proves a library run.
+**Reports says required parameter: period.** Set both dates in Parameters and run again. Check that the design exposes a Date range filter and that the query declares its required parameters.
 
 ## Related guides
 

@@ -23,9 +23,10 @@ export const ReportDefSchema = z.object({
   category: z.string().min(1),
   designId: z.string().min(1),
   primaryQueryId: z.string().min(1),
-  summaryMetrics: z.array(MetricSchema).optional(),
-  chart: ChartHintSchema.optional(),
-  paramOptions: z.record(z.string()).optional(),
+  // Saved reports return SQL NULL for absent metadata. Accept that shape on full updates.
+  summaryMetrics: z.array(MetricSchema).nullish().transform((value) => value ?? undefined),
+  chart: ChartHintSchema.nullish().transform((value) => value ?? undefined),
+  paramOptions: z.record(z.string()).nullish().transform((value) => value ?? undefined),
   status: z.enum(['draft', 'published']).default('draft'),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
