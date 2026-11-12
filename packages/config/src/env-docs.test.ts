@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 import { parseSecretKey } from '@openldr/core';
-import { ConfigSchema } from './schema';
+import { ConfigSchema, DEV_SECRETS_ENCRYPTION_KEY } from './schema';
 
 // Every env var the server reads must be listed on each environment docs page. A var added
 // to ConfigSchema without a docs row fails here, so the gap shows up before merge instead of
@@ -67,5 +67,10 @@ describe('.env.example', () => {
 
   it('has a SECRETS_ENCRYPTION_KEY the server can use', () => {
     expect(() => parseSecretKey(env.SECRETS_ENCRYPTION_KEY ?? '')).not.toThrow();
+  });
+
+  // The production refusal in schema.ts compares against this constant, so the two must match.
+  it('ships the development key the schema refuses in production', () => {
+    expect(env.SECRETS_ENCRYPTION_KEY).toBe(DEV_SECRETS_ENCRYPTION_KEY);
   });
 });

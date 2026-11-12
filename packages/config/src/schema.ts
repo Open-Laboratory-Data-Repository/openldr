@@ -9,6 +9,13 @@ const envBoolean = (defaultValue: boolean) =>
     .default(defaultValue)
     .transform((v) => v === true || v === 'true' || v === '1');
 
+/**
+ * The SECRETS_ENCRYPTION_KEY in the repo's `.env.example`. It is public, so it protects nothing:
+ * anyone with a database backup could unseal the local sign-in signing key and forge tokens.
+ * Production refuses it. `env-docs.test.ts` checks `.env.example` still holds this exact value.
+ */
+export const DEV_SECRETS_ENCRYPTION_KEY = 'b3Blbmxkci1kZXYtb25seS1zZWNyZXRzLWtleS0wMDE=';
+
 export const ConfigSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -234,6 +241,12 @@ export const ConfigSchema = z
     }
     if (cfg.NODE_ENV === 'production' && cfg.AUTH_DEV_BYPASS === true) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['AUTH_DEV_BYPASS'], message: 'AUTH_DEV_BYPASS must be off in production' });
+    }
+    if (cfg.NODE_ENV === 'production' && cfg.SECRETS_ENCRYPTION_KEY === DEV_SECRETS_ENCRYPTION_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom, path: ['SECRETS_ENCRYPTION_KEY'],
+        message: 'SECRETS_ENCRYPTION_KEY is the public development key from .env.example. Generate a new one for a real install.',
+      });
     }
   })
   .transform((cfg) => ({
