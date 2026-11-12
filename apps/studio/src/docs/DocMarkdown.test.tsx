@@ -11,7 +11,7 @@ vi.mock('./screenshots', () => ({
 import { DocMarkdown } from './DocMarkdown';
 
 describe('DocMarkdown', () => {
-  it('keeps the focused target sharp and opens the untouched full capture', () => {
+  it('keeps the focused target sharp and sends its focus to the lightbox', () => {
     const click = vi.fn();
     const { container } = render(<DocMarkdown content={'![Menu](dashboard-create-menu.png)'} onImageClick={click} />);
     const images = container.querySelectorAll('img');
@@ -20,7 +20,7 @@ describe('DocMarkdown', () => {
     expect(images[1].style.clipPath).toContain('inset(');
     expect(images[1]).toHaveAttribute('aria-hidden', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Zoom: Menu' }));
-    expect(click).toHaveBeenCalledWith({ url: '/assets/original-menu.png', alt: 'Menu' });
+    expect(click).toHaveBeenCalledWith({ url: '/assets/original-menu.png', alt: 'Menu', focus: 'dashboard-create-menu.png' });
     expect(screen.queryByRole('button', { name: 'Unblurred' })).toBeNull();
   });
   it('changes the CLI command and screenshot together when Windows is selected', () => {

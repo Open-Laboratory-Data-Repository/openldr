@@ -32,7 +32,7 @@ Si ce nom existe déjà, OpenLDR ajoute un numéro. Vous pouvez maintenant ajout
 
 ![Le nouveau tableau de bord est sélectionné et sa grille est vide.](dashboard-create-result.png)
 
-Sélectionnez une image pour voir l'écran complet. Ces captures montrent l'interface en anglais.
+Sélectionnez une image pour agrandir la même zone mise en évidence. Ces captures montrent l'interface en anglais.
 
 ## Qui peut faire quoi
 

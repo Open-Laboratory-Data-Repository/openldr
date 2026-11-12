@@ -1,7 +1,8 @@
 # Continue the user guide review
 
-This branch preserves the documentation review if the desktop loses power.
-The review is in progress. Do not merge it without the operator's review.
+These files preserve the documentation review if the desktop loses power.
+The operator authorized merging this checkpoint to main on 2026-11-12.
+The remaining guide sections still need review before they replace existing app content.
 
 ## Open the previews
 
@@ -65,12 +66,13 @@ The preview itself does not require that backup.
 
 ```sh
 git fetch origin
-git switch --track origin/codex/docs-guide-review
+git switch main
+git pull --ff-only
 ```
 
-If the branch already exists locally, switch to it and run `git pull --ff-only`.
+Use main for the next documentation edits. The earlier review branch remains available as history.
 Start a new Codex session in that checkout and ask it to read this file.
-The Git branch carries the preview and source files. It does not carry the current chat or running processes.
+Git carries the preview and source files. It does not carry the current chat or running processes.
 
 ## Editing
 
@@ -95,17 +97,17 @@ The old capture image comparisons remain archived. Their original files are also
 Approved Start here and Create a dashboard are now in apps/studio/src/docs/0.1.8 in English, French, and Portuguese.
 The website CLI reference in apps/web/src/docs/0.1.8 has matching installed and source examples.
 FocusedScreenshot.tsx applies the approved crop and blur to the four new Create captures.
-The browser lightbox opens the untouched full image. PDF and Word exports show the original full images.
+The browser lightbox retains the page crop, blur and markers when enlarging the image. PDF and Word exports show the original full images.
 CLI exports use the default Linux walkthrough. Platform buttons affect the browser view.
 The rest of the app Dashboard guide keeps its earlier content pending review.
 The full Dashboard preview applies the new treatment to all 32 screenshot placements.
 Its widget and sample instructions still need task-by-task review.
 Do not confuse the reviewed Create task with those remaining drafts.
-No merge, deployment, or release changelog update is part of this review branch.
+The operator authorized merging and pushing this review on 2026-11-12. No deployment was requested.
 
 
 ## Checks for this checkpoint
 
 See verification/checks.md for commands, outputs, and limits.
 The browser checked all three guide languages and all three CLI platform choices.
-No merge or deployment was performed. No release changelog was generated because the branch has not merged to main.
+This review is being merged to main at the operator's request. Regenerate the release changelog after merging. No deployment was requested.

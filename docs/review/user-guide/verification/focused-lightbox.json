@@ -1,0 +1,10 @@
+[
+  {
+    "kind": "app",
+    "matchingFrames": 4
+  },
+  {
+    "kind": "preview",
+    "matchingFrames": 32
+  }
+]

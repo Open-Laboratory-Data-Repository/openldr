@@ -25,16 +25,11 @@ const FOCUS: Record<string, Focus> = {
 
 export function focusedScreenshot(src: string): boolean { return src in FOCUS; }
 
-/** Display a crop of the original capture. The lightbox always receives the untouched image. */
-export function FocusedScreenshot({ src, url, alt, onImageClick }: {
-  src: string; url: string; alt: string; onImageClick: (image: LightboxImage) => void;
-}) {
+/** The same crop, blur and markers are used on the page and in the lightbox. */
+export function FocusedScreenshotFrame({ src, url, alt }: { src: string; url: string; alt: string }) {
   const { crop, targets, step } = FOCUS[src];
   const imageStyle = { position: 'absolute' as const, inset: 0, width: '100%', height: '100%', maxWidth: 'none', margin: 0, objectFit: 'fill' as const };
   return (
-    <span className="my-4 block">
-      <Button variant="outline" type="button" onClick={() => onImageClick({ url, alt })}
-        aria-label={`Zoom: ${alt}`} className="block h-auto w-full max-w-[500px] cursor-zoom-in overflow-hidden p-0">
         <span className="relative block w-full overflow-hidden bg-background" style={{ aspectRatio: '8 / 5' }}>
           <span className="absolute block" style={{
             width: `${1280 / crop.width * 100}%`, height: `${800 / crop.height * 100}%`,
@@ -56,6 +51,17 @@ export function FocusedScreenshot({ src, url, alt, onImageClick }: {
             ))}
           </span>
         </span>
+  );
+}
+
+export function FocusedScreenshot({ src, url, alt, onImageClick }: {
+  src: string; url: string; alt: string; onImageClick: (image: LightboxImage) => void;
+}) {
+  return (
+    <span className="my-4 block">
+      <Button variant="outline" type="button" onClick={() => onImageClick({ url, alt, focus: src })}
+        aria-label={`Zoom: ${alt}`} className="block h-auto w-full max-w-[500px] cursor-zoom-in overflow-hidden p-0">
+        <FocusedScreenshotFrame src={src} url={url} alt={alt} />
       </Button>
       {alt ? <span className="mt-1.5 block text-xs text-muted-foreground">{alt}</span> : null}
     </span>

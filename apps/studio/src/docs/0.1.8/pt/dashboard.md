@@ -32,7 +32,7 @@ Se esse nome já existir, o OpenLDR acrescenta um número. Pode agora acrescenta
 
 ![O novo painel está selecionado e a sua grelha de edição está vazia.](dashboard-create-result.png)
 
-Selecione uma imagem para ver o ecrã completo. Estas capturas mostram a interface em inglês.
+Selecione uma imagem para ampliar a mesma área em destaque. Estas capturas mostram a interface em inglês.
 
 ## Quem pode fazer o quê
 

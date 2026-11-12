@@ -4,7 +4,7 @@
 
 `pnpm --filter @openldr/studio test src/docs`
 
-Output: 13 test files passed, 91 tests passed.
+Output: 13 test files passed, 92 tests passed.
 This checks Markdown rendering, asset references, heading links, platform changes, and export parsing.
 It does not prove the app instructions match every product state.
 
@@ -35,7 +35,7 @@ It also rebuilt successfully when invoked by absolute path from outside the chec
 
 Headless Chromium opened the actual Studio docs through the development server.
 English, French and Portuguese each showed the new Create task.
-The image lightbox opened the original 1280 by 800 capture.
+The image lightbox retained the page crop, blur and numbered marker.
 Start here switched all 13 terminal images between Linux, macOS and Windows.
 Windows instructions showed C:\openldr_ce and PowerShell commands, with no remaining Unix folder commands.
 All three languages fit a 375 by 812 viewport without page overflow.
@@ -45,7 +45,7 @@ See browser-checks.json and the app screenshots in the parent folder.
 The standalone Dashboard preview contains 32 equal frames.
 Each inner frame measured 498 by 311.25 pixels, inside a 500-pixel button.
 The background filter was blur(1.25px). No comparison toggle was present.
-The lightbox opened the original full capture.
+The lightbox retained the page crop, blur and markers.
 The preview fit 375- and 320-pixel viewports without page overflow.
 No JavaScript page errors were reported.
 
@@ -65,3 +65,15 @@ It includes expected failures and their successful recovery commands.
 dev-results.json contains six successful source CLI command records.
 The earlier tests used isolated services and one Organization fixture.
 They did not reset the populated database or verify full restored service startup.
+
+## Focused image expansion
+
+`pnpm --filter @openldr/studio test src/docs` reported 92 tests passed after this correction.
+`pnpm --filter @openldr/studio typecheck` exited 0.
+
+A headless browser compared the page and expanded rendering for all four app Create screenshots and all 32 Dashboard preview frames.
+Their source images, crop coordinates, clipped sharp layers, background blur and markers matched.
+The app retained the focus effect after using Zoom in.
+Both expanded views fit a 375 by 812 viewport without page overflow.
+See focused-lightbox.json and the matching-expanded screenshots.
+Original full captures remain unchanged on disk.

@@ -32,7 +32,7 @@ If that name is already used, OpenLDR adds a number. You can now add widgets.
 
 ![The new dashboard is selected and its editing grid is empty.](dashboard-create-result.png)
 
-Select any screenshot to see the full screen.
+Select any screenshot to enlarge the same focused image.
 
 ## Who can do what
 

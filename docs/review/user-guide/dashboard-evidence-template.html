@@ -98,7 +98,7 @@
     </div>
    </section>
   </div>
-  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><img alt=""></div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><div data-lightbox-content></div></div>
  </div>
 </div>
 <script type="application/json" id="dashboard-evidence-assets">__EVIDENCE_ASSETS__</script>
@@ -115,8 +115,17 @@
  root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
  root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
   previousFocus = button;
-  box.querySelector('img').src = button.querySelector('img').src;
-  box.querySelector('img').alt = button.querySelector('img').alt;
+  const content = box.querySelector('[data-lightbox-content]');
+  const frame = button.querySelector('.fc-screenshot');
+  content.replaceChildren();
+  content.className = frame ? 'dg-context-shot' : '';
+  if(frame) {
+   content.dataset.shotId = button.closest('[data-shot-id]').dataset.shotId;
+   content.append(frame.cloneNode(true));
+  } else {
+   delete content.dataset.shotId;
+   content.append(button.querySelector('img').cloneNode(true));
+  }
   box.hidden = false;
   root.querySelector('.dg-main').inert=true;
   box.querySelector('button').focus();
