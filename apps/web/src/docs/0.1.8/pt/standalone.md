@@ -4,7 +4,7 @@ Execute o OpenLDR num único computador, sem Docker. Um só comando inicia uma b
 
 Só o Linux foi testado. O macOS e o Windows podem funcionar, mas ainda ninguém os verificou.
 
-Executa-o a partir de uma cópia do código-fonte, compilada no seu próprio computador. Ainda não existe instalador. As mensagens do lançador chamam-lhe `openldr-standalone`. Numa cópia do repositório, esse comando não está no seu PATH. Escreva `pnpm` antes dele e execute-o a partir da raiz do repositório, por exemplo `pnpm openldr-standalone start`.
+Executa-o a partir de uma cópia do código-fonte, compilada no seu próprio computador. Ainda não existe instalador. O lançador é o comando `openldr-standalone`, e as mensagens dele usam esse nome. Numa cópia do repositório, esse comando não está no seu PATH. Escreva `pnpm` antes dele e execute-o a partir da raiz do repositório, por exemplo `pnpm openldr-standalone start`.
 
 ## O que precisa
 
@@ -68,7 +68,7 @@ Mantenha este terminal aberto. O OpenLDR só funciona enquanto este comando esti
 
 ### 2. Criar o primeiro administrador
 
-Abra `http://localhost:3000/studio/` num navegador deste computador. O Studio mostra **Create the administrator**. Introduza o código de configuração que aparece no terminal e escolha um nome de utilizador e uma palavra-passe. A página [Instalar](/docs/install) mostra cada ecrã na parte sobre o primeiro administrador.
+Abra `http://localhost:3000/studio/` num navegador deste computador. O Studio mostra **Criar o administrador**. Introduza o código de configuração que aparece no terminal e escolha um nome de utilizador e uma palavra-passe. A página [Instalar](/docs/install) mostra cada ecrã na parte sobre o primeiro administrador.
 
 O código é válido durante 30 minutos. Cada arranque mostra um código novo enquanto não existir um administrador. Para obter um código novo com o OpenLDR a funcionar, abra um segundo terminal no repositório e execute:
 
@@ -84,9 +84,9 @@ O código de configuração só aparece no terminal. O lançador nunca o escreve
 | --- | --- | --- |
 | `--data-dir <folder>` | Veja a secção seguinte | A pasta que guarda todos os dados desta instalação. |
 | `--port <port>` | `3000` | A porta web. Se outro programa a estiver a usar, `start` para com `Port 3000 is already in use. Choose another with --port.` Nunca escolhe outra porta por si. |
-| `--host <address>` | `127.0.0.1` | O endereço em que o OpenLDR escuta. A predefinição só deixa entrar este computador. Veja **Abrir a um telemóvel ou a outro computador** mais abaixo. |
+| `--host <address>` | `127.0.0.1` | O endereço em que o OpenLDR escuta. A predefinição só deixa entrar este computador. Veja **Abrir o acesso a um telemóvel ou a outro computador** mais abaixo. |
 
-Dê a `--data-dir` um caminho completo. O pnpm executa o lançador a partir da raiz do repositório. Um caminho curto como `mydata` parte, por isso, dessa raiz, e não da pasta em que o seu terminal está.
+Dê a `--data-dir` um caminho completo. O pnpm executa o lançador a partir da raiz do repositório. Um caminho curto como `mydata` aponta então para dentro do repositório, e não para a pasta em que o seu terminal está.
 
 ## Onde fica a pasta de dados
 
@@ -96,7 +96,7 @@ Dê a `--data-dir` um caminho completo. O pnpm executa o lançador a partir da r
 | macOS, não testado | `~/Library/Application Support/OpenLDR` |
 | Windows, não testado | `%LOCALAPPDATA%\OpenLDR` |
 
-Defina `OPENLDR_HOME` na shell para usar outra pasta. `--data-dir` prevalece sobre ambos. Se arrancou com `--data-dir`, indique a mesma pasta a `stop`, `status` e `cli`. Caso contrário, procuram na pasta predefinida e dizem que o OpenLDR não está a funcionar.
+Defina `OPENLDR_HOME` na shell para usar outra pasta. Dê-lhe também um caminho completo. `--data-dir` prevalece sobre ambos. Se arrancou com `--data-dir`, indique a mesma pasta a `stop`, `status` e `cli`. Caso contrário, procuram na pasta predefinida. `stop` e `status` mostram então `OpenLDR is not running.`, e `cli` mostra `Start OpenLDR first: openldr-standalone start`.
 
 A pasta contém:
 
@@ -106,7 +106,7 @@ A pasta contém:
 | `blobs/` | Os ficheiros armazenados, como os carregamentos. |
 | `logs/` | `server.log` e `postgres.log`. |
 | `crash/` | Notas escritas quando o servidor ou um plugin falha. |
-| `work/` | Ficheiros temporários, como uma transferência de terminologia enquanto é importada. |
+| `work/` | Ficheiros temporários, como um descarregamento de terminologia enquanto é importado. |
 | `standalone.json` | A chave dos segredos, as duas palavras-passe da base de dados e a porta da base de dados. |
 | `standalone.lock` | Existe enquanto um lançador funciona. Indica o processo e o endereço desse lançador. |
 
@@ -147,7 +147,7 @@ O servidor tem 60 segundos para acabar o trabalho em curso. Depois disso, o Post
 
 ### 3. Reiniciar depois de um corte de energia ou de uma falha
 
-Execute de novo `pnpm openldr-standalone start`. Se um lançador foi terminado à força e deixou o seu Postgres a correr, `start` verifica primeiro, com um início de sessão na base de dados, que esse Postgres pertence a esta pasta. Depois para esse Postgres, substitui o bloqueio antigo e arranca normalmente. Vê as linhas de arranque habituais e mais nada.
+Execute de novo `pnpm openldr-standalone start`. Se um lançador foi terminado à força, `start` substitui primeiro o bloqueio antigo dele. Se esse lançador deixou o seu Postgres a correr, `start` inicia sessão na base de dados para verificar que esse Postgres pertence a esta pasta. Depois para esse Postgres e arranca normalmente. Vê as linhas de arranque habituais e mais nada.
 
 Testámos isto terminando o lançador à força no Linux. Um corte de energia real não foi testado.
 
@@ -156,7 +156,7 @@ Testámos isto terminando o lançador à força no Linux. Um corte de energia re
 Um segundo `start` na mesma pasta é recusado:
 
 ```text
-OpenLDR is already running (process 619959) at http://localhost:3000/studio/.
+OpenLDR is already running (process 12345) at http://localhost:3000/studio/.
 ```
 
 Para ter duas instalações a funcionar ao mesmo tempo, dê a cada uma o seu `--data-dir` e a sua `--port`.
@@ -231,11 +231,11 @@ Defina qualquer outra definição na shell antes de `start`. Por exemplo, este c
 PLUGIN_EGRESS_ENABLED=false pnpm openldr-standalone start
 ```
 
-As definições indicadas assim chegam também a `cli`. A página [Variáveis de ambiente](/docs/environment) lista-as todas.
+Uma definição indicada assim só vale para esse comando. Se um comando da CLI também precisar dela, coloque-a também antes desse comando `cli`. A página [Variáveis de ambiente](/docs/environment) lista-as todas.
 
 O lançador remove as definições de componentes que uma instalação autónoma não tem. Ignora `OIDC_*`, `KEYCLOAK_*`, `S3_*`, `MSSQL_*`, `MYSQL_*`, `IDENTITY_ADMIN_ADAPTER`, `AUTH_DEV_USERNAME` e `AUTH_DEV_ROLES`.
 
-## Abrir a um telemóvel ou a outro computador
+## Abrir o acesso a um telemóvel ou a outro computador
 
 Por predefinição, só este computador consegue abrir o OpenLDR. Para deixar entrar um telemóvel da mesma rede ou do Tailscale, arranque com o endereço deste computador nessa rede:
 
@@ -251,7 +251,9 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Substitua `100.64.0.10` pelo endereço privado ou Tailscale do seu computador. Abra no telemóvel o endereço mostrado. `--host 0.0.0.0` escuta em todos os endereços deste computador. O lançador mostra então `http://localhost:3000/studio/`, que só funciona neste computador. No telemóvel, use antes o endereço do computador.
 
-Leia a última linha antes de o fazer. Uma instalação autónoma não tem TLS. Os nomes de utilizador, as palavras-passe e os dados dos doentes atravessam a rede sem cifra. Qualquer pessoa que consiga observar essa rede pode lê-los. Faça-o só numa rede de confiança. O Tailscale cifra o tráfego entre os seus próprios dispositivos. Nunca abra esta porta à Internet. Pode ter de autorizar a porta na firewall.
+Em HTTP sem cifra a partir de outro dispositivo, o navegador desativa uma funcionalidade de que o Studio precisa. Alguns ecrãs podem então falhar, entre eles as páginas de plugins e a edição de painéis. Funcionam no computador que executa o OpenLDR.
+
+A última linha é um aviso. Uma instalação autónoma não tem TLS. Os nomes de utilizador, as palavras-passe e os dados dos doentes atravessam a rede sem cifra. Qualquer pessoa que consiga observar essa rede pode lê-los. Faça-o só numa rede de confiança. O Tailscale cifra o tráfego entre os seus próprios dispositivos. Nunca abra esta porta à Internet. Pode ter de autorizar a porta na firewall.
 
 ## Fazer e repor uma cópia de segurança
 
@@ -262,7 +264,7 @@ pnpm openldr-standalone stop
 cp -a ~/.local/share/openldr /media/backup/openldr-2026-11-13
 ```
 
-Guarde `standalone.json` com o resto. Sem ele, ninguém consegue abrir a base de dados nem ler os segredos guardados nela. A cópia contém dados de doentes e palavras-passe. Mantenha-a privada.
+Guarde `standalone.json` com o resto. Sem ele, o lançador recusa arrancar nessa base de dados. Sem a chave que ele contém, os segredos guardados na base de dados não podem ser lidos. A cópia contém dados de doentes e palavras-passe. Mantenha-a privada.
 
 Para repor, pare o OpenLDR, volte a colocar a pasta copiada no sítio original e arranque de novo. Também pode arrancar com `--data-dir` a apontar para a cópia.
 
@@ -273,7 +275,8 @@ Para repor, pare o OpenLDR, volte a colocar a pasta copiada no sítio original e
 - Só Postgres. O Postgres incluído guarda as duas bases de dados. O SQL Server e o MySQL não podem ser a base de dados de análise.
 - Um só lançador por pasta de dados.
 - Só o Linux foi testado. O Windows e o macOS não foram testados.
-- A sincronização com um servidor central que use um certificado autoassinado não funciona.
+- A sincronização com um servidor central que use um certificado autoassinado não é suportada.
+- A partir de outro dispositivo em HTTP sem cifra, alguns ecrãs do Studio podem falhar, como as páginas de plugins e a edição de painéis. Funcionam no computador que executa o OpenLDR.
 - O Postgres incluído não pode passar para uma nova versão principal. A pasta de dados só funciona com o Postgres 16.
 - Fazer uma cópia de segurança é parar e depois copiar a pasta. Não existe ferramenta de cópia de segurança.
 - Não pode mover dados entre uma instalação autónoma e uma instalação Docker.

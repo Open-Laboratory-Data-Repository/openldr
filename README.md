@@ -206,10 +206,15 @@ One command starts a bundled Postgres 16 and the server. All data stays in one f
 pnpm install --frozen-lockfile
 pnpm --filter @openldr/studio build
 pnpm --filter @openldr/standalone build
-pnpm openldr-standalone start      # prints the address and a setup code. Ctrl+C stops it.
+pnpm openldr-standalone start      # holds this terminal. Prints the address, and a setup code until an administrator exists.
+```
+
+Run these in a second terminal while `start` runs:
+
+```bash
 pnpm openldr-standalone status
-pnpm openldr-standalone stop
 pnpm openldr-standalone cli -- doctor
+pnpm openldr-standalone stop       # or press Ctrl+C in the start terminal
 ```
 
 `pnpm openldr` does not reach this install. It reads the checkout's `.env`. Use `pnpm openldr-standalone cli` instead. It serves plain HTTP with no TLS. The full guide, with its limits and backup steps, is the web docs page [Run without Docker](apps/web/src/docs/0.1.8/en/standalone.md).

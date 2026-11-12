@@ -4,7 +4,7 @@ Run OpenLDR on one computer that has no Docker. One command starts a Postgres 16
 
 Only Linux has been tested. macOS and Windows may work, but nobody has checked them yet.
 
-You run it from a copy of the source code that you build on your own computer. There is no installer yet. The launcher's messages call it `openldr-standalone`. In a source checkout that command is not on your PATH. Put `pnpm` in front of it and run it from the checkout's root folder, for example `pnpm openldr-standalone start`.
+You run it from a copy of the source code that you build on your own computer. There is no installer yet. The launcher is the `openldr-standalone` command, and its messages use that name. In a source checkout that command is not on your PATH. Put `pnpm` in front of it and run it from the checkout's root folder, for example `pnpm openldr-standalone start`.
 
 ## What you need
 
@@ -86,7 +86,7 @@ The setup code goes to the terminal only. The launcher never writes it to a log 
 | `--port <port>` | `3000` | The web port. If another program uses it, `start` stops with `Port 3000 is already in use. Choose another with --port.` It never picks another port by itself. |
 | `--host <address>` | `127.0.0.1` | The address OpenLDR listens on. The default lets only this computer in. See **Open it to a phone or another computer** below. |
 
-Give `--data-dir` a full path. pnpm runs the launcher from the checkout's root folder, so it reads a short path such as `mydata` from there, not from the folder your terminal is in.
+Give `--data-dir` a full path. pnpm runs the launcher from the checkout's root folder. A short path such as `mydata` then points into the checkout, not into the folder your terminal is in.
 
 ## Where the data folder is
 
@@ -96,7 +96,7 @@ Give `--data-dir` a full path. pnpm runs the launcher from the checkout's root f
 | macOS, untested | `~/Library/Application Support/OpenLDR` |
 | Windows, untested | `%LOCALAPPDATA%\OpenLDR` |
 
-Set `OPENLDR_HOME` in the shell to use another folder. `--data-dir` wins over both. If you started with `--data-dir`, give `stop`, `status` and `cli` the same folder. Without it they look in the default folder and report that OpenLDR is not running.
+Set `OPENLDR_HOME` in the shell to use another folder. Give it a full path too. `--data-dir` wins over both. If you started with `--data-dir`, give `stop`, `status` and `cli` the same folder. Without it they look in the default folder. `stop` and `status` then print `OpenLDR is not running.`, and `cli` prints `Start OpenLDR first: openldr-standalone start`.
 
 The folder holds:
 
@@ -147,7 +147,7 @@ The server gets 60 seconds to finish work in progress. After that Postgres stops
 
 ### 3. Start it again after a power cut or a crash
 
-Run `pnpm openldr-standalone start` again. If a launcher was killed and left its Postgres running, `start` first checks over a database login that this Postgres belongs to this folder. It then stops that Postgres, replaces the old lock and starts as usual. You see the normal start lines and nothing else.
+Run `pnpm openldr-standalone start` again. If a launcher was killed, `start` first replaces its old lock. If that launcher left its Postgres running, `start` logs in to the database to check that this Postgres belongs to this folder. It then stops that Postgres and starts as usual. You see the normal start lines and nothing else.
 
 We tested this by killing the launcher on Linux. A real power cut has not been tested.
 
@@ -156,7 +156,7 @@ We tested this by killing the launcher on Linux. A real power cut has not been t
 A second `start` on the same folder is refused:
 
 ```text
-OpenLDR is already running (process 619959) at http://localhost:3000/studio/.
+OpenLDR is already running (process 12345) at http://localhost:3000/studio/.
 ```
 
 To run two installs at once, give each its own `--data-dir` and its own `--port`.
@@ -231,7 +231,7 @@ Set any other setting in the shell before `start`. For example, this blocks ever
 PLUGIN_EGRESS_ENABLED=false pnpm openldr-standalone start
 ```
 
-Settings set this way reach `cli` too. [Environment variables](/docs/environment) lists them all.
+A setting given this way applies only to that one command. If a CLI command needs it too, put it in front of that `cli` command as well. [Environment variables](/docs/environment) lists them all.
 
 The launcher removes settings for parts a standalone install does not have. It ignores `OIDC_*`, `KEYCLOAK_*`, `S3_*`, `MSSQL_*`, `MYSQL_*`, `IDENTITY_ADMIN_ADAPTER`, `AUTH_DEV_USERNAME` and `AUTH_DEV_ROLES`.
 
@@ -251,7 +251,9 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Replace `100.64.0.10` with your computer's private or Tailscale address. Open the printed address on the phone. `--host 0.0.0.0` listens on every address this computer has. The launcher then prints `http://localhost:3000/studio/`, which works on this computer only. On the phone, use the computer's own address instead.
 
-Read the last line before you do this. A standalone install has no TLS. Usernames, passwords and patient data cross the network unencrypted. Anyone who can watch that network can read them. Use it only on a network you trust. Tailscale encrypts traffic between your own devices. Never open the port to the internet. Your firewall may need to allow the port.
+Over plain HTTP from another device, the browser turns off a feature Studio uses, so some screens can fail there. Plugin pages and dashboard editing are among them. They work on the computer that runs OpenLDR.
+
+The last line is a warning. A standalone install has no TLS. Usernames, passwords and patient data cross the network unencrypted. Anyone who can watch that network can read them. Use it only on a network you trust. Tailscale encrypts traffic between your own devices. Never open the port to the internet. Your firewall may need to allow the port.
 
 ## Back up and restore
 
@@ -262,7 +264,7 @@ pnpm openldr-standalone stop
 cp -a ~/.local/share/openldr /media/backup/openldr-2026-11-13
 ```
 
-Keep `standalone.json` with the rest. Without it, nobody can open the database or read the secrets stored in it. The copy holds patient data and passwords, so keep it private.
+Keep `standalone.json` with the rest. Without it, the launcher refuses to start on that database. Without the key it holds, the secrets stored in the database cannot be read. The copy holds patient data and passwords, so keep it private.
 
 To restore, stop OpenLDR, put the copied folder back where it was, and start again. You can also start with `--data-dir` pointing at the copy.
 
@@ -273,7 +275,8 @@ To restore, stop OpenLDR, put the copied folder back where it was, and start aga
 - Postgres only. The bundled Postgres holds both databases. SQL Server and MySQL cannot be the analytics database.
 - One launcher per data folder.
 - Only Linux has been tested. Windows and macOS are untested.
-- Sync to a central server that uses a self-signed certificate does not work.
+- Sync to a central server that uses a self-signed certificate is not supported.
+- From another device over plain HTTP, some Studio screens can fail, such as plugin pages and dashboard editing. They work on the computer that runs OpenLDR.
 - The bundled Postgres cannot be upgraded to a new major version. The data folder works with Postgres 16 only.
 - Backup means stop, then copy the folder. There is no backup tool.
 - You cannot move data between a standalone install and a Docker install.

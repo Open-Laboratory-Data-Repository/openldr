@@ -4,12 +4,12 @@ Faites tourner OpenLDR sur un seul ordinateur, sans Docker. Une seule commande d
 
 Seul Linux a été testé. macOS et Windows peuvent fonctionner, mais personne ne les a encore vérifiés.
 
-Vous l'exécutez depuis une copie du code source, compilée sur votre propre ordinateur. Il n'existe pas encore d'installateur. Les messages du lanceur l'appellent `openldr-standalone`. Dans une copie du dépôt, cette commande n'est pas dans votre PATH. Ajoutez `pnpm` devant et lancez-la depuis la racine du dépôt, par exemple `pnpm openldr-standalone start`.
+Vous l'exécutez depuis une copie du code source, compilée sur votre propre ordinateur. Il n'existe pas encore d'installateur. Le lanceur est la commande `openldr-standalone`, et ses messages utilisent ce nom. Dans une copie du dépôt, cette commande n'est pas dans votre PATH. Ajoutez `pnpm` devant et lancez-la depuis la racine du dépôt, par exemple `pnpm openldr-standalone start`.
 
 ## Ce qu'il vous faut
 
 - Git, Node.js 22.13 ou plus récent, et pnpm. Le dépôt impose pnpm 11.22.0. La page [Développement](/docs/development) explique comment les installer.
-- Ni Docker ni base de données. Postgres arrive avec les dépendances.
+- Ni Docker ni base de données. Postgres est fourni avec les dépendances.
 - Un accès réseau pour le premier `pnpm install`. Il télécharge les programmes Postgres, environ 59 Mo sous Linux.
 
 ## Le compiler
@@ -62,13 +62,13 @@ OpenLDR is running at http://localhost:3000/studio/
 Server log: /home/you/.local/share/openldr/logs/server.log
 ```
 
-La première ligne vient de pnpm. Node avertit ensuite au sujet de WASI, une fonction utilisée par les plugins. Vous pouvez ignorer cet avertissement. Les deux lignes `[seed]` n'apparaissent qu'au premier démarrage. Elles ajoutent les jeux de valeurs FHIR standard et un connecteur vers la base d'analyse. OpenLDR démarre sans données d'exemple.
+La première ligne vient de pnpm. Node avertit ensuite au sujet de WASI, une fonctionnalité utilisée par les plugins. Vous pouvez ignorer cet avertissement. Les deux lignes `[seed]` n'apparaissent qu'au premier démarrage. Elles ajoutent les jeux de valeurs FHIR standard et un connecteur vers la base d'analyse. OpenLDR démarre sans données d'exemple.
 
 Gardez ce terminal ouvert. OpenLDR ne tourne que pendant que cette commande tourne.
 
 ### 2. Créer le premier administrateur
 
-Ouvrez `http://localhost:3000/studio/` dans un navigateur de cet ordinateur. Studio affiche **Create the administrator**. Saisissez le code de configuration affiché dans le terminal, puis choisissez un nom d'utilisateur et un mot de passe. La page [Installation](/docs/install) montre chaque écran dans la partie sur le premier administrateur.
+Ouvrez `http://localhost:3000/studio/` dans un navigateur de cet ordinateur. Studio affiche **Créer l'administrateur**. Saisissez le code de configuration affiché dans le terminal, puis choisissez un nom d'utilisateur et un mot de passe. La page [Installation](/docs/install) montre chaque écran dans la partie sur le premier administrateur.
 
 Le code est valable 30 minutes. Chaque démarrage affiche un nouveau code tant qu'aucun administrateur n'existe. Pour obtenir un nouveau code pendant qu'OpenLDR tourne, ouvrez un second terminal dans le dépôt et lancez :
 
@@ -86,7 +86,7 @@ Le code de configuration ne s'affiche que dans le terminal. Le lanceur ne l'écr
 | `--port <port>` | `3000` | Le port web. Si un autre programme l'occupe, `start` s'arrête avec `Port 3000 is already in use. Choose another with --port.` Il ne choisit jamais un autre port de lui-même. |
 | `--host <address>` | `127.0.0.1` | L'adresse d'écoute d'OpenLDR. Par défaut, seul cet ordinateur y a accès. Voir **Ouvrir l'accès à un téléphone ou à un autre ordinateur** plus bas. |
 
-Donnez à `--data-dir` un chemin complet. pnpm lance le lanceur depuis la racine du dépôt. Un chemin court comme `mydata` part donc de cette racine, et non du dossier où se trouve votre terminal.
+Donnez à `--data-dir` un chemin complet. pnpm exécute le lanceur depuis la racine du dépôt. Un chemin court comme `mydata` désigne alors un dossier dans le dépôt, et non dans le dossier où se trouve votre terminal.
 
 ## Emplacement du dossier de données
 
@@ -96,14 +96,14 @@ Donnez à `--data-dir` un chemin complet. pnpm lance le lanceur depuis la racine
 | macOS, non testé | `~/Library/Application Support/OpenLDR` |
 | Windows, non testé | `%LOCALAPPDATA%\OpenLDR` |
 
-Définissez `OPENLDR_HOME` dans le shell pour utiliser un autre dossier. `--data-dir` l'emporte sur les deux. Si vous avez démarré avec `--data-dir`, donnez le même dossier à `stop`, `status` et `cli`. Sinon, ils cherchent dans le dossier par défaut et indiquent qu'OpenLDR ne tourne pas.
+Définissez `OPENLDR_HOME` dans le shell pour utiliser un autre dossier. Donnez-lui aussi un chemin complet. `--data-dir` l'emporte sur les deux. Si vous avez démarré avec `--data-dir`, donnez le même dossier à `stop`, `status` et `cli`. Sinon, ils cherchent dans le dossier par défaut. `stop` et `status` affichent alors `OpenLDR is not running.`, et `cli` affiche `Start OpenLDR first: openldr-standalone start`.
 
 Le dossier contient :
 
 | Chemin | Contenu |
 | --- | --- |
 | `postgres/` | La base de données. |
-| `blobs/` | Les fichiers stockés, comme les envois. |
+| `blobs/` | Les fichiers stockés, comme les fichiers téléversés. |
 | `logs/` | `server.log` et `postgres.log`. |
 | `crash/` | Les notes écrites quand le serveur ou un plugin plante. |
 | `work/` | Les fichiers temporaires, comme un téléchargement de terminologie pendant son import. |
@@ -147,7 +147,7 @@ Le serveur dispose de 60 secondes pour finir le travail en cours. Ensuite, Postg
 
 ### 3. Redémarrer après une coupure de courant ou un plantage
 
-Relancez `pnpm openldr-standalone start`. Si un lanceur a été tué en laissant son Postgres actif, `start` vérifie d'abord, par une connexion à la base, que ce Postgres appartient bien à ce dossier. Il arrête ensuite ce Postgres, remplace l'ancien verrou et démarre normalement. Vous voyez les lignes de démarrage habituelles, rien de plus.
+Relancez `pnpm openldr-standalone start`. Si un lanceur a été tué, `start` remplace d'abord son ancien verrou. Si ce lanceur a laissé son Postgres actif, `start` se connecte à la base pour vérifier que ce Postgres appartient bien à ce dossier. Il arrête ensuite ce Postgres et démarre normalement. Vous voyez les lignes de démarrage habituelles, rien de plus.
 
 Nous l'avons testé en tuant le lanceur sous Linux. Une vraie coupure de courant n'a pas été testée.
 
@@ -156,7 +156,7 @@ Nous l'avons testé en tuant le lanceur sous Linux. Une vraie coupure de courant
 Un second `start` sur le même dossier est refusé :
 
 ```text
-OpenLDR is already running (process 619959) at http://localhost:3000/studio/.
+OpenLDR is already running (process 12345) at http://localhost:3000/studio/.
 ```
 
 Pour faire tourner deux installations en même temps, donnez à chacune son propre `--data-dir` et son propre `--port`.
@@ -231,7 +231,7 @@ Définissez tout autre réglage dans le shell avant `start`. Par exemple, cette 
 PLUGIN_EGRESS_ENABLED=false pnpm openldr-standalone start
 ```
 
-Les réglages définis ainsi s'appliquent aussi à `cli`. La page [Variables d'environnement](/docs/environment) les liste tous.
+Un réglage donné ainsi ne vaut que pour cette commande. Si une commande CLI en a aussi besoin, placez-le également devant cette commande `cli`. La page [Variables d'environnement](/docs/environment) les liste tous.
 
 Le lanceur retire les réglages des composants qu'une installation autonome n'a pas. Il ignore `OIDC_*`, `KEYCLOAK_*`, `S3_*`, `MSSQL_*`, `MYSQL_*`, `IDENTITY_ADMIN_ADAPTER`, `AUTH_DEV_USERNAME` et `AUTH_DEV_ROLES`.
 
@@ -251,7 +251,9 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Remplacez `100.64.0.10` par l'adresse privée ou Tailscale de votre ordinateur. Ouvrez l'adresse affichée sur le téléphone. `--host 0.0.0.0` écoute sur toutes les adresses de cet ordinateur. Le lanceur affiche alors `http://localhost:3000/studio/`, qui ne fonctionne que sur cet ordinateur. Sur le téléphone, utilisez plutôt l'adresse de l'ordinateur.
 
-Lisez la dernière ligne avant de le faire. Une installation autonome n'a pas de TLS. Les noms d'utilisateur, les mots de passe et les données des patients circulent en clair sur le réseau. Toute personne qui peut observer ce réseau peut les lire. Ne le faites que sur un réseau de confiance. Tailscale chiffre le trafic entre vos propres appareils. N'ouvrez jamais ce port sur Internet. Votre pare-feu devra peut-être autoriser le port.
+En HTTP sans chiffrement depuis un autre appareil, le navigateur désactive une fonctionnalité dont Studio a besoin. Certains écrans peuvent alors échouer, notamment les pages de plugins et la modification des tableaux de bord. Ils fonctionnent sur l'ordinateur qui exécute OpenLDR.
+
+La dernière ligne est un avertissement. Une installation autonome n'a pas de TLS. Les noms d'utilisateur, les mots de passe et les données des patients circulent en clair sur le réseau. Toute personne qui peut observer ce réseau peut les lire. Ne le faites que sur un réseau de confiance. Tailscale chiffre le trafic entre vos propres appareils. N'ouvrez jamais ce port sur Internet. Votre pare-feu devra peut-être autoriser le port.
 
 ## Sauvegarder et restaurer
 
@@ -262,7 +264,7 @@ pnpm openldr-standalone stop
 cp -a ~/.local/share/openldr /media/backup/openldr-2026-11-13
 ```
 
-Gardez `standalone.json` avec le reste. Sans lui, personne ne peut ouvrir la base ni lire les secrets qu'elle contient. La copie contient des données de patients et des mots de passe. Gardez-la privée.
+Gardez `standalone.json` avec le reste. Sans lui, le lanceur refuse de démarrer sur cette base. Sans la clé qu'il contient, les secrets stockés dans la base ne peuvent pas être lus. La copie contient des données de patients et des mots de passe. Gardez-la privée.
 
 Pour restaurer, arrêtez OpenLDR, remettez le dossier copié à son emplacement d'origine et redémarrez. Vous pouvez aussi démarrer avec `--data-dir` pointant vers la copie.
 
@@ -273,7 +275,8 @@ Pour restaurer, arrêtez OpenLDR, remettez le dossier copié à son emplacement 
 - Postgres seulement. Le Postgres fourni contient les deux bases. SQL Server et MySQL ne peuvent pas servir de base d'analyse.
 - Un seul lanceur par dossier de données.
 - Seul Linux a été testé. Windows et macOS ne sont pas testés.
-- La synchronisation avec un serveur central qui utilise un certificat auto-signé ne fonctionne pas.
+- La synchronisation avec un serveur central qui utilise un certificat auto-signé n'est pas prise en charge.
+- Depuis un autre appareil en HTTP sans chiffrement, certains écrans de Studio peuvent échouer, comme les pages de plugins et la modification des tableaux de bord. Ils fonctionnent sur l'ordinateur qui exécute OpenLDR.
 - Le Postgres fourni ne peut pas passer à une nouvelle version majeure. Le dossier de données ne fonctionne qu'avec Postgres 16.
 - Sauvegarder veut dire arrêter, puis copier le dossier. Il n'existe pas d'outil de sauvegarde.
 - Vous ne pouvez pas déplacer les données entre une installation autonome et une installation Docker.
