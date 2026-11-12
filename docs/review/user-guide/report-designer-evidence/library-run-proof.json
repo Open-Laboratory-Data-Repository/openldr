@@ -1,0 +1,30 @@
+{
+  "params": {
+    "from": "2026-01-01",
+    "to": "2027-01-01"
+  },
+  "reportId": "r-96b6adbb-96f2-4934-a38d-f186915558ed",
+  "result": {
+    "columns": [
+      {
+        "key": "requests",
+        "label": "requests",
+        "kind": "string"
+      }
+    ],
+    "rows": [
+      {
+        "requests": 0
+      }
+    ],
+    "chart": {
+      "type": "stat",
+      "value": "1",
+      "label": "rows"
+    },
+    "meta": {
+      "generatedAt": "2026-11-12T14:20:42.447Z",
+      "rowCount": 1
+    }
+  }
+}

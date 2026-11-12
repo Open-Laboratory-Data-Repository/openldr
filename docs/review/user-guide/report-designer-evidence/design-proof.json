@@ -1,0 +1,64 @@
+{
+  "design": {
+    "id": "rt-1794493167238",
+    "name": "Request summary design",
+    "paper": "A4",
+    "orientation": "portrait",
+    "pages": [
+      {
+        "id": "rt-1794493167238-p1",
+        "elements": [
+          {
+            "id": "el-1794493168604-1",
+            "kind": "table",
+            "name": "Table",
+            "rect": {
+              "x": 48,
+              "y": 48,
+              "w": 480,
+              "h": 160
+            },
+            "columns": [
+              "Column A",
+              "Column B"
+            ],
+            "rows": [
+              [
+                "—",
+                "—"
+              ],
+              [
+                "—",
+                "—"
+              ]
+            ],
+            "dataSource": {
+              "kind": "custom-query",
+              "queryId": "cq_31b5475a"
+            },
+            "boundColumns": [
+              {
+                "key": "requests",
+                "label": "Requests"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "parameters": [
+      {
+        "key": "period",
+        "label": "Period",
+        "type": "daterange",
+        "value": {
+          "from": "2026-01-01",
+          "to": "2027-01-01"
+        }
+      }
+    ],
+    "status": "draft",
+    "createdAt": "Thu Nov 12 2026 17:19:34 GMT+0300 (East Africa Time)",
+    "updatedAt": "Thu Nov 12 2026 17:19:34 GMT+0300 (East Africa Time)"
+  }
+}

@@ -1,0 +1,1057 @@
+{
+  "capturedAt": "2026-11-12T14:22:36.520Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5187/studio/report-designer",
+  "steps": [
+    {
+      "id": "open-page",
+      "label": "Open Report Designer to inspect and build report layouts.",
+      "path": "report-designer-evidence/open-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 136,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "existing-template",
+      "label": "Select an existing design from Templates.",
+      "path": "report-designer-evidence/existing-template.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 633.53125,
+          "width": 215,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "existing-table",
+      "label": "Select the table element on the page.",
+      "path": "report-designer-evidence/existing-table.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 490.25,
+          "y": 204.5,
+          "width": 525,
+          "height": 595.5
+        }
+      ]
+    },
+    {
+      "id": "existing-data-tab",
+      "label": "Data shows the query binding and template parameters.",
+      "path": "report-designer-evidence/existing-data-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1195.734375,
+          "y": 48,
+          "width": 84.265625,
+          "height": 39
+        }
+      ]
+    },
+    {
+      "id": "existing-binding",
+      "label": "The bound query supplies table rows; template parameters define run filters.",
+      "path": "report-designer-evidence/existing-binding.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1037,
+          "y": 119,
+          "width": 166.71875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "actions",
+      "label": "More actions contains template operations.",
+      "path": "report-designer-evidence/actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 980,
+          "y": 51.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "new-template",
+      "label": "New template starts a separate design.",
+      "path": "report-designer-evidence/new-template.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 781.75,
+          "y": 92.5,
+          "width": 225.203125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "design-name",
+      "label": "Set Report name to the value your report needs.",
+      "path": "report-designer-evidence/design-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 492,
+          "y": 51.5,
+          "width": 108.625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "insert",
+      "label": "Insert lists printable element types.",
+      "path": "report-designer-evidence/insert.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 781.75,
+          "y": 133.5,
+          "width": 225.203125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "insert-table",
+      "label": "Table adds a data table to this design.",
+      "path": "report-designer-evidence/insert-table.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1012,
+          "y": 170.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "new-table",
+      "label": "The new table is selected for configuration.",
+      "path": "report-designer-evidence/new-table.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 490.25,
+          "y": 125,
+          "width": 360,
+          "height": 120
+        }
+      ]
+    },
+    {
+      "id": "bind-query",
+      "label": "Choose your saved Custom Query.",
+      "path": "report-designer-evidence/bind-query.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 913.75,
+          "y": 604,
+          "width": 351.234375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "add-parameter",
+      "label": "Add parameter defines a filter exposed by this template.",
+      "path": "report-designer-evidence/add-parameter.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1144.609375,
+          "y": 564,
+          "width": 123.390625,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "parameter-key",
+      "label": "Set Key param1 to the value your report needs.",
+      "path": "report-designer-evidence/parameter-key.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1037,
+          "y": 715,
+          "width": 95.5,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "parameter-label",
+      "label": "Set Label period to the value your report needs.",
+      "path": "report-designer-evidence/parameter-label.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1138.5,
+          "y": 715,
+          "width": 95.5,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "parameter-type",
+      "label": "Choose Date range to match the query parameter.",
+      "path": "report-designer-evidence/parameter-type.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1042,
+          "y": 731,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-from",
+      "label": "Set From period to the value your report needs.",
+      "path": "report-designer-evidence/parameter-from.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1155,
+          "y": 768,
+          "width": 113,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "parameter-to",
+      "label": "Set To period to the value your report needs.",
+      "path": "report-designer-evidence/parameter-to.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1155,
+          "y": 752,
+          "width": 113,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "load-columns",
+      "label": "Load columns runs the query using the template defaults.",
+      "path": "report-designer-evidence/load-columns.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1037,
+          "y": 94,
+          "width": 113.171875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "include-column",
+      "label": "Include the requests column in the printed table.",
+      "path": "report-designer-evidence/include-column.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1037,
+          "y": 455,
+          "width": 16,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "column-label",
+      "label": "Set Label for column requests to the value your report needs.",
+      "path": "report-designer-evidence/column-label.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1059,
+          "y": 449,
+          "width": 26,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "load-pages",
+      "label": "Load pages fetches rows and calculates the printed page count.",
+      "path": "report-designer-evidence/load-pages.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 929.265625,
+          "y": 94,
+          "width": 78.734375,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "show-data",
+      "label": "Show data fills the canvas using the loaded rows.",
+      "path": "report-designer-evidence/show-data.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 899.28125,
+          "y": 54.5,
+          "width": 74.71875,
+          "height": 26
+        }
+      ]
+    },
+    {
+      "id": "bound-result",
+      "label": "The printed column contains the live count, including zero.",
+      "path": "report-designer-evidence/bound-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 490.25,
+          "y": 125,
+          "width": 360,
+          "height": 120
+        }
+      ]
+    },
+    {
+      "id": "save",
+      "label": "Save persists the new design before publication.",
+      "path": "report-designer-evidence/save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 781.75,
+          "y": 206.5,
+          "width": 225.203125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "preview",
+      "label": "Preview renders the current working design as a PDF.",
+      "path": "report-designer-evidence/preview.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 781.75,
+          "y": 174.5,
+          "width": 225.203125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "preview-result",
+      "label": "The preview shows actual query output in the printable design.",
+      "path": "report-designer-evidence/preview-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 293,
+          "y": 216.265625,
+          "width": 380,
+          "height": 150
+        }
+      ]
+    },
+    {
+      "id": "preview-download",
+      "label": "Download saves the rendered PDF.",
+      "path": "report-designer-evidence/preview-download.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 961.625,
+          "y": 153.265625,
+          "width": 89.375,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "publish",
+      "label": "Publish revision snapshots the saved design. It does not create a library report.",
+      "path": "report-designer-evidence/publish.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 781.75,
+          "y": 334.5,
+          "width": 225.203125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "published",
+      "label": "Published confirms the design revision.",
+      "path": "report-designer-evidence/published.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 680.34375,
+          "y": 60,
+          "width": 58.9375,
+          "height": 15
+        }
+      ]
+    },
+    {
+      "id": "versions",
+      "label": "Versions lists published snapshots.",
+      "path": "report-designer-evidence/versions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 781.75,
+          "y": 302.5,
+          "width": 225.203125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "version-row",
+      "label": "Read the revision, publication time and publisher before restoring.",
+      "path": "report-designer-evidence/version-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1164.96875,
+          "y": 203.03125,
+          "width": 75.03125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "create-report",
+      "label": "Create report from this design creates a separate library entry.",
+      "path": "report-designer-evidence/create-report.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 781.75,
+          "y": 366.5,
+          "width": 225.203125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "report-name",
+      "label": "Choose the library report name.",
+      "path": "report-designer-evidence/report-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 857,
+          "y": 163.53125,
+          "width": 399,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "report-category",
+      "label": "Choose the category where people should find the report.",
+      "path": "report-designer-evidence/report-category.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 879,
+          "y": 335.5,
+          "width": 20,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "report-template",
+      "label": "Check the template selected for this report.",
+      "path": "report-designer-evidence/report-template.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 857,
+          "y": 391.53125,
+          "width": 399,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "report-query",
+      "label": "Check the primary query that will supply spreadsheet rows.",
+      "path": "report-designer-evidence/report-query.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 857,
+          "y": 459.53125,
+          "width": 399,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "report-actions",
+      "label": "The New report sheet has its own Actions dots.",
+      "path": "report-designer-evidence/report-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1224,
+          "y": 18,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "report-create",
+      "label": "Create report adds the named library entry.",
+      "path": "report-designer-evidence/report-create.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1085,
+          "y": 59,
+          "width": 166,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "export-pdf",
+      "label": "Export PDF downloads the current design output.",
+      "path": "report-designer-evidence/export-pdf.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1012,
+          "y": 243.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "export-excel",
+      "label": "Export Excel downloads the bound table rows.",
+      "path": "report-designer-evidence/export-excel.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1012,
+          "y": 275.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "layers",
+      "label": "Layers selects elements and controls visibility, locking and order.",
+      "path": "report-designer-evidence/layers.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1111.46875,
+          "y": 48,
+          "width": 84.265625,
+          "height": 39
+        }
+      ]
+    },
+    {
+      "id": "hide-layer",
+      "label": "Use the eye to hide an element deliberately.",
+      "path": "report-designer-evidence/hide-layer.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1208,
+          "y": 96,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "show-layer",
+      "label": "Use Show Table to restore the hidden element.",
+      "path": "report-designer-evidence/show-layer.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1208,
+          "y": 96,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "lock-layer",
+      "label": "Lock keeps the element selectable while preventing movement.",
+      "path": "report-designer-evidence/lock-layer.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 96,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "unlock-layer",
+      "label": "Unlock Table allows movement again.",
+      "path": "report-designer-evidence/unlock-layer.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 96,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "new-data-tab",
+      "label": "Open Data for the selected custom table.",
+      "path": "report-designer-evidence/new-data-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1195.734375,
+          "y": 48,
+          "width": 84.265625,
+          "height": 39
+        }
+      ]
+    },
+    {
+      "id": "phone-explorer",
+      "label": "Use the Explorer rail to find an existing template on a phone.",
+      "path": "report-designer-evidence/phone-explorer.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 3.5,
+          "y": 56,
+          "width": 24,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "phone-template",
+      "label": "Choose the existing design. Use a larger screen to edit it.",
+      "path": "report-designer-evidence/phone-template.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 12,
+          "y": 576.25,
+          "width": 215,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "phone-actions",
+      "label": "Use More actions to inspect an existing design.",
+      "path": "report-designer-evidence/phone-actions.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 331,
+          "y": 51.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    }
+  ]
+}

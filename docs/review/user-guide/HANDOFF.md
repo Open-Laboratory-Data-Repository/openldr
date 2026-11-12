@@ -621,3 +621,23 @@ no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px view
 All active preview menus match. Sample data remains optional.
 See forms-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
+
+## Report Designer preview checkpoint
+
+Previous checkpoint HEAD: 5c4bb630.
+report-designer-review.html has 43 numbered steps and 50 native image placements.
+Every step has screenshot evidence. The integrated browser check reported no missing images,
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
+All active preview menus match. Sample data remains optional.
+See report-designer-review-notes.md for live workflows, source proofs and untested variants.
+This remains a preview. Its published guide is unchanged.
+
+## Report Designer preview checkpoint
+
+Previous checkpoint HEAD: 5c4bb630.
+report-designer-review.html has 43 numbered steps and 50 native image placements.
+Every step has screenshot evidence. The integrated browser check reported no missing images,
+no broken section anchors, native 5120px enlargement, HTTP 200 and an 812px viewport without horizontal page overflow.
+All active preview menus match. Sample data remains optional.
+See report-designer-review-notes.md for live workflows, source proofs and untested variants.
+This remains a preview. Its published guide is unchanged.

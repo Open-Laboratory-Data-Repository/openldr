@@ -1,0 +1,1801 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com https://persistent.oaistatic.com/plugins/visualize/charts/; img-src 'self' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Report Designer guide preview</title>
+<style>:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 16px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans:
+    -apple-system-body, ui-sans-serif, -apple-system, system-ui, "Segoe UI",
+    Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 8px);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  -webkit-font-smoothing: antialiased;
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-weight: var(--font-weight-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+  text-underline-offset: 2px;
+  font-weight: inherit;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+li,
+.table {
+  font-family: var(--font-sans);
+}
+
+h1 {
+  font-size: calc(var(--font-size-base) * 1.5);
+  line-height: 1.3333333333;
+}
+
+h2 {
+  font-size: calc(var(--font-size-base) * 1.25);
+  line-height: 1.4;
+}
+h3 {
+  font-size: calc(var(--font-size-base) * 1.125);
+  line-height: 1.5555555556;
+}
+h4 {
+  font-size: var(--font-size-base);
+  line-height: 1.5;
+}
+h5,
+h6 {
+  font-size: var(--font-size-base);
+  line-height: calc(var(--font-size-base) * 1.625);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+strong,
+th {
+  font-weight: 600;
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+pre,
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: calc(var(--font-size-base) * 0.875);
+  line-height: calc(var(--font-size-base) * 1.625);
+  font-family: var(--font-sans);
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.table :is(th, td):not(:last-child) {
+  padding-inline-end: calc(var(--font-size-base) * 1.5);
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead :is(th, td) {
+  border-bottom-color: var(--border-strong, var(--input));
+  padding-block: calc(var(--font-size-base) / 2);
+  line-height: var(--font-size-base);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+.table tbody :is(th, td) {
+  padding-block: calc(var(--font-size-base) * 0.625);
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 8px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+.widget {
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  box-shadow: 0 0 0 0.5px var(--border-strong, var(--border));
+  color: var(--foreground);
+  background: var(--background);
+}
+
+#widget > :not(.card, .widget, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  border: 1px solid var(--border);
+  corner-shape: var(--corner-shape);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  font-family: var(--font-sans);
+  padding: 5px 12px;
+  border-color: color-mix(
+    in oklab,
+    light-dark(var(--primary-foreground), var(--foreground)) 5%,
+    transparent
+  );
+  border-radius: var(--radius-2xl);
+  color: light-dark(var(--primary-foreground), var(--foreground));
+  background: light-dark(var(--foreground), var(--popover));
+  box-shadow: 0 8px 18px rgb(15 23 42 / 20%);
+  letter-spacing: -0.15px;
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--foreground) 40%, var(--muted-foreground));
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-family: var(--font-sans);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1;
+}
+
+small,
+.text-small {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+/* Match inline alignment without overriding a containing flex or grid layout. */
+.btn,
+.nav-link,
+.form-control,
+.form-select,
+.form-range,
+.form-check {
+  vertical-align: middle;
+}
+
+.btn,
+.nav-link {
+  --btn-size: calc(12px + 2 * var(--control-spacing, 12px));
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: inherit;
+  font-family: var(--font-sans);
+  height: fit-content;
+  min-height: var(--btn-size);
+  padding-inline: var(--control-spacing, 12px);
+  border-color: transparent;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.btn {
+  border-color: var(--border);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+}
+
+/* Codex Button size="compact"; appearance stays with the button variant. */
+.btn-sm {
+  --btn-size: 24px;
+  padding-inline: 8px;
+  font-size: calc(var(--font-size-base) * 12 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 12 / 16), 1px);
+  line-height: 16px;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-link:not(:disabled):not([aria-disabled="true"]):hover {
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+
+.btn-primary {
+  border-color: var(--border);
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: border-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: border-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--muted-foreground);
+  background: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+/* Shared preview chrome; product styles stay inside each variant. */
+.viz-dotted-background {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--foreground) 14%, transparent) 0.8px,
+    transparent 0.8px
+  );
+  background-position: center;
+  background-size: 16px 16px;
+}
+
+.viz-carousel {
+  position: relative;
+  min-width: 0;
+}
+
+.viz-carousel:has(> .viz-carousel-controls) {
+  min-height: calc(60px + var(--viz-carousel-picker-height, 0px));
+  padding-bottom: 60px;
+}
+
+.viz-carousel > [data-variant][hidden] {
+  display: none !important;
+}
+
+.viz-carousel > [data-variant] {
+  isolation: isolate;
+}
+
+.viz-carousel-controls {
+  --viz-carousel-hover: light-dark(
+    color-mix(in srgb, var(--foreground) 5.4%, transparent),
+    color-mix(in srgb, var(--foreground) 7.8%, transparent)
+  );
+  position: absolute;
+  z-index: 2;
+  bottom: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  /* Leave room for the host's design-controls launcher at the trailing edge. */
+  max-width: calc(100% - 96px);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family: var(--font-sans);
+  /* Match the settings dropdown chrome independently of the content font size. */
+  font-size: 13px;
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+  transform: translateX(-50%);
+  user-select: none;
+}
+
+/* Keep authored mockup button styles out of the shared carousel chrome. */
+.viz-carousel-controls button,
+.viz-carousel-picker > summary {
+  display: flex !important;
+  height: auto !important;
+  min-height: 30px;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 0 6px !important;
+  -webkit-app-region: no-drag;
+  border: 0 !important;
+  border-radius: 14px !important;
+  color: inherit !important;
+  background: transparent !important;
+  font: inherit !important;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-picker > summary {
+  position: relative;
+  isolation: isolate;
+}
+
+.viz-carousel-controls > button {
+  --icon-size: 16px;
+  width: 30px !important;
+  padding: 0 !important;
+}
+
+.viz-carousel-picker > summary {
+  padding-inline: 12px !important;
+}
+
+.viz-carousel-controls .viz-carousel-caret {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin: 0;
+  color: inherit;
+  transform: rotate(180deg);
+}
+
+.viz-carousel-controls > button > svg,
+.viz-carousel-controls .viz-carousel-caret,
+.viz-carousel-count {
+  opacity: 0.5;
+}
+
+.viz-carousel-controls > button::before,
+.viz-carousel-picker > summary::before {
+  position: absolute;
+  z-index: -1;
+  inset: 3px;
+  border-radius: 12px;
+  content: "";
+  pointer-events: none;
+}
+
+.viz-carousel-controls > button:hover::before,
+.viz-carousel-picker > summary:hover::before {
+  background: var(--viz-carousel-hover);
+}
+
+.viz-carousel-controls > button,
+.viz-carousel-controls [data-lucide],
+.viz-carousel-controls .lucide {
+  flex-shrink: 0;
+}
+
+.viz-carousel-picker {
+  min-width: 0;
+}
+
+.viz-carousel-picker > summary {
+  min-width: 0;
+  list-style: none;
+}
+
+.viz-carousel-picker > summary::-webkit-details-marker {
+  display: none;
+}
+
+.viz-carousel-count {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.viz-carousel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-carousel-options {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  display: flex;
+  max-height: 240px;
+  flex-direction: column;
+  gap: 2px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  box-shadow: 0 4px 12px light-dark(rgb(0 0 0 / 6%), rgb(0 0 0 / 25%));
+}
+
+.viz-carousel-options > button {
+  border-radius: max(0px, calc(var(--radius-lg) - 5px)) !important;
+  width: 100% !important;
+  min-height: 28px;
+  justify-content: flex-start !important;
+  padding: 4px 8px !important;
+  font-size: var(--font-size-small) !important;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.viz-carousel-options > [aria-current="true"],
+.viz-carousel-options > button:hover {
+  background: var(--viz-carousel-hover) !important;
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding-inline: calc(4px + var(--control-spacing, 12px) / 2);
+  border-color: var(--input);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--popover) 96%, transparent);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.4285714286;
+}
+.form-control:is(
+  [type="file"],
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"],
+  [type="color"]
+) {
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  line-height: 18px;
+}
+.form-control:is(
+  [type="date"],
+  [type="datetime-local"],
+  [type="month"],
+  [type="week"]
+) {
+  padding-inline: var(--control-spacing, 12px);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+  padding: 0;
+}
+
+.form-control[type="file"]::file-selector-button {
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+  min-height: calc(10px + 2 * var(--control-spacing, 12px));
+  padding-inline: var(--control-spacing, 12px);
+  margin-inline-end: var(--control-spacing, 12px);
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  resize: vertical;
+  min-height: 96px;
+  padding: 8px 10px;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: none;
+}
+.form-control:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  opacity: 1;
+}
+.form-control[aria-invalid="true"] {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 20%, transparent);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: fit-content;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  margin: 0;
+  /* The secondary icon role is 14px at compact density and 16px at web density. */
+  --icon-size: calc(10px + var(--control-spacing, 12px) / 2);
+  /* Settings dropdowns retain a 12px inset and a 4px text-to-chevron gap. */
+  padding: 0 calc(16px + var(--icon-size)) 0 12px;
+  outline: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    ),
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 0.6px),
+      var(--muted-foreground) calc(50% - 0.6px) calc(50% + 0.6px),
+      transparent calc(50% + 0.6px)
+    );
+  background-position:
+    calc(100% - 12px - var(--icon-size) / 2) 50%,
+    calc(100% - 12px - var(--icon-size) * 0.18) 50%;
+  background-repeat: no-repeat;
+  background-size: calc(var(--icon-size) * 0.32) calc(var(--icon-size) * 0.32);
+  cursor: var(--cursor-interaction, default);
+  font-size: calc(var(--font-size-base) * 14 / 16);
+  font-size: round(nearest, calc(var(--font-size-base) * 14 / 16), 1px);
+  font-weight: var(--font-weight-normal);
+  line-height: 18px;
+}
+
+.form-select :is(option, optgroup) {
+  color: var(--popover-foreground);
+  background-color: var(--popover);
+}
+
+.form-select :is(option, optgroup):disabled {
+  color: var(--muted-foreground);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: light-dark(
+    color-mix(in srgb, var(--foreground) 5.5%, transparent),
+    color-mix(in srgb, var(--foreground) 8%, transparent)
+  );
+}
+
+.form-select:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+.form-select:disabled {
+  opacity: 0.4;
+}
+
+.form-check {
+  display: flex;
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  corner-shape: round;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  width: calc(10px + var(--control-spacing, 12px) / 2);
+  height: calc(10px + var(--control-spacing, 12px) / 2);
+  border-color: var(--border-strong, var(--input));
+  border-radius: calc(var(--radius-sm) / 2);
+  background-color: transparent;
+  color: var(--foreground);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:is(:checked, :indeterminate) {
+  border-color: var(--border-strong, var(--input));
+  background-color: color-mix(in srgb, var(--popover) 96%, transparent);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+  background-color: var(--foreground);
+}
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:indeterminate::before {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 65%;
+  height: 6.65%;
+  margin: auto;
+  border-radius: var(--radius-full);
+  background: var(--foreground);
+  mask: none;
+  content: "";
+}
+
+.form-check-input[type="radio"] {
+  border-radius: var(--radius-full);
+  width: 16px;
+  height: 16px;
+  border: 0;
+  box-shadow: inset 0 0 0 1px var(--input);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 0;
+  background: radial-gradient(
+    circle,
+    var(--primary-foreground) 0 3px,
+    var(--foreground) 3px
+  );
+  box-shadow: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:focus-visible {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+.form-check:not(.form-switch) .form-check-input[type="radio"]:disabled,
+.form-check:not(.form-switch)
+  .form-check-input[type="radio"]:disabled
+  + .form-check-label {
+  opacity: 0.5;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+  border-color: #fff;
+  background: #fff;
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--blue);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+  outline: none;
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--primary);
+  height: calc(12px + 2 * var(--control-spacing, 12px));
+  min-height: calc(12px + 2 * var(--control-spacing, 12px));
+  outline: none;
+  border-radius: var(--radius-full);
+  color: var(--foreground);
+  background: transparent;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  margin-top: -9px;
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Outline the native track and thumb, preserving the larger input hit area. */
+.form-range:focus-visible::-webkit-slider-runnable-track {
+  outline: 2px auto Highlight;
+  outline-color: -webkit-focus-ring-color;
+}
+
+.form-range::-moz-range-track {
+  background: var(--form-range-track, var(--border));
+  height: 2px;
+  border-radius: var(--radius-full);
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  border-color: transparent;
+  background: currentColor;
+  box-shadow: var(--shadow-sm);
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+.form-range:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--blue);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.viz-carousel-controls :is(button, summary):focus-visible {
+  outline: 2px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Web recipes are the default, including on renderers without inline style queries. */
+@supports (border-radius: if(style(--corner-shape: round): 1px; else: 2px)) {
+  /* Match the host's proportional text-sm scale at every text preference. */
+  .tooltip,
+  .viz-badge,
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 14 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 13 / 14), 1px)
+    );
+  }
+
+  .btn-sm {
+    font-size: if(
+      style(--corner-shape: round): round(
+          nearest,
+          calc(var(--font-size-base) * 12 / 16),
+          1px
+        );
+        else: round(nearest, calc(var(--font-size-base) * 12 / 14), 1px)
+    );
+  }
+
+  .btn,
+  .nav-link,
+  .form-select {
+    border-radius: if(
+      style(--corner-shape: round): var(--radius-full); else: var(--radius-lg)
+    );
+  }
+
+  .form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+    border-radius: if(
+      style(--corner-shape: round): calc(var(--radius-sm) / 2);
+        else: calc(var(--radius-lg) * 0.4)
+    );
+  }
+
+  .tooltip {
+    font-weight: if(
+      style(--corner-shape: round): 600; else: var(--font-weight-normal)
+    );
+  }
+}
+
+@media (pointer: coarse) {
+  .viz-carousel:has(> .viz-carousel-controls) {
+    min-height: calc(76px + var(--viz-carousel-picker-height, 0px));
+    padding-bottom: 76px;
+  }
+
+  .btn,
+  .nav-link,
+  .viz-carousel-controls button,
+  .viz-carousel-picker > summary,
+  .form-control,
+  .form-select {
+    --btn-size: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+  .form-control:is(
+    [type="file"],
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="week"],
+    [type="time"],
+    [type="color"]
+  ) {
+    height: 44px;
+    min-height: 44px;
+    font-size: max(16px, calc(var(--font-size-base) * 14 / 16));
+    font-size: max(
+      16px,
+      round(nearest, calc(var(--font-size-base) * 14 / 16), 1px)
+    );
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html>body{padding:0}
+:root{--guide-preview-height:100dvh}</style>
+</head>
+<body>
+<style>
+#report-designer-evidence-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
+#report-designer-evidence-guide * { box-sizing:border-box; }
+#report-designer-evidence-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#report-designer-evidence-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
+#report-designer-evidence-guide .dg-head strong { font-size:16px; font-weight:600; }
+#report-designer-evidence-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
+#report-designer-evidence-guide .dg-head-icons { margin-left:auto; display:flex; align-items:center; gap:20px; color:var(--dg-muted); padding-right:80px; }
+#report-designer-evidence-guide .dg-main { display:flex; min-height:0; flex:1; }
+#report-designer-evidence-guide .dg-sidebar { width:256px; flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid var(--dg-border); }
+#report-designer-evidence-guide .dg-search { height:48px; display:flex; align-items:center; gap:8px; padding:0 10px; border-bottom:1px solid var(--dg-border); flex-shrink:0; }
+#report-designer-evidence-guide .dg-search input { min-width:0; width:100%; border:1px solid var(--dg-border); border-radius:6px; padding:7px 10px; background:transparent; color:var(--dg-text); font:inherit; }
+#report-designer-evidence-guide .dg-docnav { overflow:auto; min-height:0; padding:4px 0 16px; }
+#report-designer-evidence-guide .dg-group { margin-top:5px; padding-top:8px; border-top:1px solid var(--dg-border); }
+#report-designer-evidence-guide .dg-group:first-child { border:0; margin:0; }
+#report-designer-evidence-guide .dg-group-label { display:block; padding:4px 12px; text-transform:uppercase; font-size:10px; color:var(--dg-muted); font-weight:600; letter-spacing:.03em; }
+#report-designer-evidence-guide .dg-navitem { display:block; padding:8px 12px; color:var(--dg-text); text-decoration:none; }
+#report-designer-evidence-guide .dg-selected { border-left:2px solid var(--dg-brand); background:var(--dg-wash); color:var(--dg-link); padding-left:10px; }
+#report-designer-evidence-guide .dg-content { min-width:0; flex:1; display:flex; flex-direction:column; }
+#report-designer-evidence-guide .dg-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:12px; height:48px; flex-shrink:0; border-bottom:1px solid var(--dg-border); padding:0 12px; }
+#report-designer-evidence-guide .dg-version { font-size:12px; border:1px solid var(--dg-border); border-radius:6px; padding:4px 9px; color:var(--dg-muted); }
+#report-designer-evidence-guide .dg-version b { color:var(--dg-text); font-weight:500; }
+#report-designer-evidence-guide button { font:inherit; color:inherit; cursor:inherit; }
+#report-designer-evidence-guide .dg-iconbtn { border:0; background:none; padding:5px; display:inline-flex; align-items:center; border-radius:4px; color:var(--dg-muted); }
+#report-designer-evidence-guide .dg-iconbtn:hover { background:var(--dg-wash); }
+#report-designer-evidence-guide .dg-scroll { min-height:0; flex:1; overflow:auto; padding:24px; scroll-behavior:smooth; }
+#report-designer-evidence-guide .dg-columns { display:grid; grid-template-columns:minmax(0,1fr) 224px; gap:32px; align-items:start; }
+#report-designer-evidence-guide .dg-article { min-width:0; }
+#report-designer-evidence-guide h1 { font-size:24px; line-height:1.3; margin:0 0 12px; font-weight:600; }
+#report-designer-evidence-guide h2 { font-size:18px; font-weight:600; margin:30px 0 10px; padding-bottom:5px; border-bottom:1px solid var(--dg-rule); scroll-margin-top:12px; }
+#report-designer-evidence-guide h3 { font-size:15px; font-weight:500; margin:0 0 8px; }
+#report-designer-evidence-guide p { margin:8px 0; }
+#report-designer-evidence-guide .dg-meta { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:18px; color:var(--dg-muted); }
+#report-designer-evidence-guide .dg-meta span { border:1px solid var(--dg-border); border-radius:5px; padding:1px 7px; font-size:11px; }
+#report-designer-evidence-guide .dg-intro { color:var(--dg-muted); }
+#report-designer-evidence-guide .dg-example { border-left:2px solid var(--dg-brand); padding-left:12px; margin:18px 0; }
+#report-designer-evidence-guide .dg-example p { margin:4px 0; }
+#report-designer-evidence-guide .dg-onpage { position:sticky; top:0; color:var(--dg-muted); font-size:12px; }
+#report-designer-evidence-guide .dg-onpage > p { text-transform:uppercase; font-size:10px; letter-spacing:.03em; margin:5px 0 12px; }
+#report-designer-evidence-guide .dg-onpage a { display:block; color:inherit; text-decoration:none; padding:6px 0 6px 12px; border-left:2px solid transparent; }
+#report-designer-evidence-guide .dg-onpage a:hover,#report-designer-evidence-guide .dg-onpage a[aria-current] { color:var(--dg-link); border-color:var(--dg-brand); }
+#report-designer-evidence-guide .dg-onpage small { display:block; font-size:11px; margin:24px 0 0 12px; }
+#report-designer-evidence-guide .dg-loop { margin:14px 0 22px; max-width:500px; }
+#report-designer-evidence-guide .dg-loop video { width:100%; display:block; border:1px solid var(--dg-border); border-radius:6px; background:#171717; }
+#report-designer-evidence-guide .dg-loop-control { display:flex; justify-content:space-between; align-items:center; gap:12px; color:var(--dg-muted); font-size:11px; margin-top:5px; }
+#report-designer-evidence-guide .dg-loop-control button { border:0; padding:3px 0; color:var(--dg-link); background:none; }
+#report-designer-evidence-guide .dg-step { padding:17px 0 18px; border-bottom:1px solid var(--dg-rule); }
+#report-designer-evidence-guide .dg-step:last-child { border-bottom:0; }
+#report-designer-evidence-guide .dg-number { color:var(--dg-muted); display:inline-block; min-width:22px; font-variant-numeric:tabular-nums; }
+#report-designer-evidence-guide .dg-step p { margin:4px 0 10px 22px; }
+#report-designer-evidence-guide .dg-shot { margin:10px 0 0 22px; max-width:500px; }
+#report-designer-evidence-guide .dg-shot button { display:block; width:100%; padding:0; border:1px solid var(--dg-border); border-radius:6px; overflow:hidden; background:#171717; }
+#report-designer-evidence-guide .dg-shot img { display:block; width:100%; max-height:300px; object-fit:contain; object-position:left center; }
+#report-designer-evidence-guide figcaption { color:var(--dg-muted); font-size:11px; margin-top:6px; }
+#report-designer-evidence-guide .dg-result { padding:12px 14px; border-left:2px solid var(--dg-brand); background:var(--dg-pane); margin:18px 0; }
+#report-designer-evidence-guide .dg-result p { margin:3px 0; }
+#report-designer-evidence-guide code { display:inline-block; max-width:100%; box-sizing:border-box; overflow-wrap:anywhere; font:12px/1.6 ui-monospace,monospace; background:var(--dg-pane); padding:2px 5px; border:1px solid var(--dg-border); border-radius:4px; }
+#report-designer-evidence-guide pre { margin:12px 0; padding:12px; background:var(--dg-pane); border:1px solid var(--dg-border); border-radius:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
+#report-designer-evidence-guide pre code { background:none; border:0; padding:0; }
+#report-designer-evidence-guide .dg-config { display:grid; grid-template-columns:auto minmax(0,1fr); gap:6px 18px; margin:14px 0; }
+#report-designer-evidence-guide .dg-config dt { color:var(--dg-muted); }
+#report-designer-evidence-guide .dg-config dd { margin:0; }
+#report-designer-evidence-guide .dg-onpage .dg-subtoc { padding-left:24px; }
+#report-designer-evidence-guide details { padding:12px 0; border-bottom:1px solid var(--dg-rule); }
+#report-designer-evidence-guide summary { font-weight:500; cursor:inherit; }
+#report-designer-evidence-guide details p { color:var(--dg-muted); }
+#report-designer-evidence-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
+#report-designer-evidence-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
+#report-designer-evidence-guide .dg-lightbox img { max-width:100%; max-height:100%; object-fit:contain; }
+#report-designer-evidence-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
+#report-designer-evidence-guide .dg-app { position:relative; }
+#report-designer-evidence-guide [hidden] { display:none !important; }
+#report-designer-evidence-guide.dg-folded .dg-sidebar { display:none; }
+@media(max-width:1279px) { #report-designer-evidence-guide .dg-columns { grid-template-columns:minmax(0,1fr); } #report-designer-evidence-guide .dg-onpage { display:none; } }
+@media(max-width:600px) { #report-designer-evidence-guide .dg-sidebar { display:none; } #report-designer-evidence-guide .dg-scroll { padding:18px; } #report-designer-evidence-guide .dg-head { padding:0 12px; } #report-designer-evidence-guide .dg-head-icons { padding-right:0; gap:12px; } #report-designer-evidence-guide .dg-review { display:none; } #report-designer-evidence-guide .dg-shot { margin-left:0; } #report-designer-evidence-guide .dg-step p { margin-left:0; } }
+@media(prefers-reduced-motion:reduce) { #report-designer-evidence-guide .dg-scroll { scroll-behavior:auto; } }
+</style>
+<div id="report-designer-evidence-guide" aria-label="Facilities user guide preview">
+ <div class="dg-app">
+  <header class="dg-head"><strong>Documentation</strong><span class="dg-review">Report Designer guide preview</span><div class="dg-head-icons"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-right" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M15 3v18"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-bell" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg><button type="button" class="dg-iconbtn cursor-interaction" data-theme-toggle aria-label="Switch preview theme"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg></button></div></header>
+  <div class="dg-main">
+   <aside class="dg-sidebar">
+    <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-close" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m16 15-3-3 3-3"></path></svg></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
+    <nav class="dg-docnav" aria-label="Documentation sections"><div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem" href="start-here-review.html">Start Here</a></div><div class="dg-group"><span class="dg-group-label">Set up your system</span><a class="dg-navitem" href="terminology-review.html">Terminology</a><a class="dg-navitem" href="facilities-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Facilities</a><a class="dg-navitem" href="test-catalog-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Test catalog</a><a class="dg-navitem" href="patients-review.html" title="Optional setup. Strongly recommended as you use OpenLDR.">Patients</a><a class="dg-navitem" href="forms-review.html">Forms</a><a class="dg-navitem" href="workflows-review.html">Workflows</a></div><div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><a class="dg-navitem" href="activity-review.html">Activity</a></div><div class="dg-group"><span class="dg-group-label">Build and manage</span><a class="dg-navitem" href="report-pipeline-review.html">Scheduled reports with workflows</a><a class="dg-navitem" href="query-review.html">Custom Queries</a><a class="dg-navitem dg-selected" href="#dg-top" aria-current="page">Report Designer</a></div><div class="dg-group"><span class="dg-group-label">Administration</span><a class="dg-navitem" href="layouts-review.html">Layouts</a><a class="dg-navitem" href="users-review.html">Users and Roles</a><a class="dg-navitem" href="roles-review.html">Roles</a><a class="dg-navitem" href="audit-review.html">Audit</a><a class="dg-navitem" href="settings-review.html">Settings</a><a class="dg-navitem" href="setup-checks-review.html">Setup checks</a><a class="dg-navitem" href="laboratory-review.html">Laboratory</a><a class="dg-navitem" href="data-exposure-review.html">Data exposure</a><a class="dg-navitem" href="sync-review.html">Distributed Sync</a><a class="dg-navitem" href="connectors-review.html">Connectors</a><a class="dg-navitem" href="connector-diagnose-review.html">Connect to SQL Server and diagnose a connection</a><a class="dg-navitem" href="v1-import-review.html">Import from OpenLDR v1</a><a class="dg-navitem" href="marketplace-review.html">Marketplace</a><a class="dg-navitem" href="plugin-sites-review.html">Plugin cards and side panels</a><a class="dg-navitem" href="auth-providers-review.html">Authentication providers</a><a class="dg-navitem" href="environment-review.html">Environment Variables</a><a class="dg-navitem" href="upgrading-review.html">Planned upgrades</a></div><div class="dg-group"><span class="dg-group-label">Personal settings</span><a class="dg-navitem" href="preferences-review.html">Your preferences</a></div><div class="dg-group"><span class="dg-group-label">More</span><a class="dg-navitem" href="advanced-docs-review.html">Deployment &amp; Developer Docs</a></div></nav>
+   </aside>
+   <section class="dg-content">
+    <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-panel-left-open" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18"></path><path d="m14 9 3 3-3 3"></path></svg></button><span class="dg-version">Version <b>0.1.8</b></span><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" x2="12" y1="15" y2="3"></line></svg></div>
+    <div class="dg-scroll" data-reading-pane>
+     <div class="dg-columns">
+      <article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Data design</span><span>Bind query output to printable pages</span><span>About 30 minutes</span></div>
+<h1>Report Designer</h1>
+<p>Use Report Designer to arrange printable elements, bind them to saved Custom Queries and create reports for the library. A design controls the page. A query supplies rows. Template parameters define the filters people enter when running a report.</p>
+<p>Start with your own saved query and intended page layout. No documentation sample data is required. The pictures use a zero-request reporting query in a separate test installation. Optional practice is at the end.</p>
+<p>You need <strong>Edit report templates</strong> to create, edit and publish designs. <strong>View reports</strong> opens the library, and <strong>Run reports</strong> executes its entries.</p>
+<p>Publishing a design revision and creating a library report are separate actions. Save the new design before either action.</p>
+<h2 id="dg-read">Inspect an existing report design</h2>
+<p>Use this to understand the connection between an existing table, its query and the filters the report exposes.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Report Designer</h3><p>Select Report Designer in the main menu.</p><figure class="dg-shot dg-context-shot" data-shot-id="open-page"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open Report Designer to inspect and build report layouts."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:0.0%;top:-1.3333333333333335%"><img class="fc-background" data-evidence="open-page" alt="Open Report Designer to inspect and build report layouts."><img class="fc-sharp" data-evidence="open-page" alt="" aria-hidden="true" style="clip-path:inset(17.0% 81.953125% 78.5% 0.625%)"><span class="fc-ring" aria-hidden="true" style="left:0.625%;top:17.0%;width:17.421875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Open Report Designer to inspect and build report layouts.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose a template</h3><p>Select an existing entry in Templates. The example opens Test Volume Over Time.</p><figure class="dg-shot dg-context-shot" data-shot-id="existing-template"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select an existing design from Templates."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-24.895833333333332%;top:-164.51041666666666%"><img class="fc-background" data-evidence="existing-template" alt="Select an existing design from Templates."><img class="fc-sharp" data-evidence="existing-template" alt="" aria-hidden="true" style="clip-path:inset(79.19140625% 63.515625% 18.30859375% 19.6875%)"><span class="fc-ring" aria-hidden="true" style="left:19.6875%;top:79.19140625%;width:16.796875%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Select an existing design from Templates.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Select its table</h3><p>Select the table element on the printable page.</p><figure class="dg-shot dg-context-shot" data-shot-id="existing-table"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Select the table element on the page."><span class="fc-screenshot"><span class="fc-scene" style="width:123.93493415956623%;height:123.93493415956624%;left:-22.884391944229282%;top:-23.93493415956625%"><img class="fc-background" data-evidence="existing-table" alt="Select the table element on the page."><img class="fc-sharp" data-evidence="existing-table" alt="" aria-hidden="true" style="clip-path:inset(25.5625% 20.68359375% 0.0% 38.30078125%)"><span class="fc-ring" aria-hidden="true" style="left:38.30078125%;top:25.5625%;width:41.015625%;height:74.4375%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Select the table element on the page.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Read its Data settings</h3><p>Select Data in the right inspector. Check Bind query and the template Parameters below it.</p><figure class="dg-shot dg-context-shot" data-shot-id="existing-data-tab"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Data shows the query binding and template parameters."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="existing-data-tab" alt="Data shows the query binding and template parameters."><img class="fc-sharp" data-evidence="existing-data-tab" alt="" aria-hidden="true" style="clip-path:inset(6.0% 0.0% 89.125% 93.416748046875%)"><span class="fc-ring" aria-hidden="true" style="left:93.416748046875%;top:6.0%;width:6.583251953124999%;height:4.875%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">4</span></span></span></span></button><figcaption>Data shows the query binding and template parameters.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="existing-binding"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The bound query supplies table rows; template parameters define run filters."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="existing-binding" alt="The bound query supplies table rows; template parameters define run filters."><img class="fc-sharp" data-evidence="existing-binding" alt="" aria-hidden="true" style="clip-path:inset(14.875% 5.95947265625% 81.125% 81.015625%)"><span class="fc-ring" aria-hidden="true" style="left:81.015625%;top:14.875%;width:13.02490234375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>The bound query supplies table rows; template parameters define run filters.</figcaption></figure></section>
+<h2 id="dg-create">Create a separate table design</h2>
+<p>Use a new design for your report rather than changing a shared built-in definition.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose New template</h3><p>Open More actions above the canvas and select New template. The empty designer also offers New template.</p><figure class="dg-shot dg-context-shot" data-shot-id="actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge More actions contains template operations."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-157.5%;top:0.0%"><img class="fc-background" data-evidence="actions" alt="More actions contains template operations."><img class="fc-sharp" data-evidence="actions" alt="" aria-hidden="true" style="clip-path:inset(6.4375% 20.9375% 89.5625% 76.5625%)"><span class="fc-ring" aria-hidden="true" style="left:76.5625%;top:6.4375%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>More actions contains template operations.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="new-template"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge New template starts a separate design."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.3232421875%;top:0.0%"><img class="fc-background" data-evidence="new-template" alt="New template starts a separate design."><img class="fc-sharp" data-evidence="new-template" alt="" aria-hidden="true" style="clip-path:inset(11.5625% 21.331787109375% 84.4375% 61.07421875%)"><span class="fc-ring" aria-hidden="true" style="left:61.07421875%;top:11.5625%;width:17.593994140625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>New template starts a separate design.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Name the design</h3><p>Enter a clear Report name, such as Request summary design.</p><figure class="dg-shot dg-context-shot" data-shot-id="design-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set Report name to the value your report needs."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-63.81510416666667%;top:0.0%"><img class="fc-background" data-evidence="design-name" alt="Set Report name to the value your report needs."><img class="fc-sharp" data-evidence="design-name" alt="" aria-hidden="true" style="clip-path:inset(6.4375% 53.076171875% 89.5625% 38.4375%)"><span class="fc-ring" aria-hidden="true" style="left:38.4375%;top:6.4375%;width:8.486328125%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Set Report name to the value your report needs.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Insert a table</h3><p>Open More actions, point at Insert and select Table.</p><figure class="dg-shot dg-context-shot" data-shot-id="insert"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Insert lists printable element types."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.3232421875%;top:0.0%"><img class="fc-background" data-evidence="insert" alt="Insert lists printable element types."><img class="fc-sharp" data-evidence="insert" alt="" aria-hidden="true" style="clip-path:inset(16.6875% 21.331787109375% 79.3125% 61.07421875%)"><span class="fc-ring" aria-hidden="true" style="left:61.07421875%;top:16.6875%;width:17.593994140625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Insert lists printable element types.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="insert-table"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Table adds a data table to this design."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-12.166666666666668%"><img class="fc-background" data-evidence="insert-table" alt="Table adds a data table to this design."><img class="fc-sharp" data-evidence="insert-table" alt="" aria-hidden="true" style="clip-path:inset(21.3125% 9.21875% 74.6875% 79.0625%)"><span class="fc-ring" aria-hidden="true" style="left:79.0625%;top:21.3125%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Table adds a data table to this design.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Select the table</h3><p>The inserted Table is selected. Drag it to the intended position and use its resize handles when you need another size. The example keeps its initial position.</p><figure class="dg-shot dg-context-shot" data-shot-id="new-table"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The new table is selected for configuration."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-89.63541666666667%;top:-11.666666666666666%"><img class="fc-background" data-evidence="new-table" alt="The new table is selected for configuration."><img class="fc-sharp" data-evidence="new-table" alt="" aria-hidden="true" style="clip-path:inset(15.625% 33.57421875% 69.375% 38.30078125%)"><span class="fc-ring" aria-hidden="true" style="left:38.30078125%;top:15.625%;width:28.125%;height:15.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>The new table is selected for configuration.</figcaption></figure></section>
+<h2 id="dg-bind">Choose the table query</h2>
+<p>Use a saved query that returns the intended columns. When that query has parameters, define matching template defaults before loading columns.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Data</h3><p>With the table selected, select Data in the inspector.</p><figure class="dg-shot dg-context-shot" data-shot-id="new-data-tab"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Open Data for the selected custom table."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="new-data-tab" alt="Open Data for the selected custom table."><img class="fc-sharp" data-evidence="new-data-tab" alt="" aria-hidden="true" style="clip-path:inset(6.0% 0.0% 89.125% 93.416748046875%)"><span class="fc-ring" aria-hidden="true" style="left:93.416748046875%;top:6.0%;width:6.583251953124999%;height:4.875%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Open Data for the selected custom table.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Bind the saved query</h3><p>Open Bind query and choose your Custom Query. The example uses Request count for reporting, with two required Text query parameters named from and to.</p><figure class="dg-shot dg-context-shot" data-shot-id="bind-query"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose your saved Custom Query."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-156.66666666666666%"><img class="fc-background" data-evidence="bind-query" alt="Choose your saved Custom Query."><img class="fc-sharp" data-evidence="bind-query" alt="" aria-hidden="true" style="clip-path:inset(75.5% 1.173095703125% 20.5% 71.38671875%)"><span class="fc-ring" aria-hidden="true" style="left:71.38671875%;top:75.5%;width:27.440185546875%;height:4.0%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">2</span></span></span></span></button><figcaption>Choose your saved Custom Query.</figcaption></figure></section>
+<h2 id="dg-parameters">Define the report filter and preview defaults</h2>
+<p>For Reports, the current date-range filter passes flat from and to values. The example query declares those as two required Text parameters. The template provides one Date range control. A workbench query declaring one daterange parameter currently fails when bound directly to Reports.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Add a template parameter</h3><p>Select Add parameter below the binding settings.</p><figure class="dg-shot dg-context-shot" data-shot-id="add-parameter"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Add parameter defines a filter exposed by this template."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-142.66666666666669%"><img class="fc-background" data-evidence="add-parameter" alt="Add parameter defines a filter exposed by this template."><img class="fc-sharp" data-evidence="add-parameter" alt="" aria-hidden="true" style="clip-path:inset(70.5% 0.9375% 26.0% 89.422607421875%)"><span class="fc-ring" aria-hidden="true" style="left:89.422607421875%;top:70.5%;width:9.639892578125%;height:3.5000000000000004%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">1</span></span></span></span></button><figcaption>Add parameter defines a filter exposed by this template.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Match the query key</h3><p>Set a unique template Key, such as period. This date-range control supplies the from and to values used by the reporting query.</p><figure class="dg-shot dg-context-shot" data-shot-id="parameter-key"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set Key param1 to the value your report needs."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="parameter-key" alt="Set Key param1 to the value your report needs."><img class="fc-sharp" data-evidence="parameter-key" alt="" aria-hidden="true" style="clip-path:inset(89.375% 11.5234375% 7.124999999999999% 81.015625%)"><span class="fc-ring" aria-hidden="true" style="left:81.015625%;top:89.375%;width:7.460937500000001%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Set Key param1 to the value your report needs.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose the visible label</h3><p>Set Label to what people should see, such as Period.</p><figure class="dg-shot dg-context-shot" data-shot-id="parameter-label"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set Label period to the value your report needs."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="parameter-label" alt="Set Label period to the value your report needs."><img class="fc-sharp" data-evidence="parameter-label" alt="" aria-hidden="true" style="clip-path:inset(89.375% 3.5937499999999996% 7.124999999999999% 88.9453125%)"><span class="fc-ring" aria-hidden="true" style="left:88.9453125%;top:89.375%;width:7.460937500000001%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Set Label period to the value your report needs.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Match the parameter type</h3><p>Set Type to Date range. The reporting query itself uses two Text parameters named from and to.</p><figure class="dg-shot dg-context-shot" data-shot-id="parameter-type"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose Date range to match the query parameter."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="parameter-type" alt="Choose Date range to match the query parameter."><img class="fc-sharp" data-evidence="parameter-type" alt="" aria-hidden="true" style="clip-path:inset(91.375% 9.375% 4.625% 81.40625%)"><span class="fc-ring" aria-hidden="true" style="left:81.40625%;top:91.375%;width:9.21875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Choose Date range to match the query parameter.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Set the default start</h3><p>Enter the default first included date. The example uses 2026-01-01.</p><figure class="dg-shot dg-context-shot" data-shot-id="parameter-from"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set From period to the value your report needs."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="parameter-from" alt="Set From period to the value your report needs."><img class="fc-sharp" data-evidence="parameter-from" alt="" aria-hidden="true" style="clip-path:inset(96.0% 0.9375% 0.5% 90.234375%)"><span class="fc-ring" aria-hidden="true" style="left:90.234375%;top:96.0%;width:8.828125%;height:3.5000000000000004%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">5</span></span></span></span></button><figcaption>Set From period to the value your report needs.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Set the default end</h3><p>Enter the default last included date. The example uses 2027-01-01. The reporting query includes the full end day, matching the report calendar and scheduler. These are preview defaults; report users can choose other values.</p><figure class="dg-shot dg-context-shot" data-shot-id="parameter-to"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set To period to the value your report needs."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-166.66666666666669%"><img class="fc-background" data-evidence="parameter-to" alt="Set To period to the value your report needs."><img class="fc-sharp" data-evidence="parameter-to" alt="" aria-hidden="true" style="clip-path:inset(94.0% 0.9375% 2.5% 90.234375%)"><span class="fc-ring" aria-hidden="true" style="left:90.234375%;top:94.0%;width:8.828125%;height:3.5000000000000004%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">6</span></span></span></span></button><figcaption>Set To period to the value your report needs.</figcaption></figure></section>
+<h2 id="dg-columns">Choose and preview the printed column</h2>
+<p>Load columns uses the template defaults to run the bound query. The count query returns a requests column even when the warehouse contains no requests.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Load the query columns</h3><p>Select Load columns. Read an error if the query or parameter defaults are invalid.</p><figure class="dg-shot dg-context-shot" data-shot-id="load-columns"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Load columns runs the query using the template defaults."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="load-columns" alt="Load columns runs the query using the template defaults."><img class="fc-sharp" data-evidence="load-columns" alt="" aria-hidden="true" style="clip-path:inset(11.75% 10.142822265625% 84.25% 81.015625%)"><span class="fc-ring" aria-hidden="true" style="left:81.015625%;top:11.75%;width:8.841552734375%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Load columns runs the query using the template defaults.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Include the column</h3><p>Tick requests to include it in the table. Choose the actual output columns needed by your own report.</p><figure class="dg-shot dg-context-shot" data-shot-id="include-column"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Include the requests column in the printed table."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-104.33333333333333%"><img class="fc-background" data-evidence="include-column" alt="Include the requests column in the printed table."><img class="fc-sharp" data-evidence="include-column" alt="" aria-hidden="true" style="clip-path:inset(56.875% 17.734375% 41.125% 81.015625%)"><span class="fc-ring" aria-hidden="true" style="left:81.015625%;top:56.875%;width:1.25%;height:2.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Include the requests column in the printed table.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Set its printed label</h3><p>Enter a readable column label, such as Requests. This changes the printed label, not the query field.</p><figure class="dg-shot dg-context-shot" data-shot-id="column-label"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Set Label for column requests to the value your report needs."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-104.33333333333333%"><img class="fc-background" data-evidence="column-label" alt="Set Label for column requests to the value your report needs."><img class="fc-sharp" data-evidence="column-label" alt="" aria-hidden="true" style="clip-path:inset(56.125% 15.234375% 40.375% 82.734375%)"><span class="fc-ring" aria-hidden="true" style="left:82.734375%;top:56.125%;width:2.03125%;height:3.5000000000000004%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Set Label for column requests to the value your report needs.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Load the page data</h3><p>Select Load pages above the canvas. It runs the bound data and calculates a physical page count.</p><figure class="dg-shot dg-context-shot" data-shot-id="load-pages"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Load pages fetches rows and calculates the printed page count."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-151.79850260416669%;top:0.0%"><img class="fc-background" data-evidence="load-pages" alt="Load pages fetches rows and calculates the printed page count."><img class="fc-sharp" data-evidence="load-pages" alt="" aria-hidden="true" style="clip-path:inset(11.75% 21.25% 85.25% 72.598876953125%)"><span class="fc-ring" aria-hidden="true" style="left:72.598876953125%;top:11.75%;width:6.151123046875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Load pages fetches rows and calculates the printed page count.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Show loaded data</h3><p>Select Show data. Reload pages after edits when the count is stale.</p><figure class="dg-shot dg-context-shot" data-shot-id="show-data"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Show data fills the canvas using the loaded rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-145.13346354166669%;top:0.0%"><img class="fc-background" data-evidence="show-data" alt="Show data fills the canvas using the loaded rows."><img class="fc-sharp" data-evidence="show-data" alt="" aria-hidden="true" style="clip-path:inset(6.812500000000001% 23.90625% 89.9375% 70.25634765625%)"><span class="fc-ring" aria-hidden="true" style="left:70.25634765625%;top:6.812500000000001%;width:5.83740234375%;height:3.25%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Show data fills the canvas using the loaded rows.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The table shows the real count. This installation prints one Requests column containing zero.</p></div>
+<figure class="dg-shot dg-context-shot" data-shot-id="bound-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The printed column contains the live count, including zero."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-89.63541666666667%;top:-11.666666666666666%"><img class="fc-background" data-evidence="bound-result" alt="The printed column contains the live count, including zero."><img class="fc-sharp" data-evidence="bound-result" alt="" aria-hidden="true" style="clip-path:inset(15.625% 33.57421875% 69.375% 38.30078125%)"><span class="fc-ring" aria-hidden="true" style="left:38.30078125%;top:15.625%;width:28.125%;height:15.0%"></span></span></span></button><figcaption>The printed column contains the live count, including zero.</figcaption></figure>
+<h2 id="dg-preview">Save and inspect the PDF</h2>
+<p>Save a new design explicitly. Then check the actual rendered page before publishing it.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Save the design</h3><p>Open More actions and select Save. Wait for Saved. After the first save, later edits also autosave.</p><figure class="dg-shot dg-context-shot" data-shot-id="save"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Save persists the new design before publication."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.3232421875%;top:-24.166666666666668%"><img class="fc-background" data-evidence="save" alt="Save persists the new design before publication."><img class="fc-sharp" data-evidence="save" alt="" aria-hidden="true" style="clip-path:inset(25.8125% 21.331787109375% 70.1875% 61.07421875%)"><span class="fc-ring" aria-hidden="true" style="left:61.07421875%;top:25.8125%;width:17.593994140625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Save persists the new design before publication.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open Preview</h3><p>Open More actions and select Preview.</p><figure class="dg-shot dg-context-shot" data-shot-id="preview"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Preview renders the current working design as a PDF."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.3232421875%;top:-13.5%"><img class="fc-background" data-evidence="preview" alt="Preview renders the current working design as a PDF."><img class="fc-sharp" data-evidence="preview" alt="" aria-hidden="true" style="clip-path:inset(21.8125% 21.331787109375% 74.1875% 61.07421875%)"><span class="fc-ring" aria-hidden="true" style="left:61.07421875%;top:21.8125%;width:17.593994140625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Preview renders the current working design as a PDF.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check and download the rendered page</h3><p>Read the PDF preview and use Download when you need a local copy. Close the preview to return to editing.</p><figure class="dg-shot dg-context-shot" data-shot-id="preview-result"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The preview shows actual query output in the printable design."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-50.625%;top:-47.088541666666664%"><img class="fc-background" data-evidence="preview-result" alt="The preview shows actual query output in the printable design."><img class="fc-sharp" data-evidence="preview-result" alt="" aria-hidden="true" style="clip-path:inset(27.033203125% 47.421875% 54.21679687499999% 22.890625%)"><span class="fc-ring" aria-hidden="true" style="left:22.890625%;top:27.033203125%;width:29.6875%;height:18.75%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>The preview shows actual query output in the printable design.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="preview-download"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Download saves the rendered PDF."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-159.6484375%;top:-5.088541666666667%"><img class="fc-background" data-evidence="preview-download" alt="Download saves the rendered PDF."><img class="fc-sharp" data-evidence="preview-download" alt="" aria-hidden="true" style="clip-path:inset(19.158203125% 17.890625% 77.841796875% 75.126953125%)"><span class="fc-ring" aria-hidden="true" style="left:75.126953125%;top:19.158203125%;width:6.982421875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Download saves the rendered PDF.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The preview renders the current working design with query data. A draft design carries a DRAFT stamp.</p></div>
+<h2 id="dg-publish">Publish a saved revision</h2>
+<p>Publish after checking the saved design. A revision records the published state; it does not add a Reports library entry.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Publish the revision</h3><p>Open More actions and select Publish revision. Save first if the designer asks.</p><figure class="dg-shot dg-context-shot" data-shot-id="publish"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Publish revision snapshots the saved design. It does not create a library report."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.3232421875%;top:-66.83333333333333%"><img class="fc-background" data-evidence="publish" alt="Publish revision snapshots the saved design. It does not create a library report."><img class="fc-sharp" data-evidence="publish" alt="" aria-hidden="true" style="clip-path:inset(41.8125% 21.331787109375% 54.1875% 61.07421875%)"><span class="fc-ring" aria-hidden="true" style="left:61.07421875%;top:41.8125%;width:17.593994140625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Publish revision snapshots the saved design. It does not create a library report.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Check the published status</h3><p>Check the Published status beside the design name.</p><figure class="dg-shot dg-context-shot" data-shot-id="published"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Published confirms the design revision."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-97.87760416666667%;top:0.0%"><img class="fc-background" data-evidence="published" alt="Published confirms the design revision."><img class="fc-sharp" data-evidence="published" alt="" aria-hidden="true" style="clip-path:inset(7.5% 42.24365234375% 90.625% 53.15185546875%)"><span class="fc-ring" aria-hidden="true" style="left:53.15185546875%;top:7.5%;width:4.6044921875%;height:1.875%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Published confirms the design revision.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The saved design has a published revision.</p></div>
+<h2 id="dg-versions">Inspect published versions</h2>
+<p>Use this to identify the saved revision before considering a restore.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Versions</h3><p>Open More actions and select Versions.</p><figure class="dg-shot dg-context-shot" data-shot-id="versions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Versions lists published snapshots."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.3232421875%;top:-56.166666666666664%"><img class="fc-background" data-evidence="versions" alt="Versions lists published snapshots."><img class="fc-sharp" data-evidence="versions" alt="" aria-hidden="true" style="clip-path:inset(37.8125% 21.331787109375% 58.1875% 61.07421875%)"><span class="fc-ring" aria-hidden="true" style="left:61.07421875%;top:37.8125%;width:17.593994140625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Versions lists published snapshots.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Read the revision row</h3><p>Check its version, publication time and publisher. Restore loads that snapshot into the working copy as an edit. It does not publish another revision. Close the sheet if no restore is needed.</p><figure class="dg-shot dg-context-shot" data-shot-id="version-row"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Read the revision, publication time and publisher before restoring."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-23.010416666666668%"><img class="fc-background" data-evidence="version-row" alt="Read the revision, publication time and publisher before restoring."><img class="fc-sharp" data-evidence="version-row" alt="" aria-hidden="true" style="clip-path:inset(25.37890625% 3.125% 70.62109375% 91.01318359375%)"><span class="fc-ring" aria-hidden="true" style="left:91.01318359375%;top:25.37890625%;width:5.86181640625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Read the revision, publication time and publisher before restoring.</figcaption></figure></section>
+<h2 id="dg-library">Create the report library entry</h2>
+<p>Use this after the design and query are ready. The library report can have a different name from its design.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Create report from this design</h3><p>Open More actions and select Create report from this design.</p><figure class="dg-shot dg-context-shot" data-shot-id="create-report"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Create report from this design creates a separate library entry."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-136.3232421875%;top:-77.5%"><img class="fc-background" data-evidence="create-report" alt="Create report from this design creates a separate library entry."><img class="fc-sharp" data-evidence="create-report" alt="" aria-hidden="true" style="clip-path:inset(45.8125% 21.331787109375% 50.18749999999999% 61.07421875%)"><span class="fc-ring" aria-hidden="true" style="left:61.07421875%;top:45.8125%;width:17.593994140625%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Create report from this design creates a separate library entry.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Name the report</h3><p>Enter the library Name. The example uses Request summary report.</p><figure class="dg-shot dg-context-shot" data-shot-id="report-name"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the library report name."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-10.510416666666666%"><img class="fc-background" data-evidence="report-name" alt="Choose the library report name."><img class="fc-sharp" data-evidence="report-name" alt="" aria-hidden="true" style="clip-path:inset(20.44140625% 1.875% 75.05859375% 66.953125%)"><span class="fc-ring" aria-hidden="true" style="left:66.953125%;top:20.44140625%;width:31.171875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose the library report name.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose its category</h3><p>Open Category and choose the category where people should find it, such as Operational.</p><figure class="dg-shot dg-context-shot" data-shot-id="report-category"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the category where people should find the report."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-135.20833333333334%;top:-65.16666666666666%"><img class="fc-background" data-evidence="report-category" alt="Choose the category where people should find the report."><img class="fc-sharp" data-evidence="report-category" alt="" aria-hidden="true" style="clip-path:inset(41.9375% 29.765625% 55.5625% 68.671875%)"><span class="fc-ring" aria-hidden="true" style="left:68.671875%;top:41.9375%;width:1.5625%;height:2.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Choose the category where people should find the report.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check the linked definitions</h3><p>Confirm Template and Primary query. The template controls Document layout; the primary query supplies Spreadsheet rows.</p><figure class="dg-shot dg-context-shot" data-shot-id="report-template"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check the template selected for this report."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-86.51041666666667%"><img class="fc-background" data-evidence="report-template" alt="Check the template selected for this report."><img class="fc-sharp" data-evidence="report-template" alt="" aria-hidden="true" style="clip-path:inset(48.94140625% 1.875% 46.55859375% 66.953125%)"><span class="fc-ring" aria-hidden="true" style="left:66.953125%;top:48.94140625%;width:31.171875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Check the template selected for this report.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="report-query"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Check the primary query that will supply spreadsheet rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-109.17708333333334%"><img class="fc-background" data-evidence="report-query" alt="Check the primary query that will supply spreadsheet rows."><img class="fc-sharp" data-evidence="report-query" alt="" aria-hidden="true" style="clip-path:inset(57.44140625000001% 1.875% 38.05859375% 66.953125%)"><span class="fc-ring" aria-hidden="true" style="left:66.953125%;top:57.44140625000001%;width:31.171875%;height:4.5%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Check the primary query that will supply spreadsheet rows.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Create the library entry</h3><p>Open the sheet's Actions dots and select Create report.</p><figure class="dg-shot dg-context-shot" data-shot-id="report-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge The New report sheet has its own Actions dots."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="report-actions" alt="The New report sheet has its own Actions dots."><img class="fc-sharp" data-evidence="report-actions" alt="" aria-hidden="true" style="clip-path:inset(2.25% 1.875% 93.75% 95.625%)"><span class="fc-ring" aria-hidden="true" style="left:95.625%;top:2.25%;width:2.5%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>The New report sheet has its own Actions dots.</figcaption></figure><figure class="dg-shot dg-context-shot" data-shot-id="report-create"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Create report adds the named library entry."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="report-create" alt="Create report adds the named library entry."><img class="fc-sharp" data-evidence="report-create" alt="" aria-hidden="true" style="clip-path:inset(7.375% 2.265625% 88.625% 84.765625%)"><span class="fc-ring" aria-hidden="true" style="left:84.765625%;top:7.375%;width:12.968750000000002%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Create report adds the named library entry.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The named entry is available under its category in Reports. Open its Parameters and run it there. <a href="reports-review.html">Reports</a> covers that workflow.</p></div>
+<h2 id="dg-export">Export directly from the designer</h2>
+<p>Use these exports when you need output from the current design without opening its library report.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Export PDF</h3><p>Open More actions, point at Export and select PDF.</p><figure class="dg-shot dg-context-shot" data-shot-id="export-pdf"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Export PDF downloads the current design output."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-36.5%"><img class="fc-background" data-evidence="export-pdf" alt="Export PDF downloads the current design output."><img class="fc-sharp" data-evidence="export-pdf" alt="" aria-hidden="true" style="clip-path:inset(30.4375% 9.21875% 65.5625% 79.0625%)"><span class="fc-ring" aria-hidden="true" style="left:79.0625%;top:30.4375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Export PDF downloads the current design output.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Export Excel</h3><p>Open More actions, point at Export and select Excel. Bound table rows become workbook data.</p><figure class="dg-shot dg-context-shot" data-shot-id="export-excel"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Export Excel downloads the bound table rows."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:-47.16666666666667%"><img class="fc-background" data-evidence="export-excel" alt="Export Excel downloads the bound table rows."><img class="fc-sharp" data-evidence="export-excel" alt="" aria-hidden="true" style="clip-path:inset(34.4375% 9.21875% 61.5625% 79.0625%)"><span class="fc-ring" aria-hidden="true" style="left:79.0625%;top:34.4375%;width:11.71875%;height:4.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Export Excel downloads the bound table rows.</figcaption></figure></section>
+<div class="dg-result"><p><strong>Expected result:</strong> The browser downloads the rendered PDF or workbook.</p></div>
+<h2 id="dg-layers">Control element visibility and locking</h2>
+<p>Layers provides direct controls for selected elements. Hiding affects output. Locking prevents movement.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Layers</h3><p>Select Layers in the inspector.</p><figure class="dg-shot dg-context-shot" data-shot-id="layers"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Layers selects elements and controls visibility, locking and order."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="layers" alt="Layers selects elements and controls visibility, locking and order."><img class="fc-sharp" data-evidence="layers" alt="" aria-hidden="true" style="clip-path:inset(6.0% 6.583251953124999% 89.125% 86.83349609375%)"><span class="fc-ring" aria-hidden="true" style="left:86.83349609375%;top:6.0%;width:6.583251953124999%;height:4.875%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Layers selects elements and controls visibility, locking and order.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Hide an element when intended</h3><p>Use Hide Table, the eye control, for the selected table. Hidden elements do not appear in the canvas or PDF.</p><figure class="dg-shot dg-context-shot" data-shot-id="hide-layer"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the eye to hide an element deliberately."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="hide-layer" alt="Use the eye to hide an element deliberately."><img class="fc-sharp" data-evidence="hide-layer" alt="" aria-hidden="true" style="clip-path:inset(12.0% 3.75% 85.0% 94.375%)"><span class="fc-ring" aria-hidden="true" style="left:94.375%;top:12.0%;width:1.875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Use the eye to hide an element deliberately.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Show it again</h3><p>Use Show Table to restore it.</p><figure class="dg-shot dg-context-shot" data-shot-id="show-layer"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use Show Table to restore the hidden element."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="show-layer" alt="Use Show Table to restore the hidden element."><img class="fc-sharp" data-evidence="show-layer" alt="" aria-hidden="true" style="clip-path:inset(12.0% 3.75% 85.0% 94.375%)"><span class="fc-ring" aria-hidden="true" style="left:94.375%;top:12.0%;width:1.875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">3</span></span></span></span></button><figcaption>Use Show Table to restore the hidden element.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Lock its position</h3><p>Use Lock Table to prevent movement while keeping it selectable.</p><figure class="dg-shot dg-context-shot" data-shot-id="lock-layer"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Lock keeps the element selectable while preventing movement."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="lock-layer" alt="Lock keeps the element selectable while preventing movement."><img class="fc-sharp" data-evidence="lock-layer" alt="" aria-hidden="true" style="clip-path:inset(12.0% 1.875% 85.0% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:12.0%;width:1.875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">4</span></span></span></span></button><figcaption>Lock keeps the element selectable while preventing movement.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Unlock it again</h3><p>Use Unlock Table when you intend to move it. The review leaves the table visible and unlocked.</p><figure class="dg-shot dg-context-shot" data-shot-id="unlock-layer"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Unlock Table allows movement again."><span class="fc-screenshot"><span class="fc-scene" style="width:266.66666666666663%;height:266.66666666666663%;left:-166.66666666666669%;top:0.0%"><img class="fc-background" data-evidence="unlock-layer" alt="Unlock Table allows movement again."><img class="fc-sharp" data-evidence="unlock-layer" alt="" aria-hidden="true" style="clip-path:inset(12.0% 1.875% 85.0% 96.25%)"><span class="fc-ring" aria-hidden="true" style="left:96.25%;top:12.0%;width:1.875%;height:3.0%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">5</span></span></span></span></button><figcaption>Unlock Table allows movement again.</figcaption></figure></section>
+<h2 id="dg-phone">Inspect an existing design on a phone</h2>
+<p>Use a large screen for building page layouts. On a phone, find and inspect an existing template, or run its report in Reports.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Expand the Explorer</h3><p>Select Expand explorer on its narrow rail.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-explorer"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use the Explorer rail to find an existing template on a phone."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-explorer" alt="Use the Explorer rail to find an existing template on a phone."><img class="fc-sharp" data-evidence="phone-explorer" alt="" aria-hidden="true" style="clip-path:inset(6.896551724137931% 92.66666666666666% 89.4088669950739% 0.9333333333333335%)"><span class="fc-ring" aria-hidden="true" style="left:0.9333333333333335%;top:6.896551724137931%;width:6.4%;height:3.6945812807881775%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">1</span></span></span></span></button><figcaption>Use the Explorer rail to find an existing template on a phone.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose the existing template</h3><p>Select its name, then collapse the Explorer when you need canvas space.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-template"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Choose the existing design. Use a larger screen to edit it."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:-200.13333333333333%"><img class="fc-background" data-evidence="phone-template" alt="Choose the existing design. Use a larger screen to edit it."><img class="fc-sharp" data-evidence="phone-template" alt="" aria-hidden="true" style="clip-path:inset(70.96674876847291% 39.46666666666667% 26.570197044334975% 3.2%)"><span class="fc-ring" aria-hidden="true" style="left:3.2%;top:70.96674876847291%;width:57.333333333333336%;height:2.4630541871921183%"><span class="fc-marker" style="left:calc(100% + 3px);right:auto">2</span></span></span></span></button><figcaption>Choose the existing design. Use a larger screen to edit it.</figcaption></figure></section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Open its actions</h3><p>Use More actions to inspect the available operations. Make layout edits on a larger screen.</p><figure class="dg-shot dg-context-shot" data-shot-id="phone-actions"><button type="button" class="cursor-interaction" data-enlarge aria-label="Enlarge Use More actions to inspect an existing design."><span class="fc-screenshot"><span class="fc-scene" style="width:100.0%;height:346.4533333333333%;left:0.0%;top:0.0%"><img class="fc-background" data-evidence="phone-actions" alt="Use More actions to inspect an existing design."><img class="fc-sharp" data-evidence="phone-actions" alt="" aria-hidden="true" style="clip-path:inset(6.342364532019705% 3.2% 89.71674876847291% 88.26666666666667%)"><span class="fc-ring" aria-hidden="true" style="left:88.26666666666667%;top:6.342364532019705%;width:8.533333333333333%;height:3.9408866995073892%"><span class="fc-marker" style="left:auto;right:calc(100% + 3px)">3</span></span></span></span></button><figcaption>Use More actions to inspect an existing design.</figcaption></figure></section>
+<h2 id="dg-layout">Choose page elements and layout tools</h2>
+<p>Insert also offers Text, Letterhead, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid and Chart. Select an element to edit its Properties. The one-table task above does not require those extra elements.</p>
+<p>Properties controls paper size, orientation and page numbers when no element is selected. It also controls element position, dimensions and appearance. Undo and Redo step through edits; zoom changes only your view.</p>
+<p>For a Chart or Cell grid, bind a query in Data and choose the corresponding label, value or cell columns in Properties. Check the rendered output with your own rows.</p>
+<p>Flow settings can place one element below another or control repeated content on continuation pages. Load pages after changing layout to check the physical page count. Show data displays only rows that fit the canvas page.</p>
+<h2 id="dg-content">Keep report text and query fields separate</h2>
+<p>A printed column label can differ from the query field name. Use the Data tab label fields for the visible wording. Keep binding keys matched to actual query output.</p>
+<p>The Print language selector in Properties edits one language's report text. Empty translations fall back to authored text. Query output itself is not translated by changing the design language.</p>
+<p>A Letterhead uses laboratory identity configured in Settings. It can give several designs the same logo, name and contact band.</p>
+<h2 id="dg-manage">Manage designs carefully</h2>
+<p>More actions includes Duplicate and Delete. Duplicate starts a separate design for a variation. Delete permanently removes a design after confirmation; check linked reports first.</p>
+<p>Versions Restore changes the working copy and can be undone. Preview the restored design before publishing deliberately. Publishing another revision does not require another library report for the same design.</p>
+<p>Create report from this design adds a separate library entry. It does not replace Publish revision. A published design absent from Reports still needs the library-creation step.</p>
+<h2 id="dg-practice">Optional practice reference</h2>
+<p><a href="report-designer-evidence/report-count-query.json" download>Download the optional reporting count query</a>. Import it through Query if you want a reference. It uses required Text parameters named from and to, which match Reports' current date-range input. It needs no patient sample data. Use your own approved query for normal reporting.</p>
+<p><a href="report-designer-evidence/published-summary.pdf" download>Download the actual published review PDF</a> or <a href="report-designer-evidence/summary-design.xlsx" download>its exported workbook</a> to compare the one-column result. These files contain only a zero count.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>No columns appear.</strong> Choose Bind query, configure needed template defaults and select Load columns.</p>
+<p><strong>The canvas remains empty.</strong> Include at least one bound column, then Load pages and Show data. Read query errors before changing the layout.</p>
+<p><strong>The save status shows an error.</strong> Resolve it before publishing. A new template needs an explicit first Save.</p>
+<p><strong>Create report is unavailable.</strong> Save the design, then fill Name, Category, Template and Primary query in the New report sheet.</p>
+<p><strong>Preview and output differ from expected rows.</strong> Match template keys to query parameter identifiers and check the defaults and SQL date boundaries. The reporting example includes both calendar endpoints.</p>
+<p><strong>A table prints across several pages.</strong> Data can continue beyond the first page. Load pages and inspect the PDF to check the actual count.</p>
+<p><strong>Reports says required parameter: period.</strong> A Custom Query declaring one daterange parameter works in Query but currently receives no nested range from Reports. Use the reporting pattern of two Text query parameters named from and to, referenced by the SQL. Do not assume a successful designer preview proves a library run.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="query-review.html">Query</a> creates saved data queries. <a href="reports-review.html">Reports</a> runs library entries and schedules output. <a href="laboratory-review.html">Laboratory</a> configures shared identity values.</p>
+</article>
+
+      <nav class="dg-onpage" aria-label="On this page"><p>On this page</p><a href="#dg-read">Inspect an existing report design</a><a href="#dg-create">Create a separate table design</a><a href="#dg-bind">Choose the table query</a><a href="#dg-parameters">Define the report filter and preview defaults</a><a href="#dg-columns">Choose and preview the printed column</a><a href="#dg-preview">Save and inspect the PDF</a><a href="#dg-publish">Publish a saved revision</a><a href="#dg-versions">Inspect published versions</a><a href="#dg-library">Create the report library entry</a><a href="#dg-export">Export directly from the designer</a><a href="#dg-layers">Control element visibility and locking</a><a href="#dg-phone">Inspect an existing design on a phone</a><a href="#dg-layout">Choose page elements and layout tools</a><a href="#dg-content">Keep report text and query fields separate</a><a href="#dg-manage">Manage designs carefully</a><a href="#dg-practice">Optional practice reference</a><a href="#dg-help">Troubleshooting</a><a href="#dg-related">Related guides</a><small>Click any screenshot to enlarge it.</small></nav>
+     </div>
+    </div>
+   </section>
+  </div>
+  <div class="dg-lightbox" role="dialog" aria-modal="true" aria-label="Enlarged screenshot" hidden><button type="button" class="cursor-interaction" data-close-lightbox>Close</button><div data-lightbox-content></div></div>
+ </div>
+</div>
+<script type="application/json" id="facilities-evidence-assets">{"open-page":"./report-designer-evidence/open-page.png","existing-template":"./report-designer-evidence/existing-template.png","existing-table":"./report-designer-evidence/existing-table.png","existing-data-tab":"./report-designer-evidence/existing-data-tab.png","existing-binding":"./report-designer-evidence/existing-binding.png","actions":"./report-designer-evidence/actions.png","new-template":"./report-designer-evidence/new-template.png","design-name":"./report-designer-evidence/design-name.png","insert":"./report-designer-evidence/insert.png","insert-table":"./report-designer-evidence/insert-table.png","new-table":"./report-designer-evidence/new-table.png","new-data-tab":"./report-designer-evidence/new-data-tab.png","bind-query":"./report-designer-evidence/bind-query.png","add-parameter":"./report-designer-evidence/add-parameter.png","parameter-key":"./report-designer-evidence/parameter-key.png","parameter-label":"./report-designer-evidence/parameter-label.png","parameter-type":"./report-designer-evidence/parameter-type.png","parameter-from":"./report-designer-evidence/parameter-from.png","parameter-to":"./report-designer-evidence/parameter-to.png","load-columns":"./report-designer-evidence/load-columns.png","include-column":"./report-designer-evidence/include-column.png","column-label":"./report-designer-evidence/column-label.png","load-pages":"./report-designer-evidence/load-pages.png","show-data":"./report-designer-evidence/show-data.png","bound-result":"./report-designer-evidence/bound-result.png","save":"./report-designer-evidence/save.png","preview":"./report-designer-evidence/preview.png","preview-result":"./report-designer-evidence/preview-result.png","preview-download":"./report-designer-evidence/preview-download.png","publish":"./report-designer-evidence/publish.png","published":"./report-designer-evidence/published.png","versions":"./report-designer-evidence/versions.png","version-row":"./report-designer-evidence/version-row.png","create-report":"./report-designer-evidence/create-report.png","report-name":"./report-designer-evidence/report-name.png","report-category":"./report-designer-evidence/report-category.png","report-template":"./report-designer-evidence/report-template.png","report-query":"./report-designer-evidence/report-query.png","report-actions":"./report-designer-evidence/report-actions.png","report-create":"./report-designer-evidence/report-create.png","export-pdf":"./report-designer-evidence/export-pdf.png","export-excel":"./report-designer-evidence/export-excel.png","layers":"./report-designer-evidence/layers.png","hide-layer":"./report-designer-evidence/hide-layer.png","show-layer":"./report-designer-evidence/show-layer.png","lock-layer":"./report-designer-evidence/lock-layer.png","unlock-layer":"./report-designer-evidence/unlock-layer.png","phone-explorer":"./report-designer-evidence/phone-explorer.png","phone-template":"./report-designer-evidence/phone-template.png","phone-actions":"./report-designer-evidence/phone-actions.png"}</script>
+<script>
+(() => {
+ const root = document.getElementById('report-designer-evidence-guide');
+ const assets = JSON.parse(document.getElementById('facilities-evidence-assets').textContent);
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
+ const pane = root.querySelector('[data-reading-pane]');
+ let previewTheme='dark';
+ function applyTheme(){root.style.colorScheme=previewTheme;root.querySelector('[data-theme-toggle]').setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');}
+ applyTheme();
+ root.querySelector('[data-theme-toggle]').addEventListener('click',()=>{previewTheme=previewTheme==='dark'?'light':'dark';applyTheme();});
+ const box = root.querySelector('.dg-lightbox');
+ let previousFocus = null;
+ function closeBox() { box.hidden = true; root.querySelector('.dg-main').inert=false; if(previousFocus) previousFocus.focus(); }
+ root.querySelector('[data-close-lightbox]').addEventListener('click', closeBox);
+ root.addEventListener('keydown', event => { if(event.key==='Escape' && !box.hidden) closeBox(); if(event.key==='Tab' && !box.hidden) {event.preventDefault();box.querySelector('button').focus();} });
+ root.querySelectorAll('[data-enlarge]').forEach(button => button.addEventListener('click', () => {
+  previousFocus = button;
+  const content = box.querySelector('[data-lightbox-content]');
+  const frame = button.querySelector('.fc-screenshot');
+  content.replaceChildren();
+  content.className = frame ? 'dg-context-shot' : '';
+  if(frame) {
+   content.dataset.shotId = button.closest('[data-shot-id]').dataset.shotId;
+   content.append(frame.cloneNode(true));
+  } else {
+   delete content.dataset.shotId;
+   content.append(button.querySelector('img').cloneNode(true));
+  }
+  box.hidden = false;
+  root.querySelector('.dg-main').inert=true;
+  box.querySelector('button').focus();
+ }));
+ root.querySelectorAll('a[href^="#dg-"]').forEach(link => link.addEventListener('click', event => {
+  const target = root.querySelector(link.getAttribute('href'));
+  if(!target) return;
+  event.preventDefault();
+  pane.scrollTo({top:target.getBoundingClientRect().top-pane.getBoundingClientRect().top+pane.scrollTop-12,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+  root.querySelectorAll('.dg-onpage a').forEach(item => item.removeAttribute('aria-current'));
+  if(link.closest('.dg-onpage')) link.setAttribute('aria-current','location');
+ }));
+ root.querySelectorAll('[data-play-loop]').forEach(button => button.addEventListener('click', () => {
+  const video=button.closest('figure').querySelector('video');
+  if(video.paused) video.play().then(()=>button.textContent='Pause loop').catch(()=>button.textContent='Play loop');
+  else {video.pause();button.textContent='Play loop';}
+ }));
+ root.querySelectorAll('.dg-loop').forEach(figure=>{
+  const video=figure.querySelector('video');
+  const button=figure.querySelector('[data-play-loop]');
+  video.addEventListener('play',()=>{button.textContent='Pause loop';});
+  video.addEventListener('pause',()=>{button.textContent='Play loop';});
+  if(!matchMedia('(prefers-reduced-motion:reduce)').matches) {
+   video.autoplay=true;
+   video.play().catch(()=>{button.textContent='Play loop';});
+  }
+ });
+ const expand = root.querySelector('[data-expand]');
+ root.querySelector('[data-collapse]').addEventListener('click',()=>{root.classList.add('dg-folded');expand.hidden=false;});
+ expand.addEventListener('click',()=>{root.classList.remove('dg-folded');expand.hidden=true;});
+ root.querySelector('[data-search]').addEventListener('input',event=>{
+  const query=event.target.value.trim().toLowerCase();
+  root.querySelectorAll('.dg-navitem').forEach(item=>{item.hidden=!!query&&!item.textContent.toLowerCase().includes(query);});
+ });
+
+})();
+</script>
+<style>
+#report-designer-evidence-guide .dg-context-shot { max-width:500px; }
+#report-designer-evidence-guide .fc-screenshot { display:block; position:relative; width:100%; aspect-ratio:8/5; container-type:inline-size; overflow:hidden; background:var(--dg-bg); }
+#report-designer-evidence-guide .dg-context-shot img { position:absolute; inset:0; display:block; width:100%; height:100%; max-height:none; object-fit:fill; }
+#report-designer-evidence-guide .fc-scene { position:absolute; display:block; }
+#report-designer-evidence-guide .fc-background { filter:blur(.25cqw); opacity:.9; }
+#report-designer-evidence-guide .fc-sharp { pointer-events:none; }
+#report-designer-evidence-guide .fc-ring { position:absolute; display:block; border:2px solid var(--dg-link); border-radius:3px; pointer-events:none; }
+#report-designer-evidence-guide .fc-marker { position:absolute; right:calc(100% + 3px); top:-4px; display:flex; align-items:center; justify-content:center; width:19px; height:19px; border-radius:50%; background:var(--dg-link); color:var(--dg-bg); font:500 11px/1 Arial,sans-serif; }
+#report-designer-evidence-guide [data-shot-id="open-dashboard"] .fc-marker { left:calc(100% + 3px); right:auto; }
+#report-designer-evidence-guide .dg-lightbox .dg-context-shot { margin:0; width:min(100%,calc((min(var(--guide-preview-height,840px),100dvh) - 64px)*1.6)); max-width:none; }
+</style>
+<style>#report-designer-evidence-guide .fc-marker{left:calc(100% + 3px);right:auto}#report-designer-evidence-guide .dg-head-icons{padding-right:0}@media(max-width:900px){#report-designer-evidence-guide .fc-marker{left:auto!important;right:4px!important}}</style>
+</body></html>

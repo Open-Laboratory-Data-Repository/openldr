@@ -1,0 +1,10 @@
+{
+  "status": 400,
+  "body": "{\"error\":\"required parameter: period\",\"code\":\"RP0004\",\"correlationId\":\"e2b08911\"}",
+  "reportId": "r-8949d7c6-2012-4996-a216-33c025434be5",
+  "params": {
+    "from": "2026-01-01",
+    "to": "2027-01-01"
+  },
+  "note": "Observed before documentation example adjustment. No app changes."
+}
