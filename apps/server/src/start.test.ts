@@ -80,6 +80,9 @@ describe('importing start', () => {
   });
 
   it('installs no signal or crash handlers on import', async () => {
+    // The test above already imported ./start, and vitest caches modules within a file. Reset the
+    // cache so this import runs the module's top-level code again.
+    vi.resetModules();
     const events = ['SIGTERM', 'SIGINT', 'uncaughtException', 'unhandledRejection'] as const;
     const before = events.map((e) => process.listenerCount(e));
     await import('./start');
