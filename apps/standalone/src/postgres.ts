@@ -29,7 +29,6 @@ import {
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createServer, type AddressInfo } from 'node:net';
-import { tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
@@ -443,11 +442,14 @@ function runToExit(cmd: string, args: string[], logFd: number): Promise<number |
 
 async function runInitdb(bins: Binaries, clusterDir: string, logFile: string, logFd: number, superPassword: string): Promise<void> {
   // The password goes to initdb through a file, never the command line, where other users of
-  // this computer can read it with `ps`. The file sits in a fresh owner-only folder.
-  const pwDir = mkdtempSync(join(tmpdir(), 'openldr-initdb-'));
+  // this computer can read it with `ps`. The file sits beside the work folder, inside the
+  // owner-only data folder, never in the system temp folder. Its name starts with the work
+  // folder's, `<cluster>.init-<random>.pw`, so when a kill skips the `finally` below, the next
+  // start's sweep of `<cluster>.init-*` (checkClusterFolder) removes it.
+  const pwFile = `${clusterDir}.pw`;
   try {
-    const pwFile = join(pwDir, 'pw');
-    writeFileSync(pwFile, `${superPassword}\n`, { mode: 0o600 });
+    // Created owner-only, and never over an existing file.
+    writeFileSync(pwFile, `${superPassword}\n`, { mode: 0o600, flag: 'wx' });
     const code = await runToExit(
       bins.initdb,
       [
@@ -463,7 +465,7 @@ async function runInitdb(bins: Binaries, clusterDir: string, logFile: string, lo
     );
     if (code !== 0) throw new Error(`initdb failed with exit code ${code}. See ${logFile}.`);
   } finally {
-    rmSync(pwDir, { recursive: true, force: true });
+    rmSync(pwFile, { force: true });
   }
 }
 

@@ -3,7 +3,7 @@
 // port from 3990 to 3997, and everything it starts is stopped in afterEach.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, watch, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -248,6 +248,32 @@ describe.skipIf(!LIVE)('bundled Postgres, live', { timeout: 120_000 }, () => {
     expect(readFileSync(c.logFile, 'utf8')).toMatch(/The files belonging to this database system will be owned by user/);
     expect(existsSync(join(c.clusterDir, 'global', 'pg_control'))).toBe(true);
     expect(await one(pgr.internalUrl, 'select current_user')).toBe('openldr_app');
+  });
+
+  it('writes the initdb password file beside its work folder, and nothing to the system temp folder', async () => {
+    const c = await newCase();
+    // An empty folder stands in for the system temp folder during this start. os.tmpdir() reads
+    // TMPDIR on each call.
+    const fakeTmp = mkdtempSync(join(c.root, 'tmp-'));
+    const tmpBefore = process.env.TMPDIR;
+    process.env.TMPDIR = fakeTmp;
+    const inTmp: string[] = [];
+    const beside: string[] = [];
+    const watchTmp = watch(fakeTmp, (_event, name) => void (name && inTmp.push(String(name))));
+    const watchData = watch(dirname(c.clusterDir), (_event, name) => void (name && beside.push(String(name))));
+    try {
+      await start(c);
+      await new Promise((r) => setTimeout(r, 200));
+    } finally {
+      watchTmp.close();
+      watchData.close();
+      if (tmpBefore === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = tmpBefore;
+    }
+    expect(inTmp).toEqual([]);
+    expect(beside.some((n) => /^postgres\.init-[^/]+\.pw$/.test(n))).toBe(true);
+    // Removed once initdb is done.
+    expect(readdirSync(dirname(c.clusterDir)).filter((n) => n.endsWith('.pw'))).toEqual([]);
   });
 
   it('works in a folder whose path has spaces and non-ASCII letters', async () => {

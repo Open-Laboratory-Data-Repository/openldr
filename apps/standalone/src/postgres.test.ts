@@ -250,6 +250,22 @@ describe('cluster folder checks', () => {
     expect(readdirSync(clusterDir)).toEqual(['stray.txt']);
     expect(readFileSync(join(clusterDir, 'stray.txt'), 'utf8')).toBe('keep me');
   });
+
+  it("sweeps a password file that a killed initdb left beside its work folder", async () => {
+    const root = tempDir();
+    const clusterDir = join(root, 'postgres');
+    // What a kill during initdb leaves: the work folder and the password file beside it.
+    mkdirSync(`${clusterDir}.init-k1ll3d`);
+    writeFileSync(`${clusterDir}.init-k1ll3d.pw`, 'su-x\n', { mode: 0o600 });
+    writeFileSync(join(root, 'keep.txt'), 'not ours to sweep');
+    // The port is held, so the start stops at the port check, after the sweep.
+    await expect(
+      startPostgres({ clusterDir, logFile: join(root, 'logs', 'pg.log'), settings: settings(await heldPort()) }),
+    ).rejects.toThrow(/is in use by another program/);
+    expect(readdirSync(root)).toEqual(['keep.txt']);
+    expect(existsSync(`${clusterDir}.init-k1ll3d.pw`)).toBe(false);
+    expect(existsSync(`${clusterDir}.init-k1ll3d`)).toBe(false);
+  });
 });
 
 describe('findFreePort', () => {

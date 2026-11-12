@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer, type AddressInfo, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,6 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { Config } from '@openldr/config';
 import type { RunningServer } from '@openldr/server/start';
 import {
+  FORCED_STOP_ERROR,
   STOP_WAIT_MS,
   StopError,
   UsageError,
@@ -136,7 +137,32 @@ interface Fakes {
   deps: LauncherDeps;
 }
 
-function fakes(o: { setupRequired?: boolean; closeNever?: boolean; setupFails?: boolean; pgStopFails?: boolean } = {}): Fakes {
+/**
+ * What Postgres stopping under a running server does: the server's database connections fail,
+ * and one without an error listener becomes an uncaught exception. Emitted on the process with
+ * the test runner's own listeners taken off for that moment, so only the launcher's see it.
+ */
+type Listener = (...args: unknown[]) => void;
+const CRASH_EVENTS = ['uncaughtException', 'unhandledRejection'] as const;
+
+/** The crash listeners present now: the test runner's own, before a launcher adds any. */
+function outsideCrashListeners(): Map<(typeof CRASH_EVENTS)[number], Listener[]> {
+  return new Map(CRASH_EVENTS.map((k) => [k, process.listeners(k as 'uncaughtException') as Listener[]]));
+}
+
+function emitConnectionErrors(outside: Map<(typeof CRASH_EVENTS)[number], Listener[]>): void {
+  for (const [k, ls] of outside) for (const l of ls) process.off(k, l);
+  try {
+    process.emit('uncaughtException', new Error('terminating connection due to administrator command'));
+    process.emit('unhandledRejection', new Error('Connection terminated unexpectedly'), Promise.resolve());
+  } finally {
+    for (const [k, ls] of outside) for (const l of ls) process.on(k, l);
+  }
+}
+
+function fakes(
+  o: { setupRequired?: boolean; closeNever?: boolean; setupFails?: boolean; pgStopFails?: boolean; pgStopEmits?: boolean } = {},
+): Fakes {
   const f: Fakes = {
     order: [],
     printed: [],
@@ -144,6 +170,8 @@ function fakes(o: { setupRequired?: boolean; closeNever?: boolean; setupFails?: 
     server: { started: false, closed: false },
     deps: undefined as unknown as LauncherDeps,
   };
+  // Taken before the launcher starts, so these are the test runner's own.
+  const outside = outsideCrashListeners();
   const context = {
     localSignIn: {
       setupRequired: async () => Boolean(o.setupRequired),
@@ -168,6 +196,7 @@ function fakes(o: { setupRequired?: boolean; closeNever?: boolean; setupFails?: 
         ...postgresUrls(opts.settings),
         stop: async () => {
           f.order.push((await readLock(paths)) ? 'pg.stop' : 'pg.stop (lock already gone)');
+          if (o.pgStopEmits) emitConnectionErrors(outside);
           if (o.pgStopFails) throw new Error(`postgres would not stop, password ${opts.settings.appPassword}`);
           f.pg.stopped = true;
         },
@@ -839,6 +868,103 @@ describe('a stop that leaves something behind', () => {
   });
 });
 
+describe('a forced stop ends cleanly while the server is still hung', () => {
+  /** Stubs process.exit, so a real crash handler cannot end the test run. */
+  function guardExit(): number[] {
+    const exits: number[] = [];
+    vi.spyOn(process, 'exit').mockImplementation(((code?: number) => {
+      exits.push(code ?? 0);
+    }) as never);
+    return exits;
+  }
+
+  async function serverLogLines(): Promise<Array<{ level: number; msg: string }>> {
+    const text = await readFile(paths.serverLog, 'utf8');
+    return text
+      .split('\n')
+      .filter((l) => l.startsWith('{'))
+      .map((l) => JSON.parse(l) as { level: number; msg: string });
+  }
+
+  async function expectNoCrash(exits: number[]): Promise<void> {
+    expect(exits).toEqual([]);
+    expect(await readdir(paths.crash)).toEqual([]);
+    const lines = await serverLogLines();
+    expect(lines.filter((l) => l.msg === FORCED_STOP_ERROR && l.level === 40)).toHaveLength(2);
+    expect(lines.filter((l) => l.level >= 60)).toEqual([]);
+  }
+
+  it('after the 60-second wait: resolves forced, releases the lock, writes no crash marker, and takes its handlers off', async () => {
+    const exits = guardExit();
+    const f = fakes({ closeNever: true, pgStopEmits: true });
+    const l = await start(f.deps);
+    launchers.splice(launchers.indexOf(l), 1);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const result = l.stop();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(STOP_WAIT_MS);
+    vi.useRealTimers();
+    expect(await result).toBe('forced');
+    expect(await l.done).toBe('forced');
+    expect(f.pg.stopped).toBe(true);
+    expect(await readLock(paths)).toBeNull();
+    await expectNoCrash(exits);
+    expect(listenerCounts()).toEqual(listenersBefore);
+  });
+
+  it('through the control port, forced by a second signal: the asker gets forced', async () => {
+    const exits = guardExit();
+    const f = fakes({ closeNever: true, pgStopEmits: true });
+    const l = await start(f.deps);
+    launchers.splice(launchers.indexOf(l), 1);
+    const asked = requestStop((await readLock(paths))!, 10_000);
+    await vi.waitFor(() => expect(f.order).toContain('server.close'), { timeout: 3000 });
+    void l.stop(true);
+    expect(await asked).toBe('forced');
+    expect(await l.done).toBe('forced');
+    expect(await readLock(paths)).toBeNull();
+    await expectNoCrash(exits);
+    expect(listenerCounts()).toEqual(listenersBefore);
+  });
+
+  it('the clean path keeps the real crash handlers on until the server has closed', async () => {
+    const f = fakes();
+    let duringClose: Function[] = [];
+    const startServer = f.deps.startServer;
+    f.deps.startServer = async (cfg, logger) => {
+      const s = await startServer(cfg, logger);
+      return {
+        ...s,
+        close: async () => {
+          duringClose = process.listeners('uncaughtException');
+          await s.close();
+        },
+      };
+    };
+    const l = await start(f.deps);
+    const atStart = process.listeners('uncaughtException');
+    expect(await stopped(l)).toBe('clean');
+    expect(duringClose).toEqual(atStart);
+    expect(duringClose.length).toBe(listenersBefore.uncaughtException! + 1);
+  });
+
+  it('a forced stop that leaves something behind still says what failed', async () => {
+    guardExit();
+    const f = fakes({ closeNever: true, pgStopFails: true });
+    const l = await start(f.deps);
+    launchers.splice(launchers.indexOf(l), 1);
+    const err = await l.stop(true).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(StopError);
+    expect((err as StopError).result).toBe('forced');
+    expect((err as Error).message).toMatch(/^The stop did not finish cleanly\. Postgres did not stop: /);
+    await expect(l.done).rejects.toBe(err);
+    expect(listenerCounts()).toEqual(listenersBefore);
+  });
+});
+
 describe('handleSignals', () => {
   function fakeLauncher() {
     const calls: boolean[] = [];
@@ -853,69 +979,124 @@ describe('handleSignals', () => {
     return { calls, launcher };
   }
 
+  /** A fake emitter and a fake clock. `at(ms, signal)` sends a signal at that time. */
   function wire() {
     const source = new EventEmitter();
     const printed: string[] = [];
     const exits: number[] = [];
-    const signals = handleSignals({ source, print: (l) => printed.push(l), exit: (c) => exits.push(c) });
-    return { source, printed, exits, signals };
+    let clock = 100_000;
+    const signals = handleSignals({
+      source,
+      print: (l) => printed.push(l),
+      exit: (c) => exits.push(c),
+      now: () => clock,
+    });
+    const at = (ms: number, signal: 'SIGINT' | 'SIGTERM' | 'SIGHUP') => {
+      clock = 100_000 + ms;
+      source.emit(signal);
+    };
+    return { at, printed, exits, signals };
   }
 
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
-    it(`${signal}: the first stops, the second forces, the third exits with code 1`, () => {
-      const { source, exits, signals } = wire();
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    it(`${signal}: the first stops, one after the window forces, the next after that exits with code 1`, () => {
+      const { at, exits, signals } = wire();
       const { calls, launcher } = fakeLauncher();
       signals.attach(launcher);
-      source.emit(signal);
+      at(0, signal);
       expect(calls).toEqual([false]);
-      source.emit(signal);
+      at(2000, signal);
       expect(calls).toEqual([false, true]);
       expect(exits).toEqual([]);
-      source.emit(signal);
+      at(4000, signal);
       expect(calls).toEqual([false, true]);
       expect(exits).toEqual([1]);
     });
   }
 
-  it('mixed signals count together', () => {
-    const { source, exits, signals } = wire();
+  it('two SIGHUP in the same tick give one stop and no force', () => {
+    const { at, exits, signals } = wire();
     const { calls, launcher } = fakeLauncher();
     signals.attach(launcher);
-    source.emit('SIGHUP');
-    source.emit('SIGINT');
-    source.emit('SIGTERM');
-    expect(calls).toEqual([false, true]);
-    expect(exits).toEqual([1]);
+    at(0, 'SIGHUP');
+    at(0, 'SIGHUP');
+    expect(calls).toEqual([false]);
+    expect(exits).toEqual([]);
   });
 
-  it('a signal during the start prints one line, then stops once the launcher is there', () => {
-    const { source, printed, exits, signals } = wire();
-    source.emit('SIGINT');
+  it('a hangup after the first stop signal never forces, however late', () => {
+    const { at, exits, signals } = wire();
+    const { calls, launcher } = fakeLauncher();
+    signals.attach(launcher);
+    at(0, 'SIGTERM');
+    at(0, 'SIGHUP');
+    at(5000, 'SIGHUP');
+    at(60_000, 'SIGHUP');
+    expect(calls).toEqual([false]);
+    expect(exits).toEqual([]);
+  });
+
+  it('a second SIGINT 200 ms later is the same act and does not force', () => {
+    const { at, exits, signals } = wire();
+    const { calls, launcher } = fakeLauncher();
+    signals.attach(launcher);
+    at(0, 'SIGINT');
+    at(200, 'SIGINT');
+    at(1499, 'SIGINT');
+    expect(calls).toEqual([false]);
+    expect(exits).toEqual([]);
+  });
+
+  it('a doubled forcing Ctrl+C does not end the process', () => {
+    const { at, exits, signals } = wire();
+    const { calls, launcher } = fakeLauncher();
+    signals.attach(launcher);
+    at(0, 'SIGINT');
+    at(2000, 'SIGINT');
+    at(2001, 'SIGINT');
+    expect(calls).toEqual([false, true]);
+    expect(exits).toEqual([]);
+  });
+
+  it('a SIGINT after a hangup and after the window forces', () => {
+    const { at, signals } = wire();
+    const { calls, launcher } = fakeLauncher();
+    signals.attach(launcher);
+    at(0, 'SIGHUP');
+    at(2000, 'SIGINT');
+    expect(calls).toEqual([false, true]);
+  });
+
+  it('a signal during the start prints one line once, then stops once the launcher is there', () => {
+    const { at, printed, exits, signals } = wire();
+    at(0, 'SIGHUP');
+    at(0, 'SIGHUP');
+    at(300, 'SIGINT');
     expect(printed).toEqual(['Stopping once the start has finished.']);
     expect(exits).toEqual([]);
     const { calls, launcher } = fakeLauncher();
     signals.attach(launcher);
     expect(calls).toEqual([false]);
-    source.emit('SIGINT');
+    at(2000, 'SIGINT');
     expect(calls).toEqual([false, true]);
   });
 
-  it('a second signal during the start exits at once with code 130', () => {
-    const { source, printed, exits } = wire();
-    source.emit('SIGHUP');
-    source.emit('SIGHUP');
+  it('a SIGINT after the window during the start exits at once with code 130', () => {
+    const { at, printed, exits } = wire();
+    at(0, 'SIGINT');
+    at(2000, 'SIGINT');
     expect(printed).toEqual(['Stopping once the start has finished.']);
     expect(exits).toEqual([130]);
   });
 
   it('a stop that rejects does not become an unhandled rejection', async () => {
-    const { source, signals } = wire();
+    const { at, signals } = wire();
     const unhandled: unknown[] = [];
     const onUnhandled = (e: unknown) => unhandled.push(e);
     process.on('unhandledRejection', onUnhandled);
     try {
       signals.attach({ address: ADDRESS, stop: () => Promise.reject(new Error('stop boom')), done: Promise.resolve('clean') });
-      source.emit('SIGINT');
+      at(0, 'SIGINT');
       await new Promise((r) => setTimeout(r, 20));
       expect(unhandled).toEqual([]);
     } finally {

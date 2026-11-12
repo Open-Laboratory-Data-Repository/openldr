@@ -80,6 +80,11 @@ const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 /** Hosts whose printed address says `localhost`: this computer, or every address it has. */
 const SHOWN_AS_LOCALHOST = new Set(['127.0.0.1', 'localhost', '::1', '0.0.0.0', '::']);
 
+const CRASH_KINDS = ['uncaughtException', 'unhandledRejection'] as const;
+/** Logged at warn for an error that arrives during a forced stop. */
+export const FORCED_STOP_ERROR =
+  "An error came during a forced stop. Postgres was stopped under the server, so errors from the server's database connections are expected.";
+
 export const STOPPED = 'Stopped.';
 export const STOPPED_FORCED = 'Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.';
 const NOT_RUNNING = 'OpenLDR is not running.';
@@ -222,8 +227,36 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
   let server: RunningServer | undefined;
   let pg: RunningPostgres | undefined;
   let lockTaken = false;
-  /** Removes each process listener this start added. */
+  /** Removes each process listener this start added, apart from the two kinds of crash handler. */
   const removers: Array<() => void> = [];
+  /** Removes the real crash handlers, which write a marker and exit. */
+  const crashRemovers: Array<() => void> = [];
+  /** Removes the handlers a forced stop puts in their place. They go last, when `done` settles. */
+  const quietRemovers: Array<() => void> = [];
+  /** The server log's logger, once there is one. */
+  let logger: Logger | undefined;
+
+  /**
+   * A forced stop stops Postgres under a server that still holds its database connections, so
+   * errors from those connections are expected from then on. They must not end the process
+   * through a crash handler, write a crash marker, or cut the stop short. So the real crash
+   * handlers come off, and handlers that only log at warn go on in their place. The clean path
+   * keeps the real ones until the server has closed.
+   */
+  const quietCrashHandlers = (): void => {
+    for (const remove of crashRemovers.splice(0)) remove();
+    for (const kind of CRASH_KINDS) {
+      const handler = (err: unknown): void => {
+        try {
+          logger?.warn({ err, kind }, FORCED_STOP_ERROR);
+        } catch {
+          // Logging must not end the stop.
+        }
+      };
+      process.on(kind, handler);
+      quietRemovers.push(() => process.off(kind, handler));
+    }
+  };
 
   let markStarted!: () => void;
   const started = new Promise<void>((r) => (markStarted = r));
@@ -262,7 +295,11 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       );
       const outcome = await Promise.race([closed, waited, forced]);
       clearTimeout(timer);
-      if (outcome !== 'closed') result = 'forced';
+      if (outcome !== 'closed') {
+        result = 'forced';
+        // Before Postgres stops under the server that is still running.
+        quietCrashHandlers();
+      }
       server = undefined;
     }
     if (pg) {
@@ -283,8 +320,19 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       lockTaken = false;
     }
     for (const remove of removers.splice(0)) remove();
+    for (const remove of crashRemovers.splice(0)) remove();
     if (problems.length > 0) throw new StopError(result, problems);
     return result;
+  };
+
+  /**
+   * After a forced stop the server is still hung, and its errors keep coming until the process
+   * ends. So the quiet handlers stay on until `done` settles, and index.ts then ends the process
+   * in the same turn of the event loop, before any further error can arrive.
+   */
+  const settle = (fn: () => void): void => {
+    for (const remove of quietRemovers.splice(0)) remove();
+    fn();
   };
 
   const stop = (force = false): Promise<StopResult> => {
@@ -297,11 +345,11 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
       void stopping.then(
         async (result) => {
           await control.close();
-          resolveDone(result);
+          settle(() => resolveDone(result));
         },
         async (err: unknown) => {
           await control.close();
-          rejectDone(err);
+          settle(() => rejectDone(err));
         },
       );
     }
@@ -371,23 +419,24 @@ export async function runStart(opts: { dataDir?: string; port: number; host: str
     );
     const cfg = loadConfig({ ...process.env });
     // Writes to the server log (LOG_FILE). Throws when that file cannot be opened.
-    const logger = createLogger({ level: cfg.LOG_LEVEL });
+    const log = createLogger({ level: cfg.LOG_LEVEL });
+    logger = log;
 
     // 9. The crash handlers, pointed at the crash folder. No crash-loop guard: nothing restarts
-    //    a launcher.
-    for (const kind of ['uncaughtException', 'unhandledRejection'] as const) {
+    //    a launcher. A forced stop swaps them for quiet ones (quietCrashHandlers).
+    for (const kind of CRASH_KINDS) {
       const handler = makeCrashHandler({
         dir: paths.crash,
         kind,
-        log: (m) => logger.fatal({ marker: m }, `${kind}, wrote crash marker, exiting`),
+        log: (m) => log.fatal({ marker: m }, `${kind}, wrote crash marker, exiting`),
       });
       process.on(kind, handler);
-      removers.push(() => process.off(kind, handler));
+      crashRemovers.push(() => process.off(kind, handler));
     }
 
     // 10. The server.
     try {
-      server = await deps.startServer(cfg, logger);
+      server = await deps.startServer(cfg, log);
     } catch (err) {
       if (errorCode(err) === 'EADDRINUSE') throw new Error(portTakenMessage(opts.port));
       throw err;
@@ -619,24 +668,40 @@ export interface SignalSource {
   on(event: (typeof STOP_SIGNALS)[number], listener: () => void): unknown;
 }
 
+/** Signals this close to the last one that counted are the same act by a person. */
+export const SAME_SIGNAL_MS = 1500;
+
 /**
- * Maps stop signals onto a launcher. Each of SIGINT, SIGTERM and SIGHUP counts the same.
- * - While the start runs: the first prints a line and stops the launcher once it has started.
- *   The second exits at once with code 130; the exit hook then tells Postgres to stop.
- * - Once started: the first calls `stop()`, the second `stop(true)`, the third exits with code 1.
- *   The exit hook then tells Postgres to shut down again.
+ * Maps stop signals onto a launcher. One act by a person is one signal, however many times the
+ * system delivers it: a terminal closed under an interactive shell sends SIGHUP twice in the same
+ * millisecond, once from the kernel and once passed on by the shell. So:
+ * - A signal within SAME_SIGNAL_MS of the last one that counted does nothing.
+ * - SIGHUP counts only as the first stop signal. It never forces and never ends the process.
+ * - While the start runs: the first signal prints a line and stops the launcher once it has
+ *   started. The next SIGINT or SIGTERM exits at once with code 130; the exit hook then tells
+ *   Postgres to stop.
+ * - Once started: the first calls `stop()`. The next SIGINT or SIGTERM calls `stop(true)`, and
+ *   the one after that exits with code 1. The exit hook then tells Postgres to shut down again.
+ * The window is measured from the last signal that counted, not only the first, so a doubled
+ * delivery of the forcing Ctrl+C does not end the process either.
  * The outcome of a stop is read from `launcher.done`. SIGHUP and SIGTERM on Windows are unproven.
  */
 export function handleSignals(opts: {
   source: SignalSource;
   print: (line: string) => void;
   exit: (code: number) => void;
+  now?: () => number;
 }): { attach(launcher: Launcher): void } {
+  const now = opts.now ?? Date.now;
   let launcher: Launcher | undefined;
   let count = 0;
+  let lastAt = 0;
   const ask = (l: Launcher, force: boolean) => void l.stop(force).catch(() => {});
-  const onSignal = () => {
+  const onSignal = (signal: (typeof STOP_SIGNALS)[number]) => {
+    const at = now();
+    if (count > 0 && (signal === 'SIGHUP' || at - lastAt < SAME_SIGNAL_MS)) return;
     count += 1;
+    lastAt = at;
     if (!launcher) {
       if (count === 1) opts.print(STOPPING_AFTER_START);
       else opts.exit(130);
@@ -646,7 +711,7 @@ export function handleSignals(opts: {
     else if (count === 2) ask(launcher, true);
     else opts.exit(1);
   };
-  for (const signal of STOP_SIGNALS) opts.source.on(signal, onSignal);
+  for (const signal of STOP_SIGNALS) opts.source.on(signal, () => onSignal(signal));
   return {
     attach(l) {
       launcher = l;
