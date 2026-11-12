@@ -47,7 +47,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [x] Test catalog
 - [x] Patients
 - [ ] Forms
-- [ ] Workflows
+- [x] Workflows
 - [ ] Reports
 - [ ] Activity
 - [ ] Scheduled reports with workflows

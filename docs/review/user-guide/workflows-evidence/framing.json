@@ -1,0 +1,819 @@
+[
+  {
+    "id": "open-page",
+    "crop": [
+      0,
+      84.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 216,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "search",
+    "crop": [
+      156.0,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 56,
+        "width": 288,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "ingest-row",
+    "crop": [
+      35.0703125,
+      15.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 157.5,
+        "width": 38.140625,
+        "height": 16
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "fit",
+    "crop": [
+      317.0,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 544,
+        "y": 758,
+        "width": 26,
+        "height": 26
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "trigger",
+    "crop": [
+      342.06005859375,
+      312.56719970703125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 562,
+        "y": 434.5377197265625,
+        "width": 40.1201171875,
+        "height": 56.0589599609375
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "configure",
+    "crop": [
+      326.16510009765625,
+      260.5377502441406,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 552.1651000976562,
+        "y": 396.5377502441406,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "replace-secret",
+    "crop": [
+      800,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1155.28125,
+        "y": 638.71875,
+        "width": 108.71875,
+        "height": 34
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "copy-secret",
+    "crop": [
+      800,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 977,
+        "y": 640.71875,
+        "width": 170.28125,
+        "height": 36
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "save",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1115.3125,
+        "y": 85.5,
+        "width": 73.359375,
+        "height": 30
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "confirm-save",
+    "crop": [
+      541.359375,
+      341.265625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 723.71875,
+        "y": 473.265625,
+        "width": 115.28125,
+        "height": 36
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "saved",
+    "crop": [
+      749.2421875,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 940,
+        "y": 739.5,
+        "width": 98.484375,
+        "height": 19.5
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "history",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1023.96875,
+        "y": 85.5,
+        "width": 83.34375,
+        "height": 30
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "run-row",
+    "crop": [
+      631,
+      15.96875,
+      649,
+      405.625
+    ],
+    "targets": [
+      {
+        "x": 681,
+        "y": 195.53125,
+        "width": 599,
+        "height": 46.5
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "run-result",
+    "crop": [
+      497.015625,
+      37.53125,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 697,
+        "y": 179.53125,
+        "width": 80.03125,
+        "height": 16
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "run-node",
+    "crop": [
+      631,
+      270.484375,
+      649,
+      405.625
+    ],
+    "targets": [
+      {
+        "x": 681,
+        "y": 449.65625,
+        "width": 599,
+        "height": 47.28125
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "run-output",
+    "crop": [
+      479.515625,
+      415.46875,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 697,
+        "y": 552.71875,
+        "width": 45.03125,
+        "height": 25.5
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "receipts",
+    "crop": [
+      631,
+      157.71875,
+      649,
+      405.625
+    ],
+    "targets": [
+      {
+        "x": 681,
+        "y": 252.53125,
+        "width": 599,
+        "height": 216
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "list-actions",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1236,
+        "y": 56,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "new",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1113,
+        "y": 97,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "name",
+    "crop": [
+      119.5,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 83.5,
+        "width": 207,
+        "height": 34
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "find-manual",
+    "crop": [
+      143.5,
+      80.90625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 252,
+        "y": 214.90625,
+        "width": 263,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "manual-card",
+    "crop": [
+      143.5,
+      167.96875,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 248,
+        "y": 296.90625,
+        "width": 271,
+        "height": 42.125
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "sql-card",
+    "crop": [
+      143.5,
+      167.96875,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 248,
+        "y": 296.90625,
+        "width": 271,
+        "height": 42.125
+      }
+    ],
+    "step": 6,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "connect",
+    "crop": [
+      658.375,
+      310.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 886.375,
+        "y": 448.5,
+        "width": 24,
+        "height": 24
+      }
+    ],
+    "step": 7,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "sql",
+    "crop": [
+      800,
+      217.015625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1007.234375,
+        "y": 346.21875,
+        "width": 255.765625,
+        "height": 41.59375
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "save-new",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1115.3125,
+        "y": 85.5,
+        "width": 73.359375,
+        "height": 30
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "run",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1196.671875,
+        "y": 86.5,
+        "width": 67.328125,
+        "height": 28
+      }
+    ],
+    "step": 3,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "fire-trigger",
+    "crop": [
+      494.375,
+      217.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 718.375,
+        "y": 351,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 4,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "sql-output",
+    "crop": [
+      800,
+      158.609375,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1056.59375,
+        "y": 301.609375,
+        "width": 72.25,
+        "height": 14
+      }
+    ],
+    "step": 5,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "completed",
+    "crop": [
+      458.140625,
+      500.0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 649.125,
+        "y": 759,
+        "width": 98.03125,
+        "height": 22
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "row-actions",
+    "crop": [
+      800,
+      129.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1232,
+        "y": 263.5,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "export",
+    "crop": [
+      800,
+      234.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 368.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "row-actions",
+    "crop": [
+      800,
+      129.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1232,
+        "y": 263.5,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "duplicate",
+    "crop": [
+      800,
+      202.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 336.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "duplicate-result",
+    "crop": [
+      105.2265625,
+      186.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 328.5,
+        "width": 178.453125,
+        "height": 16
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "delete",
+    "crop": [
+      800,
+      323.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 457.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "delete-confirm",
+    "crop": [
+      562.765625,
+      311.265625,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 766.53125,
+        "y": 443.265625,
+        "width": 72.46875,
+        "height": 36
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "delete-result",
+    "crop": [
+      83.8359375,
+      129.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 271.5,
+        "width": 135.671875,
+        "height": 16
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "list-actions",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1236,
+        "y": 56,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "import",
+    "crop": [
+      800,
+      0,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 1113,
+        "y": 129,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "before"
+  },
+  {
+    "id": "import-result",
+    "crop": [
+      83.8359375,
+      186.5,
+      480,
+      300.0
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 328.5,
+        "width": 135.671875,
+        "height": 16
+      }
+    ],
+    "step": null,
+    "markerPlacement": null
+  },
+  {
+    "id": "phone-search",
+    "crop": [
+      0,
+      0,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 12,
+        "y": 56,
+        "width": 288,
+        "height": 32
+      }
+    ],
+    "step": 1,
+    "markerPlacement": "after"
+  },
+  {
+    "id": "phone-open",
+    "crop": [
+      0,
+      48.3125,
+      375,
+      234.375
+    ],
+    "targets": [
+      {
+        "x": 16,
+        "y": 157.5,
+        "width": 38.140625,
+        "height": 16
+      }
+    ],
+    "step": 2,
+    "markerPlacement": "after"
+  }
+]

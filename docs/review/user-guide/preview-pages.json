@@ -8,5 +8,6 @@
   "patients": "patients-review.html",
   "roles": "roles-review.html",
   "connectors": "connectors-review.html",
-  "connector-diagnose": "connector-diagnose-review.html"
+  "connector-diagnose": "connector-diagnose-review.html",
+  "workflows": "workflows-review.html"
 }

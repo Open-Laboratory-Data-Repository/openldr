@@ -1,0 +1,289 @@
+{
+  "webhook": [
+    {
+      "id": "f96a169d-4e0a-4784-a115-c94e581cc8ad",
+      "workflowId": "wf-ingest",
+      "triggerSource": "webhook",
+      "status": "completed",
+      "startedAt": "Thu Nov 12 2026 16:48:56 GMT+0300 (East Africa Time)",
+      "finishedAt": "Thu Nov 12 2026 16:48:56 GMT+0300 (East Africa Time)",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "type": "webhook",
+            "label": "Ingest received",
+            "nodeId": "trigger-1",
+            "output": [
+              {
+                "json": {
+                  "body": {
+                    "type": "transaction",
+                    "entry": [
+                      {
+                        "resource": {
+                          "id": "docs-workflow-patient",
+                          "name": [
+                            {
+                              "given": [
+                                "Workflow"
+                              ],
+                              "family": "Documentation"
+                            }
+                          ],
+                          "active": true,
+                          "gender": "unknown",
+                          "resourceType": "Patient"
+                        }
+                      }
+                    ],
+                    "resourceType": "Bundle"
+                  },
+                  "query": {},
+                  "method": "POST",
+                  "headers": {
+                    "host": "localhost:3007",
+                    "accept": "*/*",
+                    "connection": "keep-alive",
+                    "user-agent": "node",
+                    "content-type": "application/json",
+                    "content-length": "215",
+                    "sec-fetch-mode": "cors",
+                    "accept-encoding": "gzip, deflate",
+                    "accept-language": "*",
+                    "idempotency-key": "docs-workflows-patient"
+                  }
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 0
+          },
+          {
+            "type": "condition",
+            "label": "Route by payload shape",
+            "nodeId": "route-1",
+            "output": [
+              {
+                "json": {
+                  "body": {
+                    "type": "transaction",
+                    "entry": [
+                      {
+                        "resource": {
+                          "id": "docs-workflow-patient",
+                          "name": [
+                            {
+                              "given": [
+                                "Workflow"
+                              ],
+                              "family": "Documentation"
+                            }
+                          ],
+                          "active": true,
+                          "gender": "unknown",
+                          "resourceType": "Patient"
+                        }
+                      }
+                    ],
+                    "resourceType": "Bundle"
+                  },
+                  "query": {},
+                  "method": "POST",
+                  "headers": {
+                    "host": "localhost:3007",
+                    "accept": "*/*",
+                    "connection": "keep-alive",
+                    "user-agent": "node",
+                    "content-type": "application/json",
+                    "content-length": "215",
+                    "sec-fetch-mode": "cors",
+                    "accept-encoding": "gzip, deflate",
+                    "accept-language": "*",
+                    "idempotency-key": "docs-workflows-patient"
+                  }
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 16
+          },
+          {
+            "type": "action",
+            "label": "Unwrap FHIR Bundle",
+            "nodeId": "unwrap-1",
+            "output": [
+              {
+                "json": {
+                  "id": "docs-workflow-patient",
+                  "name": [
+                    {
+                      "given": [
+                        "Workflow"
+                      ],
+                      "family": "Documentation"
+                    }
+                  ],
+                  "active": true,
+                  "gender": "unknown",
+                  "resourceType": "Patient"
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 0
+          },
+          {
+            "type": "action",
+            "nodeId": "form-validate-1",
+            "status": "skipped",
+            "durationMs": 0
+          },
+          {
+            "meta": {
+              "batchId": "92253151-521a-4a93-a383-2384055ea176",
+              "flattened": {
+                "skipped": 0,
+                "written": 0,
+                "deferred": 1,
+                "degraded": 0
+              },
+              "persisted": 1,
+              "resourceTypes": [
+                "Patient"
+              ]
+            },
+            "type": "action",
+            "label": "Persist store",
+            "nodeId": "persist-1",
+            "output": [
+              {
+                "json": {
+                  "id": "docs-workflow-patient",
+                  "name": [
+                    {
+                      "given": [
+                        "Workflow"
+                      ],
+                      "family": "Documentation"
+                    }
+                  ],
+                  "active": true,
+                  "gender": "unknown",
+                  "resourceType": "Patient"
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 14
+          },
+          {
+            "logs": [
+              {
+                "ts": 1794491336811,
+                "level": "info",
+                "nodeId": "log-1",
+                "message": "Persisted ingest: {\"id\":\"docs-workflow-patient\",\"name\":[{\"given\":[\"Workflow\"],\"family\":\"Documentation\"}],\"active\":true,\"gender\":\"unknown\",\"resourceType\":\"Patient\"}"
+              }
+            ],
+            "type": "action",
+            "label": "Log persisted",
+            "nodeId": "log-1",
+            "output": [
+              {
+                "json": {
+                  "id": "docs-workflow-patient",
+                  "name": [
+                    {
+                      "given": [
+                        "Workflow"
+                      ],
+                      "family": "Documentation"
+                    }
+                  ],
+                  "active": true,
+                  "gender": "unknown",
+                  "resourceType": "Patient"
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 0
+          }
+        ],
+        "startedAt": "2026-11-12T13:48:56.781Z",
+        "finishedAt": "2026-11-12T13:48:56.811Z"
+      },
+      "error": null,
+      "correlationId": "92253151-521a-4a93-a383-2384055ea176"
+    }
+  ],
+  "receipts": [
+    {
+      "id": "63d1d99a-9512-4f4a-98c6-2c1f0e0849eb",
+      "workflowId": "wf-ingest",
+      "status": "completed",
+      "runId": "f96a169d-4e0a-4784-a115-c94e581cc8ad",
+      "createdAt": "2026-11-12T13:48:56.764Z",
+      "startedAt": "2026-11-12T13:48:56.780Z",
+      "finishedAt": "2026-11-12T13:48:56.812Z",
+      "reason": null,
+      "outcome": {
+        "error": null,
+        "runId": "f96a169d-4e0a-4784-a115-c94e581cc8ad",
+        "status": "completed",
+        "nodeMeta": {},
+        "correlationId": "92253151-521a-4a93-a383-2384055ea176"
+      }
+    }
+  ],
+  "manual": [
+    {
+      "id": "7ca206df-d4f9-4a86-b5a7-1d3ca0faee64",
+      "workflowId": "wf_mwdluw0f_e3ydfj",
+      "triggerSource": "manual",
+      "status": "completed",
+      "startedAt": "Thu Nov 12 2026 16:50:19 GMT+0300 (East Africa Time)",
+      "finishedAt": "Thu Nov 12 2026 16:50:19 GMT+0300 (East Africa Time)",
+      "result": {
+        "status": "completed",
+        "results": [
+          {
+            "type": "trigger",
+            "label": "Manual Trigger",
+            "nodeId": "trigger-1794491416474",
+            "output": [
+              {
+                "json": {
+                  "timestamp": "2026-11-12T13:50:19.152Z",
+                  "triggered": true,
+                  "triggerType": "manual"
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 0
+          },
+          {
+            "type": "action",
+            "label": "SQL Query",
+            "nodeId": "action-1794491416905",
+            "output": [
+              {
+                "json": {
+                  "requests": 0
+                }
+              }
+            ],
+            "status": "success",
+            "durationMs": 13
+          }
+        ],
+        "startedAt": "2026-11-12T13:50:19.152Z",
+        "finishedAt": "2026-11-12T13:50:19.165Z"
+      },
+      "error": null,
+      "correlationId": null
+    }
+  ]
+}
