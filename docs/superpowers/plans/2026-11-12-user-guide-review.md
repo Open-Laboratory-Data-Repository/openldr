@@ -55,7 +55,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Report Designer
 - [ ] Layouts
 - [ ] Users and Roles
-- [ ] Roles
+- [x] Roles
 - [ ] Audit
 - [ ] Settings
 - [ ] Setup checks
@@ -77,3 +77,21 @@ Save command output and limits. Commit and push the section before moving on.
 The static preview server serves `docs/review/user-guide` on port 4392, bound to all interfaces.
 Reopen the last section from HANDOFF.md. Check git status and the remote SHA before resuming.
 Do not reset, seed or restore the normal databases. Recreate only the owned isolated capture installation.
+
+## Execution ruling after the power cut
+
+The operator asked to continue after a real power cut. Three completed sections were already pushed.
+The owned review database survived; the interrupted native capture files need replay where empty.
+One form submission reached the warehouse and must not be repeated. Its successful original screenshot survived.
+
+Ruling: review independent guide groups in parallel using separate databases and server ports.
+The dispatching-parallel-agents skill directs one agent per independent domain.
+Each agent owns only its guide files. Root reviews, refreshes navigation and commits each section.
+No agent edits published app code or pushes. This replaces native-only execution for the remaining independent guides.
+
+- Data guides use API3007, Studio5187, PostgreSQL15440.
+- Administration guides use API3008, Studio5188, PostgreSQL15441 and an owned test identity provider.
+- System guides use API3009, Studio5189, PostgreSQL15442.
+- Root retains Forms on API3006, Studio5186, PostgreSQL15439.
+
+Capture PNGs and manifests now use flush-to-disk and atomic replacement. Once-only operation proofs use durableJson.

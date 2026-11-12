@@ -1,0 +1,28 @@
+{
+  "created": {
+    "id": "7432f65d-9ef2-49d5-bb8d-e28534b6018a",
+    "slug": "documentation-reader",
+    "name": "Documentation reader",
+    "description": "Read dashboards for the documentation review.",
+    "isSystem": false,
+    "locked": false,
+    "capabilities": [
+      "dashboards.view"
+    ],
+    "memberCount": 0
+  },
+  "edited": {
+    "id": "7432f65d-9ef2-49d5-bb8d-e28534b6018a",
+    "slug": "documentation-reader",
+    "name": "Documentation reader",
+    "description": "Read dashboards and reports for the documentation review.",
+    "isSystem": false,
+    "locked": false,
+    "capabilities": [
+      "dashboards.view",
+      "reports.view"
+    ],
+    "memberCount": 0
+  },
+  "deleted": true
+}

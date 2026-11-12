@@ -1,0 +1,56 @@
+<article class="dg-article" id="dg-top">
+<div class="dg-meta"><span>Administration</span><span>Choose what people can do</span><span>About 15 minutes</span></div>
+<h1>Roles</h1>
+<p>A role groups capabilities, which are permissions for specific actions. Assign roles to people in Users. The Users sheet assigns one role per person.</p>
+<p>Use your own role names and access requirements. The pictures show a temporary Documentation reader role in an isolated test installation. No practice data is required.</p>
+<p>You need View roles to inspect roles, and Manage roles to create, change, delete or assign them. Opening Users also requires View users. Creating or editing identity details requires Manage users. Administrator is locked. Other system roles can be edited, but cannot be deleted.</p>
+<p>For installation and command-line setup, read <a href="./start-here-review.html">Start here</a>. This preview covers the Roles page.</p>
+<h2 id="dg-inspect">Inspect a role before changing access</h2>
+<p>Use this to check which actions an existing role grants.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open Settings and Roles</h3><p>Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Roles</strong>.</p>__SHOT:open-user-menu:1____SHOT:settings-menu:1____SHOT:roles-page:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the role</h3><p>Select a role row. Read its name, description and selected capabilities. Scroll the sheet to read each permission.</p>__SHOT:inspect-role:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Check whether it is locked</h3><p>The built-in Administrator displays a warning and read-only fields. Select <strong>Close</strong> at the top right when finished.</p>__SHOT:locked-role:3__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> Reading a role does not change its permissions.</p></div>
+<h2 id="dg-create">Create a role with selected permissions</h2>
+<p>Use this when existing roles do not match the access your staff need. Decide the required actions before selecting capabilities.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Open the page actions</h3><p>Select the dots above the Roles table.</p>__SHOT:create-actions:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Choose Create role</h3><p>Select <strong>Create role</strong>.</p>__SHOT:create-menu:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Enter the name</h3><p>Use a name your team recognises. The example uses <code>Documentation reader</code>.</p>__SHOT:name:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Check the slug</h3><p>The <strong>Slug</strong> is the role identifier. The name fills it automatically until you edit it. Choose it carefully because you cannot change it after creation.</p>__SHOT:slug:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Describe the role</h3><p>Enter its purpose in <strong>Description</strong>. This helps other administrators understand who should receive it.</p>__SHOT:description:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Select the capabilities</h3><p>Turn on each permission the role needs. Read the description beside each switch. The example selects <strong>View dashboards</strong>.</p>__SHOT:capability:6__</section>
+<section class="dg-step"><h3><span class="dg-number">7.</span> Open the sheet actions</h3><p>Select the dots at the top of the Create role sheet.</p>__SHOT:sheet-actions:7__</section>
+<section class="dg-step"><h3><span class="dg-number">8.</span> Create the role</h3><p>Select <strong>Create</strong>.</p>__SHOT:create-save:8__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The sheet closes and the role appears in the list. Creating a role does not assign it to anyone. Use Users to assign it.</p></div>
+__SHOT:created-result:0__
+<h2 id="dg-edit">Change a role description or permissions</h2>
+<p>Use this when the responsibilities of people holding a role change. Check who holds it before changing access.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Find the role</h3><p>Enter its name in <strong>Search roles</strong>. The example searches <code>Documentation</code>.</p>__SHOT:search:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open the row actions</h3><p>Select the dots on the matching role row.</p>__SHOT:row-actions:2__</section>
+<section class="dg-step"><h3><span class="dg-number">3.</span> Choose Edit</h3><p>Select <strong>Edit</strong>. Selecting the row opens the same sheet.</p>__SHOT:edit-menu:3__</section>
+<section class="dg-step"><h3><span class="dg-number">4.</span> Update its description</h3><p>Change <strong>Description</strong> if its purpose has changed. You may also change Name. Slug stays read-only.</p>__SHOT:edit-description:4__</section>
+<section class="dg-step"><h3><span class="dg-number">5.</span> Adjust individual permissions</h3><p>Turn capabilities on or off. The example adds <strong>View reports</strong>.</p>__SHOT:edit-capability:5__</section>
+<section class="dg-step"><h3><span class="dg-number">6.</span> Save the role</h3><p>Open the sheet dots and select <strong>Save</strong>.</p>__SHOT:edit-save:6__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The list shows the saved description. Users assigned this role receive its permissions.</p></div>
+__SHOT:edited-result:0__
+<h2 id="dg-delete">Delete a custom role</h2>
+<p>Use this only when people should lose the permissions this role grants. System roles cannot be deleted.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Choose Delete</h3><p>Find the role and open its row dots. Select <strong>Delete</strong>.</p>__SHOT:delete-menu:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Confirm the role and effect</h3><p>Read the confirmation. Members lose the capabilities granted by this role. Select <strong>Delete</strong> to confirm, or <strong>Cancel</strong> to keep it.</p>__SHOT:delete-confirm:2__</section>
+<div class="dg-result"><p><strong>Expected result:</strong> The role disappears. Deletion cannot be undone. Check affected users after removing a role.</p></div>
+__SHOT:deleted-result:0__
+<h2 id="dg-phone">Inspect roles on a phone</h2>
+<p>Use the same Roles page on a phone. Wide table columns can require horizontal scrolling.</p>
+<section class="dg-step"><h3><span class="dg-number">1.</span> Search for the role</h3><p>Enter its name in <strong>Search roles</strong>.</p>__SHOT:phone-search:1__</section>
+<section class="dg-step"><h3><span class="dg-number">2.</span> Open its settings</h3><p>Select the role row. Scroll the sheet to read its description and capabilities. Select <strong>Close</strong> at the top right to return.</p>__SHOT:phone-sheet:2__</section>
+<h2 id="dg-practice">Optional practice</h2>
+<p>In a test installation, follow Create a role using <code>Documentation reader</code>. Select only View dashboards. Add View reports in the edit task, then delete the practice role when finished. Do not assign the practice role to real staff.</p>
+<h2 id="dg-limits">Before changing access</h2>
+<p>Administrator is locked. Other system roles can be edited but cannot be deleted. A saved slug cannot be changed.</p>
+<p>Creating a role does not assign it to anyone. Role assignments are managed on Users. Check the people affected before changing or deleting an assigned role.</p>
+<h2 id="dg-help">Troubleshooting</h2>
+<p><strong>The role is read-only.</strong> Check whether you opened the locked Administrator role and whether your account has Manage roles.</p>
+<p><strong>A new role does not change anyone's access.</strong> Creating the role only stores its permissions. Use Users to assign the role to the intended person.</p>
+<h2 id="dg-related">Related guides</h2>
+<p><a href="start-here-review.html">Start here</a> explains the installed and development CLI. Users covers assigning roles to people.</p>
+</article>

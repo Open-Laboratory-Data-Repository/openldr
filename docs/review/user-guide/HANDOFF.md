@@ -353,3 +353,28 @@ The owned isolated installation and durable database volume remain available.
 Next section is Forms. Submissions must remain inside the isolated installation.
 An unrelated untracked local-sign-in spec appeared in the shared worktree during this task.
 It belongs to other work and was not edited or staged.
+
+## Power-cut recovery and Roles preview
+
+The operator confirmed a power cut and asked to continue.
+Facilities, Test catalog and Patients were already pushed through cf30972b.
+The owned review PostgreSQL volume survived. API3006, Studio5186 and preview4392 were restarted.
+Several interrupted Forms PNGs and the submission-response JSON were empty.
+The original native successful-state screenshot survived. The warehouse has two requests for
+Case One, including the one request present before the form task. The form was not submitted again.
+The one-submission recovery proof is forms-evidence/order-submitted.json.
+Interrupted field/preview images were re-recorded. Forms is still in progress.
+
+The capture helper now validates isolated server ports, flushes PNGs to disk and atomically
+replaces them. Its manifest and operation-proof writer also flushes before replacing files.
+The parallel execution ruling and port allocations are in the resumable plan.
+Root owns Forms. Separate agents own data, administration and system guide groups.
+They do not edit shared helpers/navigation or commit. Root verifies and pushes each ready section.
+
+Roles is now at roles-review.html. It has 21 numbered steps and 26 native screenshot placements.
+It covers navigation through Settings, inspecting roles, creating a custom role, editing it,
+deleting the owned practice role and phone use. Practice is optional.
+The published Roles guide remains unchanged.
+The integrated browser check passed 21 steps, 26 frames, zero missing screenshots,
+no broken anchors, a 5120px enlarged source and no horizontal overflow at 375 by 812.
+Its permission-effect limitations are recorded in roles-review-notes.md.

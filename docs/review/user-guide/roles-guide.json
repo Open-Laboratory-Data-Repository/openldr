@@ -1,0 +1,258 @@
+{
+  "title": "Roles",
+  "meta": [
+    "Administration",
+    "Choose what people can do",
+    "About 15 minutes"
+  ],
+  "intro": [
+    "A role groups capabilities, which are permissions for specific actions. Assign roles to people in Users. The Users sheet assigns one role per person.",
+    "Use your own role names and access requirements. The pictures show a temporary Documentation reader role in an isolated test installation. No practice data is required.",
+    "You need View roles to inspect roles, and Manage roles to create, change, delete or assign them. Opening Users also requires View users. Creating or editing identity details requires Manage users. Administrator is locked. Other system roles can be edited, but cannot be deleted.",
+    "For installation and command-line setup, read <a href=\"./start-here-review.html\">Start here</a>. This preview covers the Roles page."
+  ],
+  "tasks": [
+    {
+      "id": "inspect",
+      "title": "Inspect a role before changing access",
+      "intro": [
+        "Use this to check which actions an existing role grants."
+      ],
+      "steps": [
+        [
+          "Open Settings and Roles",
+          "Open your user menu at the bottom left, choose <strong>Settings</strong>, then select <strong>Roles</strong>.",
+          [
+            "open-user-menu",
+            "settings-menu",
+            "roles-page"
+          ]
+        ],
+        [
+          "Open the role",
+          "Select a role row. Read its name, description and selected capabilities. Scroll the sheet to read each permission.",
+          [
+            "inspect-role"
+          ]
+        ],
+        [
+          "Check whether it is locked",
+          "The built-in Administrator displays a warning and read-only fields. Select <strong>Close</strong> at the top right when finished.",
+          [
+            "locked-role"
+          ]
+        ]
+      ],
+      "result": "Reading a role does not change its permissions.",
+      "resultShots": []
+    },
+    {
+      "id": "create",
+      "title": "Create a role with selected permissions",
+      "intro": [
+        "Use this when existing roles do not match the access your staff need. Decide the required actions before selecting capabilities."
+      ],
+      "steps": [
+        [
+          "Open the page actions",
+          "Select the dots above the Roles table.",
+          [
+            "create-actions"
+          ]
+        ],
+        [
+          "Choose Create role",
+          "Select <strong>Create role</strong>.",
+          [
+            "create-menu"
+          ]
+        ],
+        [
+          "Enter the name",
+          "Use a name your team recognises. The example uses <code>Documentation reader</code>.",
+          [
+            "name"
+          ]
+        ],
+        [
+          "Check the slug",
+          "The <strong>Slug</strong> is the role identifier. The name fills it automatically until you edit it. Choose it carefully because you cannot change it after creation.",
+          [
+            "slug"
+          ]
+        ],
+        [
+          "Describe the role",
+          "Enter its purpose in <strong>Description</strong>. This helps other administrators understand who should receive it.",
+          [
+            "description"
+          ]
+        ],
+        [
+          "Select the capabilities",
+          "Turn on each permission the role needs. Read the description beside each switch. The example selects <strong>View dashboards</strong>.",
+          [
+            "capability"
+          ]
+        ],
+        [
+          "Open the sheet actions",
+          "Select the dots at the top of the Create role sheet.",
+          [
+            "sheet-actions"
+          ]
+        ],
+        [
+          "Create the role",
+          "Select <strong>Create</strong>.",
+          [
+            "create-save"
+          ]
+        ]
+      ],
+      "result": "The sheet closes and the role appears in the list. Creating a role does not assign it to anyone. Use Users to assign it.",
+      "resultShots": [
+        "created-result"
+      ]
+    },
+    {
+      "id": "edit",
+      "title": "Change a role description or permissions",
+      "intro": [
+        "Use this when the responsibilities of people holding a role change. Check who holds it before changing access."
+      ],
+      "steps": [
+        [
+          "Find the role",
+          "Enter its name in <strong>Search roles</strong>. The example searches <code>Documentation</code>.",
+          [
+            "search"
+          ]
+        ],
+        [
+          "Open the row actions",
+          "Select the dots on the matching role row.",
+          [
+            "row-actions"
+          ]
+        ],
+        [
+          "Choose Edit",
+          "Select <strong>Edit</strong>. Selecting the row opens the same sheet.",
+          [
+            "edit-menu"
+          ]
+        ],
+        [
+          "Update its description",
+          "Change <strong>Description</strong> if its purpose has changed. You may also change Name. Slug stays read-only.",
+          [
+            "edit-description"
+          ]
+        ],
+        [
+          "Adjust individual permissions",
+          "Turn capabilities on or off. The example adds <strong>View reports</strong>.",
+          [
+            "edit-capability"
+          ]
+        ],
+        [
+          "Save the role",
+          "Open the sheet dots and select <strong>Save</strong>.",
+          [
+            "edit-save"
+          ]
+        ]
+      ],
+      "result": "The list shows the saved description. Users assigned this role receive its permissions.",
+      "resultShots": [
+        "edited-result"
+      ]
+    },
+    {
+      "id": "delete",
+      "title": "Delete a custom role",
+      "intro": [
+        "Use this only when people should lose the permissions this role grants. System roles cannot be deleted."
+      ],
+      "steps": [
+        [
+          "Choose Delete",
+          "Find the role and open its row dots. Select <strong>Delete</strong>.",
+          [
+            "delete-menu"
+          ]
+        ],
+        [
+          "Confirm the role and effect",
+          "Read the confirmation. Members lose the capabilities granted by this role. Select <strong>Delete</strong> to confirm, or <strong>Cancel</strong> to keep it.",
+          [
+            "delete-confirm"
+          ]
+        ]
+      ],
+      "result": "The role disappears. Deletion cannot be undone. Check affected users after removing a role.",
+      "resultShots": [
+        "deleted-result"
+      ]
+    },
+    {
+      "id": "phone",
+      "title": "Inspect roles on a phone",
+      "intro": [
+        "Use the same Roles page on a phone. Wide table columns can require horizontal scrolling."
+      ],
+      "steps": [
+        [
+          "Search for the role",
+          "Enter its name in <strong>Search roles</strong>.",
+          [
+            "phone-search"
+          ]
+        ],
+        [
+          "Open its settings",
+          "Select the role row. Scroll the sheet to read its description and capabilities. Select <strong>Close</strong> at the top right to return.",
+          [
+            "phone-sheet"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "practice",
+      "title": "Optional practice",
+      "paragraphs": [
+        "In a test installation, follow Create a role using <code>Documentation reader</code>. Select only View dashboards. Add View reports in the edit task, then delete the practice role when finished. Do not assign the practice role to real staff."
+      ]
+    },
+    {
+      "id": "limits",
+      "title": "Before changing access",
+      "paragraphs": [
+        "Administrator is locked. Other system roles can be edited but cannot be deleted. A saved slug cannot be changed.",
+        "Creating a role does not assign it to anyone. Role assignments are managed on Users. Check the people affected before changing or deleting an assigned role."
+      ]
+    },
+    {
+      "id": "help",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>The role is read-only.</strong> Check whether you opened the locked Administrator role and whether your account has Manage roles.",
+        "<strong>A new role does not change anyone's access.</strong> Creating the role only stores its permissions. Use Users to assign the role to the intended person."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"start-here-review.html\">Start here</a> explains the installed and development CLI. Users covers assigning roles to people."
+      ]
+    }
+  ]
+}

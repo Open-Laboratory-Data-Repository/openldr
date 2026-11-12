@@ -1,0 +1,553 @@
+{
+  "capturedAt": "2026-11-12T13:49:40.305Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5188/studio/settings/roles",
+  "steps": [
+    {
+      "id": "inspect-role",
+      "label": "Read the role name, description and selected capabilities.",
+      "path": "roles-evidence/inspect-role.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 719.03125,
+          "y": 250.53125,
+          "width": 536.96875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "locked-role",
+      "label": "Administrator is locked. Its capabilities cannot be changed.",
+      "path": "roles-evidence/locked-role.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 633,
+          "y": 196.53125,
+          "width": 623,
+          "height": 38
+        }
+      ]
+    },
+    {
+      "id": "create-actions",
+      "label": "Open the Roles dots menu.",
+      "path": "roles-evidence/create-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 97,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "create-menu",
+      "label": "Choose Create role.",
+      "path": "roles-evidence/create-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 138,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "name",
+      "label": "Enter a name describing this role.",
+      "path": "roles-evidence/name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 719.03125,
+          "y": 196.53125,
+          "width": 536.96875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "slug",
+      "label": "Check the identifier. It becomes read-only after creation.",
+      "path": "roles-evidence/slug.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 719.03125,
+          "y": 244.53125,
+          "width": 536.96875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "description",
+      "label": "Describe who should use this role.",
+      "path": "roles-evidence/description.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 719.03125,
+          "y": 292.53125,
+          "width": 536.96875,
+          "height": 80
+        }
+      ]
+    },
+    {
+      "id": "capability",
+      "label": "Choose each permission the role needs. The example allows viewing dashboards.",
+      "path": "roles-evidence/capability.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 646,
+          "y": 514.53125,
+          "width": 597,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "sheet-actions",
+      "label": "Open the role sheet dots menu.",
+      "path": "roles-evidence/sheet-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "create-save",
+      "label": "Choose Create to save the role.",
+      "path": "roles-evidence/create-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "created-result",
+      "label": "The created role appears with its description and member count.",
+      "path": "roles-evidence/created-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 463,
+          "width": 832,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "label": "Use Search roles to find a role by name.",
+      "path": "roles-evidence/search.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 464,
+          "y": 97,
+          "width": 240,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "row-actions",
+      "label": "Open the dots on the matching role.",
+      "path": "roles-evidence/row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 190.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit-menu",
+      "label": "Choose Edit to change its description or permissions.",
+      "path": "roles-evidence/edit-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 231.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edit-description",
+      "label": "Update the description. The slug stays read-only.",
+      "path": "roles-evidence/edit-description.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 719.03125,
+          "y": 292.53125,
+          "width": 536.96875,
+          "height": 80
+        }
+      ]
+    },
+    {
+      "id": "edit-capability",
+      "label": "Enable or disable individual capabilities.",
+      "path": "roles-evidence/edit-capability.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 646,
+          "y": 763.53125,
+          "width": 597,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "edit-save",
+      "label": "Choose Save to keep the changes.",
+      "path": "roles-evidence/edit-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "edited-result",
+      "label": "The updated description appears in the role row.",
+      "path": "roles-evidence/edited-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 448,
+          "y": 178,
+          "width": 832,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "phone-search",
+      "label": "Search roles on a phone. The table can scroll horizontally.",
+      "path": "roles-evidence/phone-search.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 174,
+          "width": 299,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-sheet",
+      "label": "The role sheet uses the phone width. Scroll to inspect its capabilities.",
+      "path": "roles-evidence/phone-sheet.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 148.53125,
+          "y": 196.53125,
+          "width": 202.46875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "delete-menu",
+      "label": "Delete is available for a custom role.",
+      "path": "roles-evidence/delete-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 263.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "delete-confirm",
+      "label": "Check the role name and the effect on its members before confirming.",
+      "path": "roles-evidence/delete-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 285.734375,
+          "width": 448,
+          "height": 228.53125
+        }
+      ]
+    },
+    {
+      "id": "deleted-result",
+      "label": "The deleted role no longer matches the search.",
+      "path": "roles-evidence/deleted-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 821.984375,
+          "y": 436.5,
+          "width": 84.03125,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "open-user-menu",
+      "label": "Open your user menu at the bottom left.",
+      "path": "roles-evidence/open-user-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "settings-menu",
+      "label": "Choose Settings in your user menu.",
+      "path": "roles-evidence/settings-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 682.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "roles-page",
+      "label": "Select Roles in the Settings section list.",
+      "path": "roles-evidence/roles-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 252,
+          "y": 380,
+          "width": 183,
+          "height": 36
+        }
+      ]
+    }
+  ]
+}
