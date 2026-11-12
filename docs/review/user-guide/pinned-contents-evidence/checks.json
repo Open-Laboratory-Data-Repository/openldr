@@ -43,5 +43,17 @@
     "output": [
       "PINNED CONTENTS PASS: 9 window sizes; active task visible in both scroll directions; wheel scrolls article; full task menu and keyboard navigation; en/fr/pt"
     ]
+  },
+  {
+    "phase": "merged-main",
+    "commit": "6ac8080a",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx && pnpm --filter @openldr/config test src/env-docs.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  1 passed (1)",
+      "Tests  16 passed (16)",
+      "Test Files  1 passed (1)",
+      "Tests  8 passed (8)"
+    ]
   }
 ]

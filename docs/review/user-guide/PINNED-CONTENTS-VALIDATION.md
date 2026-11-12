@@ -67,3 +67,7 @@ Only the isolated account's display preferences changed during testing, then wer
 
 HONEST NON-PROOF: headless layout cannot test retractable phone browser chrome.
 Physical phone testing was not performed.
+
+Repair commit `6ac8080a` was fast-forwarded to main.
+The merged checks passed 16 Docs component tests and eight environment-doc tests.
+`pnpm make:changelog` generated 3086 entries after the merge.

@@ -3,7 +3,7 @@
 The seven approved app repairs and task-only contents menu are recorded in [repair validation](BUGFIX-VALIDATION.md).
 Repair commit `30d9e025` and changelog checkpoint `a4220d3c` reached remote main.
 Merged checks passed 54 Studio, 46 server and 31 reporting-date tests.
-The latest pinned-contents repair keeps the panel visible and follows the active task without a scrollbar.
+The latest pinned-contents repair, `6ac8080a`, keeps the panel visible and follows the active task without a scrollbar.
 All eight environment-doc checks now pass, including the three earlier formatting failures.
 See [pinned-contents validation](PINNED-CONTENTS-VALIDATION.md) for the latest commands and screenshots.
 Updated published guides are the editing source. Do not regenerate them from the archived preview drafts.
