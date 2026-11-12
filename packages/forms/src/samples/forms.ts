@@ -410,8 +410,12 @@ const orderForm: FormSchema = {
       ],
     },
     {
+      // The clinician and the referring facility both fill the requester (migration 115). The path
+      // table lists nothing under a Reference, so Reference.type tells them apart. The extractor
+      // writes both into one contained PractitionerRole.
       id: 'fld-ord-clinician',
       fhirPath: 'ServiceRequest.requester',
+      fhirDiscriminator: { type: 'Practitioner' },
       displayLabel: 'Requesting Clinician',
       description: null,
       fieldType: 'text',
@@ -452,8 +456,9 @@ const orderForm: FormSchema = {
       section: 'order',
     },
     {
+      // Searches the code system every facility_registry row projects into (migration 115).
       id: 'fld-ord-ref-facility',
-      fhirPath: 'ServiceRequest.performer',
+      fhirPath: 'ServiceRequest.requester',
       displayLabel: 'Referring Facility',
       description: null,
       fieldType: 'facility',
@@ -462,6 +467,8 @@ const orderForm: FormSchema = {
       order: 8,
       cardinality: { min: 0, max: '1' },
       section: 'order',
+      fhirDiscriminator: { type: 'Organization' },
+      referenceTarget: 'urn:openldr:cs:facility-registry',
       placeholder: 'Search facilities by name or MFL ID…',
     },
     {

@@ -45,7 +45,7 @@ Example 1 needs three things on the install:
 
 The form stays filled after submitting. Do not submit again unless you mean a second order.
 
-**Referring Facility** is a free-text box on the shipped Lab order, even though its hint says to search. Leave it empty, or type a name. See [Limits](#limits).
+**Referring Facility** searches your facility register by name or code. A facility shows up once it is in [Facilities](/docs/facilities). **Requesting Clinician** takes a typed name. The order keeps both, so they reach the warehouse with it.
 
 ## Example 2: build a form from a starter pack
 
@@ -326,7 +326,7 @@ A submitted order writes one result record per value typed. Results are typed wi
 
 ## Limits
 
-- **Referring Facility on the shipped Lab order is free text.** Its hint says to search facilities by name or code, but the field has no source to search, so it takes typed text.
+- **An edited Lab order keeps the old Referring Facility.** The upgrade changes the shipped Lab order only if nobody has edited it. On an edited copy, Referring Facility is still a text box, and the order does not keep it. To fix it, open the field. Set **FHIR Path** to `ServiceRequest.requester`. Tick **Array element (discriminator)** and match `type` equals `Organization`. Set **Target** to `urn:openldr:cs:facility-registry`. Then give **Requesting Clinician** the same path, matching `type` equals `Practitioner`.
 - **Data entry shows every group once.** Adding more entries to a group during data entry is not available yet.
 - **A submitted order cannot be edited.** Results are typed with the order, in one pass.
 - **Searchable** and most **Depends On** settings are saved and exported, but data entry does not use them yet.

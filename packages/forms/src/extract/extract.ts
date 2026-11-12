@@ -2,6 +2,7 @@ import type {
   Coding,
   FhirResource,
   Observation,
+  PractitionerRole,
   Quantity,
   Questionnaire,
   QuestionnaireItem,
@@ -171,6 +172,48 @@ function sharedSpecimenType(response: QuestionnaireResponse): Coding | null {
   return { system: first.system, code: first.code, ...(first.display ? { display: first.display } : {}) }
 }
 
+/** The id of the contained PractitionerRole the requester points at. */
+const REQUESTER_ID = 'requester'
+
+/** A clinician's name from a text answer, or from a picked entity's display. */
+function nameOf(value: unknown): string | undefined {
+  if (typeof value === 'string') return value.trim() || undefined
+  if (value && typeof value === 'object') {
+    const display = (value as { display?: unknown }).display
+    if (typeof display === 'string' && display.trim()) return display.trim()
+  }
+  return undefined
+}
+
+/**
+ * The referring facility as an Organization reference. A picked facility is a coding from the
+ * facility registry, and its code becomes the identifier the warehouse keys on. A name typed before
+ * the field could search (free text) keeps the name with no identifier, so it names no facility code.
+ */
+function facilityOf(value: unknown): Reference | undefined {
+  if (value && typeof value === 'object' && typeof (value as Coding).code === 'string' && (value as Coding).code) {
+    const c = value as Coding
+    return { identifier: { ...(c.system ? { system: c.system } : {}), value: c.code }, ...(c.display ? { display: c.display } : {}) }
+  }
+  const name = nameOf(value)
+  return name ? { display: name } : undefined
+}
+
+/**
+ * The requester as one PractitionerRole: the clinician and the clinic travel together. This is the
+ * shape `packages/db/src/relational/requester.ts` reads into lab_requests.requester_code, _system,
+ * _display and requester_practitioner.
+ */
+function requesterRole(clinician: string | undefined, facility: Reference | undefined): PractitionerRole | undefined {
+  if (!clinician && !facility) return undefined
+  return {
+    resourceType: 'PractitionerRole',
+    id: REQUESTER_ID,
+    ...(clinician ? { practitioner: { display: clinician } } : {}),
+    ...(facility ? { organization: facility } : {}),
+  }
+}
+
 /**
  * Emit a single ServiceRequest for a requisition form, mapping answers whose
  * field is bound to `ServiceRequest.*` (via the Corlix fhir-path) onto it.
@@ -189,6 +232,8 @@ export const ServiceRequestExtractor: ResourceExtractor = {
 
     const codings: Coding[] = []
     let orderText: string | undefined
+    let clinician: string | undefined
+    let facility: Reference | undefined
     walkResponse(response.item, (item) => {
       const meta = index.get(item.linkId)
       const path = meta?.fhirPath
@@ -226,7 +271,20 @@ export const ServiceRequestExtractor: ResourceExtractor = {
         request.identifier = [{ ...(system ? { system } : {}), value: String(value) }]
       }
       if (path === 'ServiceRequest.priority') request.priority = String(value) as ServiceRequest['priority']
+      // The clinician and the referring facility both fill the requester (migration 115), told
+      // apart by Reference.type. A requester field naming no type is the clinician, as it was
+      // before 115.
+      if (path === 'ServiceRequest.requester') {
+        if (discriminatorEquals(meta?.discriminator, 'type') === 'Organization') facility = facilityOf(value)
+        else clinician = nameOf(value)
+      }
     })
+    const requester = requesterRole(clinician, facility)
+    if (requester) {
+      const display = clinician ?? facility?.display
+      request.contained = [requester]
+      request.requester = { reference: `#${REQUESTER_ID}`, type: 'PractitionerRole', ...(display ? { display } : {}) }
+    }
     // code.text names the order after its first test. The warehouse reads text before the first
     // coding's display, and that first coding is often a LOINC link with no name of its own.
     if (codings.length) request.code = { coding: codings, ...(orderText ? { text: orderText } : {}) }

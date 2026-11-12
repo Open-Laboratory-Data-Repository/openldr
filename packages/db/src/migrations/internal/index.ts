@@ -113,6 +113,7 @@ import * as m111 from './111_patient_duplicate_dismissals';
 import * as m112 from './112_custom_query_groups';
 import * as m113 from './113_user_preferences';
 import * as m114 from './114_layout_presets';
+import * as m115 from './115_lab_order_requester';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -230,4 +231,5 @@ export const internalMigrations: Record<string, Migration> = {
   '112_custom_query_groups': { up: m112.up, down: m112.down },
   '113_user_preferences': { up: m113.up, down: m113.down },
   '114_layout_presets': { up: m114.up, down: m114.down },
+  '115_lab_order_requester': { up: m115.up, down: m115.down },
 };

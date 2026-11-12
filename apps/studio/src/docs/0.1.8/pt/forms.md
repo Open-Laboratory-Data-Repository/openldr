@@ -47,7 +47,7 @@ O Exemplo 1 precisa de três coisas na instalação:
 
 O formulário continua preenchido depois de enviar. Não envie outra vez, a não ser que queira um segundo pedido.
 
-**Referring Facility** é uma caixa de texto livre no Lab order incluído, apesar de a ajuda falar em pesquisar. Deixe-a vazia, ou escreva um nome. Veja [Limites](#limites).
+**Referring Facility** pesquisa no seu registo de unidades, por nome ou por código. Uma unidade aparece assim que está em [Unidades](/docs/facilities). **Requesting Clinician** recebe um nome escrito. O pedido guarda os dois, que chegam assim com ele ao armazém.
 
 ## Exemplo 2: construir um formulário a partir de um pacote inicial
 
@@ -243,7 +243,7 @@ Quando um formulário corresponde a um tipo de recurso FHIR, o builder verifica 
 
 ## Limites
 
-- **Referring Facility no Lab order incluído é texto livre.** A ajuda fala em pesquisar unidades, mas o campo não tem fonte onde pesquisar.
+- **Um Lab order editado mantém o Referring Facility antigo.** A atualização só altera o Lab order incluído se ninguém o tiver editado. Numa cópia editada, Referring Facility continua a ser uma caixa de texto, e o pedido não o guarda. Para corrigir, abra o campo. Defina **FHIR Path** como `ServiceRequest.requester`. Marque **Array element (discriminator)** e faça corresponder `type` igual a `Organization`. Defina **Target** como `urn:openldr:cs:facility-registry`. Depois dê o mesmo caminho a **Requesting Clinician**, com `type` igual a `Practitioner`.
 - **A introdução de dados mostra cada grupo uma vez.** Juntar entradas a um grupo durante a introdução ainda não é possível.
 - **Um pedido enviado não se edita.** Os resultados escrevem-se com o pedido, de uma só vez.
 - **O Form Builder não está traduzido.** Os rótulos ficam em inglês.

@@ -119,15 +119,19 @@ describe('reference shape validation', () => {
     ]);
   });
 
-  it('accepts the seeded Lab order sourceless facility field end to end', () => {
+  it('the seeded Lab order facility field takes a facility picked from the registry, not typed text', () => {
+    // Before migration 115 this field had no source and took any typed name.
     const labOrder = sampleForms.find((f) => f.id === 'sample-order')!;
     const facility = labOrder.fields.find((f) => f.id === 'fld-ord-ref-facility')!;
-    expect(resolveReferenceSource(facility).ok).toBe(false);
+    expect(resolveReferenceSource(facility).ok).toBe(true);
 
-    // Validates (the form's other required fields are irrelevant here), then serializes to the
-    // same valueReference toAnswer already produced for a bare-string facility.
-    const errs = validateAnswers(labOrder, { 'fld-ord-ref-facility': 'Kanyama Clinic' });
-    expect(errs.filter((e) => e.fieldId === 'fld-ord-ref-facility')).toEqual([]);
-    expect(toAnswer(facility, 'Kanyama Clinic')).toEqual({ valueReference: { reference: 'Kanyama Clinic' } });
+    // The form's other required fields are irrelevant here.
+    const typed = validateAnswers(labOrder, { 'fld-ord-ref-facility': 'Kanyama Clinic' });
+    expect(typed.filter((e) => e.fieldId === 'fld-ord-ref-facility')).toEqual([
+      { fieldId: 'fld-ord-ref-facility', label: 'Referring Facility', reason: 'must be selected from the list' },
+    ]);
+    const picked = { system: 'urn:openldr:cs:facility-registry', code: 'FAC-001', display: 'Kanyama Clinic' };
+    expect(validateAnswers(labOrder, { 'fld-ord-ref-facility': picked }).filter((e) => e.fieldId === 'fld-ord-ref-facility')).toEqual([]);
+    expect(toAnswer(facility, picked)).toEqual({ valueCoding: picked });
   });
 });

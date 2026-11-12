@@ -159,10 +159,15 @@ interface ObservedFacilityRow {
 }
 
 async function readObservedFacilityRows(externalDb: Kysely<ExternalSchema>): Promise<ObservedFacilityRow[]> {
+  // A code already in the registry's own system is not observed: it names a registry row. A studio
+  // Lab order picks its referring facility from the registry (migration 115), so its requester
+  // carries one. Folding it in would list a known facility as unmapped. Null systems are kept: SQL
+  // `<>` never matches NULL, so they need their own branch.
   const labs = await externalDb
     .selectFrom('diagnostic_reports')
     .select(({ fn }) => ['performer', 'performer_display', 'performer_system', 'source_system', fn.countAll<number>().as('n')])
     .where('performer', 'is not', null)
+    .where((eb) => eb.or([eb('performer_system', 'is', null), eb('performer_system', '<>', FACILITY_REGISTRY_SYSTEM)]))
     .groupBy(['performer', 'performer_display', 'performer_system', 'source_system'])
     .execute();
   const clinics = await externalDb
@@ -175,6 +180,7 @@ async function readObservedFacilityRows(externalDb: Kysely<ExternalSchema>): Pro
       fn.countAll<number>().as('n'),
     ])
     .where('requester_code', 'is not', null)
+    .where((eb) => eb.or([eb('requester_system', 'is', null), eb('requester_system', '<>', FACILITY_REGISTRY_SYSTEM)]))
     .groupBy(['requester_code', 'requester_display', 'requester_system', 'source_system'])
     .execute();
   return [...labs, ...clinics];
@@ -2002,6 +2008,9 @@ export async function captureObservedFacility(
   display?: string | null,
 ): Promise<void> {
   if (!code) return;
+  // The registry's own system holds one concept per registry row, written only by the registry
+  // projection. A code arriving in it names a registry row, and is never an observed one to record.
+  if (system === FACILITY_REGISTRY_SYSTEM) return;
   const existing = await deps.internalDb
     .selectFrom('terminology_concepts')
     .select(['code'])

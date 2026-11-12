@@ -2966,6 +2966,53 @@ describe('facility codes from both roles (slice B)', () => {
   });
 });
 
+// A Lab order made in the studio picks its referring facility from the registry (migration 115), so
+// its requester already names a registry concept. It is not an observed code waiting to be mapped.
+describe('a requester that names a registry facility', () => {
+  async function seeded() {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-hill', name: 'Hill Clinic', localCode: 'HILL' });
+    await projectRegistryRows(deps, [{ id: 'fac-hill', name: 'Hill Clinic' }]);
+    const code = (await currentConceptCode(deps, 'fac-hill'))!;
+    const concept = () => deps.internalDb.selectFrom('terminology_concepts').select(['code', 'display', 'properties'])
+      .where('system', '=', FACILITY_REGISTRY_SYSTEM).orderBy('code').execute();
+    return { deps, code, concept };
+  }
+
+  it('a scan leaves the registry concept and its coding system as they were', async () => {
+    const { deps, code, concept } = await seeded();
+    const before = await concept();
+    expect(before).toHaveLength(1);
+    await seedRequesters(deps, [[code, 3]], { requesterSystem: FACILITY_REGISTRY_SYSTEM, requesterDisplay: 'Hill Clinic' });
+
+    await scanObservedFacilities(deps, { now: '2026-11-12T00:00:00.000Z', apply: true });
+
+    expect(await concept()).toEqual(before);
+    expect((await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM))?.systemName).toBe('OpenLDR facility registry');
+  });
+
+  it('is not listed as an observed facility', async () => {
+    const { deps, code } = await seeded();
+    await seedRequesters(deps, [[code, 3]], { requesterSystem: FACILITY_REGISTRY_SYSTEM });
+
+    const rows = await resolveObservedFacilities(deps);
+
+    expect(rows.filter((r) => r.observedSystem === FACILITY_REGISTRY_SYSTEM)).toEqual([]);
+  });
+
+  it('ingest writes nothing into the registry system, even for a code it does not hold', async () => {
+    const { deps, concept } = await seeded();
+    const before = await concept();
+    await captureObservedFacilityFromProjection(deps, 'ServiceRequest', {
+      resourceType: 'ServiceRequest', id: 'sr-3', status: 'active', intent: 'order', subject: { reference: 'Patient/p1' },
+      contained: [{ resourceType: 'PractitionerRole', id: 'requester', organization: { identifier: { system: FACILITY_REGISTRY_SYSTEM, value: 'GONE' }, display: 'Closed clinic' } }],
+      requester: { reference: '#requester' },
+    }, 'webhook-ingest', '2026-11-12T00:00:00.000Z');
+
+    expect(await concept()).toEqual(before);
+  });
+});
+
 // Spec 2026-10-07-warehouse-facility-registry: the warehouse holds a copy of every register row,
 // so a custom query can list a register with no results present.
 describe('publishFacilityMap copies the register into the warehouse', () => {

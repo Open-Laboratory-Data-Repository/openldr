@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import AdmZip from 'adm-zip';
 import type { AppContext } from '@openldr/bootstrap';
-import type { FormDefinition, FormInput, FormVersion, FormVersionSummary } from '@openldr/forms';
+import { sampleForms, type FormDefinition, type FormInput, type FormVersion, type FormVersionSummary } from '@openldr/forms';
+import { projectServiceRequest } from '@openldr/db';
 import { registerFormsRoutes } from './forms-routes';
 import './auth-plugin';
 
@@ -1089,6 +1090,37 @@ describe('forms routes', () => {
     // The warehouse keeps the first coding, the nameless LOINC link, so the order's name rides on
     // code.text (lab_requests.panel_desc).
     expect(serviceRequest.code.text).toBe('Viral load');
+  });
+
+  it('a Lab order keeps its referring facility and clinician all the way to lab_requests', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    const labOrder = sampleForms.find((f) => f.name === 'Lab order')!;
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Lab order', schema: labOrder, targetPages: ['forms'] } });
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${created.json().id as string}/responses`,
+      payload: { answers: {
+        patient: { reference: 'Patient/p1', display: 'Doe Jane' },
+        tests: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }],
+        'fld-ord-priority': 'routine',
+        'fld-ord-clinician': 'Dr. Banda',
+        'fld-ord-ref-facility': { system: 'urn:openldr:cs:facility-registry', code: 'FAC-001', display: 'Hill Clinic' },
+      } },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const serviceRequest = runs[0].body.entry.map((e: any) => e.resource).find((r: any) => r.resourceType === 'ServiceRequest');
+    // The same projection the warehouse writer runs on this resource.
+    expect(projectServiceRequest(serviceRequest, {})).toMatchObject({
+      requester_code: 'FAC-001',
+      requester_system: 'urn:openldr:cs:facility-registry',
+      requester_display: 'Hill Clinic',
+      requester_practitioner: 'Dr. Banda',
+    });
   });
 
   it('does not ask the catalog when no answer is a catalog test', async () => {

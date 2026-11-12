@@ -23,6 +23,7 @@ import {
   LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_FIELDS,
   LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
+  LAB_ORDER_FORM_MIGRATION_REQUESTER,
 } from '@openldr/db';
 import { toQuestionnaireResponse } from '../response';
 import { ServiceRequestExtractor } from '../extract/extract';
@@ -272,14 +273,16 @@ describe('every shipped sample passes the FHIR path rules', () => {
   // 10 became 7 the same day (migration 101): the Users form's name and email do the same.
   // 7 became 4 (migration 102): the Lab order's notes and ward point at the first entry of
   // their lists. 4 became 2 (migration 103): the requisition number fills the
-  // urn:openldr:order:requisition entry of ServiceRequest.identifier. The 2 left are the
-  // clinician and the referring facility, which need decisions these changes did not make.
-  it('the other samples carry exactly the 2 known structural warnings', () => {
+  // urn:openldr:order:requisition entry of ServiceRequest.identifier. 2 became 1 (migration
+  // 115): the referring facility moved off the performer list onto the requester. The 1 left is
+  // the clinician, a text box on a Reference. The extractor writes it into the requester's
+  // PractitionerRole, which a plain value cannot express as a path.
+  it('the other samples carry exactly the 1 known structural warning', () => {
     const warnings = sampleForms
       .filter((f) => f.name !== 'Facility')
       .flatMap((f) => lintFormSchema(f).filter((i) => i.severity === 'warning'))
       .filter((i) => i.code === 'fhir-path-cardinality' || i.code === 'fhir-path-type-mismatch');
-    expect(warnings.map((i) => i.fieldId).sort()).toEqual(['fld-ord-clinician', 'fld-ord-ref-facility']);
+    expect(warnings.map((i) => i.fieldId).sort()).toEqual(['fld-ord-clinician']);
   });
 
   it('the Patient form produces no findings of any severity', () => {
@@ -296,8 +299,8 @@ describe('every shipped sample passes the FHIR path rules', () => {
 describe('migrations 102 and 103 on the Lab order form', () => {
   const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
 
-  it("matches migration 110's frozen snapshot exactly", () => {
-    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_ORDER_REJECTION);
+  it("matches migration 115's frozen snapshot exactly", () => {
+    expect(order().fields).toEqual(LAB_ORDER_FORM_MIGRATION_REQUESTER);
   });
 
   // The order asked for a specimen twice: once per test in the results sheet, once here. The
@@ -326,15 +329,15 @@ describe('migrations 102 and 103 on the Lab order form', () => {
     for (const prior of [
       LAB_ORDER_FORM_MIGRATION_PREV_FIELDS, LAB_ORDER_FORM_MIGRATION_PREV_REQUISITION,
       LAB_ORDER_FORM_MIGRATION_BOUND_FIELDS, LAB_ORDER_FORM_MIGRATION_CATALOG_FIELDS,
-      LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS,
+      LAB_ORDER_FORM_MIGRATION_RESULT_FIELDS, LAB_ORDER_FORM_MIGRATION_ORDER_REJECTION,
     ]) {
       const normalized = normalizeFormSchema({ ...order(), fields: prior as never });
       expect(normalized.fields).toEqual(prior);
     }
   });
 
-  // The order extractor reads only the tests, the requisition number and the priority
-  // (extract.ts). It reads the requisition number from the old path and the new one. This proves
+  // The order extractor reads the tests, the requisition number, the priority and, since 115, the
+  // requester (extract.ts). It reads the requisition number from the old path and the new one. This proves
   // the new paths change a submitted order in one way only: the shape after 103 names the
   // requisition system on the identifier, as the operator asked on 2026-09-15. Everything else,
   // including the identifier's value, is the same as the shape before 102 produces.
@@ -357,6 +360,63 @@ describe('migrations 102 and 103 on the Lab order form', () => {
     expect((after[0] as any).identifier).toEqual([{ system: 'urn:openldr:order:requisition', value: 'REF-42' }]);
     const withoutIdentifier = (r: unknown[]) => r.map(({ identifier, ...rest }: any) => rest);
     expect(withoutIdentifier(after)).toEqual(withoutIdentifier(before));
+  });
+});
+
+describe('migration 115: the referring facility and clinician reach the order', () => {
+  const order = () => sampleForms.find((f) => f.name === 'Lab order')!;
+  const field = (id: string) => order().fields.find((f) => f.id === id)!;
+  const ctx = { subject: { reference: 'Patient/p1' }, authored: '2026-11-12T00:00:00Z' };
+  const extract = (answers: Record<string, unknown>) =>
+    ServiceRequestExtractor.extract(toQuestionnaireResponse(order(), answers as never), toQuestionnaire(order()), ctx)[0] as any;
+  const hill = { system: 'urn:openldr:cs:facility-registry', code: 'FAC-001', display: 'Hill Clinic' };
+
+  it('the referring facility searches the facility registry', () => {
+    expect(resolveReferenceSource(field('fld-ord-ref-facility')))
+      .toEqual({ ok: true, source: { kind: 'coding', mode: 'codesystem', system: 'urn:openldr:cs:facility-registry' } });
+  });
+
+  it('both fields fill the requester, told apart by the type of what they name', () => {
+    expect(field('fld-ord-clinician')).toMatchObject({ fhirPath: 'ServiceRequest.requester', fhirDiscriminator: { type: 'Practitioner' } });
+    expect(field('fld-ord-ref-facility')).toMatchObject({ fhirPath: 'ServiceRequest.requester', fhirDiscriminator: { type: 'Organization' } });
+    const ids = ['fld-ord-clinician', 'fld-ord-ref-facility'];
+    expect(lintFormSchema(order()).filter((i) => i.severity === 'error' && ids.includes(i.fieldId ?? ''))).toEqual([]);
+  });
+
+  it('writes the clinician and the facility as one PractitionerRole the requester points at', () => {
+    const r = extract({ tests: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }], 'fld-ord-clinician': 'Dr. Banda', 'fld-ord-ref-facility': hill });
+    expect(r.requester).toEqual({ reference: '#requester', type: 'PractitionerRole', display: 'Dr. Banda' });
+    expect(r.contained).toEqual([{
+      resourceType: 'PractitionerRole',
+      id: 'requester',
+      practitioner: { display: 'Dr. Banda' },
+      organization: { identifier: { system: 'urn:openldr:cs:facility-registry', value: 'FAC-001' }, display: 'Hill Clinic' },
+    }]);
+    // The performer is the lab asked to do the test. The referring facility is not it.
+    expect(r.performer).toBeUndefined();
+  });
+
+  it('a clinician alone names no facility', () => {
+    const r = extract({ 'fld-ord-clinician': 'Dr. Banda' });
+    expect(r.contained).toEqual([{ resourceType: 'PractitionerRole', id: 'requester', practitioner: { display: 'Dr. Banda' } }]);
+    expect(r.requester.display).toBe('Dr. Banda');
+  });
+
+  it('a facility alone names it on the requester', () => {
+    const r = extract({ 'fld-ord-ref-facility': hill });
+    expect(r.contained[0].practitioner).toBeUndefined();
+    expect(r.requester).toEqual({ reference: '#requester', type: 'PractitionerRole', display: 'Hill Clinic' });
+  });
+
+  it('a facility typed as free text before the search keeps its name, with no code', () => {
+    const r = extract({ 'fld-ord-ref-facility': 'Lake Health Centre' });
+    expect(r.contained[0].organization).toEqual({ display: 'Lake Health Centre' });
+  });
+
+  it('an order with neither answer has no requester', () => {
+    const r = extract({ 'fld-ord-priority': 'routine' });
+    expect(r.requester).toBeUndefined();
+    expect(r.contained).toBeUndefined();
   });
 });
 
