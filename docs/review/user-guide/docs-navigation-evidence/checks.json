@@ -27,5 +27,17 @@
     "output": [
       "DOCS NAVIGATION PASS: 8 sizes; overlay preserves article width; search/selection, Escape, outside click, resize and versions; en/fr/pt; no server writes"
     ]
+  },
+  {
+    "phase": "merged-main",
+    "commit": "aedafb37",
+    "command": "pnpm --filter @openldr/studio test src/pages/Docs.test.tsx && pnpm --filter @openldr/config test src/env-docs.test.ts",
+    "exitCode": 0,
+    "output": [
+      "Test Files  1 passed (1)",
+      "Tests  18 passed (18)",
+      "Test Files  1 passed (1)",
+      "Tests  8 passed (8)"
+    ]
   }
 ]

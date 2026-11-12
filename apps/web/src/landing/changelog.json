@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "aedafb37",
+          "type": "fix",
+          "scope": "",
+          "title": "Move docs version picker and overlay phone navigation"
+        },
+        {
           "hash": "6ac8080a",
           "type": "fix",
           "scope": "",

@@ -1,6 +1,6 @@
 ## Latest checkpoint, 2026-11-12
 
-The latest navigation change places Version below Search with its value on the right.
+The latest navigation change, `aedafb37`, places Version below Search with its value on the right.
 Phone documentation navigation opens as a Sheet over the article and closes after guide selection.
 See [navigation validation](DOCS-NAVIGATION-VALIDATION.md) for commands, window sizes and screenshots.
 

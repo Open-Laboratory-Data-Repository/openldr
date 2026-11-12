@@ -67,3 +67,7 @@ No database, guide prose, existing screenshot source, public web layout or CLI b
 HONEST NON-PROOF: headless Chromium cannot test retractable phone browser chrome.
 Only a real phone can confirm bottom-edge access with its browser bars visible.
 Physical phone testing was not performed.
+
+Repair commit `aedafb37` was fast-forwarded to main.
+Merged checks passed 18 Docs component tests and eight environment-doc tests.
+`pnpm make:changelog` generated 3087 entries after the merge.
