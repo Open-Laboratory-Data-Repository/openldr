@@ -34,6 +34,7 @@ def build():
             cw = ch * 1.6
         cx = min(sw - cw, max(0, target['x'] + target['width'] / 2 - cw / 2))
         cy = min(sh - ch, max(0, target['y'] + target['height'] / 2 - ch / 2))
+        assert all(cx-1 <= t['x'] and t['x']+t['width'] <= cx+cw+1 and cy-1 <= t['y'] and t['y']+t['height'] <= cy+ch+1 for t in targets), ('Focus clipped',key,targets,[cx,cy,cw,ch])
         layers = ''
         rings = ''
         marker_placement = None

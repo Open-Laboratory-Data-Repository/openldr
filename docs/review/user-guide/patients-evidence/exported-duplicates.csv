@@ -1,0 +1,3 @@
+group,rule,system_label,evidence,patient_id,patient_guid,surname,firstname,date_of_birth,sex,managing_facility
+1,identifier,Example ID,DOCS-001,example-catalog-patient,DOCS-001,Documentation,Case One,1990-01-01,U,
+1,identifier,Example ID,DOCS-001,example-patient-two,DOCS-001,Documentation,Case Two,1980-01-01,U,

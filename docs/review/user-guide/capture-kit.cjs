@@ -23,6 +23,7 @@ async function start(slug,route){
   }
   const size=page.viewportSize();for(const f of focus)if(f.x<0||f.y<0||f.x+f.width>size.width+1||f.y+f.height>size.height+1)throw Error('Target outside viewport '+id+' '+JSON.stringify(f));
   await page.screenshot({path:path.join(out,id+'.png'),animations:'disabled'});
+  if(fs.existsSync(manifestFile))steps=JSON.parse(fs.readFileSync(manifestFile)).steps;
   steps=steps.filter(x=>x.id!==id);steps.push({id,label,path:slug+'-evidence/'+id+'.png',source_dimensions:[size.width,size.height],pixel_dimensions:[size.width*4,size.height*4],focus});
   fs.writeFileSync(manifestFile,JSON.stringify({capturedAt:new Date().toISOString(),source:'Live isolated Studio. Native DPR 4 screenshots.',appUrl:'http://localhost:5186/studio/'+route,steps},null,2)+'\n');console.log('CAPTURE '+id);
  }

@@ -45,7 +45,7 @@ Check every screenshot loads at native resolution, every numbered step has evide
 Save command output and limits. Commit and push the section before moving on.
 
 - [x] Test catalog
-- [ ] Patients
+- [x] Patients
 - [ ] Forms
 - [ ] Workflows
 - [ ] Reports

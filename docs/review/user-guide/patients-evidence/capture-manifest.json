@@ -1,0 +1,1099 @@
+{
+  "capturedAt": "2026-11-12T08:47:06.431Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5186/studio/patients",
+  "steps": [
+    {
+      "id": "open-page",
+      "label": "Patients is in the main menu on the left.",
+      "path": "patients-evidence/open-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 376,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "patients-tab",
+      "label": "Patients lists records received from your source systems.",
+      "path": "patients-evidence/patients-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 49,
+          "width": 74.59375,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "search-name",
+      "label": "With identifier-view permission, search can find part of a name.",
+      "path": "patients-evidence/search-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 93,
+          "width": 240,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "search-result",
+      "label": "Read the matching patient row before opening it.",
+      "path": "patients-evidence/search-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 192.5,
+          "width": 177.625,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "open-row",
+      "label": "Select the patient row to open its read-only details.",
+      "path": "patients-evidence/open-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 192.5,
+          "width": 177.625,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "identity",
+      "label": "Identity shows source details. The Patients page does not edit them.",
+      "path": "patients-evidence/identity.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 127.53125,
+          "width": 671,
+          "height": 289
+        }
+      ]
+    },
+    {
+      "id": "identifiers",
+      "label": "Identifiers shows the systems and values received for this patient.",
+      "path": "patients-evidence/identifiers.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 721.359375,
+          "y": 480.53125,
+          "width": 534.640625,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "requests",
+      "label": "Requests shows this patient's orders, status and result counts.",
+      "path": "patients-evidence/requests.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 600.53125,
+          "width": 671,
+          "height": 64.5
+        }
+      ]
+    },
+    {
+      "id": "close-details",
+      "label": "Close returns to the patient list.",
+      "path": "patients-evidence/close-details.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1236,
+          "y": 16,
+          "width": 28,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "row-view",
+      "label": "View in the patient row menu opens the same details.",
+      "path": "patients-evidence/row-view.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 227.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "identifier-tab",
+      "label": "Identifier systems lists the identifier types that have arrived.",
+      "path": "patients-evidence/identifier-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 334.59375,
+          "y": 50,
+          "width": 132.9375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "identifier-row-actions",
+      "label": "Open the dots beside the identifier system you want to label.",
+      "path": "patients-evidence/identifier-row-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 137.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "identifier-edit",
+      "label": "Edit opens this identifier system's display and search settings.",
+      "path": "patients-evidence/identifier-edit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 178.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "identifier-label",
+      "label": "Give this identifier system a name people recognise. The example uses Example ID.",
+      "path": "patients-evidence/identifier-label.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 921.0625,
+          "y": 196.53125,
+          "width": 334.9375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "identifier-list",
+      "label": "Show in the list includes this identifier system in the patient table.",
+      "path": "patients-evidence/identifier-list.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 921.0625,
+          "y": 264.53125,
+          "width": 334.9375,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "identifier-searchable",
+      "label": "Search matches it determines whether identifiers from this system participate in searching.",
+      "path": "patients-evidence/identifier-searchable.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 921.0625,
+          "y": 300.53125,
+          "width": 334.9375,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "identifier-actions",
+      "label": "Identifier system settings have their own dots menu.",
+      "path": "patients-evidence/identifier-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "identifier-save",
+      "label": "Save stores the label and display/search choices.",
+      "path": "patients-evidence/identifier-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "identifier-saved",
+      "label": "The identifier system now displays the saved label.",
+      "path": "patients-evidence/identifier-saved.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 125,
+          "width": 272.25,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "search-identifier",
+      "label": "Search an identifier value rather than its label. These two fictional records deliberately share DOCS-001.",
+      "path": "patients-evidence/search-identifier.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 93,
+          "width": 240,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "listed-identifier",
+      "label": "The listed identifier appears with its configured label.",
+      "path": "patients-evidence/listed-identifier.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 590.65625,
+          "y": 194,
+          "width": 139.875,
+          "height": 17
+        }
+      ]
+    },
+    {
+      "id": "duplicates-tab",
+      "label": "Duplicates lists groups that may represent the same person.",
+      "path": "patients-evidence/duplicates-tab.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 471.53125,
+          "y": 50,
+          "width": 89.375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-group",
+      "label": "Read the rule and evidence before deciding whether the group is a duplicate.",
+      "path": "patients-evidence/duplicate-group.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 538.9375,
+          "y": 174,
+          "width": 197.625,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "duplicate-open",
+      "label": "Select the group row to inspect its members.",
+      "path": "patients-evidence/duplicate-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 174,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "duplicate-evidence",
+      "label": "The group sheet explains why these patients were matched.",
+      "path": "patients-evidence/duplicate-evidence.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 701.703125,
+          "y": 546.53125,
+          "width": 57.609375,
+          "height": 14
+        }
+      ]
+    },
+    {
+      "id": "member-actions",
+      "label": "Each member has its own dots menu for opening the full patient.",
+      "path": "patients-evidence/member-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 422.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "member-open",
+      "label": "Open patient opens the selected member's read-only record.",
+      "path": "patients-evidence/member-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 459.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-reason",
+      "label": "If you have confirmed different people, enter a reason for the decision.",
+      "path": "patients-evidence/duplicate-reason.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 747.8125,
+          "y": 292.53125,
+          "width": 508.1875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "duplicate-actions",
+      "label": "Use the group dots menu to record your decision.",
+      "path": "patients-evidence/duplicate-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "duplicate-mark",
+      "label": "Mark as not duplicates hides this reviewed group from Open. It does not merge or delete patients.",
+      "path": "patients-evidence/duplicate-mark.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1095,
+          "y": 176.5,
+          "width": 156.078125,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-dismissed",
+      "label": "The reviewed group is absent from the Open list.",
+      "path": "patients-evidence/duplicate-dismissed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 706.96875,
+          "y": 434.5,
+          "width": 106.0625,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "duplicate-status",
+      "label": "Use Status to find groups marked as not duplicates.",
+      "path": "patients-evidence/duplicate-status.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 256,
+          "y": 93,
+          "width": 176,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-status-option",
+      "label": "Not duplicates lists reviewed groups.",
+      "path": "patients-evidence/duplicate-status-option.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 261,
+          "y": 162,
+          "width": 128.71875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-reopen",
+      "label": "Open the reviewed group if you need to undo the decision.",
+      "path": "patients-evidence/duplicate-reopen.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 174,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "duplicate-restore",
+      "label": "Show again returns the group to Open without changing patient records.",
+      "path": "patients-evidence/duplicate-restore.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-restored",
+      "label": "The group is back in Open for review.",
+      "path": "patients-evidence/duplicate-restored.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 174,
+          "width": 1040,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "duplicate-export-actions",
+      "label": "The Duplicates tab has a separate export menu.",
+      "path": "patients-evidence/duplicate-export-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1232,
+          "y": 93,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "duplicate-export",
+      "label": "Export CSV downloads open groups for the team that maintains the source data.",
+      "path": "patients-evidence/duplicate-export.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1109,
+          "y": 134,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-open",
+      "label": "Use Filter to include records marked Merged by the source.",
+      "path": "patients-evidence/filter-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 504,
+          "y": 93,
+          "width": 72.671875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-add",
+      "label": "Add filter starts a Status rule.",
+      "path": "patients-evidence/filter-add.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 517,
+          "y": 227,
+          "width": 87.359375,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "filter-status",
+      "label": "Choose Status and keep its equals operator.",
+      "path": "patients-evidence/filter-status.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 619,
+          "y": 156,
+          "width": 176,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-merged",
+      "label": "Choose Merged to inspect inactive or replaced records.",
+      "path": "patients-evidence/filter-merged.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 940,
+          "y": 225,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "filter-apply",
+      "label": "Apply updates the patient list with this Status rule.",
+      "path": "patients-evidence/filter-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1076.96875,
+          "y": 223,
+          "width": 54.03125,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "merged-row",
+      "label": "Merged records show a badge beside the patient name.",
+      "path": "patients-evidence/merged-row.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 206,
+          "width": 273.484375,
+          "height": 57
+        }
+      ]
+    },
+    {
+      "id": "merged-actions",
+      "label": "A source-reported replacement adds a patient-sheet dots menu.",
+      "path": "patients-evidence/merged-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 139.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "merged-replacement",
+      "label": "Open the patient this record was merged into follows the source replacement.",
+      "path": "patients-evidence/merged-replacement.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 955.5,
+          "y": 176.5,
+          "width": 295.390625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "replacement-result",
+      "label": "The replacement patient opens in the same read-only sheet.",
+      "path": "patients-evidence/replacement-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 725.265625,
+          "y": 188.53125,
+          "width": 530.734375,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "member-view-result",
+      "label": "Open patient displays the selected member in its read-only patient sheet.",
+      "path": "patients-evidence/member-view-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 609,
+          "y": 127.53125,
+          "width": 671,
+          "height": 289
+        }
+      ]
+    },
+    {
+      "id": "duplicate-status-open",
+      "label": "Choose Open to return to unresolved duplicate groups.",
+      "path": "patients-evidence/duplicate-status-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 261,
+          "y": 130,
+          "width": 128.71875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-tabs",
+      "label": "Patients, Identifier systems and Duplicates remain at the top on a phone.",
+      "path": "patients-evidence/phone-tabs.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 49,
+          "width": 74.59375,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "phone-search",
+      "label": "Use the patient search on a phone.",
+      "path": "patients-evidence/phone-search.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 16,
+          "y": 97,
+          "width": 331,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-details",
+      "label": "The patient sheet uses the phone width and scrolls through its sections.",
+      "path": "patients-evidence/phone-details.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 117.265625,
+          "y": 188.53125,
+          "width": 233.734375,
+          "height": 20
+        }
+      ]
+    }
+  ]
+}

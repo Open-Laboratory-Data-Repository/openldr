@@ -330,3 +330,26 @@ Build new sections with write-guide-article.py and build-guide.py, then refresh-
 The capture-kit.cjs module constrains workflow writes to the isolated API on port 3006.
 The temporary capture installation remains available with its owned durable PostgreSQL volume.
 Next section is Patients. Use fictional patients in the isolated installation only.
+
+## Patients preview checkpoint
+
+The Test catalog preview and its exact Add range label were pushed through 521ef7ac.
+Remote main was verified as 521ef7acbc30c290ce33ebfb0c18697a60382f5d.
+Changelog generation after those docs commits produced no tracked change.
+
+Patients is available at patients-review.html on port 4392.
+It has 42 numbered steps and 57 screenshot placements, using native 4x captures.
+The guide covers patient search, identifier labels, source-reported replacement navigation,
+duplicate review, dismiss/restore and export. Practice is optional.
+The published Patients guide remains unchanged.
+See patients-review-notes.md, workflow-checks.json and preview-checks.json under its evidence folder.
+All seven active previews share the same navigation.
+Patient route tests passed 19 tests. These prove permission/audit routes with mocked stores,
+not live browser masking. The screenshots use full identifier-view permission.
+
+Capture phases must run in sequence. capture-kit.cjs now reloads the on-disk manifest per image.
+The builder rejects focus targets clipped by a crop.
+The owned isolated installation and durable database volume remain available.
+Next section is Forms. Submissions must remain inside the isolated installation.
+An unrelated untracked local-sign-in spec appeared in the shared worktree during this task.
+It belongs to other work and was not edited or staged.

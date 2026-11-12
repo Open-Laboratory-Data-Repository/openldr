@@ -1,0 +1,29 @@
+{
+  "checkedAt": "2026-11-12T08:45:57.044Z",
+  "isolatedPatientCount": 4,
+  "patientNames": [
+    "Case One Documentation",
+    "Case Two Documentation",
+    "Old Record Documentation",
+    "Seed Sample"
+  ],
+  "openDuplicateGroups": 1,
+  "identifierSettings": [
+    {
+      "system": "urn:example:patient-id",
+      "patientCount": 3,
+      "label": "Example ID",
+      "labelSource": "operator",
+      "listColumn": true,
+      "searchable": true
+    },
+    {
+      "system": "urn:openldr:seed:patient",
+      "patientCount": 1,
+      "label": null,
+      "labelSource": "none",
+      "listColumn": false,
+      "searchable": true
+    }
+  ]
+}

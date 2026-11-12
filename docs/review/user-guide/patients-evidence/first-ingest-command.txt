@@ -1,0 +1,5 @@
+$ node packages/cli/dev.mjs ingest docs/review/user-guide/patients-evidence/example-patients.json
+(node:140455) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794472816037,"pid":140455,"hostname":"fredrick-Station","name":"openldr","batchId":"3edee7a5-c404-4e67-86cc-6ed46361a2b7","source":"cli","converter":"fhir-bundle","msg":"ingest payload accepted"}
+batch 3edee7a5-c404-4e67-86cc-6ed46361a2b7: done (3 resources)
