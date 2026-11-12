@@ -1,10 +1,10 @@
 # Formulaires
 
-Les **formulaires** sont les écrans de saisie à la main : une demande d'examens à la réception, un dossier patient, un établissement. Chaque formulaire se construit dans le **Générateur de formulaires** à partir de champs, et chaque champ peut correspondre à un élément FHIR, pour que la saisie devienne un vrai enregistrement. Un formulaire passe de **Draft** à **Published** puis **Archived**, pour être conçu sans risque avant que quelqu'un l'utilise.
+Les **formulaires** sont les écrans de saisie à la main : une demande d'examens à la réception, un dossier patient, un établissement. Chaque formulaire se construit dans le **Générateur de formulaires** à partir de champs, et chaque champ peut correspondre à un élément FHIR, pour que la saisie devienne un vrai enregistrement. Un formulaire passe de **Brouillon** à **Publié** puis **Archivé**, pour être conçu sans risque avant que quelqu'un l'utilise.
 
 Une installation neuve contient quatre formulaires publiés : **Lab order**, **Patient**, **Users** et **Facility**. Ce guide saisit une demande d'examens avec le formulaire fourni, puis construit et publie votre propre formulaire. Comptez 15 minutes. Sélectionnez une image ou un clip pour l'agrandir.
 
-Le Générateur de formulaires s'affiche dans la langue du studio. Les noms des champs du Lab order fourni, comme **Tests** ou **Priority**, et les menus de la page **Formulaires** restent en anglais. Ce guide les cite tels qu'ils s'affichent.
+Le Générateur de formulaires s'affiche dans la langue du studio. Les noms des champs du Lab order fourni, comme **Tests** ou **Priority**, restent en anglais. Ce guide les cite tels qu'ils s'affichent.
 
 ![Formulaires : les quatre formulaires fournis, avec leur type FHIR, nombre de champs, version et statut.](forms-tour.png)
 
@@ -55,7 +55,7 @@ Construisez un formulaire plus court pour les demandes de charge virale à parti
 
 ![Nommer le formulaire, choisir R4 et ServiceRequest, garder cinq champs du pack et les ajouter.](forms-build.mp4)
 
-1. Sur **Formulaires**, ouvrez le menu **⋯** de la page et sélectionnez **New**. Le **Générateur de formulaires** s'ouvre.
+1. Sur **Formulaires**, ouvrez le menu **⋯** de la page et sélectionnez **Nouveau**. Le **Générateur de formulaires** s'ouvre.
 2. Dans **Nom du formulaire**, tapez `Quick viral load request`.
 3. Réglez **Version FHIR** sur **R4 (la plus courante)**.
 4. Réglez **Type de ressource** sur **ServiceRequest**. Tapez pour filtrer la longue liste. Le **Pack Lab order** s'ouvre de lui-même, avec **9 sur 9 sélectionnés**. Chaque entrée dit pourquoi elle est là.
@@ -83,11 +83,11 @@ L'aperçu n'envoie jamais rien.
 
 1. Fermez l'aperçu. Ouvrez **Actions du générateur** et sélectionnez **Publier**. Publish enregistre d'abord le formulaire, il n'y a donc pas d'étape d'enregistrement à part.
 
-**Résultat attendu :** un message le confirme, et la pastille d'état à côté du nom passe au vert avec **v1**. Sur **Formulaires**, **Quick viral load request** est listé **Published**, avec **5** champs.
+**Résultat attendu :** un message le confirme, et la pastille d'état à côté du nom passe au vert avec **v1**. Sur **Formulaires**, **Quick viral load request** est listé **Publié**, avec **5** champs.
 
 ![Le nouveau formulaire dans la liste, Published.](forms-list-published.png)
 
-Pour le retirer, ouvrez le menu **⋯** de sa ligne et sélectionnez **Delete**.
+Pour le retirer, ouvrez le menu **⋯** de sa ligne et sélectionnez **Supprimer**.
 
 ## Le cycle de vie
 

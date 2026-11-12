@@ -32,9 +32,10 @@ const STATUS_TOAST_KEY: Record<FormStatus, string> = {
 };
 
 function StatusBadge({ status }: { status: FormStatus }) {
-  if (status === 'published') return <Badge className="border-transparent bg-emerald-500/15 text-emerald-700">Published</Badge>;
-  if (status === 'archived') return <Badge variant="outline" className="text-muted-foreground">Archived</Badge>;
-  return <Badge variant="secondary">Draft</Badge>;
+  const { t } = useTranslation();
+  if (status === 'published') return <Badge className="border-transparent bg-emerald-500/15 text-emerald-700">{t('forms.statusPublished')}</Badge>;
+  if (status === 'archived') return <Badge variant="outline" className="text-muted-foreground">{t('forms.statusArchived')}</Badge>;
+  return <Badge variant="secondary">{t('forms.statusDraft')}</Badge>;
 }
 
 function toSummary(form: FormDefinition): FormSummary {
@@ -119,7 +120,7 @@ export function Forms() {
     },
     {
       id: 'fhirResourceType', labelKey: 'forms.colFhirType', type: 'text', defaultVisible: true,
-      accessor: (f) => (f.fhirResourceType ? <Badge variant="outline">{f.fhirResourceType}</Badge> : <span className="text-muted-foreground">Custom</span>),
+      accessor: (f) => (f.fhirResourceType ? <Badge variant="outline">{f.fhirResourceType}</Badge> : <span className="text-muted-foreground">{t('forms.custom')}</span>),
     },
     { id: 'fieldCount', labelKey: 'forms.colFields', type: 'number', defaultVisible: true, cellClassName: 'text-muted-foreground', accessor: (f) => f.fieldCount },
     { id: 'versionLabel', labelKey: 'forms.colVersion', type: 'text', defaultVisible: true, cellClassName: 'text-muted-foreground', accessor: (f) => f.versionLabel || '-' },
@@ -127,18 +128,18 @@ export function Forms() {
       id: 'status', labelKey: 'forms.colStatus', type: 'enum', defaultVisible: true,
       accessor: (f) => <StatusBadge status={f.status} />,
       enumOptions: [
-        { value: 'draft', label: 'Draft' },
-        { value: 'published', label: 'Published' },
-        { value: 'archived', label: 'Archived' },
+        { value: 'draft', labelKey: 'forms.statusDraft' },
+        { value: 'published', labelKey: 'forms.statusPublished' },
+        { value: 'archived', labelKey: 'forms.statusArchived' },
       ],
     },
     {
       id: 'active', labelKey: 'forms.colActive', type: 'enum', defaultVisible: true,
-      accessor: (f) => (f.active ? <Badge variant="secondary">Active</Badge> : <span className="text-muted-foreground">Inactive</span>),
-      enumOptions: [{ value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }],
+      accessor: (f) => (f.active ? <Badge variant="secondary">{t('forms.active')}</Badge> : <span className="text-muted-foreground">{t('forms.inactive')}</span>),
+      enumOptions: [{ value: 'true', labelKey: 'forms.active' }, { value: 'false', labelKey: 'forms.inactive' }],
     },
     { id: 'updatedAt', labelKey: 'forms.colUpdated', type: 'date', defaultVisible: true, cellClassName: 'text-xs text-muted-foreground', accessor: (f) => formatDate(f.updatedAt) },
-  ], []);
+  ], [t]);
 
   const valueGetters = useMemo(() => ({
     name: (f: FormSummary) => f.name,
@@ -173,7 +174,7 @@ export function Forms() {
     try {
       const parsed: unknown = JSON.parse(await file.text());
       if (!isImportableSchema(parsed)) {
-        setActionError('Import JSON must include a name field.');
+        setActionError(t('forms.importNeedsName'));
         return;
       }
       const created = await createForm({
@@ -248,7 +249,7 @@ export function Forms() {
   };
 
   return (
-    <AppShell title="Forms" fullBleed>
+    <AppShell title={t('nav.forms')} fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-col gap-2 border-b border-border px-3 py-2">
           <DataTableToolbar
@@ -267,13 +268,13 @@ export function Forms() {
             actions={
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Form actions">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('forms.pageActions')}>
                     <MoreHorizontal className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => navigate('/forms/new')}>New</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => fileRef.current?.click()}>Import</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/forms/new')}>{t('forms.new')}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => fileRef.current?.click()}>{t('forms.import')}</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { void load(); }}>{t('forms.refresh')}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -285,7 +286,7 @@ export function Forms() {
             type="file"
             accept="application/json,.json"
             className="hidden"
-            aria-label="Import form JSON"
+            aria-label={t('forms.importAria')}
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = '';
@@ -312,29 +313,29 @@ export function Forms() {
                     <TableCell onClick={(event) => event.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label={`Actions for ${form.name}`}>
+                          <Button variant="ghost" size="icon" aria-label={t('forms.rowActions', { name: form.name })}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}`)}>View/Run</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>Edit builder</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { void duplicate(form); }}>Duplicate</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>Compare</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { void publish(form); }} disabled={form.status === 'published'}>Publish</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { void changeStatus(form, 'archived'); }} disabled={form.status === 'archived'}>Archive</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}`)}>{t('forms.viewRun')}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>{t('forms.editBuilder')}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { void duplicate(form); }}>{t('forms.duplicate')}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/forms/${form.id}/builder`)}>{t('forms.compare')}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { void publish(form); }} disabled={form.status === 'published'}>{t('forms.publish')}</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { void changeStatus(form, 'archived'); }} disabled={form.status === 'archived'}>{t('forms.archive')}</DropdownMenuItem>
                           <DropdownMenuItem asChild>
-                            <a href={formQuestionnaireUrl(form.id)} download={`${form.name}.questionnaire.json`}>Export</a>
+                            <a href={formQuestionnaireUrl(form.id)} download={`${form.name}.questionnaire.json`}>{t('forms.export')}</a>
                           </DropdownMenuItem>
                           {form.status === 'published' ? (
                             <DropdownMenuItem
                               data-testid={`export-bundle-${form.id}`}
                               onClick={() => { void exportBundle(form); }}
                             >
-                              Export as marketplace bundle
+                              {t('forms.exportBundle')}
                             </DropdownMenuItem>
                           ) : null}
-                          <DropdownMenuItem onClick={() => setDeleting(form)}>Delete</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setDeleting(form)}>{t('forms.delete')}</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -365,9 +366,9 @@ export function Forms() {
         <ConfirmDialog
           open={deleting !== null}
           onOpenChange={(open) => { if (!open) setDeleting(null); }}
-          title="Delete form"
-          description={deleting ? `Delete ${deleting.name}? This cannot be undone.` : undefined}
-          confirmLabel="Delete"
+          title={t('forms.deleteTitle')}
+          description={deleting ? t('forms.deleteBody', { name: deleting.name }) : undefined}
+          confirmLabel={t('forms.delete')}
           destructive
           onConfirm={() => { void confirmDelete(); }}
         />

@@ -1,10 +1,10 @@
 # Formulários
 
-Os **formulários** são os ecrãs para introduzir dados à mão: um pedido de exames na receção, um registo de paciente, uma unidade. Cada formulário constrói-se no **Construtor de Formulários** a partir de campos, e cada campo pode corresponder a um elemento FHIR, para que o que se escreve se torne um registo a sério. Um formulário passa de **Draft** a **Published** e depois a **Archived**, para poder ser desenhado com segurança antes de alguém o usar.
+Os **formulários** são os ecrãs para introduzir dados à mão: um pedido de exames na receção, um registo de paciente, uma unidade. Cada formulário constrói-se no **Construtor de Formulários** a partir de campos, e cada campo pode corresponder a um elemento FHIR, para que o que se escreve se torne um registo a sério. Um formulário passa de **Rascunho** a **Publicado** e depois a **Arquivado**, para poder ser desenhado com segurança antes de alguém o usar.
 
 Uma instalação nova traz quatro formulários publicados: **Lab order**, **Patient**, **Users** e **Facility**. Este guia faz um pedido de exames com o formulário incluído, e depois constrói e publica um formulário seu. Leva cerca de 15 minutos. Selecione uma imagem ou um clip para o ampliar.
 
-O Construtor de Formulários aparece no idioma do studio. Os nomes dos campos do Lab order incluído, como **Tests** ou **Priority**, e os menus da página **Formulários** ficam em inglês. Este guia cita-os tal como aparecem.
+O Construtor de Formulários aparece no idioma do studio. Os nomes dos campos do Lab order incluído, como **Tests** ou **Priority**, ficam em inglês. Este guia cita-os tal como aparecem.
 
 ![Formulários: os quatro formulários incluídos, com tipo FHIR, número de campos, versão e estado.](forms-tour.png)
 
@@ -55,7 +55,7 @@ Construa um formulário mais curto para pedidos de carga viral a partir do pacot
 
 ![Dar nome ao formulário, escolher R4 e ServiceRequest, manter cinco campos do pacote e adicioná-los.](forms-build.mp4)
 
-1. Em **Formulários**, abra o menu **⋯** da página e selecione **New**. Abre-se o **Construtor de Formulários**.
+1. Em **Formulários**, abra o menu **⋯** da página e selecione **Novo**. Abre-se o **Construtor de Formulários**.
 2. Em **Nome do formulário**, escreva `Quick viral load request`.
 3. Defina **Versão FHIR** como **R4 (a mais comum)**.
 4. Defina **Tipo de recurso** como **ServiceRequest**. Escreva para filtrar a lista longa. O **Pacote Lab order** abre sozinho, com **9 de 9 selecionados**. Cada entrada diz porque está lá.
@@ -83,11 +83,11 @@ A pré-visualização nunca envia nada.
 
 1. Feche a pré-visualização. Abra **Ações do construtor** e selecione **Publicar**. Publish guarda primeiro o formulário, por isso não há um passo de guardar à parte.
 
-**Resultado esperado:** uma mensagem confirma, e o ponto de estado ao lado do nome fica verde com **v1**. Em **Formulários**, **Quick viral load request** aparece como **Published**, com **5** campos.
+**Resultado esperado:** uma mensagem confirma, e o ponto de estado ao lado do nome fica verde com **v1**. Em **Formulários**, **Quick viral load request** aparece como **Publicado**, com **5** campos.
 
 ![O formulário novo na lista, Published.](forms-list-published.png)
 
-Para o retirar, abra o menu **⋯** da linha e selecione **Delete**.
+Para o retirar, abra o menu **⋯** da linha e selecione **Eliminar**.
 
 ## O ciclo de vida
 

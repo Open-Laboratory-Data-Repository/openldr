@@ -47,6 +47,34 @@ describe('Forms page', () => {
     vi.mocked(toast.error).mockReset();
   });
 
+  it('shows the page, its menus and the status badge in French', async () => {
+    const i18n = (await import('@/i18n')).default;
+    await i18n.changeLanguage('fr');
+    try {
+      render(<MemoryRouter><Forms /></MemoryRouter>);
+      expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
+      const formRow = screen.getByText('Specimen intake').closest('tr')!;
+      expect(within(formRow).getByText('Brouillon')).toBeInTheDocument();
+      expect(within(formRow).getByText('Actif')).toBeInTheDocument();
+
+      const header = screen.getByRole('button', { name: 'Actions des formulaires' });
+      fireEvent.pointerDown(header, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Nouveau')) fireEvent.keyDown(header, { key: 'Enter' });
+      expect(await screen.findByText('Nouveau')).toBeInTheDocument();
+      expect(screen.getByText('Importer')).toBeInTheDocument();
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+      const row = screen.getByRole('button', { name: 'Actions pour Specimen intake' });
+      fireEvent.pointerDown(row, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByText('Dupliquer')) fireEvent.keyDown(row, { key: 'Enter' });
+      expect(await screen.findByText('Dupliquer')).toBeInTheDocument();
+      expect(screen.getByText('Modifier dans le générateur')).toBeInTheDocument();
+      expect(screen.getByText('Supprimer')).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('publishing from a row reports which form was published', async () => {
     render(<MemoryRouter><Forms /></MemoryRouter>);
     expect(await screen.findByText('Specimen intake')).toBeInTheDocument();
