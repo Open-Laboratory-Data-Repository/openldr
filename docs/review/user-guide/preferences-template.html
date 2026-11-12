@@ -1,7 +1,7 @@
 <style>
 #preferences-evidence-guide { --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
 #preferences-evidence-guide * { box-sizing:border-box; }
-#preferences-evidence-guide .dg-app { display:flex; flex-direction:column; height:840px; min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#preferences-evidence-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
 #preferences-evidence-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
 #preferences-evidence-guide .dg-head strong { font-size:16px; font-weight:600; }
 #preferences-evidence-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
@@ -81,13 +81,7 @@
   <div class="dg-main">
    <aside class="dg-sidebar">
     <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><i data-lucide="panel-left-close" aria-hidden="true"></i></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
-    <nav class="dg-docnav" aria-label="Proposed documentation sections">
-     <div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem" href="start-here-review.html">Start here</a></div>
-     <div class="dg-group"><span class="dg-group-label">Set up your lab</span><span class="dg-navitem">Terminology</span><span class="dg-navitem">Facilities</span><span class="dg-navitem">Test catalog</span><span class="dg-navitem">Forms</span><span class="dg-navitem">Workflows</span></div>
-     <div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><span class="dg-navitem">Activity</span></div>
-     <div class="dg-group"><span class="dg-group-label">Build and manage</span><span class="dg-navitem">Custom Queries</span><span class="dg-navitem">Report Designer</span><span class="dg-navitem">Users and Roles</span><span class="dg-navitem">Settings</span></div>
-     <div class="dg-group"><span class="dg-group-label">Personal settings</span><a class="dg-navitem dg-selected" href="#dg-top" aria-current="page">Your preferences</a><span class="dg-navitem">Layouts</span></div>
-    </nav>
+    __PREVIEW_NAVIGATION__
    </aside>
    <section class="dg-content">
     <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><i data-lucide="panel-left-open" aria-hidden="true"></i></button><span class="dg-version">Version <b>0.1.8</b></span><i data-lucide="download" aria-hidden="true"></i></div>
@@ -107,7 +101,7 @@
 (() => {
  const root = document.getElementById('preferences-evidence-guide');
  const assets = JSON.parse(document.getElementById('preferences-evidence-assets').textContent);
- root.querySelectorAll('img[data-evidence]').forEach(img=>{img.src=assets[img.dataset.evidence];});
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
  const pane = root.querySelector('[data-reading-pane]');
  let previewTheme='dark';
  function applyTheme(){root.style.colorScheme=previewTheme;root.querySelector('[data-theme-toggle]').setAttribute('aria-label','Switch to '+(previewTheme==='dark'?'light':'dark')+' mode');}

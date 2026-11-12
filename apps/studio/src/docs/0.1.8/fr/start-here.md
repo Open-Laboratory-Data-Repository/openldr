@@ -4,6 +4,8 @@ OpenLDR Studio est l'application web pour les dossiers de votre laboratoire. Uti
 
 Ouvrez d'abord Studio. Si un guide vous demande d'exécuter une commande, suivez les instructions ci-dessous. Aucune donnée d'exemple n'est nécessaire.
 
+La configuration des établissements, du catalogue de tests et des paramètres des patients est facultative. OpenLDR peut recevoir et traiter les données avant leur configuration. Nous recommandons fortement de les configurer au cours de l'utilisation du système. Commencez par consulter [Terminologie](/docs/terminology), puis suivez **Configurer votre système** dans le menu de la documentation.
+
 ## Ouvrir Studio
 
 Ouvrez l'adresse Studio de votre installation dans votre navigateur, puis connectez-vous avec votre compte.

@@ -1,0 +1,147 @@
+{
+  "capturedAt": "2026-11-12T07:18:52.692Z",
+  "scale": 4,
+  "source": "Live Studio and live API. Lossless PNG. Logical coordinates retained.",
+  "steps": [
+    {
+      "id": "dashboard-builder",
+      "path": "high-resolution/dashboard-reference/dashboard-builder.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 32,
+          "y": 32,
+          "width": 1216,
+          "height": 736
+        }
+      ]
+    },
+    {
+      "id": "dashboard-chart-types",
+      "path": "high-resolution/dashboard-reference/dashboard-chart-types.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 896,
+          "y": 0,
+          "width": 384,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "id": "dashboard-menu-edit",
+      "path": "high-resolution/dashboard-reference/dashboard-menu-edit.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1030,
+          "y": 98,
+          "width": 234,
+          "height": 366
+        }
+      ]
+    },
+    {
+      "id": "dashboard-filter-editor",
+      "path": "high-resolution/dashboard-reference/dashboard-filter-editor.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 840,
+          "y": 0,
+          "width": 440,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "id": "dashboard-raw-sql-setting",
+      "path": "high-resolution/dashboard-reference/dashboard-raw-sql-setting.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 465,
+          "y": 482.046875,
+          "width": 798,
+          "height": 236
+        }
+      ]
+    },
+    {
+      "id": "dashboard-delete-confirm",
+      "path": "high-resolution/dashboard-reference/dashboard-delete-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 416,
+          "y": 285.734375,
+          "width": 448,
+          "height": 228.53125
+        }
+      ]
+    },
+    {
+      "id": "dashboard-phone",
+      "path": "high-resolution/dashboard-reference/dashboard-phone.png",
+      "source_dimensions": [
+        390,
+        844
+      ],
+      "pixel_dimensions": [
+        1560,
+        3376
+      ],
+      "focus": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 390,
+          "height": 844
+        }
+      ]
+    }
+  ]
+}

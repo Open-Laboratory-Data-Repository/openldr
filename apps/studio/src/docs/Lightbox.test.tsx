@@ -16,15 +16,15 @@ describe('Lightbox', () => {
     render(<Lightbox image={{ url: '/assets/open.png', alt: 'Open Dashboard', focus: 'dashboard-create-open.png' }} onClose={() => {}} />);
     const img = screen.getByAltText('Open Dashboard');
     const frame = img.parentElement!.parentElement!;
-    expect(frame).toHaveStyle({ aspectRatio: '8 / 5' });
-    expect(img).toHaveStyle({ filter: 'blur(1.25px)' });
+    expect(frame).toHaveStyle({ aspectRatio: '8 / 5', containerType: 'inline-size' });
+    expect(img).toHaveStyle({ filter: 'blur(.25cqw)' });
     const sharp = img.nextElementSibling!.querySelector('img')!;
     expect(sharp.style.clipPath).toContain('inset(');
     expect(screen.getByText('1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     expect(screen.getByText('150%')).toBeInTheDocument();
     expect(frame.parentElement).toHaveStyle({ width: '150%' });
-    expect(img).toHaveStyle({ filter: 'blur(1.25px)' });
+    expect(img).toHaveStyle({ filter: 'blur(.25cqw)' });
     expect(sharp.style.clipPath).toContain('inset(');
   });
   it('keeps the themed illustration surround while zooming', () => {

@@ -2,6 +2,8 @@
 
 **Pacientes** lista todos os pacientes que o OpenLDR recebeu com dados de laboratório, e onde foram testados. O sistema de origem, como um sistema hospitalar ou de laboratório, é o dono de cada paciente. O OpenLDR mostra os pacientes e nunca os altera.
 
+As definições de pacientes são opcionais. O OpenLDR recebe os registos dos pacientes com os dados laboratoriais, sem exigir que atribua nomes aos sistemas de identificadores primeiro. Recomendamos vivamente que configure estas definições e reveja possíveis duplicados durante a utilização do sistema.
+
 Este guia leva cerca de 15 minutos. Usa os dados de exemplo da documentação, por isso carregue-os primeiro. Selecione uma imagem ou um clip para o ampliar.
 
 ![Pacientes com os dados de exemplo carregados: 25 pacientes.](patients-list.png)

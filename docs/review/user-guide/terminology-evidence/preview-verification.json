@@ -1,0 +1,22 @@
+{
+  "steps": 47,
+  "screenshotFrames": 56,
+  "sourceCaptures": 53,
+  "allStepsIllustrated": true,
+  "missingImages": 0,
+  "sameExpandedImageAndCrop": true,
+  "backgroundBlur": "1.25px",
+  "desktopFrame": [
+    498,
+    311.25
+  ],
+  "phoneFrame": [
+    305,
+    190.625
+  ],
+  "phoneWidth": 375,
+  "horizontalOverflow": false,
+  "clippedStepMarkersAt1280": 0,
+  "clippedStepMarkersAt375": 0,
+  "themeToggleVerified": true
+}

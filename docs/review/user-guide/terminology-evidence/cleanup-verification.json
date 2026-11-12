@@ -1,0 +1,18 @@
+{
+  "removed": [
+    {
+      "type": "valuesets",
+      "id": "vs-67d734be-79f3-44de-99c0-c545d566b7b7",
+      "url": "urn:example:docs-guide-review-values-20261112"
+    },
+    {
+      "type": "systems",
+      "id": "cs-eae51873-d3e1-4ff0-9c27-79acb0d3cfd5",
+      "url": "urn:example:docs-guide-review-20261112"
+    }
+  ],
+  "remainingSystems": 514,
+  "remainingValueSets": 690,
+  "originalSystemIdsUnchanged": true,
+  "originalValueSetIdsUnchanged": true
+}

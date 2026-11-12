@@ -30,6 +30,17 @@ irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/ma
 
 Pour arrêter la pile, lancez `docker compose down` dans le dossier `openldr/` créé par l'installateur. Pour la redémarrer, lancez `docker compose up -d` dans le même dossier.
 
+## Configurer votre système
+
+OpenLDR peut recevoir et traiter les données avant la configuration des établissements, du catalogue de tests ou des paramètres des patients. Ces tâches sont facultatives. Nous recommandons fortement de les réaliser au cours de l'utilisation du système.
+
+- Les établissements associent des noms et des lieux cohérents aux codes.
+- Le catalogue de tests rapproche les tests de différentes sources et fournit les choix du formulaire Lab order.
+- Les paramètres des patients nomment les systèmes d'identifiants et facilitent la vérification des doublons possibles.
+
+Ouvrez **Documentation** dans Studio et suivez **Configurer votre système**, en commençant par Terminologie. Les guides intégrés expliquent chaque tâche.
+
+
 ## 3. Étapes suivantes
 
 - [Charger et envoyer des données](/docs/load-data) : envoyez vos premières données de laboratoire dans OpenLDR.

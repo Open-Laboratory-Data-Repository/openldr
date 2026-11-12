@@ -1,0 +1,82 @@
+[
+  {
+    "page": "terminology",
+    "loadedImages": 110,
+    "enlarged": {
+      "native": [
+        5120,
+        3200
+      ],
+      "display": [
+        2202,
+        1376
+      ],
+      "blur": "blur(5.50398px)"
+    },
+    "mobile": {
+      "viewport": 812,
+      "height": 812,
+      "horizontalOverflow": false
+    }
+  },
+  {
+    "page": "preferences",
+    "loadedImages": 30,
+    "enlarged": {
+      "native": [
+        5120,
+        3200
+      ],
+      "display": [
+        2202,
+        1376
+      ],
+      "blur": "blur(5.50398px)"
+    },
+    "mobile": {
+      "viewport": 812,
+      "height": 812,
+      "horizontalOverflow": false
+    }
+  },
+  {
+    "page": "dashboard",
+    "loadedImages": 65,
+    "enlarged": {
+      "native": [
+        5120,
+        3200
+      ],
+      "display": [
+        2202,
+        1376
+      ],
+      "blur": "blur(5.50398px)"
+    },
+    "mobile": {
+      "viewport": 812,
+      "height": 812,
+      "horizontalOverflow": false
+    }
+  },
+  {
+    "page": "start-here",
+    "loadedImages": 14,
+    "enlarged": {
+      "native": [
+        2944,
+        1664
+      ],
+      "display": [
+        2434,
+        1350
+      ],
+      "blur": null
+    },
+    "mobile": {
+      "viewport": 812,
+      "height": 812,
+      "horizontalOverflow": false
+    }
+  }
+]

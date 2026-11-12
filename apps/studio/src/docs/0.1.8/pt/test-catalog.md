@@ -2,6 +2,8 @@
 
 O **catálogo de exames** é a lista nacional de exames. Cada exame tem um código, um nome, uma categoria, os tipos de amostra que aceita e, quando o tem, um código LOINC. Um exame sem código LOINC mostra **Sem LOINC**.
 
+A configuração do catálogo de testes é opcional. O OpenLDR pode receber e processar dados antes desta configuração. Recomendamos vivamente que a faça durante a utilização do sistema, para relacionar testes de diferentes fontes. As opções de testes do formulário Lab order usam o catálogo configurado.
+
 O catálogo tem três funções. Decide que exames o formulário **Lab order** oferece. Deixa os relatórios contar um exame da mesma forma, seja qual for o nome que cada sistema de laboratório lhe dá. E guarda os parâmetros de resultado e os intervalos de referência de cada exame.
 
 Uma instalação nova não traz exames. Este guia carrega uma pequena lista de exemplo, ativa alguns exames e associa-lhes os dados de exemplo da documentação. Leva cerca de 15 minutos. Selecione uma imagem ou um clip para o ampliar.

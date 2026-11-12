@@ -1,151 +1,406 @@
 # Terminologia
 
-A **Terminologia** guarda os códigos que o OpenLDR entende: códigos de exames, tipos de amostra, motivos de recusa, países, tipos de unidade, e os grandes sistemas externos como LOINC e SNOMED CT quando os carrega. Os formulários, o catálogo de exames, as unidades e os relatórios leem daqui os seus códigos, por isso um código mudado aqui muda o que eles oferecem.
+Encontre os códigos do seu laboratório, adicione as suas listas e escolha os códigos aceites por um formulário. Comece por consultar as listas já instaladas.
 
-A página tem três níveis. Os **editores** (Publishers), à esquerda, agrupam os sistemas de códigos por quem os mantém. Um **sistema de códigos** (code system) é uma lista de códigos, como os motivos de recusa de um exame. Um **termo** (term) é um código dessa lista, com o nome de apresentação. Os **value sets** escolhem códigos de um ou mais sistemas para um uso concreto, como as respostas que um campo de formulário aceita.
+Um **publicador** agrupa listas pela entidade que as mantém. Um **sistema de códigos** contém termos codificados. Um **conjunto de valores** seleciona os códigos permitidos para uma utilização, como um campo de formulário.
 
-A página Terminologia e os seus painéis estão só em inglês, por isso este guia mantém os rótulos em inglês. Leva cerca de 10 minutos. Selecione uma imagem ou um clip para o ampliar.
+Não precisa dos dados de exemplo da documentação. As capturas usam uma lista integrada e um exemplo temporário chamado `DOCS-GUIDE-REVIEW`. Use os seus nomes, códigos e URLs ao criar listas para o laboratório.
 
-![Terminologia, editor System: os sistemas de códigos desta instalação, com URL e origem.](terminology-tour.png)
+A leitura exige permissão para consultar terminologia. Criar, alterar e importar exige permissão para gerir terminologia.
 
-## Quem pode fazer o quê
+## Encontrar um código e consultar os detalhes
 
-| Capacidade | O que permite |
-| --- | --- |
-| **Browse terminology** | Abrir a Terminologia e ler editores, sistemas de códigos, termos e value sets |
-| **Manage terminology** | Adicionar, editar e eliminar editores, sistemas de códigos, termos e value sets, e importar |
+Procure um código existente antes de criar outro. Este exemplo encontra um motivo de rejeição de teste no sistema integrado REJECT-TEST.
 
-## O que tem uma instalação nova
+### 1. Abrir Terminologia
 
-O editor **System** guarda os sistemas de códigos que o OpenLDR instala e mantém, como **REJECT-TEST** (motivos de recusa de um exame), **REJECT-ORDER** (motivos de recusa de um pedido), **TEST-CATALOG**, **TEST-CATEGORY**, **FACILITY-TYPE** e **ISO-3166** (países). Outros aparecem com o trabalho. Importar um registo de unidades, como em [Unidades](/docs/facilities), junta duas listas dos níveis e estados observados desse registo.
+Selecione **Terminologia** no menu principal à esquerda.
 
-**HL7 FHIR** guarda os value sets padrão do FHIR. **LOINC**, **SNOMED CT**, **WHO · ICD-10**, **WHO · ICD-11**, **UCUM** e **RxNorm** estão vazios até os carregar. Cada um mostra **No code systems or value sets yet**.
+![Captura do Studio: Abrir Terminologia](terminology-guide-open-terminology.png)
 
-## Exemplo 1: percorrer um sistema de códigos
+### 2. Escolher o publicador
 
-![Abrir REJECT-TEST a partir do editor System.](terminology-browse.mp4)
+Selecione o publicador que mantém a lista. Neste exemplo, escolha **System**.
 
-1. Abra **Terminologia**. O editor **System** está selecionado, no separador **Code systems**.
-2. Selecione a linha **REJECT-TEST**.
+![Captura do Studio: Escolher o publicador](terminology-guide-choose-publisher.png)
 
-**Resultado esperado:** quatro termos, todos **ACTIVE**: `CLOTTED` Clotted, `CONTAINER` Wrong container, `HAEM` Haemolysed, e `QNS` Insufficient volume. São os motivos que um laboratório pode dar para recusar um exame de um Lab order.
+### 3. Selecionar Code systems
 
-A pesquisa filtra os termos por código ou nome. A lista de estados mostra também os termos retirados. **← Code systems** volta à lista.
+Se o publicador oferecer os dois tipos de lista, selecione **Code systems** junto ao nome.
 
-## Exemplo 2: adicionar um motivo de recusa
+![Captura do Studio: Selecionar Code systems](terminology-guide-code-systems-tab.png)
 
-Adicione **Unlabelled specimen** como motivo de recusa de um exame, e veja-o no Lab order.
+### 4. Abrir um sistema de códigos
 
-![Adicionar UNLABELLED, Unlabelled specimen, a REJECT-TEST.](terminology-add-term.mp4)
+Selecione a lista a consultar. Este exemplo abre **REJECT-TEST**.
 
-1. Com **REJECT-TEST** aberto, abra o menu **⋯** da página. Selecione **Term** e depois **New**. Abre-se o painel **New term**.
-2. Em **Code**, escreva `UNLABELLED`. Em **Display name**, escreva `Unlabelled specimen`. Deixe **Status** em **Active**.
-3. Abra o menu **⋯** do painel e guarde.
+![Captura do Studio: Abrir um sistema de códigos](terminology-guide-choose-code-system.png)
 
-**Resultado esperado:** **5 terms**, com **UNLABELLED** Unlabelled specimen no fim.
+### 5. Pesquisar pelo código ou nome
 
+Introduza parte do código ou nome em **Search terms…**. Este exemplo usa `HAEM`.
 
-Abra agora o Lab order: **Formulários**, **Lab order**, **View/Run**. Escolha um exame, abra o menu **⋯** da linha e selecione **Recusar com motivo**. **Unlabelled specimen** está na lista, com o código.
+![Captura do Studio: Pesquisar pelo código ou nome](terminology-guide-search-terms.png)
 
-![A lista de recusa do Lab order oferece agora Unlabelled specimen.](terminology-reason-in-order.png)
+**Resultado esperado:** a lista mostra os termos correspondentes deste sistema. O filtro de estado permite reduzir os resultados.
 
-Para retirar o motivo, abra o menu **⋯** da linha na Terminologia e selecione **Delete**. A outra entrada desse menu é **View**.
+![Captura do Studio: Pesquisar pelo código ou nome](terminology-guide-search-result.png)
 
-## Exemplo 3: ler os value sets
+### 6. Abrir o termo
 
-![O separador Value sets do editor System.](terminology-value-sets.png)
+Selecione a linha. O painel **Edit term** mostra o código, o nome, o estado e os outros detalhes.
 
-1. Abra **Terminologia** e selecione o separador **Value sets**.
+![Captura do Studio: Abrir o termo](terminology-guide-open-term.png)
 
-**Resultado esperado:** 17 value sets, como **Biological Sex** (4 códigos), **Country** (249), **Facility Type** (63), **Test rejection reasons** e **This lab's tests**.
+![Captura do Studio: Abrir o termo](terminology-guide-term-details.png)
 
-Um value set que leva um sistema de códigos inteiro, ou que o OpenLDR calcula na hora, não guarda códigos. **Codes** e o seu painel mostram a lista calculada, a mesma que os formulários oferecem. **Test rejection reasons** e **This lab's tests** estão nesse caso. A linha de comandos lê a mesma lista:
+### 7. Fechar o painel
 
-```bash
-./openldr terminology expand urn:openldr:valueset:test-reject-reason
-./openldr terminology expand urn:openldr:valueset:lab-tests
+Selecione **Close** no canto superior direito para sair sem guardar alterações.
+
+![Captura do Studio: Fechar o painel](terminology-guide-close-term.png)
+
+## Criar um sistema de códigos para a sua lista
+
+Crie um sistema de códigos quando a lista necessária ainda não existir. Escolha primeiro o publicador. As capturas usam System e mantêm Active selecionado.
+
+**System code** é o identificador curto e não pode mudar depois da criação. **System name** é o nome legível. **Canonical URL** identifica a lista nas trocas com outros sistemas. Pode ficar vazio numa lista personalizada.
+
+### 1. Abrir o menu da página
+
+Selecione os três pontos à direita do percurso do publicador, acima da tabela.
+
+![Captura do Studio: Abrir o menu da página](terminology-guide-system-actions.png)
+
+### 2. Abrir Code system
+
+Selecione **Code system** no menu.
+
+![Captura do Studio: Abrir Code system](terminology-guide-code-system-menu.png)
+
+### 3. Escolher New
+
+Selecione **New**. Abre-se o painel **New coding system**.
+
+![Captura do Studio: Escolher New](terminology-guide-new-code-system.png)
+
+### 4. Introduzir o código do sistema
+
+Introduza um código único em **System code**. O exemplo usa `DOCS-GUIDE-REVIEW`.
+
+![Captura do Studio: Introduzir o código do sistema](terminology-guide-system-code.png)
+
+### 5. Introduzir o nome
+
+Introduza o nome a apresentar em **System name**.
+
+![Captura do Studio: Introduzir o nome](terminology-guide-system-name.png)
+
+### 6. Introduzir o URL canónico, se necessário
+
+Introduza o identificador da sua organização em **Canonical URL**. Numa lista personalizada, pode deixar o campo vazio.
+
+![Captura do Studio: Introduzir o URL canónico, se necessário](terminology-guide-system-url.png)
+
+### 7. Criar o sistema de códigos
+
+Selecione **Create** na parte inferior deste painel.
+
+![Captura do Studio: Criar o sistema de códigos](terminology-guide-create-system.png)
+
+**Resultado esperado:** o novo sistema aparece no publicador escolhido. Abra a linha para adicionar termos.
+
+![Captura do Studio: Criar o sistema de códigos](terminology-guide-system-created-step-0.png)
+
+## Adicionar um termo
+
+Adicione um código e o seu nome legível a um sistema existente. O código deve ser único nesse sistema. Os novos termos começam como Active. O nome curto, a classe, a unidade e os metadados são opcionais.
+
+### 1. Abrir o sistema de destino
+
+Selecione o sistema que deve conter o termo. Use uma lista existente ou a criada acima.
+
+![Captura do Studio: Abrir o sistema de destino](terminology-guide-system-created-step-1.png)
+
+### 2. Abrir o menu dos termos
+
+Selecione os três pontos junto de **Search terms…** e do filtro de estado.
+
+![Captura do Studio: Abrir o menu dos termos](terminology-guide-term-actions-step-2.png)
+
+### 3. Escolher New term
+
+Selecione **New term**.
+
+![Captura do Studio: Escolher New term](terminology-guide-new-term.png)
+
+### 4. Introduzir o código
+
+Introduza o valor a guardar em **Code**. O exemplo usa `EXAMPLE-1`.
+
+![Captura do Studio: Introduzir o código](terminology-guide-term-code.png)
+
+### 5. Introduzir o nome apresentado
+
+Introduza um nome legível em **Display name**.
+
+![Captura do Studio: Introduzir o nome apresentado](terminology-guide-term-display.png)
+
+### 6. Abrir o menu do editor de termos
+
+Selecione os três pontos junto dos separadores **Details** e **Mappings**.
+
+![Captura do Studio: Abrir o menu do editor de termos](terminology-guide-term-sheet-actions-step-6.png)
+
+### 7. Escolher Create
+
+Selecione **Create** para guardar o novo termo.
+
+![Captura do Studio: Escolher Create](terminology-guide-create-term.png)
+
+**Resultado esperado:** o painel fecha e o termo aparece no sistema de códigos.
+
+![Captura do Studio: Escolher Create](terminology-guide-term-created.png)
+
+## Alterar o nome apresentado de um termo
+
+Corrija o nome legível quando necessário. O código guardado mantém-se.
+
+### 1. Abrir o termo
+
+Selecione a linha do termo no sistema de códigos.
+
+![Captura do Studio: Abrir o termo](terminology-guide-edit-term-row.png)
+
+### 2. Alterar Display name
+
+Substitua o texto de **Display name**. O exemplo usa `Updated example label`.
+
+![Captura do Studio: Alterar Display name](terminology-guide-edit-term-name.png)
+
+### 3. Abrir o menu do editor de termos
+
+Selecione os três pontos junto de **Details** e **Mappings**.
+
+![Captura do Studio: Abrir o menu do editor de termos](terminology-guide-term-sheet-actions-step-3.png)
+
+### 4. Escolher Save
+
+Selecione **Save**. Os termos existentes usam Save e os novos termos usam Create.
+
+![Captura do Studio: Escolher Save](terminology-guide-save-term.png)
+
+**Resultado esperado:** a lista apresenta o novo nome junto do mesmo código.
+
+![Captura do Studio: Escolher Save](terminology-guide-term-updated.png)
+
+## Importar vários termos de um ficheiro
+
+Use a importação se já tiver uma lista de códigos e nomes. Abra primeiro o sistema de destino.
+
+O modelo descarregado usa **JSON Lines**, um objeto JSON por linha. Cada termo precisa de `code` e `displayName`. A linha de metadados identifica o sistema de códigos. Por exemplo:
+
+```jsonl
+{"type":"meta","codingSystem":"DOCS-GUIDE-REVIEW","version":"2026-01-01"}
+{"code":"EXAMPLE-2","displayName":"Imported example label"}
 ```
 
-Com o catálogo de exemplo ativado, como em [Catálogo de exames, Exemplo 2](/docs/test-catalog#exemplo-2-ativar-exames-neste-laboratorio), a segunda mostra `5 total; CREAT, FBC, GLU, HIV-VL, MAL-RDT`. É a lista que o campo **Tests** do Lab order oferece.
+Use o identificador do seu sistema e os seus termos. São permitidas linhas vazias e linhas iniciadas por `//`.
 
-Um value set padrão é só de leitura. O painel diz para o duplicar para o alterar.
+### 1. Abrir o menu dos termos
 
-## Importar termos
+Selecione os três pontos junto de **Search terms…**.
 
-O menu **⋯** da página, em **Term**, tem **Import terms…** e **Download template**. O modelo é um ficheiro de texto com um objeto JSON por linha:
+![Captura do Studio: Abrir o menu dos termos](terminology-guide-term-actions-step-1.png)
 
-```text
-{"type":"meta","codingSystem":"REJECT-TEST","version":"2026-01-01"}
-{"code":"LEAKED","displayName":"Leaking container"}
-```
+### 2. Descarregar o modelo, se necessário
 
-`code` e `displayName` são obrigatórios. `shortName`, `class`, `unit`, `status` e `metadata` são opcionais. As linhas vazias e as que começam por `//` são ignoradas. Um CSV com as colunas `code` e `display` também é lido.
+Selecione **Download template**. Prepare o ficheiro com os campos e exemplos do modelo.
 
-Uma linha sem `code` ou sem `displayName` para a importação. A mensagem indica a linha, e nada é importado.
+![Captura do Studio: Descarregar o modelo, se necessário](terminology-guide-download-template.png)
 
-Os grandes sistemas externos carregam-se na linha de comandos:
+### 3. Escolher Import terms
 
-```bash
-./openldr terminology import loinc <path> --accept-license
-./openldr terminology distribution import snomed --file <snomed.zip> --accept-license
-```
+Abra novamente o menu dos termos e selecione **Import terms**.
 
-## De onde vem um sistema de códigos
+![Captura do Studio: Escolher Import terms](terminology-guide-import-terms.png)
 
-A tabela de sistemas de códigos mostra uma descrição por baixo de cada nome, quando o sistema a tem, e uma coluna **Source**:
+### 4. Selecionar o ficheiro preparado
 
-- **OpenLDR**: o CE instala-o e mantém-no. Não pode ser eliminado.
-- **Received data**: o CE criou-o ao projetar dados recebidos, por exemplo os códigos de laboratório vistos nos resultados.
-- **Imported**: um administrador importou-o, nesta página ou com `openldr terminology import resource`.
-- **Content pack**: um pacote de conteúdo instalou-o. O pacote e a versão aparecem por baixo da etiqueta.
-- **Facility register**: um registo de unidades. As unidades estão em Unidades.
-- **Created here**: um administrador criou-o nesta página.
+Escolha o ficheiro na janela do computador. A importação começa após a seleção. A captura mostra o resultado depois de selecionar o ficheiro de exemplo.
 
-Um sistema importado recebe o nome e a descrição do `title` (ou `name`) e da `description` do recurso. `openldr terminology system list` mostra a mesma origem na última coluna.
+![Captura do Studio: Selecionar o ficheiro preparado](terminology-guide-import-result.png)
 
-## Catálogo de exames e categorias
+**Resultado esperado:** os códigos importados aparecem neste sistema. A pesquisa permite encontrar um código específico.
 
-Cada instalação tem dois sistemas de códigos no editor System. **Test catalog** guarda a lista nacional de exames. **Test categories** guarda as categorias a que um exame pode pertencer, começando por Chemistry, Haematology, Microbiology, Serology e Molecular. Adicione ou mude o nome de categorias aqui.
+## Consultar os códigos permitidos por um conjunto de valores
 
-Um exame do catálogo tem também uma categoria e tipos de amostra que esta página não mostra. O código LOINC é um mapeamento, no separador Mappings do termo. Editar um exame aqui mantém a categoria, as amostras e a ligação LOINC. Um termo adicionado aqui não tem categoria nem amostras. Num laboratório que recebe o catálogo do central, a próxima alteração do central substitui qualquer edição feita aqui.
+Consulte um conjunto de valores para saber as respostas que um campo pode oferecer. As regras **Include** e **Exclude** definem a lista. **Expansion** apresenta os códigos obtidos.
 
-## Na linha de comandos
+### 1. Voltar à lista de sistemas
 
-```bash
-./openldr terminology system list
-./openldr terminology term list urn:openldr:cs:reject-test
-./openldr terminology lookup urn:openldr:cs:reject-test HAEM
-./openldr terminology expand urn:openldr:valueset:test-reject-reason
-./openldr terminology valueset list
-```
+Se estiver aberta uma lista de termos, selecione **← Code systems**.
 
-`system list` mostra a origem de cada sistema na última coluna. `term list` mostra os quatro termos de REJECT-TEST e o estado. `lookup` mostra um código, aqui `HAEM: Haemolysed`. `validate-code --code HAEM --valueset urn:openldr:valueset:test-reject-reason` mostra `true: HAEM is in urn:openldr:valueset:test-reject-reason`.
+![Captura do Studio: Voltar à lista de sistemas](terminology-guide-back-to-systems.png)
 
-## O que usar e quando
+### 2. Selecionar Value sets
 
-- Use **termos** para valores codificados isolados.
-- Use **value sets** quando um campo de formulário precisa de uma lista fechada de respostas.
-- Use **índices de ontologia** quando é preciso hierarquia, relações ou exploração de conceitos. Vêm com as distribuições LOINC, SNOMED CT e RxNorm.
-- Ligue cedo os formulários à terminologia, para que os dados enviados sejam coerentes o bastante para relatórios e fluxos.
+Selecione **Value sets** junto ao nome do publicador. Este exemplo usa System.
 
-## Num telemóvel
+![Captura do Studio: Selecionar Value sets](terminology-guide-value-sets-tab.png)
 
-Num telemóvel, a lista de editores começa recolhida, para deixar a largura à tabela. Abra-a com **Show publishers**, o botão no topo da lista, para escolher um editor, e depois recolha-a. A tabela desliza para o lado até ao menu **⋯** de cada linha.
+### 3. Abrir um conjunto de valores
+
+Selecione a linha. Este exemplo abre **Test rejection reasons**.
+
+![Captura do Studio: Abrir um conjunto de valores](terminology-guide-open-value-set.png)
+
+### 4. Ler Expansion
+
+Desloque-se até **Expansion** para consultar os códigos produzidos pelas regras.
+
+![Captura do Studio: Ler Expansion](terminology-guide-value-set-expansion.png)
+
+**Resultado esperado:** pode consultar os códigos permitidos sem alterar o conjunto. A quantidade depende dos sistemas e regras da instalação.
+
+## Criar uma lista de códigos permitidos
+
+Crie um conjunto de valores para oferecer uma lista controlada de códigos. Este exemplo inclui todos os códigos de um sistema. Deixe a lista de conceitos vazia para incluir o sistema inteiro. O exemplo permanece Draft enquanto é preparado.
+
+### 1. Abrir o menu da página
+
+Feche primeiro qualquer painel de edição. Selecione os três pontos junto ao percurso do publicador.
+
+![Captura do Studio: Abrir o menu da página](terminology-guide-value-set-page-actions.png)
+
+### 2. Abrir Value set
+
+Selecione **Value set** no menu.
+
+![Captura do Studio: Abrir Value set](terminology-guide-value-set-menu.png)
+
+### 3. Escolher New
+
+Selecione **New** para abrir o editor.
+
+![Captura do Studio: Escolher New](terminology-guide-new-value-set.png)
+
+### 4. Introduzir o URL do conjunto
+
+Introduza uma **Canonical URL** única. Use um URL diferente do sistema de códigos.
+
+![Captura do Studio: Introduzir o URL do conjunto](terminology-guide-value-set-url.png)
+
+### 5. Introduzir um título legível
+
+Introduza o nome da lista de códigos permitidos em **Title**.
+
+![Captura do Studio: Introduzir um título legível](terminology-guide-value-set-title.png)
+
+### 6. Escolher o sistema de códigos de origem
+
+Em **Include**, abra **System** e escolha a lista que contém os termos.
+
+![Captura do Studio: Escolher o sistema de códigos de origem](terminology-guide-value-set-system.png)
+
+![Captura do Studio: Escolher o sistema de códigos de origem](terminology-guide-value-set-system-selection.png)
+
+### 7. Abrir o menu do editor
+
+Selecione os três pontos no canto superior direito do editor do conjunto de valores.
+
+![Captura do Studio: Abrir o menu do editor](terminology-guide-value-set-actions.png)
+
+### 8. Escolher Save
+
+Selecione **Save**. O editor calcula a expansão depois de guardar.
+
+![Captura do Studio: Escolher Save](terminology-guide-save-value-set.png)
+
+**Resultado esperado:** Expansion apresenta os códigos ativos do sistema escolhido. O exemplo contém dois códigos.
+
+![Captura do Studio: Escolher Save](terminology-guide-value-set-created.png)
+
+Um conjunto de valores também pode incluir conceitos específicos, excluir códigos ou importar outro conjunto. Criá-lo não o associa automaticamente a um formulário. Consulte o [guia de Formulários](/docs/forms) para configurar os campos.
+
+## Abrir a importação de uma distribuição padrão
+
+LOINC, SNOMED CT e RxNorm têm uma importação de distribuições ZIP no navegador. Use-a para o pacote fornecido pelo publicador, em vez de uma pequena lista de termos locais.
+
+### 1. Escolher o publicador externo
+
+Selecione **LOINC**, **SNOMED CT** ou **RxNorm**. A captura usa LOINC.
+
+![Captura do Studio: Escolher o publicador externo](terminology-guide-standard-publisher.png)
+
+### 2. Abrir o menu da página
+
+Selecione os três pontos à direita do percurso do publicador.
+
+![Captura do Studio: Abrir o menu da página](terminology-guide-standard-actions.png)
+
+### 3. Escolher Import distribution...
+
+Selecione **Import distribution...**.
+
+![Captura do Studio: Escolher Import distribution...](terminology-guide-import-distribution.png)
+
+**Resultado esperado:** abre-se o painel de importação. Inclui um campo ZIP, uma versão opcional e a confirmação da licença. A importação decorre em segundo plano depois do envio.
+
+![Captura do Studio: Escolher Import distribution...](terminology-guide-distribution-importer.png)
+
+Forneça o pacote de distribuição e trate da respetiva licença.
+
+## Escolher um publicador no telefone
+
+A lista de publicadores começa recolhida para deixar mais espaço para a tabela.
+
+### 1. Mostrar os publicadores
+
+Selecione **Show publishers** no canto superior esquerdo do painel Terminologia.
+
+![Captura do Studio: Mostrar os publicadores](terminology-guide-phone-show-publishers.png)
+
+### 2. Escolher o publicador
+
+Selecione o publicador pretendido.
+
+![Captura do Studio: Escolher o publicador](terminology-guide-phone-choose-publisher.png)
+
+### 3. Recolher a lista de publicadores
+
+Selecione **Hide publishers** para devolver a largura à tabela.
+
+![Captura do Studio: Recolher a lista de publicadores](terminology-guide-phone-hide-publishers.png)
+
+**Resultado esperado:** o publicador escolhido mantém-se no percurso. Desloque a tabela horizontalmente para alcançar as colunas fora do ecrã.
 
 ## Resolução de problemas
 
-- **Import terms para com `line 3: displayName required`.** Essa linha não tem nome. Corrija-a e importe de novo. Nada do ficheiro foi guardado.
-- **Um value set mostra 0 códigos.** Ainda não tem nada: o seu sistema de códigos não tem termos, ou nenhum exame está ativado neste laboratório. `openldr terminology expand <url>` mostra a mesma lista.
-- **Um termo novo não aparece num formulário.** Recarregue o formulário. Um value set com uma lista fixa de códigos precisa também do código novo.
-- **Formato de ficheiro não suportado.** Compare o ficheiro com o modelo transferido.
-- **Falta o código ou o nome.** Corrija o ficheiro de origem: os dois são precisos.
-- **Uma fonte não está disponível.** Confirme a licença e a disponibilidade da fonte antes de esperar vê-la.
-- **Um índice de ontologia está vazio.** O sistema pode não ter hierarquia, ou o índice não foi construído para essa fonte.
-- **Uma entrada perdeu propriedades depois de editada.** Antes de 2026-09-15, guardar um termo aqui apagava todas as propriedades que a página não mostra, como as partes LOINC, o tipo de um organismo ou o papel de um parâmetro de resultado. Já não acontece. As entradas danificadas antes continuam assim até a fonte ser importada de novo: `openldr terminology import loinc <path> --accept-license` para LOINC, `openldr terminology import organisms <file>` para organismos, e `openldr terminology import parameters <file>` para parâmetros de resultado.
+### A importação indica displayName required
+
+O erro identifica a linha sem nome legível. Adicione `displayName` ao termo e escolha o ficheiro corrigido. O exemplo abaixo falhou na linha 2.
+
+![Captura do Studio: A importação indica displayName required](terminology-guide-import-error.png)
+
+### As opções Term estão desativadas
+
+Abra primeiro um sistema de códigos. As ações sobre termos precisam de uma lista de destino.
+
+### Não consigo alterar o código de um termo existente
+
+O editor mantém o código após a criação. O nome apresentado e os outros campos editáveis ainda podem mudar.
+
+### O conjunto de valores é indicado como imutável
+
+Alguns conjuntos padrão são apenas de leitura. O editor explica que precisam de ser duplicados antes de qualquer alteração.
+
+### O conjunto de valores tem uma expansão vazia
+
+Verifique as regras Include, o sistema escolhido e o estado dos termos. Um conjunto de testes deste laboratório também depende dos testes ativados.
 
 ## Guias relacionados
 
-- [Formulários](/docs/forms)
-- [Catálogo de exames](/docs/test-catalog)
-- [Unidades](/docs/facilities)
-- [Auditoria](/docs/audit)
+[Começar aqui](/docs/start-here) explica o CLI instalado e o CLI de desenvolvimento, incluindo as pastas de exemplo `openldr_ce`. Consulte esse guia antes de executar comandos de terminologia num terminal.
+
+[Formulários](/docs/forms) · [Catálogo de testes](/docs/test-catalog) · [Unidades de saúde](/docs/facilities) · [As suas preferências](/docs/user-preferences)

@@ -1,0 +1,981 @@
+{
+  "capturedOn": "2026-11-12",
+  "appUrl": "http://localhost:5173/studio/terminology",
+  "checks": [
+    "Browsed REJECT-TEST and searched HAEM.",
+    "Opened and closed an existing term without saving.",
+    "Created DOCS-GUIDE-REVIEW through the coding-system sheet.",
+    "Created EXAMPLE-1, imported EXAMPLE-2 and updated EXAMPLE-1 display name.",
+    "Downloaded the actual JSON Lines template.",
+    "Reproduced line 2: displayName required, then imported a corrected file.",
+    "Read the built-in rejection-reason value set and its four-code expansion.",
+    "Created a temporary value set whose expansion contains the two example terms.",
+    "Opened the standard distribution ZIP importer without choosing a file or accepting a license.",
+    "Checked publisher controls at a fresh 375x812 visit."
+  ],
+  "limits": [
+    "Development authentication bypass was active.",
+    "Native file chooser screens are not captured.",
+    "No licensed terminology distribution was uploaded.",
+    "No physical phone or second device was tested.",
+    "Mapping authoring, publisher creation and a form binding were not exercised in this review."
+  ],
+  "steps": [
+    {
+      "id": "open-terminology",
+      "label": "Terminology is in the main menu on the left.",
+      "path": "terminology-evidence/open-terminology.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 223,
+          "x": 8,
+          "y": 256
+        }
+      ]
+    },
+    {
+      "id": "choose-publisher",
+      "label": "Choose the publisher that maintains your code system.",
+      "path": "terminology-evidence/choose-publisher.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 37,
+          "width": 239,
+          "x": 240,
+          "y": 84
+        }
+      ]
+    },
+    {
+      "id": "choose-code-system",
+      "label": "Open the code system you want to browse. This example uses REJECT-TEST.",
+      "path": "terminology-evidence/choose-code-system.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 53,
+          "width": 202.4375,
+          "x": 480,
+          "y": 527.8984375
+        }
+      ]
+    },
+    {
+      "id": "search-terms",
+      "label": "Search terms by code or display name within the open code system.",
+      "path": "terminology-evidence/search-terms.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 448,
+          "x": 492,
+          "y": 137
+        }
+      ]
+    },
+    {
+      "id": "search-result",
+      "label": "The term list is filtered to the code or name you entered.",
+      "path": "terminology-evidence/search-result.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 53,
+          "width": 128,
+          "x": 480,
+          "y": 218
+        }
+      ]
+    },
+    {
+      "id": "open-term",
+      "label": "Select a term row to inspect its details.",
+      "path": "terminology-evidence/open-term.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 53,
+          "width": 128,
+          "x": 480,
+          "y": 218
+        }
+      ]
+    },
+    {
+      "id": "term-details",
+      "label": "A term row opens its details in an editing sheet. Code is fixed after creation.",
+      "path": "terminology-evidence/term-details.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 416.1796875,
+          "x": 829.8203125,
+          "y": 305.546875
+        }
+      ]
+    },
+    {
+      "id": "close-term",
+      "label": "Close leaves the existing term unchanged.",
+      "path": "terminology-evidence/close-term.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 24,
+          "width": 28,
+          "x": 1236,
+          "y": 16
+        }
+      ]
+    },
+    {
+      "id": "code-systems-tab",
+      "label": "Use Code systems when the publisher also offers value sets.",
+      "path": "terminology-evidence/code-systems-tab.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 18.6640625,
+          "width": 85.6953125,
+          "x": 551.0078125,
+          "y": 56.1640625
+        }
+      ]
+    },
+    {
+      "id": "system-actions",
+      "label": "The page dots menu is at the right end of the publisher breadcrumb.",
+      "path": "terminology-evidence/system-actions.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 24,
+          "width": 24,
+          "x": 1244,
+          "y": 53.5
+        }
+      ]
+    },
+    {
+      "id": "code-system-menu",
+      "label": "Code system contains the action for a new code list.",
+      "path": "terminology-evidence/code-system-menu.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 1113,
+          "y": 119
+        }
+      ]
+    },
+    {
+      "id": "new-code-system",
+      "label": "Choose New to open the coding-system sheet.",
+      "path": "terminology-evidence/new-code-system.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 958,
+          "y": 124
+        }
+      ]
+    },
+    {
+      "id": "system-code",
+      "label": "Enter a unique short code for your code system.",
+      "path": "terminology-evidence/system-code.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 399,
+          "x": 857,
+          "y": 184.546875
+        }
+      ]
+    },
+    {
+      "id": "system-name",
+      "label": "Enter the name people should see for the code system.",
+      "path": "terminology-evidence/system-name.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 399,
+          "x": 857,
+          "y": 301.546875
+        }
+      ]
+    },
+    {
+      "id": "system-url",
+      "label": "Use a stable canonical URL when sharing these codes with other systems.",
+      "path": "terminology-evidence/system-url.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 247,
+          "x": 857,
+          "y": 374.546875
+        }
+      ]
+    },
+    {
+      "id": "create-system",
+      "label": "Create is at the bottom of the coding-system sheet.",
+      "path": "terminology-evidence/create-system.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 74.0234375,
+          "x": 1181.9765625,
+          "y": 748
+        }
+      ]
+    },
+    {
+      "id": "system-created",
+      "label": "The new code system appears in the selected publisher.",
+      "path": "terminology-evidence/system-created.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 65,
+          "width": 202.4375,
+          "x": 480,
+          "y": 181
+        }
+      ]
+    },
+    {
+      "id": "term-actions",
+      "label": "The term dots menu sits beside Search terms and the status filter.",
+      "path": "terminology-evidence/term-actions.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 32,
+          "x": 1236,
+          "y": 137
+        }
+      ]
+    },
+    {
+      "id": "new-term",
+      "label": "New term opens the editor for this code system.",
+      "path": "terminology-evidence/new-term.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 157.8515625,
+          "x": 1105,
+          "y": 178
+        }
+      ]
+    },
+    {
+      "id": "term-code",
+      "label": "Enter the code that will be stored with this term.",
+      "path": "terminology-evidence/term-code.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 416.1796875,
+          "x": 829.8203125,
+          "y": 257.546875
+        }
+      ]
+    },
+    {
+      "id": "term-display",
+      "label": "Enter a readable display name for the term.",
+      "path": "terminology-evidence/term-display.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 416.1796875,
+          "x": 829.8203125,
+          "y": 305.546875
+        }
+      ]
+    },
+    {
+      "id": "term-status",
+      "label": "Choose the lifecycle status. Active is the default for a new term.",
+      "path": "terminology-evidence/term-status.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 423.171875,
+          "x": 822.828125,
+          "y": 591.546875
+        }
+      ]
+    },
+    {
+      "id": "term-sheet-actions",
+      "label": "The term editor saves from its dots menu beside Details and Mappings.",
+      "path": "terminology-evidence/term-sheet-actions.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 28,
+          "width": 28,
+          "x": 1236,
+          "y": 133.546875
+        }
+      ]
+    },
+    {
+      "id": "create-term",
+      "label": "Choose Create for a new term. Existing terms use Save.",
+      "path": "terminology-evidence/create-term.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 1109,
+          "y": 171
+        }
+      ]
+    },
+    {
+      "id": "term-created",
+      "label": "The term appears in this code system with Active status.",
+      "path": "terminology-evidence/term-created.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 53,
+          "width": 128,
+          "x": 480,
+          "y": 218
+        }
+      ]
+    },
+    {
+      "id": "download-template",
+      "label": "Download template provides the columns for a term import.",
+      "path": "terminology-evidence/download-template.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 157.8515625,
+          "x": 1105,
+          "y": 242
+        }
+      ]
+    },
+    {
+      "id": "import-terms",
+      "label": "Import terms opens the file chooser for the current code system.",
+      "path": "terminology-evidence/import-terms.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 157.8515625,
+          "x": 1105,
+          "y": 210
+        }
+      ]
+    },
+    {
+      "id": "import-error",
+      "label": "The error identifies the line and missing displayName field.",
+      "path": "terminology-evidence/import-error.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 34,
+          "width": 776,
+          "x": 492,
+          "y": 186
+        }
+      ]
+    },
+    {
+      "id": "import-result",
+      "label": "After the corrected file is chosen, EXAMPLE-2 appears in the term list.",
+      "path": "terminology-evidence/import-result.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 53,
+          "width": 128,
+          "x": 480,
+          "y": 271
+        }
+      ]
+    },
+    {
+      "id": "edit-term-row",
+      "label": "Select the existing term you want to change.",
+      "path": "terminology-evidence/edit-term-row.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 53,
+          "width": 128,
+          "x": 480,
+          "y": 218
+        }
+      ]
+    },
+    {
+      "id": "edit-term-name",
+      "label": "Change the display name. The stored code remains fixed.",
+      "path": "terminology-evidence/edit-term-name.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 36,
+          "width": 416.1796875,
+          "x": 829.8203125,
+          "y": 305.546875
+        }
+      ]
+    },
+    {
+      "id": "save-term",
+      "label": "Existing terms use Save in the editor dots menu.",
+      "path": "terminology-evidence/save-term.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 1109,
+          "y": 171
+        }
+      ]
+    },
+    {
+      "id": "term-updated",
+      "label": "The existing code now has its updated display name.",
+      "path": "terminology-evidence/term-updated.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 53,
+          "width": 226.25,
+          "x": 608,
+          "y": 218
+        }
+      ]
+    },
+    {
+      "id": "back-to-systems",
+      "label": "Leave the term list with the Code systems back button.",
+      "path": "terminology-evidence/back-to-systems.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 28,
+          "width": 115.359375,
+          "x": 492,
+          "y": 92
+        }
+      ]
+    },
+    {
+      "id": "value-sets-tab",
+      "label": "Value sets lists the allowed-code lists for the selected publisher.",
+      "path": "terminology-evidence/value-sets-tab.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 18.6640625,
+          "width": 66.5546875,
+          "x": 638.703125,
+          "y": 56.1640625
+        }
+      ]
+    },
+    {
+      "id": "open-value-set",
+      "label": "Select a value set to inspect its composition and expansion.",
+      "path": "terminology-evidence/open-value-set.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 65,
+          "width": 126.171875,
+          "x": 390,
+          "y": 569.265625
+        }
+      ]
+    },
+    {
+      "id": "value-set-expansion",
+      "label": "Expansion shows the allowed codes resolved from the value-set rules.",
+      "path": "terminology-evidence/value-set-expansion.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 16,
+          "width": 629,
+          "x": 630,
+          "y": 619.234375
+        }
+      ]
+    },
+    {
+      "id": "value-set-menu",
+      "label": "Choose Value set in the page dots menu.",
+      "path": "terminology-evidence/value-set-menu.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 1113,
+          "y": 183
+        }
+      ]
+    },
+    {
+      "id": "new-value-set",
+      "label": "New opens the value-set builder.",
+      "path": "terminology-evidence/new-value-set.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 958,
+          "y": 188
+        }
+      ]
+    },
+    {
+      "id": "value-set-url",
+      "label": "Give the value set a stable, unique canonical URL.",
+      "path": "terminology-evidence/value-set-url.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 317.5,
+          "x": 621,
+          "y": 174.234375
+        }
+      ]
+    },
+    {
+      "id": "value-set-title",
+      "label": "The title is the readable name of this allowed-code list.",
+      "path": "terminology-evidence/value-set-title.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 317.5,
+          "x": 950.5,
+          "y": 174.234375
+        }
+      ]
+    },
+    {
+      "id": "value-set-system",
+      "label": "Under Include, choose the code system that supplies the allowed codes.",
+      "path": "terminology-evidence/value-set-system.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 28,
+          "width": 288,
+          "x": 678.0078125,
+          "y": 381.234375
+        }
+      ]
+    },
+    {
+      "id": "value-set-system-option",
+      "label": "Choose the code system that contains your terms.",
+      "path": "terminology-evidence/value-set-system-option.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 869.4375,
+          "x": 396,
+          "y": 5566
+        }
+      ]
+    },
+    {
+      "id": "value-set-system-chosen",
+      "label": "The Include rule now names the code system whose codes will be allowed.",
+      "path": "terminology-evidence/value-set-system-chosen.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 28,
+          "width": 288,
+          "x": 678.0078125,
+          "y": 381.234375
+        }
+      ]
+    },
+    {
+      "id": "value-set-system-selection",
+      "label": "Choose your code system from the System list.",
+      "path": "terminology-evidence/value-set-system-selection.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 869.4375,
+          "x": 396,
+          "y": 733
+        }
+      ]
+    },
+    {
+      "id": "value-set-actions",
+      "label": "Save a value set from the builder dots menu.",
+      "path": "terminology-evidence/value-set-actions.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 28,
+          "width": 28,
+          "x": 1240,
+          "y": 94.234375
+        }
+      ]
+    },
+    {
+      "id": "save-value-set",
+      "label": "Save stores the value-set rules and computes the expansion.",
+      "path": "terminology-evidence/save-value-set.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 1113,
+          "y": 131
+        }
+      ]
+    },
+    {
+      "id": "value-set-created",
+      "label": "The saved value set expands to the two active example codes.",
+      "path": "terminology-evidence/value-set-created.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 16,
+          "width": 629,
+          "x": 630,
+          "y": 619.234375
+        }
+      ]
+    },
+    {
+      "id": "standard-publisher",
+      "label": "Select the external publisher whose distribution you want to load.",
+      "path": "terminology-evidence/standard-publisher.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 37,
+          "width": 239,
+          "x": 240,
+          "y": 158
+        }
+      ]
+    },
+    {
+      "id": "import-distribution",
+      "label": "Import distribution opens the browser upload workflow for this publisher.",
+      "path": "terminology-evidence/import-distribution.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 32,
+          "width": 150,
+          "x": 1113,
+          "y": 128
+        }
+      ]
+    },
+    {
+      "id": "distribution-importer",
+      "label": "The importer accepts a distribution ZIP, an optional version and your license confirmation.",
+      "path": "terminology-evidence/distribution-importer.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 90,
+          "width": 478,
+          "x": 401,
+          "y": 340.6171875
+        }
+      ]
+    },
+    {
+      "id": "phone-show-publishers",
+      "label": "On a phone, Show publishers opens the publisher list.",
+      "path": "terminology-evidence/phone-show-publishers.jpg",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "focus": [
+        {
+          "height": 28,
+          "width": 28,
+          "x": 4,
+          "y": 51.5
+        }
+      ]
+    },
+    {
+      "id": "phone-choose-publisher",
+      "label": "Choose a publisher from the open list.",
+      "path": "terminology-evidence/phone-choose-publisher.jpg",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "focus": [
+        {
+          "height": 37,
+          "width": 159,
+          "x": 0,
+          "y": 84
+        }
+      ]
+    },
+    {
+      "id": "phone-hide-publishers",
+      "label": "Hide publishers gives the code table the phone width again.",
+      "path": "terminology-evidence/phone-hide-publishers.jpg",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "focus": [
+        {
+          "height": 28,
+          "width": 28,
+          "x": 127,
+          "y": 51.5
+        }
+      ]
+    },
+    {
+      "id": "value-set-page-actions",
+      "label": "Open the page dots menu above the value-set table.",
+      "path": "terminology-evidence/value-set-page-actions.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 24,
+          "width": 24,
+          "x": 1244,
+          "y": 53.5
+        }
+      ]
+    },
+    {
+      "id": "standard-actions",
+      "label": "Open the page dots menu for the selected standard publisher.",
+      "path": "terminology-evidence/standard-actions.jpg",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "focus": [
+        {
+          "height": 24,
+          "width": 24,
+          "x": 1244,
+          "y": 53.5
+        }
+      ]
+    }
+  ],
+  "importedFiles": [
+    "terminology-evidence/guide-terms-invalid.jsonl",
+    "terminology-evidence/guide-terms.jsonl"
+  ]
+}

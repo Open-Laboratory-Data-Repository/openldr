@@ -1,0 +1,287 @@
+{
+  "capturedAt": "2026-11-12T07:09:52.242Z",
+  "scale": 4,
+  "source": "Live Studio and live API. Lossless PNG. Logical coordinates retained.",
+  "steps": [
+    {
+      "id": "user-menu-button",
+      "path": "high-resolution/preferences/user-menu-button.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 755.5,
+          "width": 223,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "language-menu",
+      "path": "high-resolution/preferences/language-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 609.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "language-french",
+      "path": "high-resolution/preferences/language-french.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 216,
+          "y": 646.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "language-result",
+      "path": "high-resolution/preferences/language-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 0,
+          "y": 0,
+          "width": 240,
+          "height": 800
+        }
+      ]
+    },
+    {
+      "id": "theme-button",
+      "path": "high-resolution/preferences/theme-button.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1224,
+          "y": 7.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "theme-result",
+      "path": "high-resolution/preferences/theme-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1224,
+          "y": 7.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "start-page-menu",
+      "path": "high-resolution/preferences/start-page-menu.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 13,
+          "y": 641.5,
+          "width": 198,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "start-page-reports",
+      "path": "high-resolution/preferences/start-page-reports.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 216,
+          "y": 379,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "start-page-result",
+      "path": "high-resolution/preferences/start-page-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 0,
+          "width": 1040,
+          "height": 48
+        }
+      ]
+    },
+    {
+      "id": "sidebar-collapse",
+      "path": "high-resolution/preferences/sidebar-collapse.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 195,
+          "y": 7.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "sidebar-expand",
+      "path": "high-resolution/preferences/sidebar-expand.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 11.5,
+          "y": 7.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-open-menu",
+      "path": "high-resolution/preferences/phone-open-menu.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 12,
+          "y": 7.5,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-user-menu",
+      "path": "high-resolution/preferences/phone-user-menu.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 767.5,
+          "width": 239,
+          "height": 36.5
+        }
+      ]
+    },
+    {
+      "id": "phone-menu-result",
+      "path": "high-resolution/preferences/phone-menu-result.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 559.5,
+          "width": 208,
+          "height": 204
+        }
+      ]
+    }
+  ]
+}

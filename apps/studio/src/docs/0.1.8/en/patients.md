@@ -2,6 +2,8 @@
 
 **Patients** lists every patient OpenLDR has received with lab data, and where they were tested. The source system, such as a HIMS or a lab system, owns each patient. OpenLDR shows patients and never edits them.
 
+Patient settings are optional. OpenLDR receives patient records with your lab data without requiring you to label identifier systems first. We strongly recommend configuring these settings and reviewing possible duplicates as you use the system.
+
 This guide takes about 15 minutes. It uses the docs sample data, so load that first. Select any picture or clip to enlarge it.
 
 ![Patients with the sample data loaded: 25 patients.](patients-list.png)

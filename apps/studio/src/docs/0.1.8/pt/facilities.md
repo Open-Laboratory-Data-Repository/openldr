@@ -2,6 +2,8 @@
 
 **Unidades** guarda os registos de unidades que esta instalação conhece: a lista nacional de unidades de saúde e laboratórios, cada uma com um código, um nome, um tipo e um local. Os dados laboratoriais identificam as unidades pelo código. Um registo transforma esses códigos em nomes e locais, para que os relatórios digam "Sample District Hospital, Sample North" em vez de `SAMPLE-HOSP-01`.
 
+A configuração das unidades de saúde é opcional. O OpenLDR pode receber e processar dados antes de adicionar um registo de unidades. Recomendamos vivamente esta configuração durante a utilização do sistema, para associar nomes e localizações consistentes aos códigos das unidades.
+
 A página tem dois separadores. **Registo** lista as unidades adicionadas ou importadas. **Observadas** lista os códigos de unidade que chegaram nos dados laboratoriais, e a unidade a que cada um corresponde. Adicionar uma linha ao registo e resolver um código observado são tarefas distintas.
 
 Uma instalação nova não tem nenhum registo. Este guia importa um pequeno registo de exemplo e liga-lhe os dados de exemplo da documentação. Leva cerca de 20 minutos. Selecione uma imagem ou um clip para o ampliar.

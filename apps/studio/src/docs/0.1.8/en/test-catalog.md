@@ -2,6 +2,8 @@
 
 The **test catalog** is the national list of tests. Each test has a code, a name, a category, the specimen types it accepts and, when it has one, a LOINC code. A test with no LOINC code shows **No LOINC**.
 
+Setting up the Test catalog is optional. OpenLDR can receive and process lab data before you configure it. We strongly recommend setting it up as you use the system, so tests can be matched across sources. Choosing tests in the Lab order form uses the configured catalog.
+
 The catalog does three jobs. It decides which tests the **Lab order** form offers. It lets reports count a test the same way whatever each lab system calls it. And it holds each test's result parameters and reference ranges.
 
 A fresh install ships no tests. This guide loads a small sample list, switches some tests on, and maps the docs sample data to it. It takes about 15 minutes. Select any picture or clip to enlarge it.

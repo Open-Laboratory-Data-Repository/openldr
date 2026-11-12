@@ -28,7 +28,7 @@ describe('DocMarkdown', () => {
     const { container } = render(<DocMarkdown content={'![Menu](dashboard-create-menu.png)'} onImageClick={click} />);
     const images = container.querySelectorAll('img');
     expect(images).toHaveLength(2);
-    expect(images[0].style.filter).toBe('blur(1.25px)');
+    expect(images[0].style.filter).toBe('blur(.25cqw)');
     expect(images[1].style.clipPath).toContain('inset(');
     expect(images[1]).toHaveAttribute('aria-hidden', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Zoom: Menu' }));

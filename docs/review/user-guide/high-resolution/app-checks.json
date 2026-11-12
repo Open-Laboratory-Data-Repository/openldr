@@ -1,0 +1,17 @@
+[
+  {
+    "guide": "dashboard",
+    "nativeWidth": 5120,
+    "blur": "blur(5.635px)"
+  },
+  {
+    "guide": "user-preferences",
+    "nativeWidth": 5120,
+    "blur": "blur(5.635px)"
+  },
+  {
+    "guide": "start-here",
+    "nativeWidth": 2944,
+    "blur": "none"
+  }
+]

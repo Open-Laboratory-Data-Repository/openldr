@@ -1,0 +1,116 @@
+<article class="dg-article" id="dg-top">
+ <div class="dg-meta"><span>System setup</span><span>Browse or manage terminology</span><span>About 20 minutes</span></div>
+ <h1>Terminology</h1>
+ <p>Find the codes your lab uses, add your own code lists and choose which codes a form can accept. Start by checking what is already installed.</p>
+ <p>A <strong>publisher</strong> groups lists by who maintains them. A <strong>code system</strong> is a list of coded terms. A <strong>value set</strong> selects the codes allowed for a particular use, such as a form field.</p>
+ <p>You do not need documentation sample data. The screenshots use a built-in list and a temporary example called <code>DOCS-GUIDE-REVIEW</code>. Use your own names, codes and URLs when creating your lab's lists.</p>
+ <p>Reading needs permission to browse terminology. Creating, changing and importing need permission to manage terminology.</p>
+
+ <h2 id="dg-browse">Find a code and read its details</h2>
+ <p>Look for an existing code before creating another one. This example finds a test rejection reason in the built-in REJECT-TEST code system.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open Terminology</h3><p>Select <strong>Terminology</strong> in the main menu on the left.</p>__SHOT:open-terminology:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose the publisher</h3><p>Select the publisher that maintains the list. For this example, select <strong>System</strong>.</p>__SHOT:choose-publisher:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Select Code systems</h3><p>If the publisher offers both types of list, select <strong>Code systems</strong> beside its name.</p>__SHOT:code-systems-tab:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Open a code system</h3><p>Select the list you want to read. This example opens <strong>REJECT-TEST</strong>.</p>__SHOT:choose-code-system:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Search for the code or name</h3><p>Enter part of the code or display name in <strong>Search terms…</strong>. This example uses <code>HAEM</code>.</p>__SHOT:search-terms:5__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the list shows matching terms from this code system. The status filter can narrow the results further.</p></div>
+ __SHOT:search-result:0__
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Open the term</h3><p>Select its row. The <strong>Edit term</strong> sheet shows its code, display name, status and other details.</p>__SHOT:open-term:6__</section>
+ __SHOT:term-details:0__
+ <section class="dg-step"><h3><span class="dg-number">7.</span> Close the sheet</h3><p>Select <strong>Close</strong> at the top right to leave without saving changes.</p>__SHOT:close-term:7__</section>
+
+ <h2 id="dg-system">Create a code system for your own list</h2>
+ <p>Create a code system when your lab needs a list that does not already exist. Choose its publisher first. The screenshots use System and leave Active checked.</p>
+ <p><strong>System code</strong> is the short identifier and cannot be changed after creation. <strong>System name</strong> is the readable name. A <strong>Canonical URL</strong> identifies the list when codes are shared with other systems. It can be left blank for a custom list.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open the page dots menu</h3><p>Select the dots at the right end of the publisher breadcrumb, above the table.</p>__SHOT:system-actions:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Open Code system</h3><p>Select <strong>Code system</strong> in the menu.</p>__SHOT:code-system-menu:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose New</h3><p>Select <strong>New</strong>. The <strong>New coding system</strong> sheet opens.</p>__SHOT:new-code-system:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Enter a system code</h3><p>Enter a unique code in <strong>System code</strong>. The example uses <code>DOCS-GUIDE-REVIEW</code>.</p>__SHOT:system-code:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Enter its name</h3><p>Enter the name people should see in <strong>System name</strong>.</p>__SHOT:system-name:5__</section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Enter its canonical URL, if needed</h3><p>Enter the identifier your organization uses in <strong>Canonical URL</strong>, or leave it blank for a custom list.</p>__SHOT:system-url:6__</section>
+ <section class="dg-step"><h3><span class="dg-number">7.</span> Create the code system</h3><p>Select <strong>Create</strong> at the bottom of this sheet.</p>__SHOT:create-system:7__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the new code system appears under the selected publisher. Open its row to add terms.</p></div>
+ __SHOT:system-created:0__
+
+ <h2 id="dg-add">Add a term</h2>
+ <p>Add a code and its readable name to an existing code system. Use a code that is unique within that system. New terms start as Active; short name, class, unit and metadata are optional.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open the destination code system</h3><p>Select the code system that should contain your term. Use an existing list or one you created above.</p>__SHOT:system-created:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Open the term dots menu</h3><p>Select the dots beside <strong>Search terms…</strong> and the status filter.</p>__SHOT:term-actions:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose New term</h3><p>Select <strong>New term</strong>.</p>__SHOT:new-term:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Enter the code</h3><p>Enter the value to store in <strong>Code</strong>. The example uses <code>EXAMPLE-1</code>.</p>__SHOT:term-code:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Enter the display name</h3><p>Enter a readable label in <strong>Display name</strong>.</p>__SHOT:term-display:5__</section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Open the editor dots menu</h3><p>Select the dots beside the <strong>Details</strong> and <strong>Mappings</strong> tabs.</p>__SHOT:term-sheet-actions:6__</section>
+ <section class="dg-step"><h3><span class="dg-number">7.</span> Choose Create</h3><p>Select <strong>Create</strong> to store the new term.</p>__SHOT:create-term:7__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the sheet closes and the term appears in the code system.</p></div>
+ __SHOT:term-created:0__
+
+ <h2 id="dg-edit">Change a term's display name</h2>
+ <p>Change the readable label when it needs correcting. The stored code stays the same.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open the term</h3><p>Select the term's row in its code system.</p>__SHOT:edit-term-row:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Change Display name</h3><p>Replace the text in <strong>Display name</strong>. The example changes it to <code>Updated example label</code>.</p>__SHOT:edit-term-name:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Open the editor dots menu</h3><p>Select the dots beside <strong>Details</strong> and <strong>Mappings</strong>.</p>__SHOT:term-sheet-actions:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Choose Save</h3><p>Select <strong>Save</strong>. Existing terms use Save; new terms use Create.</p>__SHOT:save-term:4__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the list shows the new display name beside the same code.</p></div>
+ __SHOT:term-updated:0__
+
+ <h2 id="dg-import">Import several terms from a file</h2>
+ <p>Use an import when you already have a list of codes and names. Open the destination code system first.</p>
+ <p>The downloaded template uses <strong>JSON Lines</strong>: one JSON object on each line. Each term needs <code>code</code> and <code>displayName</code>. The metadata line identifies the code system. For example:</p>
+ <pre><code>{"type":"meta","codingSystem":"DOCS-GUIDE-REVIEW","version":"2026-01-01"}
+{"code":"EXAMPLE-2","displayName":"Imported example label"}</code></pre>
+ <p>Your file should use your own code-system identifier and terms. Blank lines and lines beginning with <code>//</code> are allowed.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open the term dots menu</h3><p>Select the dots beside <strong>Search terms…</strong>.</p>__SHOT:term-actions:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Download the template if you need one</h3><p>Select <strong>Download template</strong>. Prepare your file using its columns and examples.</p>__SHOT:download-template:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose Import terms</h3><p>Open the term dots menu again and select <strong>Import terms</strong>.</p>__SHOT:import-terms:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Select your prepared file</h3><p>Choose the file in your computer's file window. Import begins after you choose it. The screenshot shows the result after the example file was selected.</p>__SHOT:import-result:4__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the imported codes appear in this code system. Search can help you find a particular imported code.</p></div>
+
+ <h2 id="dg-read-values">See which codes a value set allows</h2>
+ <p>Read a value set when you need to know which answers a form field can offer. Its <strong>Include</strong> and <strong>Exclude</strong> rules define the list. <strong>Expansion</strong> shows the resulting codes.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Return to the code-system list</h3><p>If a term list is open, select <strong>← Code systems</strong>.</p>__SHOT:back-to-systems:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Select Value sets</h3><p>Select <strong>Value sets</strong> beside the publisher name. This example uses System.</p>__SHOT:value-sets-tab:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Open a value set</h3><p>Select its row. This example opens <strong>Test rejection reasons</strong>.</p>__SHOT:open-value-set:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Read Expansion</h3><p>Scroll down to <strong>Expansion</strong> to read the codes produced by its rules.</p>__SHOT:value-set-expansion:4__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> you can read the allowed codes without changing the value set. The count depends on the code systems and rules in your installation.</p></div>
+
+ <h2 id="dg-create-values">Create an allowed-code list</h2>
+ <p>Create a value set to make a code system available as a controlled list. This example includes all codes from one code system. Leave the concept list empty to include the whole system. The example stays Draft while being prepared.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Open the page dots menu</h3><p>Close any editing sheet first. Select the page dots beside the publisher breadcrumb.</p>__SHOT:value-set-page-actions:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Open Value set</h3><p>Select <strong>Value set</strong> in the menu.</p>__SHOT:value-set-menu:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose New</h3><p>Select <strong>New</strong> to open the builder.</p>__SHOT:new-value-set:3__</section>
+ <section class="dg-step"><h3><span class="dg-number">4.</span> Enter the value-set URL</h3><p>Enter a unique <strong>Canonical URL</strong>. Use a different URL from the code system's URL.</p>__SHOT:value-set-url:4__</section>
+ <section class="dg-step"><h3><span class="dg-number">5.</span> Enter a readable title</h3><p>Enter the name of your allowed-code list in <strong>Title</strong>.</p>__SHOT:value-set-title:5__</section>
+ <section class="dg-step"><h3><span class="dg-number">6.</span> Choose the source code system</h3><p>Under <strong>Include</strong>, open <strong>System</strong> and choose the list that contains your terms.</p>__SHOT:value-set-system:6____SHOT:value-set-system-selection:6__</section>
+ <section class="dg-step"><h3><span class="dg-number">7.</span> Open the builder dots menu</h3><p>Select the dots at the top right of the value-set builder.</p>__SHOT:value-set-actions:7__</section>
+ <section class="dg-step"><h3><span class="dg-number">8.</span> Choose Save</h3><p>Select <strong>Save</strong>. The builder computes the expansion after saving.</p>__SHOT:save-value-set:8__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> Expansion shows the active codes supplied by the selected code system. The example contains two codes.</p></div>
+ __SHOT:value-set-created:0__
+ <p>A value set can also include selected concepts, exclude codes or import another value set. Creating the value set does not bind it to a form automatically. Form-field setup belongs in the <a href="http://100.107.125.94:5173/studio/docs/forms">Forms guide</a>.</p>
+
+ <h2 id="dg-standard">Open the importer for a standard distribution</h2>
+ <p>LOINC, SNOMED CT and RxNorm have a distribution ZIP importer in the browser. Use this for a provider's distribution package, rather than importing it as a small list of local terms.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Choose the external publisher</h3><p>Select <strong>LOINC</strong>, <strong>SNOMED CT</strong> or <strong>RxNorm</strong>. The screenshot uses LOINC.</p>__SHOT:standard-publisher:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Open the page dots menu</h3><p>Select the dots at the right end of the publisher breadcrumb.</p>__SHOT:standard-actions:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Choose Import distribution...</h3><p>Select <strong>Import distribution...</strong>.</p>__SHOT:import-distribution:3__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the distribution importer opens. It has a ZIP file field, an optional version and a license confirmation. It imports in the background after upload.</p></div>
+ __SHOT:distribution-importer:0__
+ <p>You supply the distribution package and handle its license.</p>
+
+ <h2 id="dg-phone">Choose a publisher on a phone</h2>
+ <p>The publisher list starts folded on a phone so the table has more space.</p>
+ <section class="dg-step"><h3><span class="dg-number">1.</span> Show publishers</h3><p>Select <strong>Show publishers</strong> at the top left of the Terminology pane.</p>__SHOT:phone-show-publishers:1__</section>
+ <section class="dg-step"><h3><span class="dg-number">2.</span> Choose the publisher</h3><p>Select the publisher you need.</p>__SHOT:phone-choose-publisher:2__</section>
+ <section class="dg-step"><h3><span class="dg-number">3.</span> Hide the publisher list</h3><p>Select <strong>Hide publishers</strong> to give the table the width again.</p>__SHOT:phone-hide-publishers:3__</section>
+ <div class="dg-result"><p><strong>Expected result:</strong> the selected publisher remains in the breadcrumb. Scroll the table sideways when its remaining columns are off screen.</p></div>
+
+ <h2 id="dg-help">Troubleshooting</h2>
+ <details><summary>The import says displayName required</summary><p>The error names the line that has no readable name. Add <code>displayName</code> to that term and choose the corrected file again. The example below failed on line 2.</p>__SHOT:import-error:0__</details>
+ <details><summary>The Term options are disabled</summary><p>Open a code system first. Term actions need a destination list.</p></details>
+ <details><summary>I cannot change Code on an existing term</summary><p>The editor keeps the code fixed after creation. Display name and other editable fields can still be changed.</p></details>
+ <details><summary>The value set says it is immutable</summary><p>Some standard catalog value sets are read-only. Their builder explains that they must be duplicated before changes can be made.</p></details>
+ <details><summary>A value set has an empty expansion</summary><p>Check its Include rules, the selected code system and the status of its terms. A value set for this lab's tests also depends on which tests the lab has enabled.</p></details>
+
+ <h2 id="dg-related">Related guides</h2>
+ <p><a href="start-here-review.html">Start here</a> explains the installed and development CLI, including the example <code>openldr_ce</code> folders. Use that guide before running terminology commands from a terminal.</p>
+ <p><a href="http://100.107.125.94:5173/studio/docs/forms">Forms</a> · <a href="http://100.107.125.94:5173/studio/docs/test-catalog">Test catalog</a> · <a href="http://100.107.125.94:5173/studio/docs/facilities">Facilities</a> · <a href="preferences-review.html">Your preferences</a></p>
+</article>

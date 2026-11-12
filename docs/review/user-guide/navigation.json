@@ -1,0 +1,204 @@
+[
+  {
+    "id": "start",
+    "title": "Start here",
+    "items": [
+      {
+        "slug": "start-here",
+        "title": "Start Here",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "id": "system-setup",
+    "title": "Set up your system",
+    "items": [
+      {
+        "slug": "terminology",
+        "title": "Terminology",
+        "optional": false
+      },
+      {
+        "slug": "facilities",
+        "title": "Facilities",
+        "optional": true
+      },
+      {
+        "slug": "test-catalog",
+        "title": "Test catalog",
+        "optional": true
+      },
+      {
+        "slug": "patients",
+        "title": "Patients",
+        "optional": true
+      },
+      {
+        "slug": "forms",
+        "title": "Forms",
+        "optional": false
+      },
+      {
+        "slug": "workflows",
+        "title": "Workflows",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "id": "daily-work",
+    "title": "Daily work",
+    "items": [
+      {
+        "slug": "dashboard",
+        "title": "Dashboards",
+        "optional": false
+      },
+      {
+        "slug": "reports",
+        "title": "Reports",
+        "optional": false
+      },
+      {
+        "slug": "activity",
+        "title": "Activity",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "id": "data-design",
+    "title": "Build and manage",
+    "items": [
+      {
+        "slug": "report-pipeline",
+        "title": "Scheduled reports with workflows",
+        "optional": false
+      },
+      {
+        "slug": "query",
+        "title": "Custom Queries",
+        "optional": false
+      },
+      {
+        "slug": "report-designer",
+        "title": "Report Designer",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "id": "administration",
+    "title": "Administration",
+    "items": [
+      {
+        "slug": "layouts",
+        "title": "Layouts",
+        "optional": false
+      },
+      {
+        "slug": "users",
+        "title": "Users and Roles",
+        "optional": false
+      },
+      {
+        "slug": "roles",
+        "title": "Roles",
+        "optional": false
+      },
+      {
+        "slug": "audit",
+        "title": "Audit",
+        "optional": false
+      },
+      {
+        "slug": "settings",
+        "title": "Settings",
+        "optional": false
+      },
+      {
+        "slug": "setup-checks",
+        "title": "Setup checks",
+        "optional": false
+      },
+      {
+        "slug": "laboratory",
+        "title": "Laboratory",
+        "optional": false
+      },
+      {
+        "slug": "data-exposure",
+        "title": "Data exposure",
+        "optional": false
+      },
+      {
+        "slug": "sync",
+        "title": "Distributed Sync",
+        "optional": false
+      },
+      {
+        "slug": "connectors",
+        "title": "Connectors",
+        "optional": false
+      },
+      {
+        "slug": "connector-diagnose",
+        "title": "Connect to SQL Server and diagnose a connection",
+        "optional": false
+      },
+      {
+        "slug": "v1-import",
+        "title": "Import from OpenLDR v1",
+        "optional": false
+      },
+      {
+        "slug": "marketplace",
+        "title": "Marketplace",
+        "optional": false
+      },
+      {
+        "slug": "plugin-sites",
+        "title": "Plugin cards and side panels",
+        "optional": false
+      },
+      {
+        "slug": "auth-providers",
+        "title": "Authentication providers",
+        "optional": false
+      },
+      {
+        "slug": "environment",
+        "title": "Environment Variables",
+        "optional": false
+      },
+      {
+        "slug": "upgrading",
+        "title": "Planned upgrades",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "id": "personal",
+    "title": "Personal settings",
+    "items": [
+      {
+        "slug": "user-preferences",
+        "title": "Your preferences",
+        "optional": false
+      }
+    ]
+  },
+  {
+    "id": "more",
+    "title": "More",
+    "items": [
+      {
+        "slug": "advanced-docs",
+        "title": "Deployment & Developer Docs",
+        "optional": false
+      }
+    ]
+  }
+]

@@ -2,6 +2,8 @@
 
 **Établissements** contient les registres d'établissements que connaît cette installation : la liste nationale des structures de santé et des laboratoires, chacun avec un code, un nom, un type et un lieu. Les données de laboratoire désignent les établissements par leur code. Un registre transforme ces codes en noms et en lieux, pour que les rapports disent « Sample District Hospital, Sample North » au lieu de `SAMPLE-HOSP-01`.
 
+La configuration des établissements est facultative. OpenLDR peut recevoir et traiter les données de laboratoire avant l'ajout d'un registre. Nous recommandons fortement de le configurer au cours de l'utilisation du système, pour associer des noms et des lieux cohérents aux codes d'établissement.
+
 La page a deux onglets. **Registre** liste les établissements ajoutés ou importés. **Observés** liste les codes d'établissement arrivés dans les données de laboratoire, et l'établissement vers lequel chacun se résout. Ajouter une ligne au registre et résoudre un code observé sont deux tâches distinctes.
 
 Une installation neuve n'a aucun registre. Ce guide importe un petit registre d'exemple et y relie les données d'exemple de la documentation. Comptez 20 minutes. Sélectionnez une image ou un clip pour l'agrandir.

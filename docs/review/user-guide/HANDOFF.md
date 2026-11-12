@@ -162,3 +162,98 @@ The operator approved publication on 2026-11-12. The guide is promoted in Englis
 Personal settings now contains Your preferences. Other published guide groups are unchanged.
 preferences-focus.json preserves the approved crop, markers and phone screenshot dimensions.
 The earlier screenshots and clips remain available. The review files remain editable.
+
+## Terminology preview
+
+Your preferences was published and pushed in f37702ef, followed by changelog commit ede2a676.
+The operator asked to review Terminology next, with changes kept in preview.
+Open terminology-review.html and read terminology-review-notes.md for the findings and proof limits.
+Rebuild with `python3 docs/review/user-guide/build-terminology.py`.
+The source article and template are terminology-article.html and terminology-template.html.
+Original screenshots, fixture files, framing and cleanup evidence are under terminology-evidence.
+The draft has 47 numbered steps and 56 equal screenshot frames.
+The live review created and removed one temporary code system and one temporary value set.
+Their two synthetic terms were removed with the code system. Original code-system and value-set ID sets matched afterward.
+The draft and its proposed setup navigation remain uncommitted. Published Terminology content remains unchanged.
+
+## High-resolution images after the power cut
+
+The preview height cap was removed. Standalone pages use the current viewport height.
+All four active guide previews now use native 4x captures or native illustration renders.
+Desktop sources are 5120 by 3200 pixels. Phone sources are 1500 by 3248 pixels.
+The seven older Dashboard reference images were also recaptured. Their crops retain native pixels.
+The Dashboard phone reference uses 1560 by 3376 pixels.
+The 43 terminal and file-browser illustrations are 2944 by 1664 pixels.
+Original app images are preserved in high-resolution/original-app.
+The previous terminal renders are preserved in terminal-dotted/original-2x.
+Original review screenshots remain in their original evidence folders.
+
+Start here, Dashboard and Your preferences use the new assets in app source.
+Terminology remains a preview. Its published article has not changed.
+The same framing is used in each page and its lightbox.
+Blur scales with the frame width, so large images retain the intended distinction.
+Videos and their original posters were not re-recorded.
+No commit or push was requested for this image batch. These edits remain uncommitted.
+
+The capture script is capture-high-resolution.cjs. It has preferences, terminology,
+dashboard and dashboard-reference phases. Dashboard phases require a separate sample installation
+at ports 3006 and 5186. Never point those phases at the populated warehouse.
+The temporary PostgreSQL container used for this run was removed after capturing.
+The normal database was not reset or seeded. Preferences were restored to their original values.
+Terminology cleanup compared the original ID sets and retained 514 code systems and 690 value sets.
+Dashboard cleanup compared the entire original dashboard list and removed only owned examples.
+
+Rebuild the previews with build.py, build-preferences.py and build-terminology.py.
+Then run promote-high-resolution.py to update approved app assets and framing.
+That promotion script also needs Pillow. It does not promote the Terminology article.
+terminal-dotted/promote.cjs renders all terminal and file-browser images at 4x.
+check-high-resolution.cjs verifies the active previews against the server at port 4392.
+
+Checks for this batch:
+
+- `node docs/review/user-guide/check-high-resolution.cjs` passed for all four previews.
+  It checked native image widths, 2560 by 1440 enlargement and 375 by 812 layout.
+  All previews used the full 812px mobile viewport without horizontal overflow.
+- `pnpm --filter @openldr/studio typecheck` exited 0.
+- `pnpm --filter @openldr/studio test src/docs/Lightbox.test.tsx src/docs/validation.test.ts`
+  reported 2 test files and 25 tests passed. Existing dialog-description warnings remain.
+- `pnpm --filter @openldr/studio build` exited 0, built in 10.86 seconds.
+  Existing dependency annotation and chunk-size warnings remain.
+- Live app checks confirmed Dashboard and Preferences load 5120px sources in their lightboxes.
+  Start here loads 2944px illustrations. Details are in high-resolution/app-checks.json.
+- `git diff --check` exited 0.
+
+These checks cover capture rendering, documentation components and desktop compilation.
+They do not prove physical phone behavior, native Windows or macOS CLI execution,
+or higher-resolution video playback. Existing recordings remain unchanged.
+
+The preview server now serves this repository folder directly at port 4392.
+The previous copies under the Codex visualization folder were refreshed too.
+
+
+## Approved Terminology publication and menu order
+
+On 2026-11-12, the operator approved the high-resolution updates and Terminology for main.
+Terminology is published in English, French and Portuguese with 47 steps and 56 image placements.
+The three reused screenshots have separate placement names so their step numbers remain correct.
+The earlier guide captures remain available.
+
+Set up your system is the new documentation group after Start here.
+Its order is Terminology, Facilities, Test catalog, Patients, Forms, Workflows.
+Facilities, Test catalog and patient settings are optional. The guide introductions and web
+getting-started pages strongly recommend configuring them during use. They are not presented
+as prerequisites for receiving and processing data. Lab order test choices use the configured catalog.
+
+All four active previews use navigation.json through build.py. Their menu order matches the app registry.
+Start here includes a live Terminology preview link, so the round trip keeps it available.
+Historical image comparison pages remain unchanged.
+
+Facilities is the next guide to review. Its full walkthrough has not been rewritten in this slice.
+Only the optional setup note was added to Facilities, Test catalog and Patients.
+
+Publication checks: 94 Studio documentation tests and 29 web documentation tests passed.
+Studio and web typechecks passed. The Studio production build completed in 9.38 seconds.
+Browser publication results are recorded in high-resolution/publication-checks.json.
+The browser checks cover all three Terminology locales, 47 numbered steps, 56 screenshot placements,
+5120px native image sources, mobile layout and the preview navigation round trip.
+A physical phone is still needed to verify controls against retracting browser chrome.

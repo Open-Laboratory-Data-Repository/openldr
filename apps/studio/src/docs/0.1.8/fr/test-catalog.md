@@ -2,6 +2,8 @@
 
 Le **catalogue des examens** est la liste nationale des examens. Chaque examen a un code, un nom, une catégorie, les types de prélèvement qu'il accepte et, s'il en a un, un code LOINC. Un examen sans code LOINC affiche **Sans LOINC**.
 
+La configuration du catalogue de tests est facultative. OpenLDR peut recevoir et traiter les données avant sa configuration. Nous recommandons fortement de le configurer au cours de l'utilisation du système, pour rapprocher les tests de différentes sources. Les choix de tests du formulaire Lab order utilisent le catalogue configuré.
+
 Le catalogue a trois rôles. Il décide des examens que propose le formulaire **Lab order**. Il permet aux rapports de compter un examen de la même façon, quel que soit son nom dans chaque système de laboratoire. Et il porte les paramètres de résultat et les intervalles de référence de chaque examen.
 
 Une installation neuve ne contient aucun examen. Ce guide charge une petite liste d'exemple, active quelques examens et y associe les données d'exemple de la documentation. Comptez 15 minutes. Sélectionnez une image ou un clip pour l'agrandir.

@@ -1,0 +1,552 @@
+[
+  {
+    "id": "open-dashboard",
+    "crop": [
+      0,
+      0,
+      640,
+      400
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 56,
+        "width": 223,
+        "height": 36
+      }
+    ]
+  },
+  {
+    "id": "open-actions",
+    "crop": [
+      640,
+      0,
+      640,
+      400
+    ],
+    "targets": [
+      {
+        "x": 1232,
+        "y": 62,
+        "width": 32,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "choose-new-dashboard",
+    "crop": [
+      640,
+      0,
+      640,
+      400
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 103,
+        "width": 150,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "dashboard-created",
+    "crop": [
+      200,
+      0,
+      640,
+      400
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 92,
+        "width": 224,
+        "height": 36
+      },
+      {
+        "x": 240,
+        "y": 141,
+        "width": 1040,
+        "height": 16
+      }
+    ]
+  },
+  {
+    "id": "bar-step-1-new-dashboard",
+    "crop": [
+      640,
+      24.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 208,
+        "width": 150,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-step-2-add-widget",
+    "crop": [
+      640,
+      24.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 208,
+        "width": 150,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-step-3-title",
+    "crop": [
+      0,
+      0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 49,
+        "y": 41.5,
+        "width": 320,
+        "height": 27
+      }
+    ]
+  },
+  {
+    "id": "bar-step-4-defaults",
+    "crop": [
+      8.0,
+      0,
+      664,
+      415.0
+    ],
+    "targets": [
+      {
+        "x": 40,
+        "y": 91,
+        "width": 600,
+        "height": 230
+      }
+    ]
+  },
+  {
+    "id": "bar-step-5-group-button",
+    "crop": [
+      0,
+      150.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 134,
+        "y": 323,
+        "width": 76,
+        "height": 54
+      }
+    ]
+  },
+  {
+    "id": "bar-step-5-group-menu",
+    "crop": [
+      0,
+      301.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 68,
+        "y": 485,
+        "width": 118,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "widget-date-grain",
+    "crop": [
+      18.0,
+      43.375,
+      746,
+      466.25
+    ],
+    "targets": [
+      {
+        "x": 50,
+        "y": 205,
+        "width": 682,
+        "height": 143
+      }
+    ]
+  },
+  {
+    "id": "bar-step-6-chart-menu",
+    "crop": [
+      328.0,
+      274.5,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 573,
+        "y": 458.5,
+        "width": 150,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-step-6-bar-picker",
+    "crop": [
+      640,
+      0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 921,
+        "y": 140.53125,
+        "width": 163.5,
+        "height": 42
+      }
+    ]
+  },
+  {
+    "id": "bar-step-7-save",
+    "crop": [
+      328.0,
+      347.5,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 573,
+        "y": 531.5,
+        "width": 150,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-result",
+    "crop": [
+      184.0,
+      124.5,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 157,
+        "width": 496,
+        "height": 335
+      }
+    ]
+  },
+  {
+    "id": "dashboard-done",
+    "crop": [
+      640,
+      161.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 1035,
+        "y": 345,
+        "width": 208,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-step-2-add-widget",
+    "crop": [
+      640,
+      24.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 1109,
+        "y": 208,
+        "width": 150,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-step-3-title",
+    "crop": [
+      0,
+      0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 49,
+        "y": 41.5,
+        "width": 320,
+        "height": 27
+      }
+    ]
+  },
+  {
+    "id": "bar-step-4-defaults",
+    "crop": [
+      8.0,
+      0,
+      664,
+      415.0
+    ],
+    "targets": [
+      {
+        "x": 40,
+        "y": 91,
+        "width": 600,
+        "height": 230
+      }
+    ]
+  },
+  {
+    "id": "bar-step-5-group-button",
+    "crop": [
+      0,
+      150.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 134,
+        "y": 323,
+        "width": 76,
+        "height": 54
+      }
+    ]
+  },
+  {
+    "id": "bar-step-5-group-menu",
+    "crop": [
+      0,
+      301.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 68,
+        "y": 485,
+        "width": 118,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-step-6-chart-menu",
+    "crop": [
+      328.0,
+      274.5,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 573,
+        "y": 458.5,
+        "width": 150,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-step-6-bar-picker",
+    "crop": [
+      640,
+      0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 921,
+        "y": 140.53125,
+        "width": 163.5,
+        "height": 42
+      }
+    ]
+  },
+  {
+    "id": "bar-step-7-save",
+    "crop": [
+      328.0,
+      347.5,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 573,
+        "y": 531.5,
+        "width": 150,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "bar-result",
+    "crop": [
+      184.0,
+      124.5,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 157,
+        "width": 496,
+        "height": 335
+      }
+    ]
+  },
+  {
+    "id": "filter-step-1-dashboard",
+    "crop": [
+      0,
+      0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 8,
+        "y": 56,
+        "width": 223,
+        "height": 36
+      }
+    ]
+  },
+  {
+    "id": "filter-step-2-selector",
+    "crop": [
+      48.0,
+      0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 92,
+        "width": 224,
+        "height": 36
+      }
+    ]
+  },
+  {
+    "id": "filter-step-3-calendar",
+    "crop": [
+      205.25,
+      176.0,
+      691.5,
+      432.1875
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 208,
+        "width": 590,
+        "height": 368.1875
+      }
+    ]
+  },
+  {
+    "id": "filter-step-3-selected",
+    "crop": [
+      205.25,
+      176.0,
+      691.5,
+      432.1875
+    ],
+    "targets": [
+      {
+        "x": 256,
+        "y": 208,
+        "width": 590,
+        "height": 368.1875
+      }
+    ]
+  },
+  {
+    "id": "filter-step-4-test",
+    "crop": [
+      224.1953125,
+      153.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 470.5,
+        "y": 337,
+        "width": 147.390625,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "filter-step-5-priority",
+    "crop": [
+      349.5,
+      89.0,
+      640,
+      400.0
+    ],
+    "targets": [
+      {
+        "x": 610.5,
+        "y": 273,
+        "width": 118,
+        "height": 32
+      }
+    ]
+  },
+  {
+    "id": "filter-result",
+    "crop": [
+      208.0,
+      0,
+      847,
+      529.375
+    ],
+    "targets": [
+      {
+        "x": 240,
+        "y": 48,
+        "width": 783,
+        "height": 242
+      }
+    ]
+  }
+]

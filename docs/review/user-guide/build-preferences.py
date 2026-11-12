@@ -12,6 +12,7 @@ helpers = runpy.run_path(str(ROOT / 'build.py'))
 def build():
     manifest = json.loads((ROOT / 'preferences-evidence/capture-manifest.json').read_text())
     steps = {step['id']: step for step in manifest['steps']}
+    helpers['high_resolution']('preferences', steps)
     assets = {}
     placements = []
 

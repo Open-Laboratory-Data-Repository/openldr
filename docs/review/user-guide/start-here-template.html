@@ -1,7 +1,7 @@
 <style>
 #start-here-guide { --muted-foreground:var(--dg-muted); --dg-bg:light-dark(#fff,#171717); --dg-pane:light-dark(#fafafa,#1a1a1a); --dg-text:light-dark(#18181b,#fafafa); --dg-muted:light-dark(#71717a,#a0a0a0); --dg-border:light-dark(#e4e4e7,#2e2e2e); --dg-rule:light-dark(#eee,#242424); --dg-brand:#4682b4; --dg-link:light-dark(#276594,#73a9d5); --dg-wash:light-dark(#eaf0f6,#1e2a32); color:var(--dg-text); font:14px/1.6 Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; color-scheme:light dark; }
 #start-here-guide * { box-sizing:border-box; }
-#start-here-guide .dg-app { display:flex; flex-direction:column; height:840px; min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
+#start-here-guide .dg-app { display:flex; flex-direction:column; height:var(--guide-preview-height,840px); min-height:0; border:1px solid var(--dg-border); background:var(--dg-bg); }
 #start-here-guide .dg-head { display:flex; align-items:center; gap:16px; height:48px; padding:0 18px; flex-shrink:0; border-bottom:1px solid var(--dg-border); }
 #start-here-guide .dg-head strong { font-size:16px; font-weight:600; }
 #start-here-guide .dg-review { margin-left:12px; color:var(--dg-muted); font-size:12px; }
@@ -74,7 +74,7 @@
 #start-here-guide details p { color:var(--dg-muted); }
 #start-here-guide .dg-return { color:var(--dg-link); text-decoration:none; display:inline-block; margin-top:22px; }
 #start-here-guide .dg-lightbox { position:absolute; inset:0; z-index:20; background:var(--dg-bg); display:flex; align-items:center; justify-content:center; padding:40px 16px 16px; }
-#start-here-guide .dg-lightbox-frame { display:block; width:min(100%,calc((min(840px,100dvh) - 64px)*736/416)); }
+#start-here-guide .dg-lightbox-frame { display:block; width:min(100%,calc((min(var(--guide-preview-height,840px),100dvh) - 64px)*736/416)); }
 #start-here-guide .dg-dotted-frame img { max-height:none; }
 #start-here-guide .dg-lightbox-frame > img { max-width:100%; max-height:100%; object-fit:contain; }
 #start-here-guide .dg-lightbox button { position:absolute; right:14px; top:8px; background:#242424; color:#fff; border:1px solid #555; border-radius:5px; padding:5px 10px; }
@@ -92,12 +92,7 @@
   <div class="dg-main">
    <aside class="dg-sidebar">
     <div class="dg-search"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Collapse documentation sidebar" data-collapse><i data-lucide="panel-left-close" aria-hidden="true"></i></button><input type="search" placeholder="Search…" aria-label="Search documentation" data-search></div>
-    <nav class="dg-docnav" aria-label="Documentation sections">
-     <div class="dg-group"><span class="dg-group-label">Start here</span><a class="dg-navitem dg-selected" href="#sh-top" aria-current="page">Start here</a><span class="dg-navitem">Your preferences</span></div>
-     <div class="dg-group"><span class="dg-group-label">Daily work</span><a class="dg-navitem" href="dashboard-review.html">Dashboards</a><span class="dg-navitem">Reports</span><span class="dg-navitem">Activity</span></div>
-     <div class="dg-group"><span class="dg-group-label">Data and design</span><span class="dg-navitem">Workflows</span><span class="dg-navitem">Scheduled reports with workflows</span><span class="dg-navitem">Custom Queries</span><span class="dg-navitem">Report Designer</span><span class="dg-navitem">Forms</span><span class="dg-navitem">Terminology</span></div>
-     <div class="dg-group"><span class="dg-group-label">Administration</span><span class="dg-navitem">Facilities</span><span class="dg-navitem">Test catalog</span><span class="dg-navitem">Users and Roles</span><span class="dg-navitem">Settings</span></div>
-    </nav>
+    __PREVIEW_NAVIGATION__
    </aside>
    <section class="dg-content">
     <div class="dg-toolbar"><button class="dg-iconbtn cursor-interaction" type="button" aria-label="Show documentation sidebar" data-expand hidden><i data-lucide="panel-left-open" aria-hidden="true"></i></button><span class="dg-version">Version <b>0.1.8</b></span><i data-lucide="download" aria-hidden="true"></i></div>
@@ -117,7 +112,7 @@
 (() => {
  const root = document.getElementById('start-here-guide');
  const assets = JSON.parse(document.getElementById('start-here-assets').textContent);
- root.querySelectorAll('img[data-evidence]').forEach(img=>{img.src=assets[img.dataset.evidence];});
+ root.querySelectorAll('img[data-evidence]').forEach(img=>{img.loading='lazy';img.decoding='async';img.src=assets[img.dataset.evidence];});
  const themeButton=root.querySelector('[data-theme-toggle]');
  let previewTheme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
  function applyTheme() {

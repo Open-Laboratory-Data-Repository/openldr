@@ -1,0 +1,6 @@
+// Terminology import template. One JSON object per line.
+// Required: code, displayName. Optional: shortName, class, unit, status, metadata.
+// Blank lines and // comments are ignored.
+{"type":"meta","codingSystem":"DOCS-GUIDE-REVIEW","version":"2026-01-01"}
+{"code":"119361006","displayName":"Plasma specimen","shortName":"Plasma","class":"Specimen"}
+{"code":"441407007","displayName":"HIV 1 RNA measurement","class":"Procedure","unit":"copies/mL","metadata":{"equivalentLoinc":"20447-9"}}

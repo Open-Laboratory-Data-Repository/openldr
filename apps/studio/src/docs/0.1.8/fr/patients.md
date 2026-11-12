@@ -2,6 +2,8 @@
 
 **Patients** liste chaque patient qu'OpenLDR a reçu avec des données de laboratoire, et où il a été testé. Le système source, comme un dossier hospitalier ou un système de laboratoire, est le propriétaire de chaque patient. OpenLDR affiche les patients et ne les modifie jamais.
 
+Les paramètres des patients sont facultatifs. OpenLDR reçoit les dossiers des patients avec les données de laboratoire, sans exiger de nommer d'abord les systèmes d'identifiants. Nous recommandons fortement de configurer ces paramètres et de vérifier les doublons possibles au cours de l'utilisation du système.
+
 Ce guide prend environ 15 minutes. Il utilise les données d'exemple de la documentation, chargez-les d'abord. Sélectionnez une image ou un clip pour l'agrandir.
 
 ![Patients avec les données d'exemple chargées : 25 patients.](patients-list.png)

@@ -30,6 +30,17 @@ irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/ma
 
 To stop the stack, run `docker compose down` in the `openldr/` folder the installer made. To start it again, run `docker compose up -d` in the same folder.
 
+## Set up your system
+
+OpenLDR can receive and process lab data before you configure Facilities, Test catalog or patient settings. These setup tasks are optional. We strongly recommend completing them as you use the system.
+
+- Facilities gives facility codes consistent names and locations.
+- Test catalog helps match tests across sources and supplies choices in the Lab order form.
+- Patient settings label identifier systems and help you review possible duplicate records.
+
+Open **Docs** in Studio and follow **Set up your system**, starting with Terminology. The in-app guides explain each task.
+
+
 ## 3. Next steps
 
 - [Load & push data](/docs/load-data): send your first lab data into OpenLDR.

@@ -1,0 +1,1226 @@
+{
+  "terminology-guide-open-terminology.png": {
+    "crop": {
+      "x": 0,
+      "y": 124.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 8,
+        "y": 256,
+        "width": 223,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "terminology-guide-choose-publisher.png": {
+    "crop": {
+      "x": 119.5,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 240,
+        "y": 84,
+        "width": 239,
+        "height": 37
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "terminology-guide-code-systems-tab.png": {
+    "crop": {
+      "x": 353.86328125,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 551.015625,
+        "y": 56.171875,
+        "width": 85.6953125,
+        "height": 18.65625
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "terminology-guide-choose-code-system.png": {
+    "crop": {
+      "x": 341.21875,
+      "y": 403.8125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 527.3125,
+        "width": 202.4375,
+        "height": 53
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "terminology-guide-search-terms.png": {
+    "crop": {
+      "x": 467.0,
+      "y": 0,
+      "width": 498,
+      "height": 311.25
+    },
+    "targets": [
+      {
+        "x": 492,
+        "y": 137,
+        "width": 448,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "terminology-guide-search-result.png": {
+    "crop": {
+      "x": 304.0,
+      "y": 200.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 324,
+        "width": 128,
+        "height": 53
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "terminology-guide-open-term.png": {
+    "crop": {
+      "x": 304.0,
+      "y": 94.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 218,
+        "width": 128,
+        "height": 53
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "terminology-guide-term-details.png": {
+    "crop": {
+      "x": 797.91015625,
+      "y": 173.546875,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "height": 36,
+        "width": 416.1796875,
+        "x": 829.8203125,
+        "y": 305.546875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "terminology-guide-close-term.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1236,
+        "y": 16,
+        "width": 28,
+        "height": 24
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 7
+  },
+  "terminology-guide-system-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1244,
+        "y": 53.5,
+        "width": 24,
+        "height": 24
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "terminology-guide-code-system-menu.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1113,
+        "y": 118.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "terminology-guide-new-code-system.png": {
+    "crop": {
+      "x": 793.0,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 958,
+        "y": 123.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "terminology-guide-system-code.png": {
+    "crop": {
+      "x": 800,
+      "y": 52.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 857,
+        "y": 184.53125,
+        "width": 399,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "terminology-guide-system-name.png": {
+    "crop": {
+      "x": 800,
+      "y": 169.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 857,
+        "y": 301.53125,
+        "width": 399,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "terminology-guide-system-url.png": {
+    "crop": {
+      "x": 740.5,
+      "y": 242.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 857,
+        "y": 374.53125,
+        "width": 247,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "terminology-guide-create-system.png": {
+    "crop": {
+      "x": 800,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1181.96875,
+        "y": 748,
+        "width": 74.0234375,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 7
+  },
+  "terminology-guide-system-created-step-0.png": {
+    "crop": {
+      "x": 341.21875,
+      "y": 63.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 181,
+        "width": 202.4375,
+        "height": 65
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "terminology-guide-system-created-step-1.png": {
+    "crop": {
+      "x": 341.21875,
+      "y": 63.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 181,
+        "width": 202.4375,
+        "height": 65
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "terminology-guide-term-actions-step-2.png": {
+    "crop": {
+      "x": 800,
+      "y": 3.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1236,
+        "y": 137,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "terminology-guide-new-term.png": {
+    "crop": {
+      "x": 800,
+      "y": 44.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1105.25,
+        "y": 178,
+        "width": 157.8515625,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 3
+  },
+  "terminology-guide-term-code.png": {
+    "crop": {
+      "x": 797.91796875,
+      "y": 125.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 829.828125,
+        "y": 257.53125,
+        "width": 416.1796875,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "terminology-guide-term-display.png": {
+    "crop": {
+      "x": 797.91796875,
+      "y": 173.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 829.828125,
+        "y": 305.53125,
+        "width": 416.1796875,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 5
+  },
+  "terminology-guide-term-sheet-actions-step-6.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1236,
+        "y": 133.53125,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 6
+  },
+  "terminology-guide-create-term.png": {
+    "crop": {
+      "x": 800,
+      "y": 36.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1109,
+        "y": 170.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 7
+  },
+  "terminology-guide-term-created.png": {
+    "crop": {
+      "x": 304.0,
+      "y": 94.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 218,
+        "width": 128,
+        "height": 53
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "terminology-guide-edit-term-row.png": {
+    "crop": {
+      "x": 304.0,
+      "y": 94.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 218,
+        "width": 128,
+        "height": 53
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "terminology-guide-edit-term-name.png": {
+    "crop": {
+      "x": 797.91796875,
+      "y": 173.53125,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 829.828125,
+        "y": 305.53125,
+        "width": 416.1796875,
+        "height": 36
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "terminology-guide-term-sheet-actions-step-3.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1236,
+        "y": 133.53125,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 3
+  },
+  "terminology-guide-save-term.png": {
+    "crop": {
+      "x": 800,
+      "y": 36.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1109,
+        "y": 170.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 4
+  },
+  "terminology-guide-term-updated.png": {
+    "crop": {
+      "x": 353.125,
+      "y": 94.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 218,
+        "width": 226.25,
+        "height": 53
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "terminology-guide-term-actions-step-1.png": {
+    "crop": {
+      "x": 800,
+      "y": 3.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1236,
+        "y": 137,
+        "width": 32,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "terminology-guide-download-template.png": {
+    "crop": {
+      "x": 800,
+      "y": 108.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1105.25,
+        "y": 242,
+        "width": 157.8515625,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "terminology-guide-import-terms.png": {
+    "crop": {
+      "x": 800,
+      "y": 76.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1105.25,
+        "y": 210,
+        "width": 157.8515625,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 3
+  },
+  "terminology-guide-import-result.png": {
+    "crop": {
+      "x": 304.0,
+      "y": 147.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 271,
+        "width": 128,
+        "height": 53
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "terminology-guide-back-to-systems.png": {
+    "crop": {
+      "x": 309.6796875,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 492,
+        "y": 92,
+        "width": 115.359375,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "terminology-guide-value-sets-tab.png": {
+    "crop": {
+      "x": 431.99609375,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 638.71875,
+        "y": 56.171875,
+        "width": 66.5546875,
+        "height": 18.65625
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "terminology-guide-open-value-set.png": {
+    "crop": {
+      "x": 297.25,
+      "y": 449.90625,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 480,
+        "y": 567.40625,
+        "width": 114.5,
+        "height": 65
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "terminology-guide-value-set-expansion.png": {
+    "crop": {
+      "x": 591.0,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 621,
+        "y": 610.21875,
+        "width": 420,
+        "height": 120
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "terminology-guide-value-set-page-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1244,
+        "y": 53.5,
+        "width": 24,
+        "height": 24
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 1
+  },
+  "terminology-guide-value-set-menu.png": {
+    "crop": {
+      "x": 800,
+      "y": 48.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1113,
+        "y": 182.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "terminology-guide-new-value-set.png": {
+    "crop": {
+      "x": 793.0,
+      "y": 53.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 958,
+        "y": 187.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "terminology-guide-value-set-url.png": {
+    "crop": {
+      "x": 539.75,
+      "y": 40.21875,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 621,
+        "y": 174.21875,
+        "width": 317.5,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 4
+  },
+  "terminology-guide-value-set-title.png": {
+    "crop": {
+      "x": 800,
+      "y": 40.21875,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 950.5,
+        "y": 174.21875,
+        "width": 317.5,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 5
+  },
+  "terminology-guide-value-set-system.png": {
+    "crop": {
+      "x": 582.015625,
+      "y": 245.21875,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 678.015625,
+        "y": 381.21875,
+        "width": 288,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 6
+  },
+  "terminology-guide-value-set-system-selection.png": {
+    "crop": {
+      "x": 370.5,
+      "y": 393.75,
+      "width": 650,
+      "height": 406.25
+    },
+    "targets": [
+      {
+        "x": 395.5,
+        "y": 733.25,
+        "width": 600,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "inside",
+    "step": 6
+  },
+  "terminology-guide-value-set-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1240,
+        "y": 94.21875,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 7
+  },
+  "terminology-guide-save-value-set.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1113,
+        "y": 131.25,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 8
+  },
+  "terminology-guide-value-set-created.png": {
+    "crop": {
+      "x": 591.0,
+      "y": 500.0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 621,
+        "y": 610.21875,
+        "width": 420,
+        "height": 120
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "terminology-guide-standard-publisher.png": {
+    "crop": {
+      "x": 119.5,
+      "y": 26.5,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 240,
+        "y": 158,
+        "width": 239,
+        "height": 37
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "terminology-guide-standard-actions.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1244,
+        "y": 53.5,
+        "width": 24,
+        "height": 24
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 2
+  },
+  "terminology-guide-import-distribution.png": {
+    "crop": {
+      "x": 800,
+      "y": 0,
+      "width": 480,
+      "height": 300.0
+    },
+    "targets": [
+      {
+        "x": 1113,
+        "y": 127.5,
+        "width": 150,
+        "height": 32
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": "before",
+    "step": 3
+  },
+  "terminology-guide-distribution-importer.png": {
+    "crop": {
+      "x": 376.0,
+      "y": 220.6171875,
+      "width": 528,
+      "height": 330.0
+    },
+    "targets": [
+      {
+        "height": 90,
+        "width": 478,
+        "x": 401,
+        "y": 340.6171875
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  },
+  "terminology-guide-phone-show-publishers.png": {
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "x": 4,
+        "y": 51.5,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerPlacement": "after",
+    "step": 1
+  },
+  "terminology-guide-phone-choose-publisher.png": {
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "x": 0,
+        "y": 84,
+        "width": 159,
+        "height": 37
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerPlacement": "after",
+    "step": 2
+  },
+  "terminology-guide-phone-hide-publishers.png": {
+    "crop": {
+      "x": 0,
+      "y": 0,
+      "width": 375,
+      "height": 234.375
+    },
+    "targets": [
+      {
+        "x": 127,
+        "y": 51.5,
+        "width": 28,
+        "height": 28
+      }
+    ],
+    "source": {
+      "width": 375,
+      "height": 812
+    },
+    "markerPlacement": "after",
+    "step": 3
+  },
+  "terminology-guide-import-error.png": {
+    "crop": {
+      "x": 467.0,
+      "y": 46.75,
+      "width": 500,
+      "height": 312.5
+    },
+    "targets": [
+      {
+        "x": 492,
+        "y": 186,
+        "width": 450,
+        "height": 34
+      }
+    ],
+    "source": {
+      "width": 1280,
+      "height": 800
+    },
+    "markerPlacement": null
+  }
+}

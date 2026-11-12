@@ -2,6 +2,8 @@
 
 **Facilities** holds the facility registers this install knows: the national list of health facilities and laboratories, each with a code, a name, a type and where it is. Lab data names facilities by code. A register turns those codes into names and places, so reports can say "Sample District Hospital, Sample North" instead of `SAMPLE-HOSP-01`.
 
+Setting up Facilities is optional. OpenLDR can receive and process lab data before you add a facility register. We strongly recommend setting it up as you use the system, so facility codes have consistent names and locations.
+
 The page has two tabs. **Registry** lists the facilities you added or imported. **Observed** lists the facility codes that arrived in lab data, and which facility each one resolves to. Adding a registry row and resolving an observed code are separate tasks.
 
 A fresh install has no register. This guide imports a small sample register and links the docs sample data to it. It takes about 20 minutes. Select any picture or clip to enlarge it.
