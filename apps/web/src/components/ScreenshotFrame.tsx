@@ -1,5 +1,16 @@
+import { useSyncExternalStore } from 'react';
 import { screenshotUrl } from '@/landing/screenshots';
 import { cn } from '@/lib/cn';
+
+function subscribeTheme(onChange: () => void) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  return () => observer.disconnect();
+}
+
+function currentTheme() {
+  return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
 
 export interface ScreenshotFrameProps {
   name: string;
@@ -30,7 +41,10 @@ export function ScreenshotFrame({
   chrome = false,
   className,
 }: ScreenshotFrameProps) {
-  const url = screenshotUrl(name);
+  const theme = useSyncExternalStore(subscribeTheme, currentTheme, () => 'dark');
+  const darkUrl = screenshotUrl(name);
+  const lightUrl = screenshotUrl(name.replace(/\.png$/, '-light.png'));
+  const url = theme === 'light' && lightUrl ? lightUrl : darkUrl;
 
   if (!url) {
     return (

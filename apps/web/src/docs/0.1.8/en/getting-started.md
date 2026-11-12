@@ -1,52 +1,58 @@
 # Getting started
 
-OpenLDR Community Edition collects laboratory data from many sources, turns it into FHIR R4, and stores it in a database your organization controls. It then gives you dashboards, reports and surveillance views, with a strong focus on antimicrobial resistance (AMR). It is built for national and regional lab networks.
+Install OpenLDR on a computer your organisation controls, then open Studio in a browser. OpenLDR receives laboratory data, converts it to FHIR R4, a standard format for healthcare data, and makes it available for dashboards and reports.
 
-These pages cover installing, setting up and fixing an OpenLDR server. To learn the studio itself, open **Docs** inside the studio after you sign in.
+These web guides cover installation, server configuration and troubleshooting. The guides inside Studio explain how to use the app. You can use your own data throughout. Sample data is optional.
 
-## 1. Install
+## Choose where OpenLDR will run
 
-You need a host with Docker. Check [Requirements](/docs/requirements) first.
+Choose the computer that will store your data and run OpenLDR. It needs to stay on while people use Studio. A laptop or phone opening Studio in a browser does not need its own OpenLDR installation.
 
-The one-line installer generates every secret, starts the stack on `https://localhost` with a self-signed certificate, and prints the URL and the admin credentials. All options are on the [Install](/docs/install) page.
+| Your host | Where to start |
+| --- | --- |
+| Linux, macOS or Windows 10/11 | Read [Requirements](/docs/requirements), then follow [Install](/docs/install). |
+| Windows Server | Follow [Windows Server](/docs/windows-server) to prepare a Linux environment, then install OpenLDR there. |
+| A source checkout for development | Follow [Development](/docs/development). This uses workspace commands rather than the installed CLI. |
+| An existing OpenLDR installation | Follow [Planned upgrades](/docs/upgrading). You do not need a new installation. |
 
-Linux or macOS:
+## Install and check the result
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
-```
+The installer creates the configuration, generates passwords and starts the services. Run it on your chosen host.
 
-Windows (PowerShell):
+1. Open the guide for your host above. Check its requirements before running commands.
+2. Follow that guide's installation steps. Wait for the services to become ready.
+3. Keep the address and **App sign-in** credentials printed at the end. The Keycloak admin password is a separate credential for managing authentication.
 
-```powershell
-irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1 | iex
-```
+![Illustration of installer output. The highlighted lines show the address and App sign-in credentials. Passwords are placeholders.](guide:install-result)
 
-## 2. Sign in
+**Expected result:** The installer says **OpenLDR is ready** and prints the address to open. If it says **OpenLDR is starting**, some services are not ready yet. Inspect `docker compose ps` and `docker compose logs` from the installation folder before continuing.
 
-1. Open the URL the installer printed.
-2. Sign in with the admin credentials it printed.
-3. Open **Docs** in the studio menu and read **Start here**.
+The illustrated address is the default for a local installation. If you need access from other computers, configure a hostname with [Install](/docs/install). On another computer, `localhost` refers to that computer, not your OpenLDR host.
 
-To stop the stack, run `docker compose down` in the `openldr/` folder the installer made. To start it again, run `docker compose up -d` in the same folder.
+## Sign in to Studio
 
-## Set up your system
+Use the app credentials to enter Studio for the first time.
 
-OpenLDR can receive and process lab data before you configure Facilities, Test catalog or patient settings. These setup tasks are optional. We strongly recommend completing them as you use the system.
+1. Open the address the installer printed. For a remote installation, use the hostname you configured.
+2. Sign in as `labadmin`, using the generated password on the **App sign-in** line.
+3. Change the initial password when prompted.
 
-- Facilities gives facility codes consistent names and locations.
-- Test catalog helps match tests across sources and supplies choices in the Lab order form.
-- Patient settings label identifier systems and help you review possible duplicate records.
+**Expected result:** Studio opens. A new installation includes a sample dashboard unless you chose the seedless option. Existing data and permissions determine what you see on an upgraded installation.
 
-Open **Docs** in Studio and follow **Set up your system**, starting with Terminology. The in-app guides explain each task.
+The default local installation uses a self-signed certificate. A browser warning is expected for that setup. Check that you opened your own installation's address before accepting it. See [Install](/docs/install) for a trusted certificate.
 
-Studio Docs includes illustrated tasks for Terminology, Facilities, Test catalog, Patients, Forms and Workflows. Follow the dashboard and report guides for daily work, or the settings guides to manage the installation. Each task starts with its purpose and shows the controls to use. Follow the guides with your own data; practice files are optional.
+## Continue in the app
 
-## 3. Next steps
+Open **Docs** in Studio's main menu and read **Start here**. It explains the installed and development CLI, then links to the illustrated user guides.
 
-- [Load & push data](/docs/load-data): send your first lab data into OpenLDR.
-- [Environment variables](/docs/environment): configure a deployment.
-- [Authentication providers](/docs/auth-providers): sign in with Keycloak or another OpenID Connect provider.
-- [Planned upgrades](/docs/upgrading): move to a new release safely.
-- [Command-line interface (CLI)](/docs/cli): run OpenLDR from a terminal on a server with no browser.
-- [Development](/docs/development): run OpenLDR from source.
+Facilities, Test catalog and patient settings are optional. OpenLDR can receive and process data before you complete them. We recommend setting them up as you use the system. The in-app **Set up your system** guides start with Terminology.
+
+Use the dashboard and report guides for daily work. They work with your own data; practice files are optional.
+
+## Choose your next task
+
+- [Load & push data](/docs/load-data): bring your first laboratory data into OpenLDR.
+- [Command-line interface](/docs/cli): run operator commands on the OpenLDR host.
+- [Authentication providers](/docs/auth-providers): configure who can sign in.
+- [Environment variables](/docs/environment): change server configuration.
+- [Planned upgrades](/docs/upgrading): prepare a backup and move to a new release.

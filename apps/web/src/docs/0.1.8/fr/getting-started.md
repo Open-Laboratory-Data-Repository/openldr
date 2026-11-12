@@ -1,52 +1,58 @@
 # Bien démarrer
 
-OpenLDR Community Edition collecte les données de laboratoire de nombreuses sources, les convertit en FHIR R4 et les enregistre dans une base de données que votre organisation contrôle. Il fournit ensuite des tableaux de bord, des rapports et des vues de surveillance, avec un accent fort sur la résistance aux antimicrobiens (RAM). Il est conçu pour les réseaux nationaux et régionaux de laboratoires.
+Installez OpenLDR sur un ordinateur contrôlé par votre organisation, puis ouvrez Studio dans un navigateur. OpenLDR reçoit les données de laboratoire, les convertit en FHIR R4, un format standard pour les données de santé, et les rend disponibles pour les tableaux de bord et les rapports.
 
-Ces pages couvrent l'installation, la configuration et le dépannage d'un serveur OpenLDR. Pour apprendre le studio lui-même, ouvrez **Documentation** dans le studio après la connexion.
+Ces guides web couvrent l'installation, la configuration du serveur et le dépannage. Les guides intégrés à Studio expliquent comment utiliser l'application. Vous pouvez utiliser vos propres données. Les données d'exemple sont facultatives.
 
-## 1. Installer
+## Choisir où exécuter OpenLDR
 
-Il vous faut un hôte avec Docker. Lisez d'abord [Prérequis](/docs/requirements).
+Choisissez l'ordinateur qui stockera les données et exécutera OpenLDR. Il doit rester allumé pendant l'utilisation de Studio. Un ordinateur portable ou un téléphone qui ouvre Studio dans un navigateur n'a pas besoin de sa propre installation.
 
-L'installateur en une ligne génère tous les secrets, démarre la pile sur `https://localhost` avec un certificat auto-signé, puis affiche l'URL et les identifiants administrateur. Toutes les options sont sur la page [Installation](/docs/install).
+| Votre hôte | Par où commencer |
+| --- | --- |
+| Linux, macOS ou Windows 10/11 | Lisez les [Prérequis](/docs/requirements), puis suivez [Installation](/docs/install). |
+| Windows Server | Suivez [Windows Server](/docs/windows-server) pour préparer un environnement Linux, puis installez-y OpenLDR. |
+| Code source pour le développement | Suivez [Développement](/docs/development). Cette méthode utilise les commandes du projet plutôt que la CLI installée. |
+| Installation OpenLDR existante | Suivez [Mises à niveau planifiées](/docs/upgrading). Une nouvelle installation n'est pas nécessaire. |
 
-Linux ou macOS :
+## Installer et vérifier le résultat
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
-```
+L'installateur crée la configuration, génère les mots de passe et démarre les services. Exécutez-le sur l'hôte choisi.
 
-Windows (PowerShell) :
+1. Ouvrez le guide adapté à votre hôte ci-dessus. Vérifiez ses prérequis avant de lancer les commandes.
+2. Suivez ses étapes d'installation. Attendez que les services soient prêts.
+3. Conservez l'adresse et les identifiants **App sign-in** affichés à la fin. Le mot de passe administrateur Keycloak sert séparément à gérer l'authentification.
 
-```powershell
-irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1 | iex
-```
+![Illustration de la sortie de l'installateur. Les lignes encadrées montrent l'adresse et les identifiants App sign-in. Les mots de passe sont des espaces réservés.](guide:install-result)
 
-## 2. Se connecter
+**Résultat attendu :** L'installateur affiche **OpenLDR is ready** et l'adresse à ouvrir. S'il affiche **OpenLDR is starting**, certains services ne sont pas encore prêts. Examinez `docker compose ps` et `docker compose logs` depuis le dossier d'installation avant de continuer.
 
-1. Ouvrez l'URL affichée par l'installateur.
-2. Connectez-vous avec les identifiants administrateur affichés.
-3. Ouvrez **Documentation** dans le menu du studio et lisez **Commencer ici**.
+L'adresse illustrée est celle d'une installation locale par défaut. Pour un accès depuis d'autres ordinateurs, configurez un nom d'hôte avec [Installation](/docs/install). Sur un autre ordinateur, `localhost` désigne cet ordinateur, pas votre hôte OpenLDR.
 
-Pour arrêter la pile, lancez `docker compose down` dans le dossier `openldr/` créé par l'installateur. Pour la redémarrer, lancez `docker compose up -d` dans le même dossier.
+## Se connecter à Studio
 
-## Configurer votre système
+Utilisez les identifiants de l'application pour entrer dans Studio pour la première fois.
 
-OpenLDR peut recevoir et traiter les données avant la configuration des établissements, du catalogue de tests ou des paramètres des patients. Ces tâches sont facultatives. Nous recommandons fortement de les réaliser au cours de l'utilisation du système.
+1. Ouvrez l'adresse affichée par l'installateur. Pour une installation distante, utilisez le nom d'hôte configuré.
+2. Connectez-vous avec `labadmin` et le mot de passe généré sur la ligne **App sign-in**.
+3. Changez le mot de passe initial lorsque cela vous est demandé.
 
-- Les établissements associent des noms et des lieux cohérents aux codes.
-- Le catalogue de tests rapproche les tests de différentes sources et fournit les choix du formulaire Lab order.
-- Les paramètres des patients nomment les systèmes d'identifiants et facilitent la vérification des doublons possibles.
+**Résultat attendu :** Studio s'ouvre. Une nouvelle installation comprend un tableau de bord d'exemple, sauf si vous avez choisi l'option sans données initiales. Après une mise à niveau, les données et les droits existants déterminent ce qui s'affiche.
 
-Ouvrez **Documentation** dans Studio et suivez **Configurer votre système**, en commençant par Terminologie. Les guides intégrés expliquent chaque tâche.
+L'installation locale par défaut utilise un certificat auto-signé. Un avertissement du navigateur est attendu dans ce cas. Vérifiez que vous avez ouvert l'adresse de votre propre installation avant de l'accepter. Consultez [Installation](/docs/install) pour un certificat reconnu par les navigateurs.
 
-La documentation de Studio présente des tâches illustrées pour Terminology, Facilities, Test catalog, Patients, Forms et Workflows. Suivez les guides des tableaux de bord et des rapports pour le travail quotidien, ou ceux des paramètres pour gérer l'installation. Chaque tâche explique son objectif et montre les commandes à utiliser. Utilisez vos propres données ; les fichiers de pratique sont facultatifs.
+## Continuer dans l'application
 
-## 3. Étapes suivantes
+Ouvrez **Documentation** dans le menu principal de Studio et lisez **Commencer ici**. Ce guide explique la CLI installée et celle de développement, puis renvoie vers les guides illustrés.
 
-- [Charger et envoyer des données](/docs/load-data) : envoyez vos premières données de laboratoire dans OpenLDR.
-- [Variables d'environnement](/docs/environment) : configurez un déploiement.
-- [Fournisseurs d'authentification](/docs/auth-providers) : connexion avec Keycloak ou un autre fournisseur OpenID Connect.
-- [Mises à niveau planifiées](/docs/upgrading) : passez à une nouvelle version sans risque.
-- [Interface en ligne de commande (CLI)](/docs/cli) : utilisez OpenLDR depuis un terminal, sur un serveur sans navigateur.
-- [Développement](/docs/development) : lancez OpenLDR depuis le code source.
+Les établissements, le catalogue de tests et les paramètres des patients sont facultatifs. OpenLDR peut recevoir et traiter des données avant leur configuration. Nous recommandons de les configurer au cours de l'utilisation. Les guides intégrés **Configurer votre système** commencent par Terminologie.
+
+Utilisez les guides des tableaux de bord et des rapports pour le travail quotidien. Ils acceptent vos propres données ; les fichiers de pratique sont facultatifs.
+
+## Choisir la tâche suivante
+
+- [Charger et envoyer des données](/docs/load-data) : importez vos premières données de laboratoire.
+- [Interface en ligne de commande](/docs/cli) : lancez les commandes sur l'hôte OpenLDR.
+- [Fournisseurs d'authentification](/docs/auth-providers) : configurez les personnes autorisées à se connecter.
+- [Variables d'environnement](/docs/environment) : modifiez la configuration du serveur.
+- [Mises à niveau planifiées](/docs/upgrading) : préparez une sauvegarde et passez à une nouvelle version.

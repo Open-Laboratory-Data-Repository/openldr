@@ -15,6 +15,11 @@ function renderDocs(path: string) {
 }
 
 describe('DocsPage', () => {
+  it('renders the installer illustration without stripping its media identifier', () => {
+    renderDocs('/docs/getting-started');
+    expect(screen.getByRole('img', { name: /Illustration of installer output/ })).toBeInTheDocument();
+    expect(screen.queryByText(/Screenshot unavailable/)).toBeNull();
+  });
 
 
   it('leaves the studio user guides to the in-app docs', () => {

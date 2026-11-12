@@ -57,7 +57,7 @@ describe('InstallBlock', () => {
     render(<InstallBlock />, { wrapper: MemoryRouter });
     expect(screen.getByRole('region', { name: /openldr installation/i })).toHaveClass('text-center');
     expect(screen.getByLabelText(/openldr install command/i)).toContainElement(screen.getByRole('tablist'));
-    expect(screen.getByLabelText(/openldr install command/i)).toHaveClass('mx-auto', 'max-w-4xl');
+    expect(screen.getByLabelText(/openldr install command/i)).toHaveClass('mx-auto', 'w-full');
     expect(screen.getByRole('tablist')).toHaveClass('border-b', 'px-4');
   });
 });

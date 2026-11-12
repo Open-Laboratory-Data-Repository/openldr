@@ -97,6 +97,14 @@
   border-radius: var(--radius-lg);
 }
 
+.doc-content[data-guide='getting-started'] { font-size: 15px; line-height: 1.8; }
+.doc-content[data-guide='getting-started'] h1 { font-size: 32px; }
+.doc-content[data-guide='getting-started'] h2 { margin-top: 44px; padding-bottom: 10px; font-size: 22px; line-height: 1.4; }
+.doc-content[data-guide='getting-started'] p { margin: 14px 0; }
+.doc-content[data-guide='getting-started'] li { margin: 12px 0; padding-left: 4px; }
+.doc-content[data-guide='getting-started'] th,
+.doc-content[data-guide='getting-started'] td { padding: 12px; font-size: 14px; }
+
 /* shadcn token bridge — map shadcn's expected vars onto the existing palette.
    These reference the existing theme vars, so they auto-switch with data-theme. */
 :root {

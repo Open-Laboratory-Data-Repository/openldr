@@ -1,6 +1,6 @@
 import { isValidElement, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import ReactMarkdown, { type Components } from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   Select,
@@ -21,6 +21,7 @@ import {
   type DocLocale,
 } from './content';
 import { extractToc, headingIdMaker, wantsToc, type TocEntry } from './toc';
+import { InstallResultIllustration } from './InstallResultIllustration';
 
 function textContent(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(textContent).join('');
@@ -106,6 +107,7 @@ function makeHeadingId(): (node: object | undefined, children: ReactNode) => str
 
 /** A clip (`x.mp4`) plays muted on a loop, with its `x.png` poster. A screenshot opens full size. */
 function DocMedia({ src, alt }: { src: string; alt: string }) {
+  if (src === 'guide:install-result') return <InstallResultIllustration alt={alt} />;
   const url = resolveMedia(src);
   if (!url) {
     return (
@@ -324,7 +326,7 @@ export function DocsPage() {
           ))}
         </nav>
       </aside>
-      <article className="doc-content min-w-0 max-w-3xl" aria-labelledby="doc-title">
+      <article className="doc-content min-w-0 max-w-3xl" data-guide={version === '0.1.8' ? key : undefined} aria-labelledby="doc-title">
         <div className="mb-6 border-b border-border pb-4">
           <p className="text-xs font-medium text-muted-foreground">OpenLDR {version}</p>
           {/* The page's own h1. The sidebar's "Documentation" is a label, not a heading, so the
@@ -347,7 +349,11 @@ export function DocsPage() {
           <p className="text-muted-foreground">This page is not available for version {version}.</p>
         ) : (
           <div className="doc-markdown">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents()}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents()}
+              urlTransform={(url, key) => key === 'src' && url === 'guide:install-result' ? url : defaultUrlTransform(url)}
+            >
               {stripLeadingH1(body)}
             </ReactMarkdown>
           </div>
