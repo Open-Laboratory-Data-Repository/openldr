@@ -64,7 +64,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Distributed Sync
 - [x] Connectors
 - [x] Connect to SQL Server and diagnose a connection
-- [ ] Import from OpenLDR v1
+- [x] Import from OpenLDR v1
 - [x] Marketplace
 - [x] Plugin cards and side panels
 - [ ] Authentication providers

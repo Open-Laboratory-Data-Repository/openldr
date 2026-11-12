@@ -1,0 +1,9 @@
+$ node packages/cli/dev.mjs import status openldr-v1-import
+(node:155148) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794492215314,"pid":155148,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+ab66969f-7143-49cc-8152-5c7c2506f637  completed  keys=1 imported=1 failed=0 resources=5  cursor=EXAMPLE-V1-001
+8cdd6398-09e8-4cc4-bb8e-68d610c3bae7  completed (dry run)  keys=1 imported=1 failed=0 resources=5  cursor=EXAMPLE-V1-001
+cc41edd3-2266-49f3-9a63-bb4fe95c0509  completed (dry run)  keys=1 imported=1 failed=0 resources=5  cursor=EXAMPLE-V1-001
+
+EXIT 0

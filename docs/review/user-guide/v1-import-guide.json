@@ -1,0 +1,258 @@
+{
+  "title": "Import from OpenLDR v1",
+  "meta": [
+    "System setup",
+    "Copy a v1 database into CE",
+    "About 15 minutes to prepare"
+  ],
+  "intro": [
+    "The OpenLDR v1 import plugin reads a v1 SQL Server database and saves mapped requests, patients, results and antimicrobial susceptibility results into CE. It runs on the server in pages of requests.",
+    "Use your own v1 database through a read-only Microsoft SQL connector. Diagnose it first. The plugin must be installed and an administrator must allow it to read that connector.",
+    "You need <strong>Manage connectors</strong> to grant source access. The plugin page is for the lab administrator role. Know the UTC offset used by the source lab.",
+    "The pictures use one fictional request, patient and text result on an isolated SQL Server. They establish an actual dry run and import of that small fixture. They do not establish compatibility with every historical v1 database. Optional practice data is at the end."
+  ],
+  "tasks": [
+    {
+      "id": "allow",
+      "title": "Allow the plugin to read a connector",
+      "intro": [
+        "Install the plugin through Marketplace or its approved plugin file. Create a Microsoft SQL connector with SELECT access to the v1 tables. The account should not change source records."
+      ],
+      "steps": [
+        [
+          "Open Connectors",
+          "Open <strong>Settings</strong>, then <strong>Connectors</strong>. Use <a href=\"connector-diagnose-review.html\">Diagnose connections</a> to check the source connection first.",
+          [
+            "connectors"
+          ]
+        ],
+        [
+          "Open Plugin access",
+          "On the v1 connector row, open the dots and choose <strong>Plugin access</strong>.",
+          [
+            "access"
+          ]
+        ],
+        [
+          "Allow the importer",
+          "Turn on the switch beside <code>openldr-v1-import</code>. Each switch saves immediately.",
+          [
+            "allow"
+          ]
+        ],
+        [
+          "Check the saved switch",
+          "The switch stays on. Turn it off later to revoke the plugin's access to that connector.",
+          [
+            "allowed"
+          ]
+        ]
+      ],
+      "result": "The plugin can now offer this connector as a source. Grant and revoke actions appear in Audit.",
+      "resultShots": []
+    },
+    {
+      "id": "source",
+      "title": "Choose and check the source",
+      "intro": [
+        "A successful connection check establishes network access and login. The later Checks step establishes the expected tables."
+      ],
+      "steps": [
+        [
+          "Open the importer",
+          "Select <strong>OpenLDR v1 import</strong> in the main menu.",
+          [
+            "plugin-nav"
+          ]
+        ],
+        [
+          "Choose the source connector",
+          "On Source, select the connector that points to your v1 database.",
+          [
+            "source"
+          ]
+        ],
+        [
+          "Check the connection",
+          "Select <strong>Check connection</strong>. Read each step and wait for <strong>The connection works.</strong> Correct any failure before proceeding.",
+          [
+            "connection"
+          ]
+        ]
+      ],
+      "result": "The selected connection works from the CE server. No source data has been imported.",
+      "resultShots": []
+    },
+    {
+      "id": "options",
+      "title": "Set the source time and import limits",
+      "intro": [
+        "v1 stores local date-times without a time zone. Choose the offset that describes those source timestamps."
+      ],
+      "steps": [
+        [
+          "Set Site time zone",
+          "Select Next to open Options. Enter the source lab's UTC offset, such as <code>+02:00</code>. Use <code>Z</code> only for a source stored in UTC. The fictional example uses Z.",
+          [
+            "timezone"
+          ]
+        ],
+        [
+          "Choose optional limits",
+          "Database overrides the connector database. From date and To date limit registered dates. Panel codes is a comma-separated list. Leave limits empty only when you intend to read everything.",
+          [
+            "options"
+          ]
+        ],
+        [
+          "Run the table checks",
+          "Select Next to open Checks. Read the table and row counts. <strong>4 of 4</strong> tables must be found: Requests, LabResults, Patients and ASTResults.",
+          [
+            "checks"
+          ]
+        ]
+      ],
+      "result": "Checks count source tables and rows without importing. If a table is missing, verify the database and source schema.",
+      "resultShots": []
+    },
+    {
+      "id": "dry",
+      "title": "Try a dry run",
+      "intro": [
+        "A dry run reads and maps a limited number of requests without saving their clinical records."
+      ],
+      "steps": [
+        [
+          "Set the request limit",
+          "Select Next to open Dry run. Enter a small request limit. The example uses <code>100</code> against a one-request fixture.",
+          [
+            "dry-limit"
+          ]
+        ],
+        [
+          "Start the dry run",
+          "Choose <strong>Start dry run</strong>.",
+          [
+            "dry-start"
+          ]
+        ],
+        [
+          "Read the result",
+          "Wait for Finished. Check requests read, mapped or imported counts, and failures. Read the reasons before proceeding.",
+          [
+            "dry-result"
+          ]
+        ]
+      ],
+      "result": "The fictional fixture finishes with one successful request and no failures. A successful sample does not guarantee that every request in a large source will map.",
+      "resultShots": []
+    },
+    {
+      "id": "import",
+      "title": "Import the checked source",
+      "intro": [
+        "An actual import saves records in CE. Keep your source database backup and agree the import scope before starting."
+      ],
+      "steps": [
+        [
+          "Review the import summary",
+          "Select Next to open Import. Check the connector and options.",
+          [
+            "import-summary"
+          ]
+        ],
+        [
+          "Start the import",
+          "Choose <strong>Start import</strong>. The server reads requests page by page and saves mapped records.",
+          [
+            "import-start"
+          ]
+        ],
+        [
+          "Read the completed counts",
+          "Wait for Finished or inspect a stopped or failed result. The example saves one request with no failures. Counters update by page, so they can remain still while a page runs.",
+          [
+            "complete"
+          ]
+        ],
+        [
+          "Check Activity",
+          "Open <strong>Activity</strong>. The import run appears with its status and request counts. A dry run is not listed as an import activity.",
+          [
+            "activity"
+          ]
+        ]
+      ],
+      "result": "The mapped data is stored in CE. Imported records retain plugin and run provenance. The source database remains unchanged.",
+      "resultShots": []
+    },
+    {
+      "id": "phone",
+      "title": "Read an import on a phone",
+      "intro": [
+        "Starting a long import is easier on a computer. The plugin page remains available on a phone."
+      ],
+      "steps": [
+        [
+          "Open the importer page",
+          "Read the current step and run status. Scroll inside the page for longer summaries.",
+          [
+            "phone"
+          ]
+        ]
+      ],
+      "result": "",
+      "resultShots": []
+    }
+  ],
+  "end": [
+    {
+      "id": "resume",
+      "title": "Stop, resume and repeat",
+      "paragraphs": [
+        "An active import continues on the server when you leave the page. Returning opens the current run. <strong>Stop</strong> ends it after its current page. <strong>Resume</strong> continues after the last completed request following a stop, failure or server restart.",
+        "A request already imported is replaced rather than duplicated. Repeating an import is a data update. Review your source scope and options first. The small screenshot fixture finished too quickly to demonstrate Stop and Resume. Those controls were checked in source, not captured during a long run.",
+        "Failed requests do not stop other requests. The page shows the first 100 reasons. It stores reason codes without source row content. An import does not emit data.persisted for each imported request, so workflows listening for that event do not run for those records."
+      ]
+    },
+    {
+      "id": "cli",
+      "title": "Run the import from the CLI",
+      "paragraphs": [
+        "Follow <a href=\"start-here-review.html\">Start here</a> for CLI setup. From <code>openldr_ce</code>, allow only the intended connector. Use a dry run before the actual import. Replace the id and source offset."
+      ],
+      "html": [
+        "<pre><code>pnpm openldr import allow openldr-v1-import &lt;connector-id&gt;\npnpm openldr import start --plugin openldr-v1-import --connector &lt;connector-id&gt; --option tz=+02:00 --dry-run --limit 100\npnpm openldr import start --plugin openldr-v1-import --connector &lt;connector-id&gt; --option tz=+02:00\npnpm openldr import status openldr-v1-import\npnpm openldr import allowed openldr-v1-import</code></pre>"
+      ]
+    },
+    {
+      "id": "practice",
+      "title": "Optional practice with fictional source data",
+      "paragraphs": [
+        "Normal use needs an existing v1 database. For a disposable SQL Server only, <a href=\"v1-import-evidence/example-source.sql\">example-source.sql</a> creates a separate <code>guide_v1</code> database, the four expected tables, one fictional request, one patient and one text result. ASTResults is empty. This is a minimal source fixture, not a complete historical v1 schema.",
+        "The fixture creates a database. Read it before running and use a disposable server without a database named guide_v1. Ask your database operator to create a read-only account for it. No login credential is supplied in the file.",
+        "In a source checkout, <code>pnpm build:v1-import</code> stages the reference importer. It needs Rust and the wasm32-wasip1 target. Install its staged file with <code>pnpm openldr plugin install reference-plugins/openldr-v1-import/plugin.wasm</code>. The unsigned build is for a test installation. Use your organisation's approved signed package in normal use."
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "title": "Troubleshooting",
+      "paragraphs": [
+        "<strong>No importer in the main menu.</strong> Check plugin installation, enabled state and administrator access.",
+        "<strong>Plugin access is empty.</strong> Check that the connector is Microsoft SQL and the importer is installed.",
+        "<strong>No source choices.</strong> Allow the plugin on the correct connector, then reopen its page.",
+        "<strong>Connection fails.</strong> Use connector Diagnose and correct the first failed step.",
+        "<strong>Fewer than four tables.</strong> Check the database override, table names and read permissions. A connection success alone does not prove the v1 schema.",
+        "<strong>Start or Resume is refused.</strong> Read its error and the API log. The import service requires an audit entry before starting.",
+        "<strong>Counts stand still.</strong> Wait for the current page. Each page can contain 500 requests. Check errors before deciding a large import has stalled."
+      ]
+    },
+    {
+      "id": "related",
+      "title": "Related guides",
+      "paragraphs": [
+        "<a href=\"connector-diagnose-review.html\">Diagnose connections</a>, <a href=\"connectors-review.html\">Connectors</a>, <a href=\"marketplace-review.html\">Marketplace</a>, <a href=\"activity-review.html\">Activity</a> and <a href=\"audit-review.html\">Audit</a>."
+      ]
+    }
+  ]
+}

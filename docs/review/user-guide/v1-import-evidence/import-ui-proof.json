@@ -1,0 +1,3 @@
+{
+  "text": "1\nSource\n2\nOptions\n3\nChecks\n4\nDry run\n5\nImport\nImport into OpenLDR\n\nSaves every matching v1 request, with its patient, results and AST results. A request imported before is replaced, not duplicated. You can leave this page: the import keeps running on the server.\n\nFrom connector\nExample v1 database\nSite time zone\nZ\nFinished\nRequests read\n1\nRequests saved\n1\nRequests failed\n0\nRecords\n5\nStart a new import\nBack"
+}

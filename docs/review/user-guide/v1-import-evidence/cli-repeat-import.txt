@@ -1,0 +1,8 @@
+$ node packages/cli/dev.mjs import start --plugin openldr-v1-import --connector e6280ae0-b3bf-41c5-9010-5e98199a3ddb --option tz=Z
+(node:158893) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794492231759,"pid":158893,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+(node:158893) [DEP0123] DeprecationWarning: Setting the TLS ServerName to an IP address is not permitted by RFC 6066. This will be ignored in a future version.
+782fb49c-49fd-4d06-9c20-ddf067a42c6b  completed  keys=1 imported=1 failed=0 resources=5  cursor=EXAMPLE-V1-001
+
+EXIT 0

@@ -531,3 +531,13 @@ no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewp
 All active preview menus match. Sample data remains optional.
 See query-review-notes.md for live workflows, source proofs and untested variants.
 This remains a preview. Its published guide is unchanged.
+
+## Import from OpenLDR v1 preview checkpoint
+
+Previous checkpoint HEAD: c52d00d5.
+v1-import-review.html has 18 numbered steps and 18 native image placements.
+Every step has screenshot evidence. The integrated browser check reported no missing images,
+no broken section anchors, native 5120px enlargement, HTTP 200 and an812px viewport without horizontal page overflow.
+All active preview menus match. Sample data remains optional.
+See v1-import-review-notes.md for live workflows, source proofs and untested variants.
+This remains a preview. Its published guide is unchanged.
