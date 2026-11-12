@@ -1,0 +1,34 @@
+{
+  "queries": [
+    {
+      "id": "cq_f1c87c76",
+      "name": "Requests in a date range",
+      "connectorId": "dff54445-bb19-4757-8303-06b9e090d719",
+      "sql": "SELECT COUNT(*) AS requests\nFROM lab_requests\nWHERE authored_at >= {{ param.from }}\n  AND authored_at < {{ param.to }}",
+      "params": [
+        {
+          "id": "period",
+          "type": "daterange",
+          "label": "Period",
+          "required": true
+        }
+      ],
+      "groupId": null
+    }
+  ],
+  "lastRun": {
+    "columns": [
+      {
+        "key": "requests",
+        "label": "requests"
+      }
+    ],
+    "rows": [
+      {
+        "requests": 0
+      }
+    ],
+    "rowCount": 1,
+    "ms": 13
+  }
+}

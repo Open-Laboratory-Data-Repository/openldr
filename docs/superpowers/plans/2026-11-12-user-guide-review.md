@@ -51,7 +51,7 @@ Save command output and limits. Commit and push the section before moving on.
 - [ ] Reports
 - [x] Activity
 - [x] Scheduled reports with workflows
-- [ ] Custom Queries
+- [x] Custom Queries
 - [ ] Report Designer
 - [x] Layouts
 - [x] Users and Roles

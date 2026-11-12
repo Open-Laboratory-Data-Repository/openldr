@@ -1,0 +1,5 @@
+$ node packages/cli/dev.mjs query export --out /tmp/openldr-guide-query-export.json --name 'Request count by period'
+(node:251549) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794492532630,"pid":251549,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+exported 1 query to /tmp/openldr-guide-query-export.json

@@ -1,0 +1,6 @@
+$ node packages/cli/dev.mjs query import /tmp/openldr-guide-query-export.json
+(node:252697) ExperimentalWarning: WASI is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":30,"time":1794492548185,"pid":252697,"hostname":"fredrick-Station","name":"openldr","msg":"sync disabled (not configured)"}
+skipped   Request count by period
+0 created, 0 replaced, 1 skipped.

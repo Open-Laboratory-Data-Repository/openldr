@@ -1,0 +1,25 @@
+{
+  "queries": [
+    {
+      "id": "cq_f1c87c76",
+      "name": "Request count by period",
+      "connectorId": "dff54445-bb19-4757-8303-06b9e090d719",
+      "sql": "SELECT COUNT(*) AS requests\nFROM lab_requests\nWHERE authored_at >= {{ param.from }}\n  AND authored_at < {{ param.to }}",
+      "params": [
+        {
+          "id": "period",
+          "type": "daterange",
+          "label": "Period",
+          "required": true
+        }
+      ],
+      "groupId": "cqg_8d55e8ae"
+    }
+  ],
+  "groups": [
+    {
+      "id": "cqg_8d55e8ae",
+      "name": "Documentation examples"
+    }
+  ]
+}

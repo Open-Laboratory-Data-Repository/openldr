@@ -1,0 +1,1393 @@
+{
+  "capturedAt": "2026-11-12T14:10:15.434Z",
+  "source": "Live isolated Studio. Native DPR 4 screenshots.",
+  "appUrl": "http://localhost:5187/studio/query",
+  "steps": [
+    {
+      "id": "open-page",
+      "label": "Open Query from the main menu.",
+      "path": "query-evidence/open-page.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 8,
+          "y": 176,
+          "width": 223,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "connectors",
+      "label": "Expand Connectors in the Explorer.",
+      "path": "query-evidence/connectors.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 96,
+          "width": 239,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "warehouse",
+      "label": "Expand your enabled database connector.",
+      "path": "query-evidence/warehouse.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 298,
+          "y": 128,
+          "width": 173,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "schema",
+      "label": "Expand the schema that contains your data.",
+      "path": "query-evidence/schema.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 152,
+          "width": 239,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "table",
+      "label": "Select a table to browse its current rows.",
+      "path": "query-evidence/table.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 404,
+          "width": 239,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "browse-sql",
+      "label": "SQL shows the SELECT used for this table browse.",
+      "path": "query-evidence/browse-sql.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1187,
+          "y": 96,
+          "width": 28,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "browse-result",
+      "label": "An empty warehouse can return no rows without being an error.",
+      "path": "query-evidence/browse-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 509.828125,
+          "y": 139,
+          "width": 770.171875,
+          "height": 283.796875
+        }
+      ]
+    },
+    {
+      "id": "browse-paging",
+      "label": "Use the result page size and arrows for larger tables.",
+      "path": "query-evidence/browse-paging.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1036.5625,
+          "y": 762,
+          "width": 80,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "datasets",
+      "label": "Datasets lists saved workflow data.",
+      "path": "query-evidence/datasets.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 628,
+          "width": 239,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "dataset-result",
+      "label": "The saved workflow summary opens without a new source query.",
+      "path": "query-evidence/dataset-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 480,
+          "y": 88,
+          "width": 230,
+          "height": 78
+        }
+      ]
+    },
+    {
+      "id": "new-query",
+      "label": "The plus opens a new query tab.",
+      "path": "query-evidence/new-query.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 480,
+          "y": 48,
+          "width": 41,
+          "height": 39
+        }
+      ]
+    },
+    {
+      "id": "choose-connector",
+      "label": "Choose the enabled database you intend to query.",
+      "path": "query-evidence/choose-connector.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 521,
+          "y": 134,
+          "width": 222.34375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "sql",
+      "label": "Enter a read-only SELECT. This count also works with no data.",
+      "path": "query-evidence/sql.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 509.828125,
+          "y": 139,
+          "width": 770.171875,
+          "height": 304
+        }
+      ]
+    },
+    {
+      "id": "run",
+      "label": "Run executes the selected connector and SQL.",
+      "path": "query-evidence/run.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1240,
+          "y": 96,
+          "width": 28,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "count-result",
+      "label": "One output row contains the actual request count.",
+      "path": "query-evidence/count-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 480,
+          "y": 448,
+          "width": 230,
+          "height": 78
+        }
+      ]
+    },
+    {
+      "id": "parameter-sql",
+      "label": "Date-range SQL reads the bound from and to values.",
+      "path": "query-evidence/parameter-sql.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 509.828125,
+          "y": 139,
+          "width": 770.171875,
+          "height": 304
+        }
+      ]
+    },
+    {
+      "id": "parameters",
+      "label": "Parameters defines the values the query asks for.",
+      "path": "query-evidence/parameters.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1130,
+          "y": 96,
+          "width": 28,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "parameter-actions",
+      "label": "The Parameters sheet has its own actions menu.",
+      "path": "query-evidence/parameter-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1196,
+          "y": 27.265625,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "parameter-add",
+      "label": "Add creates a parameter definition.",
+      "path": "query-evidence/parameter-add.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1069,
+          "y": 64.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-id",
+      "label": "Use a stable variable identifier.",
+      "path": "query-evidence/parameter-id.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 952.484375,
+          "y": 157.53125,
+          "width": 290.515625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-label",
+      "label": "The label is what users see when running the query.",
+      "path": "query-evidence/parameter-label.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 952.484375,
+          "y": 201.53125,
+          "width": 290.515625,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-type",
+      "label": "daterange asks for two dates and supplies from and to.",
+      "path": "query-evidence/parameter-type.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 957.5,
+          "y": 346.5,
+          "width": 118,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-required",
+      "label": "Require a value when the SQL needs both date bounds.",
+      "path": "query-evidence/parameter-required.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 952.484375,
+          "y": 289.53125,
+          "width": 16,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "parameter-save",
+      "label": "Save applies the parameter definition to this tab.",
+      "path": "query-evidence/parameter-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1069,
+          "y": 105.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "from-date",
+      "label": "Enter the first included date.",
+      "path": "query-evidence/from-date.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1081,
+          "y": 152.53125,
+          "width": 175,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "to-date",
+      "label": "Enter the exclusive end date used by this example SQL.",
+      "path": "query-evidence/to-date.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1081,
+          "y": 196.53125,
+          "width": 175,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "run-values-actions",
+      "label": "Open the run-parameter actions after checking the dates.",
+      "path": "query-evidence/run-values-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1228,
+          "y": 95.53125,
+          "width": 28,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "run-values",
+      "label": "Run with these values executes the parameterized query.",
+      "path": "query-evidence/run-values.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1098,
+          "y": 132.5,
+          "width": 152.96875,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "parameter-result",
+      "label": "The filtered count is a real result, including zero.",
+      "path": "query-evidence/parameter-result.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 480,
+          "y": 448,
+          "width": 230,
+          "height": 78
+        }
+      ]
+    },
+    {
+      "id": "query-actions",
+      "label": "Use Query actions to save this SQL and its parameter definition.",
+      "path": "query-evidence/query-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1183,
+          "y": 97,
+          "width": 32,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "save-query",
+      "label": "Save asks for a name on the first save.",
+      "path": "query-evidence/save-query.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1060,
+          "y": 138,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "query-name",
+      "label": "Choose a unique saved-query name.",
+      "path": "query-evidence/query-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 846.359375,
+          "y": 143.53125,
+          "width": 409.640625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "name-save",
+      "label": "Save in the naming sheet persists the query.",
+      "path": "query-evidence/name-save.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1077,
+          "y": 66.25,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "saved-query",
+      "label": "The saved query is available in the Explorer.",
+      "path": "query-evidence/saved-query.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 544,
+          "width": 211,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "saved-actions",
+      "label": "Saved queries have their own row actions.",
+      "path": "query-evidence/saved-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 451,
+          "y": 546,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "rename",
+      "label": "Rename changes the saved name while preserving its query identifier.",
+      "path": "query-evidence/rename.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 320,
+          "y": 579,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "rename-value",
+      "label": "Enter the new unique name.",
+      "path": "query-evidence/rename-value.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 846.359375,
+          "y": 143.53125,
+          "width": 409.640625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "renamed",
+      "label": "The Explorer shows the new query name.",
+      "path": "query-evidence/renamed.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 544,
+          "width": 211,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "custom-actions",
+      "label": "Custom query actions contains New group.",
+      "path": "query-evidence/custom-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 451,
+          "y": 154,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "new-group",
+      "label": "New group creates an Explorer folder for saved queries.",
+      "path": "query-evidence/new-group.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 320,
+          "y": 187,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "group-name",
+      "label": "Choose a useful group name.",
+      "path": "query-evidence/group-name.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 846.359375,
+          "y": 159.53125,
+          "width": 409.640625,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "move-group",
+      "label": "Move to group changes organisation without changing SQL.",
+      "path": "query-evidence/move-group.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 320,
+          "y": 687,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "group-option",
+      "label": "Choose the destination group.",
+      "path": "query-evidence/group-option.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 475,
+          "y": 692,
+          "width": 173.984375,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "grouped",
+      "label": "The query is listed inside the selected group.",
+      "path": "query-evidence/grouped.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 208,
+          "width": 211,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "transfer-actions",
+      "label": "The Explorer has separate transfer actions.",
+      "path": "query-evidence/transfer-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 415,
+          "y": 55.5,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "export-open",
+      "label": "Export queries opens a selection sheet.",
+      "path": "query-evidence/export-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 284,
+          "y": 129.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "export-select",
+      "label": "Select only the queries you intend to export.",
+      "path": "query-evidence/export-select.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 921,
+          "y": 728.53125,
+          "width": 16,
+          "height": 16
+        }
+      ]
+    },
+    {
+      "id": "export-download",
+      "label": "Download exports names, SQL, parameters and group names.",
+      "path": "query-evidence/export-download.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-open",
+      "label": "Import queries opens the file review.",
+      "path": "query-evidence/import-open.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 284,
+          "y": 161.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-choose",
+      "label": "Choose file opens your file picker.",
+      "path": "query-evidence/import-choose.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 176.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "import-preview",
+      "label": "Review whether each name will be created, skipped or replaced.",
+      "path": "query-evidence/import-preview.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 897,
+          "y": 356.53125,
+          "width": 383,
+          "height": 44.5
+        }
+      ]
+    },
+    {
+      "id": "import-connector",
+      "label": "Choose the connector for newly imported names.",
+      "path": "query-evidence/import-connector.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1147.90625,
+          "y": 231.53125,
+          "width": 108.09375,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "import-replace",
+      "label": "Leave Replace existing queries off to preserve same-name definitions.",
+      "path": "query-evidence/import-replace.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1147.90625,
+          "y": 279.53125,
+          "width": 36,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "id": "import-apply",
+      "label": "Import applies the reviewed plan. This same-name example is skipped.",
+      "path": "query-evidence/import-apply.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 1101,
+          "y": 208.5,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "phone-expand",
+      "label": "The Explorer starts collapsed on a phone.",
+      "path": "query-evidence/phone-expand.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 3.5,
+          "y": 56,
+          "width": 24,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "phone-query",
+      "label": "Open a saved query inside its group.",
+      "path": "query-evidence/phone-query.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 0,
+          "y": 208,
+          "width": 211,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "phone-collapse",
+      "label": "Collapse the Explorer to make more room for the editor.",
+      "path": "query-evidence/phone-collapse.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 203,
+          "y": 52.5,
+          "width": 24,
+          "height": 30
+        }
+      ]
+    },
+    {
+      "id": "phone-run",
+      "label": "Run opens parameter entry for the saved query.",
+      "path": "query-evidence/phone-run.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 347.296875,
+          "y": 96,
+          "width": 28,
+          "height": 34
+        }
+      ]
+    },
+    {
+      "id": "phone-values",
+      "label": "Enter the date bounds in the phone parameter sheet.",
+      "path": "query-evidence/phone-values.png",
+      "source_dimensions": [
+        375,
+        812
+      ],
+      "pixel_dimensions": [
+        1500,
+        3248
+      ],
+      "focus": [
+        {
+          "x": 222.5,
+          "y": 152.53125,
+          "width": 128.5,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "group-actions",
+      "label": "Open the group actions without changing the query.",
+      "path": "query-evidence/group-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 451,
+          "y": 182,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "group-delete",
+      "label": "Delete group removes the folder and keeps its queries.",
+      "path": "query-evidence/group-delete.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 320,
+          "y": 256,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "group-delete-confirm",
+      "label": "The confirmation explicitly keeps the queries.",
+      "path": "query-evidence/group-delete-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 726.828125,
+          "y": 443.265625,
+          "width": 112.171875,
+          "height": 36
+        }
+      ]
+    },
+    {
+      "id": "ungrouped",
+      "label": "The query remains outside the removed group.",
+      "path": "query-evidence/ungrouped.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 240,
+          "y": 572,
+          "width": 211,
+          "height": 28
+        }
+      ]
+    },
+    {
+      "id": "delete-query-actions",
+      "label": "Open the actions for an unneeded custom query.",
+      "path": "query-evidence/delete-query-actions.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 451,
+          "y": 378,
+          "width": 24,
+          "height": 24
+        }
+      ]
+    },
+    {
+      "id": "delete-query",
+      "label": "Delete query permanently removes this saved definition.",
+      "path": "query-evidence/delete-query.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 320,
+          "y": 484,
+          "width": 150,
+          "height": 32
+        }
+      ]
+    },
+    {
+      "id": "delete-query-confirm",
+      "label": "Confirm only the saved query you intend to remove.",
+      "path": "query-evidence/delete-query-confirm.png",
+      "source_dimensions": [
+        1280,
+        800
+      ],
+      "pixel_dimensions": [
+        5120,
+        3200
+      ],
+      "focus": [
+        {
+          "x": 727.609375,
+          "y": 415.265625,
+          "width": 111.390625,
+          "height": 36
+        }
+      ]
+    }
+  ]
+}
