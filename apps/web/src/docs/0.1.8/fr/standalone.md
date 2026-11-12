@@ -16,6 +16,8 @@ Vous l'exécutez depuis une copie du code source, compilée sur votre propre ord
 
 Lancez toutes les commandes de cette page depuis la racine du dépôt, là où se trouve `package.json`.
 
+Quand une commande du lanceur se termine avec un code de sortie autre que 0, ou quand vous appuyez sur Ctrl+C, pnpm ajoute sa propre ligne qui commence par `[ELIFECYCLE]`, par exemple `[ELIFECYCLE] Command failed.` Cette ligne vient de pnpm. Ce n'est pas une erreur d'OpenLDR.
+
 ### 1. Récupérer le code source
 
 ```sh
@@ -62,7 +64,7 @@ OpenLDR is running at http://localhost:3000/studio/
 Server log: /home/you/.local/share/openldr/logs/server.log
 ```
 
-La première ligne vient de pnpm. Node avertit ensuite au sujet de WASI, une fonctionnalité utilisée par les plugins. Vous pouvez ignorer cet avertissement. Les deux lignes `[seed]` n'apparaissent qu'au premier démarrage. Elles ajoutent les jeux de valeurs FHIR standard et un connecteur vers la base d'analyse. OpenLDR démarre sans données d'exemple.
+La première ligne vient de pnpm. Node avertit ensuite au sujet de WASI, une fonctionnalité utilisée par les plugins. Vous pouvez ignorer cet avertissement. Les deux lignes `[seed]` apparaissent tant qu'un démarrage ne les a pas menées à bout. En général, c'est le premier démarrage. Si le premier démarrage a été interrompu, le suivant affiche celles qui restent à faire. Elles ajoutent les jeux de valeurs FHIR standard et un connecteur vers la base d'analyse. OpenLDR démarre sans données d'exemple.
 
 Gardez ce terminal ouvert. OpenLDR ne tourne que pendant que cette commande tourne.
 
@@ -108,7 +110,7 @@ Le dossier contient :
 | `crash/` | Les notes écrites quand le serveur ou un plugin plante. |
 | `work/` | Les fichiers temporaires, comme un téléchargement de terminologie pendant son import. |
 | `standalone.json` | La clé des secrets, les deux mots de passe de la base et le port de la base. |
-| `standalone.lock` | Présent tant qu'un lanceur tourne. Il indique le processus et l'adresse de ce lanceur. |
+| `standalone.lock` | Présent tant qu'un lanceur tourne. Il indique le processus et l'adresse de ce lanceur. Il peut rester après un plantage ou un arrêt brutal. Le `start` suivant le remplace. |
 
 Sous Linux, seul votre utilisateur peut ouvrir le dossier. Le lanceur donne le mode 700 au dossier et le mode 600 aux deux fichiers. La base n'écoute que sur `127.0.0.1`. Son port est choisi au premier démarrage, 54320 s'il est libre, puis conservé dans `standalone.json`.
 
@@ -125,7 +127,7 @@ Data folder: /home/you/.local/share/openldr
 OpenLDR is running at http://localhost:3000/studio/
 ```
 
-`status` se termine avec le code 0 quand OpenLDR tourne et 3 sinon. S'il ne tourne pas, vous voyez `OpenLDR is not running.`, et pnpm ajoute `[ELIFECYCLE] Command failed with exit code 3.` Cette ligne de pnpm rapporte seulement le code de sortie. Ce n'est pas une panne.
+`status` se termine avec le code 0 quand OpenLDR tourne et 3 sinon. S'il ne tourne pas, vous voyez `OpenLDR is not running.`, puis la ligne de pnpm `[ELIFECYCLE] Command failed with exit code 3.`
 
 ### 2. L'arrêter
 
@@ -139,11 +141,17 @@ pnpm openldr-standalone stop
 Stopped.
 ```
 
-`stop` demande l'arrêt au lanceur en cours par un petit port ouvert seulement sur cet ordinateur. Il n'envoie aucun signal à un numéro de processus. Si rien ne tourne, il affiche `OpenLDR is not running.`
+Si le serveur est encore occupé au bout de 60 secondes, Postgres s'arrête quand même. `stop` affiche alors cette ligne à la place, après environ une minute :
 
-Vous pouvez aussi appuyer sur Ctrl+C dans le terminal où tourne `start`. Fermer cette fenêtre de terminal a le même effet. Dans tous les cas, le serveur s'arrête d'abord, puis Postgres.
+```text
+Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.
+```
 
-Le serveur dispose de 60 secondes pour finir le travail en cours. Ensuite, Postgres s'arrête quand même et vous voyez `Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.` Un deuxième Ctrl+C saute ces 60 secondes. Un troisième termine le lanceur tout de suite. Postgres reçoit quand même l'ordre de s'arrêter à la sortie du lanceur.
+Dans les deux cas, le code de sortie est 0. `stop` demande l'arrêt au lanceur en cours par un petit port ouvert seulement sur cet ordinateur. Il n'envoie aucun signal à un numéro de processus. Si rien ne tourne, il affiche `OpenLDR is not running.`
+
+Vous pouvez aussi appuyer sur Ctrl+C dans le terminal où tourne `start`. Fermer cette fenêtre de terminal est aussi un arrêt normal. Dans tous les cas, le serveur s'arrête d'abord, puis Postgres. Le terminal de `start` affiche la même ligne `Stopped.`, ou la ligne des 60 secondes ci-dessus.
+
+Pour ne pas attendre les 60 secondes, appuyez de nouveau sur Ctrl+C après un instant. Des appuis espacés de moins d'une seconde et demie comptent pour un seul, car un terminal peut transmettre plusieurs fois une même touche. Un troisième Ctrl+C, là encore après un instant, termine le lanceur tout de suite avec le code de sortie 1. Postgres reçoit quand même l'ordre de s'arrêter à la sortie du lanceur. Fermer le terminal ne raccourcit jamais l'attente.
 
 ### 3. Redémarrer après une coupure de courant ou un plantage
 
@@ -251,7 +259,7 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Remplacez `100.64.0.10` par l'adresse privée ou Tailscale de votre ordinateur. Ouvrez l'adresse affichée sur le téléphone. `--host 0.0.0.0` écoute sur toutes les adresses de cet ordinateur. Le lanceur affiche alors `http://localhost:3000/studio/`, qui ne fonctionne que sur cet ordinateur. Sur le téléphone, utilisez plutôt l'adresse de l'ordinateur.
 
-En HTTP sans chiffrement depuis un autre appareil, le navigateur désactive une fonctionnalité dont Studio a besoin. Certains écrans peuvent alors échouer, notamment les pages de plugins et la modification des tableaux de bord. Ils fonctionnent sur l'ordinateur qui exécute OpenLDR.
+En HTTP sans chiffrement, le navigateur désactive une fonctionnalité qu'utilise Studio. Certains écrans peuvent alors échouer, notamment les pages de plugins et la modification des tableaux de bord. Cela se produit sur le téléphone, et aussi sur cet ordinateur quand vous ouvrez l'adresse donnée à `--host`. Ces écrans fonctionnent quand Studio est ouvert à l'adresse `http://localhost:3000/studio/` sur l'ordinateur qui exécute OpenLDR. Cette adresse ne répond qu'avec l'adresse d'écoute par défaut ou avec `--host 0.0.0.0`.
 
 La dernière ligne est un avertissement. Une installation autonome n'a pas de TLS. Les noms d'utilisateur, les mots de passe et les données des patients circulent en clair sur le réseau. Toute personne qui peut observer ce réseau peut les lire. Ne le faites que sur un réseau de confiance. Tailscale chiffre le trafic entre vos propres appareils. N'ouvrez jamais ce port sur Internet. Votre pare-feu devra peut-être autoriser le port.
 
@@ -276,7 +284,7 @@ Pour restaurer, arrêtez OpenLDR, remettez le dossier copié à son emplacement 
 - Un seul lanceur par dossier de données.
 - Seul Linux a été testé. Windows et macOS ne sont pas testés.
 - La synchronisation avec un serveur central qui utilise un certificat auto-signé n'est pas prise en charge.
-- Depuis un autre appareil en HTTP sans chiffrement, certains écrans de Studio peuvent échouer, comme les pages de plugins et la modification des tableaux de bord. Ils fonctionnent sur l'ordinateur qui exécute OpenLDR.
+- Ouvert à une autre adresse que `localhost`, en HTTP sans chiffrement, certains écrans de Studio peuvent échouer, comme les pages de plugins et la modification des tableaux de bord. Ils fonctionnent à l'adresse `http://localhost:3000/studio/` sur l'ordinateur qui exécute OpenLDR. Cette adresse ne répond qu'avec l'adresse d'écoute par défaut ou avec `--host 0.0.0.0`.
 - Le Postgres fourni ne peut pas passer à une nouvelle version majeure. Le dossier de données ne fonctionne qu'avec Postgres 16.
 - Sauvegarder veut dire arrêter, puis copier le dossier. Il n'existe pas d'outil de sauvegarde.
 - Vous ne pouvez pas déplacer les données entre une installation autonome et une installation Docker.

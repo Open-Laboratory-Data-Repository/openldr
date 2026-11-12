@@ -9,12 +9,14 @@ Executa-o a partir de uma cópia do código-fonte, compilada no seu próprio com
 ## O que precisa
 
 - Git, Node.js 22.13 ou mais recente, e pnpm. O repositório fixa pnpm 11.22.0. A página [Desenvolvimento](/docs/development) explica como os instalar.
-- Nem Docker nem base de dados. O Postgres chega com as dependências.
+- Nem Docker nem base de dados. O Postgres vem com as dependências.
 - Acesso à rede no primeiro `pnpm install`. Este descarrega os programas do Postgres, cerca de 59 MB no Linux.
 
 ## Compilar
 
 Execute todos os comandos desta página a partir da raiz do repositório, onde está o `package.json`.
+
+Quando um comando do lançador termina com um código de saída diferente de 0, ou quando carrega em Ctrl+C, o pnpm acrescenta uma linha própria que começa por `[ELIFECYCLE]`, por exemplo `[ELIFECYCLE] Command failed.` Essa linha vem do pnpm. Não é um erro do OpenLDR.
 
 ### 1. Obter o código-fonte
 
@@ -62,7 +64,7 @@ OpenLDR is running at http://localhost:3000/studio/
 Server log: /home/you/.local/share/openldr/logs/server.log
 ```
 
-A primeira linha vem do pnpm. O Node avisa depois sobre o WASI, uma funcionalidade que os plugins usam. Pode ignorar esse aviso. As duas linhas `[seed]` só aparecem no primeiro arranque. Acrescentam os conjuntos de valores FHIR padrão e um conector para a base de dados de análise. O OpenLDR arranca sem dados de exemplo.
+A primeira linha vem do pnpm. O Node avisa depois sobre o WASI, uma funcionalidade que os plugins usam. Pode ignorar esse aviso. As duas linhas `[seed]` aparecem até um arranque as concluir. Normalmente, é o primeiro arranque. Se o primeiro arranque foi interrompido, o seguinte mostra as que ficaram por fazer. Acrescentam os conjuntos de valores FHIR padrão e um conector para a base de dados de análise. O OpenLDR arranca sem dados de exemplo.
 
 Mantenha este terminal aberto. O OpenLDR só funciona enquanto este comando estiver a correr.
 
@@ -108,7 +110,7 @@ A pasta contém:
 | `crash/` | Notas escritas quando o servidor ou um plugin falha. |
 | `work/` | Ficheiros temporários, como um descarregamento de terminologia enquanto é importado. |
 | `standalone.json` | A chave dos segredos, as duas palavras-passe da base de dados e a porta da base de dados. |
-| `standalone.lock` | Existe enquanto um lançador funciona. Indica o processo e o endereço desse lançador. |
+| `standalone.lock` | Existe enquanto um lançador funciona. Indica o processo e o endereço desse lançador. Pode ficar para trás depois de uma falha ou de uma paragem à força. O `start` seguinte substitui-o. |
 
 No Linux, só o seu utilizador pode abrir a pasta. O lançador dá o modo 700 à pasta e o modo 600 aos dois ficheiros. A base de dados só escuta em `127.0.0.1`. A porta é escolhida no primeiro arranque, 54320 se estiver livre, e fica guardada em `standalone.json`.
 
@@ -125,7 +127,7 @@ Data folder: /home/you/.local/share/openldr
 OpenLDR is running at http://localhost:3000/studio/
 ```
 
-`status` termina com o código 0 quando o OpenLDR está a funcionar e 3 quando não está. Quando não está, vê `OpenLDR is not running.`, e o pnpm acrescenta `[ELIFECYCLE] Command failed with exit code 3.` Essa linha do pnpm só indica o código de saída. Não é uma avaria.
+`status` termina com o código 0 quando o OpenLDR está a funcionar e 3 quando não está. Quando não está, vê `OpenLDR is not running.` e depois a linha do pnpm `[ELIFECYCLE] Command failed with exit code 3.`
 
 ### 2. Pará-lo
 
@@ -139,11 +141,17 @@ pnpm openldr-standalone stop
 Stopped.
 ```
 
-`stop` pede ao lançador em execução que pare, através de uma pequena porta aberta só neste computador. Não envia nenhum sinal a um número de processo. Se nada estiver a funcionar, mostra `OpenLDR is not running.`
+Se o servidor ainda estiver ocupado ao fim de 60 segundos, o Postgres para na mesma. `stop` mostra então esta linha, ao fim de cerca de um minuto:
 
-Também pode carregar em Ctrl+C no terminal onde `start` está a correr. Fechar essa janela de terminal tem o mesmo efeito. Em qualquer dos casos, o servidor para primeiro e o Postgres depois.
+```text
+Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.
+```
 
-O servidor tem 60 segundos para acabar o trabalho em curso. Depois disso, o Postgres para na mesma e vê `Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.` Um segundo Ctrl+C salta esses 60 segundos. Um terceiro termina o lançador de imediato. O Postgres recebe na mesma a ordem de parar quando o lançador sai.
+Nos dois casos, o código de saída é 0. `stop` pede ao lançador em execução que pare, através de uma pequena porta aberta só neste computador. Não envia nenhum sinal a um número de processo. Se nada estiver a funcionar, mostra `OpenLDR is not running.`
+
+Também pode carregar em Ctrl+C no terminal onde `start` está a correr. Fechar essa janela de terminal também é uma paragem normal. Em qualquer dos casos, o servidor para primeiro e o Postgres depois. O terminal de `start` mostra a mesma linha `Stopped.`, ou a linha dos 60 segundos acima.
+
+Para não esperar os 60 segundos, carregue de novo em Ctrl+C passado um momento. Toques com menos de um segundo e meio de intervalo contam como um só, porque um terminal pode entregar a mesma tecla mais do que uma vez. Um terceiro Ctrl+C, também passado um momento, termina o lançador de imediato com o código de saída 1. O Postgres recebe na mesma a ordem de parar quando o lançador sai. Fechar o terminal nunca encurta a espera.
 
 ### 3. Reiniciar depois de um corte de energia ou de uma falha
 
@@ -251,7 +259,7 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Substitua `100.64.0.10` pelo endereço privado ou Tailscale do seu computador. Abra no telemóvel o endereço mostrado. `--host 0.0.0.0` escuta em todos os endereços deste computador. O lançador mostra então `http://localhost:3000/studio/`, que só funciona neste computador. No telemóvel, use antes o endereço do computador.
 
-Em HTTP sem cifra a partir de outro dispositivo, o navegador desativa uma funcionalidade de que o Studio precisa. Alguns ecrãs podem então falhar, entre eles as páginas de plugins e a edição de painéis. Funcionam no computador que executa o OpenLDR.
+Em HTTP sem cifra, o navegador desativa uma funcionalidade que o Studio usa. Alguns ecrãs podem então falhar, entre eles as páginas de plugins e a edição de painéis. Isto acontece no telemóvel, e também neste computador quando abre o endereço dado a `--host`. Estes ecrãs funcionam quando o Studio é aberto em `http://localhost:3000/studio/` no computador que executa o OpenLDR. Esse endereço só responde com o endereço de escuta predefinido ou com `--host 0.0.0.0`.
 
 A última linha é um aviso. Uma instalação autónoma não tem TLS. Os nomes de utilizador, as palavras-passe e os dados dos doentes atravessam a rede sem cifra. Qualquer pessoa que consiga observar essa rede pode lê-los. Faça-o só numa rede de confiança. O Tailscale cifra o tráfego entre os seus próprios dispositivos. Nunca abra esta porta à Internet. Pode ter de autorizar a porta na firewall.
 
@@ -276,7 +284,7 @@ Para repor, pare o OpenLDR, volte a colocar a pasta copiada no sítio original e
 - Um só lançador por pasta de dados.
 - Só o Linux foi testado. O Windows e o macOS não foram testados.
 - A sincronização com um servidor central que use um certificado autoassinado não é suportada.
-- A partir de outro dispositivo em HTTP sem cifra, alguns ecrãs do Studio podem falhar, como as páginas de plugins e a edição de painéis. Funcionam no computador que executa o OpenLDR.
+- Aberto num endereço que não seja `localhost`, em HTTP sem cifra, alguns ecrãs do Studio podem falhar, como as páginas de plugins e a edição de painéis. Funcionam em `http://localhost:3000/studio/` no computador que executa o OpenLDR. Esse endereço só responde com o endereço de escuta predefinido ou com `--host 0.0.0.0`.
 - O Postgres incluído não pode passar para uma nova versão principal. A pasta de dados só funciona com o Postgres 16.
 - Fazer uma cópia de segurança é parar e depois copiar a pasta. Não existe ferramenta de cópia de segurança.
 - Não pode mover dados entre uma instalação autónoma e uma instalação Docker.

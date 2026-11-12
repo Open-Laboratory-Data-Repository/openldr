@@ -16,6 +16,8 @@ You run it from a copy of the source code that you build on your own computer. T
 
 Run every command on this page from the checkout's root folder, where `package.json` is.
 
+When a launcher command ends with an exit code other than 0, or when you press Ctrl+C, pnpm adds its own line that starts with `[ELIFECYCLE]`, such as `[ELIFECYCLE] Command failed.` That line comes from pnpm. It is not an OpenLDR error.
+
 ### 1. Get the source code
 
 ```sh
@@ -62,7 +64,7 @@ OpenLDR is running at http://localhost:3000/studio/
 Server log: /home/you/.local/share/openldr/logs/server.log
 ```
 
-The first line comes from pnpm. Node then warns about WASI, a feature plugins use. You can ignore that warning. The two `[seed]` lines appear on the first start only. They add the standard FHIR value sets and a connector to the analytics database. OpenLDR starts with no sample data.
+The first line comes from pnpm. Node then warns about WASI, a feature plugins use. You can ignore that warning. The two `[seed]` lines appear until a start has finished them. That is usually the first start. If the first start was cut off, the next start prints the ones still to do. They add the standard FHIR value sets and a connector to the analytics database. OpenLDR starts with no sample data.
 
 Keep this terminal open. OpenLDR runs only while this command runs.
 
@@ -108,7 +110,7 @@ The folder holds:
 | `crash/` | Notes written when the server or a plugin crashes. |
 | `work/` | Scratch files, such as a terminology download while it is imported. |
 | `standalone.json` | The secrets key, the two database passwords and the database port. |
-| `standalone.lock` | Exists while a launcher runs. It names that launcher's process and address. |
+| `standalone.lock` | Exists while a launcher runs. It names that launcher's process and address. It can stay behind after a crash or a hard kill. The next `start` replaces it. |
 
 On Linux only your user can open the folder. The launcher sets the folder to mode 700 and the two files to mode 600. The database listens on `127.0.0.1` only. Its port is chosen at the first start, 54320 if that one is free, and is kept in `standalone.json`.
 
@@ -125,7 +127,7 @@ Data folder: /home/you/.local/share/openldr
 OpenLDR is running at http://localhost:3000/studio/
 ```
 
-`status` exits with code 0 when OpenLDR runs and 3 when it does not. When it does not run, you see `OpenLDR is not running.`, and pnpm adds `[ELIFECYCLE] Command failed with exit code 3.` That pnpm line reports the exit code. It is not a fault.
+`status` exits with code 0 when OpenLDR runs and 3 when it does not. When it does not run, you see `OpenLDR is not running.`, then pnpm's line `[ELIFECYCLE] Command failed with exit code 3.`
 
 ### 2. Stop it
 
@@ -139,11 +141,17 @@ pnpm openldr-standalone stop
 Stopped.
 ```
 
-`stop` asks the running launcher to stop through a small port open only on this computer. It sends no signal to a process number. If nothing runs, it prints `OpenLDR is not running.`
+If the server is still busy after 60 seconds, Postgres stops anyway. `stop` then prints this line instead, after about a minute:
 
-You can also press Ctrl+C in the terminal where `start` runs. Closing that terminal window does the same. Each way stops the server first, then Postgres.
+```text
+Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.
+```
 
-The server gets 60 seconds to finish work in progress. After that Postgres stops anyway, and you see `Stopped, but the server did not finish in 60 seconds. Work in flight will be retried.` A second Ctrl+C skips the 60 seconds. A third ends the launcher at once. Postgres is still told to stop as the launcher exits.
+Both end with exit code 0. `stop` asks the running launcher to stop through a small port open only on this computer. It sends no signal to a process number. If nothing runs, it prints `OpenLDR is not running.`
+
+You can also press Ctrl+C in the terminal where `start` runs. Closing that terminal window is a normal stop too. Each way stops the server first, then Postgres. The `start` terminal prints the same `Stopped.` line, or the 60-second line above.
+
+To skip the 60-second wait, press Ctrl+C again after a moment. Presses less than a second and a half apart count as one, because a terminal can deliver one key press more than once. A third Ctrl+C, again after a moment, ends the launcher at once with exit code 1. Postgres is still told to stop as the launcher exits. Closing the terminal never skips the wait.
 
 ### 3. Start it again after a power cut or a crash
 
@@ -251,7 +259,7 @@ Listening on 100.64.0.10. Sign-in travels over plain HTTP on this network.
 
 Replace `100.64.0.10` with your computer's private or Tailscale address. Open the printed address on the phone. `--host 0.0.0.0` listens on every address this computer has. The launcher then prints `http://localhost:3000/studio/`, which works on this computer only. On the phone, use the computer's own address instead.
 
-Over plain HTTP from another device, the browser turns off a feature Studio uses, so some screens can fail there. Plugin pages and dashboard editing are among them. They work on the computer that runs OpenLDR.
+Over plain HTTP, the browser turns off a feature Studio uses, so some screens can fail. Plugin pages and dashboard editing are among them. This happens on the phone, and also on this computer when you open the `--host` address. These screens work when Studio is opened at `http://localhost:3000/studio/` on the computer that runs OpenLDR. That address answers only with the default host or with `--host 0.0.0.0`.
 
 The last line is a warning. A standalone install has no TLS. Usernames, passwords and patient data cross the network unencrypted. Anyone who can watch that network can read them. Use it only on a network you trust. Tailscale encrypts traffic between your own devices. Never open the port to the internet. Your firewall may need to allow the port.
 
@@ -276,7 +284,7 @@ To restore, stop OpenLDR, put the copied folder back where it was, and start aga
 - One launcher per data folder.
 - Only Linux has been tested. Windows and macOS are untested.
 - Sync to a central server that uses a self-signed certificate is not supported.
-- From another device over plain HTTP, some Studio screens can fail, such as plugin pages and dashboard editing. They work on the computer that runs OpenLDR.
+- Opened at any address other than `localhost`, some Studio screens can fail over plain HTTP, such as plugin pages and dashboard editing. They work at `http://localhost:3000/studio/` on the computer that runs OpenLDR. That address answers only with the default host or with `--host 0.0.0.0`.
 - The bundled Postgres cannot be upgraded to a new major version. The data folder works with Postgres 16 only.
 - Backup means stop, then copy the folder. There is no backup tool.
 - You cannot move data between a standalone install and a Docker install.
