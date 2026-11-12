@@ -18,7 +18,15 @@ export function operatorText(example: OperatorExample, platform: InstallPlatform
   return platform === 'windows' && example.windows !== undefined ? example.windows : example.unix;
 }
 export function operatorMarkdown(markdown: string, platform: InstallPlatform): string {
-  return markdown.replaceAll(OPERATOR_PLATFORM_MARKER, '').replace(/\{\{operator:([a-z0-9-]+)\}\}/g, (_, id: string) => {
+  return markdown.replaceAll(OPERATOR_PLATFORM_MARKER, '')
+    .replace(/```([^\n]*)\n\{\{operator:([a-z0-9-]+)\}\}\n```/g, (block, language: string, id: string) => {
+      const example = examples[id];
+      if (!example?.file) return block;
+      const name = example.file.split(',')[0];
+      return `**\`${name}\`**\n\n\`\`\`${language}\n{{operator:${id}}}\n\`\`\``;
+    })
+    .replace(/!\[[^\]]*\]\((guide:operator-[a-z0-9-]+)\)/g, (image, src: string) => operatorExample(src)?.file ? '' : image)
+    .replace(/\{\{operator:([a-z0-9-]+)\}\}/g, (_, id: string) => {
     const example = examples[id];
     if (!example) throw new Error(`Unknown operator illustration: ${id}`);
     return operatorText(example, platform);

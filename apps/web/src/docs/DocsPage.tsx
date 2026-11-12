@@ -125,7 +125,8 @@ function InstallCapture({ src, alt }: { src: string; alt: string }) {
 function DocMedia({ src, alt, platform, locale }: { src: string; alt: string; platform: InstallPlatform; locale: DocLocale }) {
   if (src === 'guide:install-result') return <InstallResultIllustration alt={alt} locale={locale} />;
   const example = operatorExample(src);
-  if (example) return <InstallGuideIllustration scene="terminal" platform={example.shell ?? platform} command={operatorText(example, platform)} file={example.file} alt={alt} locale={locale} />;
+  if (example?.file) return null;
+  if (example) return <InstallGuideIllustration scene="terminal" platform={example.shell ?? platform} command={operatorText(example, platform)} alt={alt} locale={locale} />;
   const server = serverScene(src);
   if (server) return <InstallGuideIllustration scene="terminal" platform={serverPlatform(server)} command={SERVER_COMMANDS[server]} alt={alt} locale={locale} />;
   const scene = installScene(src);

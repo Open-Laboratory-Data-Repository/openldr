@@ -16,12 +16,25 @@ describe('Reviewed operator guides', () => {
             expect(operatorExample(match[1])).not.toBeNull();
           }
           const steps = rendered.split(/(?=^#{2,3} )/m).filter(section => /^### \d+\./.test(section));
-          for (const step of steps) expect(step).toMatch(/!\[[^\]]+\]\(/);
+          for (const step of steps) {
+            if (!/!\[[^\]]+\]\(/.test(step)) expect(step).toMatch(/\*\*`[^`]+`\*\*\n\n```/);
+          }
           expect(rendered).not.toContain('operator@workstation:');
         }
       });
     }
   }
+  it('shows configuration only once, with its filename and original indentation', () => {
+    const source = '```yaml\n{{operator:upgrade-grace}}\n```\n\n![Configuration](guide:operator-upgrade-grace)';
+    const rendered = operatorMarkdown(source, 'unix');
+    expect(rendered).toContain('**`docker-compose.yml`**');
+    expect(rendered).toContain('services:\n  api:\n    stop_grace_period:');
+    expect(rendered).not.toContain('guide:operator-upgrade-grace');
+    const env = operatorMarkdown('```dotenv\n{{operator:env-loglevel}}\n```\n![Environment](guide:operator-env-loglevel)', 'unix');
+    expect(env).toContain('**`.env`**');
+    expect(env).not.toContain('guide:operator-env-loglevel');
+  });
+
   it('does not accept arbitrary media schemes or unknown example names', () => {
     expect(operatorExample('javascript:operator-upgrade-health')).toBeNull();
     expect(operatorExample('guide:operator-does-not-exist')).toBeNull();
